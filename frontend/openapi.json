@@ -19982,6 +19982,17 @@
               }
             ],
             "title": "Thumb Url"
+          },
+          "media_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Url"
           }
         },
         "type": "object",

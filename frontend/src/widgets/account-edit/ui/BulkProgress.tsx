@@ -6,7 +6,7 @@ import { Icon, Spinner } from '@/shared/ui';
 import type { BulkRow } from './useBulkRun';
 
 // The run view of a bulk edit: one line per account, in the order the batch
-// walks them. Shared by every bulk tab — the rows are the same four states
+// walks them. Shared by every bulk tab — the rows are the same five states
 // whatever was applied.
 //
 // A refused account keeps its reason on screen rather than only in the global
@@ -69,7 +69,9 @@ export function BulkProgress({
                   ? (okLabel?.(row.accountId) ?? t('accounts.bulk.rowOk'))
                   : row.state === 'running'
                     ? t('accounts.bulk.rowRunning')
-                    : t('accounts.bulk.rowQueued')}
+                    : row.state === 'skipped'
+                      ? t('accounts.bulk.rowSkipped')
+                      : t('accounts.bulk.rowQueued')}
             </span>
           </div>
         ))}

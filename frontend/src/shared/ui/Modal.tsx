@@ -56,6 +56,13 @@ const SHELL = {
     // `className` нельзя было закрыть.
     card: 'flex h-full w-[min(84vw,300px)] flex-col overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
   },
+  // Полноэкранный просмотр фото и сторис: тёмная сцена вместо вуали и без поверхности
+  // карточки — медиа само себе поверхность. Вариантом, а не своим порталом, чтобы стек
+  // Escape закрывал только просмотр, а ProfileModal под ним оставался открытым.
+  viewer: {
+    overlay: 'items-stretch justify-stretch bg-term',
+    card: 'relative flex h-full w-full items-center justify-center',
+  },
 } as const;
 
 // Четыре ширины диалога, и это ровно та шкала, ради которой она есть: 22 модалки тратили

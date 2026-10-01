@@ -13,10 +13,23 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.db import fetch_account
+from core.repositories.neuroshilling import (
+    create_campaign,
+    list_campaign_accounts,
+    update_campaign,
+)
 from schemas.accounts import AccountCreate
+from schemas.neuroshilling import (
+    NeuroshillingAccountAssignment,
+    NeuroshillingCampaignCreate,
+    NeuroshillingCampaignUpdate,
+)
+from services import _account_owner
 from services.accounts import add_account, remove_account
 from services.accounts.twofa import _TWOFA_LOCKS, twofa_lock
 from services.neurocomment._state import in_cooldown, reset_for_tests, set_cooldown
+from services.warming import AccountUnavailableError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -88,3 +101,37 @@ async def test_removing_an_account_drops_its_twofa_lock() -> None:
     assert _ACCOUNT not in _TWOFA_LOCKS
     # Keyed by account, not a convenient way to clear the whole table.
     assert "acc-keep" in _TWOFA_LOCKS
+
+
+@pytest.mark.asyncio
+async def test_removing_an_account_a_running_neuroshilling_campaign_holds_is_refused() -> None:
+    """The run has dealt the account lines in memory; deleting it would leave a ghost."""
+    await add_account(AccountCreate(account_id=_ACCOUNT, label="A", session_name=_ACCOUNT))
+    assert _account_owner.try_claim(_ACCOUNT, "neuroshilling", "camp-1") is None
+    try:
+        with pytest.raises(AccountUnavailableError):
+            await remove_account(_ACCOUNT)
+    finally:
+        _account_owner.reset_for_tests()
+
+    assert await fetch_account(_ACCOUNT) is not None
+
+
+@pytest.mark.asyncio
+async def test_removing_an_account_rostered_in_an_idle_neuroshilling_campaign() -> None:
+    """``neuroshilling_accounts`` FKs the account; the delete used to die on it."""
+    await add_account(AccountCreate(account_id=_ACCOUNT, label="A", session_name=_ACCOUNT))
+    campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
+    await update_campaign(
+        campaign.campaign_id,
+        NeuroshillingCampaignUpdate(
+            expected_updated_at=campaign.updated_at,
+            name="Promo",
+            accounts=[NeuroshillingAccountAssignment(account_id=_ACCOUNT)],
+        ),
+    )
+
+    await remove_account(_ACCOUNT)
+
+    assert await fetch_account(_ACCOUNT) is None
+    assert await list_campaign_accounts(campaign.campaign_id) == []

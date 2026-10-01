@@ -80,6 +80,16 @@ async def get_account_story_thumb(account_id: str, story_id: int, request: Reque
     return _image_response(request, image)
 
 
+@router.get("/accounts/{account_id}/profile/stories/{story_id}/media", include_in_schema=False)
+async def get_account_story_media(account_id: str, story_id: int, request: Request) -> Response:
+    media = await accounts.account_story_media(account_id, story_id)
+    if media is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND, detail="story media not found"
+        )
+    return _image_response(request, media)
+
+
 @router.get("/accounts/{account_id}/scheduled/{post_id}/thumb", include_in_schema=False)
 async def get_scheduled_post_thumb(account_id: str, post_id: str, request: Request) -> Response:
     image = await scheduled_posts.scheduled_post_thumbnail(account_id, post_id)

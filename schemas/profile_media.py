@@ -142,6 +142,8 @@ class ProfileStoryView(BaseModel):
     # Total reactions left on the story (``None`` under the same conditions).
     reactions: int | None = None
     thumb_url: str | None = None
+    # Full playable media (photo or video) for the story player.
+    media_url: str | None = None
 
 
 class ProfileMusicView(BaseModel):

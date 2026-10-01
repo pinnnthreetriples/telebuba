@@ -1,14 +1,16 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileStoryView } from '@/shared/api';
 import { Icon, IconButton } from '@/shared/ui';
 
-import { tileStyle } from './_profileShared';
+import { HOVER_ONLY, tileStyle } from './_profileShared';
 import { DashedAdd } from './_shared';
+import { StoryViewer } from './StoryViewer';
 
 // The profile modal's stories tab: 9:16 tiles with view/reaction badges, a
-// pin/unpin toggle, a privacy badge, and remove — plus the add-story tile.
+// pin/unpin toggle, a privacy badge, and remove — plus the add-story tile. The
+// controls show on hover; a click on the tile opens the story player.
 export function StoriesTab({
   stories,
   pinPending,
@@ -26,18 +28,32 @@ export function StoriesTab({
   scheduled: ReactNode;
 }) {
   const { t } = useTranslation();
+  const [viewing, setViewing] = useState<number | null>(null);
   return (
     <div>
       <div className="mb-md type-prose">{t('accounts.profile.storiesHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
-        {stories.map((story) => (
-          <div key={story.story_id} className="relative">
-            <div
-              className="rounded-lg border border-black/5"
+        {stories.map((story, index) => (
+          <div key={story.story_id} className="group relative">
+            <button
+              type="button"
+              aria-label={t('accounts.profile.openStory')}
+              onClick={() => {
+                setViewing(index);
+              }}
+              className="flex w-full items-center justify-center rounded-lg border border-black/5"
               style={tileStyle(story.thumb_url, '9 / 16')}
-            />
+            >
+              {story.kind === 'video' && (
+                <span
+                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse ${HOVER_ONLY}`}
+                >
+                  <Icon name="play" size={16} />
+                </span>
+              )}
+            </button>
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-tiny font-medium text-on-inverse">
+              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-tiny font-medium text-on-inverse">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -77,33 +93,48 @@ export function StoriesTab({
               onClick={() => {
                 onRemove(story);
               }}
-              className="absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
+              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>
-            <button
-              type="button"
-              disabled={pinPending}
-              aria-label={t(
-                story.is_pinned ? 'accounts.profile.unpinStory' : 'accounts.profile.pinStory',
-              )}
-              onClick={() => {
-                onPinToggle(story);
-              }}
-              className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-tight py-hair text-center text-tiny font-medium disabled:opacity-50 ${
-                story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
-              }`}
+            {/* One stacked column, not two fixed `bottom-*` offsets: those overlapped
+                whenever a label's line box outgrew the gap between them. */}
+            <div
+              className={`pointer-events-none absolute inset-x-[5px] bottom-[5px] flex flex-col gap-xs ${HOVER_ONLY}`}
             >
-              {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
-            </button>
-            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-scrim px-tight py-hair text-center text-tiny font-medium text-on-inverse">
-              {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
-            </span>
+              <button
+                type="button"
+                disabled={pinPending}
+                aria-label={t(
+                  story.is_pinned ? 'accounts.profile.unpinStory' : 'accounts.profile.pinStory',
+                )}
+                onClick={() => {
+                  onPinToggle(story);
+                }}
+                className={`pointer-events-auto truncate rounded-sm px-tight py-hair text-center text-tiny font-medium disabled:opacity-50 ${
+                  story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
+                }`}
+              >
+                {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
+              </button>
+              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-tiny font-medium text-on-inverse">
+                {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
+              </span>
+            </div>
           </div>
         ))}
         <DashedAdd ratio="9 / 16" label={t('accounts.profile.addStory')} onClick={onAdd} />
       </div>
       {scheduled}
+      {viewing !== null && (
+        <StoryViewer
+          stories={stories}
+          index={viewing}
+          onClose={() => {
+            setViewing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -95,12 +95,18 @@ async def remove_account(account_id: str) -> None:
         _stop_warming_locked,
         account_lock,
     )
+    from services.warming._exclusion import assert_not_neuroshilling  # noqa: PLC0415
 
     # Lock order is global neurocomment lifecycle → per-account lifecycle everywhere.
     # This makes delete atomic against listener start/switch/reconcile and prevents the
     # in-memory handler from surviving a DB cascade or resurrecting on pool rebuild.
     async with nc_runtime.neurocomment_lifecycle(), account_lock(account_id):
-        # The warming stop comes first because it is the only step here that can
+        # A running neuroshilling campaign is talking through this session and has
+        # dealt it lines in memory; deleting under it would leave the run sending as
+        # a ghost. Refused before anything is touched, and race-free because the
+        # campaign's start claims its roster under this same per-account lock.
+        assert_not_neuroshilling(account_id)
+        # The warming stop comes next because it is the other step here that can
         # REFUSE the delete. Nothing above it may have destroyed operator state by
         # then: run after the listener teardown, a 409 would answer "nothing was
         # deleted" while the listener account and its running flag were already

@@ -5,11 +5,12 @@ import type { ProfilePhotoView } from '@/shared/api';
 import { Icon, IconButton } from '@/shared/ui';
 
 import { PHOTO_SUFFIXES } from './_channelsShared';
-import { tileStyle } from './_profileShared';
+import { HOVER_ONLY, tileStyle } from './_profileShared';
 import { DashedAdd } from './_shared';
+import { PhotoViewer } from './PhotoViewer';
 
 // The profile modal's photo tab: the account's photo history as tiles with
-// remove / make-main controls, plus picker + drag-and-drop bulk upload. Upload
+// remove / make-main controls (click a tile to open the zoomable viewer), plus picker + drag-and-drop bulk upload. Upload
 // mechanics (prefilter, sequencing, progress) stay in ProfileModal — this tab
 // only collects files and raises intents.
 export function PhotoTab({
@@ -36,6 +37,7 @@ export function PhotoTab({
   const { t } = useTranslation();
   const photoInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const onPhotosPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
     // Materialise the array BEFORE resetting the input — event.target.files is
@@ -76,12 +78,26 @@ export function PhotoTab({
       )}
       <div className="mb-md type-prose">{t('accounts.profile.photoHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
-        {photos.map((photo) => (
-          <div key={photo.photo_id} className="relative">
-            <div
-              className="rounded-lg border border-black/5"
+        {photos.map((photo, index) => (
+          <div key={photo.photo_id} className="group relative">
+            <button
+              type="button"
+              aria-label={t('accounts.profile.openPhoto')}
+              disabled={!photo.thumb_url}
+              onClick={() => {
+                setViewing(index);
+              }}
+              className="flex w-full cursor-zoom-in items-center justify-center rounded-lg border border-black/5 disabled:cursor-default"
               style={tileStyle(photo.thumb_url, '1')}
-            />
+            >
+              {photo.thumb_url && (
+                <span
+                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse ${HOVER_ONLY}`}
+                >
+                  <Icon name="zoom-in" size={18} />
+                </span>
+              )}
+            </button>
             <IconButton
               size="sm"
               shape="circle"
@@ -89,7 +105,7 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
+              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>
@@ -133,6 +149,15 @@ export function PhotoTab({
         onChange={onPhotosPicked}
         className="hidden"
       />
+      {viewing !== null && (
+        <PhotoViewer
+          photos={photos}
+          index={viewing}
+          onClose={() => {
+            setViewing(null);
+          }}
+        />
+      )}
     </div>
   );
 }
