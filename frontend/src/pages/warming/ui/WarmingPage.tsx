@@ -20,6 +20,7 @@ import {
   Badge,
   Button,
   Card,
+  ChipAddButton,
   CollapsibleCard,
   ConfirmModal,
   FeedbackMark,
@@ -413,15 +414,13 @@ export function WarmingPage() {
                   cancelLabel={t('warming.channels.cancel')}
                 />
               ) : (
-                <Button
-                  variant="dashedMuted"
-                  size="xs"
+                <ChipAddButton
                   onClick={() => {
                     setAddingChannel(true);
                   }}
                 >
                   {t('warming.channels.addPill')}
-                </Button>
+                </ChipAddButton>
               )}
             </div>
           </CollapsibleCard>

@@ -391,6 +391,9 @@ function scan(path: string, src: string): { offenders: string[]; pairings: strin
     const cs = chunks(own);
     const fills = [...new Set(cs.flatMap((c) => fillsOf(c.text)))];
     if (cs.some((c) => CSS_FILL.test(c.text))) fills.push('css');
+    // `TerminalPane` paints `bg-term` inside its own file, so the log lines written in a
+    // caller are read on it, not on the card the caller stands in.
+    if (tag.name === 'TerminalPane') fills.push('term');
     const always = [...new Set(cs.filter((c) => c.always).flatMap((c) => fillsOf(c.text)))];
     if (fills.length > 0) spans.push({ start: i, open: tag.end, end, fills, always });
     const orphaned: string[] = [];
