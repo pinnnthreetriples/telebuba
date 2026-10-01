@@ -14,6 +14,7 @@ import pytest
 from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
+from core.db import configure_database
 from core.web_login.fingerprint import note_installed_browser
 from services import _account_owner, _join_lock, pacing
 from services.neuroshilling import _state as neuroshilling_state
@@ -92,6 +93,25 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.fixture(autouse=True)
+def _isolate_database(tmp_path: Path) -> None:
+    """Point the engine at a fresh database in this test's ``tmp_path``, for EVERY test.
+
+    The engine path is process state: ``configure_database`` sets it and nothing
+    resets it, so a test that reads the DB without configuring one read whatever the
+    previous test on that worker left behind — or, first on a worker, the relative
+    ``settings.db.path``. ``test_discovery_keywords.py`` (no DB fixture, one settings
+    read) inherited the row ``test_challenge_solver.py`` saved with
+    ``deepseek_api_key="ds-test"``; the stored column beats the env key, so three of
+    its tests saw the wrong key whenever xdist ordered them after that test.
+
+    ``configure_database`` also drops the cached settings row, so a row resolved by an
+    earlier test (with that test's env key resolved into it) cannot pin into this one.
+    Tests that configure their own database still do: this is the floor.
+    """
+    configure_database(tmp_path / "telebuba.db")
+
+
+@pytest.fixture(autouse=True)
 def _no_ambient_llm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run every test as a deployment that has configured no LLM key.
 
@@ -110,18 +130,12 @@ def _no_ambient_llm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     means to exercise a provider sets its key itself and stubs both
     (``tests/services/neurocomment/test_llm_routing.py``).
 
-    The key is now resolved INTO the cached settings row (stored column, else this
-    value), so the cache is dropped too: a row resolved by an earlier test would
-    otherwise pin that test's key into this one.
+    The key is resolved INTO the cached settings row (stored column, else this
+    value); ``_isolate_database`` drops that cache before every test.
     """
-    from core.repositories._warming_settings import (  # noqa: PLC0415 - core.db import cycle
-        _invalidate_warming_settings_cache,
-    )
-
     monkeypatch.setattr(settings.deepseek, "api_key", "")
     monkeypatch.setattr(settings.gemini, "api_key", "")
     monkeypatch.setattr(settings.openai, "api_key", "")
-    _invalidate_warming_settings_cache()
 
 
 @pytest.fixture(autouse=True)
