@@ -11,6 +11,7 @@ import {
   Input,
   SegmentedControl,
   Switch,
+  SettingRow,
 } from '@/shared/ui';
 
 import { AdvancedLimitsModal } from './AdvancedLimitsModal';
@@ -18,34 +19,6 @@ import type { ScenarioDraft } from './scenarioDraft';
 import type { SetupDraft } from './setupDraft';
 import { clampInt, MAX_LISTEN_MINUTES, MAX_PAUSE_SECONDS, splitTargets } from './setupDraft';
 import { useNumberField } from './useNumberField';
-
-// Строка настройки: подпись слева, контрол справа, разделитель сверху. Весь правый
-// столбец и половина левого набраны ею — в макете это одна и та же строка, и раньше
-// каждая такая пара набиралась своим `flex` со своим отступом.
-function Row({
-  label,
-  hint,
-  children,
-  first = false,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-  // Первая строка блока не рисует разделитель: он отделял бы её от заголовка.
-  first?: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-line-row'}`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-body">{label}</div>
-        {hint === undefined ? null : <div className="mt-hair type-caption">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 // Числовое поле дизайн-системы с тем же поведением пустого значения, что у пауз шага.
 function NumberInput({
@@ -67,7 +40,8 @@ function NumberInput({
   return (
     <Input
       size="xs"
-      className="w-number tabular-nums"
+      textStyle="tabular"
+      widthPreset="number"
       type="number"
       min={min}
       max={max}
@@ -203,31 +177,33 @@ export function CampaignSetupSection({
           />
 
           {/* Карточки сохраняют пояснения, а общий контрол даёт им radio keyboard pattern. */}
-          <SegmentedControl
-            value={scenario.mode}
-            disabled={live}
-            ariaLabel={t('neuroshilling.scenario.mode.label')}
-            variant="outline"
-            className="grid gap-sm pb-sm sm:grid-cols-2"
-            options={(['campaign', 'revive'] as const).map((mode) => ({
-              value: mode,
-              label: (
-                <span className="block text-left">
-                  <span className="block type-item-title">
-                    {t(`neuroshilling.scenario.mode.${mode}`)}
+          <div className="pb-sm">
+            <SegmentedControl
+              value={scenario.mode}
+              disabled={live}
+              ariaLabel={t('neuroshilling.scenario.mode.label')}
+              variant="outline"
+              className="grid sm:grid-cols-2"
+              options={(['campaign', 'revive'] as const).map((mode) => ({
+                value: mode,
+                label: (
+                  <span className="block text-left">
+                    <span className="block type-item-title">
+                      {t(`neuroshilling.scenario.mode.${mode}`)}
+                    </span>
+                    <span className="mt-xs block type-caption">
+                      {t(`neuroshilling.setup.mode.${mode}.body`)}
+                    </span>
                   </span>
-                  <span className="mt-xs block type-caption">
-                    {t(`neuroshilling.setup.mode.${mode}.body`)}
-                  </span>
-                </span>
-              ),
-            }))}
-            onChange={(mode) => {
-              onScenario({ ...scenario, mode });
-            }}
-          />
+                ),
+              }))}
+              onChange={(mode) => {
+                onScenario({ ...scenario, mode });
+              }}
+            />
+          </div>
 
-          <Row label={t('neuroshilling.setup.traversal.label')}>
+          <SettingRow labelTone="body" label={t('neuroshilling.setup.traversal.label')}>
             <SegmentedControl
               variant="pill"
               value={draft.runMode}
@@ -253,9 +229,9 @@ export function CampaignSetupSection({
                 onDraft({ ...draft, runMode: mode });
               }}
             />
-          </Row>
+          </SettingRow>
 
-          <Row label={t('neuroshilling.setup.pause.label')}>
+          <SettingRow labelTone="body" label={t('neuroshilling.setup.pause.label')}>
             <div className="flex items-center gap-sm">
               {(['min', 'max'] as const).map((bound) => (
                 <NumberInput
@@ -287,9 +263,10 @@ export function CampaignSetupSection({
               ))}
               <span className="type-caption">{t('neuroshilling.setup.pause.unit')}</span>
             </div>
-          </Row>
+          </SettingRow>
 
-          <Row
+          <SettingRow
+            labelTone="body"
             label={t('neuroshilling.setup.uniqueMessages.label')}
             hint={t('neuroshilling.setup.uniqueMessages.caption')}
           >
@@ -301,7 +278,7 @@ export function CampaignSetupSection({
                 onScenario({ ...scenario, uniqueMessages: value });
               }}
             />
-          </Row>
+          </SettingRow>
         </div>
 
         <div className="min-w-0 sm:pl-2xl">
@@ -310,7 +287,7 @@ export function CampaignSetupSection({
             caption={t('neuroshilling.setup.listening.caption')}
           />
 
-          <Row first label={t('neuroshilling.setup.autoresponder.label')}>
+          <SettingRow labelTone="body" first label={t('neuroshilling.setup.autoresponder.label')}>
             <HelpHint text={t('neuroshilling.setup.listening.hint')} />
             <SegmentedControl
               variant="pill"
@@ -325,11 +302,12 @@ export function CampaignSetupSection({
                 onDraft({ ...draft, autoresponder: option });
               }}
             />
-          </Row>
+          </SettingRow>
 
           {neuro ? (
             <>
-              <Row
+              <SettingRow
+                labelTone="body"
                 label={t('neuroshilling.setup.replyToHumans.label')}
                 hint={t('neuroshilling.setup.replyToHumans.caption')}
               >
@@ -341,7 +319,7 @@ export function CampaignSetupSection({
                     onDraft({ ...draft, replyToHumans: value });
                   }}
                 />
-              </Row>
+              </SettingRow>
 
               {/* Показывается ровно на одном сочетании — том единственном, где
                   опубликованное спровоцировал посторонний человек. */}
@@ -355,7 +333,7 @@ export function CampaignSetupSection({
                 </div>
               )}
 
-              <Row label={t('neuroshilling.setup.replyActivity.label')}>
+              <SettingRow labelTone="body" label={t('neuroshilling.setup.replyActivity.label')}>
                 <SegmentedControl
                   variant="pill"
                   value={draft.replyActivity}
@@ -369,9 +347,10 @@ export function CampaignSetupSection({
                     onDraft({ ...draft, replyActivity: option });
                   }}
                 />
-              </Row>
+              </SettingRow>
 
-              <Row
+              <SettingRow
+                labelTone="body"
                 label={t('neuroshilling.setup.readChat.label')}
                 hint={t('neuroshilling.setup.readChat.caption')}
               >
@@ -383,9 +362,9 @@ export function CampaignSetupSection({
                     onScenario({ ...scenario, useChatContext: value });
                   }}
                 />
-              </Row>
+              </SettingRow>
 
-              <Row label={t('neuroshilling.setup.listen.row')}>
+              <SettingRow labelTone="body" label={t('neuroshilling.setup.listen.row')}>
                 <div className="flex items-center gap-sm">
                   <NumberInput
                     min={1}
@@ -399,7 +378,7 @@ export function CampaignSetupSection({
                   />
                   <span className="type-caption">{t('neuroshilling.setup.listen.unit')}</span>
                 </div>
-              </Row>
+              </SettingRow>
             </>
           ) : (
             <div className="rounded-lg border border-dashed border-line-strong px-md py-md type-caption">
@@ -409,7 +388,8 @@ export function CampaignSetupSection({
         </div>
       </div>
 
-      <Row
+      <SettingRow
+        labelTone="body"
         label={t('neuroshilling.setup.limits.label')}
         hint={t('neuroshilling.setup.limits.caption')}
       >
@@ -428,7 +408,7 @@ export function CampaignSetupSection({
         >
           {t('neuroshilling.setup.limits.configure')}
         </Button>
-      </Row>
+      </SettingRow>
 
       {limitsOpen ? (
         <AdvancedLimitsModal

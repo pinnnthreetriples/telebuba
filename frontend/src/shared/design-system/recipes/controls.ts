@@ -23,16 +23,26 @@
 // доступности. У обычной кнопки имя — её содержимое, у иконочной оно приходит из
 // `aria-label`, и общий компонент сделал бы это имя необязательным.
 import { cn } from '@/shared/lib/cn';
+import { componentSettings as settings } from '../tokens/components';
+import type { ControlSize, FieldVariant, AreaVariant } from '../tokens/components';
+import {
+  GAP,
+  HEIGHT,
+  PL,
+  PX,
+  PY,
+  RADIUS,
+  ROLE,
+  TEXT,
+  WIDE_PX,
+  WIDTH,
+  paddingClasses,
+} from './settings';
+export type { ControlSize } from '../tokens/components';
 
 // Высота — ФИКСИРОВАННАЯ, и это главное, что рецепт приносит. Четыре ступени, каждая
 // называет, где контрол стоит: `xs` — короче поля, `sm` — внутри строки, `md` —
 // самостоятельный контрол формы, `lg` — цель касания.
-const CONTROL_HEIGHT = {
-  xs: 'h-compact',
-  sm: 'h-field',
-  md: 'h-control',
-  lg: 'h-touch',
-} as const;
 
 // Рунг размера по ступени — тоже общий: это то, что делает имя ступени одним и тем же у
 // кнопки и у поля.
@@ -41,26 +51,6 @@ const CONTROL_HEIGHT = {
 // слияния: `xs`/`sm` были `body` (12.5px), `md`/`lg` — `lead` (13px), то есть полшага
 // разницы, которой на контроле не видно. Ступени различает высота, а не кегль — она
 // теперь фиксированная, и её видно.
-const CONTROL_TEXT = {
-  xs: 'text-body',
-  sm: 'text-body',
-  md: 'text-body',
-  lg: 'text-body',
-} as const;
-
-const BUTTON_PAD = {
-  xs: 'px-md',
-  sm: 'px-xl',
-  md: 'px-2xl',
-  lg: 'px-2xl',
-} as const;
-
-const FIELD_PAD = {
-  xs: 'px-md',
-  sm: 'px-md',
-  md: 'px-md',
-  lg: 'px-lg',
-} as const;
 
 // Форма — по РОДУ контрола, а не по его ступени размера, и это правка, а не описание.
 //
@@ -72,14 +62,6 @@ const FIELD_PAD = {
 // кнопок приложения с ним не согласны.
 //
 // Теперь у кнопки одна форма на все ступени. Ступень отвечает за высоту и поля — и только.
-const SHAPE = {
-  // Кнопка — любая, любого размера.
-  pill: 'rounded-full',
-  // Поле и триггер выпадающего списка.
-  field: 'rounded-lg',
-  // Поле внутри другой коробки.
-  inset: 'rounded-md',
-} as const;
 
 // Фокус — ОБВОДКА, а не тень. Тенью он и был, и `shadow-focus` на белом мерит **1.18:1**
 // против 3:1, которых WCAG 2.2 требует от индикатора фокуса; вдобавок он приходил от
@@ -111,7 +93,6 @@ const INVALID = 'border-danger';
 
 const CONTROL_TRANSITION = 'transition duration-state';
 
-export type ControlSize = keyof typeof CONTROL_HEIGHT;
 // `ControlShape` тут был и ушёл вместе с параметром `shape` у `buttonBase`: тип, который
 // называет выбор, которого больше нет, — это приглашение вернуть выбор.
 
@@ -125,11 +106,12 @@ export type ControlSize = keyof typeof CONTROL_HEIGHT;
  */
 export function buttonBase({ size, className }: { size: ControlSize; className?: string }): string {
   return cn(
-    'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap',
-    CONTROL_HEIGHT[size],
-    BUTTON_PAD[size],
-    CONTROL_TEXT[size],
-    SHAPE.pill,
+    'inline-flex shrink-0 items-center justify-center whitespace-nowrap',
+    GAP[settings.controls.gap],
+    HEIGHT[settings.controls.height[size]],
+    PX[settings.controls.buttonPadding[size]],
+    TEXT[settings.controls.text[size]],
+    RADIUS[settings.controls.buttonRadius],
     FOCUS_RING,
     DISABLED,
     PRESS_FEEDBACK,
@@ -150,10 +132,10 @@ export function fieldBase({
 }): string {
   return cn(
     'w-full border bg-surface-card',
-    CONTROL_HEIGHT[size],
-    FIELD_PAD[size],
-    CONTROL_TEXT[size],
-    SHAPE[size === 'xs' ? 'inset' : 'field'],
+    HEIGHT[settings.controls.height[size]],
+    PX[settings.controls.fieldPadding[size]],
+    TEXT[settings.controls.text[size]],
+    RADIUS[settings.controls.fieldRadius[size]],
     FIELD_FOCUS,
     CONTROL_TRANSITION,
     invalid === true && INVALID,
@@ -176,13 +158,103 @@ export function areaBase({
     // Вертикальные поля вместо высоты: область растёт вслед за текстом, и фиксировать
     // её значило бы обрезать написанное. Значения подобраны так, чтобы
     // однострочная область совпала по высоте с полем той же ступени.
-    size === 'md' || size === 'lg' ? 'py-sm' : 'py-tight',
-    FIELD_PAD[size],
-    CONTROL_TEXT[size],
-    SHAPE[size === 'xs' ? 'inset' : 'field'],
+    PY[settings.controls.areaPadding[size]],
+    PX[settings.controls.fieldPadding[size]],
+    TEXT[settings.controls.text[size]],
+    RADIUS[settings.controls.fieldRadius[size]],
     FIELD_FOCUS,
     CONTROL_TRANSITION,
     invalid === true && INVALID,
     className,
   );
+}
+
+const WEIGHT = { medium: 'font-medium', semibold: 'font-semibold' } as const;
+export function buttonWeight(size: ControlSize): string {
+  return WEIGHT[settings.controls.buttonWeight[size]];
+}
+export function buttonLoadingGap(): string {
+  return GAP[settings.controls.loadingGap];
+}
+
+export function buttonContentGap(gap: 'default' | 'roomy'): string {
+  return GAP[gap === 'default' ? settings.controls.gap : settings.controls.roomyGap];
+}
+export type FieldInset = 'none' | 'leading' | 'trailing' | 'both';
+export function fieldInset(inset: FieldInset): string {
+  return cn(
+    (inset === 'leading' || inset === 'both') && PL[settings.controls.iconInset],
+    (inset === 'trailing' || inset === 'both') && 'field-end-inset',
+  );
+}
+
+const WIDE_HEIGHT = {
+  field: 'sm:h-field',
+  control: 'sm:h-control',
+  touch: 'sm:h-touch',
+  compact: 'sm:h-compact',
+};
+const MIN_HEIGHT = { touch: 'min-h-touch', control: 'min-h-control' };
+export type ButtonPresentation =
+  'standard' | 'multiline' | 'touch' | 'compactFooter' | 'status' | 'tab';
+export function buttonPresentation(
+  presentation: ButtonPresentation,
+  shape: 'pill' | 'square',
+  size: ControlSize,
+): string {
+  const config = settings.controls;
+  return cn(
+    shape === 'square' && RADIUS[config.squareRadius],
+    (presentation === 'multiline' || presentation === 'touch') &&
+      cn(
+        'h-auto sm:min-h-0',
+        MIN_HEIGHT[config.multiline.minHeight as keyof typeof MIN_HEIGHT],
+        WIDE_HEIGHT[config.multiline.wideHeight as keyof typeof WIDE_HEIGHT],
+      ),
+    presentation === 'multiline' &&
+      cn(
+        'whitespace-normal sm:py-0',
+        PX[config.multiline.x],
+        PY[config.multiline.y],
+        WIDE_PX[config.multiline.wideX],
+      ),
+    presentation === 'status' &&
+      cn('h-auto font-medium', PX[config.buttonPadding.xs], PY[config.areaPadding.xs]),
+    presentation === 'tab' && cn('h-auto min-h-touch font-semibold', PX[config.fieldPadding.lg]),
+    presentation === 'compactFooter' &&
+      cn(PX[config.compactFooterX], WIDE_PX[config.buttonPadding[size]]),
+  );
+}
+export function fieldPresentation(variant: Exclude<FieldVariant, 'standard'>): string {
+  return cn(
+    'w-full outline-none',
+    RADIUS[settings.controls.variantRadii[variant]],
+    paddingClasses(settings.controls.fieldVariants[variant]),
+    variant === 'inlineCaption'
+      ? 'border-none bg-transparent type-caption'
+      : variant === 'inline'
+        ? 'border-none bg-transparent text-body'
+        : cn('border bg-surface-card text-body', FIELD_FOCUS),
+    variant === 'readout' && 'font-mono font-semibold',
+    variant === 'compactNumber' && 'font-medium',
+    variant === 'auth' && 'font-normal text-content-primary',
+  );
+}
+export function areaPresentation(variant: Exclude<AreaVariant, 'standard'>): string {
+  return cn(
+    'w-full border bg-surface-card outline-none',
+    RADIUS[settings.controls.areaRadii[variant]],
+    FIELD_FOCUS,
+    paddingClasses(settings.controls.areaVariants[variant]),
+    variant === 'composer'
+      ? cn(
+          MIN_HEIGHT[settings.controls.composerMinHeight],
+          ROLE[settings.controls.areaText.composer],
+          'text-content-primary',
+        )
+      : TEXT[settings.controls.areaText.prompt],
+  );
+}
+export function fieldWidth(preset: keyof typeof settings.controls.fieldWidths): string {
+  return WIDTH[settings.controls.fieldWidths[preset]];
 }

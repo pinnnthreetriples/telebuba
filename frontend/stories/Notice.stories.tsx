@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Notice } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Notice',
+  title: 'Design System/Components/Notice',
   component: Notice,
   tags: ['autodocs'],
   args: {

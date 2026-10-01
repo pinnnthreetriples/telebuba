@@ -124,14 +124,14 @@ export function Section({
   title,
   icon,
   right,
-  bodyClassName = 'px-xl pb-xl',
+  bodyPadding = 'roomy',
   onOpenChange,
   children,
 }: {
   title: string;
   icon?: ReactNode;
   right?: ReactNode;
-  bodyClassName?: string;
+  bodyPadding?: 'roomy' | 'tight';
   // Passed through for the 2FA card, whose one-time plaintext must not survive
   // a collapse (a collapsed body is hidden, not unmounted).
   onOpenChange?: (open: boolean) => void;
@@ -142,9 +142,9 @@ export function Section({
       label={title}
       trailing={right}
       onOpenChange={onOpenChange}
-      wrapperClassName="self-start rounded-card border border-line bg-surface-card"
-      headerClassName="px-xl py-lg"
-      bodyClassName={bodyClassName}
+      wrapperClassName="self-start"
+      headerPadding="panel"
+      bodyPadding={bodyPadding}
       header={
         <span className="flex items-center gap-sm type-card-title">
           {title}

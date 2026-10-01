@@ -10,6 +10,22 @@ function classesOf(name: string): string {
   return screen.getByRole('button', { name }).className;
 }
 
+test('blue and danger text remain readable on the canvas hover surface', () => {
+  render(
+    <>
+      <Button variant="ghostAction">Action</Button>
+      <Button variant="refreshSuccess">Success</Button>
+      <Button variant="refreshDanger">Retry</Button>
+    </>,
+  );
+  expect(screen.getByRole('button', { name: 'Action' })).toHaveClass('text-info-strong');
+  expect(screen.getByRole('button', { name: 'Success' })).toHaveClass('hover:text-info-strong');
+  expect(screen.getByRole('button', { name: 'Retry' })).toHaveClass(
+    'text-danger-deep',
+    'hover:text-info-strong',
+  );
+});
+
 test('the size sets height and padding, the variant the fill', async () => {
   const { container } = render(
     <>

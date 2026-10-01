@@ -1,6 +1,7 @@
+import { dialogTitle, dialogBody } from '@/shared/design-system';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Modal } from '@/shared/ui';
+import { ModalFooter, ModalBody, Button, Modal } from '@/shared/ui';
 
 // Design modal: campaign-delete (L1373-1385) — a destructive confirm.
 export function CampaignDeleteModal({
@@ -19,12 +20,12 @@ export function CampaignDeleteModal({
       size="confirm"
       label={t('neurocomment.modal.campaignDelete.title', { name })}
     >
-      <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">
+      <ModalBody variant="form">
+        <div className={dialogTitle()}>
           {t('neurocomment.modal.campaignDelete.title', { name })}
         </div>
-        <div className="mb-2xl type-dialog-body">{t('neurocomment.modal.campaignDelete.body')}</div>
-        <div className="flex justify-end gap-sm">
+        <div className={dialogBody()}>{t('neurocomment.modal.campaignDelete.body')}</div>
+        <ModalFooter variant="plain">
           <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
           <Button
             variant="danger"
@@ -35,8 +36,8 @@ export function CampaignDeleteModal({
           >
             {t('neurocomment.modal.campaignDelete.confirm')}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

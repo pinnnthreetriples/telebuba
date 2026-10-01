@@ -60,7 +60,7 @@ function StepRow({
           один раз. `flex-wrap` оставлен: в узкой колонке строка переносится, а не
           выдавливает роль до нечитаемой ширины. */}
       <div className="mb-sm flex flex-wrap items-center gap-tight">
-        <Badge className="font-semibold tabular-nums">
+        <Badge emphasis="semibold" className="tabular-nums">
           {t('neuroshilling.scenario.steps.position', { position })}
         </Badge>
         <div className="min-w-0 flex-1">
@@ -123,7 +123,8 @@ function StepRow({
             и вдвое дешевле по ширине, чем два поля рядом. Числа прижаты К ТИРЕ, поэтому
             пара читается диапазоном «60–180», а не двумя значениями в своих коробках. */}
         <div className="flex h-control shrink-0 items-center gap-xs rounded-lg border border-line bg-surface-card px-sm">
-          <input
+          <Input
+            variant="inline"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -133,10 +134,13 @@ function StepRow({
               minField.onChange(event.target.value);
             }}
             onBlur={minField.onBlur}
-            className="tb-plain-number w-action border-none bg-transparent text-right text-body tabular-nums outline-none"
+            textStyle="tabular"
+            widthPreset="action"
+            className="tb-plain-number text-right"
           />
           <span className="type-caption">–</span>
-          <input
+          <Input
+            variant="inline"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -146,7 +150,9 @@ function StepRow({
               maxField.onChange(event.target.value);
             }}
             onBlur={maxField.onBlur}
-            className="tb-plain-number w-action border-none bg-transparent text-left text-body tabular-nums outline-none"
+            textStyle="tabular"
+            widthPreset="action"
+            className="tb-plain-number text-left"
           />
           <span className="type-caption">{t('neuroshilling.scenario.steps.seconds')}</span>
         </div>
@@ -204,7 +210,7 @@ function StepRow({
       {step.kind === 'message' ? (
         <Textarea
           size="sm"
-          className="font-[inherit]"
+
           value={step.text}
           maxLength={1000}
           placeholder={t('neuroshilling.scenario.steps.textPlaceholder')}
@@ -615,7 +621,7 @@ export function ScenarioSection({
         <Button
           variant="primary"
           fullWidth
-          className="font-medium"
+          weight="medium"
           disabled={busy || dirty || namelessRole || draft.steps.length === 0}
           title={dirty ? t('neuroshilling.scenario.approveHint') : undefined}
           onClick={onApprove}

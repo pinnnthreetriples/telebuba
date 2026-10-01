@@ -3,6 +3,8 @@ import plugin from 'tailwindcss/plugin';
 
 import {
   breakpoint,
+  componentSettings,
+  layoutSettings,
   channel,
   duration,
   easing,
@@ -100,7 +102,7 @@ export default {
     // ещё выигрывала: `type-caption text-danger` — подпись в цвете ошибки, а
     // `type-card-title font-bold` — заголовок, за который кому-то ещё придётся спорить.
     // Этот порядок и есть причина, по которой здесь плагин, а не рецепт на `@apply`.
-    plugin(({ addComponents, theme }) => {
+    plugin(({ addComponents, addUtilities, theme }) => {
       type Role = {
         size: string;
         weight: string;
@@ -110,6 +112,43 @@ export default {
         caps?: string;
       };
       const roles = theme('typeRole') as Record<string, Role>;
+      const layout = layoutSettings;
+      addComponents({
+        '.layout-app': {
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          maxWidth: maxWidth[layout.app.width],
+          paddingLeft: rhythm[layout.app.x],
+          paddingRight: rhythm[layout.app.x],
+          paddingTop: rhythm[layout.app.top],
+          paddingBottom: height[layout.app.bottom],
+          [`@media (min-width: ${String(breakpoint.wide)}px)`]: {
+            paddingLeft: rhythm[layout.app.wideX],
+            paddingRight: rhythm[layout.app.wideX],
+          },
+        },
+        '.layout-auth': {
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          marginTop: height[layout.auth.top],
+          maxWidth: maxWidth[layout.auth.width],
+          padding: rhythm[layout.auth.x],
+        },
+        '.layout-board': {
+          display: 'grid',
+          gap: rhythm[layout.board.gap],
+          [`@media (min-width: ${String(breakpoint.wide)}px)`]: {
+            gridTemplateColumns: `${width[layout.board.sidebar]} minmax(0, 1fr)`,
+          },
+        },
+        '.layout-launch-board': {
+          display: 'grid',
+          gap: rhythm[layout.launchBoard.gap],
+          [`@media (min-width: ${String(breakpoint.wide)}px)`]: {
+            gridTemplateColumns: `${width[layout.launchBoard.sidebar]} minmax(0, 1fr)`,
+          },
+        },
+      });
       addComponents(
         Object.fromEntries(
           Object.entries(roles).map(([name, role]) => [
@@ -131,6 +170,11 @@ export default {
           ]),
         ),
       );
+      addUtilities({
+        '.field-end-inset': {
+          paddingRight: theme(`height.${componentSettings.controls.trailingIconInset}`) as string,
+        },
+      });
     }),
   ],
 } satisfies Config;

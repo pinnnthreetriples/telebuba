@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/shared/i18n';
+import { i18n } from '@/shared/i18n';
 
 import { campaignsQueryOptions, neurocommentBoardQueryOptions } from '@/entities/campaign';
 
@@ -30,6 +30,17 @@ afterEach(() => {
 });
 
 describe('ChannelDiscoveryModal', () => {
+  it('keeps its title above the campaign explanation', () => {
+    route({ board: boardPayload([]) });
+    renderModal();
+    const title = screen.getByRole('heading', {
+      name: i18n.t('neurocomment.modal.discovery.title'),
+    });
+    expect(title.parentElement).not.toHaveClass('flex');
+    expect(title.parentElement?.querySelector('p')).not.toBeNull();
+    expect(title.parentElement?.parentElement).toHaveClass('border-b');
+  });
+
   it('opens on the form and switches to results after a started search', async () => {
     const calls = route({ board: boardPayload([candidate()]) });
     renderModal();

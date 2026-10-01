@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button, Toaster, toastError } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Toaster',
+  title: 'Design System/Components/Toaster',
   component: Toaster,
   tags: ['autodocs'],
 } satisfies Meta<typeof Toaster>;

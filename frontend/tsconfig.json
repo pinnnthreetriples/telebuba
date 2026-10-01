@@ -31,6 +31,7 @@
     "stories",
     ".storybook",
     "vite.config.ts",
+    "vite.catalog.config.ts",
     "vitest.config.ts",
     "vitest.setup.ts",
     "openapi-ts.config.ts"

@@ -1,3 +1,4 @@
+import { spinnerGeometry } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // Кольцо ожидания. Оно было написано руками семнадцать раз, и это не про повторение
@@ -17,14 +18,8 @@ import { cn } from '@/shared/lib/cn';
 // носила `size-spinner`, `size-chip` и `size-tile`. Четыре числа в пределах трёх пикселей
 // — это не решение, а место, где легла рука; ровно тот же дефект, что `backdrop?: number`
 // у диалога. Все четыре стали `sm`.
-const SIZE = {
-  // Внутри кнопки или строки — это почти каждый случай.
-  sm: 'size-spinner border-2',
-  // Вместо содержимого блока, который ещё грузится.
-  md: 'size-chip border-2',
-  // Вместо портрета: единственное кольцо, которому 2px мало.
-  lg: 'size-tile border-[3px]',
-} as const;
+// The large ring alone needs a 3px stroke: a ring-specific optical correction.
+const STROKE = { sm: 'border-2', md: 'border-2', lg: 'border-[3px]' } as const;
 
 // Тон говорит, ПО ЧЕМУ кольцо крутится, а не какого оно цвета: `onAction` — на залитом
 // действии, где синий на синем не виден; `danger` — в подтверждении необратимого
@@ -57,19 +52,14 @@ export function Spinner({
   tone = 'default',
   className = '',
 }: {
-  size?: keyof typeof SIZE;
+  size?: keyof typeof STROKE;
   tone?: SpinnerTone;
   className?: string;
 }) {
   return (
     <span
       aria-hidden="true"
-      className={cn(
-        'tb-spin inline-block shrink-0 rounded-full',
-        SIZE[size],
-        TONE[tone],
-        className,
-      )}
+      className={cn(spinnerGeometry(size), STROKE[size], TONE[tone], className)}
     />
   );
 }

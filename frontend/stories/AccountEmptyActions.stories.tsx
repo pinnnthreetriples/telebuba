@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { DashedAdd, DashedEmptyAction } from '../src/widgets/account-edit/ui/_shared';
 
 const meta = {
-  title: 'Patterns/Account empty actions',
+  title: 'Design System/Patterns/Account empty actions',
   component: DashedEmptyAction,
   tags: ['autodocs'],
   args: {

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { type FeedbackTone, noticeTone } from '@/shared/design-system';
+import { type FeedbackTone, noticeGeometry } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The tinted block that explains something on the screen it explains: a failed
@@ -20,11 +20,17 @@ import { cn } from '@/shared/lib/cn';
 export function Notice({
   tone = 'info',
   bordered = true,
+  padding = 'default',
+  typography = 'body',
+  contentGap = 'none',
   className,
   children,
   ...rest
 }: {
   tone?: FeedbackTone;
+  padding?: 'default' | 'compact';
+  typography?: 'body' | 'caption';
+  contentGap?: 'none' | 'row';
   // The border is what separates a notice from the card behind it. It comes off
   // for the ones nested inside a panel that already has one.
   bordered?: boolean;
@@ -33,7 +39,7 @@ export function Notice({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className'>) {
   return (
     <div
-      className={cn('rounded-lg px-md py-md text-body', noticeTone(tone, bordered), className)}
+      className={cn(noticeGeometry(padding, typography, contentGap, tone, bordered), className)}
       {...rest}
     >
       {children}

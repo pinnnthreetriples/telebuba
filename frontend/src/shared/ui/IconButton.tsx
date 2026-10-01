@@ -1,6 +1,15 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 
-import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import {
+  FOCUS_RING,
+  PRESS_FEEDBACK,
+  iconButtonSize,
+  iconButtonShape,
+  iconButtonResponsiveSize,
+  componentSettings,
+  verdictFill,
+  type ResponsiveIconSize,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The bordered white chip that carries an icon or a single glyph, in the four
@@ -10,12 +19,6 @@ import { cn } from '@/shared/lib/cn';
 // same scale two ways in one literal — `h-11 w-11` beside `h-[34px] w-[34px]` —
 // and a square whose two sides are separate decisions is a square that can stop
 // being one.
-const SIZE = {
-  sm: 'size-chip',
-  md: 'size-icon',
-  lg: 'size-tile',
-  touch: 'size-touch',
-} as const;
 
 // Форма — своя ось, а не следствие размера, и это правка.
 //
@@ -29,10 +32,6 @@ const SIZE = {
 // он теперь ЗАПРОС, а не побочный эффект: `shape="circle"` стоит в одном месте — на
 // корзине в модалке нейроаккаунтов, — и там это решение места вызова, которое видно в
 // разметке.
-const SHAPE = {
-  square: 'rounded-md',
-  circle: 'rounded-full',
-} as const;
 
 // What the button MEANS, painted as the hover it takes. Even a neutral icon action
 // gets a quiet hover signal so pointer users can distinguish it from decoration.
@@ -49,6 +48,17 @@ const TONE = {
     'text-content-subtle hover:border-info-line hover:bg-action-hover hover:text-info-strong',
   danger:
     'text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
+  success:
+    'text-success-deep hover:border-line-strong hover:bg-success-tint hover:text-content-primary',
+  warning:
+    'text-warning-deep hover:border-line-strong hover:bg-warning-tint hover:text-content-primary',
+  inverse:
+    'border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse',
+  subtle: 'text-content-subtle hover:border-line-strong hover:bg-canvas hover:text-content-primary',
+  bare: 'border-transparent bg-transparent text-content-muted hover:border-line-strong hover:bg-canvas hover:text-content-primary',
+  actionOutline:
+    'border-action-primary text-content-muted hover:border-line-strong hover:bg-canvas hover:text-content-primary',
+  actionBordered: 'border-action-primary bg-action-primary text-on-action hover:bg-action-pressed',
 } as const;
 
 // The same outline ring `Button` wears, and now literally the same string: `FOCUS_RING`
@@ -65,6 +75,9 @@ const TONE = {
 // by the caller. A caller's override losing to the base is invisible until it matters.
 export function IconButton({
   size = 'md',
+  responsiveSize,
+  verdict,
+  textStyle = 'default',
   shape = 'square',
   tone = 'neutral',
   className = '',
@@ -72,8 +85,11 @@ export function IconButton({
   ref,
   ...rest
 }: {
-  size?: keyof typeof SIZE;
-  shape?: keyof typeof SHAPE;
+  size?: keyof typeof componentSettings.iconButton.size | 'fieldAction';
+  responsiveSize?: ResponsiveIconSize;
+  textStyle?: 'default' | 'initial';
+  verdict?: Parameters<typeof verdictFill>[0];
+  shape?: keyof typeof componentSettings.iconButton.shape;
   tone?: keyof typeof TONE;
   className?: string;
   children: ReactNode;
@@ -95,9 +111,16 @@ export function IconButton({
         'inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition disabled:pointer-events-none disabled:opacity-50 aria-busy:pointer-events-none',
         PRESS_FEEDBACK,
         FOCUS_RING,
-        SIZE[size],
-        SHAPE[shape],
+        iconButtonSize(size),
+        responsiveSize && iconButtonResponsiveSize(responsiveSize),
+        iconButtonShape(shape),
         TONE[tone],
+        textStyle === 'initial' && 'text-body font-semibold',
+        verdict !== undefined &&
+          cn(
+            verdictFill(verdict),
+            'duration-enter disabled:hover:border-line disabled:hover:bg-surface-card disabled:hover:text-content-subtle',
+          ),
         className,
       )}
     >

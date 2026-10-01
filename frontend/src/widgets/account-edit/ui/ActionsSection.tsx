@@ -9,8 +9,7 @@ import {
   resetAccountSessionMutation,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { verdictFill } from '@/shared/design-system';
-import { cn, useClearedTimeouts } from '@/shared/lib';
+import { useClearedTimeouts } from '@/shared/lib';
 import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Spinner } from '@/shared/ui';
 
 import { Section } from './_shared';
@@ -86,7 +85,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
 
   return (
     <>
-      <Section title={t('accounts.edit.actions')} bodyClassName="px-xl pb-tight">
+      <Section title={t('accounts.edit.actions')} bodyPadding="tight">
         <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>
             <div className="type-card-title">{t('accounts.edit.aliveTitle')}</div>
@@ -114,7 +113,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             // Тот же рецепт исхода, что у кнопки проверки в таблице аккаунтов: три рунга
             // были набраны здесь вложенным тернарником. Сведение `loading` к заливке покоя
             // держит рецепт, а не это место — оно и было тем, что разошлось бы.
-            className={cn('duration-enter', verdictFill(aliveCheck))}
+            verdict={aliveCheck}
           >
             {aliveCheck === 'idle' && (
               <span className="tb-blur inline-flex">

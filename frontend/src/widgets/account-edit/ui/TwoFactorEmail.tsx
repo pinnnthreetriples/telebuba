@@ -220,7 +220,7 @@ export function TwoFactorEmail({
           <label className="mb-md block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
             <Input
-              className="font-mono tracking-code"
+              textStyle="monoCode"
               ref={codeRef}
               value={code}
               onChange={(event) => {
@@ -244,7 +244,7 @@ export function TwoFactorEmail({
             </Button>
             <Button
               size="xs"
-              className="text-content-muted"
+              variant="statusIdle"
               onClick={onResend}
               loading={resendEmail.isPending}
             >
@@ -285,7 +285,7 @@ export function TwoFactorEmail({
           <div className="mb-md type-caption">{t('accounts.edit.twofaEmailWarn')}</div>
           <Button
             fullWidth
-            className="font-medium"
+            weight="medium"
             onClick={onAttach}
             disabled={!addressValid || !hasStored}
             loading={setEmail.isPending}

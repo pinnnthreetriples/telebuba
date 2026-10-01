@@ -59,8 +59,8 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.campaigns.title')}
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
+      headerPadding="compact"
+
       header={<span className="type-card-title">{t('neuroshilling.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-tight">
@@ -90,7 +90,7 @@ export function CampaignsCard({
                 <>
                   <IconButton
                     size="md"
-                    tone="neutral"
+                    tone={isRunning ? 'warning' : 'success'}
                     title={
                       isRunning
                         ? t('neuroshilling.campaign.pause')
@@ -104,11 +104,6 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={
-                      isRunning
-                        ? 'text-warning-deep hover:bg-warning-tint'
-                        : 'text-success-deep hover:bg-success-tint'
-                    }
                   >
                     <Icon name={isRunning ? 'pause' : 'play'} size={16} />
                   </IconButton>
@@ -161,7 +156,8 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="min-w-0 flex-1 border-action-primary"
+            tone="selected"
+            className="min-w-0 flex-1"
           />
           <Button variant="primary" size="sm" disabled={!createName.trim()} onClick={onCreate}>
             {t('neuroshilling.campaigns.confirm')}
@@ -176,7 +172,13 @@ export function CampaignsCard({
           </IconButton>
         </div>
       ) : (
-        <Button variant="dashed" fullWidth className="mt-sm font-medium" onClick={onStartCreate}>
+        <Button
+          variant="dashed"
+          fullWidth
+          weight="medium"
+          className="mt-sm"
+          onClick={onStartCreate}
+        >
           {t('neuroshilling.campaigns.create')}
         </Button>
       )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HintBubble, SegmentedControl } from '@/shared/ui';
+import { Input, HintBubble, SegmentedControl } from '@/shared/ui';
 
 // Fleet-wide choice of WHICH message the fleet answers: the post itself, or a human's
 // comment under it — plus how long the reply mode holds a post open waiting for that
@@ -87,7 +87,8 @@ export function CommentModeFields({
         <label className="mt-lg block">
           <span className="mb-sm block type-label">{t('neurocomment.mode.waitLabel')}</span>
           <span className="flex items-center gap-sm">
-            <input
+            <Input
+              variant="compactNumber"
               type="number"
               min={WAIT_MIN}
               max={WAIT_MAX}
@@ -106,7 +107,8 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-number rounded-md border border-line bg-surface-card px-md py-tight text-body font-medium text-content-primary disabled:opacity-60"
+              widthPreset="number"
+              className="tb-time"
             />
             <span className="type-caption">{t('neurocomment.mode.waitHint')}</span>
           </span>

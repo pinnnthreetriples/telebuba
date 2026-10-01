@@ -10,8 +10,8 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK, verdictFill } from '@/shared/design-system';
-import { cn, type FeedbackResult } from '@/shared/lib';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
+import { type FeedbackResult } from '@/shared/lib';
 import {
   Card,
   DataTable,
@@ -216,7 +216,7 @@ export function AccountsTable({
               tone="primary"
               title={t('accounts.actions.web')}
               aria-label={t('accounts.actions.web')}
-              className="md:size-icon"
+              responsiveSize={{ md: 'md' }}
               // No proxy means the backend can't reach Telegram signed-in as this
               // account, so the globe is dead until one is assigned.
               disabled={!account.proxy_id || openingWeb}
@@ -254,10 +254,8 @@ export function AccountsTable({
               // lands after `.bg-success-deep` alphabetically, and both verdicts used to
               // lose their fill while keeping their white glyph — a white check on a white
               // circle, for every check this table ever ran.
-              className={cn(
-                'duration-enter disabled:hover:border-line disabled:hover:bg-surface-card disabled:hover:text-content-subtle md:size-icon',
-                verdictFill(verdict),
-              )}
+              responsiveSize={{ md: 'md' }}
+              verdict={busy ? 'loading' : (verdict ?? 'idle')}
             >
               {busy ? (
                 <Spinner />
@@ -275,7 +273,7 @@ export function AccountsTable({
               tone="primary"
               title={t('accounts.actions.profile')}
               aria-label={t('accounts.actions.profile')}
-              className="md:size-icon"
+              responsiveSize={{ md: 'md' }}
               onClick={(event) => {
                 event.stopPropagation();
                 (onProfile ?? onOpen)?.(account);
@@ -289,7 +287,7 @@ export function AccountsTable({
               tone="danger"
               title={t('accounts.actions.delete')}
               aria-label={t('accounts.actions.delete')}
-              className="md:size-icon"
+              responsiveSize={{ md: 'md' }}
               disabled={busy}
               onClick={(event) => {
                 event.stopPropagation();
@@ -305,7 +303,7 @@ export function AccountsTable({
   ];
 
   return (
-    <Card className="overflow-hidden">
+    <Card padding="none" className="overflow-hidden">
       <div className="tb-scroll overflow-x-auto">
         <DataTable
           data={data}

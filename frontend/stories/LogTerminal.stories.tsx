@@ -28,7 +28,7 @@ const lines: LogEntry[] = [
 ];
 
 const meta = {
-  title: 'Patterns/Activity log',
+  title: 'Design System/Patterns/Activity log',
   component: LogTerminal,
   tags: ['autodocs'],
   args: {

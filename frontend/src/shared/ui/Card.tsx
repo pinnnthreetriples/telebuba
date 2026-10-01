@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 
-import { surface } from '@/shared/design-system';
+import {
+  cardPadding,
+  cardSubtitle,
+  cardSurface,
+  cardTitle,
+  type CardAppearance,
+  type CardPadding,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The app's card surface: white, hairline border, `rounded-card`. It lived as a
@@ -17,21 +24,25 @@ import { cn } from '@/shared/lib/cn';
 export function Card({
   title,
   subtitle,
-  className = 'px-xl py-xl',
+  padding = 'default',
+  appearance = 'card',
+  className,
   children,
   ...rest
 }: {
   title?: string;
   subtitle?: string;
+  padding?: CardPadding;
+  appearance?: CardAppearance;
   // Padding, kept as a prop because a card that holds a table pads its rows
   // instead of itself, and one that holds a form pads itself.
   className?: string;
   children: ReactNode;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
-    <div className={cn(surface('card'), className)} {...rest}>
-      {title ? <div className="mb-xs text-body font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-lg text-body text-content-subtle">{subtitle}</div> : null}
+    <div className={cn(cardSurface(appearance), className, cardPadding(padding))} {...rest}>
+      {title ? <div className={cardTitle()}>{title}</div> : null}
+      {subtitle ? <div className={cardSubtitle()}>{subtitle}</div> : null}
       {children}
     </div>
   );

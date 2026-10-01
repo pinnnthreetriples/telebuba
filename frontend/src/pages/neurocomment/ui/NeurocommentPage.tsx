@@ -1,3 +1,4 @@
+import { pageTitleSpacing, boardLayout } from '@/shared/design-system';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,8 +34,8 @@ import { clearLogsMutation, logCountQueryOptions, logsQueryOptions } from '@/ent
 import { ChannelDiscoveryButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
-import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { ConfirmModal, toastError } from '@/shared/ui';
+import { cn, logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { PageFrame, SectionStack, ConfirmModal, toastError } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
@@ -503,8 +504,8 @@ export function NeurocommentPage() {
   for (const channel of Object.keys(okCheck.feedback)) channelCheckStatus[channel] = 'ok';
 
   return (
-    <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-page-title">{t('neurocomment.title')}</h1>
+    <PageFrame variant="full" className="tb-fadeup">
+      <h1 className={cn('m-0 type-page-title', pageTitleSpacing())}>{t('neurocomment.title')}</h1>
 
       {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
           one-column grid sprout an implicit second column and sit both children side
@@ -515,9 +516,9 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className={boardLayout()}>
         {/* RIGHT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-2 lg:row-start-1">
+        <SectionStack className="min-w-0 lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={canStartListener}
@@ -548,10 +549,10 @@ export function NeurocommentPage() {
               setConfirmClearLogs(true);
             }}
           />
-        </div>
+        </SectionStack>
 
         {/* LEFT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-1 lg:row-start-1">
+        <SectionStack className="min-w-0 lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}
@@ -650,7 +651,7 @@ export function NeurocommentPage() {
           />
 
           <HowItWorksCard />
-        </div>
+        </SectionStack>
       </div>
 
       {showAccounts ? (
@@ -874,6 +875,6 @@ export function NeurocommentPage() {
           }}
         />
       ) : null}
-    </div>
+    </PageFrame>
   );
 }

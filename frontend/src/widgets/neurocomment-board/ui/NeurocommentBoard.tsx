@@ -167,11 +167,7 @@ function AccountComments({
           </Badge>
         </div>
         {onOpenHistory ? (
-          <Button
-            size="xs"
-            onClick={onOpenHistory}
-            className="text-action-primary hover:border-action-primary"
-          >
+          <Button size="xs" onClick={onOpenHistory} variant="secondaryAction">
             {t('neurocomment.feed.history')}
           </Button>
         ) : null}
@@ -361,7 +357,8 @@ export function NeurocommentBoard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.board.title')}
-      headerClassName="border-b border-line-row px-lg py-lg"
+      headerDivider
+      bodyPadding="none"
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>
@@ -390,7 +387,8 @@ export function NeurocommentBoard({
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="rounded-lg sm:size-tile lg:size-icon"
+            responsiveSize={{ sm: 'lg', lg: 'md' }}
+            shape="field"
           >
             <Icon name="gear" size={16} />
           </IconButton>

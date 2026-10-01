@@ -83,6 +83,9 @@ export const typeRole = {
   'dialog-body': { size: 'body', weight: '400', ink: 'content-muted', leading: 'body' },
   // Заголовок блока, в котором стоит.
   'card-title': { size: 'title', weight: '600', ink: 'content-primary', leading: 'body' },
+  // Dense card headers retain the body rung and semibold weight.
+  'compact-title': { size: 'body', weight: '600', ink: 'content-primary', leading: 'body' },
+  'field-error': { size: 'tiny', weight: '500', ink: 'danger-deep', leading: 'body' },
   // Название одного элемента внутри карточки.
   'item-title': { size: 'body', weight: '600', ink: 'content-primary', leading: 'body' },
   // Надпись, открывающая группу настроек, капителью. Единственная роль с межбуквенным:

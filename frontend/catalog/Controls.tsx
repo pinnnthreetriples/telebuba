@@ -71,7 +71,7 @@ export function Controls({ intro }: { intro?: ReactNode }) {
                   variant={variant}
                   size={example === 'fullWidth' ? 'md' : example}
                   fullWidth={example === 'fullWidth'}
-                  className={example === 'fullWidth' ? 'font-medium' : undefined}
+                  weight={example === 'fullWidth' ? 'medium' : undefined}
                 >
                   Сохранить
                 </Button>

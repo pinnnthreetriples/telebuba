@@ -7,7 +7,7 @@ import {
   ScheduleTimeField,
   type ScheduleMode,
 } from '@/features/schedule-post';
-import { Icon, IconButton, Input, SegmentedControl, toastError } from '@/shared/ui';
+import { SectionStack, Icon, IconButton, Input, SegmentedControl, toastError } from '@/shared/ui';
 
 import {
   isUploadableMusic,
@@ -95,7 +95,8 @@ function Picked({
             onClick={() => {
               onRemove(index);
             }}
-            className="absolute right-tight top-tight border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
+            tone="inverse"
+            className="absolute right-tight top-tight"
           >
             <Icon name="close" size={16} />
           </IconButton>
@@ -124,7 +125,7 @@ export function BulkPhotoTab({
   const { t } = useTranslation();
   const urls = usePreviews(files);
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div className="type-prose">{t('accounts.bulk.photoHint')}</div>
       <SegmentedControl
         variant="outline"
@@ -169,7 +170,7 @@ export function BulkPhotoTab({
       <div className="type-caption">
         {spread ? t('accounts.bulk.photoEachNote') : t('accounts.bulk.photoOneNote')}
       </div>
-    </div>
+    </SectionStack>
   );
 }
 
@@ -192,7 +193,7 @@ export function BulkStoriesTab({
   const { t } = useTranslation();
   const urls = usePreviews(files);
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div className="type-prose">{t('accounts.bulk.storyHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         <Picked
@@ -254,7 +255,7 @@ export function BulkStoriesTab({
         />
       </div>
       <div className="type-caption">{t('accounts.bulk.storyNote')}</div>
-    </div>
+    </SectionStack>
   );
 }
 
@@ -268,7 +269,7 @@ export function BulkMusicTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div className="type-prose">{t('accounts.bulk.musicHint')}</div>
       {file ? (
         <div className="flex items-center gap-lg rounded-lg border border-line px-lg py-md">
@@ -311,7 +312,7 @@ export function BulkMusicTab({
         </FilePicker>
       )}
       <div className="type-caption">{t('accounts.bulk.musicNote')}</div>
-    </div>
+    </SectionStack>
   );
 }
 

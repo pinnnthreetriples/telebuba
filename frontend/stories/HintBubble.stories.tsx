@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { HintBubble } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/HintBubble',
+  title: 'Design System/Components/HintBubble',
   component: HintBubble,
   tags: ['autodocs'],
   args: {

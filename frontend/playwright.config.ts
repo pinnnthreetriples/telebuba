@@ -13,7 +13,7 @@ import { defineConfig, devices } from '@playwright/test';
 // набор эталонов. `deviceScaleFactor: 1` — чтобы эталоны не зависели от DPI машины.
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: 'storybook.spec.ts',
+  testIgnore: 'storybook*.spec.ts',
   outputDir: './e2e/.artifacts',
   // Платформа и имя проекта в пути — оба обязательны, и оба выяснились падением.
   //
@@ -132,6 +132,7 @@ export default defineConfig({
     // Перенести все 22 значило бы положить в правку 19 двоичных файлов, которых она не
     // касалась, и назвать чужой разброс своим изменением.
     launchOptions: {
+      executablePath: process.env.PLAYWRIGHT_CHROME_PATH || undefined,
       args: [
         '--font-render-hinting=none',
         '--disable-font-subpixel-positioning',

@@ -9,7 +9,16 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
-import { Badge, Button, DataTable, type DataTableColumnMeta, Modal } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Badge,
+  Button,
+  DataTable,
+  type DataTableColumnMeta,
+  Modal,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 
@@ -132,7 +141,7 @@ export function CampaignDetailsModal({
 
   return (
     <Modal onClose={onClose} size="table" label={campaign.name}>
-      <div className="flex flex-wrap items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex flex-wrap items-center">
         <div className="min-w-0">
           <div className="truncate type-dialog-title">{campaign.name}</div>
           {campaign.topic ? (
@@ -144,9 +153,9 @@ export function CampaignDetailsModal({
         <span className="type-caption tabular-nums">
           {t('neuroshilling.launch.progress', { sent: run.sent ?? 0, total: run.total ?? 0 })}
         </span>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl py-lg">
+      <ModalBody variant="rows">
         {rows.length === 0 ? (
           // Пар «аккаунт × цель» нет, пока нет хотя бы одного из двух, и это не пустая
           // таблица, а незаконченная настройка — поэтому сюда же и кнопка.
@@ -154,16 +163,16 @@ export function CampaignDetailsModal({
         ) : (
           <DataTable data={rows} columns={columns} />
         )}
-      </div>
+      </ModalBody>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter className="flex items-center justify-end">
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.details.close')}
         </Button>
         <Button variant="primary" size="sm" onClick={onOpenSettings}>
           {t('neuroshilling.details.settings')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

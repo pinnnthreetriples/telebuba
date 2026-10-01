@@ -1,7 +1,18 @@
+import { dialogTitle } from '@/shared/design-system';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, CloseButton, Icon, IconButton, Modal, Textarea } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  Button,
+  CloseButton,
+  Icon,
+  IconButton,
+  Modal,
+  Textarea,
+} from '@/shared/ui';
 
 export interface PromptAccount {
   account_id: string;
@@ -41,11 +52,11 @@ export function CampaignPromptModal({
 
   return (
     <Modal onClose={onClose} size="form" label={t('neurocomment.modal.campaignPrompt.title')}>
-      <div className="p-2xl">
-        <div className="mb-tight flex items-center justify-between">
+      <ModalBody variant="form">
+        <ModalHeader variant="inline" className="mb-tight justify-between">
           <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
           <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
-        </div>
+        </ModalHeader>
         <div className="mb-lg type-prose">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
@@ -59,7 +70,7 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="px-lg py-md font-[inherit]"
+          variant="prompt"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
@@ -104,12 +115,8 @@ export function CampaignPromptModal({
           </div>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
-          <Button
-            variant="primary"
-            onClick={save}
-            className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
-          >
+        <ModalFooter variant="plain" className="mt-xl">
+          <Button variant={saved ? 'saved' : 'primary'} onClick={save}>
             {saved ? (
               <span className="inline-flex items-center gap-sm">
                 <span className="inline-flex tb-swapin">
@@ -122,8 +129,8 @@ export function CampaignPromptModal({
             )}
           </Button>
           <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
 
       {confirm ? (
         <Modal
@@ -133,8 +140,8 @@ export function CampaignPromptModal({
           size="confirm"
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
-          <div className="p-2xl">
-            <div className="mb-sm type-dialog-title">
+          <ModalBody variant="form">
+            <div className={dialogTitle()}>
               {t('neurocomment.modal.campaignPrompt.removeTitle')}
             </div>
             <div className="mb-xl type-dialog-body">
@@ -143,7 +150,7 @@ export function CampaignPromptModal({
                 channel: confirm.channel,
               })}
             </div>
-            <div className="flex justify-end gap-sm">
+            <ModalFooter variant="plain">
               <Button
                 onClick={() => {
                   setConfirm(null);
@@ -160,8 +167,8 @@ export function CampaignPromptModal({
               >
                 {t('neurocomment.modal.campaignPrompt.removeConfirm')}
               </Button>
-            </div>
-          </div>
+            </ModalFooter>
+          </ModalBody>
         </Modal>
       ) : null}
     </Modal>

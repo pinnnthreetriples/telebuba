@@ -39,7 +39,17 @@ import {
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
 import { formatLocalDateTime } from '@/shared/lib';
-import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  CloseButton,
+  Icon,
+  IconButton,
+  Modal,
+  TabList,
+} from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
 import {
@@ -414,7 +424,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         label={t('accounts.bulk.title')}
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <ModalHeader variant="roomy" className="flex items-center">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -429,7 +439,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               disabled={running}
               aria-label={t('accounts.profile.close')}
             />
-          </div>
+          </ModalHeader>
 
           <div className="flex items-center gap-md border-b border-line-row px-xl py-md">
             <IconButton
@@ -458,7 +468,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                       onClick={() => {
                         setIds((prev) => prev.filter((id) => id !== row.account_id));
                       }}
-                      className="absolute -right-hair -top-hair bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute -right-hair -top-hair opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       <Icon name="close" size={16} />
                     </IconButton>
@@ -485,11 +495,13 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               />
             )}
 
-            <div
+            <ModalBody
+              variant="profile"
+              gap="default"
               role={started ? undefined : 'tabpanel'}
               id={started ? undefined : 'bulk-tabpanel'}
               aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
-              className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+              className="tb-scroll flex flex-1 flex-col overflow-y-auto"
             >
               {started ? (
                 <BulkProgress
@@ -568,10 +580,10 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 />
               )}
               {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
-            </div>
+            </ModalBody>
           </fieldset>
 
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <ModalFooter variant="profile" className="flex items-center justify-end">
             {!started && <div className="mr-auto hidden type-label sm:block">{NOTE[tab]}</div>}
             {started ? (
               running ? (
@@ -585,12 +597,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               )
             ) : (
               <>
-                <Button onClick={onClose} disabled={preparing} className="px-md sm:px-2xl">
+                <Button onClick={onClose} disabled={preparing} presentation="compactFooter">
                   {t('accounts.profile.cancel')}
                 </Button>
                 <Button
                   variant="primary"
-                  className="px-md sm:px-2xl"
+                  presentation="compactFooter"
                   disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
                   loading={preparing}
                   onClick={apply}
@@ -601,7 +613,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 </Button>
               </>
             )}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {pickerOpen && (

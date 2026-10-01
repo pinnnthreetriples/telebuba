@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldError } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/FieldError',
+  title: 'Design System/Components/FieldError',
   component: FieldError,
   tags: ['autodocs'],
   args: {

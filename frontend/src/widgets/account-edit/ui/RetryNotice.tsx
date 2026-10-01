@@ -16,12 +16,17 @@ export function RetryNotice({
   role?: 'alert';
 }) {
   return (
-    <Notice tone="danger" className="flex items-center justify-between gap-md" role={role}>
+    <Notice
+      tone="danger"
+      contentGap="row"
+      className="flex items-center justify-between"
+      role={role}
+    >
       <span>{message}</span>
       <Button
         size="xs"
-        variant="danger"
-        className="bg-surface-card"
+        variant="dangerSurface"
+
         disabled={disabled}
         onClick={onRetry}
       >

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { AccountAvatar } from '../src/entities/account';
 
 const meta = {
-  title: 'Patterns/Account avatar',
+  title: 'Design System/Patterns/Account avatar',
   component: AccountAvatar,
   tags: ['autodocs'],
   args: {

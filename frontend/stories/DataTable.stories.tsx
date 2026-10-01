@@ -20,7 +20,7 @@ const columns: ColumnDef<Account>[] = [
 ];
 
 const meta = {
-  title: 'Shared/DataTable',
+  title: 'Design System/Components/DataTable',
   component: DataTable,
   tags: ['autodocs'],
   args: { data, columns },

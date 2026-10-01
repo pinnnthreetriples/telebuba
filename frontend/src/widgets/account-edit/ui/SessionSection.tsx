@@ -162,12 +162,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           <FeedbackMark
             result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck}
           />
-          <Button
-            size="xs"
-            className="text-content-muted"
-            onClick={onLogout}
-            loading={logout.isPending}
-          >
+          <Button size="xs" variant="statusIdle" onClick={onLogout} loading={logout.isPending}>
             {t('accounts.edit.logout')}
           </Button>
         </span>
@@ -178,7 +173,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           size="xs"
           onClick={onRequestCode}
           loading={requestCode.isPending}
-          className="text-action-primary"
+          variant="secondaryAction"
         >
           {t('accounts.edit.sendCode')}
         </Button>
@@ -187,7 +182,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
           <Input
-            className="tracking-code"
+            textStyle="code"
             value={smsCode}
             onChange={(event) => {
               setSmsCode(event.target.value);
@@ -215,7 +210,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       </div>
       <Button
         fullWidth
-        className="font-medium"
+        weight="medium"
         onClick={onConfirmLogin}
         disabled={!code}
         loading={submitCode.isPending}

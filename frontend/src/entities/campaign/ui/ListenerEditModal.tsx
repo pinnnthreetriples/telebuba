@@ -4,7 +4,18 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal, Select, TabList, toastError } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  CloseButton,
+  Icon,
+  Modal,
+  Select,
+  TabList,
+  toastError,
+} from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -146,7 +157,7 @@ export function ListenerEditModal({
 
   return (
     <Modal onClose={close} size="panel" label={t('neurocomment.listener.title')}>
-      <div className="flex items-center gap-md px-xl pb-lg pt-xl">
+      <ModalHeader variant="listener" className="flex items-center">
         <span className={HEADING_ICON_TILE}>
           <Icon name="chart" size={18} />
         </span>
@@ -155,7 +166,7 @@ export function ListenerEditModal({
           <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
         </div>
         <CloseButton aria-label={t('neurocomment.modal.close')} onClick={close} disabled={saving} />
-      </div>
+      </ModalHeader>
 
       <TabList
         options={TABS.map((value) => ({
@@ -169,11 +180,11 @@ export function ListenerEditModal({
         ariaLabel={t('neurocomment.listener.title')}
       />
 
-      <div
+      <ModalBody
+        variant="profile"
         role="tabpanel"
         id="listener-tabpanel"
         aria-labelledby={`listener-tab-${tab}`}
-        className="p-xl"
       >
         {tab === 'commenting' ? (
           <>
@@ -218,18 +229,17 @@ export function ListenerEditModal({
             {t('neurocomment.modal.listenerEdit.partialSave')}
           </p>
         ) : null}
-      </div>
+      </ModalBody>
 
-      <div className="flex justify-end gap-sm px-xl pb-xl">
+      <ModalFooter variant="listener" className="flex justify-end">
         <Button onClick={close} disabled={saving}>
           {t('neurocomment.modal.cancel')}
         </Button>
         <Button
-          variant="primary"
+          variant={saved ? 'saved' : 'primary'}
           onClick={save}
           // A second click while the PUT is open would send the same body again.
           loading={saving}
-          className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
         >
           {saved ? (
             <span className="inline-flex items-center gap-sm">
@@ -242,7 +252,7 @@ export function ListenerEditModal({
             t('neurocomment.modal.save')
           )}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

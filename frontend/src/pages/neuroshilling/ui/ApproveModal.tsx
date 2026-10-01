@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
-import { Badge, Button, Modal } from '@/shared/ui';
+import { Input, ModalHeader, ModalBody, ModalFooter, Badge, Button, Modal } from '@/shared/ui';
 
 import { useNumberField } from './useNumberField';
 
@@ -48,7 +48,8 @@ function PauseBox({
   });
   return (
     <span className="flex h-compact shrink-0 items-center gap-xs rounded-md border border-line bg-surface-card px-sm">
-      <input
+      <Input
+        variant="inlineCaption"
         type="number"
         min={0}
         max={MAX_STEP_DELAY_SECONDS}
@@ -58,10 +59,13 @@ function PauseBox({
           minField.onChange(event.target.value);
         }}
         onBlur={minField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-right type-caption tabular-nums outline-none"
+        textStyle="tabular"
+        widthPreset="action"
+        className="tb-plain-number text-right"
       />
       <span className="type-caption">–</span>
-      <input
+      <Input
+        variant="inlineCaption"
         type="number"
         min={0}
         max={MAX_STEP_DELAY_SECONDS}
@@ -71,7 +75,9 @@ function PauseBox({
           maxField.onChange(event.target.value);
         }}
         onBlur={maxField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-left type-caption tabular-nums outline-none"
+        textStyle="tabular"
+        widthPreset="action"
+        className="tb-plain-number text-left"
       />
       <span className="type-caption">{t('neuroshilling.scenario.steps.seconds')}</span>
     </span>
@@ -122,7 +128,7 @@ export function ApproveModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neuroshilling.preview.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex items-center">
         <span className="type-dialog-title">{t('neuroshilling.preview.title')}</span>
         {/* Два счётчика — двумя ключами, а не одним с двумя подстановками: склоняются
             они по РАЗНЫМ числам, и «5 реплик, 1 реакций» — ровно то, что получается,
@@ -143,9 +149,9 @@ export function ApproveModal({
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl py-lg">
+      <ModalBody variant="rows">
         {dirty ? (
           <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
             {t('neuroshilling.preview.unsaved')}
@@ -237,9 +243,9 @@ export function ApproveModal({
             })}
           </div>
         )}
-      </div>
+      </ModalBody>
 
-      <div className="flex flex-wrap items-center gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter className="flex flex-wrap items-center">
         <span className="mr-auto type-caption tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
@@ -252,7 +258,7 @@ export function ApproveModal({
         >
           {t('neuroshilling.preview.play')}
         </Button>
-        <Button size="sm" className="text-action-primary" disabled={busy} onClick={onRegenerate}>
+        <Button size="sm" variant="secondaryAction" disabled={busy} onClick={onRegenerate}>
           {t('neuroshilling.preview.regenerate')}
         </Button>
         {/* Утверждать нечего, пока нечего читать, и незачем — пока сценарий уже утверждён
@@ -268,7 +274,7 @@ export function ApproveModal({
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.settings.cancel')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

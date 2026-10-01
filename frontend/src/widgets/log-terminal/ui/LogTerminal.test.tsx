@@ -48,6 +48,7 @@ test('rows render translated and the counter follows the filter', async () => {
   expect(screen.getByText('2')).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: 'Алиса' }));
+  expect(screen.getByTitle('Показать все')).not.toHaveClass('border');
   expect(screen.queryByText('Кампания завершена')).toBeNull();
   expect(screen.getByText('1')).toBeInTheDocument();
 

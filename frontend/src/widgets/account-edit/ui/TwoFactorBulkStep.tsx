@@ -276,7 +276,8 @@ export function TwoFactorBulkStep({
               <FormField field={field} label={t('accounts.edit.twofaPassword')}>
                 <div className="relative">
                   <Input
-                    className="pr-[36px] font-mono"
+                    inset="trailing"
+                    textStyle="mono"
                     id={field.name}
                     name={field.name}
                     value={field.state.value}

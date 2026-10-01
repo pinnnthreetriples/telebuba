@@ -93,7 +93,8 @@ export function StoriesTab({
               onClick={() => {
                 onRemove(story);
               }}
-              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
+              tone="inverse"
+              className={`absolute right-tight top-tight ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>

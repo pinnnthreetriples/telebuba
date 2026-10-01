@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Icon, SegmentedControl } from '@/shared/ui';
+import { SectionStack, Icon, SegmentedControl } from '@/shared/ui';
 
 import type { PrivacyKey, PrivacyLevel } from './_profileShared';
 import { PRIVACY_KEYS, PRIVACY_LEVELS } from './_profileShared';
@@ -22,7 +22,7 @@ export function BulkPrivacyTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div className="rounded-lg bg-info-tint px-md py-md type-prose">
         {t('accounts.bulk.privacyHint')}
       </div>
@@ -67,6 +67,6 @@ export function BulkPrivacyTab({
         );
       })}
       <div className="type-caption">{t('accounts.bulk.privacyNote')}</div>
-    </div>
+    </SectionStack>
   );
 }

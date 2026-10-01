@@ -1,4 +1,4 @@
-import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import { switchTrack, switchThumb } from '@/shared/design-system';
 
 // The design's pill switch (track + sliding thumb), 18px of travel.
 //
@@ -31,10 +31,10 @@ export function Switch({
         onChange(!checked);
       }}
       // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the track is its own knob's travel (3 + size-chip + 21)
-      className={`tb-sw relative h-compact w-[46px] shrink-0 rounded-full transition-colors duration-state disabled:pointer-events-none disabled:opacity-50 ${PRESS_FEEDBACK} ${FOCUS_RING} ${checked ? 'bg-action-primary hover:bg-action-pressed' : 'bg-line-strong hover:bg-content-subtle'}`}
+      className={`${switchTrack(checked)} w-[46px]`}
     >
       <span
-        className={`tb-sw-thumb absolute top-[3px] block size-chip rounded-full bg-surface-card shadow-thumb transition-transform ${checked ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}
+        className={`${switchThumb()} top-[3px] ${checked ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}
       />
     </button>
   );

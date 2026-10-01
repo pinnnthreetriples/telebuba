@@ -18,6 +18,8 @@ const SAMPLES: Record<TypeRoleName, string> = {
   'dialog-title': 'Удалить аккаунт?',
   'dialog-body': 'Аккаунт и его сессия будут удалены безвозвратно.',
   'card-title': 'Ограничения аккаунта',
+  'compact-title': 'Настройки API',
+  'field-error': 'Введите значение',
   'item-title': 'Иван Петров',
   eyebrow: 'Прокси и сеть',
   label: 'Действий в сутки',

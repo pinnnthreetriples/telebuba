@@ -10,7 +10,7 @@ function SwitchExample() {
 }
 
 const meta = {
-  title: 'Shared/Switch',
+  title: 'Design System/Components/Switch',
   component: Switch,
   tags: ['autodocs'],
   args: { checked: true, onChange: () => undefined, label: 'Автоответ' },

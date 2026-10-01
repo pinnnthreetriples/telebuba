@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Textarea } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Textarea',
+  title: 'Design System/Components/Textarea',
   component: Textarea,
   tags: ['autodocs'],
   args: { placeholder: 'Промпт для генерации комментария' },

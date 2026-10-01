@@ -88,7 +88,8 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
               </div>
               <Button
                 size="xs"
-                className="rounded-full hover:border-info-line hover:text-action-primary"
+                shape="pill"
+                variant="refresh"
                 onClick={() => {
                   setEditingId(channel.channel_id);
                 }}

@@ -7,7 +7,17 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, CloseButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  Button,
+  CloseButton,
+  Input,
+  Modal,
+  Notice,
+  Textarea,
+} from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -203,11 +213,11 @@ export function ChannelCreateModal({
       size="form"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
+      <ModalBody variant="form" className="tb-scroll max-h-dialog overflow-y-auto">
+        <ModalHeader variant="inline" className="mb-lg justify-between">
           <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
           <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
-        </div>
+        </ModalHeader>
 
         <label className="mb-lg block">
           <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
@@ -228,7 +238,6 @@ export function ChannelCreateModal({
         <label className="mb-lg block">
           <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
           <Textarea
-            className="[font-family:inherit]"
             value={about}
             maxLength={CHANNEL_ABOUT_MAX}
             onChange={(event) => {
@@ -259,7 +268,7 @@ export function ChannelCreateModal({
             <div className="relative flex items-center">
               <span className="absolute left-lg text-body text-content-subtle">@</span>
               <Input
-                className="pl-page"
+                inset="leading"
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
@@ -281,7 +290,7 @@ export function ChannelCreateModal({
           </Notice>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <ModalFooter variant="plain" className="mt-xl">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.channel.cancel')}
           </Button>
@@ -305,8 +314,8 @@ export function ChannelCreateModal({
                 ? t('accounts.channel.creating')
                 : t('accounts.channel.createBtn')}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

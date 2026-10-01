@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 
-import { badgeTone, type BadgeTone } from '@/shared/design-system';
+import {
+  badgeGeometry,
+  badgeDot,
+  type BadgeTone,
+  type BadgeSize,
+  type BadgeEmphasis,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The tinted pill that labels a row — a count, a state, a "N удалено". Forty of
@@ -23,17 +29,11 @@ import { cn } from '@/shared/lib/cn';
 // sit at `text-tiny`, which the type scale itself calls a pill's label. It had no
 // name of its own because the two rungs that happened to be written first took `sm`
 // and `md` between them; the smallest is `xs`, which is what it always measured.
-const SIZE = {
-  md: 'px-md py-tight text-body',
-  sm: 'px-md py-xs text-tiny',
-  xs: 'px-sm py-hair text-tiny',
-} as const;
 
 // 6px over the 5px also in use: four of the app's seven status dots are already
 // this one, and beside an 11px label the smaller reads as a printing flaw. Its
 // diameter is a component's dimension and not a rung of the spacing rhythm, which
 // is why it is written out rather than taken from the scale.
-const DOT = 'size-dot shrink-0 rounded-full bg-current';
 
 // Имя набора приходит из рецепта, а не объявляется здесь псевдонимом: пока оно было
 // `Tone` в рецепте и `BadgeTone` тут, у одного множества было два имени.
@@ -43,12 +43,20 @@ export function Badge({
   tone = 'neutral',
   size = 'xs',
   dot = false,
+  emphasis = 'medium',
+  contentGap = 'default',
+  appearance = 'default',
+  bordered = false,
   className,
   children,
   ...rest
 }: {
   tone?: BadgeTone;
-  size?: keyof typeof SIZE;
+  size?: BadgeSize;
+  emphasis?: BadgeEmphasis;
+  contentGap?: 'default' | 'roomy';
+  appearance?: 'default' | 'channel';
+  bordered?: boolean;
   // The leading dot, `bg-current` so it can never disagree with the label. A prop
   // rather than a span the caller passes in, because a caller writing that span
   // re-decides the diameter and the gap each time, and those two disagreeing across
@@ -60,14 +68,12 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-tight whitespace-nowrap rounded-full font-medium',
-        badgeTone(tone),
-        SIZE[size],
+        badgeGeometry(size, emphasis, contentGap, appearance, bordered, tone),
         className,
       )}
       {...rest}
     >
-      {dot ? <span className={DOT} /> : null}
+      {dot ? <span className={badgeDot()} /> : null}
       {children}
     </span>
   );

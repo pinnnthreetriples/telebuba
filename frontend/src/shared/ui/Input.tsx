@@ -1,7 +1,18 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { InputHTMLAttributes, Ref, TextareaHTMLAttributes } from 'react';
 
-import { areaBase, type ControlSize, fieldBase } from '@/shared/design-system';
+import {
+  areaBase,
+  type ControlSize,
+  fieldBase,
+  fieldInset,
+  type FieldInset,
+  type FieldVariant,
+  type AreaVariant,
+  fieldPresentation,
+  areaPresentation,
+  fieldWidth,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The app's text fields. The `md` look below was copy-pasted verbatim as a local
@@ -29,40 +40,100 @@ import { cn } from '@/shared/lib/cn';
 const TONE = {
   default: 'border-line',
   flat: 'border-line bg-canvas',
+  selected: 'border-action-primary',
+  inert: 'border-line bg-canvas text-content-subtle',
 } as const;
 
 type FieldSize = Exclude<ControlSize, 'lg'>;
 
-type Shared = {
+type Shared<Variant extends FieldVariant | AreaVariant = FieldVariant | AreaVariant> = {
+  variant?: Variant;
+  widthPreset?: Parameters<typeof fieldWidth>[0];
+  textStyle?: 'default' | 'mono' | 'code' | 'tabular' | 'monoCode' | 'monoPrimary';
   size?: FieldSize;
   tone?: keyof typeof TONE;
   // Drives the border only. The message itself belongs beside the field (see
   // `FieldError`), because a red border alone is a colour carrying meaning.
   invalid?: boolean;
   className?: string;
+  inset?: FieldInset;
 };
 
 function shell(
-  { size = 'md', tone = 'default', invalid, className }: Shared,
+  {
+    size = 'md',
+    tone = 'default',
+    invalid,
+    className,
+    inset = 'none',
+    variant = 'standard',
+    textStyle = 'default',
+    widthPreset,
+  }: Shared,
   multiline = false,
 ): string {
-  const base = multiline ? areaBase({ size, invalid }) : fieldBase({ size, invalid });
-  return cn(base, TONE[tone], invalid === true && 'border-danger', className);
+  const base =
+    variant === 'standard'
+      ? multiline
+        ? areaBase({ size, invalid })
+        : fieldBase({ size, invalid })
+      : variant === 'prompt' || variant === 'composer'
+        ? areaPresentation(variant)
+        : fieldPresentation(variant);
+  const TEXT_STYLE = {
+    default: '',
+    mono: 'font-mono',
+    code: 'tracking-code',
+    tabular: 'tabular-nums',
+    monoCode: 'font-mono tracking-code',
+    monoPrimary: 'font-mono text-content-primary',
+  };
+  return cn(
+    base,
+    TONE[tone],
+    TEXT_STYLE[textStyle],
+    widthPreset && fieldWidth(widthPreset),
+    invalid === true && 'border-danger',
+    fieldInset(inset),
+    className,
+  );
 }
 
-export function Input({ size, tone, invalid, className, ...rest }: Shared & InputProps) {
+export function Input({
+  size,
+  tone,
+  invalid,
+  className,
+  inset,
+  variant,
+  textStyle,
+  widthPreset,
+  ...rest
+}: Shared<FieldVariant> & InputProps) {
   return (
     <input
       aria-invalid={invalid || undefined}
-      className={shell({ size, tone, invalid, className })}
+      className={shell({ size, tone, invalid, className, inset, variant, textStyle, widthPreset })}
       {...rest}
     />
   );
 }
 
-function fitTextarea(area: HTMLTextAreaElement) {
+function fitTextarea(area: HTMLTextAreaElement, maxRows?: number) {
   area.style.height = 'auto';
-  if (area.scrollHeight > 0) area.style.height = `${String(area.scrollHeight)}px`;
+  if (area.scrollHeight <= 0) return;
+  if (maxRows === undefined) {
+    area.style.height = `${String(area.scrollHeight)}px`;
+    return;
+  }
+  const style = getComputedStyle(area);
+  const line = Number.parseFloat(style.lineHeight);
+  const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+  const cap =
+    Math.max(1, maxRows) * (Number.isFinite(line) && line > 0 ? line : 20) +
+    (Number.isFinite(padding) ? padding : 0);
+  area.style.height = `${String(Math.min(area.scrollHeight, cap))}px`;
+  area.style.overflowY = area.scrollHeight > cap ? 'auto' : 'hidden';
 }
 
 export function Textarea({
@@ -70,10 +141,15 @@ export function Textarea({
   tone,
   invalid,
   className,
+  inset,
+  variant,
+  maxRows,
+  textStyle,
+  widthPreset,
   onInput,
   ref: forwardedRef,
   ...rest
-}: Shared & TextareaProps) {
+}: Shared<AreaVariant> & TextareaProps) {
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const attachRef = useCallback(
     (node: HTMLTextAreaElement | null) => {
@@ -85,7 +161,7 @@ export function Textarea({
   );
 
   useLayoutEffect(() => {
-    if (areaRef.current) fitTextarea(areaRef.current);
+    if (areaRef.current) fitTextarea(areaRef.current, maxRows);
   });
 
   useLayoutEffect(() => {
@@ -95,11 +171,11 @@ export function Textarea({
     const observer = new ResizeObserver(() => {
       if (area.clientWidth === width) return;
       width = area.clientWidth;
-      fitTextarea(area);
+      fitTextarea(area, maxRows);
     });
     observer.observe(area);
     return () => observer.disconnect();
-  }, []);
+  }, [maxRows]);
 
   return (
     <textarea
@@ -107,9 +183,12 @@ export function Textarea({
       {...rest}
       rows={1}
       ref={attachRef}
-      className={cn(shell({ size, tone, invalid, className }, true), 'resize-none overflow-hidden')}
+      className={cn(
+        shell({ size, tone, invalid, className, inset, variant, textStyle, widthPreset }, true),
+        'resize-none overflow-hidden',
+      )}
       onInput={(event) => {
-        fitTextarea(event.currentTarget);
+        fitTextarea(event.currentTarget, maxRows);
         onInput?.(event);
       }}
     />
@@ -121,5 +200,6 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'classNam
   ref?: Ref<HTMLInputElement>;
 };
 type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className' | 'rows'> & {
+  maxRows?: number;
   ref?: Ref<HTMLTextAreaElement>;
 };

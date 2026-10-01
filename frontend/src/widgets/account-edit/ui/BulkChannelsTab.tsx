@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import {
+  SectionStack,
   Button,
   Icon,
   IconButton,
@@ -57,7 +58,7 @@ export function BulkChannelsTab({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <SegmentedControl
         variant="outline"
         value={mode}
@@ -133,7 +134,6 @@ export function BulkChannelsTab({
           <label className="flex flex-col gap-tight">
             <span className="type-label">{t('accounts.channel.aboutLabel')}</span>
             <Textarea
-              className="[font-family:inherit]"
               value={channel.about}
               maxLength={CHANNEL_ABOUT_MAX}
               onChange={(event) => {
@@ -156,7 +156,7 @@ export function BulkChannelsTab({
               <div className="relative flex items-center">
                 <span className="absolute left-lg text-body text-content-subtle">@</span>
                 <Input
-                  className="pl-page"
+                  inset="leading"
                   aria-label={t('accounts.channel.usernameLabel')}
                   value={channel.username}
                   onChange={(event) => {
@@ -181,7 +181,6 @@ export function BulkChannelsTab({
           <div className="type-prose">{t('accounts.bulk.channelPostHint')}</div>
           <div className="flex flex-col gap-tight">
             <Textarea
-              className="[font-family:inherit]"
               value={post.text}
               maxLength={postTextMax(post.file)}
               aria-label={t('accounts.channel.composerPlaceholder')}
@@ -249,6 +248,6 @@ export function BulkChannelsTab({
           <div className="type-caption">{t('accounts.bulk.channelPostNote')}</div>
         </>
       )}
-    </div>
+    </SectionStack>
   );
 }

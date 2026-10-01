@@ -88,8 +88,7 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.campaigns.title')}
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
+
       header={<span className="type-card-title">{t('neurocomment.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
@@ -129,7 +128,7 @@ export function CampaignsCard({
                 <>
                   <IconButton
                     size="md"
-                    tone="neutral"
+                    tone={isRunning ? 'warning' : 'success'}
                     aria-label={
                       isRunning ? t('neurocomment.campaign.pause') : t('neurocomment.campaign.run')
                     }
@@ -139,11 +138,6 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={
-                      isRunning
-                        ? 'text-warning-deep hover:bg-warning-tint'
-                        : 'text-success-deep hover:bg-success-tint'
-                    }
                   >
                     {isRunning ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                   </IconButton>
@@ -181,7 +175,7 @@ export function CampaignsCard({
         ) : null}
       </div>
 
-      <Button variant="dashed" fullWidth className="mt-md font-medium" onClick={onCreate}>
+      <Button variant="dashed" fullWidth weight="medium" className="mt-md" onClick={onCreate}>
         {t('neurocomment.campaigns.create')}
       </Button>
 
@@ -189,9 +183,9 @@ export function CampaignsCard({
       <div className="mt-lg border-t border-line-row pt-md">
         <CollapsibleCard
           defaultOpen
-          wrapperClassName=""
-          headerClassName="px-0 py-0"
-          bodyClassName="px-0 pb-0 pt-md"
+          appearance="embedded"
+          headerPadding="none"
+          bodyPadding="inset"
           label={t('neurocomment.channels.title')}
           header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
         >
@@ -208,7 +202,8 @@ export function CampaignsCard({
                 onClick={onCheckChannels}
                 // `text-tiny` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
                 // рядом с именем кампании, и на рунге контрола имя не остаётся.
-                className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                textSize="tiny"
+                variant="compactChannel"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -245,7 +240,6 @@ export function CampaignsCard({
                   size="sm"
                   shape="circle"
                   tone="danger"
-                  className="text-content-subtle"
                 >
                   <Icon name="close" size={16} />
                 </IconButton>

@@ -1,3 +1,4 @@
+import { pageTitleSpacing, boardLayout } from '@/shared/design-system';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,8 +22,8 @@ import type {
   NeuroshillingCampaign,
   NeuroshillingCampaignUpdate,
 } from '@/shared/api';
-import { useLogEventStream } from '@/shared/lib';
-import { ConfirmModal } from '@/shared/ui';
+import { cn, useLogEventStream } from '@/shared/lib';
+import { PageFrame, SectionStack, ConfirmModal } from '@/shared/ui';
 import { LogTerminal } from '@/widgets/log-terminal';
 
 import { ApproveModal } from './ApproveModal';
@@ -578,14 +579,14 @@ export function NeuroshillingPage() {
     // `max-w-shell`, а не `max-w-page`: страница стала двухколоночной, и на ширине
     // страницы (1000px) сайдбар в 328px оставил бы главной колонке меньше, чем ей нужно
     // под шесть узлов конвейера и таблицу.
-    <div className="tb-fadeup mx-auto max-w-shell">
-      <h1 className="m-0 mb-xl type-page-title">{t('neuroshilling.title')}</h1>
+    <PageFrame variant="full" className="tb-fadeup">
+      <h1 className={cn('m-0 type-page-title', pageTitleSpacing())}>{t('neuroshilling.title')}</h1>
 
       {/* Колонки разъезжаются на `lg`, а ниже складываются в стопку. Порядок в стопке —
           порядок в разметке: сводка замечаний и выбор кампании стоят ВЫШЕ конвейера,
           потому что на узком экране сначала выбирают, а потом смотрят. */}
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
-        <div className="flex flex-col gap-md lg:w-sidebar lg:shrink-0">
+      <div className={boardLayout('launch')}>
+        <SectionStack gap="compact" className="min-w-0">
           <ChecksBanner blockers={blockers} />
 
           <CampaignsCard
@@ -633,9 +634,9 @@ export function NeuroshillingPage() {
           />
 
           <HowItWorksCard />
-        </div>
+        </SectionStack>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-lg">
+        <SectionStack className="min-w-0 flex-1">
           {campaign === undefined ||
           stored === undefined ||
           stored.campaign_id !== campaignId ? null : (
@@ -689,7 +690,7 @@ export function NeuroshillingPage() {
             }}
             accountName={titleOf}
           />
-        </div>
+        </SectionStack>
       </div>
 
       {/* Подробности кампании: кто, в каком чате и что скажет. Ждёт ТЕ ЖЕ данные, что и
@@ -878,6 +879,6 @@ export function NeuroshillingPage() {
           }}
         />
       ) : null}
-    </div>
+    </PageFrame>
   );
 }

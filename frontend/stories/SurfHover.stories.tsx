@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Icon, IconButton, SurfHover } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/SurfHover',
+  title: 'Design System/Components/SurfHover',
   component: SurfHover,
   tags: ['autodocs'],
   args: {

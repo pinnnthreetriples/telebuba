@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, Modal, toastError } from '@/shared/ui';
+import { Input, ModalHeader, ModalBody, ModalFooter, Button, Modal, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -103,7 +103,8 @@ function LimitRow({
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
-        <input
+        <Input
+          variant="readout"
           type="number"
           min={min}
           max={CAP_MAX}
@@ -121,7 +122,8 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-readout rounded-md border border-line bg-surface-card px-md py-tight text-right font-mono text-body font-semibold text-content-primary"
+          widthPreset="readout"
+          className="text-right"
         />
       </div>
       <div className="mt-tight type-caption">
@@ -200,7 +202,7 @@ export function AccountLimitsModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex items-center">
         <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
@@ -219,9 +221,9 @@ export function AccountLimitsModal({
           <div className="type-dialog-title">{t('neurocomment.modal.limits.title', { name })}</div>
           <div className="mt-hair type-prose">{t('neurocomment.modal.limits.sub')}</div>
         </div>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl pb-xs pt-xs">
+      <ModalBody variant="tight">
         {view ? (
           KEYS.map((key) => (
             <LimitRow
@@ -243,23 +245,23 @@ export function AccountLimitsModal({
               : t('neurocomment.modal.limits.loading')}
           </div>
         )}
-      </div>
+      </ModalBody>
 
       <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-tiny text-content-muted">
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 
-      <div className="flex justify-between gap-md border-t border-line-row px-2xl pb-xl pt-lg">
+      <ModalFooter variant="inset" contentGap="roomy" className="justify-between">
         <Button
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
           }}
-          className="border-line-strong text-content-muted"
+          variant="secondaryMuted"
         >
           {t('neurocomment.modal.limits.resetAll')}
         </Button>
         <div className="flex gap-sm">
-          <Button onClick={onClose} className="border-line-strong text-content-muted">
+          <Button onClick={onClose} variant="secondaryMuted">
             {t('neurocomment.modal.cancel')}
           </Button>
           <Button
@@ -272,7 +274,7 @@ export function AccountLimitsModal({
             {t('neurocomment.modal.limits.save')}
           </Button>
         </div>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

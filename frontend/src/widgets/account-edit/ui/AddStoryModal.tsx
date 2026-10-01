@@ -19,8 +19,19 @@ import {
   useNow,
   type ScheduleMode,
 } from '@/features/schedule-post';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
+import { formLabel, BAR_FILL, BAR_TRACK } from '@/shared/design-system';
+import {
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  Button,
+  CloseButton,
+  Icon,
+  Input,
+  Modal,
+  SegmentedControl,
+  Spinner,
+} from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -339,8 +350,8 @@ export function AddStoryModal({
       size="form"
       label={t('accounts.addStory.title')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
+      <ModalBody variant="form" className="tb-scroll max-h-dialog overflow-y-auto">
+        <ModalHeader variant="inline" className="mb-lg justify-between">
           <span className="type-dialog-title">{t('accounts.addStory.title')}</span>
           <CloseButton
             onClick={onClose}
@@ -350,7 +361,7 @@ export function AddStoryModal({
             disabled={busy}
             aria-label={t('accounts.addStory.close')}
           />
-        </div>
+        </ModalHeader>
 
         <ScheduleModeControl
           className="mb-md"
@@ -389,7 +400,7 @@ export function AddStoryModal({
         />
 
         <label className="mb-lg block">
-          <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>
+          <span className={formLabel()}>{t('accounts.addStory.caption')}</span>
           <Input
             value={caption}
             // Read once at the click: an edit during the publish would be ignored.
@@ -691,7 +702,7 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <ModalFooter variant="plain" className="mt-xl">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.addStory.cancel')}
           </Button>
@@ -705,8 +716,8 @@ export function AddStoryModal({
           >
             {later ? t('accounts.schedule.storySubmit') : t('accounts.addStory.publish')}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

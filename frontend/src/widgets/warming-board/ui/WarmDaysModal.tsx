@@ -3,8 +3,16 @@ import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
+import { dialogBody, HEADING_ICON_TILE } from '@/shared/design-system';
+import {
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  Button,
+  Icon,
+  Modal,
+  SegmentedControl,
+} from '@/shared/ui';
 
 const MIN = 1;
 const MAX = 14;
@@ -65,8 +73,8 @@ export function WarmDaysModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('warming.days.title')}>
-      <div className="p-2xl">
-        <div className="mb-xs flex items-start gap-md">
+      <ModalBody variant="form">
+        <ModalHeader variant="inline" contentGap="compact" className="mb-xs items-start">
           <div className={HEADING_ICON_TILE}>
             <svg
               width="17"
@@ -84,18 +92,21 @@ export function WarmDaysModal({
           <span className="tb-tip inline-flex shrink-0">
             {/* Already a tab stop, so `:focus-within` reveals the bubble for free; the
                 `aria-describedby` is what names it. See app/styles/index.css. */}
-            <button
+            <Button
+              presentation="status"
+              size="xs"
+              contentGap="roomy"
+              variant={
+                spam === 'clean'
+                  ? 'statusSuccess'
+                  : spam === 'limited'
+                    ? 'statusDanger'
+                    : 'statusIdle'
+              }
               type="button"
               aria-describedby={spamTipId}
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
-              className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium disabled:opacity-60 ${
-                spam === 'clean'
-                  ? 'border-success text-success-deep'
-                  : spam === 'limited'
-                    ? 'border-danger text-danger'
-                    : 'border-line text-content-muted'
-              }`}
             >
               <Icon name="shield-check" size={14} />
               {spam === 'loading'
@@ -105,13 +116,13 @@ export function WarmDaysModal({
                   : spam === 'limited'
                     ? t('warming.days.spamLimited')
                     : t('warming.days.spamCheck')}
-            </button>
+            </Button>
             <span id={spamTipId} role="tooltip" className="tb-tip-pop">
               {t('warming.days.spamTip')}
             </span>
           </span>
-        </div>
-        <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
+        </ModalHeader>
+        <div className={dialogBody()}>{t('warming.days.subtitle', { phone })}</div>
 
         <div className="mb-xl text-center">
           <div className="text-hero font-bold leading-none text-action-primary">{days}</div>
@@ -213,7 +224,7 @@ export function WarmDaysModal({
           }}
         />
 
-        <div className="flex justify-end gap-sm">
+        <ModalFooter variant="plain">
           <Button
             variant="primary"
             onClick={() => {
@@ -224,8 +235,8 @@ export function WarmDaysModal({
             {t('warming.days.start')}
           </Button>
           <Button onClick={onClose}>{t('warming.days.cancel')}</Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

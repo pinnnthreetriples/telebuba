@@ -5,7 +5,7 @@ import { Button } from '../src/shared/ui';
 import { ButtonSizingGuide } from './ButtonSizingGuide';
 
 const meta = {
-  title: 'Shared/Button',
+  title: 'Design System/Components/Button',
   component: Button,
   tags: ['autodocs'],
   args: { children: 'Сохранить' },
@@ -25,4 +25,16 @@ export const DashedMuted: Story = {
 };
 export const Disabled: Story = { args: { variant: 'primary', disabled: true } };
 export const Loading: Story = { args: { variant: 'primary', loading: true } };
+export const GhostAction: Story = { args: { variant: 'ghostAction', children: 'Действие' } };
+export const RefreshSuccess: Story = { args: { variant: 'refreshSuccess', children: 'Обновить' } };
+export const RefreshDanger: Story = { args: { variant: 'refreshDanger', children: 'Повторить' } };
 export const SizesInContext: Story = { render: () => <ButtonSizingGuide /> };
+export const ContrastCanvas: Story = {
+  render: () => (
+    <div className="flex flex-wrap gap-md bg-canvas p-lg">
+      <Button variant="ghostAction">Ghost action</Button>
+      <Button variant="refreshSuccess">Refresh success</Button>
+      <Button variant="refreshDanger">Refresh danger</Button>
+    </div>
+  ),
+};

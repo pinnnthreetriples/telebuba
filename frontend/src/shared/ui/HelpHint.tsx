@@ -1,15 +1,10 @@
-import { surface } from '@/shared/design-system';
+import { helpBadge, hintBubble, hintExample } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // A small "?" badge that reveals a short plain-language explanation on hover or
 // keyboard focus. Pure CSS (group-hover / focus-within) so there's no popover
 // library; `title` is the accessible/native fallback. Used next to settings
 // labels where the field's effect isn't obvious from its name.
-const BADGE =
-  'flex size-glyph shrink-0 cursor-help items-center justify-center rounded-full ' +
-  'border border-line text-tiny font-bold leading-none text-content-subtle ' +
-  'transition-colors hover:border-action-primary hover:text-action-primary focus:outline-none ' +
-  'focus-visible:border-focus focus-visible:text-focus';
 
 // The bubble on its own, for the callers whose trigger is the control itself rather than a
 // "?" beside it — a control that is already a <button> cannot host the badge, since the
@@ -26,13 +21,14 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        query, if the clipping ever actually bites. */
     <span
       className={cn(
-        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-md text-left text-tiny text-content-muted group-hover:block group-focus-within:block',
-        surface('panel'),
+        // This badge needs 7px anchor clearance, not a shared spacing rung.
+        'top-[calc(100%+7px)]',
+        hintBubble(),
       )}
       role="tooltip"
     >
       {text}
-      {example ? <span className="mt-tight block text-content-subtle">{example}</span> : null}
+      {example ? <span className={hintExample()}>{example}</span> : null}
     </span>
   );
 }
@@ -41,7 +37,7 @@ export function HelpHint({ text, example }: { text: string; example?: string }) 
   const title = example ? `${text}\n${example}` : text;
   return (
     <span className="group relative inline-flex align-middle">
-      <span role="note" aria-label={title} tabIndex={0} title={title} className={BADGE}>
+      <span role="note" aria-label={title} tabIndex={0} title={title} className={helpBadge()}>
         ?
       </span>
       <HintBubble text={text} example={example} />

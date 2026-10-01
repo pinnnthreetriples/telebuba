@@ -36,7 +36,7 @@ const names: IconName[] = [
 ];
 
 const meta = {
-  title: 'Shared/Icon',
+  title: 'Design System/Components/Icon',
   component: Icon,
   tags: ['autodocs'],
   args: { name: 'check', size: 16 },

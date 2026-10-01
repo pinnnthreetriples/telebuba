@@ -1,6 +1,16 @@
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
-import { FOCUS_RING, PRESS_FEEDBACK, SURFACE } from '@/shared/design-system';
+import {
+  FOCUS_RING,
+  PRESS_FEEDBACK,
+  cardSurface,
+  collapsibleBody,
+  collapsibleHeader,
+  collapsibleTrigger,
+  type BodyPadding,
+  type HeaderPadding,
+  type CardAppearance,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Icon } from './Icon';
@@ -24,9 +34,13 @@ export function CollapsibleCard({
   label,
   defaultOpen = false,
   onOpenChange,
-  wrapperClassName = SURFACE.card,
-  headerClassName = 'px-lg py-lg',
-  bodyClassName = 'px-lg pb-lg',
+  appearance = 'card',
+  headerPadding = 'default',
+  bodyPadding = 'default',
+  headerDivider = false,
+  wrapperClassName,
+  headerClassName,
+  bodyClassName,
   children,
 }: {
   header: ReactNode;
@@ -37,6 +51,10 @@ export function CollapsibleCard({
   // holding a one-time secret cannot rely on unmount to drop it. This tells the
   // owner the card just closed; the 2FA card clears its plaintext on it.
   onOpenChange?: (open: boolean) => void;
+  appearance?: CardAppearance;
+  headerPadding?: HeaderPadding;
+  bodyPadding?: BodyPadding;
+  headerDivider?: boolean;
   wrapperClassName?: string;
   headerClassName?: string;
   bodyClassName?: string;
@@ -85,23 +103,14 @@ export function CollapsibleCard({
   }, [open, children]);
 
   return (
-    <div className={cn('overflow-hidden', wrapperClassName)}>
-      <div
-        className={cn(
-          'flex items-center gap-md transition-colors duration-state hover:bg-action-hover',
-          headerClassName,
-        )}
-      >
+    <div className={cn('overflow-hidden', cardSurface(appearance), wrapperClassName)}>
+      <div className={cn(headerClassName, collapsibleHeader(headerPadding, headerDivider))}>
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
           aria-controls={bodyId}
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-md text-left transition duration-state',
-            FOCUS_RING,
-            PRESS_FEEDBACK,
-          )}
+          className={cn(collapsibleTrigger(), FOCUS_RING, PRESS_FEEDBACK)}
         >
           {header}
         </button>
@@ -153,7 +162,7 @@ export function CollapsibleCard({
           }
         }}
       >
-        <div className={bodyClassName}>{children}</div>
+        <div className={cn(bodyClassName, collapsibleBody(bodyPadding))}>{children}</div>
       </div>
     </div>
   );

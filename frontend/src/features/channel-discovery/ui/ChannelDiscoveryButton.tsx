@@ -5,17 +5,6 @@ import { Button } from '@/shared/ui';
 
 import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
 
-// Та же кнопка, что соседняя «Проверить каналы»: они читаются одной группой контролов, и
-// теперь это буквально один компонент, а не одинаково набранная строка. Строка была
-// `const PILL` — и именно поэтому её не видел гейт, читавший атрибуты элемента: класс
-// приходил идентификатором. Гейт с тех пор смотрит и в константы файла.
-//
-// `text-tiny` — решение места вызова, и оно не про форму: обе кнопки стоят в узкой колонке
-// рядом с именем кампании, которое и есть подлежащее строки. На рунге контрола (`body`)
-// пара занимает её целиком, и от имени остаётся «К…».
-const COMPACT =
-  'text-tiny text-content-muted hover:border-action-primary hover:text-action-primary';
-
 type Props = {
   campaignId: string | null;
   campaignName: string;
@@ -33,7 +22,8 @@ export function ChannelDiscoveryButton({ campaignId, campaignName }: Props) {
         onClick={() => {
           setOpen(true);
         }}
-        className={COMPACT}
+        variant="compactChannel"
+        textSize="tiny"
       >
         {t('neurocomment.modal.discovery.open')}
       </Button>

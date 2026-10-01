@@ -1,14 +1,25 @@
+import { cn } from '@/shared/lib';
+import { formLabel, pageTitleSpacing, sectionStack } from '@/shared/design-system';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
-import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@/shared/ui';
+import {
+  PageFrame,
+  Button,
+  Card,
+  HelpHint,
+  Icon,
+  Input,
+  Notice,
+  SegmentedControl,
+} from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = formLabel();
 
 // The page is only what no other screen owns: the LLM keys, their pacing and the two
 // provider choices. The warming toggles live on the warming board's action-tuning card
@@ -202,7 +213,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
     <form
       noValidate
       // Зазор между карточками раздаёт форма, а не карточки: `mb` у `Card` больше нет.
-      className="flex flex-col gap-lg"
+      className={sectionStack()}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -296,16 +307,9 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
       <div className="flex justify-end gap-sm">
         <Button onClick={onCancel}>{t('settings.cancel')}</Button>
         <Button
-          variant="primary"
+          variant={justSaved ? 'savedPrimary' : saveFailed ? 'failedPrimary' : 'primary'}
           type="submit"
           disabled={pending}
-          className={
-            justSaved
-              ? 'bg-success-deep hover:bg-success-deep'
-              : saveFailed
-                ? 'bg-danger hover:bg-danger'
-                : ''
-          }
         >
           {justSaved ? (
             <span className="inline-flex items-center gap-sm">
@@ -339,9 +343,8 @@ export function SettingsPage() {
   const warming = useQuery(warmingSettingsQueryOptions());
 
   return (
-    // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
-    <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-xl type-page-title">{t('settings.title')}</h1>
+    <PageFrame variant="settings" className="tb-fadeup">
+      <h1 className={cn('m-0 type-page-title', pageTitleSpacing())}>{t('settings.title')}</h1>
       {warming.isPending ? (
         <p className="text-content-muted">{t('settings.loading')}</p>
       ) : warming.isError || !warming.data ? (
@@ -351,6 +354,6 @@ export function SettingsPage() {
       ) : (
         <SettingsForm settings={warming.data} />
       )}
-    </div>
+    </PageFrame>
   );
 }

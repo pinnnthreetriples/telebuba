@@ -1,6 +1,14 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-import { buttonBase, type ControlSize } from '@/shared/design-system';
+import {
+  buttonBase,
+  buttonWeight,
+  buttonLoadingGap,
+  buttonContentGap,
+  buttonPresentation,
+  type ControlSize,
+  type ButtonPresentation,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Spinner, type SpinnerTone } from './Spinner';
@@ -95,6 +103,40 @@ const VARIANT = {
     'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
   dashedMuted:
     'border border-dashed border-line-strong bg-surface-card text-content-muted hover:border-action-primary hover:text-action-primary',
+  info: 'border border-info-line bg-info-tint text-info-strong hover:border-action-primary',
+  dangerSurface: 'border border-danger-line bg-surface-card text-danger-deep hover:border-danger',
+  secondaryMuted:
+    'border border-line-strong bg-surface-card text-content-muted hover:border-line-strong',
+  successSolid: 'border border-success bg-success-deep text-on-success hover:bg-success-deep',
+  dangerSolid: 'border border-danger bg-danger text-on-danger hover:bg-danger',
+  success: 'bg-success-deep text-on-action hover:bg-success-press',
+  statusSuccess: 'border border-success bg-surface-card text-success-deep hover:border-line-strong',
+  statusDanger: 'border border-danger bg-surface-card text-danger hover:border-line-strong',
+  refresh:
+    'border border-line bg-surface-card text-content-primary hover:border-info-line hover:text-action-primary',
+  statusIdle: 'border border-line bg-surface-card text-content-muted hover:border-line-strong',
+  secondaryAction:
+    'border border-line bg-surface-card text-action-primary hover:border-action-primary',
+  ghostMuted: 'text-content-muted hover:bg-canvas hover:text-content-primary',
+  ghostAction: 'text-info-strong hover:bg-canvas hover:text-content-primary',
+  compactChannel:
+    'border border-line bg-surface-card text-content-muted hover:border-action-primary hover:text-action-primary',
+  infoDismiss: 'bg-info-tint text-info-strong hover:bg-danger-tint hover:text-danger-deep',
+  transparentMuted:
+    'border border-line bg-transparent text-content-muted hover:border-info-line hover:text-info-strong',
+  secondaryStop:
+    'border border-line bg-surface-card text-content-primary hover:border-line-strong hover:bg-surface',
+  inert: 'bg-canvas text-content-subtle hover:bg-canvas',
+  saved: 'border border-success-deep bg-success-deep text-on-action hover:bg-success-deep',
+  savedPrimary: 'bg-success-deep text-on-action hover:bg-success-deep',
+  failedPrimary: 'bg-danger text-on-action hover:bg-danger',
+  infoGhost: 'bg-info-tint text-info-strong hover:bg-canvas hover:text-content-primary',
+  dangerSurfaceDanger:
+    'border border-danger-line bg-surface-card text-danger-deep hover:border-danger-line hover:bg-danger-tint',
+  refreshSuccess:
+    'border border-success-line bg-surface-card text-success-deep hover:border-info-line hover:bg-canvas hover:text-info-strong',
+  refreshDanger:
+    'border border-danger-line bg-surface-card text-danger-deep hover:border-info-line hover:bg-canvas hover:text-info-strong',
 } as const;
 
 // Тон кольца ожидания — следствие заливки, а не второе решение вызывающего. `satisfies`, а
@@ -111,11 +153,41 @@ const SPINNER_TONE = {
   ghost: 'default',
   dashed: 'default',
   dashedMuted: 'default',
+  info: 'default',
+  dangerSurface: 'danger',
+  secondaryMuted: 'default',
+  successSolid: 'onAction',
+  dangerSolid: 'onAction',
+  success: 'onAction',
+  statusSuccess: 'default',
+  statusDanger: 'danger',
+  refresh: 'default',
+  statusIdle: 'default',
+  secondaryAction: 'default',
+  ghostMuted: 'default',
+  ghostAction: 'default',
+  compactChannel: 'default',
+  infoDismiss: 'default',
+  transparentMuted: 'default',
+  secondaryStop: 'default',
+  inert: 'default',
+  saved: 'onAction',
+  savedPrimary: 'onAction',
+  failedPrimary: 'onAction',
+  infoGhost: 'default',
+  dangerSurfaceDanger: 'danger',
+  refreshSuccess: 'default',
+  refreshDanger: 'danger',
 } satisfies Record<keyof typeof VARIANT, SpinnerTone>;
 
 export function Button({
   variant = 'secondary',
   size = 'md',
+  contentGap = 'default',
+  shape = 'pill',
+  presentation = 'standard',
+  weight = 'auto',
+  textSize = 'default',
   fullWidth = false,
   loading = false,
   disabled = false,
@@ -125,6 +197,11 @@ export function Button({
 }: {
   variant?: keyof typeof VARIANT;
   size?: keyof typeof SIZE;
+  contentGap?: 'default' | 'roomy';
+  shape?: 'pill' | 'square';
+  presentation?: ButtonPresentation;
+  weight?: 'auto' | 'medium' | 'semibold';
+  textSize?: 'default' | 'tiny';
   fullWidth?: boolean;
   // Запрос в полёте — ОДНО состояние: кольцо перед содержимым, подпись на месте, клики не
   // проходят, `aria-busy` объявлен. Отдельным пропом от `disabled`, потому что скринридер
@@ -144,13 +221,17 @@ export function Button({
       aria-busy={loading || undefined}
       className={cn(
         buttonBase({ size: SIZE[size].size }),
+        buttonContentGap(contentGap),
         'aria-busy:cursor-progress',
         // Кольцу нужно больше воздуха, чем глифу: базовый зазор кнопки — `tight` (6px),
         // и все тринадцать рукописных обёрток вокруг кольца ставили `gap-sm` (8px). Это
         // решение, а не подгонка под прежнюю картинку, и оно живёт только на время
         // ожидания — обычный зазор кнопки не меняется.
-        loading && 'gap-sm',
-        SIZE[size].weight,
+        loading && buttonLoadingGap(),
+        buttonWeight(size),
+        buttonPresentation(presentation, shape, SIZE[size].size),
+        weight !== 'auto' && (weight === 'medium' ? 'font-medium' : 'font-semibold'),
+        textSize === 'tiny' && 'text-tiny',
         fullWidth && 'flex w-full',
         VARIANT[variant],
         className,

@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { fieldBase, surface } from '@/shared/design-system';
+import {
+  selectTrigger,
+  selectOption,
+  selectPanel,
+  selectEmpty,
+  selectSelected,
+} from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Icon } from './Icon';
@@ -17,14 +23,6 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 //
 // Гашение своё: недоступный ВЫБОР остаётся читаемым (в нём написано выбранное значение),
 // поэтому он гасится заливкой и краской, а не прозрачностью, как кнопка.
-const TRIGGER = cn(
-  fieldBase({ size: 'md' }),
-  'flex items-center justify-between gap-sm text-left text-content-primary',
-  'border-line hover:border-line-strong focus-visible:border-focus focus-visible:shadow-focus',
-  'disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-content-subtle',
-);
-const OPTION =
-  'flex w-full items-center justify-between gap-sm rounded-sm border-none px-md py-sm text-left text-body hover:bg-action-hover disabled:text-content-subtle';
 
 export function Select({
   value,
@@ -160,7 +158,7 @@ export function Select({
           if (open) setOpen(false);
           else openList();
         }}
-        className={`${TRIGGER} ${open ? 'border-action-primary' : 'border-line'}`}
+        className={`${selectTrigger()} ${open ? 'border-action-primary' : 'border-line'}`}
       >
         <span className={`min-w-0 truncate ${current ? '' : 'text-content-subtle'}`}>
           {current?.label ?? placeholder}
@@ -179,13 +177,14 @@ export function Select({
         // and, unlike `hidden`, keeps the open/close transition.
         inert={!open}
         className={cn(
-          'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop p-xs',
-          surface('panel'),
+          // Select-specific anchor clearance, not a shared rhythm rung.
+          'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop',
+          selectPanel(),
           open && 'open',
         )}
       >
         {options.length === 0 ? (
-          <div className="px-md py-sm text-body text-content-subtle">{emptyLabel}</div>
+          <div className={selectEmpty()}>{emptyLabel}</div>
         ) : (
           options.map((option, index) => (
             <button
@@ -206,7 +205,7 @@ export function Select({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={`${OPTION} ${option.value === value ? 'font-medium text-info-strong' : 'text-content-primary'} ${
+              className={`${selectOption()} ${option.value === value ? selectSelected() : 'text-content-primary'} ${
                 open && index === active ? 'bg-info-tint' : ''
               }`}
             >

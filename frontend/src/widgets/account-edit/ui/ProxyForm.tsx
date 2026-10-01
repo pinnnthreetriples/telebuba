@@ -1,10 +1,20 @@
+import { formLabel } from '@/shared/design-system';
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, FormField, Icon, IconButton, Input, SegmentedControl, Spinner } from '@/shared/ui';
+import {
+  SectionStack,
+  Badge,
+  FormField,
+  Icon,
+  IconButton,
+  Input,
+  SegmentedControl,
+  Spinner,
+} from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 
@@ -14,7 +24,7 @@ import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-tight block type-label';
+const LABEL = formLabel();
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -75,7 +85,7 @@ export function ProxyForm({
   };
 
   return (
-    <div className="flex flex-col gap-md">
+    <SectionStack gap="compact">
       <div className="grid grid-cols-1 items-end gap-md md:grid-cols-[2fr_1fr_auto]">
         <form.Field name="host">
           {(field) => (
@@ -91,7 +101,7 @@ export function ProxyForm({
                 inputMode="decimal"
                 placeholder="123.45.67.89"
                 invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                className="font-mono"
+                textStyle="mono"
               />
             </FormField>
           )}
@@ -111,7 +121,7 @@ export function ProxyForm({
                 maxLength={5}
                 placeholder="1080"
                 invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
-                className="font-mono"
+                textStyle="mono"
               />
             </FormField>
           )}
@@ -169,7 +179,7 @@ export function ProxyForm({
                   type={showPass ? 'text' : 'password'}
                   autoComplete="new-password"
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
-                  className="pr-[36px]"
+                  inset="trailing"
                 />
                 <IconButton
                   size="md"
@@ -178,7 +188,8 @@ export function ProxyForm({
                     setShowPass((shown) => !shown);
                   }}
                   aria-label={t('accounts.proxyForm.password')}
-                  className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
+                  tone="bare"
+                  className="absolute right-sm top-1/2 -translate-y-1/2"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                 </IconButton>
@@ -211,7 +222,7 @@ export function ProxyForm({
             <span className="type-prose">{t('accounts.proxyForm.checking')}</span>
           )}
           {detect === 'ok' && (
-            <Badge tone="success" size="md" className="tb-pop gap-sm">
+            <Badge tone="success" size="md" contentGap="roomy" className="tb-pop">
               {country ? (
                 <span
                   className={`fi fi-${country.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
@@ -228,6 +239,6 @@ export function ProxyForm({
           )}
         </div>
       )}
-    </div>
+    </SectionStack>
   );
 }

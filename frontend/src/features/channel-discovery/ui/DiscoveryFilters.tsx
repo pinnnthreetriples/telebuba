@@ -165,7 +165,8 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 size="xs"
                 type="text"
                 inputMode="numeric"
-                className="w-number tabular-nums"
+                textStyle="tabular"
+                widthPreset="number"
                 aria-label={t(`${P}.minSubscribers`)}
                 aria-describedby={membersMessageId}
                 placeholder="0"
@@ -180,7 +181,8 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 size="xs"
                 type="text"
                 inputMode="numeric"
-                className="w-number tabular-nums"
+                textStyle="tabular"
+                widthPreset="number"
                 aria-label={t(`${P}.maxSubscribers`)}
                 aria-describedby={membersMessageId}
                 placeholder="∞"
@@ -220,7 +222,8 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               size="xs"
               type="text"
               inputMode="numeric"
-              className="w-number tabular-nums"
+              textStyle="tabular"
+              widthPreset="number"
               placeholder={String(LIMIT_DEFAULT)}
               invalid={badLimit}
               aria-describedby={limitMessageId}
@@ -241,7 +244,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             <Input
               id={seedId}
               size="sm"
-              className="w-menu"
+              widthPreset="menu"
               value={form.seedChannel}
               placeholder={t(`${P}.seedChannelPlaceholder`)}
               invalid={badSeed}

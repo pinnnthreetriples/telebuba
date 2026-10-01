@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { RetryNotice } from '../src/widgets/account-edit/ui/RetryNotice';
 
 const meta = {
-  title: 'Patterns/Retry notice',
+  title: 'Design System/Patterns/Retry notice',
   component: RetryNotice,
   tags: ['autodocs'],
   args: {

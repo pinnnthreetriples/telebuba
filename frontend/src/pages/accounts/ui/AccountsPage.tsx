@@ -1,3 +1,4 @@
+import { pageTitleSpacing } from '@/shared/design-system';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,10 +14,20 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
+import {
+  PageFrame,
+  Button,
+  Card,
+  Icon,
+  IconButton,
+  SearchInput,
+  Spinner,
+  StatTile,
+  toastError,
+} from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
-import { useTransientFeedback } from '@/shared/lib';
+import { cn, useTransientFeedback } from '@/shared/lib';
 import {
   AccountEdit,
   AddAccountModal,
@@ -236,20 +247,24 @@ export function AccountsPage() {
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
   // problem, each with its own colour. Values come from the fleet-wide stats
   // query, not the current page, so they hold across pagination and search.
-  const stats: { label: string; value: number; cls: string }[] = [
+  const stats: {
+    label: string;
+    value: number;
+    tone: 'default' | 'success' | 'warning' | 'action' | 'danger';
+  }[] = [
     {
       label: t('accounts.stats.total'),
       value: fleetStats?.total ?? 0,
-      cls: 'text-content-primary',
+      tone: 'default',
     },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, tone: 'success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, tone: 'warning' },
     {
       label: t('accounts.stats.code'),
       value: fleetStats?.needs_code ?? 0,
-      cls: 'text-action-primary',
+      tone: 'action',
     },
-    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
+    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, tone: 'danger' },
   ];
 
   const hasPrev = cursorStack.length > 1;
@@ -281,7 +296,7 @@ export function AccountsPage() {
   }
 
   return (
-    <div className="tb-fadeup">
+    <PageFrame variant="full" className="tb-fadeup">
       {/* Зазор ставит страница, а не карточка пула. Обёрткой, а не `gap` на колонке:
           у этой страницы ритм из двух шагов — `lg` между блоками и `xl` под заголовком,
           что видно и на других страницах, — а `gap` умеет выразить только один. Замена
@@ -294,47 +309,42 @@ export function AccountsPage() {
         />
       </div>
 
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
+      <div className={cn(pageTitleSpacing(), 'flex flex-wrap items-center justify-between gap-lg')}>
         <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
         <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
           {/* Collapsible search field */}
           <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
-            <div
+            <SearchInput
               // Свёрнутое поле — нулевой ширины, невидимое и вне табуляции; анимацию
               // ширины/прозрачности даёт `.tb-time` (index.css).
-              aria-hidden={!searchExpanded}
-              className={`tb-time h-tile overflow-hidden rounded-full border bg-surface-card ${
-                searchExpanded
-                  ? 'w-full border-line opacity-100 sm:w-tip'
-                  : 'invisible w-0 border-transparent opacity-0'
+              variant="header"
+              containerProps={{ 'aria-hidden': !searchExpanded }}
+              className={`tb-time overflow-hidden ${
+                searchExpanded ? 'w-full opacity-100 sm:w-tip' : 'invisible w-0 opacity-0'
               }`}
-            >
-              <input
-                ref={searchInputRef}
-                tabIndex={searchExpanded ? 0 : -1}
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
+              ref={searchInputRef}
+              tabIndex={searchExpanded ? 0 : -1}
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCursorStack([null]);
+              }}
+              onBlur={() => {
+                if (search === '') setSearchOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSearch('');
                   setCursorStack([null]);
-                }}
-                onBlur={() => {
-                  if (search === '') setSearchOpen(false);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setSearch('');
-                    setCursorStack([null]);
-                    setSearchOpen(false);
-                    // Return focus to the lupa that opened the field, rather than
-                    // dropping it on the body — focusing the button also blurs the
-                    // input, so no separate blur() call is needed.
-                    searchButtonRef.current?.focus();
-                  }
-                }}
-                placeholder={t('accounts.searchPlaceholder')}
-                className="h-full w-full border-none bg-surface-card px-md py-0 text-body outline-none"
-              />
-            </div>
+                  setSearchOpen(false);
+                  // Return focus to the lupa that opened the field, rather than
+                  // dropping it on the body — focusing the button also blurs the
+                  // input, so no separate blur() call is needed.
+                  searchButtonRef.current?.focus();
+                }
+              }}
+              placeholder={t('accounts.searchPlaceholder')}
+            />
             <IconButton
               ref={searchButtonRef}
               size="lg"
@@ -391,13 +401,7 @@ export function AccountsPage() {
 
       <div className="mb-lg flex flex-wrap gap-md">
         {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
-          >
-            <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px type-caption">{stat.label}</div>
-          </div>
+          <StatTile key={stat.label} value={stat.value} label={stat.label} tone={stat.tone} />
         ))}
       </div>
 
@@ -410,7 +414,9 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center type-prose">{t('accounts.empty')}</Card>
+            <Card padding="empty" className="text-center type-prose">
+              {t('accounts.empty')}
+            </Card>
           ) : (
             <AccountsTable
               data={items}
@@ -518,6 +524,6 @@ export function AccountsPage() {
           }}
         />
       ) : null}
-    </div>
+    </PageFrame>
   );
 }

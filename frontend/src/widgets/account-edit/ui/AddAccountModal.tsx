@@ -5,7 +5,17 @@ import { useTranslation } from 'react-i18next';
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalFooter,
+  SectionStack,
+  Input,
+  ModalBody,
+  Button,
+  CloseButton,
+  Icon,
+  Modal,
+} from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
@@ -220,8 +230,8 @@ export function AddAccountModal({
 
   return (
     <Modal onClose={onClose} size="form" label={t('accounts.addWizard.title')}>
-      <div className="px-2xl pb-xl pt-2xl">
-        <div className="mb-lg flex items-start justify-between">
+      <ModalBody variant="wizard">
+        <ModalHeader variant="inline" className="mb-lg items-start justify-between">
           <div>
             <div className="type-dialog-title">
               {twofaResult
@@ -241,7 +251,7 @@ export function AddAccountModal({
             </div>
           </div>
           <CloseButton onClick={onClose} aria-label={t('accounts.addWizard.close')} />
-        </div>
+        </ModalHeader>
 
         {/* stepper */}
         <div className="mb-xl flex items-center gap-md">
@@ -263,7 +273,7 @@ export function AddAccountModal({
 
         {step === 1 ? (
           <>
-            <div className="flex flex-col gap-md">
+            <SectionStack gap="compact">
               <ChoiceCard
                 icon={<Icon name="file" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.sessionTitle')}
@@ -315,11 +325,16 @@ export function AddAccountModal({
               />
 
               {method === 'phone' && (
-                <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-surface-card px-md py-lg">
+                <SectionStack
+                  gap="compact"
+                  padding="field"
+                  className="tb-fadeup rounded-lg border border-line bg-surface-card"
+                >
                   <label className="block type-caption font-medium">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
-                  <input
+                  <Input
+                    variant="auth"
                     type="tel"
                     value={phone}
                     onChange={(event) => {
@@ -328,7 +343,6 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-focus"
                   />
                   <Button
                     variant="primary"
@@ -348,7 +362,7 @@ export function AddAccountModal({
                       {t('accounts.addWizard.phoneError')}
                     </div>
                   )}
-                </div>
+                </SectionStack>
               )}
 
               {method && method !== 'phone' && (
@@ -386,8 +400,8 @@ export function AddAccountModal({
                   <ImportFileList files={bulk.files} onRetry={bulk.retry} />
                 </>
               )}
-            </div>
-            <div className="mt-xl flex justify-end gap-sm">
+            </SectionStack>
+            <ModalFooter variant="plain" className="mt-xl">
               <Button onClick={onClose}>{t('accounts.addWizard.cancel')}</Button>
               {/* Locked until at least one account exists and no import is still
                   in flight: step 2 must see the whole batch, not its first half. */}
@@ -402,7 +416,7 @@ export function AddAccountModal({
               >
                 {t('accounts.addWizard.next')}
               </Button>
-            </div>
+            </ModalFooter>
           </>
         ) : step === 4 || (step === 3 && method !== 'phone') ? (
           <TwoFactorBulkStep
@@ -431,7 +445,7 @@ export function AddAccountModal({
                   : t('accounts.addWizard.added')}
               </span>
             </div>
-            <div className="flex flex-col gap-md">
+            <SectionStack gap="compact">
               <ChoiceCard
                 icon={<Icon name="plus" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.proxyManual')}
@@ -461,7 +475,7 @@ export function AddAccountModal({
                   setProxyStep('pool');
                 }}
               />
-            </div>
+            </SectionStack>
             <div className="mt-xl flex justify-between gap-sm">
               <Button
                 onClick={() => {
@@ -470,7 +484,7 @@ export function AddAccountModal({
               >
                 {t('accounts.addWizard.back')}
               </Button>
-              <Button className="text-content-muted" onClick={afterProxy}>
+              <Button variant="statusIdle" onClick={afterProxy}>
                 {t('accounts.addWizard.skip')}
               </Button>
             </div>
@@ -511,7 +525,7 @@ export function AddAccountModal({
             onImported={onImported}
           />
         )}
-      </div>
+      </ModalBody>
     </Modal>
   );
 }

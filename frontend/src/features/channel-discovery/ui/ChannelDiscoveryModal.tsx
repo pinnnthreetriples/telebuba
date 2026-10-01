@@ -11,7 +11,7 @@ import {
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
 import { useLogEventStream } from '@/shared/lib';
-import { Button, Modal, StatusIcon } from '@/shared/ui';
+import { ModalHeader, ModalBody, ModalFooter, Button, Modal, StatusIcon } from '@/shared/ui';
 
 import {
   buildSearchRequest,
@@ -220,14 +220,16 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-hair type-caption">
-          {t('neurocomment.modal.discovery.sub', { name: campaignName })}
-        </p>
-      </div>
+      <ModalHeader>
+        <div className="min-w-0">
+          <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
+          <p className="mt-hair type-caption">
+            {t('neurocomment.modal.discovery.sub', { name: campaignName })}
+          </p>
+        </div>
+      </ModalHeader>
 
-      <div className="flex flex-col gap-2xl px-2xl py-xl">
+      <ModalBody gap="roomy">
         <div ref={contentRef} tabIndex={-1} className="outline-none">
           {submitted ? (
             <DiscoveryResults
@@ -290,9 +292,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             </p>
           ) : null}
         </div>
-      </div>
+      </ModalBody>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter className="flex flex-wrap items-center justify-end">
         {submitted ? (
           <>
             <Button
@@ -377,7 +379,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             </Button>
           </>
         )}
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

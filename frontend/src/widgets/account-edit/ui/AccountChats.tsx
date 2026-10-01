@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -21,9 +20,8 @@ import {
   markAccountChatReadRequest,
   sendAccountChatMessageRequest,
 } from '@/entities/account';
-import { FOCUS_RING } from '@/shared/design-system';
 import { useLogEventStream } from '@/shared/lib';
-import { Badge, Button, Card, Icon, IconButton } from '@/shared/ui';
+import { SectionStack, Textarea, Badge, Button, Card, Icon, IconButton } from '@/shared/ui';
 
 const MAX_ROWS = 6;
 type AccountChatsProps = { accountId: string; overview: ReactNode };
@@ -40,17 +38,6 @@ function sendErrorKey(error: unknown): string {
   if (code === 'payload_too_large') return 'requestTooLarge';
   if (code === 'too_many_files') return 'tooManyFiles';
   return 'sendError';
-}
-
-function resizeComposer(node: HTMLTextAreaElement): void {
-  const style = window.getComputedStyle(node);
-  const lineHeight = Number.parseFloat(style.lineHeight) || 24;
-  const padding =
-    (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
-  const maxHeight = lineHeight * MAX_ROWS + padding;
-  node.style.height = 'auto';
-  node.style.height = `${Math.min(node.scrollHeight, maxHeight)}px`;
-  node.style.overflowY = node.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 function messageTime(value: string): string {
@@ -173,9 +160,6 @@ function ChatComposer({
   const [droppedFiles, setDroppedFiles] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    if (textarea.current) resizeComposer(textarea.current);
-  }, [text]);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if ((!text.trim() && files.length === 0) || pending || disabled) return;
@@ -217,9 +201,11 @@ function ChatComposer({
         </p>
       ) : null}
       <div className="flex flex-col gap-sm sm:flex-row sm:items-end">
-        <textarea
+        <Textarea
+          variant="composer"
+          maxRows={MAX_ROWS}
           ref={textarea}
-          rows={1}
+
           value={text}
           disabled={disabled || pending}
           onChange={(e) => setText(e.target.value)}
@@ -231,7 +217,7 @@ function ChatComposer({
           }}
           placeholder={t('accounts.edit.chats.messagePlaceholder')}
           aria-label={t('accounts.edit.chats.messagePlaceholder')}
-          className={`min-h-control min-w-0 w-full resize-none overflow-y-hidden rounded-lg border border-line bg-surface-card px-md py-sm type-prose text-content-primary outline-none ${FOCUS_RING} sm:w-auto sm:flex-1`}
+          className="min-w-0 sm:w-auto sm:flex-1"
         />
         <div className="flex w-full items-center justify-between gap-sm sm:w-auto sm:justify-start">
           <label className="inline-flex min-h-control cursor-pointer items-center rounded-lg border border-line px-md type-label hover:bg-canvas">
@@ -415,14 +401,18 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
   };
 
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div
         role="tablist"
         aria-label={t('accounts.edit.chats.tabs')}
         className="flex w-fit items-center gap-xs rounded-full border border-line bg-surface-card p-xs"
       >
         {(['overview', 'chats'] as const).map((value) => (
-          <button
+          <Button
+            presentation="tab"
+            size="lg"
+            contentGap="roomy"
+            variant={tab === value ? 'primary' : 'ghost'}
             key={value}
             id={`account-tab-${value}`}
             type="button"
@@ -430,10 +420,9 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             aria-selected={tab === value}
             aria-controls={`account-panel-${value}`}
             onClick={() => setTab(value)}
-            className={`min-h-touch inline-flex items-center gap-sm rounded-full px-lg text-body font-semibold transition-colors ${tab === value ? 'bg-action-primary text-on-action' : 'text-content-muted hover:bg-canvas hover:text-content-primary'}`}
           >
             {t(`accounts.edit.chats.${value === 'chats' ? 'tab' : 'overview'}`)}
-          </button>
+          </Button>
         ))}
       </div>
       <section
@@ -523,7 +512,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             ) : null}
           </section>
           {selected ? (
-            <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
+            <Card padding="none" className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
               <header className="flex flex-wrap items-center gap-md border-b border-line-row px-lg py-md">
                 <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong type-label font-semibold">
                   {selected.title.slice(0, 1).toUpperCase()}
@@ -538,7 +527,12 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                   </span>
                 </span>
               </header>
-              <div className="flex flex-1 flex-col gap-md overflow-y-auto p-lg" aria-live="polite">
+              <SectionStack
+                gap="compact"
+                padding="compact"
+                className="flex-1 overflow-y-auto"
+                aria-live="polite"
+              >
                 {readError ? (
                   <div role="alert" className="type-caption text-danger">
                     {t('accounts.edit.chats.readError')}{' '}
@@ -599,7 +593,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                     {t('accounts.edit.chats.emptyHistory')}
                   </p>
                 ) : null}
-              </div>
+              </SectionStack>
               <ChatComposer
                 onSend={submit}
                 pending={sendPending}
@@ -607,12 +601,12 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
               />
             </Card>
           ) : (
-            <Card className="flex min-h-0 items-center justify-center p-xl type-prose text-content-muted lg:col-span-2">
+            <Card className="flex min-h-0 items-center justify-center type-prose text-content-muted lg:col-span-2">
               {t('accounts.edit.chats.chooseConversation')}
             </Card>
           )}
         </div>
       </section>
-    </div>
+    </SectionStack>
   );
 }

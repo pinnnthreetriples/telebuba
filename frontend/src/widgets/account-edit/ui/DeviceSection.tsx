@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Input } from '@/shared/ui';
+import { SectionStack, Input } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 
@@ -30,35 +30,35 @@ export function DeviceSection({ account }: { account: AccountRead }) {
       }
     >
       <div className="mb-lg type-prose">{t('accounts.edit.deviceLocked')}</div>
-      <div className="flex flex-col gap-md">
+      <SectionStack gap="compact">
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
           <Input
-            tone="flat"
             value={account.device_model ?? '—'}
             disabled
-            className="cursor-not-allowed text-content-subtle"
+            tone="inert"
+            className="cursor-not-allowed"
           />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceOs')}</span>
           <Input
-            tone="flat"
             value={account.device_system_version ?? '—'}
             disabled
-            className="cursor-not-allowed text-content-subtle"
+            tone="inert"
+            className="cursor-not-allowed"
           />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceLang')}</span>
           <Input
-            tone="flat"
             value={account.device_lang ?? '—'}
             disabled
-            className="cursor-not-allowed text-content-subtle"
+            tone="inert"
+            className="cursor-not-allowed"
           />
         </label>
-      </div>
+      </SectionStack>
     </Section>
   );
 }
