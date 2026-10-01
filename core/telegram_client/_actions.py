@@ -154,7 +154,9 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         dead.__cause__ = exc  # same chain ``raise ... from exc`` would build
         return await _generic_error(account_id, action, dead, domain=domain)
     except errors.FloodWaitError as exc:
-        if action.action_type in _PROFILE_EDIT_ACTION_TYPES:
+        # Only the operator's own click marks the account: a domain caller (the
+        # scheduled publisher included) is automated and keeps its own retry time.
+        if domain is None and action.action_type in _PROFILE_EDIT_ACTION_TYPES:
             await _mark_account_status(account_id, "flood_wait")
         return await _flood_action_result(
             account_id,

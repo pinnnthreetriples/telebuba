@@ -69,6 +69,9 @@ export function routeApi() {
     if (pathname === '/api/v1/accounts/profile') {
       return Promise.resolve(jsonResponse({ ...ACCOUNT, first_name: 'Пётр' }));
     }
+    if (pathname === '/api/v1/accounts/acc-1/scheduled') {
+      return Promise.resolve(jsonResponse({ items: [], server_now: new Date().toISOString() }));
+    }
     return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   });
 }

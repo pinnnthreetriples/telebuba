@@ -165,6 +165,14 @@ async def remove_account(account_id: str) -> None:
         # it here would be this registry's first nesting, under warming's lifecycle
         # lock. Recorded rather than fixed.
         _TWOFA_LOCKS.pop(account_id, None)
+    # The account's scheduled posts went with its row; their files go now, not at
+    # the next periodic sweep. Best-effort: the sweep retries whatever this leaves.
+    from services.scheduled_posts import collect_media_garbage  # noqa: PLC0415 - import cycle
+
+    try:
+        await collect_media_garbage()
+    except Exception:
+        logger.exception("scheduled media sweep failed after removing %s", account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

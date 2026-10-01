@@ -33,6 +33,7 @@ from core._config_domains import (
     TrustSettings,
 )
 from core._config_neuroshilling import NeuroshillingSettings
+from core._config_scheduled import ScheduledPostsSettings
 from core._config_warming import WarmingSettings
 
 # RFC 7518 §3.2: an HS256 HMAC key should be at least 32 bytes.
@@ -338,6 +339,7 @@ class Settings(BaseSettings):
     trust: TrustSettings = Field(default_factory=TrustSettings)
     neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)
     neuroshilling: NeuroshillingSettings = Field(default_factory=NeuroshillingSettings)
+    scheduled_posts: ScheduledPostsSettings = Field(default_factory=ScheduledPostsSettings)
 
 
 def load_settings() -> Settings:

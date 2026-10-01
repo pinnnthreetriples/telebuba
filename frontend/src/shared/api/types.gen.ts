@@ -875,6 +875,16 @@ export type BodySetAccountPhoto = {
 };
 
 /**
+ * Body_uploadScheduledMedia
+ */
+export type BodyUploadScheduledMedia = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * BulkMessageGenerateRequest
  */
 export type BulkMessageGenerateRequest = {
@@ -3958,6 +3968,186 @@ export type RetryPairRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * SchedulePhotoRequest
+ */
+export type SchedulePhotoRequest = {
+  /**
+   * Run At
+   */
+  run_at: string;
+  /**
+   * Filename
+   */
+  filename?: string | null;
+  /**
+   * Batch Id
+   */
+  batch_id?: string | null;
+  /**
+   * Client Key
+   */
+  client_key?: string | null;
+  /**
+   * Media Id
+   */
+  media_id: string;
+};
+
+/**
+ * ScheduleStoryRequest
+ */
+export type ScheduleStoryRequest = {
+  /**
+   * Run At
+   */
+  run_at: string;
+  /**
+   * Filename
+   */
+  filename?: string | null;
+  /**
+   * Batch Id
+   */
+  batch_id?: string | null;
+  /**
+   * Client Key
+   */
+  client_key?: string | null;
+  /**
+   * Media Ids
+   */
+  media_ids: Array<string>;
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: 'contacts' | 'close_friends' | 'public';
+  /**
+   * Protect Content
+   */
+  protect_content?: boolean;
+  /**
+   * Collage Layout
+   */
+  collage_layout?: string | null;
+  /**
+   * Period Seconds
+   */
+  period_seconds?: number;
+};
+
+/**
+ * ScheduledMediaUploaded
+ */
+export type ScheduledMediaUploaded = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Media Kind
+   */
+  media_kind: 'image' | 'video';
+  /**
+   * Size Bytes
+   */
+  size_bytes: number;
+};
+
+/**
+ * ScheduledPostList
+ */
+export type ScheduledPostList = {
+  /**
+   * Items
+   */
+  items: Array<ScheduledPostRead>;
+  /**
+   * Server Now
+   */
+  server_now: string;
+};
+
+/**
+ * ScheduledPostRead
+ */
+export type ScheduledPostRead = {
+  /**
+   * Post Id
+   */
+  post_id: string;
+  /**
+   * Kind
+   */
+  kind: 'photo' | 'story';
+  /**
+   * State
+   */
+  state: 'pending' | 'processing' | 'done' | 'failed' | 'cancelled' | 'missed' | 'ambiguous';
+  /**
+   * Run At
+   */
+  run_at: string;
+  /**
+   * Next Attempt At
+   */
+  next_attempt_at: string;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+  /**
+   * Attempts
+   */
+  attempts: number;
+  /**
+   * Error Code
+   */
+  error_code?: string | null;
+  /**
+   * Filename
+   */
+  filename?: string | null;
+  /**
+   * Media Kind
+   */
+  media_kind: 'image' | 'video';
+  /**
+   * Media Count
+   */
+  media_count: number;
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: 'contacts' | 'close_friends' | 'public' | null;
+  /**
+   * Story Id
+   */
+  story_id?: number | null;
+  /**
+   * Thumb Url
+   */
+  thumb_url?: string | null;
+};
+
+/**
+ * ScheduledPostReschedule
+ */
+export type ScheduledPostReschedule = {
+  /**
+   * Run At
+   */
+  run_at: string;
 };
 
 /**
@@ -7996,6 +8186,328 @@ export type CancelContactLookupJobResponses = {
 
 export type CancelContactLookupJobResponse =
   CancelContactLookupJobResponses[keyof CancelContactLookupJobResponses];
+
+export type UploadScheduledMediaData = {
+  body: BodyUploadScheduledMedia;
+  path?: never;
+  query?: never;
+  url: '/api/v1/scheduled/media';
+};
+
+export type UploadScheduledMediaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type UploadScheduledMediaError =
+  UploadScheduledMediaErrors[keyof UploadScheduledMediaErrors];
+
+export type UploadScheduledMediaResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledMediaUploaded;
+};
+
+export type UploadScheduledMediaResponse =
+  UploadScheduledMediaResponses[keyof UploadScheduledMediaResponses];
+
+export type ScheduleAccountPhotoData = {
+  body: SchedulePhotoRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/scheduled/photo';
+};
+
+export type ScheduleAccountPhotoErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ScheduleAccountPhotoError =
+  ScheduleAccountPhotoErrors[keyof ScheduleAccountPhotoErrors];
+
+export type ScheduleAccountPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledPostRead;
+};
+
+export type ScheduleAccountPhotoResponse =
+  ScheduleAccountPhotoResponses[keyof ScheduleAccountPhotoResponses];
+
+export type ScheduleAccountStoryData = {
+  body: ScheduleStoryRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/scheduled/story';
+};
+
+export type ScheduleAccountStoryErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ScheduleAccountStoryError =
+  ScheduleAccountStoryErrors[keyof ScheduleAccountStoryErrors];
+
+export type ScheduleAccountStoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledPostRead;
+};
+
+export type ScheduleAccountStoryResponse =
+  ScheduleAccountStoryResponses[keyof ScheduleAccountStoryResponses];
+
+export type ListAccountScheduledPostsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/scheduled';
+};
+
+export type ListAccountScheduledPostsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ListAccountScheduledPostsError =
+  ListAccountScheduledPostsErrors[keyof ListAccountScheduledPostsErrors];
+
+export type ListAccountScheduledPostsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledPostList;
+};
+
+export type ListAccountScheduledPostsResponse =
+  ListAccountScheduledPostsResponses[keyof ListAccountScheduledPostsResponses];
+
+export type CancelScheduledPostData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Post Id
+     */
+    post_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/scheduled/{post_id}';
+};
+
+export type CancelScheduledPostErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CancelScheduledPostError = CancelScheduledPostErrors[keyof CancelScheduledPostErrors];
+
+export type CancelScheduledPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledPostRead;
+};
+
+export type CancelScheduledPostResponse =
+  CancelScheduledPostResponses[keyof CancelScheduledPostResponses];
+
+export type RescheduleScheduledPostData = {
+  body: ScheduledPostReschedule;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Post Id
+     */
+    post_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/scheduled/{post_id}';
+};
+
+export type RescheduleScheduledPostErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RescheduleScheduledPostError =
+  RescheduleScheduledPostErrors[keyof RescheduleScheduledPostErrors];
+
+export type RescheduleScheduledPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ScheduledPostRead;
+};
+
+export type RescheduleScheduledPostResponse =
+  RescheduleScheduledPostResponses[keyof RescheduleScheduledPostResponses];
 
 export type ListProxiesData = {
   body?: never;

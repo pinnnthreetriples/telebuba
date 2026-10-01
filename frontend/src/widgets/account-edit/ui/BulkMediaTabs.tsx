@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  BULK_MIN_LEAD_MS,
+  ScheduleModeControl,
+  ScheduleTimeField,
+  type ScheduleMode,
+} from '@/features/schedule-post';
 import { Icon, IconButton, Input, SegmentedControl, toastError } from '@/shared/ui';
 
 import {
@@ -305,6 +311,73 @@ export function BulkMusicTab({
         </FilePicker>
       )}
       <div className="type-caption">{t('accounts.bulk.musicNote')}</div>
+    </div>
+  );
+}
+
+const MAX_SPREAD_MINUTES = 24 * 60;
+
+// Фото и сторис can wait for a time instead of going out on the click. The first
+// account gets the base time, each next one `spread` minutes later plus a random
+// shift; the per-account moments are drawn when the batch starts.
+export function BulkSchedulePanel({
+  mode,
+  onMode,
+  base,
+  onBase,
+  spread,
+  onSpread,
+  now,
+  tailTooFar,
+}: {
+  mode: ScheduleMode;
+  onMode: (mode: ScheduleMode) => void;
+  base: number | null;
+  onBase: (ms: number | null) => void;
+  spread: number;
+  onSpread: (minutes: number) => void;
+  now: number;
+  tailTooFar: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-md rounded-lg border border-line p-md">
+      <ScheduleModeControl value={mode} onChange={onMode} />
+      {mode === 'later' && (
+        <>
+          <div className="flex flex-wrap items-end gap-md">
+            <ScheduleTimeField
+              value={base}
+              onChange={onBase}
+              now={now}
+              minLeadMs={BULK_MIN_LEAD_MS}
+              label={t('accounts.schedule.bulkBase')}
+            />
+            <label className="flex flex-col gap-tight">
+              <span className="type-label">{t('accounts.schedule.bulkSpread')}</span>
+              <Input
+                type="number"
+                size="xs"
+                min={0}
+                max={MAX_SPREAD_MINUTES}
+                value={spread}
+                onChange={(event) => {
+                  const value = Math.round(Number(event.target.value));
+                  if (Number.isFinite(value)) {
+                    onSpread(Math.min(MAX_SPREAD_MINUTES, Math.max(0, value)));
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <div className="type-caption">{t('accounts.schedule.bulkNote', { n: spread })}</div>
+          {tailTooFar && (
+            <div role="alert" className="type-caption text-danger-deep">
+              {t('accounts.schedule.bulkTooFar')}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -41,8 +41,18 @@ def _delete_account(account_id: str) -> None:
         _neurocomment_readiness,
         _neurocomment_runtime,
     )
+    from core.repositories.scheduled_posts._tables import (  # noqa: PLC0415
+        _scheduled_profile_posts,
+    )
 
     with _get_engine().begin() as connection:
+        # Scheduled posts FK accounts.account_id; their media rows cascade from the
+        # post. The stored files are swept by the service once the rows are gone.
+        connection.execute(
+            delete(_scheduled_profile_posts).where(
+                _scheduled_profile_posts.c.account_id == account_id,
+            ),
+        )
         # Neurocomment children FK accounts.account_id (campaign serving links,
         # per-channel readiness, posted/claimed comments) → clear them first too.
         connection.execute(
@@ -142,7 +152,7 @@ async def delete_account(account_id: str) -> None:
     SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
     helper manually purges ``warming_account_state`` /
     ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
-    joined channels before deleting the ``accounts`` row. The shared pool
+    joined channels / scheduled posts before deleting the ``accounts`` row. The shared pool
     proxy is left intact. New per-account tables MUST be added to
     ``_delete_account`` — relying on FK cascade is a bug.
 

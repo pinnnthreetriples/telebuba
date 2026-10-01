@@ -79,6 +79,7 @@ from core.telegram_client._read import (
 from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
+from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import accept_web_login_token
 
 __all__ = [
@@ -102,6 +103,7 @@ __all__ = [
     "forget_post_listener",
     "get_client",
     "invalidate_reaction_whitelist_cache",
+    "is_known_collage_layout",
     "list_dialogs",
     "log_out_session",
     "mark_read",

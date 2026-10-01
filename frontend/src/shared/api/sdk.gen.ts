@@ -43,6 +43,9 @@ import type {
   CancelContactLookupJobData,
   CancelContactLookupJobErrors,
   CancelContactLookupJobResponses,
+  CancelScheduledPostData,
+  CancelScheduledPostErrors,
+  CancelScheduledPostResponses,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameErrors,
   CheckAccountChannelUsernameResponses,
@@ -211,6 +214,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsErrors,
   ListAccountChatsResponses,
+  ListAccountScheduledPostsData,
+  ListAccountScheduledPostsErrors,
+  ListAccountScheduledPostsResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
@@ -298,6 +304,9 @@ import type {
   RequestLoginCodeData,
   RequestLoginCodeErrors,
   RequestLoginCodeResponses,
+  RescheduleScheduledPostData,
+  RescheduleScheduledPostErrors,
+  RescheduleScheduledPostResponses,
   ResendAccountTwofaEmailData,
   ResendAccountTwofaEmailErrors,
   ResendAccountTwofaEmailResponses,
@@ -310,6 +319,12 @@ import type {
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsErrors,
   SaveNeuroshillingSettingsResponses,
+  ScheduleAccountPhotoData,
+  ScheduleAccountPhotoErrors,
+  ScheduleAccountPhotoResponses,
+  ScheduleAccountStoryData,
+  ScheduleAccountStoryErrors,
+  ScheduleAccountStoryResponses,
   SendAccountChatMessageData,
   SendAccountChatMessageErrors,
   SendAccountChatMessageResponses,
@@ -418,6 +433,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
+  UploadScheduledMediaData,
+  UploadScheduledMediaErrors,
+  UploadScheduledMediaResponses,
 } from './types.gen';
 
 export type Options<
@@ -1506,6 +1524,111 @@ export const cancelContactLookupJob = <ThrowOnError extends boolean = false>(
     CancelContactLookupJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/contact-lookup/{job_id}/cancel', ...options });
+
+/**
+ * Upload Scheduled Media
+ */
+export const uploadScheduledMedia = <ThrowOnError extends boolean = false>(
+  options: Options<UploadScheduledMediaData, ThrowOnError>,
+): RequestResult<UploadScheduledMediaResponses, UploadScheduledMediaErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    UploadScheduledMediaResponses,
+    UploadScheduledMediaErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/scheduled/media',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Schedule Account Photo
+ */
+export const scheduleAccountPhoto = <ThrowOnError extends boolean = false>(
+  options: Options<ScheduleAccountPhotoData, ThrowOnError>,
+): RequestResult<ScheduleAccountPhotoResponses, ScheduleAccountPhotoErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ScheduleAccountPhotoResponses,
+    ScheduleAccountPhotoErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/scheduled/photo',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Schedule Account Story
+ */
+export const scheduleAccountStory = <ThrowOnError extends boolean = false>(
+  options: Options<ScheduleAccountStoryData, ThrowOnError>,
+): RequestResult<ScheduleAccountStoryResponses, ScheduleAccountStoryErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ScheduleAccountStoryResponses,
+    ScheduleAccountStoryErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/scheduled/story',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Account Scheduled Posts
+ */
+export const listAccountScheduledPosts = <ThrowOnError extends boolean = false>(
+  options: Options<ListAccountScheduledPostsData, ThrowOnError>,
+): RequestResult<
+  ListAccountScheduledPostsResponses,
+  ListAccountScheduledPostsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListAccountScheduledPostsResponses,
+    ListAccountScheduledPostsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/scheduled', ...options });
+
+/**
+ * Cancel Scheduled Post
+ */
+export const cancelScheduledPost = <ThrowOnError extends boolean = false>(
+  options: Options<CancelScheduledPostData, ThrowOnError>,
+): RequestResult<CancelScheduledPostResponses, CancelScheduledPostErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    CancelScheduledPostResponses,
+    CancelScheduledPostErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/scheduled/{post_id}', ...options });
+
+/**
+ * Reschedule Scheduled Post
+ */
+export const rescheduleScheduledPost = <ThrowOnError extends boolean = false>(
+  options: Options<RescheduleScheduledPostData, ThrowOnError>,
+): RequestResult<RescheduleScheduledPostResponses, RescheduleScheduledPostErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    RescheduleScheduledPostResponses,
+    RescheduleScheduledPostErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/scheduled/{post_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * List Proxies

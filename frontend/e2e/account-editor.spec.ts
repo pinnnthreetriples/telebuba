@@ -40,9 +40,11 @@ test('account editors keep their position and show a subtle tab hover', async ({
                       }
                     : path.endsWith('/channels')
                       ? { items: [], next_cursor: null }
-                      : path.endsWith('/accounts')
-                        ? fx.accounts
-                        : undefined;
+                      : path.endsWith('/scheduled')
+                        ? { items: [], server_now: new Date().toISOString() }
+                        : path.endsWith('/accounts')
+                          ? fx.accounts
+                          : undefined;
     if (body === undefined) unmatched.push(path);
     await route.fulfill({
       status: 200,

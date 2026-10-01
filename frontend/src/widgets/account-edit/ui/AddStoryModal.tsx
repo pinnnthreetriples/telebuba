@@ -1,8 +1,24 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { postAccountStoryMutation } from '@/entities/account';
+import {
+  accountScheduledPostsQueryKey,
+  postAccountStoryMutation,
+  scheduleAccountStoryMutation,
+  uploadScheduledMediaMutation,
+} from '@/entities/account';
+import {
+  ScheduleModeControl,
+  ScheduleTimeField,
+  clampToLead,
+  defaultRunAt,
+  newBatchId,
+  runAtProblem,
+  toIso,
+  useNow,
+  type ScheduleMode,
+} from '@/features/schedule-post';
 import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
 
@@ -120,9 +136,31 @@ export function AddStoryModal({
   const [collageLayout, setCollageLayout] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const post = useMutation(postAccountStoryMutation());
-  const busy = post.isPending;
-  const done = post.isSuccess;
-  const failed = post.isError;
+  // "On schedule": the files go to the server's store and a timed post is made
+  // from them — one request per file plus one, so the state is kept here rather
+  // than read off one mutation.
+  const queryClient = useQueryClient();
+  const now = useNow();
+  const [mode, setMode] = useState<ScheduleMode>('now');
+  const [runAt, setRunAt] = useState<number | null>(() => defaultRunAt(Date.now()));
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduled, setScheduled] = useState(false);
+  const [scheduleError, setScheduleError] = useState<unknown>(null);
+  const upload = useMutation(uploadScheduledMediaMutation());
+  const scheduleStory = useMutation(scheduleAccountStoryMutation());
+  // A retry re-sends neither a file already stored nor a post already made: the
+  // stored ids are kept per file, and the dialog's key finds a post whose answer
+  // was lost.
+  const storedIds = useRef(new Map<File, string>());
+  const batchId = useRef(newBatchId());
+  const later = mode === 'later';
+  const busy = post.isPending || scheduling;
+  const done = post.isSuccess || scheduled;
+  const failed = post.isError || scheduleError !== null;
+  const resetAll = () => {
+    post.reset();
+    setScheduleError(null);
+  };
 
   const count = images.length;
   const isCollage = video === null && count >= MIN_COLLAGE_IMAGES;
@@ -163,12 +201,12 @@ export function AddStoryModal({
     metaText = t('accounts.addStory.stError');
     metaTone = 'text-danger';
   } else if (done) {
-    metaText = t('accounts.addStory.stDone');
+    metaText = t(later ? 'accounts.schedule.storyDone' : 'accounts.addStory.stDone');
     metaTone = 'text-success-deep';
   } else if (busy) {
     metaText = t('accounts.addStory.stUploading');
   }
-  const errorDetail = errorText(post.error, t, t('accounts.addStory.stError'));
+  const errorDetail = errorText(post.error ?? scheduleError, t, t('accounts.addStory.stError'));
 
   const onPick = (event: React.ChangeEvent<HTMLInputElement>) => {
     // The add control is disabled while busy/done, but this handler sits on the
@@ -179,7 +217,7 @@ export function AddStoryModal({
     // live FileList after value='' yields an empty list in real browsers.
     const picked = Array.from(event.target.files ?? []);
     event.target.value = '';
-    post.reset();
+    resetAll();
     if (picked.length === 0) return;
     const videos = picked.filter((file) => file.type.startsWith('video'));
     const photos = picked.filter((file) => !file.type.startsWith('video'));
@@ -202,12 +240,12 @@ export function AddStoryModal({
       if (moved) next.splice(to, 0, moved);
       return next;
     });
-    post.reset();
+    resetAll();
   };
 
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
-    post.reset();
+    resetAll();
   };
 
   // The success window's auto-close timer, cleared on unmount: fired after the
@@ -220,9 +258,55 @@ export function AddStoryModal({
     [],
   );
 
+  const schedulePublish = async (files: File[]) => {
+    if (runAt === null) return;
+    setScheduling(true);
+    setScheduleError(null);
+    try {
+      const mediaIds: string[] = [];
+      for (const file of files) {
+        const known = storedIds.current.get(file);
+        const mediaId = known ?? (await upload.mutateAsync({ body: { file } })).media_id;
+        storedIds.current.set(file, mediaId);
+        mediaIds.push(mediaId);
+      }
+      await scheduleStory.mutateAsync({
+        path: { account_id: accountId },
+        body: {
+          media_ids: mediaIds,
+          // Clamped at send time: a long upload can outlive a time picked close in.
+          run_at: toIso(clampToLead(runAt, Date.now())),
+          batch_id: batchId.current,
+          client_key: 'story',
+          filename: files[0]?.name ?? null,
+          caption: caption.trim() || null,
+          privacy_preset: PRIVACY[audience],
+          protect_content: noForward,
+          collage_layout: isCollage ? collageLayout : null,
+        },
+      });
+      setScheduled(true);
+      void queryClient.invalidateQueries({
+        queryKey: accountScheduledPostsQueryKey({ path: { account_id: accountId } }),
+      });
+      // Nothing was published, so the profile grid has nothing to refresh.
+      closeTimer.current = window.setTimeout(onClose, 900);
+    } catch (error) {
+      // A swept file must be uploaded again, not named again.
+      if (envelopeMessage(error) === 'scheduled_media_missing') storedIds.current.clear();
+      setScheduleError(error);
+    } finally {
+      setScheduling(false);
+    }
+  };
+
   const publish = () => {
     const files = video !== null ? [video] : images;
     if (files.length === 0) return;
+    if (later) {
+      void schedulePublish(files);
+      return;
+    }
     post.mutate(
       {
         path: { account_id: accountId },
@@ -268,6 +352,27 @@ export function AddStoryModal({
           />
         </div>
 
+        <ScheduleModeControl
+          className="mb-md"
+          value={mode}
+          disabled={busy || done}
+          onChange={(next) => {
+            setMode(next);
+            resetAll();
+          }}
+        />
+        {later && (
+          <div className="mb-lg">
+            <ScheduleTimeField
+              value={runAt}
+              onChange={setRunAt}
+              now={now}
+              label={t('accounts.schedule.storyAt')}
+              disabled={busy || done}
+            />
+          </div>
+        )}
+
         <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>
         <SegmentedControl
           className="mb-lg"
@@ -277,6 +382,7 @@ export function AddStoryModal({
             value,
             label: t(`accounts.addStory.${value}`),
           }))}
+          disabled={busy || done}
           onChange={(value) => {
             setAudience(value);
           }}
@@ -286,6 +392,8 @@ export function AddStoryModal({
           <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>
           <Input
             value={caption}
+            // Read once at the click: an edit during the publish would be ignored.
+            disabled={busy || done}
             onChange={(event) => {
               setCaption(event.target.value);
             }}
@@ -299,6 +407,7 @@ export function AddStoryModal({
 
         <button
           type="button"
+          disabled={busy || done}
           onClick={() => {
             setNoForward((value) => !value);
           }}
@@ -503,7 +612,7 @@ export function AddStoryModal({
                   type="button"
                   onClick={() => {
                     setVideo(null);
-                    post.reset();
+                    resetAll();
                   }}
                   aria-label={t('accounts.addStory.removeFile')}
                   className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
@@ -560,6 +669,7 @@ export function AddStoryModal({
                   <button
                     type="button"
                     onClick={publish}
+                    disabled={later && runAtProblem(runAt, now) !== null}
                     aria-label={t('accounts.addStory.retry')}
                     className="inline-flex size-chip items-center justify-center rounded-full text-content-muted"
                   >
@@ -591,9 +701,9 @@ export function AddStoryModal({
             // `done` keeps the button locked through the 900ms success-close
             // window — isPending is already false there, and a second click
             // would publish the same story to the live account twice.
-            disabled={!hasMedia || busy || done}
+            disabled={!hasMedia || busy || done || (later && runAtProblem(runAt, now) !== null)}
           >
-            {t('accounts.addStory.publish')}
+            {later ? t('accounts.schedule.storySubmit') : t('accounts.addStory.publish')}
           </Button>
         </div>
       </div>

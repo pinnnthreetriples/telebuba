@@ -92,6 +92,23 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.fixture(autouse=True)
+def _isolate_scheduled_media(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Point the scheduled-media store at ``tmp_path`` and reset its runtime.
+
+    The store defaults to the relative ``runtime/scheduled_media``, i.e. the live
+    instance's own directory when pytest runs from the main checkout, and its sweep
+    deletes every file no row of the (empty, temporary) test database references.
+    The runtime's event and the store lock bind to the loop that created them.
+    """
+    from services import scheduled_posts  # noqa: PLC0415 - heavy import, only here
+
+    monkeypatch.setattr(settings.scheduled_posts, "media_dir", tmp_path / "scheduled_media")
+    scheduled_posts.reset_for_tests()
+    yield
+    scheduled_posts.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
 def _no_ambient_llm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run every test as a deployment that has configured no LLM key.
 

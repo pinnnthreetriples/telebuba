@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -8,19 +8,37 @@ import {
   AccountAvatar,
   accountPrivacyQueryKey,
   accountProfileSnapshotQueryKey,
+  accountScheduledPostsQueryKey,
   addAccountMusicMutation,
   allAccountsQueryOptions,
   createAccountChannelMutation,
   invalidateAccountViews,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,
+  scheduleAccountPhotoMutation,
+  scheduleAccountStoryMutation,
   setAccountChannelPhotoMutation,
   setAccountPhotoMutation,
   setAccountPrivacyMutation,
   updateAccountProfileMutation,
+  uploadScheduledMediaMutation,
 } from '@/entities/account';
+import {
+  BULK_MIN_LEAD_MS,
+  bulkRunAts,
+  bulkTailMs,
+  clampToLead,
+  defaultRunAt,
+  MAX_LEAD_MS,
+  newBatchId,
+  runAtProblem,
+  toIso,
+  useNow,
+  type ScheduleMode,
+} from '@/features/schedule-post';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
+import { formatLocalDateTime } from '@/shared/lib';
 import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
@@ -30,7 +48,7 @@ import {
   type ChannelDraft,
   type PostDraft,
 } from './BulkChannelsTab';
-import { BulkMusicTab, BulkPhotoTab, BulkStoriesTab } from './BulkMediaTabs';
+import { BulkMusicTab, BulkPhotoTab, BulkSchedulePanel, BulkStoriesTab } from './BulkMediaTabs';
 import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
 import { BulkTextTab } from './BulkTextTab';
@@ -49,6 +67,7 @@ import {
   type TextFieldKey,
 } from './_profileShared';
 import { useBulkRun } from './useBulkRun';
+import { useMountedRef } from './useMountedRef';
 
 type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
 const TABS = [
@@ -61,6 +80,10 @@ const TABS = [
 ] as const satisfies readonly Tab[];
 
 type Audience = 'contacts' | 'close_friends' | 'public';
+
+// Photos and stories may wait for a time; the other tabs always apply on the click.
+const SCHEDULABLE: ReadonlySet<Tab> = new Set(['photo', 'stories']);
+const DEFAULT_SPREAD_MINUTES = 10;
 
 const EMPTY_CHANNEL: ChannelDraft = {
   avatar: null,
@@ -78,8 +101,12 @@ const EMPTY_CHANNEL: ChannelDraft = {
 // anything to apply" and its own per-account step; the shell — batch strip, tab
 // strip, run rows, footer — is the same for all of them.
 export function BulkEditModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const now = useNow();
+  const upload = useMutation(uploadScheduledMediaMutation());
+  const schedulePhoto = useMutation(scheduleAccountPhotoMutation());
+  const scheduleStory = useMutation(scheduleAccountStoryMutation());
   const updateProfile = useMutation(updateAccountProfileMutation());
   const setPhoto = useMutation(setAccountPhotoMutation());
   const postStory = useMutation(postAccountStoryMutation());
@@ -114,6 +141,17 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const [channelMode, setChannelMode] = useState<'create' | 'post'>('create');
   const [channel, setChannel] = useState<ChannelDraft>(EMPTY_CHANNEL);
   const [post, setPost] = useState<PostDraft>({ text: '', file: null });
+
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('now');
+  const [baseRunAt, setBaseRunAt] = useState<number | null>(() =>
+    defaultRunAt(Date.now(), 2 * BULK_MIN_LEAD_MS),
+  );
+  const [spreadMinutes, setSpreadMinutes] = useState(DEFAULT_SPREAD_MINUTES);
+  const [preparing, setPreparing] = useState(false);
+  // When each account's post will go out, for its row once it is scheduled.
+  const scheduledAt = useRef<Record<string, number>>({});
+  // A close during the upload must not let the batch start afterwards with no UI.
+  const alive = useMountedRef();
 
   const bulk = useBulkRun();
 
@@ -274,24 +312,98 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     }
   };
 
-  const running = bulk.rows.some((row) => row.state === 'queued' || row.state === 'running');
+  const running =
+    preparing || bulk.rows.some((row) => row.state === 'queued' || row.state === 'running');
+  const later = SCHEDULABLE.has(tab) && scheduleMode === 'later';
+  const tailTooFar =
+    baseRunAt !== null && bulkTailMs(baseRunAt, ids.length, spreadMinutes) > now + MAX_LEAD_MS;
+  const timeReady =
+    !later || (runAtProblem(baseRunAt, now, BULK_MIN_LEAD_MS) === null && !tailTooFar);
+  // Everything the batch reads is frozen once its upload starts.
+  const locked = started || preparing;
+
+  const invalidateBatch = () => {
+    // Names, avatars and media of every account in the batch just changed; the
+    // table behind this dialog — and any open profile snapshot — is showing
+    // what they were.
+    invalidateAccountViews(queryClient);
+    for (const accountId of ids) {
+      const path = { path: { account_id: accountId } };
+      void queryClient.invalidateQueries({ queryKey: accountProfileSnapshotQueryKey(path) });
+      void queryClient.invalidateQueries({ queryKey: accountPrivacyQueryKey(path) });
+      void queryClient.invalidateQueries({
+        queryKey: accountChannelsQueryOptions(path).queryKey,
+      });
+      void queryClient.invalidateQueries({ queryKey: accountScheduledPostsQueryKey(path) });
+    }
+  };
+
+  // The files go over the wire ONCE, then every account gets a small JSON request
+  // naming them — a batch of fifty is fifty tiny calls, not fifty uploads.
+  const applyScheduled = async () => {
+    if (baseRunAt === null) return;
+    const files =
+      tab === 'photo' ? (perAccount ? photos : photos.slice(0, 1)) : storyFiles.slice(0, 1);
+    if (files.length === 0) return;
+    setPreparing(true);
+    const mediaIds: string[] = [];
+    try {
+      for (const file of files) {
+        mediaIds.push((await upload.mutateAsync({ body: { file } })).media_id);
+      }
+    } catch {
+      // The global mutation toast says why; nothing was scheduled yet.
+      setPreparing(false);
+      return;
+    }
+    if (!alive.current) return;
+    setPreparing(false);
+    const plan = bulkRunAts(baseRunAt, ids.length, spreadMinutes, Math.random);
+    const batchId = newBatchId();
+    scheduledAt.current = {};
+    setStarted(true);
+    void bulk
+      .run(ids, async (accountId, index) => {
+        // Re-checked at send time: a long batch can outlive the lead of its tail.
+        const runAt = clampToLead(plan[index] ?? baseRunAt, Date.now());
+        const pick = index % mediaIds.length;
+        const shared = {
+          run_at: toIso(runAt),
+          filename: files[pick]?.name ?? null,
+          batch_id: batchId,
+          client_key: `row${String(index)}`,
+        };
+        const path = { account_id: accountId };
+        if (tab === 'photo') {
+          await schedulePhoto.mutateAsync({
+            path,
+            body: { ...shared, media_id: mediaIds[pick] ?? '' },
+          });
+        } else {
+          await scheduleStory.mutateAsync({
+            path,
+            body: {
+              ...shared,
+              media_ids: mediaIds.slice(0, 1),
+              caption: caption.trim() || null,
+              privacy_preset: audience,
+              protect_content: false,
+              collage_layout: null,
+            },
+          });
+        }
+        scheduledAt.current[accountId] = runAt;
+      })
+      .finally(invalidateBatch);
+  };
 
   const apply = () => {
+    if (later) {
+      void applyScheduled();
+      return;
+    }
     setStarted(true);
-    void bulk.run(ids, step).finally(() => {
-      // Names, avatars and media of every account in the batch just changed; the
-      // table behind this dialog — and any open profile snapshot — is showing
-      // what they were.
-      invalidateAccountViews(queryClient);
-      for (const accountId of ids) {
-        const path = { path: { account_id: accountId } };
-        void queryClient.invalidateQueries({ queryKey: accountProfileSnapshotQueryKey(path) });
-        void queryClient.invalidateQueries({ queryKey: accountPrivacyQueryKey(path) });
-        void queryClient.invalidateQueries({
-          queryKey: accountChannelsQueryOptions(path).queryKey,
-        });
-      }
-    });
+    void bulk.run(ids, step).finally(invalidateBatch);
   };
 
   return (
@@ -322,7 +434,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
           <div className="flex items-center gap-md border-b border-line-row px-xl py-md">
             <IconButton
               size="sm"
-              disabled={started}
+              disabled={locked}
               onClick={() => {
                 setPickerOpen(true);
               }}
@@ -338,7 +450,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                     className="size-tile rounded-full"
                     fallbackClassName="bg-canvas text-content-muted type-label"
                   />
-                  {!started && ids.length > 1 && (
+                  {!locked && ids.length > 1 && (
                     <IconButton
                       size="sm"
                       shape="circle"
@@ -356,78 +468,108 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           </div>
 
-          {!started && (
-            <TabList
-              options={TABS.map((value) => ({ value, label: t(`accounts.profile.tab.${value}`) }))}
-              value={tab}
-              onChange={setTab}
-              idPrefix="bulk-tab"
-              panelId="bulk-tabpanel"
-              ariaLabel={t('accounts.bulk.title')}
-            />
-          )}
-
-          <div
-            role={started ? undefined : 'tabpanel'}
-            id={started ? undefined : 'bulk-tabpanel'}
-            aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
-            className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
-          >
-            {started ? (
-              <BulkProgress rows={bulk.rows} label={label} />
-            ) : tab === 'text' ? (
-              <BulkTextTab
-                on={on}
-                value={value}
-                onToggle={(key) => {
-                  setOn((prev) => ({ ...prev, [key]: !prev[key] }));
-                }}
-                onValue={(key, next) => {
-                  setValue((prev) => ({ ...prev, [key]: next }));
-                }}
-              />
-            ) : tab === 'photo' ? (
-              <BulkPhotoTab
-                files={photos}
-                spread={perAccount}
-                onFiles={setPhotos}
-                onSpread={setPerAccount}
-              />
-            ) : tab === 'stories' ? (
-              <BulkStoriesTab
-                files={storyFiles}
-                caption={caption}
-                audience={audience}
-                onFiles={setStoryFiles}
-                onCaption={setCaption}
-                onAudience={setAudience}
-              />
-            ) : tab === 'music' ? (
-              <BulkMusicTab file={track} onFile={setTrack} />
-            ) : tab === 'channels' ? (
-              <BulkChannelsTab
-                mode={channelMode}
-                channel={channel}
-                post={post}
-                onMode={setChannelMode}
-                onChannel={setChannel}
-                onPost={setPost}
-              />
-            ) : (
-              <BulkPrivacyTab
-                levels={levels}
-                onPick={(key, level) => {
-                  setLevels((prev) => {
-                    const next = { ...prev };
-                    if (level === null) delete next[key];
-                    else next[key] = level;
-                    return next;
-                  });
-                }}
+          {/* Disabled while the batch's files upload: the batch has already read
+              the tab, the files and the time, so a change here would be ignored. */}
+          <fieldset disabled={preparing} className="contents">
+            {!started && (
+              <TabList
+                options={TABS.map((value) => ({
+                  value,
+                  label: t(`accounts.profile.tab.${value}`),
+                }))}
+                value={tab}
+                onChange={setTab}
+                idPrefix="bulk-tab"
+                panelId="bulk-tabpanel"
+                ariaLabel={t('accounts.bulk.title')}
               />
             )}
-            {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
-          </div>
+
+            <div
+              role={started ? undefined : 'tabpanel'}
+              id={started ? undefined : 'bulk-tabpanel'}
+              aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
+              className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+            >
+              {started ? (
+                <BulkProgress
+                  rows={bulk.rows}
+                  label={label}
+                  okLabel={(accountId) => {
+                    const at = scheduledAt.current[accountId];
+                    return at === undefined
+                      ? t('accounts.bulk.rowOk')
+                      : t('accounts.schedule.bulkRowOk', {
+                          when: formatLocalDateTime(at, i18n.language),
+                        });
+                  }}
+                />
+              ) : tab === 'text' ? (
+                <BulkTextTab
+                  on={on}
+                  value={value}
+                  onToggle={(key) => {
+                    setOn((prev) => ({ ...prev, [key]: !prev[key] }));
+                  }}
+                  onValue={(key, next) => {
+                    setValue((prev) => ({ ...prev, [key]: next }));
+                  }}
+                />
+              ) : tab === 'photo' ? (
+                <BulkPhotoTab
+                  files={photos}
+                  spread={perAccount}
+                  onFiles={setPhotos}
+                  onSpread={setPerAccount}
+                />
+              ) : tab === 'stories' ? (
+                <BulkStoriesTab
+                  files={storyFiles}
+                  caption={caption}
+                  audience={audience}
+                  onFiles={setStoryFiles}
+                  onCaption={setCaption}
+                  onAudience={setAudience}
+                />
+              ) : tab === 'music' ? (
+                <BulkMusicTab file={track} onFile={setTrack} />
+              ) : tab === 'channels' ? (
+                <BulkChannelsTab
+                  mode={channelMode}
+                  channel={channel}
+                  post={post}
+                  onMode={setChannelMode}
+                  onChannel={setChannel}
+                  onPost={setPost}
+                />
+              ) : (
+                <BulkPrivacyTab
+                  levels={levels}
+                  onPick={(key, level) => {
+                    setLevels((prev) => {
+                      const next = { ...prev };
+                      if (level === null) delete next[key];
+                      else next[key] = level;
+                      return next;
+                    });
+                  }}
+                />
+              )}
+              {!started && SCHEDULABLE.has(tab) && (
+                <BulkSchedulePanel
+                  mode={scheduleMode}
+                  onMode={setScheduleMode}
+                  base={baseRunAt}
+                  onBase={setBaseRunAt}
+                  spread={spreadMinutes}
+                  onSpread={setSpreadMinutes}
+                  now={now}
+                  tailTooFar={tailTooFar}
+                />
+              )}
+              {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
+            </div>
+          </fieldset>
 
           <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
             {!started && <div className="mr-auto hidden type-label sm:block">{NOTE[tab]}</div>}
@@ -443,16 +585,19 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               )
             ) : (
               <>
-                <Button onClick={onClose} className="px-md sm:px-2xl">
+                <Button onClick={onClose} disabled={preparing} className="px-md sm:px-2xl">
                   {t('accounts.profile.cancel')}
                 </Button>
                 <Button
                   variant="primary"
                   className="px-md sm:px-2xl"
-                  disabled={ids.length === 0 || !READY[tab]}
+                  disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
+                  loading={preparing}
                   onClick={apply}
                 >
-                  {t('accounts.bulk.apply', { count: ids.length })}
+                  {later
+                    ? t('accounts.schedule.bulkApply', { count: ids.length })
+                    : t('accounts.bulk.apply', { count: ids.length })}
                 </Button>
               </>
             )}

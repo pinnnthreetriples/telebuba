@@ -49,6 +49,7 @@ from services.neuroshilling import (
     reconcile_neuroshilling_on_startup,
     shutdown_neuroshilling_on_shutdown,
 )
+from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 # Stdlib sink for full text — see ``core.proxy_check._failed_result``.
@@ -146,9 +147,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
     await reconcile_inboxes_on_startup()
+    await start_scheduled_posts()
     try:
         yield
     finally:
+        # First: it would otherwise keep claiming and publishing while warming drains,
+        # then lose an in-flight upload to the pool teardown (an ambiguous post).
+        await _shutdown_step("scheduled_posts", shutdown_scheduled_posts)
         await _shutdown_step("warming", shutdown_warming_runtime)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)

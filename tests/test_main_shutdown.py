@@ -32,10 +32,15 @@ _RECONCILE = (
     "reconcile_neurocomment_on_startup",
     "reconcile_neuroshilling_on_startup",
     "reconcile_inboxes_on_startup",
+    # The scheduled publisher starts last: it only reads what the others restored.
+    "start_scheduled_posts",
 )
 # Neuroshilling sits between neurocomment and the pool teardown: its run tasks hold
 # pooled Telethon clients, so they have to drain before the pool goes.
 _STEPS = (
+    # First out: otherwise it keeps publishing while warming drains, and the pool
+    # teardown then takes an upload in flight.
+    "shutdown_scheduled_posts",
     "shutdown_warming_runtime",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
