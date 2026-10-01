@@ -520,6 +520,7 @@
       "failedCount": "{{n}} с ошибкой",
       "rowQueued": "Ждёт",
       "rowRunning": "Применяем",
+      "rowSkipped": "Пропущен",
       "rowOk": "Готово",
       "stop": "Остановить",
       "done": "Закрыть",

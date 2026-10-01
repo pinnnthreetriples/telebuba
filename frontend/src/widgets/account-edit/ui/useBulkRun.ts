@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export type BulkRow = {
   accountId: string;
-  state: 'queued' | 'running' | 'ok' | 'error';
+  state: 'queued' | 'running' | 'ok' | 'error' | 'skipped';
   error: unknown;
 };
 
@@ -59,6 +59,12 @@ export function useBulkRun() {
         patch(accountId, gen, { state: 'error', error });
       }
     }
+    // A stopped batch leaves its untouched accounts queued; settle them, or the
+    // dialog reads them as still to come and never lets the operator out.
+    if (gen !== generation.current) return;
+    setRows((prev) =>
+      prev.map((row) => (row.state === 'queued' ? { ...row, state: 'skipped' } : row)),
+    );
   };
 
   // The in-flight account still finishes: its profile is already changing on
