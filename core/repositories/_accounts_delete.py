@@ -9,6 +9,7 @@ so existing call sites are unaffected.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, update
 
@@ -19,6 +20,23 @@ from core.db import (
     _now_iso,
     _warming_joined_channels,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
+
+
+def _delete_scheduled_posts(connection: Connection, account_id: str) -> None:
+    # Scheduled posts FK accounts.account_id; their media rows cascade from the
+    # post. The stored files are swept by the service once the rows are gone.
+    from core.repositories.scheduled_posts._tables import (  # noqa: PLC0415
+        _scheduled_profile_posts,
+    )
+
+    connection.execute(
+        delete(_scheduled_profile_posts).where(
+            _scheduled_profile_posts.c.account_id == account_id,
+        ),
+    )
 
 
 def _delete_account(account_id: str) -> None:
@@ -41,18 +59,9 @@ def _delete_account(account_id: str) -> None:
         _neurocomment_readiness,
         _neurocomment_runtime,
     )
-    from core.repositories.scheduled_posts._tables import (  # noqa: PLC0415
-        _scheduled_profile_posts,
-    )
 
     with _get_engine().begin() as connection:
-        # Scheduled posts FK accounts.account_id; their media rows cascade from the
-        # post. The stored files are swept by the service once the rows are gone.
-        connection.execute(
-            delete(_scheduled_profile_posts).where(
-                _scheduled_profile_posts.c.account_id == account_id,
-            ),
-        )
+        _delete_scheduled_posts(connection, account_id)
         # Neurocomment children FK accounts.account_id (campaign serving links,
         # per-channel readiness, posted/claimed comments) → clear them first too.
         connection.execute(

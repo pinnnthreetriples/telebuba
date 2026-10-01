@@ -129,8 +129,12 @@ async def _resync_avatar(post: ScheduledPost) -> None:
         return
     try:
         await refresh_account_avatar(post.account_id)
-    except Exception:  # noqa: BLE001 - cosmetic; the post itself is already published
-        logger.warning("avatar resync after scheduled photo failed for %s", post.account_id)
+    except Exception as exc:  # noqa: BLE001 - cosmetic; the post itself is already published
+        logger.warning(
+            "avatar resync after scheduled photo failed for %s (%s)",
+            post.account_id,
+            type(exc).__name__,
+        )
 
 
 async def _settle(post: ScheduledPost, result: ActionResult) -> None:

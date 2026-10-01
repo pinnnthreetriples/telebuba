@@ -99,8 +99,12 @@ def load(connection: Connection, rows: Sequence[RowMapping]) -> list[ScheduledPo
     for row in rows:
         try:
             loaded.append(_to_post(row, names[str(row["post_id"])]))
-        except (ValidationError, ValueError):
-            logger.warning("scheduled post %s no longer validates; skipped", row["post_id"])
+        except (ValidationError, ValueError) as exc:
+            logger.warning(
+                "scheduled post %s no longer validates (%s); skipped",
+                row["post_id"],
+                type(exc).__name__,
+            )
     return loaded
 
 

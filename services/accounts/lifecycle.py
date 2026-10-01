@@ -171,8 +171,13 @@ async def remove_account(account_id: str) -> None:
 
     try:
         await collect_media_garbage()
-    except Exception:
-        logger.exception("scheduled media sweep failed after removing %s", account_id)
+    except Exception as exc:  # noqa: BLE001 - the account is gone; only its files remain
+        logger.warning(
+            "scheduled media sweep failed after removing %s (%s)",
+            account_id,
+            type(exc).__name__,
+            exc_info=exc,
+        )
     await log_event("INFO", "account_removed", account_id=account_id)
 
 
