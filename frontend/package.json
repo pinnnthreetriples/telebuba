@@ -18,7 +18,7 @@
     "ds:css": "node scripts/design-token-css.mjs",
     "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run ds:dead && npm run ds:css && npm run test",
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\"",
-    "catalog": "vite --port 8132 --strictPort --host 127.0.0.1",
+    "catalog": "vite --config vite.catalog.config.ts --port 8132 --strictPort --host 127.0.0.1",
     "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
     "storybook:build": "storybook build",
     "storybook:test:server": "storybook dev -p 6106 --host 127.0.0.1 --no-open",

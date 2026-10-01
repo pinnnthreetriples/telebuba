@@ -49,7 +49,7 @@ const pool: NeuroshillingBoardAccount[] = [
 ];
 
 const meta = {
-  title: 'Patterns/Launch readiness',
+  title: 'Design System/Patterns/Launch readiness',
   component: PipelineCard,
   tags: ['autodocs'],
   args: {

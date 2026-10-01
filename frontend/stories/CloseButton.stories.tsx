@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { CloseButton } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/CloseButton',
+  title: 'Design System/Components/CloseButton',
   component: CloseButton,
   tags: ['autodocs'],
   args: { 'aria-label': 'Закрыть' },

@@ -180,7 +180,7 @@ function PairRow({
               {pair.rightName}
             </span>
           </span>
-          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-bold' : undefined}>
+          <Badge tone={live ? 'success' : 'neutral'} emphasis={live ? 'bold' : 'medium'}>
             {pair.messages.length}
           </Badge>
           <Icon
@@ -274,7 +274,7 @@ export function DialogueFeed() {
   const live = isFresh(pairs[0]?.newestAt ?? '');
 
   return (
-    <Card className="p-lg">
+    <Card padding="compact">
       <div className="mb-lg flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
@@ -283,7 +283,7 @@ export function DialogueFeed() {
         />
         <span className="min-w-0 flex-1 type-card-title">{t('warming.dialogues.title')}</span>
         {pairs.length > 0 ? (
-          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-bold' : undefined}>
+          <Badge tone={live ? 'success' : 'neutral'} emphasis={live ? 'bold' : 'medium'}>
             {t('warming.dialogues.pairs', { count: pairs.length })}
           </Badge>
         ) : null}

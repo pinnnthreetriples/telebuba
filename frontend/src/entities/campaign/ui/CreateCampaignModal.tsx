@@ -2,7 +2,18 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Badge, Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Badge,
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  Modal,
+  Textarea,
+} from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -28,7 +39,7 @@ export function CreateCampaignModal({
 
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex items-center">
         <span className={HEADING_ICON_TILE}>
           <Icon name="plus" size={18} />
         </span>
@@ -36,9 +47,9 @@ export function CreateCampaignModal({
           <div className="type-dialog-title">{t('neurocomment.modal.createCampaign.title')}</div>
           <div className="mt-hair type-prose">{t('neurocomment.modal.createCampaign.sub')}</div>
         </div>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl pb-xl pt-xl">
+      <ModalBody>
         <div className="mb-sm type-item-title">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
@@ -56,7 +67,7 @@ export function CreateCampaignModal({
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
-          className="mb-lg font-[inherit]"
+          className="mb-lg"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
@@ -76,7 +87,9 @@ export function CreateCampaignModal({
             {channels.map((channel, index) => (
               <Badge
                 size="md"
-                className="gap-sm border border-line text-content-secondary"
+                contentGap="roomy"
+                appearance="channel"
+                bordered
                 key={`${channel}-${String(index)}`}
               >
                 {channel}
@@ -110,18 +123,13 @@ export function CreateCampaignModal({
             placeholder={t('neurocomment.channels.placeholder')}
             aria-label={t('neurocomment.channels.placeholder')}
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="rounded-lg bg-info-tint text-info-strong"
-            onClick={addChannel}
-          >
+          <Button variant="infoGhost" size="sm" shape="square" onClick={addChannel}>
             {t('neurocomment.modal.add')}
           </Button>
         </div>
-      </div>
+      </ModalBody>
 
-      <div className="flex gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
+      <ModalFooter variant="inset" className="flex">
         <Button
           variant="primary"
           className="flex-1"
@@ -136,7 +144,7 @@ export function CreateCampaignModal({
         <Button className="flex-1" onClick={onClose}>
           {t('neurocomment.modal.cancel')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

@@ -35,7 +35,7 @@ function Example() {
 }
 
 const meta = {
-  title: 'Patterns/Inline chip editor',
+  title: 'Design System/Patterns/Inline chip editor',
   component: InlineChipEditor,
   tags: ['autodocs'],
   args: {

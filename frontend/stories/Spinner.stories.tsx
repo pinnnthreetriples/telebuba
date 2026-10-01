@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Spinner } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Spinner',
+  title: 'Design System/Components/Spinner',
   component: Spinner,
   tags: ['autodocs'],
 } satisfies Meta<typeof Spinner>;

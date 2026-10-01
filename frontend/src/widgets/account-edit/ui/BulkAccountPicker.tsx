@@ -4,7 +4,17 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, AccountAvatar, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Button, CloseButton, Icon, Input, Modal, Spinner } from '@/shared/ui';
+import {
+  SectionStack,
+  ModalHeader,
+  ModalFooter,
+  Button,
+  CloseButton,
+  Icon,
+  Input,
+  Modal,
+  Spinner,
+} from '@/shared/ui';
 
 // Everything the search box matches on, lowercased once per row rather than per
 // keystroke × row. `label` doubles as the row's rendered name.
@@ -69,7 +79,7 @@ export function BulkAccountPicker({
   return (
     <Modal onClose={onClose} size="panel" label={t('accounts.bulk.pickTitle')}>
       <div className="flex max-h-dialog flex-col overflow-hidden">
-        <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+        <ModalHeader variant="roomy" className="flex items-center">
           <div className="min-w-0 flex-1">
             <h2 className="truncate type-dialog-title">{t('accounts.bulk.pickTitle')}</h2>
             <div className="truncate type-prose">
@@ -77,9 +87,9 @@ export function BulkAccountPicker({
             </div>
           </div>
           <CloseButton onClick={onClose} aria-label={t('accounts.profile.close')} />
-        </div>
+        </ModalHeader>
 
-        <div className="flex flex-col gap-md border-b border-line-row px-xl py-lg">
+        <ModalHeader variant="message" flow="column">
           <Input
             value={search}
             placeholder={t('accounts.bulk.pickSearch')}
@@ -135,7 +145,7 @@ export function BulkAccountPicker({
               </Button>
             )}
           </div>
-        </div>
+        </ModalHeader>
 
         <div className="tb-scroll flex-1 overflow-y-auto">
           {fleet.isPending ? (
@@ -143,7 +153,7 @@ export function BulkAccountPicker({
               <Spinner size="lg" />
             </div>
           ) : fleet.isError ? (
-            <div className="flex flex-col items-center gap-md px-xl py-empty text-center">
+            <SectionStack gap="compact" padding="empty" className="items-center text-center">
               <p role="alert" className="type-prose text-danger">
                 {t('accounts.error')}
               </p>
@@ -154,7 +164,7 @@ export function BulkAccountPicker({
               >
                 {t('accounts.bulk.pickRetry')}
               </Button>
-            </div>
+            </SectionStack>
           ) : shown.length === 0 ? (
             <div className="px-xl py-empty text-center type-prose">
               {t('accounts.bulk.pickEmpty')}
@@ -198,7 +208,7 @@ export function BulkAccountPicker({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+        <ModalFooter variant="profile" className="flex items-center justify-end">
           <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
           <Button
             variant="primary"
@@ -209,7 +219,7 @@ export function BulkAccountPicker({
           >
             {t('accounts.bulk.pickApply', { n: draft.length })}
           </Button>
-        </div>
+        </ModalFooter>
       </div>
     </Modal>
   );

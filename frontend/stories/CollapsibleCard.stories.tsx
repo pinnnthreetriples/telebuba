@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { CollapsibleCard } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/CollapsibleCard',
+  title: 'Design System/Components/CollapsibleCard',
   component: CollapsibleCard,
   tags: ['autodocs'],
   args: {

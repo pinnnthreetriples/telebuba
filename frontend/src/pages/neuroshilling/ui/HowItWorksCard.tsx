@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { CollapsibleCard, NumberedStep } from '@/shared/ui';
+import { SectionStack, CollapsibleCard, NumberedStep } from '@/shared/ui';
 
 const HOW_STEPS = [0, 1, 2, 3] as const;
 
@@ -10,17 +10,17 @@ export function HowItWorksCard() {
   return (
     <CollapsibleCard
       label={t('neuroshilling.howto.title')}
-      wrapperClassName="rounded-card border border-line bg-canvas"
-      headerClassName="px-lg py-lg"
+      appearance="canvas"
+
       header={<span className="type-card-title">{t('neuroshilling.howto.title')}</span>}
     >
-      <div className="flex flex-col gap-md">
+      <SectionStack gap="compact">
         {HOW_STEPS.map((index) => (
           <NumberedStep key={index} number={index + 1}>
             {t(`neuroshilling.howto.steps.${String(index)}`)}
           </NumberedStep>
         ))}
-      </div>
+      </SectionStack>
     </CollapsibleCard>
   );
 }

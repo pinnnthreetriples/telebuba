@@ -37,6 +37,7 @@ export default tseslint.config(
       // (needed for the brace-expansion advisory), NOT to adopt a new ruleset — those
       // rules flag pre-existing app code and are their own reviewed change.
       'design-tokens/no-raw-values': 'error',
+      'design-tokens/component-contracts': 'error',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
@@ -70,7 +71,7 @@ export default tseslint.config(
     // The rule's own fixtures are the patterns it bans, so it cannot lint them: a
     // gate that flags nothing looks identical to a gate that catches nothing, and
     // this is the file that tells them apart.
-    files: ['**/designTokenRule.test.ts'],
+    files: ['**/designTokenRule.test.ts', '**/componentContracts.test.ts'],
     rules: { 'design-tokens/no-raw-values': 'off' },
   },
   prettier,

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { PipelineCard } from '../src/pages/neurocomment/ui/PipelineCard';
 
 const meta = {
-  title: 'Patterns/Runtime pipeline',
+  title: 'Design System/Patterns/Runtime pipeline',
   component: PipelineCard,
   tags: ['autodocs'],
   args: {

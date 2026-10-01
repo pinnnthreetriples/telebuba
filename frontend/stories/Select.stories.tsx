@@ -16,7 +16,7 @@ function SelectExample() {
 }
 
 const meta = {
-  title: 'Shared/Select',
+  title: 'Design System/Components/Select',
   component: Select,
   tags: ['autodocs'],
   args: { value: 'socks5', onChange: () => undefined, options, ariaLabel: 'Протокол' },

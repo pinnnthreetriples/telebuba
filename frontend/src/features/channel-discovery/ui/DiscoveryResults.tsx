@@ -8,6 +8,7 @@ import type {
   DiscoverySourceReport,
 } from '@/shared/api';
 import {
+  SectionStack,
   Badge,
   Button,
   Icon,
@@ -458,7 +459,7 @@ export function DiscoveryResults({
     );
 
     return (
-      <div className="flex flex-col gap-md">
+      <SectionStack gap="compact">
         {qualifyingStrip && work != null ? <SearchProgress work={work} phase="qualifying" /> : null}
         <div className="flex flex-wrap items-center gap-sm">
           <SegmentedControl
@@ -597,7 +598,7 @@ export function DiscoveryResults({
             </Button>
           </div>
         ) : null}
-      </div>
+      </SectionStack>
     );
   };
 

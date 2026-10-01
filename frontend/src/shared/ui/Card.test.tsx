@@ -4,9 +4,9 @@ import { expect, test } from 'vitest';
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Card } from './Card';
 
-test('the surface is the card and the padding is the caller`s', () => {
+test('the surface is the card and compact padding is an explicit preset', () => {
   render(
-    <Card data-testid="plain" className="p-lg">
+    <Card data-testid="plain" padding="compact">
       тело
     </Card>,
   );

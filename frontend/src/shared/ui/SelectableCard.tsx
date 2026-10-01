@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react';
 
-import { FOCUS_RING } from '@/shared/design-system';
-import { cn } from '@/shared/lib/cn';
+import {
+  selectableCardShell,
+  selectableCardTarget,
+  selectableCardContent,
+  selectableCardTitle,
+  selectableCardMeta,
+  selectableCardActions,
+} from '@/shared/design-system';
 
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -37,22 +43,20 @@ export function SelectableCard({
       open={actionsOpen}
       actions={actions}
       surface={
-        <div
-          className={`relative rounded-lg border p-lg ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
-        >
+        <div className={selectableCardShell(selected)}>
           <button
             type="button"
             aria-pressed={selected}
             aria-label={name}
             onClick={onSelect}
-            className={cn('absolute inset-0 cursor-pointer rounded-lg', FOCUS_RING)}
+            className={selectableCardTarget()}
           />
-          <div className="pointer-events-none flex justify-between gap-md">
+          <div className={selectableCardContent()}>
             <div className="min-w-0 flex-1">
-              <div className="mb-tight truncate type-card-title">{name}</div>
-              <div className="truncate type-caption">{meta}</div>
+              <div className={selectableCardTitle()}>{name}</div>
+              <div className={selectableCardMeta()}>{meta}</div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-sm">
+            <div className={selectableCardActions()}>
               {status}
               <span className="pointer-events-auto relative">
                 <IconButton

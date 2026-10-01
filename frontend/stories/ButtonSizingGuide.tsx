@@ -35,7 +35,7 @@ export function ButtonSizingGuide() {
           <strong>fullWidth</strong> — ширина на всю форму при высоте md. Это не отдельный размер.
         </p>
         <div className="w-menu max-w-full">
-          <Button fullWidth variant="primary" className="font-medium">
+          <Button fullWidth variant="primary" weight="medium">
             Войти
           </Button>
         </div>

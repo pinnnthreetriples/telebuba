@@ -4,7 +4,17 @@ import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
 import { HEADING_ICON_TILE, SURFACE } from '@/shared/design-system';
-import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Modal } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  ConfirmModal,
+  FeedbackMark,
+  Icon,
+  IconButton,
+  Modal,
+} from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
 import { AccountLimitsModal } from './AccountLimitsModal';
@@ -336,7 +346,7 @@ export function NeuroAccountsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.neuroAccounts.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex items-center">
         <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
@@ -357,9 +367,9 @@ export function NeuroAccountsModal({
             {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
           </div>
         </div>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl pb-lg pt-sm">
+      <ModalBody variant="inset">
         {accounts.length > 0 ? (
           accounts.map((account) => (
             <AccountRow
@@ -378,13 +388,13 @@ export function NeuroAccountsModal({
             {t('neurocomment.modal.neuroAccounts.empty')}
           </div>
         )}
-      </div>
+      </ModalBody>
 
-      <div className="flex justify-end border-t border-line-row px-2xl pb-xl pt-lg">
+      <ModalFooter variant="inset" className="flex justify-end">
         <Button variant="primary" onClick={onClose}>
           {t('neurocomment.modal.neuroAccounts.done')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

@@ -27,7 +27,7 @@ function FormFieldExample({ initiallyTouched = false }: { initiallyTouched?: boo
 }
 
 const meta = {
-  title: 'Shared/FormField',
+  title: 'Design System/Components/FormField',
   component: FormField,
   tags: ['autodocs'],
   args: {

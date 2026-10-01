@@ -1,3 +1,4 @@
+import { formLabel } from '@/shared/design-system';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -5,7 +6,7 @@ import { Input } from '@/shared/ui';
 
 import type { NeuroLimitsField, NeuroLimitsValue } from './neuroLimitsForm';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = formLabel();
 const ERROR = 'mt-tight block text-tiny font-medium text-danger-deep';
 
 // The fleet-wide neurocomment limits — moved here from the Settings page, next to the

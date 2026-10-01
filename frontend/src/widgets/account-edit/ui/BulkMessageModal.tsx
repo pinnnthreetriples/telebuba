@@ -12,6 +12,9 @@ import {
   sendBulkMessagesMutation,
 } from '@/entities/account';
 import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
   Button,
   CloseButton,
   HelpHint,
@@ -265,7 +268,7 @@ export function BulkMessageModal({
     <>
       <Modal onClose={close} size="panel" label={t('accounts.messages.title')}>
         <div className="flex max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-lg">
+          <ModalHeader variant="message" contentGap="roomy">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -273,9 +276,14 @@ export function BulkMessageModal({
               <h2 className="truncate type-dialog-title">{t('accounts.messages.title')}</h2>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.profile.close')} />
-          </div>
+          </ModalHeader>
 
-          <div className="tb-scroll flex-1 space-y-lg overflow-y-auto p-xl">
+          <ModalBody
+            variant="profile"
+            gap="default"
+            flow="space"
+            className="tb-scroll flex-1 overflow-y-auto"
+          >
             {started ? (
               stale ? (
                 <div className="space-y-sm">
@@ -420,7 +428,7 @@ export function BulkMessageModal({
                                 onClick={() => {
                                   setIds((prev) => prev.filter((value) => value !== id));
                                 }}
-                                className="absolute -right-hair -top-hair bg-surface-card sm:opacity-0 sm:transition-opacity sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
+                                className="absolute -right-hair -top-hair sm:opacity-0 sm:transition-opacity sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
                               >
                                 <Icon name="close" size={16} />
                               </IconButton>
@@ -584,9 +592,9 @@ export function BulkMessageModal({
                 </section>
               </>
             )}
-          </div>
+          </ModalBody>
 
-          <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <ModalFooter variant="profile" className="flex flex-wrap items-center justify-end">
             {!started && (
               <div className="mr-auto min-w-0">
                 <span className="type-caption tabular-nums">
@@ -643,7 +651,7 @@ export function BulkMessageModal({
                 {t('accounts.messages.send')}
               </Button>
             )}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {pickerOpen && (

@@ -1,3 +1,4 @@
+import { pageTitleSpacing, boardLayout } from '@/shared/design-system';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +16,10 @@ import {
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
-import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { cn, useLogEventStream, useTransientFeedback } from '@/shared/lib';
 import {
+  PageFrame,
+  SectionStack,
   Badge,
   Button,
   Card,
@@ -28,6 +31,7 @@ import {
   IconButton,
   InlineChipEditor,
   NumberedStep,
+  StatTile,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -63,15 +67,6 @@ function reasonKey(reason: string): string {
   return reason.startsWith('session ')
     ? 'warming.notReady.session'
     : (READINESS_REASON_KEY[reason] ?? '');
-}
-
-function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
-  return (
-    <div className="text-right">
-      <div className={`type-stat ${cls}`}>{value}</div>
-      <div className="type-caption">{label}</div>
-    </div>
-  );
 }
 
 export function WarmingPage() {
@@ -228,22 +223,32 @@ export function WarmingPage() {
   const poolOn = warming.length > 0;
 
   return (
-    <div className="tb-fadeup">
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
+    <PageFrame variant="full" className="tb-fadeup">
+      <div className={cn(pageTitleSpacing(), 'flex flex-wrap items-center justify-between gap-lg')}>
         <h1 className="m-0 type-page-title">{t('warming.titleFull')}</h1>
         <div className="flex w-full flex-wrap items-center justify-between gap-md sm:w-auto sm:flex-nowrap sm:gap-lg">
           <div className="flex gap-md sm:gap-lg">
-            <Counter
+            <StatTile
+              variant="plain"
+              className="text-right"
               value={warming.length}
               label={t('warming.counter.warming')}
-              cls="text-action-primary"
+              tone="action"
             />
-            <Counter
+            <StatTile
+              variant="plain"
+              className="text-right"
               value={idle.length}
               label={t('warming.counter.ready')}
-              cls="text-content-primary"
+              tone="default"
             />
-            <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
+            <StatTile
+              variant="plain"
+              className="text-right"
+              value={errors}
+              label={t('warming.counter.errors')}
+              tone="danger"
+            />
           </div>
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
@@ -258,7 +263,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className="gap-sm"
+            contentGap="roomy"
           >
             {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
@@ -273,9 +278,9 @@ export function WarmingPage() {
           clientWidth 1024, a scroll the viewport-wide sticky header can't follow. The
           feed that proved it has since moved to the left column; the floor stays,
           because the board's own log prints the same kind of line. */}
-      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-lg">
-          <Card className="p-lg">
+      <div className={boardLayout()}>
+        <SectionStack className="min-w-0">
+          <Card padding="compact">
             <div className="mb-md flex items-center justify-between">
               <span className="type-card-title">{t('warming.ready.title')}</span>
               <span className="rounded-full border border-line bg-surface-card px-sm py-hair type-caption">
@@ -349,18 +354,13 @@ export function WarmingPage() {
                       </div>
                       <Button
                         type="button"
-                        variant="primary"
+                        variant={ready ? 'primary' : 'inert'}
                         size="lg"
                         disabled={!ready || busyIds.has(account.account_id)}
                         title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={
-                          ready
-                            ? undefined
-                            : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
-                        }
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </Button>
@@ -376,7 +376,7 @@ export function WarmingPage() {
           <DialogueFeed />
 
           <CollapsibleCard
-            wrapperClassName="rounded-lg border border-line bg-surface-card"
+            appearance="softCard"
             header={<span className="type-card-title">{t('warming.channels.title')}</span>}
             label={t('warming.channels.title')}
           >
@@ -385,7 +385,9 @@ export function WarmingPage() {
               {channels.map((channel) => (
                 <Badge
                   size="md"
-                  className="gap-sm border border-line text-content-secondary"
+                  contentGap="roomy"
+                  appearance="channel"
+                  bordered
                   key={channel.channel}
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
@@ -441,13 +443,13 @@ export function WarmingPage() {
                   <Icon name="check" size={16} className="stroke-success-deep" />
                 </span>
                 <span className="type-card-title">{t('warming.warmed.title')}</span>
-                <Badge tone="success" className="font-bold">
+                <Badge tone="success" emphasis="bold">
                   {warmed.length}
                 </Badge>
               </>
             }
           >
-            <div className="flex flex-col gap-md">
+            <SectionStack gap="compact">
               {warmed.map((acc) => {
                 // Telegram name on top; the phone (with its country flag) drops
                 // to a subtitle — same pattern as the ready card. When there is
@@ -523,7 +525,8 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex-1 shrink gap-sm"
+                        contentGap="roomy"
+                        className="flex-1 shrink"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
@@ -555,12 +558,12 @@ export function WarmingPage() {
                   </div>
                 );
               })}
-            </div>
+            </SectionStack>
           </CollapsibleCard>
 
           <CollapsibleCard
             label={t('warming.howto.title')}
-            wrapperClassName="rounded-card border border-line bg-canvas"
+            appearance="canvas"
             header={<span className="type-card-title">{t('warming.howto.title')}</span>}
           >
             <div className="mb-lg type-caption">{t('warming.howto.hint')}</div>
@@ -572,9 +575,9 @@ export function WarmingPage() {
               ))}
             </div>
           </CollapsibleCard>
-        </div>
+        </SectionStack>
 
-        <div className="flex min-w-0 flex-col gap-lg">
+        <SectionStack className="min-w-0">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {
@@ -597,7 +600,7 @@ export function WarmingPage() {
               карточек, а тумблерам левая колонка мала — 340px не держат и двух
               столбцов. */}
           <ActionTuningCard />
-        </div>
+        </SectionStack>
       </div>
 
       {warmDaysFor ? (
@@ -647,6 +650,6 @@ export function WarmingPage() {
           onConfirm={confirmRemoveChannel}
         />
       ) : null}
-    </div>
+    </PageFrame>
   );
 }

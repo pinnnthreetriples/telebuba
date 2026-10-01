@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { NumberedStep } from '../src/shared/ui';
 
 const meta = {
-  title: 'Patterns/Numbered steps',
+  title: 'Design System/Patterns/Numbered steps',
   component: NumberedStep,
   tags: ['autodocs'],
   args: { number: 1, children: 'Подключите аккаунт и проверьте его состояние.' },

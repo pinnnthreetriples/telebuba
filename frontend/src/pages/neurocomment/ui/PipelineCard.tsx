@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Odometer } from '@/shared/ui';
+import { StatTile, Button, Icon, Odometer } from '@/shared/ui';
 
 import type { LogEntry } from '@/shared/api';
 
@@ -68,7 +68,7 @@ export function PipelineCard({
           size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className="gap-sm"
+          contentGap="roomy"
         >
           {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
@@ -152,10 +152,14 @@ export function PipelineCard({
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
-          <div key={stat.label} className="bg-surface-card px-lg py-lg max-md:odd:last:col-span-2">
-            <Odometer value={stat.value} className={stat.color} />
-            <div className="mt-hair type-caption">{stat.label}</div>
-          </div>
+          <StatTile
+            key={stat.label}
+            variant="runtime"
+            valuePresentation="custom"
+            className="max-md:odd:last:col-span-2"
+            value={<Odometer value={stat.value} className={stat.color} />}
+            label={stat.label}
+          />
         ))}
       </div>
     </div>

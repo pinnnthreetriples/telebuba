@@ -9,6 +9,15 @@ import {
 import { Fragment, type HTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/lib/cn';
+import {
+  tableCell,
+  tableCard,
+  tableCardHead,
+  tableCardTitle,
+  tableCardActions,
+  tableCardRow,
+  tableCardSubRow,
+} from '@/shared/design-system';
 
 import { useWideContainer } from './useWideViewport';
 
@@ -45,12 +54,12 @@ interface DataTableProps<TData> {
 // win. It used to win by accident: both classes reached the element and Tailwind happens
 // to emit `text-right` after `text-left`, so the column got its way through emit order
 // rather than through anyone deciding.
-const TH = 'px-lg py-md text-left type-table-header';
+
 const ROW = 'tb-row border-t border-line-row transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
-const CARD = 'tb-row overflow-hidden border-t border-line-row px-lg py-lg first:border-t-0';
+
 const CARD_LABEL = 'shrink-0 type-table-header';
 const CARD_VALUE = 'min-w-0 break-words text-right text-body text-content-secondary';
 
@@ -153,14 +162,14 @@ export function DataTable<TData>({
               key={row.id}
               {...rowProps}
               role="listitem"
-              className={cn(CARD, rowProps?.className)}
+              className={cn(tableCard(), rowProps?.className)}
             >
               {head.length > 0 ? (
-                <div className="flex items-center gap-md">
+                <div className={tableCardHead()}>
                   {head.map((cell) => (
                     <div
                       key={cell.id}
-                      className={slotOf(cell) === 'title' ? 'min-w-0 flex-1' : 'shrink-0'}
+                      className={slotOf(cell) === 'title' ? tableCardTitle() : 'shrink-0'}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </div>
@@ -168,17 +177,14 @@ export function DataTable<TData>({
                 </div>
               ) : null}
               {actions.map((cell) => (
-                <div key={cell.id} className="mt-md">
+                <div key={cell.id} className={tableCardActions()}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </div>
               ))}
               {body.map((cell) => {
                 const header = headerById.get(cell.column.id);
                 return (
-                  <div
-                    key={cell.id}
-                    className="mt-md flex items-baseline justify-between gap-md first:mt-0"
-                  >
+                  <div key={cell.id} className={tableCardRow()}>
                     <span className={CARD_LABEL}>
                       {header
                         ? flexRender(header.column.columnDef.header, header.getContext())
@@ -193,7 +199,7 @@ export function DataTable<TData>({
               {/* Bled out of the card's padding: sub-row content already carries its
                   own border-t/tint designed to sit flush under a table row. */}
               {renderSubRow ? (
-                <SubRow open={row.getIsExpanded()} className="-mx-lg -mb-lg mt-md">
+                <SubRow open={row.getIsExpanded()} className={tableCardSubRow()}>
                   {renderSubRow(row)}
                 </SubRow>
               ) : null}
@@ -214,7 +220,7 @@ export function DataTable<TData>({
                 <th
                   key={header.id}
                   className={cn(
-                    TH,
+                    tableCell(true),
                     (header.column.columnDef.meta as DataTableColumnMeta)?.className,
                   )}
                 >
@@ -234,7 +240,7 @@ export function DataTable<TData>({
                     <td
                       key={cell.id}
                       className={cn(
-                        'px-lg py-md',
+                        tableCell(),
                         (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
                       )}
                     >

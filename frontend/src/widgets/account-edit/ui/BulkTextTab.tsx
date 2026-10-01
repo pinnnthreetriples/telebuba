@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Icon, Input, Textarea } from '@/shared/ui';
+import { SectionStack, Icon, Input, Textarea } from '@/shared/ui';
 
 import { TEXT_FIELDS, TEXT_MAX, type TextFieldKey } from './_profileShared';
 
@@ -28,7 +28,7 @@ export function BulkTextTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
+    <SectionStack>
       <div className="rounded-lg bg-info-tint px-md py-md type-prose">
         {t('accounts.bulk.hint')}
       </div>
@@ -55,7 +55,6 @@ export function BulkTextTab({
             </button>
             {key === 'bio' ? (
               <Textarea
-                className="[font-family:inherit]"
                 disabled={!on[key]}
                 value={value[key]}
                 aria-label={label}
@@ -89,6 +88,6 @@ export function BulkTextTab({
           </div>
         );
       })}
-    </div>
+    </SectionStack>
   );
 }

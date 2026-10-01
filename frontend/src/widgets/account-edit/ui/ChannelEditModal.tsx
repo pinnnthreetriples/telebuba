@@ -9,6 +9,8 @@ import {
   updateAccountChannelMutation,
 } from '@/entities/account';
 import {
+  ModalHeader,
+  ModalBody,
   Button,
   ConfirmModal,
   CloseButton,
@@ -168,8 +170,8 @@ export function ChannelEditModal({
         // is a real (if rare) read result, which left the dialog nameless.
         label={t('accounts.channel.dialog')}
       >
-        <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-          <div className="mb-lg flex items-center justify-between gap-md">
+        <ModalBody variant="form" className="tb-scroll max-h-dialog overflow-y-auto">
+          <ModalHeader variant="inline" contentGap="compact" className="mb-lg justify-between">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
@@ -192,7 +194,7 @@ export function ChannelEditModal({
               disabled={busy}
               aria-label={t('accounts.channel.close')}
             />
-          </div>
+          </ModalHeader>
 
           {detail.isError && (
             // Без `mb-lg`: ветка `detail.isSuccess` в этом состоянии не отрисована, то
@@ -226,7 +228,6 @@ export function ChannelEditModal({
               <label className="mb-lg block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
                 <Textarea
-                  className="[font-family:inherit]"
                   value={shownAbout}
                   maxLength={CHANNEL_ABOUT_MAX}
                   onChange={(event) => {
@@ -286,7 +287,7 @@ export function ChannelEditModal({
               <ChannelPostsPanel accountId={accountId} channelId={channelId} />
             </>
           )}
-        </div>
+        </ModalBody>
       </Modal>
       {confirmDiscard ? (
         <ConfirmModal

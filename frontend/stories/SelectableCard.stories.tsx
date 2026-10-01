@@ -33,10 +33,9 @@ function Example({
           <>
             <IconButton
               size="md"
-              tone="neutral"
+              tone="warning"
               aria-label="Приостановить кампанию"
               title="Приостановить кампанию"
-              className="text-warning-deep hover:bg-warning-tint"
             >
               <Icon name="pause" size={16} />
             </IconButton>
@@ -64,7 +63,7 @@ function Example({
 }
 
 const meta = {
-  title: 'Patterns/Campaign selection',
+  title: 'Design System/Patterns/Campaign selection',
   component: SelectableCard,
   tags: ['autodocs'],
   args: {
@@ -82,12 +81,7 @@ const meta = {
     actionsLabel: 'Действия с кампанией',
     actions: (
       <>
-        <IconButton
-          size="md"
-          tone="neutral"
-          aria-label="Приостановить кампанию"
-          className="text-warning-deep hover:bg-warning-tint"
-        >
+        <IconButton size="md" tone="warning" aria-label="Приостановить кампанию">
           <Icon name="pause" size={16} />
         </IconButton>
         <IconButton size="md" tone="primary" aria-label="Изменить кампанию">

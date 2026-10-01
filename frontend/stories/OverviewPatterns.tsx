@@ -236,7 +236,8 @@ export function OverviewPatterns() {
                 <Button
                   size="xs"
                   onClick={() => setDiscoveryOpen(true)}
-                  className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                  variant="compactChannel"
+                  textSize="tiny"
                 >
                   Найти каналы
                 </Button>

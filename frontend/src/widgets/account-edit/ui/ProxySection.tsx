@@ -234,7 +234,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
         {account.proxy_id ? (
           <Button
             size="xs"
-            className="text-content-muted"
+            variant="statusIdle"
             onClick={onUnassign}
             disabled={proxyBusy}
             loading={unassignProxy.isPending}
@@ -311,7 +311,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
                   <span className={LABEL}>{t('accounts.edit.password')}</span>
                   <div className="relative">
                     <Input
-                      className="pr-[36px]"
+                      inset="trailing"
                       value={field.state.value}
                       onChange={(event) => {
                         field.handleChange(event.target.value);
@@ -327,7 +327,8 @@ export function ProxySection({ account }: { account: AccountRead }) {
                         setShowPass((value) => !value);
                       }}
                       aria-label={t('accounts.edit.password')}
-                      className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
+                      tone="bare"
+                      className="absolute right-sm top-1/2 -translate-y-1/2"
                     >
                       {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                     </IconButton>
@@ -359,7 +360,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
       <div className="flex flex-wrap items-center gap-md">
         <Button
           size="sm"
-          className="items-center gap-sm"
+          contentGap="roomy"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
           loading={visibleCheck === 'loading'}
@@ -385,7 +386,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="type-prose">{t('accounts.edit.proxyChecking')}</span>
         )}
         {visibleCheck === 'ok' && (
-          <Badge tone="success" size="md" className="tb-pop gap-sm">
+          <Badge tone="success" size="md" contentGap="roomy" className="tb-pop">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}

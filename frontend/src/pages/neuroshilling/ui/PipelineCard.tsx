@@ -8,7 +8,7 @@ import type {
   NeuroshillingStep,
 } from '@/shared/api';
 import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Badge, Button, Card, Notice } from '@/shared/ui';
+import { SectionStack, Badge, Button, Card, Notice, StatTile } from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 import { launchBlockers } from './launchChecks';
@@ -52,15 +52,6 @@ function Node({
         <span className={done ? 'type-item-title' : 'type-caption'}>{label}</span>
         <span className="-mt-xs type-caption">{sub}</span>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-md py-md">
-      <div className="type-stat tabular-nums">{value}</div>
-      <div className="mt-xs type-caption">{label}</div>
     </div>
   );
 }
@@ -198,11 +189,28 @@ export function PipelineCard({
       </div>
 
       <div className="mb-lg grid grid-cols-3 divide-line overflow-hidden rounded-lg border border-line sm:grid-cols-5 sm:divide-x">
-        <Stat label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
-        <Stat label={t('neuroshilling.launch.tile.targets')} value={String(targets.length)} />
-        <Stat label={t('neuroshilling.launch.tile.roles')} value={String(roles.length)} />
-        <Stat label={t('neuroshilling.launch.tile.messages')} value={String(messageSteps)} />
-        <Stat
+        <StatTile
+          variant="launch"
+          label={t('neuroshilling.launch.tile.accounts')}
+          value={String(roster.length)}
+        />
+        <StatTile
+          variant="launch"
+          label={t('neuroshilling.launch.tile.targets')}
+          value={String(targets.length)}
+        />
+        <StatTile
+          variant="launch"
+          label={t('neuroshilling.launch.tile.roles')}
+          value={String(roles.length)}
+        />
+        <StatTile
+          variant="launch"
+          label={t('neuroshilling.launch.tile.messages')}
+          value={String(messageSteps)}
+        />
+        <StatTile
+          variant="launch"
           label={t('neuroshilling.launch.tile.dialogue')}
           value={clock(dialogueSeconds(steps))}
         />
@@ -251,7 +259,7 @@ export function PipelineCard({
       {/* Оба уведомления об исходе — в одной колонке с `gap`: расстояние между ними и
           до того, что выше, принадлежит ей, а не им. */}
       {status === 'failed' || halted.length > 0 ? (
-        <div className="mt-md flex flex-col gap-md">
+        <SectionStack gap="compact" className="mt-md">
           {status === 'failed' && run.last_error_type ? (
             <Notice tone="danger" bordered={false}>
               {t('neuroshilling.launch.failed', { type: run.last_error_type })}
@@ -262,7 +270,7 @@ export function PipelineCard({
               {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
             </Notice>
           ) : null}
-        </div>
+        </SectionStack>
       ) : null}
     </Card>
   );

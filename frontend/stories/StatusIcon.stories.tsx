@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { StatusIcon } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/StatusIcon',
+  title: 'Design System/Components/StatusIcon',
   component: StatusIcon,
   tags: ['autodocs'],
   args: { kind: 'ok' },

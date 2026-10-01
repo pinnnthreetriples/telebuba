@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Card } from '@/shared/ui';
+import { SectionStack, Card } from '@/shared/ui';
 
 import { StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
@@ -57,7 +57,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   return (
     // Ритм колонки — один зазор, и ставит его колонка: пять детей несли `mb-lg` каждый,
     // кроме последнего, и «кроме последнего» приходилось помнить.
-    <div className="tb-fadeup flex max-w-page flex-col gap-lg">
+    <SectionStack className="tb-fadeup max-w-page">
       <button
         type="button"
         onClick={onBack}
@@ -68,7 +68,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         ← {t('accounts.edit.back')}
       </button>
 
-      <Card className="flex flex-wrap items-center gap-lg px-xl py-xl">
+      <Card className="flex flex-wrap items-center gap-lg">
         <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-title font-semibold text-info-strong">
           {mono(account)}
         </div>
@@ -94,6 +94,6 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       </Card>
 
       <AccountChats accountId={account.account_id} overview={overview} />
-    </div>
+    </SectionStack>
   );
 }

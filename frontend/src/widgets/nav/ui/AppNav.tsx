@@ -196,12 +196,13 @@ export function AppNav() {
             <IconButton
               size="touch"
               shape="circle"
-              tone="action"
+              tone="actionBordered"
               aria-label={t('shell.account')}
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="border-action-primary text-body font-semibold lg:size-tile"
+              responsiveSize={{ lg: 'lg' }}
+              textStyle="initial"
             >
               {initials}
             </IconButton>

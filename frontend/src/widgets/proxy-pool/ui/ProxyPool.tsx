@@ -81,7 +81,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <Card className="px-xl py-lg">
+    <Card padding="panel">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="type-card-title">{t('accounts.proxyPool.title')}</span>
@@ -116,7 +116,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           >
             {t('accounts.proxyPool.emptyBody')}
           </div>
-          <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
+          <Button variant="primary" contentGap="roomy" onClick={onAdd}>
             <Icon name="plus" size={16} />
             {t('accounts.proxyPool.emptyAdd')}
           </Button>
@@ -239,7 +239,7 @@ function ProxyCard({
             size="touch"
             shape="circle"
             tone="primary"
-            className="md:size-chip"
+            responsiveSize={{ md: 'sm' }}
             onClick={onCheck}
             disabled={busy}
             aria-label={t('accounts.actions.check')}
@@ -251,7 +251,7 @@ function ProxyCard({
             size="touch"
             shape="circle"
             tone="danger"
-            className="md:size-chip"
+            responsiveSize={{ md: 'sm' }}
             onClick={onDelete}
             disabled={busy}
             aria-label={t('accounts.actions.delete')}

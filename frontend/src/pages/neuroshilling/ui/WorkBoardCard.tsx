@@ -130,7 +130,7 @@ export function WorkBoardCard({
   );
 
   return (
-    <Card className="py-xl">
+    <Card padding="vertical">
       <div className="mb-md flex flex-wrap items-center gap-md px-xl">
         <span className="type-card-title">{t('neuroshilling.board.title')}</span>
         <Badge className="tabular-nums">{campaignList.length}</Badge>

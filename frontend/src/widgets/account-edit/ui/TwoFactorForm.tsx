@@ -107,7 +107,8 @@ export function TwoFactorForm({
               <FormField field={field} label={t('accounts.edit.twofaPassword')}>
                 <div className="relative">
                   <Input
-                    className="pr-[36px] font-mono"
+                    inset="trailing"
+                    textStyle="mono"
                     id={field.name}
                     name={field.name}
                     value={field.state.value}
@@ -151,7 +152,7 @@ export function TwoFactorForm({
       <div className="mb-lg type-caption">{t('accounts.edit.twofaHintWarn')}</div>
       <Button
         fullWidth
-        className="font-medium"
+        weight="medium"
         onClick={() => {
           void twofaForm.handleSubmit();
         }}

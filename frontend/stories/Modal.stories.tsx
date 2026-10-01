@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button, Modal } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Modal',
+  title: 'Design System/Components/Modal',
   component: Modal,
   tags: ['autodocs'],
   args: {

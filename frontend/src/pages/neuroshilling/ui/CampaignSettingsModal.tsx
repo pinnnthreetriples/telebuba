@@ -1,7 +1,9 @@
+import { cn } from '@/shared/lib';
+import { modalBody, sectionStack } from '@/shared/design-system';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Modal } from '@/shared/ui';
+import { ModalHeader, ModalFooter, Button, Modal } from '@/shared/ui';
 
 // Оболочка диалога настроек кампании: шапка с именем, прокручиваемое тело и подвал с
 // сохранением. Всё, что внутри, кладёт страница.
@@ -41,7 +43,7 @@ export function CampaignSettingsModal({
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader className="flex items-center">
         <div className="min-w-0">
           <div className="truncate type-dialog-title">{name}</div>
           <div className="mt-hair type-caption">{t('neuroshilling.settings.subtitle')}</div>
@@ -52,7 +54,7 @@ export function CampaignSettingsModal({
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null}
-      </div>
+      </ModalHeader>
 
       {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
@@ -64,12 +66,12 @@ export function CampaignSettingsModal({
       ) : null}
       <fieldset
         disabled={saving}
-        className="m-0 flex min-w-0 flex-col gap-2xl border-0 px-2xl py-xl"
+        className={cn(modalBody(), sectionStack('roomy'), 'm-0 min-w-0 border-0')}
       >
         {children}
       </fieldset>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter className="flex flex-wrap items-center justify-end">
         <Button size="sm" onClick={onClose} disabled={saving}>
           {t('neuroshilling.settings.cancel')}
         </Button>
@@ -82,7 +84,7 @@ export function CampaignSettingsModal({
         >
           {t('neuroshilling.settings.save')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

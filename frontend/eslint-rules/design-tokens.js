@@ -1,3 +1,5 @@
+import { componentContracts } from './component-contracts.js';
+
 // The design system is a closed set — tailwind.config.ts names every colour, type
 // rung, radius, elevation, motion rung, line-height, letter-spacing and unit of rhythm
 // the UI has — and a closed set only stays closed if reopening it is an error rather
@@ -441,4 +443,6 @@ const noRawValues = {
   },
 };
 
-export default { rules: { 'no-raw-values': noRawValues } };
+export default {
+  rules: { 'no-raw-values': noRawValues, 'component-contracts': componentContracts },
+};

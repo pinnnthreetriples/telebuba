@@ -10,7 +10,16 @@ import {
 import type { WarmingSettings } from '@/shared/api';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { mutationErrorText } from '@/shared/lib';
-import { Badge, Button, CollapsibleCard, FeedbackMark, HelpHint, Icon, Switch } from '@/shared/ui';
+import {
+  SectionStack,
+  Badge,
+  Button,
+  CollapsibleCard,
+  FeedbackMark,
+  HelpHint,
+  Icon,
+  Switch,
+} from '@/shared/ui';
 import type { IconName } from '@/shared/ui';
 
 // Каждое действие прогрева одной строкой, сгруппированное так, как оператор их
@@ -173,7 +182,7 @@ function ActionRow({
       {working ? null : (
         // С рамкой: заливка `neutral` — это `canvas`, а панель под ней `surface`, и
         // три единицы между ними плашкой не читаются. Тот же приём, что у пилюль каналов.
-        <Badge className="border border-line">{t(`warming.tune.state.${state}`)}</Badge>
+        <Badge bordered>{t(`warming.tune.state.${state}`)}</Badge>
       )}
     </div>
   );
@@ -246,9 +255,6 @@ export function ActionTuningCard() {
 
   return (
     <CollapsibleCard
-      wrapperClassName="rounded-card border border-line bg-surface-card"
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
       label={t('warming.tune.title')}
       header={
         <>
@@ -293,7 +299,7 @@ export function ActionTuningCard() {
               <span className="type-eyebrow">{t(`warming.tune.group.${group.key}`)}</span>
               {group.heavy ? <Badge tone="warning">{t('warming.tune.trafficHeavy')}</Badge> : null}
             </div>
-            <div className="flex flex-col gap-md">
+            <SectionStack gap="compact">
               {group.actions.map((action) => (
                 <ActionRow
                   key={action.key}
@@ -311,7 +317,7 @@ export function ActionTuningCard() {
                   }}
                 />
               ))}
-            </div>
+            </SectionStack>
           </div>
         ))}
       </div>

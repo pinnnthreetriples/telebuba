@@ -214,7 +214,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
+              <Notice tone="danger" typography="caption" className="mb-md">
                 {t('accounts.edit.twofaStoreFailed')}
               </Notice>
             ) : null}
@@ -228,7 +228,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
+              <Notice tone="danger" typography="caption" className="mb-md">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
@@ -249,13 +249,16 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               readOnly
               value={created.password}
               aria-label={t('accounts.edit.twofaNewPassword')}
-              className="mb-sm break-all font-mono text-content-primary"
+              textStyle="monoPrimary"
+              className="mb-sm break-all"
             />
             {clipboard ? (
               <Button
                 type="button"
                 fullWidth
-                className="mb-md font-medium text-content-muted"
+                weight="medium"
+                variant="statusIdle"
+                className="mb-md"
                 onClick={() => {
                   copyPassword(created.password);
                 }}
@@ -275,7 +278,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             ) : null}
             <Button
               fullWidth
-              className="font-medium"
+              weight="medium"
               onClick={() => {
                 setCreated(null);
                 setCopyState('idle');
@@ -404,7 +407,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               ) : (
                 <Button
                   fullWidth
-                  className="font-medium"
+                  weight="medium"
                   onClick={() => {
                     setChanging(true);
                   }}

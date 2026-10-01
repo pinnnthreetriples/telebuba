@@ -1,7 +1,10 @@
 import { useState } from 'react';
 
+import { dialogBody, dialogTitle } from '@/shared/design-system';
+
 import { Button } from './Button';
 import { Modal } from './Modal';
+import { ModalBody, ModalFooter } from './ModalParts';
 
 // Generic delete/remove confirm dialog (rule: any destructive action asks
 // first). Mirrors DeleteAccountModal/ProxyDeleteModal/CampaignDeleteModal's
@@ -42,16 +45,16 @@ export function ConfirmModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={title}>
-      <div className="p-2xl">
-        <div className="mb-sm text-title font-bold">{title}</div>
-        <div className="mb-2xl text-body text-content-muted">{body}</div>
-        <div className="flex justify-end gap-sm">
+      <ModalBody variant="form">
+        <div className={dialogTitle()}>{title}</div>
+        <div className={dialogBody()}>{body}</div>
+        <ModalFooter variant="plain">
           <Button onClick={onClose}>{cancelLabel}</Button>
           <Button variant="danger" onClick={confirm} loading={pending}>
             {confirmLabel}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { mutationErrorText } from '@/shared/lib';
-import { Icon, Spinner } from '@/shared/ui';
+import { SectionStack, Icon, Spinner } from '@/shared/ui';
 
 import type { BulkRow } from './useBulkRun';
 
@@ -28,7 +28,7 @@ export function BulkProgress({
   const failed = rows.filter((row) => row.state === 'error').length;
 
   return (
-    <div className="flex flex-col gap-md">
+    <SectionStack gap="compact">
       <div className="flex items-center justify-between gap-md">
         <span className="type-label">
           {t('accounts.bulk.progress', { done, total: rows.length })}
@@ -76,6 +76,6 @@ export function BulkProgress({
           </div>
         ))}
       </div>
-    </div>
+    </SectionStack>
   );
 }

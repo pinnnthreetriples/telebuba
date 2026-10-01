@@ -25,7 +25,7 @@ export function CaptchaSolverCard({
   const { t } = useTranslation();
   const tipId = useId();
   return (
-    <Card className="">
+    <Card padding="none">
       <div className="flex items-center justify-between gap-md px-lg py-md">
         <div className="flex min-w-0 items-center gap-md">
           <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">

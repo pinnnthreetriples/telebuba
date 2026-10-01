@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FeedbackMark } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/FeedbackMark',
+  title: 'Design System/Components/FeedbackMark',
   component: FeedbackMark,
   tags: ['autodocs'],
 } satisfies Meta<typeof FeedbackMark>;

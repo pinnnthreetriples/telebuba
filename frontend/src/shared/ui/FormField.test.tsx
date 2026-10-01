@@ -48,7 +48,7 @@ test('renders the label and the input, and shows the translated error once touch
   const error = screen.getByText('Укажите имя');
   expect(screen.getByRole('textbox', { name: 'Name' })).toBe(input);
   expect(input).toHaveAttribute('aria-describedby', error.id);
-  expect(error).toHaveClass('text-danger-deep');
+  expect(error).toHaveClass('type-field-error');
   // The invalid input carries the error border.
   expect(input.className).toContain('border-danger');
   // Checked in the errored state: that is when the field grows the wiring axe reads.

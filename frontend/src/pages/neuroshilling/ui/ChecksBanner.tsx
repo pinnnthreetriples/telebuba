@@ -25,9 +25,9 @@ export function ChecksBanner({ blockers }: { blockers: string[] }) {
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.checks.title', { count: blockers.length })}
-      wrapperClassName="rounded-card border border-warning-line bg-warning-tint"
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
+      appearance="warning"
+      headerPadding="compact"
+
       header={
         <span className="flex min-w-0 items-center gap-md">
           {/* Голый знак, а не залитый кружок. Кружок был `warning-deep` на

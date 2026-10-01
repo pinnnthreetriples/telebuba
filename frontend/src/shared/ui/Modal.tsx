@@ -1,8 +1,7 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { surface } from '@/shared/design-system';
-import { cn } from '@/shared/lib/cn';
+import { modalOverlay, modalCard, type ModalSize, type ModalVariant } from '@/shared/design-system';
 
 // Everything a keyboard can land on inside the dialog (for the Tab trap).
 const FOCUSABLE =
@@ -43,27 +42,6 @@ let overflowBeforeLock = '';
 // Поверхность диалога приходит из `recipes/surfaces.ts` — того же набора, что у Card и у
 // выпадающей панели. Шторка её не берёт: она прилегает к краю экрана, поэтому у неё нет
 // ни радиуса, ни тени, и «поверхность диалога» описывала бы её неверно.
-const SHELL = {
-  center: {
-    overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
-    card: `m-auto tb-arrive ${surface('dialog')}`,
-  },
-  'drawer-left': {
-    overlay: 'items-stretch justify-start',
-    // Ширина шторки живёт ЗДЕСЬ, а не приходит от вызывающего. Она не одна из четырёх
-    // ступеней ниже — это доля экрана с потолком, — и шторка в приложении одна, поэтому
-    // её ширина принадлежит варианту, а не месту вызова. Пока она приходила классом,
-    // `className` нельзя было закрыть.
-    card: 'flex h-full w-[min(84vw,300px)] flex-col overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
-  },
-  // Полноэкранный просмотр фото и сторис: тёмная сцена вместо вуали и без поверхности
-  // карточки — медиа само себе поверхность. Вариантом, а не своим порталом, чтобы стек
-  // Escape закрывал только просмотр, а ProfileModal под ним оставался открытым.
-  viewer: {
-    overlay: 'items-stretch justify-stretch bg-term',
-    card: 'relative flex h-full w-full items-center justify-center',
-  },
-} as const;
 
 // Четыре ширины диалога, и это ровно та шкала, ради которой она есть: 22 модалки тратили
 // 11 ширин. `confirm` — вопрос с двумя кнопками, `form` — диалог, который заполняют,
@@ -74,12 +52,6 @@ const SHELL = {
 // `w-[460px]`, — и он же позволял передать ЛЮБОЙ класс диалогу, включая тот, что спорит с
 // его собственной поверхностью. Шторка ширину теперь не передаёт (см. выше), поэтому
 // `className` у диалога больше нет вовсе.
-const SIZE = {
-  confirm: 'w-confirm',
-  form: 'w-form',
-  panel: 'w-panel',
-  table: 'w-table',
-} as const;
 
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
 // card (fadeup). Backdrop-click and Escape close; the card stops propagation.
@@ -113,8 +85,8 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
   // Ширина диалога. Шторка её игнорирует: её ширина принадлежит варианту.
-  size?: keyof typeof SIZE;
-  variant?: keyof typeof SHELL;
+  size?: ModalSize;
+  variant?: ModalVariant;
   // Accessible name for the dialog — REQUIRED, not optional: while it was
   // optional 20 of the 21 call sites left it out and a screen reader announced a
   // nameless "dialog". Every one of them already renders a title; pass that.
@@ -187,11 +159,7 @@ export function Modal({
   };
 
   return createPortal(
-    <div
-      role="presentation"
-      onClick={onClose}
-      className={cn('fixed inset-0 z-dialog flex bg-veil tb-ovfade', SHELL[variant].overlay)}
-    >
+    <div role="presentation" onClick={onClose} className={modalOverlay(variant)}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -202,11 +170,7 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={cn(
-          'max-w-full outline-none',
-          SHELL[variant].card,
-          variant === 'center' && SIZE[size],
-        )}
+        className={modalCard(variant, size)}
       >
         {children}
       </div>

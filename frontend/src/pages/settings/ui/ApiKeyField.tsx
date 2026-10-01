@@ -1,6 +1,7 @@
+import { formLabel } from '@/shared/design-system';
 import { IconButton, Input } from '@/shared/ui';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = formLabel();
 
 // Stays inline, both halves. The crossed-out eye is this file's own transcription
 // and is drawn nowhere else, so <Icon> can only take the open one — and the two
@@ -64,7 +65,8 @@ export function ApiKeyField({
       <span className={FIELD_LABEL}>{label}</span>
       <div className="flex gap-sm">
         <Input
-          className="flex-1 font-mono"
+          textStyle="mono"
+          className="flex-1"
           type={show ? 'text' : 'password'}
           // A provider API key, not a credential of this origin: `new-password`
           // is the token browsers honour as "do not fill" on a password input.
@@ -76,11 +78,11 @@ export function ApiKeyField({
           placeholder={placeholder}
         />
         <IconButton
-          size="md"
+          size="fieldAction"
           tone="primary"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="h-control w-action rounded-lg"
+          shape="field"
         >
           <EyeIcon off={show} />
         </IconButton>

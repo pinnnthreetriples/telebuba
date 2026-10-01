@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'storybook.spec.ts',
+  testMatch: 'storybook*.spec.ts',
   outputDir: './e2e/.artifacts/storybook',
   preserveOutput: 'always',
   timeout: 90_000,
@@ -28,7 +28,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run storybook:test:server',
     url: 'http://127.0.0.1:6106/iframe.html?id=design-system-overview--patterns&viewMode=story',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

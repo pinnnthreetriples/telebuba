@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { SectionStack, Input, Button } from '@/shared/ui';
 
 import { requestLoginCodeMutation, submitLoginCodeMutation } from '@/entities/account';
 
@@ -40,7 +40,7 @@ export function CodeLoginStep({
   return (
     <>
       {!requestCode.isSuccess ? (
-        <div className="flex flex-col gap-md">
+        <SectionStack gap="compact">
           <div className="rounded-lg border border-line bg-surface-card px-lg py-lg type-prose">
             {phone}
           </div>
@@ -61,15 +61,16 @@ export function CodeLoginStep({
           {requestCode.isError && (
             <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
-        </div>
+        </SectionStack>
       ) : (
-        <div className="flex flex-col gap-md">
+        <SectionStack gap="compact">
           <div className="rounded-lg bg-success-tint px-md py-md text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
           <label className="block type-caption font-medium">
             {t('accounts.addWizard.smsCode')}
-            <input
+            <Input
+              variant="auth"
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -77,12 +78,13 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
+              className="mt-tight"
             />
           </label>
           <label className="block type-caption font-medium">
             {t('accounts.addWizard.twoFA')}
-            <input
+            <Input
+              variant="auth"
               type="password"
               // `off` is documented as ignored on password inputs;
               // `new-password` is the token that actually suppresses the
@@ -92,13 +94,13 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
+              className="mt-tight"
             />
           </label>
           {submitCode.isError && (
             <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
-        </div>
+        </SectionStack>
       )}
       <div className="mt-xl flex justify-end gap-sm">
         <Button

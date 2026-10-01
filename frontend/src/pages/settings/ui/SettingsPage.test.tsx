@@ -7,6 +7,7 @@ import { expect, test, vi } from 'vitest';
 import '@/shared/i18n';
 
 import { SettingsPage } from './SettingsPage';
+import { layoutSettings } from '@/shared/design-system';
 
 function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,6 +40,24 @@ function routeSettings() {
 
 const captchaGroup = () => screen.getByRole('radiogroup', { name: 'LLM для решения капчи' });
 const textGroup = () => screen.getByRole('radiogroup', { name: 'LLM для текстов' });
+
+test('the page title preserves and follows the central bottom spacing after resetting margins', () => {
+  routeSettings();
+  const view = renderWithClient(<SettingsPage />);
+  expect(screen.getByRole('heading', { level: 1 })).toHaveClass('m-0', 'mb-xl');
+  const previous = layoutSettings.titleGap;
+  try {
+    layoutSettings.titleGap = '2xl';
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <SettingsPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('m-0', 'mb-2xl');
+  } finally {
+    layoutSettings.titleGap = previous;
+  }
+});
 
 async function warmingPutBody(): Promise<Record<string, unknown>> {
   const calls = vi.mocked(fetch).mock.calls.map(([i]) => i as Request);

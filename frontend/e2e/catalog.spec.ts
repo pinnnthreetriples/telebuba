@@ -29,6 +29,14 @@ async function open(page: Page) {
 }
 
 test.describe('каталог дизайн-системы', () => {
+  test('an unmatched API request stops at the offline catalog server', async ({ request }) => {
+    const response = await request.get('/api/v1/health');
+    expect(response.status()).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      detail: 'Catalog requires an offline API fixture',
+    });
+  });
+
   test('не переполняет desktop viewport на ширине 1120px', async ({ page }) => {
     await page.setViewportSize({ width: 1120, height: 780 });
     await open(page);

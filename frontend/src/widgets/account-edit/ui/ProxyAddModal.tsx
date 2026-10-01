@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createProxyMutation, proxyPoolQueryOptions } from '@/entities/proxy';
-import { Button, CloseButton, Modal } from '@/shared/ui';
+import { ModalHeader, ModalFooter, ModalBody, Button, CloseButton, Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
@@ -43,19 +43,19 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} size="form" label={t('accounts.proxyAdd.title')}>
-      <div className="p-2xl">
-        <div className="mb-lg flex items-center justify-between">
+      <ModalBody variant="form">
+        <ModalHeader variant="inline" className="mb-lg justify-between">
           <span className="type-dialog-title">{t('accounts.proxyAdd.title')}</span>
           <CloseButton onClick={onClose} aria-label={t('accounts.proxyAdd.close')} />
-        </div>
+        </ModalHeader>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
-        <div className="mt-xl flex justify-end gap-sm">
+        <ModalFooter variant="plain" className="mt-xl">
           <Button onClick={onClose}>{t('accounts.proxyAdd.cancel')}</Button>
           <Button variant="primary" onClick={onAdd} disabled={!canAdd}>
             {t('accounts.proxyAdd.add')}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

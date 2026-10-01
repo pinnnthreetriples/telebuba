@@ -82,13 +82,15 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             aria-describedby={tipId}
             onClick={runSpamCheck}
             loading={spamCheck === 'loading'}
-            className={`gap-sm rounded-full ${
+            contentGap="roomy"
+            shape="pill"
+            variant={
               spamCheck === 'ok'
-                ? 'border-success bg-success-deep text-on-success hover:border-success'
+                ? 'successSolid'
                 : spamCheck === 'err'
-                  ? 'border-danger bg-danger text-on-danger hover:border-danger'
-                  : 'text-content-muted'
-            }`}
+                  ? 'dangerSolid'
+                  : 'statusIdle'
+            }
           >
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">

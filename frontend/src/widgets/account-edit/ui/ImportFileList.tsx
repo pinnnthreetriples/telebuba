@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Spinner } from '@/shared/ui';
+import { SectionStack, Button, Icon, Spinner } from '@/shared/ui';
 
 import type { BulkFile } from './useBulkImport';
 
@@ -25,7 +25,7 @@ export function ImportFileList({
   };
 
   return (
-    <div className="flex flex-col gap-md">
+    <SectionStack gap="compact">
       {files.length > 1 && (
         <div className="type-caption">
           {t('accounts.addWizard.importSummary', { ok, total: files.length })}
@@ -72,6 +72,6 @@ export function ImportFileList({
           </div>
         </div>
       ))}
-    </div>
+    </SectionStack>
   );
 }

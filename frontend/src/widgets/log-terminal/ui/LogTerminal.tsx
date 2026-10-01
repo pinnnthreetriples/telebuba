@@ -106,8 +106,7 @@ export function LogTerminal({
     <CollapsibleCard
       defaultOpen
       label={title}
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
+
       trailing={
         <>
           {onlyAccount ? (
@@ -116,13 +115,12 @@ export function LogTerminal({
             // row either way, so it stays visible while the rows scroll — otherwise a
             // filter you scrolled past just looks like an empty log.
             <Button
-              variant="ghost"
+              variant="infoDismiss"
               size="xs"
               title={t('logTerminal.showAll')}
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="bg-info-tint text-info-strong hover:bg-danger-tint hover:text-danger-deep"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,

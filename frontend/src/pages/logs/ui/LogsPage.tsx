@@ -1,3 +1,4 @@
+import { pageTitleSpacing } from '@/shared/design-system';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -7,6 +8,7 @@ import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account'
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
 import {
+  PageFrame,
   Button,
   Card,
   DataTable,
@@ -14,7 +16,7 @@ import {
   Select,
   type DataTableColumnMeta,
 } from '@/shared/ui';
-import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
+import { cn, eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
@@ -172,8 +174,8 @@ export function LogsPage() {
   };
 
   return (
-    <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-page-title">{t('logs.title')}</h1>
+    <PageFrame variant="full" className="tb-fadeup">
+      <h1 className={cn('m-0 type-page-title', pageTitleSpacing())}>{t('logs.title')}</h1>
 
       <div className="mb-lg flex flex-wrap items-center gap-sm">
         {/* The measured capsule that used to slide behind these pills is gone with
@@ -212,10 +214,12 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-empty text-center type-prose">{t('logs.empty')}</Card>
+        <Card padding="empty" className="text-center type-prose">
+          {t('logs.empty')}
+        </Card>
       ) : (
         <>
-          <Card className="overflow-hidden">
+          <Card padding="none" className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
@@ -242,6 +246,6 @@ export function LogsPage() {
           </div>
         </>
       )}
-    </div>
+    </PageFrame>
   );
 }

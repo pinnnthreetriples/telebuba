@@ -32,7 +32,7 @@ function Example() {
 }
 
 const meta = {
-  title: 'Shared/TabList',
+  title: 'Design System/Components/TabList',
   component: TabList,
   tags: ['autodocs'],
   args: {

@@ -10,15 +10,28 @@ const options = [
   { value: 'off', label: 'Стоп' },
 ] as const;
 
-function SegmentedExample() {
+function SegmentedExample({
+  variant = 'tray',
+  disabled = false,
+}: {
+  variant?: 'tray' | 'pill' | 'outline';
+  disabled?: boolean;
+}) {
   const [value, setValue] = useState<'all' | 'live' | 'off'>('live');
   return (
-    <SegmentedControl value={value} onChange={setValue} options={options} ariaLabel="Фильтр" />
+    <SegmentedControl
+      variant={variant}
+      disabled={disabled}
+      value={value}
+      onChange={setValue}
+      options={options}
+      ariaLabel="Фильтр"
+    />
   );
 }
 
 const meta = {
-  title: 'Shared/SegmentedControl',
+  title: 'Design System/Components/SegmentedControl',
   component: SegmentedControl,
   tags: ['autodocs'],
   args: { value: 'live', onChange: () => undefined, options, ariaLabel: 'Фильтр' },
@@ -29,13 +42,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Tray: Story = { render: () => <SegmentedExample /> };
 export const Pill: Story = {
-  render: () => (
-    <SegmentedControl
-      variant="pill"
-      value="live"
-      onChange={() => {}}
-      options={options}
-      ariaLabel="Фильтр"
-    />
-  ),
+  render: () => <SegmentedExample variant="pill" />,
 };
+export const Outline: Story = { render: () => <SegmentedExample variant="outline" /> };
+export const Disabled: Story = { render: () => <SegmentedExample disabled /> };

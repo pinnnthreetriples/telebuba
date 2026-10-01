@@ -7,6 +7,8 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { fieldErrorText, formLabel } from '@/shared/design-system';
+
 import { Input, Textarea } from './Input';
 
 // Minimal @tanstack/react-form field primitive: a label, an input (or arbitrary
@@ -14,7 +16,6 @@ import { Input, Textarea } from './Input';
 // (proxy add/edit, profile text, add-account) displays errors the same way.
 // `cn` is imported from the specific module (not the shared/lib barrel) to avoid
 // the shared/ui ↔ shared/lib import cycle.
-const LABEL = 'mb-tight block text-body font-medium text-content-secondary';
 
 // Structural slice of a react-form string field — just what this primitive reads
 // and calls. Avoids depending on the library's exact FieldApi generics/export.
@@ -41,7 +42,7 @@ export function FieldError({ field, id }: { field: FormFieldApi; id?: string }) 
   const error = fieldError(field);
   if (!error) return null;
   return (
-    <span id={id} className="mt-tight block text-tiny font-medium text-danger-deep">
+    <span id={id} className={fieldErrorText()}>
       {t(error)}
     </span>
   );
@@ -94,7 +95,7 @@ export function FormField({
   return (
     <div className="block">
       <label className="block">
-        {label ? <span className={LABEL}>{label}</span> : null}
+        {label ? <span className={formLabel()}>{label}</span> : null}
         {children != null ? (
           describeControl(children, description)
         ) : (

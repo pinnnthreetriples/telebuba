@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 
-import { FOCUS_RING, surface } from '@/shared/design-system';
+import { segmentedWrap, segmentedOption, type SegmentedVariant } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // One row of mutually exclusive options, exactly one of them filled. Fourteen sites
@@ -29,38 +29,6 @@ import { cn } from '@/shared/lib/cn';
 // A `tablist` prop would have zero wearers, so there is none: what that trades away is
 // that the session-import switch — the one wearer that does swap a panel — is
 // announced as a radio group, and its two panels are not linked by `aria-controls`.
-const WRAP = {
-  // The inset tray: a sunken grey groove the options sit in, active one raised out of
-  // it. Six wearers, all of them a full-width row inside a modal or a card section.
-  tray: `flex gap-tight p-xs ${surface('inset')}`,
-  // The same idea drawn as a stadium and sized by its labels, for the trays that sit
-  // inline at the end of a row rather than spanning it. Its active segment is filled
-  // blue instead of raised white — `shadow-pill` is the token for exactly that, "the
-  // sliding pill of a segmented tab strip".
-  pill: 'inline-flex rounded-full border border-line bg-surface-card p-xs',
-  // No tray at all: each option is its own outlined box, and the active one is tinted
-  // rather than lifted. Five wearers.
-  outline: 'flex gap-sm',
-} as const;
-
-const SEG = {
-  tray: 'flex-1 rounded-sm py-sm text-body font-medium',
-  pill: 'rounded-full px-lg py-tight text-body font-medium',
-  outline: 'flex-1 rounded-lg border px-md py-sm text-body font-medium',
-} as const;
-
-const ON = {
-  tray: 'bg-surface-card text-content-primary shadow-seg',
-  pill: 'bg-action-primary text-on-action shadow-pill',
-  outline: 'border-action-primary bg-info-tint text-info-strong',
-} as const;
-
-const OFF = {
-  tray: 'text-content-muted',
-  pill: 'text-content-muted',
-  outline:
-    'border-line bg-surface-card text-content-muted hover:border-line-strong hover:bg-surface',
-} as const;
 
 // `group relative` is for the one wearer whose option carries a HintBubble (the
 // neurocomment mode pair): the bubble is positioned against, and revealed by, the
@@ -78,7 +46,6 @@ const OFF = {
 // beside it so the browser's own ring was discarded too. `Button` and `IconButton` moved
 // to this outline; `shadow-focus` keeps its job on the fields, where it is a glow beside
 // a border that goes `primary` and carries the indication on its own.
-const BASE = cn('group relative transition-colors duration-state disabled:opacity-60', FOCUS_RING);
 
 export type SegmentedOption<T extends string> = {
   value: T;
@@ -115,7 +82,7 @@ export function SegmentedControl<T extends string>({
   value: string;
   onChange: (value: T) => void;
   options: readonly SegmentedOption<T>[];
-  variant?: keyof typeof WRAP;
+  variant?: SegmentedVariant;
   // The whole tray at once — the wearer's form is read-only, or the field does not apply
   // (the comments filter under kind 'groups'). A single option going dead is not this
   // flag's job: that lives on the option (`SegmentedOption.disabled`), which the roving
@@ -152,7 +119,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className={cn(WRAP[variant], className)}
+      className={cn(segmentedWrap(variant), className)}
       // A radiogroup is ONE tab stop: Tab lands on the checked option and Tab again
       // leaves the group, while the arrows move within it. Selection follows focus,
       // which is what the ARIA radio pattern asks for and what ProfileModal's tablist
@@ -191,7 +158,7 @@ export function SegmentedControl<T extends string>({
           onClick={() => {
             onChange(option.value);
           }}
-          className={cn(BASE, SEG[variant], option.value === value ? ON[variant] : OFF[variant])}
+          className={segmentedOption(variant, option.value === value)}
         >
           {option.label}
         </button>

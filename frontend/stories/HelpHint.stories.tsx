@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { HelpHint } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/HelpHint',
+  title: 'Design System/Components/HelpHint',
   component: HelpHint,
   tags: ['autodocs'],
   args: {

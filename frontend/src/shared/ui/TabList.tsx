@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
 
-import { FOCUS_RING } from '@/shared/design-system';
+import { tabListGeometry, tabOptionGeometry } from '@/shared/design-system';
 
 export type TabOption<T extends string> = { value: T; label: string };
 
@@ -38,11 +38,7 @@ export function TabList<T extends string>({
   };
 
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
-    >
+    <div role="tablist" aria-label={ariaLabel} className={tabListGeometry()}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -54,11 +50,7 @@ export function TabList<T extends string>({
           tabIndex={value === option.value ? 0 : -1}
           onKeyDown={(event) => onKeyDown(event, option.value)}
           onClick={() => onChange(option.value)}
-          className={`shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
-            value === option.value
-              ? 'border-action-primary text-content-primary'
-              : 'border-transparent text-content-muted hover:border-info-line'
-          }`}
+          className={tabOptionGeometry(value === option.value)}
         >
           {option.label}
         </button>

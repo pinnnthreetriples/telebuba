@@ -1,6 +1,16 @@
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button, HelpHint, Input, Modal, Switch } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Badge,
+  Button,
+  HelpHint,
+  Input,
+  Modal,
+  Switch,
+} from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
 import { useNumberField } from './useNumberField';
@@ -50,7 +60,8 @@ function NumberRow({
       <HelpHint text={hint} />
       <Input
         size="xs"
-        className="w-number tabular-nums"
+        textStyle="tabular"
+        widthPreset="number"
         type="number"
         min={min}
         max={max}
@@ -92,11 +103,11 @@ export function AdvancedLimitsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.setup.advanced.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl type-dialog-title">
+      <ModalHeader className="type-dialog-title">
         {t('neuroshilling.setup.advanced.title')}
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl py-sm">
+      <ModalBody variant="slim">
         <NumberRow
           label={t('neuroshilling.setup.perHour.label')}
           hint={t('neuroshilling.setup.perHour.hint')}
@@ -162,13 +173,13 @@ export function AdvancedLimitsModal({
             }}
           />
         </div>
-      </div>
+      </ModalBody>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter className="flex items-center justify-end">
         <Button variant="primary" size="sm" onClick={onClose}>
           {t('neuroshilling.setup.advanced.done')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

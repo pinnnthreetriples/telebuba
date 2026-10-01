@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Icon, IconButton } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/IconButton',
+  title: 'Design System/Components/IconButton',
   component: IconButton,
   tags: ['autodocs'],
   args: { 'aria-label': 'Изменить', children: <Icon name="pencil" size={14} /> },

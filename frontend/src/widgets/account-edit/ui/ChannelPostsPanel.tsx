@@ -205,7 +205,6 @@ export function ChannelPostsPanel({
           побайтово, а уведомление перестаёт решать расстояние до соседа. */}
       <div className="flex flex-col gap-sm rounded-lg border border-line bg-surface-card p-md">
         <Textarea
-          className="[font-family:inherit]"
           value={text}
           maxLength={textMax}
           placeholder={t('accounts.channel.composerPlaceholder')}
@@ -242,7 +241,7 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <Notice tone="danger" className="py-sm">
+          <Notice tone="danger" padding="compact">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
           </Notice>
         )}
@@ -299,12 +298,12 @@ export function ChannelPostsPanel({
         </div>
       )}
       {posts.isError && (
-        <Notice tone="danger" className="mt-md flex items-center justify-between gap-md">
+        <Notice tone="danger" contentGap="row" className="mt-md flex items-center justify-between">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <Button
             size="xs"
-            variant="danger"
-            className="bg-surface-card"
+            variant="dangerSurface"
+
             onClick={() => {
               void posts.refetch();
             }}
@@ -361,7 +360,6 @@ export function ChannelPostsPanel({
               {editingId === post.post_id ? (
                 <div className="mt-sm flex flex-col gap-sm">
                   <Textarea
-                    className="[font-family:inherit]"
                     value={editText}
                     maxLength={editMax}
                     aria-label={t('accounts.channel.postEdit')}
@@ -370,7 +368,7 @@ export function ChannelPostsPanel({
                     }}
                   />
                   {editPost.isError && (
-                    <Notice tone="danger" className="py-sm">
+                    <Notice tone="danger" padding="compact">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </Notice>
                   )}

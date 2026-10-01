@@ -6,7 +6,17 @@ import { useTranslation } from 'react-i18next';
 import { neurocommentCommentsQueryOptions } from '@/entities/campaign';
 import type { CommentRecord, NeurocommentAccountCard } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Badge, Button, Card, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Modal,
+  type DataTableColumnMeta,
+} from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
@@ -90,11 +100,11 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
+      <ModalHeader>
         <div className="type-dialog-title">{t('neurocomment.history.title')}</div>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl pb-lg pt-md">
+      <ModalBody variant="history">
         {isPending ? (
           <p className="py-empty text-center type-prose">{t('neurocomment.history.loading')}</p>
         ) : isError ? (
@@ -104,15 +114,15 @@ export function CommentHistoryModal({
         ) : items.length === 0 ? (
           <div className="py-empty text-center type-prose">{t('neurocomment.history.empty')}</div>
         ) : (
-          <Card className="overflow-hidden">
+          <Card padding="none" className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
           </Card>
         )}
-      </div>
+      </ModalBody>
 
-      <div className="flex items-center justify-between border-t border-line-row px-2xl pb-xl pt-lg">
+      <ModalFooter variant="inset" className="flex items-center justify-between">
         <div className="flex gap-sm">
           <Button
             size="sm"
@@ -136,7 +146,7 @@ export function CommentHistoryModal({
         <Button variant="primary" onClick={onClose}>
           {t('neurocomment.history.done')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

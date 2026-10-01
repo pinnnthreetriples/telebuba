@@ -327,7 +327,7 @@ function WarmingCard({
                 onClick={() => {
                   setStopOpen(true);
                 }}
-                className="text-content-muted"
+                variant="statusIdle"
               >
                 {t('warming.actions.stopShort')}
               </Button>
@@ -469,7 +469,7 @@ function WarmingCard({
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="bg-transparent text-content-muted hover:border-info-line hover:text-info-strong"
+                    variant="transparentMuted"
                   >
                     <svg
                       width="10"
@@ -551,14 +551,15 @@ function WarmingCard({
           <div className="mt-md flex items-center gap-sm">
             <FeedbackMark result={result} />
             <Button
-              variant="primary"
+              variant="success"
               disabled={busy}
               onClick={() => {
                 onPromote(account.account_id);
               }}
               // Зелёная заливка — решение места вызова, как у пяти белых `danger`: у
               // `VARIANT` нет залитого успеха, и одного носителя для имени мало.
-              className="flex-1 shrink gap-sm bg-success-deep hover:bg-success-press"
+              contentGap="roomy"
+              className="flex-1 shrink"
             >
               <svg
                 width="14"
@@ -596,7 +597,7 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <Card className="p-lg">
+    <Card padding="compact">
       <div className="mb-lg flex items-center justify-between">
         <div className="flex items-center gap-md">
           <span className="flex size-icon items-center justify-center rounded-md bg-action-primary">

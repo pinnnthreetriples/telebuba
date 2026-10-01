@@ -20,14 +20,18 @@ type Role = {
 
 const roles = (config.theme as { typeRole: Record<string, Role> }).typeRole;
 const fontSize = config.theme.fontSize as Record<string, string>;
-const content = config.theme.colors.content;
+const colors = config.theme.colors;
 
 // Краска роли пишется так, как её пишет класс — `content-primary`, — а палитра рампу
 // вкладывает. Спецслучая «краска без рунга» больше нет: у `content` каждая ступень
 // названа, и одноимённого корня `ink` не осталось.
 function inkHex(token: string): string {
-  const rung = token.slice('content-'.length) as keyof typeof content;
-  return content[rung];
+  const [root, ...parts] = token.split('-');
+  const scale = colors[root as keyof typeof colors];
+  if (typeof scale === 'string') return scale;
+  const color = (scale as Record<string, string>)[parts.join('-')];
+  if (color === undefined) throw new Error(`Unresolved role ink: ${token}`);
+  return color;
 }
 
 // One compile for the whole suite: Tailwind only emits a component whose class appears

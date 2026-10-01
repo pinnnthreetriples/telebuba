@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Badge } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/Badge',
+  title: 'Design System/Components/Badge',
   component: Badge,
   tags: ['autodocs'],
   args: { children: 'Прогрет' },

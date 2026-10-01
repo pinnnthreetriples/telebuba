@@ -1,6 +1,7 @@
+import { dialogTitle, dialogBody } from '@/shared/design-system';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Modal } from '@/shared/ui';
+import { ModalFooter, ModalBody, Button, Icon, Modal } from '@/shared/ui';
 
 // The design's "stop warming?" confirm (three actions: finish→warmed, keep
 // going, hard stop).
@@ -18,10 +19,10 @@ export function WarmStopModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('warming.stopModal.title')}>
-      <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
-        <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
-        <div className="flex flex-col gap-sm sm:flex-row">
+      <ModalBody variant="form">
+        <div className={dialogTitle()}>{t('warming.stopModal.title')}</div>
+        <div className={dialogBody()}>{t('warming.stopModal.body', { phone })}</div>
+        <ModalFooter variant="plain" className="flex-col sm:flex-row">
           <Button
             variant="primary"
             className="w-full sm:flex-1"
@@ -33,7 +34,7 @@ export function WarmStopModal({
             <Icon name="check" size={14} />
             {t('warming.stopModal.toWarmed')}
           </Button>
-          <Button className="w-full hover:bg-surface sm:flex-1" onClick={onClose}>
+          <Button variant="secondaryStop" className="w-full sm:flex-1" onClick={onClose}>
             {t('warming.stopModal.keep')}
           </Button>
           {/* The one destructive button in the app that is white at rest and tints
@@ -42,8 +43,8 @@ export function WarmStopModal({
               third would read as the recommended one. The variant supplies the
               border, the ink and the states; the resting fill is the override. */}
           <Button
-            variant="danger"
-            className="w-full bg-surface-card hover:border-danger-line hover:bg-danger-tint sm:flex-1"
+            variant="dangerSurfaceDanger"
+            className="w-full sm:flex-1"
             onClick={() => {
               onStop();
               onClose();
@@ -51,8 +52,8 @@ export function WarmStopModal({
           >
             {t('warming.stopModal.stop')}
           </Button>
-        </div>
-      </div>
+        </ModalFooter>
+      </ModalBody>
     </Modal>
   );
 }

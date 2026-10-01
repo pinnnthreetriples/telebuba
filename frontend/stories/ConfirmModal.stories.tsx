@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ConfirmModal } from '../src/shared/ui';
 
 const meta = {
-  title: 'Shared/ConfirmModal',
+  title: 'Design System/Components/ConfirmModal',
   component: ConfirmModal,
   tags: ['autodocs'],
   args: {

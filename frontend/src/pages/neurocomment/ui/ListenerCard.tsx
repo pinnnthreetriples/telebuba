@@ -55,7 +55,7 @@ export function ListenerCard({
       ? t('neurocomment.listener.listeningNoChannels')
       : t('neurocomment.listener.paused');
   return (
-    <Card className="relative z-raised px-lg py-lg">
+    <Card padding="compact" className="relative z-raised">
       <div className="mb-xs flex items-center gap-md">
         <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <Icon name="chart" size={16} />
@@ -74,7 +74,7 @@ export function ListenerCard({
               <>
                 <IconButton
                   size="md"
-                  tone="neutral"
+                  tone={running ? 'warning' : 'success'}
                   aria-label={
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
@@ -83,11 +83,6 @@ export function ListenerCard({
                   }
                   onClick={onToggleRuntime}
                   disabled={!running && !canStart}
-                  className={
-                    running
-                      ? 'text-warning-deep hover:bg-warning-tint'
-                      : 'text-success-deep hover:bg-success-tint'
-                  }
                 >
                   {running ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                 </IconButton>

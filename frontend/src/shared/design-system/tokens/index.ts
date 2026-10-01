@@ -11,6 +11,8 @@ export * as primitives from './primitives';
 export * as semantic from './semantic';
 export * as spacing from './spacing';
 export * as typography from './typography';
+export * from './components';
+export * from './layout';
 
 export { layer, radius, shadow, font, palette, channel } from './primitives';
 export { flatColors, background, content, border, action, feedback, inverse } from './semantic';
