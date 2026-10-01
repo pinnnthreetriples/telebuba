@@ -41,8 +41,20 @@ def _delete_account(account_id: str) -> None:
         _neurocomment_readiness,
         _neurocomment_runtime,
     )
+    from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
 
     with _get_engine().begin() as connection:
+        # neuroshilling_accounts.account_id is an FK (part of the roster's primary
+        # key), so a rostered account could not be deleted at all. Only the roster
+        # link goes: ``replaced_by_account_id`` on OTHER rows is not an FK and stays —
+        # clearing it would refund a ban's one substitution and let a second caller
+        # spend another reserve. A role this leaves unplayed is the launch gate's to
+        # refuse; a RUNNING campaign never gets here (``remove_account`` refuses).
+        connection.execute(
+            delete(_neuroshilling_accounts).where(
+                _neuroshilling_accounts.c.account_id == account_id,
+            ),
+        )
         # Neurocomment children FK accounts.account_id (campaign serving links,
         # per-channel readiness, posted/claimed comments) → clear them first too.
         connection.execute(
@@ -142,7 +154,8 @@ async def delete_account(account_id: str) -> None:
     SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
     helper manually purges ``warming_account_state`` /
     ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
-    joined channels before deleting the ``accounts`` row. The shared pool
+    joined channels / neurocomment and neuroshilling roster rows before
+    deleting the ``accounts`` row. The shared pool
     proxy is left intact. New per-account tables MUST be added to
     ``_delete_account`` — relying on FK cascade is a bug.
 

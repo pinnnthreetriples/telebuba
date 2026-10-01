@@ -435,6 +435,22 @@ async def test_delete_account_returns_conflict_while_warming_task_is_still_stopp
     assert resp.json()["error"]["code"] == "conflict"
 
 
+@pytest.mark.asyncio
+async def test_delete_account_returns_conflict_while_neuroshilling_holds_it(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _held(account_id: str) -> None:
+        code = "account_busy_neuroshilling"
+        raise warming_service.AccountUnavailableError(code, account_id)
+
+    monkeypatch.setattr("services.accounts.remove_account", _held)
+    async with _client(app) as client:
+        resp = await client.delete("/api/v1/accounts/busy")
+    assert resp.status_code == 409
+    assert "neuroshilling" in resp.json()["error"]["message"]
+
+
 @pytest.mark.parametrize(
     ("encoded", "victim"),
     [

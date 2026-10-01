@@ -235,7 +235,17 @@ async def delete_account(account_id: AccountIdPath) -> None:
     # service-side guard, unlinked whatever the id resolved to).
     try:
         with service_errors_to_http():
-            await accounts.remove_account(account_id)
+            try:
+                await accounts.remove_account(account_id)
+            except warming_service.AccountUnavailableError as exc:
+                # Caught inside: it is a ``ValueError``, which the block above would
+                # collapse to 400. Free-form rather than ``exc.code``: the SPA's text
+                # for that code tells the operator to stop the campaign and then start
+                # WARMING.
+                raise HTTPException(
+                    status_code=http_status.HTTP_409_CONFLICT,
+                    detail="account is held by a running neuroshilling campaign",
+                ) from exc
     except warming_service.WarmingTaskNotQuiescentError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
