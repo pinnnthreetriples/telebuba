@@ -265,7 +265,7 @@ export function BulkMessageModal({
     <>
       <Modal onClose={close} size="panel" label={t('accounts.messages.title')}>
         <div className="flex max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-lg">
+          <div className="flex items-center gap-lg border-b border-canvas px-xl py-lg">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -603,7 +603,7 @@ export function BulkMessageModal({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <div className="flex flex-wrap items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
             {!started && (
               <div className="mr-auto min-w-0">
                 <span className="type-small tabular-nums">

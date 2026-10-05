@@ -36,7 +36,7 @@ function Row({
 }) {
   return (
     <div
-      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-line-row'}`}
+      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-canvas'}`}
     >
       <div className="min-w-0 flex-1">
         <div className="text-body">{label}</div>

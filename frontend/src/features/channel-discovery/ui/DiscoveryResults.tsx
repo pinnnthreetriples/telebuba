@@ -275,7 +275,7 @@ function Row({
   return (
     <div
       className={cn(
-        'flex flex-col gap-xs border-t border-line-row py-sm',
+        'flex flex-col gap-xs border-t border-canvas py-sm',
         !selectable && 'text-content-subtle',
       )}
     >
@@ -574,7 +574,7 @@ export function DiscoveryResults({
         </div>
 
         {sources.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-sm border-t border-line-row pt-sm type-small">
+          <div className="flex flex-wrap items-center justify-between gap-sm border-t border-canvas pt-sm type-small">
             <span>
               {t('neurocomment.modal.discovery.results.sourcesPrefix')}{' '}
               {sources

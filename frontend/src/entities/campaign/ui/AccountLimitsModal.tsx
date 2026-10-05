@@ -84,7 +84,7 @@ function LimitRow({
   const value = draft === undefined ? (gauge.overridden ? gauge.limit : '') : draft;
 
   return (
-    <div className="border-b border-line-row py-lg last:border-b-0">
+    <div className="border-b border-canvas py-lg last:border-b-0">
       <div className="flex items-baseline justify-between gap-md">
         <span className="type-h3">{label}</span>
         <span
@@ -200,7 +200,7 @@ export function AccountLimitsModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
@@ -251,7 +251,7 @@ export function AccountLimitsModal({
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 
-      <div className="flex justify-between gap-md border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex justify-between gap-md border-t border-canvas px-2xl pb-xl pt-lg">
         <Button
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));

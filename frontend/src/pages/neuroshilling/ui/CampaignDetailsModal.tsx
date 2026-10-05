@@ -132,7 +132,7 @@ export function CampaignDetailsModal({
 
   return (
     <Modal onClose={onClose} size="table" label={campaign.name}>
-      <div className="flex flex-wrap items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex flex-wrap items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <div className="min-w-0">
           <div className="truncate type-h2">{campaign.name}</div>
           {campaign.topic ? (
@@ -158,7 +158,7 @@ export function CampaignDetailsModal({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.details.close')}
         </Button>

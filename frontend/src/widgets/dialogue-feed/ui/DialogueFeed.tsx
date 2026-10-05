@@ -95,7 +95,7 @@ export function DialogueTranscript({
   if (!oldest) return null;
 
   return (
-    <div className="flex flex-col gap-tight border-t border-line-row pt-md">
+    <div className="flex flex-col gap-tight border-t border-canvas pt-md">
       {/* The oldest line ON THIS PAGE — not the exchange's start: the feed is a
           sliding window of the last 30 messages app-wide, which is the same
           reason `pairs.ts` refuses to derive the sides from it. The only

@@ -316,7 +316,7 @@ export function ActionTuningCard() {
         ))}
       </div>
 
-      <div className="mt-lg border-t border-line-row pt-lg">
+      <div className="mt-lg border-t border-canvas pt-lg">
         <div className="flex items-start justify-between gap-lg">
           <div className="min-w-0 flex-1">
             <div className="type-body-medium">{t('warming.tune.gate.title')}</div>

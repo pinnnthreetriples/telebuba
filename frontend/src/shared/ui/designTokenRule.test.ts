@@ -20,14 +20,19 @@ if (rule) {
   ruleTester.run('no-raw-values', rule, {
     valid: [
       // The named set, which is the whole point.
-      'const a = "bg-action-primary text-on-action px-2xl py-md rounded-full text-body";',
-      'const b = "gap-md mb-lg border-line-row shadow-pop duration-state";',
+      'const a = "bg-action-primary text-on-fill px-2xl py-md rounded-full text-body";',
+      'const b = "gap-md mb-lg border-canvas shadow-pop duration-state";',
       // The written exceptions.
       {
-        // Роль названа в самом классе: белая поверхность и надпись на залитом действии
-        // больше не один `white`. Голый `white`/`black` теперь ошибка, и её случай — ниже.
-        code: 'const c = "bg-surface-card text-on-action";',
-        name: 'a white surface and ink on a filled action are two names now',
+        // Единственная пара имён с одним значением: белая поверхность и чернила на
+        // заливке. Разные имена держит гейт контраста — см. шапку `semantic.ts`.
+        code: 'const c = "bg-surface-card text-on-fill";',
+        name: 'a white surface and ink on a fill keep two names',
+      },
+      {
+        // Фокус — тот же синий, что у действия, и то же имя. `shadow-focus` — тень.
+        code: 'const c2 = "focus-visible:outline-action-primary focus-visible:shadow-focus";',
+        name: 'a focus ring is the action blue; the focus glow is an elevation',
       },
       { code: 'const d = "rounded-[2px] rounded-[3px]";', name: 'hairline radii' },
       { code: 'const e = "pb-[80px] mt-[96px] py-[50px]";', name: 'page breathing room' },
@@ -41,8 +46,8 @@ if (rule) {
       },
       { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
       {
-        code: 'const g2 = "bg-white/85 bg-black/10 border-white/40 border-black/5";',
-        name: 'an alpha on white or black is a wash over content the palette cannot know',
+        code: 'const g2 = "bg-surface-card/85 bg-black/10 border-surface-card/40 border-black/5";',
+        name: 'an alpha on white (`surface-card`) or black is a wash over content the palette cannot know',
       },
       {
         code: 'const g3 = "bg-info-tint text-info-strong bg-scrim bg-veil bg-surface";',
@@ -87,7 +92,7 @@ if (rule) {
         name: 'the named rungs, which is the whole point',
       },
       {
-        code: 'const u2 = "text-body leading-none text-on-action";',
+        code: 'const u2 = "text-body leading-none text-on-fill";',
         name: 'a single glyph has no line-height, and `none` is the rung that says so',
       },
       {
@@ -142,10 +147,41 @@ if (rule) {
         code: 'const sp = "tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary";',
         errors: [{ message: /waiting ring assembled by hand/ }],
       },
-      // Направленная краска: `border-white` правило видело всегда, `border-t-white` — нет.
+      // Направленная краска: `border-black` правило видело всегда, `border-r-black` — нет.
       {
-        code: 'const dir = "border-t-white border-r-black";',
-        errors: [{ message: /Bare `white`\/`black`/ }],
+        code: 'const dir = "border-r-black";',
+        errors: [{ message: /Bare `black`/ }],
+      },
+      // Восьмой проход: вторые имена одной краски — ошибка, с альфой и без.
+      {
+        code: 'const w1 = "border-t-white"; const w2 = "bg-white/85";',
+        errors: [
+          { message: /collapsed into another one/ },
+          { message: /collapsed into another one/ },
+        ],
+      },
+      {
+        code: 'const o1 = "text-on-action"; const o2 = "stroke-on-success"; const o3 = "hover:text-on-inverse";',
+        errors: [
+          { message: /collapsed into another one/ },
+          { message: /collapsed into another one/ },
+          { message: /collapsed into another one/ },
+        ],
+      },
+      {
+        code: 'const h1 = "hover:bg-action-hover"; const h2 = "border-line-row"; const h3 = "from-fallback-start";',
+        errors: [
+          { message: /collapsed into another one/ },
+          { message: /collapsed into another one/ },
+          { message: /collapsed into another one/ },
+        ],
+      },
+      {
+        code: 'const fo = "focus-visible:outline-focus"; const fo2 = "focus:border-focus";',
+        errors: [
+          { message: /second name for the action blue/ },
+          { message: /second name for the action blue/ },
+        ],
       },
       {
         code: 'const bp = "xl:flex-row";',
@@ -154,13 +190,6 @@ if (rule) {
       {
         code: 'const a = "bg-blue-500";',
         errors: [{ message: /palette/ }],
-      },
-      // Фокус краской действия: класс работает, выглядит правильным и связывает два
-      // решения в одно. Единственный дефект из этой таблицы, который НИЧЕГО не портит на
-      // экране — до первой перекраски кнопок.
-      {
-        code: 'const f = "focus-visible:outline-action-primary";',
-        errors: [{ message: /focus indicator painted with the ACTION colour/ }],
       },
       {
         code: 'const b = "text-[#0066ff]";',
@@ -179,6 +208,11 @@ if (rule) {
       },
       {
         code: 'const r = "bg-canvas/40";',
+        errors: [{ message: /alpha modifier on a named colour/ }],
+      },
+      {
+        // Исключение для белого — ровно `surface-card`, а не весь `surface`.
+        code: 'const r2 = "bg-surface/60";',
         errors: [{ message: /alpha modifier on a named colour/ }],
       },
       {

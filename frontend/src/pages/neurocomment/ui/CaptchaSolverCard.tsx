@@ -76,7 +76,7 @@ export function CaptchaSolverCard({
       </div>
       {solverEnabled && captchaQueue.length > 0 ? (
         <div className="px-lg pb-lg">
-          <div className="mb-md flex items-center gap-sm border-t border-line-row pt-md">
+          <div className="mb-md flex items-center gap-sm border-t border-canvas pt-md">
             <svg
               width="13"
               height="13"

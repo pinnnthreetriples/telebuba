@@ -43,7 +43,7 @@ export function BulkProgress({
         {rows.map((row) => (
           <div
             key={row.accountId}
-            className="flex items-center gap-md border-b border-line-row px-md py-sm last:border-b-0"
+            className="flex items-center gap-md border-b border-canvas px-md py-sm last:border-b-0"
           >
             <span className="flex size-glyph shrink-0 items-center justify-center">
               {row.state === 'running' ? (

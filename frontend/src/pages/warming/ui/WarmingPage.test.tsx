@@ -53,7 +53,7 @@ test('warming row actions meet the touch target size', async () => {
 
   expect(screen.getByText('Прогреть').closest('button')).toHaveClass(
     'h-touch',
-    'focus-visible:outline-focus',
+    'focus-visible:outline-action-primary',
   );
   expect(screen.getByLabelText('Обратно в прогрев')).toHaveClass('size-touch');
 });

@@ -43,7 +43,7 @@ function NumberRow({
   // него собственный текст: подставлять туда число нельзя.
   const nullable = placeholder !== undefined;
   return (
-    <div className="flex items-center gap-md border-b border-line-row py-md">
+    <div className="flex items-center gap-md border-b border-canvas py-md">
       {/* `span`, а не `label`: имя полю даёт его собственный `aria-label`, и второй
           элемент-подпись сделал бы это имя неоднозначным. */}
       <span className="min-w-0 flex-1 text-body">{label}</span>
@@ -92,7 +92,7 @@ export function AdvancedLimitsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.setup.advanced.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl type-h2">
+      <div className="border-b border-canvas px-2xl pb-lg pt-xl type-h2">
         {t('neuroshilling.setup.advanced.title')}
       </div>
 
@@ -164,7 +164,7 @@ export function AdvancedLimitsModal({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
         <Button variant="primary" size="sm" onClick={onClose}>
           {t('neuroshilling.setup.advanced.done')}
         </Button>

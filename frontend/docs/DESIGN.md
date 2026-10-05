@@ -4,37 +4,26 @@ name: Telebuba
 description: Дизайн-система Telebuba — операторского дашборда для Telegram. Тёплый серый фон, белые карточки, один синий для действия и тона смысла с подложкой и рамкой. Светлая тема — единственная. Файл собран из src/shared/design-system командой npm run ds:doc; правка руками будет перезаписана.
 colors:
   # Действие
-  focus: "#0066ff"
   action-primary: "#0066ff"
-  action-hover: "#eef4ff"
   action-pressed: "#0057db"
   # Основа
-  white: "#ffffff"
   black: "#000000"
   canvas: "#f1efed"
   surface: "#faf9f7"
   surface-card: "#ffffff"
   scrim: "rgb(11 11 12 / 0.55)"
   veil: "rgb(11 11 12 / 0.40)"
-  fallback-start: "#cbd7ec"
-  fallback-end: "#e6e5e3"
   # Текст
   content-primary: "#0b0b0c"
   content-secondary: "#3a3a3a"
   content-muted: "#63615d"
   content-subtle: "#6e6b66"
   # Чернила на заливке
-  on-action: "#ffffff"
+  on-fill: "#ffffff"
   on-action-track: "#5ba3ff"
-  on-success: "#ffffff"
-  on-warning: "#ffffff"
-  on-danger: "#ffffff"
-  on-inverse: "#ffffff"
-  on-neutral: "#ffffff"
   # Линии
   line: "#e6e5e3"
   line-strong: "#d8d6d2"
-  line-row: "#f0eeeb"
   # Смысл
   info-strong: "#0052cc"
   info-tint: "#eef4ff"
@@ -169,7 +158,7 @@ breakpoints:
 components:
   button-primary:
     backgroundColor: "{colors.action-primary}"
-    textColor: "{colors.on-action}"
+    textColor: "{colors.on-fill}"
     hoverBackgroundColor: "{colors.action-pressed}"
     height: "{height.control}"
     paddingX: "{spacing.2xl}"
@@ -178,7 +167,7 @@ components:
     fontWeight: 500
   button-neutral:
     backgroundColor: "{colors.content-primary}"
-    textColor: "{colors.on-neutral}"
+    textColor: "{colors.on-fill}"
     hoverBackgroundColor: "{colors.content-primary}"
     height: "{height.control}"
     paddingX: "{spacing.2xl}"
@@ -223,7 +212,7 @@ components:
     backgroundColor: "{colors.surface-card}"
     textColor: "{colors.info-strong}"
     hoverBorderColor: "{colors.action-primary}"
-    hoverBackgroundColor: "{colors.action-hover}"
+    hoverBackgroundColor: "{colors.info-tint}"
     height: "{height.control}"
     paddingX: "{spacing.2xl}"
     fontSize: "{fontSize.body}"
@@ -368,13 +357,13 @@ Telebuba — операторский дашборд: аккаунты, прок
 
 ## Цвета
 
-Уровень 1 — палитра (`primitives.ts`): сырые краски, каждая записана один раз. Уровень 2 — назначение (`semantic.ts`): имена из этого файла ссылаются на палитру. Класс всегда называет назначение (`bg-surface-card`, `text-on-action`), а не краску, поэтому белая карточка и белая надпись на кнопке перекрашиваются независимо.
+Уровень 1 — палитра (`primitives.ts`): сырые краски, каждая записана один раз. Уровень 2 — назначение (`semantic.ts`): имена из этого файла ссылаются на палитру. Класс называет назначение (`bg-surface-card`, `text-on-fill`), а не краску. Одна краска — одно имя: синонимов в наборе нет, и `tokens.test.ts` это проверяет. Единственная пара с одним значением — `surface-card` и `on-fill` (оба белые): гейт контраста узнаёт пару по имени, и только разные имена оставляют белое на белом измеримым.
 
-- **Основа.** `canvas` — под предметом и всё заполняемое, `surface-card` — сам предмет (карточка, диалог, поле), `surface` — шаг от белого внутри предмета.
+- **Основа.** `canvas` — под предметом, всё заполняемое и разделитель строк, `surface-card` — сам предмет (карточка, диалог, поле; под альфой — белое над фотографией), `surface` — шаг от белого внутри предмета.
 - **Текст.** `content-primary` → `secondary` → `muted` → `subtle`. Последние два стоят на пороге AA: светлее не бывает.
-- **Действие.** `action-primary` заливает главную кнопку, `action-pressed` — её нажатие, `action-hover` — наведение на незалитое. `focus` — тот же синий, но отдельное решение.
+- **Действие.** `action-primary` заливает главную кнопку и рисует кольцо фокуса, `action-pressed` — нажатие, `info-tint` — наведение на незалитое и выбранная плитка.
 - **Смысл.** У каждого тона: основной (текст, иконка), `-tint` (подложка), `-line` (рамка подложки), `-deep` (текст на подложке, когда основной не проходит по контрасту).
-- **Чернила на заливке.** `on-action`, `on-success`, `on-danger`, `on-neutral` — надпись на залитом. Каждая своим именем, чтобы перекрасить одно, не задев другое.
+- **Чернила на заливке.** `on-fill` — надпись и иконка на любой заливке: действие, тон, серый, тёмная поверхность. Пол контраста держит измерение, а не имя: на янтаре надпись стоит только на `warning-deep`.
 
 ## Типографика
 
@@ -418,7 +407,7 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 - **Поверхности.** `card`, `dialog`, `panel`, `inset`, `inverse` — `surface(variant)`. Карточка: `rounded-card`, рамка `line`, поля 20px.
 - **Плашка.** Заливка тона и его `-deep` надпись, пилюля, без рамки.
 
-Отключённое — 50% непрозрачности. Фокус клавиатуры у каждой кнопки — 2px обводка `focus` с отступом 2px.
+Отключённое — 50% непрозрачности. Фокус клавиатуры у каждой кнопки — 2px обводка `action-primary` с отступом 2px.
 
 ## Как менять
 
@@ -443,6 +432,7 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 - Называть роль текста (`type-*`), а не набирать размер, вес и серый руками.
 - Держать одно `primary` на экран; всё остальное — `secondary` или `ghost`.
 - Не сообщать состояние одним цветом: рядом иконка или слово.
-- Не ставить `surface-card` надписью и `on-action` фоном: значение одно, работы разные.
+- Не ставить `surface-card` надписью и `on-fill` фоном: значение одно, но гейт контраста различает их по имени.
+- Не заводить второе имя для краски, которая уже названа: синоним ловит `tokens.test.ts`.
 - Не класть тень на карточку: глубину даёт рамка.
 - Не смешивать пилюлю и прямоугольник у кнопок одного ряда.

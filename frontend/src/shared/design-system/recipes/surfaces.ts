@@ -31,7 +31,7 @@ export type SurfaceVariant = keyof typeof SURFACE;
 
 export function tileAction(className?: string): string {
   return cn(
-    'transition duration-state hover:border-info-line hover:bg-action-hover hover:text-info-strong disabled:pointer-events-none disabled:opacity-60',
+    'transition duration-state hover:border-info-line hover:bg-info-tint hover:text-info-strong disabled:pointer-events-none disabled:opacity-60',
     FOCUS_RING,
     PRESS_FEEDBACK,
     className,

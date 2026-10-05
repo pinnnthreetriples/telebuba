@@ -414,7 +414,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         label={t('accounts.bulk.title')}
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <div className="flex items-center gap-lg border-b border-canvas px-xl py-xl">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -431,7 +431,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             />
           </div>
 
-          <div className="flex items-center gap-md border-b border-line-row px-xl py-md">
+          <div className="flex items-center gap-md border-b border-canvas px-xl py-md">
             <IconButton
               size="sm"
               disabled={locked}
@@ -571,7 +571,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           </fieldset>
 
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <div className="flex items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
             {!started && (
               <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
                 {NOTE[tab]}

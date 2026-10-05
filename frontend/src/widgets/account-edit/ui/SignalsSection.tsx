@@ -84,20 +84,20 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             loading={spamCheck === 'loading'}
             className={`gap-sm rounded-full ${
               spamCheck === 'ok'
-                ? 'border-success bg-success-deep text-on-success hover:border-success'
+                ? 'border-success bg-success-deep text-on-fill hover:border-success'
                 : spamCheck === 'err'
-                  ? 'border-danger bg-danger text-on-danger hover:border-danger'
+                  ? 'border-danger bg-danger text-on-fill hover:border-danger'
                   : 'text-content-muted'
             }`}
           >
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">
-                <Icon name="check" size={14} className="stroke-on-success" />
+                <Icon name="check" size={14} className="stroke-on-fill" />
               </span>
             )}
             {spamCheck === 'err' && (
               <span className="tb-blur inline-flex">
-                <Icon name="close" size={14} className="stroke-on-danger" />
+                <Icon name="close" size={14} className="stroke-on-fill" />
               </span>
             )}
             {t('accounts.edit.signalsCheck')}
@@ -115,7 +115,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         {signals.map((signal) => (
           <div
             key={signal.label}
-            className="flex items-center justify-between gap-md border-b border-line-row py-md"
+            className="flex items-center justify-between gap-md border-b border-canvas py-md"
           >
             <span className="flex items-center gap-sm type-body text-content-subtle">
               <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />

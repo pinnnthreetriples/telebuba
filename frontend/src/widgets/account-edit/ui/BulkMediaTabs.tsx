@@ -95,7 +95,7 @@ function Picked({
             onClick={() => {
               onRemove(index);
             }}
-            className="absolute right-tight top-tight border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
+            className="absolute right-tight top-tight border-transparent bg-scrim text-on-fill hover:border-transparent hover:bg-content-primary hover:text-on-fill"
           >
             <Icon name="close" size={16} />
           </IconButton>
@@ -276,7 +276,7 @@ export function BulkMusicTab({
       <div className="type-body text-content-subtle">{t('accounts.bulk.musicHint')}</div>
       {file ? (
         <div className="flex items-center gap-lg rounded-lg border border-line px-lg py-md">
-          <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action">
+          <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-fill">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M8 5v14l11-7z" />
             </svg>

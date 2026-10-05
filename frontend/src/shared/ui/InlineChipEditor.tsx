@@ -65,7 +65,7 @@ export function InlineChipEditor({
           title={cancelLabel}
           aria-label={cancelLabel}
           onClick={onCancel}
-          className="bg-line-row text-content-muted"
+          className="bg-canvas text-content-muted"
         >
           <Icon name="close" size={16} />
         </IconButton>

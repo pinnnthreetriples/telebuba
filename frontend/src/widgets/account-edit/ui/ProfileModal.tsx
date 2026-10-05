@@ -647,9 +647,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
           {/* header */}
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <div className="flex items-center gap-lg border-b border-canvas px-xl py-xl">
             <div
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-h1 font-medium text-content-primary"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-info-line to-line text-h1 font-medium text-content-primary"
               style={
                 avatarUri
                   ? {
@@ -969,7 +969,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <div className="flex items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null ? (

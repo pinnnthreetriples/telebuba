@@ -122,7 +122,7 @@ export function ApproveModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neuroshilling.preview.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <span className="type-h2">{t('neuroshilling.preview.title')}</span>
         {/* Два счётчика — двумя ключами, а не одним с двумя подстановками: склоняются
             они по РАЗНЫМ числам, и «5 реплик, 1 реакций» — ровно то, что получается,
@@ -241,7 +241,7 @@ export function ApproveModal({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center gap-sm border-t border-canvas px-2xl py-lg">
         <span className="mr-auto type-small tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>

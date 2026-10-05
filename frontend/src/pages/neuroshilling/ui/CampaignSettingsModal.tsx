@@ -41,7 +41,7 @@ export function CampaignSettingsModal({
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <div className="min-w-0">
           <div className="truncate type-h2">{name}</div>
           <div className="mt-hair type-small">{t('neuroshilling.settings.subtitle')}</div>
@@ -69,7 +69,7 @@ export function CampaignSettingsModal({
         {children}
       </fieldset>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
         <Button size="sm" onClick={onClose} disabled={saving}>
           {t('neuroshilling.settings.cancel')}
         </Button>

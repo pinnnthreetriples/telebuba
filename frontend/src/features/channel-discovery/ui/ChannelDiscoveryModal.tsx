@@ -220,7 +220,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="border-b border-canvas px-2xl pb-lg pt-xl">
         <h2 className="type-h2">{t('neurocomment.modal.discovery.title')}</h2>
         <p className="mt-hair type-small">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
@@ -292,7 +292,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
         {submitted ? (
           <>
             <Button

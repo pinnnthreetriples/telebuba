@@ -118,7 +118,7 @@ test('every button carries the same disabled and focus treatment', () => {
 
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
-    expect(classesOf(name)).toContain('focus-visible:outline-focus');
+    expect(classesOf(name)).toContain('focus-visible:outline-action-primary');
     expect(classesOf(name)).toContain('active:scale-press');
     expect(classesOf(name)).toContain('disabled:active:scale-rest');
     expect(classesOf(name)).toContain('motion-reduce:active:scale-rest');
@@ -184,7 +184,7 @@ test('focus is an outline, and the browser ring is not thrown away', () => {
   render(<Button>Сохранить</Button>);
   const cls = screen.getByRole('button').className;
   expect(cls).toContain('focus-visible:outline-2');
-  expect(cls).toContain('focus-visible:outline-focus');
+  expect(cls).toContain('focus-visible:outline-action-primary');
   expect(cls).not.toContain('outline-none');
   expect(cls).not.toContain('shadow-focus');
 });
@@ -230,7 +230,7 @@ test('тон кольца следует за заливкой кнопки', ()
   const ringOf = (name: string) =>
     screen.getByRole('button', { name }).querySelector('.tb-spin')?.className ?? '';
 
-  expect(ringOf('Синяя')).toContain('border-t-on-action');
+  expect(ringOf('Синяя')).toContain('border-t-on-fill');
   expect(ringOf('Красная')).toContain('border-t-danger');
   expect(ringOf('Обычная')).toContain('border-t-action-primary');
 });

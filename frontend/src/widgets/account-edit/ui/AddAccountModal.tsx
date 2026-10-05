@@ -253,7 +253,7 @@ export function AddAccountModal({
                 />
               )}
               <span
-                className={`flex size-icon items-center justify-center rounded-full text-body font-medium ${step >= n ? 'bg-action-primary text-on-action' : 'border border-line bg-surface-card text-content-muted'}`}
+                className={`flex size-icon items-center justify-center rounded-full text-body font-medium ${step >= n ? 'bg-action-primary text-on-fill' : 'border border-line bg-surface-card text-content-muted'}`}
               >
                 {n}
               </span>
@@ -328,7 +328,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-focus"
+                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-action-primary"
                   />
                   <Button
                     variant="primary"

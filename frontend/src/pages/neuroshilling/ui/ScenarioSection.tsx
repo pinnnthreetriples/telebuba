@@ -19,7 +19,7 @@ import {
 } from './scenarioDraft';
 
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-info-line bg-surface-card py-md text-body font-medium text-info-strong hover:border-action-primary hover:bg-action-hover disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-info-line bg-surface-card py-md text-body font-medium text-info-strong hover:border-action-primary hover:bg-info-tint disabled:opacity-50';
 
 function StepRow({
   step,

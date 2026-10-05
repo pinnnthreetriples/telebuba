@@ -154,7 +154,7 @@ function AccountRow({
   };
 
   return (
-    <div className="border-b border-line-row py-md">
+    <div className="border-b border-canvas py-md">
       <div className="flex flex-wrap items-center gap-md">
         <FeedbackMark result={result} />
         <span className="min-w-0 flex-1 truncate type-h3">{account.name}</span>
@@ -252,7 +252,7 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+            className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-info-tint ${
               selected.length === 0 ? 'font-medium text-info-strong' : 'text-content-primary'
             }`}
           >
@@ -270,7 +270,7 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+                className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-info-tint ${
                   isSelected ? 'font-medium text-info-strong' : 'text-content-primary'
                 }`}
                 title={channel}
@@ -336,7 +336,7 @@ export function NeuroAccountsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.neuroAccounts.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
@@ -380,7 +380,7 @@ export function NeuroAccountsModal({
         )}
       </div>
 
-      <div className="flex justify-end border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex justify-end border-t border-canvas px-2xl pb-xl pt-lg">
         <Button variant="primary" onClick={onClose}>
           {t('neurocomment.modal.neuroAccounts.done')}
         </Button>

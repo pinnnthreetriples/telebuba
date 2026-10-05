@@ -14,22 +14,16 @@
 //
 // What this rule deliberately does NOT flag, and why:
 //
-//   `bg-white` / `text-white` (213 sites) — white and black are the two colours a
-//   palette does not have to name. An alias would be a synonym rather than a role,
-//   and there is no second theme for it to point somewhere else in. They are rungs of
-//   `theme.colors` now rather than leftovers of Tailwind's palette underneath it, which
-//   is what makes them nameable at all: the palette REPLACES Tailwind's, so a colour the
-//   config does not carry does not compile.
-//
-//   an ALPHA modifier on white or black (13 sites) — `bg-white/85` under the nav bar's
-//   blur, `bg-white/70` over a photo grid mid-drag, `bg-black/55` over a story preview,
-//   `bg-black/10` over a syncing modal body, `border-black/5` and `border-white/40`
-//   hairlines drawn on a photograph. Same
-//   carve-out as the line above, and for a sharper reason: the palette holds flat
-//   colours, and what is behind each of these is a photograph or a scrolling page, so
-//   there is no composite for a token to be. The pattern below therefore bans an alpha
-//   only on a colour the palette DOES name, which is the case where a composite exists
-//   and something else already has its name. AddStoryModal's `bg-black/55` is the
+//   an ALPHA modifier on `surface-card` or `black` — `bg-surface-card/85` under the nav
+//   bar's blur, `bg-surface-card/70` over a photo grid mid-drag, `bg-black/55` over a
+//   story preview, `bg-black/10` over a syncing modal body, `border-black/5` hairlines
+//   drawn on a photograph. The two ends of the range: the palette holds flat colours,
+//   and what is behind each of these is a photograph or a scrolling page, so there is
+//   no composite for a token to be. White under an alpha used to have its own name,
+//   `white`, which was a third name for #ffffff; it is the white surface showing
+//   through, so it wears that surface's name. The pattern below therefore bans an alpha
+//   only on the OTHER colours the palette names, which is the case where a composite
+//   exists and something else already has its name. AddStoryModal's `bg-black/55` is the
 //   closest any of the eleven comes to failing that test — it is `scrim` with 11 units
 //   of warmth left out — and measuring it is what kept it out here: over the whitest
 //   thing a photograph can be, the two washes put a white numeral at 4.74:1 and 4.35:1.
@@ -204,7 +198,16 @@ const RETIRED =
   // ink AND the dark blue that reads on a tint, `ink` was named after the material rather
   // than the role.
   'ink|ink-body|ink-muted|ink-subtle|' +
-  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline';
+  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline|' +
+  // Восьмой проход: один цвет — одно имя. Каждое из этих имён было вторым именем краски,
+  // которая уже называлась иначе; `focus` — отдельным паттерном ниже, потому что
+  // `shadow-focus` — законная тень, а не краска.
+  'white|on-action|on-success|on-warning|on-danger|on-inverse|on-neutral|' +
+  'action-hover|fallback-start|fallback-end|line-row';
+
+// `focus` ушёл из красок, но остался в тенях: `shadow-focus` — свечение поля. Поэтому для
+// него приставки краски без `shadow`.
+const COLOUR_BUT_SHADOW = COLOUR.replace('|shadow|', '|');
 
 // Tailwind's own line-height and letter-spacing names, which this config replaces
 // outright the way it replaced the type scale. They are listed rather than left to fail
@@ -230,56 +233,40 @@ const RETIRED_WEIGHT = 'thin|extralight|light|semibold|bold|extrabold|black';
 // (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. Read
 // from the config for the reason given at `TYPE_RUNG`.
 //
-// `white` and `black` come out: the pattern this feeds bans an alpha modifier on a named
-// colour, and alpha on those two is the documented exception — `border-black/5` on a
-// photograph, `bg-black/55` on a story tile. `transparent` and `current` come out because
-// an alpha on a keyword is not a colour the palette failed to name; it is nonsense that
-// emits nothing.
-const NOT_A_TINTABLE_COLOUR = new Set(['white', 'black', 'transparent', 'current']);
+// `black` comes out: the pattern this feeds bans an alpha modifier on a named colour, and
+// alpha on black is the documented exception — `border-black/5` on a photograph,
+// `bg-black/55` on a story tile. The other end of that range, white, is `surface-card`,
+// which is a rung of `surface` rather than a root, so it is let through by
+// `ALPHA_BASE` below instead. `transparent` and `current` come out because an alpha on a
+// keyword is not a colour the palette failed to name; it is nonsense that emits nothing.
+const NOT_A_TINTABLE_COLOUR = new Set(['black', 'transparent', 'current']);
 const TOKEN = colorRoots()
   .filter((name) => !NOT_A_TINTABLE_COLOUR.has(name))
   .join('|');
+const ALPHA_BASE = String.raw`(?!surface-card/)`;
 
 const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
     message:
-      'That colour was collapsed into another one and no longer exists: `track` and `primary-wash` are `canvas` and `primary-tint`, `line-input` is `line`, `success-dot` is `success`. The unification ledger in docs/design-system.html carries the reason for each.',
+      'That colour was collapsed into another one and no longer exists — one colour, one name. `white` is `surface-card` (with an alpha over a photograph too); every `on-*` ink (`on-action`, `on-success`, `on-warning`, `on-danger`, `on-inverse`, `on-neutral`) is `on-fill`; `action-hover` is `info-tint`; `fallback-start`/`fallback-end` are `info-line`/`line`; `line-row` is `canvas`. Older: `track` and `primary-wash` are `canvas` and `info-tint`, `line-input` is `line`, `success-dot` is `success`. docs/design-system.md carries the reason for each.',
   },
   {
-    // `bg-white` / `text-white` without an alpha: both were one class doing two jobs, and
-    // the split is the whole point of the semantic pass — a card's fill is
-    // `bg-surface-card`, a filled action's label is `text-on-action`, ink on the dark
-    // surface is `text-on-inverse`. WITH an alpha they stay legal: white at 85% under the
-    // nav's blur and white at 40% as a hairline on a photograph are the extreme of the
-    // range rather than a role, and there is no flat composite for them to be.
+    // `focus` был вторым именем синего действия. `shadow-focus` при этом законен — это
+    // тень из `boxShadow`, а не краска, — поэтому приставки здесь без `shadow`.
+    test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR_BUT_SHADOW})-focus(?![\w-])`),
+    message:
+      'The focus colour was a second name for the action blue and no longer exists: a focus ring is `outline-action-primary` (or `border-action-primary`). `shadow-focus` — the glow of a focused field — is an elevation, not a colour, and stays.',
+  },
+  {
+    // Голый `black` без альфы: чёрного как роли в интерфейсе нет. Белого тут нет вовсе —
+    // `white` ушёл в `RETIRED` выше и ловится там с альфой и без.
     // Прежний список знал `border-` и не знал `border-t-`, поэтому `border-t-white`
     // проходил насквозь — им была набрана дуга кольца ожидания в четырёх местах. Это
     // закрыто: направление не другая краска.
-    //
-    // `stroke` и `fill` были исключены ЦЕЛИКОМ, и причина была измеренная: `stroke-white`
-    // стоял в восьми местах — белая галочка на ЗАЛИТОМ контроле, тот же дефект, что у
-    // кольца, — но роли «чернила на залитом тоне» в системе не было, а надеть `on-action`
-    // на успех значило бы соврать именем. Правило, которое надо шесть раз подавить, чтобы
-    // оно прошло, — не правило, поэтому исключалась приставка, а не сайты.
-    //
-    // Роли появились (`on-success`, `on-warning`, `on-danger`), все восемь мест на них
-    // перешли, и исключение снято: список приставок здесь снова тот же `COLOUR`.
-    test: at(String.raw`(?:${COLOUR})-(?:white|black)(?![\w-/])`),
+    test: at(String.raw`(?:${COLOUR})-black(?![\w-/])`),
     message:
-      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on a filled feedback tone is `on-success`/`on-warning`/`on-danger`; ink on a filled NEUTRAL (the ink-dark button, the grey counter) is `text-on-neutral`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`; the muted ink ON a filled action (a waiting ring’s track) is `on-action-track`. An alpha form — `bg-white/85`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be: over a known flat fill the composite exists and has a name.',
-  },
-  {
-    // Индикатор фокуса краской ДЕЙСТВИЯ. `border.focus` был объявлен ступенью с самого
-    // начала и не доходил ни до одного класса: восемь контролов рисовали фокус через
-    // `outline-action-primary`, поэтому перекрасить кнопку означало перекрасить фокус.
-    // Значение у них одно и остаётся одним — разъединены имена, и это правило держит
-    // разъединение, потому что классы выглядят одинаково работающими.
-    test: at(
-      String.raw`focus(?:-visible|-within)?:(?:outline|border|shadow|ring)-action-(?:primary|hover|pressed)(?![\w-])`,
-    ),
-    message:
-      'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
+      'Bare `black` is not a colour this UI paints. Dark text is `content-primary`; a dark surface is `term`; a wash over a photograph is `bg-scrim`. An alpha form — `bg-black/55`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be. Ink on any filled control or surface is `on-fill`.',
   },
   {
     // Кольцо ожидания, собранное руками. Оно было собрано так семнадцать раз, и дорожка
@@ -317,10 +304,10 @@ const PATTERNS = [
   },
   {
     test: at(
-      String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${TOKEN})(?:-[a-z]+)?/(?:\[[0-9.]+\]|\d{1,3})(?![\w-])`,
+      String.raw`(?:[\w-]+:)*(?:${COLOUR})-${ALPHA_BASE}(?:${TOKEN})(?:-[a-z]+)?/(?:\[[0-9.]+\]|\d{1,3})(?![\w-])`,
     ),
     message:
-      'An alpha modifier on a named colour paints a colour the palette does not name, and the palette cannot see it: `contrast.test.ts` reads a token per class and its ink pattern stops at the `/`. Seven sites wrote one this way and every one already had a name — five selected cards and tiles spelled `bg-primary` at 0.06, 0.08 and 5 across four slices, all of them `bg-primary-tint` to within four units on the white they sit on; a drop zone spelled `bg-canvas/40`, which is `bg-surface` to within one; and a countdown spelled `text-primary/70`, which measured 2.81:1 on the tint it sits in. Alpha on `white` or `black` is the exception, and the header says why. Name the composite, or use the token that already is it.',
+      'An alpha modifier on a named colour paints a colour the palette does not name, and the palette cannot see it: `contrast.test.ts` reads a token per class and its ink pattern stops at the `/`. Seven sites wrote one this way and every one already had a name — five selected cards and tiles spelled `bg-primary` at 0.06, 0.08 and 5 across four slices, all of them `bg-info-tint` to within four units on the white they sit on; a drop zone spelled `bg-canvas/40`, which is `bg-surface` to within one; and a countdown spelled `text-primary/70`, which measured 2.81:1 on the tint it sits in. Alpha on `surface-card` (white) or `black` is the exception, and the header says why. Name the composite, or use the token that already is it.',
   },
   {
     test: /(?:rgba?|hsla?)\(/,

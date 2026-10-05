@@ -86,13 +86,13 @@ const SIZE: Record<'lg' | 'md' | 'sm' | 'xs', { size: ControlSize; weight: strin
 // места вызова просили именно этого. Без строки наведение унаследовалось бы от
 // перекрытой заливки.
 const VARIANT = {
-  primary: 'bg-action-primary text-on-action hover:bg-action-pressed',
-  neutral: 'bg-content-primary text-on-neutral hover:bg-content-primary',
+  primary: 'bg-action-primary text-on-fill hover:bg-action-pressed',
+  neutral: 'bg-content-primary text-on-fill hover:bg-content-primary',
   secondary: 'border border-line bg-surface-card text-content-primary hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
   ghost: 'text-content-muted hover:bg-canvas hover:text-content-primary',
   dashed:
-    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
+    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-info-tint',
   dashedMuted:
     'border border-dashed border-line-strong bg-surface-card text-content-muted hover:border-action-primary hover:text-action-primary',
 } as const;

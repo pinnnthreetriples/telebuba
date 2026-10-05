@@ -18,7 +18,7 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // tailwind-merge carries Tailwind's DEFAULT scales, and this config replaces two of
 // them outright, so it has to be told the new names. Without that it cannot tell a
 // type rung from a text colour — both are spelled `text-*` — and resolves
-// `text-body text-white` to `text-white`, silently dropping the size. That is not
+// `text-body text-on-fill` to `text-on-fill`, silently dropping the size. That is not
 // hypothetical: it is what `Button` produced, since its variant paints the colour
 // after its size sets the rung.
 //

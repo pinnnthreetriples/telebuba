@@ -41,7 +41,7 @@ export function TabList<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
+      className="tb-scroll flex gap-xl overflow-x-auto border-b border-canvas px-xl"
     >
       {options.map((option) => (
         <button

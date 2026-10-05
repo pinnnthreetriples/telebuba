@@ -26,7 +26,7 @@ export function Row({
     <div
       className={cn(
         'flex min-h-touch flex-wrap items-center gap-md py-sm',
-        !first && 'border-t border-line-row',
+        !first && 'border-t border-canvas',
       )}
     >
       <div className="min-w-0 flex-1">

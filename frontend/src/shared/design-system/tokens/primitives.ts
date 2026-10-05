@@ -32,8 +32,9 @@ export const palette = {
 
   // Нейтральный ряд: от подложки страницы до самых тёмных чернил.
   warmGrey050: '#faf9f7',
+  // `warmGrey200` (#f0eeeb) слит сюда: он отличался на 1–2 единицы, а это ниже порога, на
+  // котором плоская область читается другим цветом.
   warmGrey100: '#f1efed',
-  warmGrey200: '#f0eeeb',
   warmGrey300: '#e6e5e3',
   warmGrey400: '#d8d6d2',
   warmGrey600: '#6e6b66',
@@ -117,23 +118,19 @@ function channelsOf(hex: string): string {
   return [0, 2, 4].map((at) => String(parseInt(value.slice(at, at + 2), 16))).join(' ');
 }
 
+// Один канал — одна краска: у двух имён с одним значением тут столько же оснований, сколько
+// у двух классов (см. шапку `semantic.ts`).
 export const channel = {
-  // Кольцо пульса живой вещи: `.pl-pulse` и `.tb-livedot`.
+  // Синий действия: кольцо пульса живой вещи (`.pl-pulse`, `.tb-livedot`), свечение
+  // сфокусированного поля и пилюля табов.
   action: channelsOf(palette.blue600),
   // Свечение загружающейся строки: `.tb-loadlead`.
   glow: channelsOf(palette.blue400),
-  // Свечение сфокусированного поля. Отдельным именем от `action`, хотя значение то же:
-  // фокус и действие — два решения, и перекрасить кнопки, не перекрашивая индикатор
-  // фокуса, должно быть возможно. Значение при этом не копируется — оба имени ссылаются
-  // на `blue600`. См. `border.focus` в `semantic.ts`: там та же пара, другой осью.
-  focus: channelsOf(palette.blue600),
   // Тёмные чернила под альфой: обе завесы и две тени. Это НЕ `black` — завеса набрана
   // самой тёмной краской ряда (#0b0b0c), и разницу с чистым чёрным видно на белой
   // карточке под ней.
   ink: channelsOf(palette.warmGrey900),
   // Чистый чёрный под альфой: тень ползунка, который тянут, и тень поднятого сегмента.
-  // Отдельным каналом от `ink` потому же, почему `focus` отдельно от `action`: две тени
-  // на сером и две на чёрном — это два решения, а не одно, записанное дважды.
   black: channelsOf(palette.black),
 } as const;
 
@@ -168,7 +165,7 @@ export const shadow = {
   pop: `0 10px 30px rgb(${channel.ink} / 0.12)`,
   ring: `0 0 0 1px rgb(${channel.ink} / 0.07)`,
   thumb: `0 1px 3px rgb(${channel.black} / 0.3)`,
-  focus: `0 0 0 3px rgb(${channel.focus} / 0.12)`,
+  focus: `0 0 0 3px rgb(${channel.action} / 0.12)`,
   seg: `0 1px 2px 0 rgb(${channel.black} / 0.05)`,
   pill: `0 1px 2px rgb(${channel.action} / 0.3)`,
 } as const;

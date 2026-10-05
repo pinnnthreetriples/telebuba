@@ -151,7 +151,7 @@ export function StoryViewer({
             {stories.map((s, i) => (
               <div
                 key={s.story_id}
-                className="h-rail flex-1 overflow-hidden rounded-full bg-white/30"
+                className="h-rail flex-1 overflow-hidden rounded-full bg-surface-card/30"
               >
                 <div
                   data-testid="story-progress"
@@ -173,7 +173,7 @@ export function StoryViewer({
             </ViewerButton>
           )}
           {story.caption && (
-            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-md py-sm text-body text-on-inverse">
+            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-md py-sm text-body text-on-fill">
               {story.caption}
             </div>
           )}

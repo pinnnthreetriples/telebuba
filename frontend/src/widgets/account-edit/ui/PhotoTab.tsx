@@ -72,7 +72,7 @@ export function PhotoTab({
       className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-action-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-body font-medium text-action-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-surface-card/70 text-body font-medium text-action-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
@@ -92,7 +92,7 @@ export function PhotoTab({
             >
               {photo.thumb_url && (
                 <span
-                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse ${HOVER_ONLY}`}
+                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-fill ${HOVER_ONLY}`}
                 >
                   <Icon name="zoom-in" size={18} />
                 </span>
@@ -105,7 +105,7 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
+              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-fill hover:border-transparent hover:bg-content-primary hover:text-on-fill ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>

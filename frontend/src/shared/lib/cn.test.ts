@@ -7,7 +7,7 @@ import { cn } from './cn';
 // spelled `text-*` — and drops it in favour of the colour that follows, which is
 // exactly the order a variant component paints in.
 test('a type rung survives the colour painted after it', () => {
-  expect(cn('text-body', 'text-on-action')).toBe('text-body text-on-action');
+  expect(cn('text-body', 'text-on-fill')).toBe('text-body text-on-fill');
   expect(cn('bg-canvas text-content-muted', 'text-small')).toBe(
     'bg-canvas text-content-muted text-small',
   );

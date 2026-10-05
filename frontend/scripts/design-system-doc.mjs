@@ -110,34 +110,37 @@ function readConfig() {
 // подписи выводится без неё — пустая строка в свотче и есть сигнал, что в конфиге
 // появилось имя, которому ещё не назначили смысл.
 const ROLE = {
-  white: 'Карточки, поля, шапка',
   black: 'Только под альфой над фотографией: рамка снимка, плашка на кадре истории',
+  canvas:
+    'Фон страницы, всё заполняемое на карточке (дорожка прогресса, чип, счётчик) и разделитель строк таблицы',
   surface: 'Шапка таблицы, наведение на строку, вложенный блок',
-  canvas: 'Фон страницы, рельс под плашкой и всё заполняемое: дорожка прогресса, чип, счётчик',
+  'surface-card':
+    'Карточки, диалоги, панели, поля; под альфой — шапка под размытием и белое над фотографией',
   scrim:
     'Завеса над фотографией: тёмные чернила на 55%, чтобы кнопка поверх снимка осталась читаемой',
-  ink: 'Заголовки, основной текст',
-  'ink-body': 'Плотные строки, значения в чипах',
-  'ink-muted': 'Второстепенный текст, контурные кнопки',
-  'ink-subtle': 'Подписи, плейсхолдеры, иконки в покое',
-  line: 'Граница по умолчанию, в том числе у поля ввода',
+  veil: 'Завеса над страницей под диалогом: приглушает, на ней ничего не пишут',
+  'content-primary': 'Заголовки, основной текст',
+  'content-secondary': 'Плотные строки, значения в чипах',
+  'content-muted': 'Второстепенный текст, контурные кнопки',
+  'content-subtle': 'Подписи, плейсхолдеры, иконки в покое',
+  'on-fill': 'Надпись и иконка на любой заливке: действие, тон, серый счётчик, тост, подсказка',
+  'on-action-track': 'Дорожка кольца ожидания внутри залитой кнопки',
+  line: 'Граница по умолчанию, в том числе у поля ввода; конец градиента заглушки',
   'line-strong': 'Наведение, пунктир, полоса прокрутки',
-  'line-row': 'Разделитель строк таблицы',
-  primary: 'Действие, живое состояние, фокус',
-  'primary-press': 'Наведение и нажатие залитой кнопки',
-  'primary-tint': 'Выбранная строка, синий чип, заливка наведения',
-  'primary-line': 'Граница синей подложки и пунктира',
-  'primary-hairline': 'Рамка настолько бледная, что работает и разделителем плитки',
-  'primary-deep': 'Синий для мелкого текста на tint: основной даёт там 4.38:1',
+  'action-primary': 'Действие, ссылка, живое состояние, кольцо фокуса',
+  'action-pressed': 'Нажатие залитой кнопки',
+  'info-strong': 'Синий для мелкого текста на tint: основной даёт там 4.38:1',
+  'info-tint': 'Подложка «в работе», выбранная строка и плитка, заливка наведения',
+  'info-line': 'Граница синей подложки и пунктира; начало градиента заглушки',
+  'info-hairline': 'Рамка настолько бледная, что работает и разделителем плитки',
   success: 'Работает, проверено',
   'success-deep': 'Заголовок на зелёной подложке — единственный проходит по читаемости',
   'success-press': 'Наведение и нажатие залитой зелёной кнопки',
   'success-tint': 'Плашка «слушает», зелёный чип',
   'success-line': 'Граница зелёной подложки',
-  'success-dot': 'Точка «система активна»',
   warning: 'Пауза, ожидание, спам-блок',
   'warning-deep': 'Заголовок или иконка на янтарном чипе',
-  'warning-strong': 'Точка и значок, где нужен более яркий янтарный',
+  'warning-press': 'Нажатие янтарной заливки: единственный тон, где оно ярче базового',
   'warning-tint': 'Подложка предупреждения',
   'warning-line': 'Граница янтарной подложки',
   danger: 'Ошибка, удаление, бан',
@@ -145,6 +148,7 @@ const ROLE = {
   'danger-tint': 'Лицо разрушительной кнопки',
   'danger-line': 'Граница красной подложки',
   term: 'Журнал, тёмная подсказка, тост',
+  'term-thumb': 'Ползунок прокрутки журнала',
   'term-dim': 'Время и разделители в строке журнала',
   'term-text': 'Текст журнала',
   'term-link': 'Канал и ссылка в журнале',
@@ -159,22 +163,22 @@ const ROLE = {
 const SWATCH_GROUPS = [
   {
     title: 'Основа',
-    keys: ['white', 'black', 'canvas', 'scrim', 'surface'],
+    keys: ['canvas', 'surface', 'scrim', 'veil', 'black'],
     prose:
-      'Тон отвечает на вопрос «где я нахожусь»: белое — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом и внутри него всё, что заполняется. Отдельного тона для заполняемого нет: он отличался от <strong>canvas</strong> на три единицы, а на фоне страницы ни один чип в приложении не лежит. <strong>scrim</strong> стоит особняком: это не тон основы, а завеса поверх фотографии, единственное полупрозрачное значение в наборе.',
+      'Тон отвечает на вопрос «где я нахожусь»: <strong>surface-card</strong> — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом и внутри него всё, что заполняется, вместе с разделителем строк. Отдельных тонов для заполняемого и для разделителя нет: они отличались от <strong>canvas</strong> на одну–три единицы. <strong>scrim</strong> и <strong>veil</strong> стоят особняком: это не тона основы, а завесы, единственные полупрозрачные значения в наборе. <strong>black</strong> носится только под альфой над фотографией.',
   },
   {
     title: 'Текст',
-    keys: ['ink'],
+    keys: ['content', 'on-fill', 'on-action-track'],
     prose:
-      '<strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на заливке чипа, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>body</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть.',
+      '<strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на заливке чипа, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>secondary</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть. <strong>on-fill</strong> — одни чернила на любой заливке; у неё и у <strong>surface-card</strong> одно значение, и это единственная такая пара: разные имена нужны гейту контраста, чтобы белое на белом оставалось измеримым.',
   },
   { title: 'Линии', keys: ['line'], prose: '' },
   {
     title: 'Смысл',
-    keys: ['primary', 'success', 'warning', 'danger', 'term'],
+    keys: ['action', 'info', 'success', 'warning', 'danger', 'term'],
     prose:
-      'У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>press</strong>, наведение на залитую кнопку, а его <strong>tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.',
+      'У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий — один на действие и «в работе»: <strong>action-primary</strong> — заливка, ссылка и кольцо фокуса, <strong>action-pressed</strong> — нажатие, а <strong>info-tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.',
   },
   { title: 'Прочее', keys: [], prose: '' },
 ];
@@ -464,8 +468,8 @@ function renderTypeRoles(config, indent) {
     ].join(';');
     return specRow(
       `${indent}  `,
-      `<code>type-${entry.name}</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${spec}</span>`,
-      `<span style="${style}">${note.sample}</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${note.text}</span>`,
+      `<code>type-${entry.name}</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">${spec}</span>`,
+      `<span style="${style}">${note.sample}</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">${note.text}</span>`,
     );
   });
   return [
@@ -574,7 +578,7 @@ function renderRadiusScale(config, indent) {
   return config.borderRadius
     .map(
       (e) =>
-        `${indent}<div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:${e.value}"></div><span class="cap">${e.name} · ${px(e.value)}<i>${RUNG.borderRadius[e.name] ?? ''}</i></span></div>`,
+        `${indent}<div><div style="width:56px;height:38px;background:var(--info-tint);border:1px solid var(--info-line);border-radius:${e.value}"></div><span class="cap">${e.name} · ${px(e.value)}<i>${RUNG.borderRadius[e.name] ?? ''}</i></span></div>`,
     )
     .join('\n');
 }
@@ -586,7 +590,7 @@ function renderShadowScale(config, indent) {
   // элемента, и разная подложка под разными тенями сравнивала бы не то.
   const wells = rungs.map(
     (e) =>
-      `${indent}  <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:${e.value};display:block"></span><span class="cap">${e.name}<i>${RUNG.boxShadow[e.name] ?? ''}</i></span></div>`,
+      `${indent}  <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:${e.value};display:block"></span><span class="cap">${e.name}<i>${RUNG.boxShadow[e.name] ?? ''}</i></span></div>`,
   );
   return [
     `${indent}<p class="body">${prose}</p>`,

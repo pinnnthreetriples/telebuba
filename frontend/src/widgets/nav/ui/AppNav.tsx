@@ -106,7 +106,7 @@ export function AppNav() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
+    <header className="sticky top-0 z-sticky border-b border-line bg-surface-card/85 backdrop-blur-[10px]">
       <div className="mx-auto flex h-header max-w-shell items-center gap-tight px-md sm:gap-md sm:px-lg lg:gap-page lg:px-2xl">
         <IconButton
           size="touch"
@@ -220,7 +220,7 @@ export function AppNav() {
                   className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-xs lg:top-[42px] ${SURFACE.panel}`}
                 >
                   {me.data ? (
-                    <div className="truncate border-b border-line-row px-md py-sm text-body text-content-muted">
+                    <div className="truncate border-b border-canvas px-md py-sm text-body text-content-muted">
                       {me.data.username}
                     </div>
                   ) : null}

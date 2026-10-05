@@ -88,7 +88,7 @@ export function CollapsibleCard({
     <div className={cn('overflow-hidden', wrapperClassName)}>
       <div
         className={cn(
-          'flex items-center gap-md transition-colors duration-state hover:bg-action-hover',
+          'flex items-center gap-md transition-colors duration-state hover:bg-info-tint',
           headerClassName,
         )}
       >
