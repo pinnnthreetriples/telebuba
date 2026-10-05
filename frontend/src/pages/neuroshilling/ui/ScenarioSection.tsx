@@ -60,7 +60,7 @@ function StepRow({
           один раз. `flex-wrap` оставлен: в узкой колонке строка переносится, а не
           выдавливает роль до нечитаемой ширины. */}
       <div className="mb-sm flex flex-wrap items-center gap-tight">
-        <Badge className="font-semibold tabular-nums">
+        <Badge className="font-medium tabular-nums">
           {t('neuroshilling.scenario.steps.position', { position })}
         </Badge>
         <div className="min-w-0 flex-1">
@@ -135,7 +135,7 @@ function StepRow({
             onBlur={minField.onBlur}
             className="tb-plain-number w-action border-none bg-transparent text-right text-body tabular-nums outline-none"
           />
-          <span className="type-caption">–</span>
+          <span className="type-small">–</span>
           <input
             type="number"
             min={0}
@@ -148,7 +148,7 @@ function StepRow({
             onBlur={maxField.onBlur}
             className="tb-plain-number w-action border-none bg-transparent text-left text-body tabular-nums outline-none"
           />
-          <span className="type-caption">{t('neuroshilling.scenario.steps.seconds')}</span>
+          <span className="type-small">{t('neuroshilling.scenario.steps.seconds')}</span>
         </div>
         {/* Смена вида: реплика ↔ реакция. Стрелки в разные стороны, а не карандаш
             макета: карандаш значит «править», а шаг правят и без этой кнопки — текстом
@@ -356,12 +356,12 @@ export function ScenarioSection({
   return (
     <section>
       <div className="mb-md flex items-center gap-md">
-        <span className="type-card-title">{t('neuroshilling.scenario.title')}</span>
+        <span className="type-h3">{t('neuroshilling.scenario.title')}</span>
         {/* Утверждение умирает в ЭТОЙ секции, поэтому здесь оно и должно быть видно:
             любая правка ниже возвращает кампанию в черновик в момент сохранения, и
             оператор, видевший плашку только на превью, узнал бы об этом из отказа. */}
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${
+          className={`shrink-0 rounded-full px-md py-xs text-small font-medium ${
             dirty && status === 'approved'
               ? 'bg-warning-tint text-warning-deep'
               : status === 'approved'
@@ -379,7 +379,9 @@ export function ScenarioSection({
           шаг», генерация и вложение. Тема была полем в три строки над панелью генерации;
           в диалоге это две трети экрана под текст, который почти всегда — одна фраза. */}
       <div className="mb-md flex flex-wrap items-center gap-sm">
-        <span className="type-label">{t('neuroshilling.scenario.topic.label')}</span>
+        <span className="type-body-medium text-content-secondary">
+          {t('neuroshilling.scenario.topic.label')}
+        </span>
         <Input
           size="sm"
           // Пол ширины, а не голый `flex-1`: в строке с ней стоят пять контролов, и без
@@ -449,7 +451,7 @@ export function ScenarioSection({
 
       {/* Роли — карточками в сетку, а не строками во всю ширину: у роли всего два поля,
           которые читают на бегу, — имя и аккаунт, который её играет. */}
-      <div className="mb-sm flex items-center gap-sm type-item-title">
+      <div className="mb-sm flex items-center gap-sm type-body-medium">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
@@ -569,10 +571,12 @@ export function ScenarioSection({
         </button>
       </div>
       {draft.roles.length === 0 ? (
-        <div className="mb-md type-prose">{t('neuroshilling.scenario.roles.none')}</div>
+        <div className="mb-md type-body text-content-subtle">
+          {t('neuroshilling.scenario.roles.none')}
+        </div>
       ) : null}
 
-      <div className="mb-sm flex items-center gap-sm type-item-title">
+      <div className="mb-sm flex items-center gap-sm type-body-medium">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
@@ -602,13 +606,15 @@ export function ScenarioSection({
           />
         ))}
         {draft.steps.length === 0 ? (
-          <div className="type-prose">{t('neuroshilling.scenario.steps.none')}</div>
+          <div className="type-body text-content-subtle">
+            {t('neuroshilling.scenario.steps.none')}
+          </div>
         ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-sm">
         {namelessRole ? (
-          <span className="mr-auto type-caption text-danger-deep">
+          <span className="mr-auto type-small text-danger-deep">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}

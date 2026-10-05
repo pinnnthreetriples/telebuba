@@ -34,7 +34,7 @@ function Age({ iso }: { iso: string }) {
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <span className="flex items-center gap-sm type-caption">
+    <span className="flex items-center gap-sm type-small">
       <span className="flex items-center gap-xs">
         {[0, 1, 2].map((index) => (
           <span
@@ -101,7 +101,7 @@ export function DialogueTranscript({
           reason `pairs.ts` refuses to derive the sides from it. The only
           timestamp in the transcript: at 308px of content width a per-reply
           time costs a line each. */}
-      <span className="self-center tabular-nums type-caption">
+      <span className="self-center tabular-nums type-small">
         <Age iso={oldest.created_at} />
       </span>
       {messages.map((message) => {
@@ -167,20 +167,20 @@ function PairRow({
         className={`flex w-full flex-col px-md py-md text-left ${FOCUS_RING}`}
       >
         <span className="flex w-full items-center gap-sm">
-          <span className="flex min-w-0 flex-1 items-center gap-tight type-label">
+          <span className="flex min-w-0 flex-1 items-center gap-tight type-body-medium text-content-secondary">
             {/* Both sides truncate. Two untruncated names plus the arrow and the
                 time is what wrapped the old header into three lines here. */}
-            <span className={`truncate ${open ? 'font-semibold text-content-primary' : ''}`}>
+            <span className={`truncate ${open ? 'font-medium text-content-primary' : ''}`}>
               {pair.leftName}
             </span>
             <Icon name="arrow-right" size={12} className="shrink-0 text-content-subtle" />
             {/* Blue for the right-hand side, the same blue its bubbles carry —
                 that pairing is the legend for which side is whose. */}
-            <span className={`truncate ${open ? 'font-semibold text-info-strong' : ''}`}>
+            <span className={`truncate ${open ? 'font-medium text-info-strong' : ''}`}>
               {pair.rightName}
             </span>
           </span>
-          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-bold' : undefined}>
+          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-medium' : undefined}>
             {pair.messages.length}
           </Badge>
           <Icon
@@ -192,7 +192,7 @@ function PairRow({
           />
         </span>
         {open ? null : (
-          <span className="mt-hair flex w-full items-center gap-tight type-caption">
+          <span className="mt-hair flex w-full items-center gap-tight type-small">
             {live ? (
               <TypingIndicator />
             ) : (
@@ -281,15 +281,17 @@ export function DialogueFeed() {
         <span
           className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
         />
-        <span className="min-w-0 flex-1 type-card-title">{t('warming.dialogues.title')}</span>
+        <span className="min-w-0 flex-1 type-h3">{t('warming.dialogues.title')}</span>
         {pairs.length > 0 ? (
-          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-bold' : undefined}>
+          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-medium' : undefined}>
             {t('warming.dialogues.pairs', { count: pairs.length })}
           </Badge>
         ) : null}
       </div>
       {pairs.length === 0 ? (
-        <div className="py-page text-center type-prose">{t('warming.dialogues.empty')}</div>
+        <div className="py-page text-center type-body text-content-subtle">
+          {t('warming.dialogues.empty')}
+        </div>
       ) : (
         // The list is the ONE scroll: an open transcript grows inside it rather
         // than scrolling on its own, because two nested scrollbars in a 340px

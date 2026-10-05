@@ -31,13 +31,13 @@ export function Row({
     >
       <div className="min-w-0 flex-1">
         {htmlFor === undefined ? (
-          <span className="type-label">{label}</span>
+          <span className="type-body-medium text-content-secondary">{label}</span>
         ) : (
-          <label htmlFor={htmlFor} className="type-label">
+          <label htmlFor={htmlFor} className="type-body-medium text-content-secondary">
             {label}
           </label>
         )}
-        {hint === undefined ? null : <div className="mt-hair type-caption">{hint}</div>}
+        {hint === undefined ? null : <div className="mt-hair type-small">{hint}</div>}
       </div>
       {children}
     </div>
@@ -47,8 +47,8 @@ export function Row({
 export function Eyebrow({ title, caption }: { title: string; caption?: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-sm pb-sm">
-      <span className="type-eyebrow">{title}</span>
-      {caption === undefined ? null : <span className="type-caption">{caption}</span>}
+      <span className="type-small-medium">{title}</span>
+      {caption === undefined ? null : <span className="type-small">{caption}</span>}
     </div>
   );
 }

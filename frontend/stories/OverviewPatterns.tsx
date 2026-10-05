@@ -161,8 +161,8 @@ export function OverviewPatterns() {
     >
       <div className="grid gap-lg lg:grid-cols-2">
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Блок кампаний</h3>
-          <p className="mb-md type-caption">Нейрокомментинг</p>
+          <h3 className="mb-sm type-h3">Блок кампаний</h3>
+          <p className="mb-md type-small">Нейрокомментинг</p>
           <div className="grid lg:grid-cols-[340px_minmax(0,1fr)]">
             <CampaignsCard
               campaignList={campaigns}
@@ -236,7 +236,7 @@ export function OverviewPatterns() {
                 <Button
                   size="xs"
                   onClick={() => setDiscoveryOpen(true)}
-                  className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                  className="text-small text-content-muted hover:border-action-primary hover:text-action-primary"
                 >
                   Найти каналы
                 </Button>
@@ -245,12 +245,12 @@ export function OverviewPatterns() {
             {discoveryOpen && (
               <Modal onClose={() => setDiscoveryOpen(false)} size="table" label="Поиск каналов">
                 <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-                  <h2 className="type-dialog-title">Поиск каналов</h2>
-                  <p className="mt-hair type-caption">
+                  <h2 className="type-h2">Поиск каналов</h2>
+                  <p className="mt-hair type-small">
                     Для кампании {campaigns.find((item) => item.campaign_id === campaignId)?.name}
                   </p>
                 </div>
-                <div className="px-2xl py-xl type-prose">
+                <div className="px-2xl py-xl type-body text-content-subtle">
                   Поиск и результаты доступны в подключённом приложении.
                 </div>
                 <div className="flex justify-end border-t border-line-row px-2xl py-lg">
@@ -364,24 +364,24 @@ export function OverviewPatterns() {
           </div>
         </div>
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Аватар аккаунта</h3>
-          <p className="mb-md type-caption">Таблица аккаунтов, прогрев и формы выбора</p>
+          <h3 className="mb-sm type-h3">Аватар аккаунта</h3>
+          <p className="mb-md type-small">Таблица аккаунтов, прогрев и формы выбора</p>
           <div className="flex items-center gap-xl rounded-card border border-line bg-surface-card p-lg">
             <div className="flex items-center gap-sm">
               <AccountAvatar
                 account={{ account_id: 'a1', first_name: 'Иван', last_name: 'Петров' }}
                 className="size-tile shrink-0 rounded-full"
-                fallbackClassName="bg-info-tint text-info-strong text-body font-semibold"
+                fallbackClassName="bg-info-tint text-info-strong text-body font-medium"
               />
-              <span className="type-caption">В таблице</span>
+              <span className="type-small">В таблице</span>
             </div>
             <div className="flex items-center gap-sm">
               <AccountAvatar
                 account={{ account_id: 'a2', first_name: 'Мария', last_name: 'Смирнова' }}
                 className="size-tile shrink-0 rounded-full ring-2 ring-success"
-                fallbackClassName="bg-info-tint text-info-strong text-tiny font-bold"
+                fallbackClassName="bg-info-tint text-info-strong text-small font-medium"
               />
-              <span className="type-caption">В прогреве</span>
+              <span className="type-small">В прогреве</span>
             </div>
           </div>
         </div>
@@ -389,8 +389,8 @@ export function OverviewPatterns() {
 
       <div className="grid gap-lg lg:grid-cols-2">
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Вкладки профиля</h3>
-          <p className="mb-md type-caption">Профиль и массовое редактирование аккаунтов</p>
+          <h3 className="mb-sm type-h3">Вкладки профиля</h3>
+          <p className="mb-md type-small">Профиль и массовое редактирование аккаунтов</p>
           <div className="rounded-card border border-line bg-surface-card">
             <TabList
               options={[
@@ -407,15 +407,15 @@ export function OverviewPatterns() {
               role="tabpanel"
               id="overview-tabpanel"
               aria-labelledby={`overview-tab-${tab}`}
-              className="p-lg type-prose"
+              className="p-lg type-body text-content-subtle"
             >
               {tab === 'text' ? 'Имя, фамилия и описание' : 'Фото аккаунта'}
             </div>
           </div>
         </div>
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Редактор канала</h3>
-          <p className="mb-md type-caption">Прогрев, нейрокомментинг и нейрошиллинг</p>
+          <h3 className="mb-sm type-h3">Редактор канала</h3>
+          <p className="mb-md type-small">Прогрев, нейрокомментинг и нейрошиллинг</p>
           <div className="flex flex-wrap items-center gap-sm rounded-card border border-line bg-surface-card p-lg">
             {channels.map((channel) => (
               <Badge key={channel} tone="neutral">
@@ -441,8 +441,8 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Нумерованные шаги</h3>
-        <p className="mb-md type-caption">Подсказки прогрева и кампаний</p>
+        <h3 className="mb-sm type-h3">Нумерованные шаги</h3>
+        <p className="mb-md type-small">Подсказки прогрева и кампаний</p>
         <div className="grid gap-md md:grid-cols-2">
           <NumberedStep number={1}>Выберите аккаунты.</NumberedStep>
           <NumberedStep number={2}>Проверьте ограничения.</NumberedStep>
@@ -450,8 +450,8 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Ошибка загрузки с повтором</h3>
-        <p className="mb-md type-caption">Редактирование аккаунта и его каналов</p>
+        <h3 className="mb-sm type-h3">Ошибка загрузки с повтором</h3>
+        <p className="mb-md type-small">Редактирование аккаунта и его каналов</p>
         {retryNoticeVisible && (
           <RetryNotice
             message="Не удалось загрузить настройки аккаунта."
@@ -463,8 +463,8 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Журнал событий</h3>
-        <p className="mb-md type-caption">Нейрокомментинг и нейрошиллинг</p>
+        <h3 className="mb-sm type-h3">Журнал событий</h3>
+        <p className="mb-md type-small">Нейрокомментинг и нейрошиллинг</p>
         <LogTerminal
           title="Лог кампании"
           logLines={entries}
@@ -484,8 +484,8 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Конвейер обработки</h3>
-        <p className="mb-md type-caption">Текущая стадия нейрокомментинга</p>
+        <h3 className="mb-sm type-h3">Конвейер обработки</h3>
+        <p className="mb-md type-small">Текущая стадия нейрокомментинга</p>
         <RuntimePipeline
           running={runtimeRunning}
           canStart
@@ -503,8 +503,8 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Готовность к запуску</h3>
-        <p className="mb-md type-caption">Проверки кампании нейрошиллинга</p>
+        <h3 className="mb-sm type-h3">Готовность к запуску</h3>
+        <p className="mb-md type-small">Проверки кампании нейрошиллинга</p>
         <LaunchPipeline
           campaign={campaign}
           run={{ status: launchRunning ? 'running' : 'idle', sent: 0, total: 120 }}

@@ -295,7 +295,7 @@ export function AccountsPage() {
       </div>
 
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
+        <h1 className="m-0 type-h1">{t('accounts.title')}</h1>
         <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
           {/* Collapsible search field */}
           <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
@@ -395,8 +395,8 @@ export function AccountsPage() {
             key={stat.label}
             className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
           >
-            <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px type-caption">{stat.label}</div>
+            <div className={`type-h1 ${stat.cls}`}>{stat.value}</div>
+            <div className="mt-px type-small">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -410,7 +410,9 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center type-prose">{t('accounts.empty')}</Card>
+            <Card className="px-lg py-empty text-center type-body text-content-subtle">
+              {t('accounts.empty')}
+            </Card>
           ) : (
             <AccountsTable
               data={items}

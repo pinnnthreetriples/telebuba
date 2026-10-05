@@ -145,7 +145,7 @@ export function LogTerminal({
       header={
         <>
           <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-          <span className="type-card-title">{title}</span>
+          <span className="type-h3">{title}</span>
           <Badge tone="neutral" size="xs">
             {shown.length}
           </Badge>

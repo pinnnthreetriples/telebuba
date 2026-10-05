@@ -108,18 +108,20 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         </span>
       }
     >
-      <div className="mb-sm type-prose">{t('accounts.edit.signalsReadonly')}</div>
+      <div className="mb-sm type-body text-content-subtle">
+        {t('accounts.edit.signalsReadonly')}
+      </div>
       <div className="flex flex-col">
         {signals.map((signal) => (
           <div
             key={signal.label}
             className="flex items-center justify-between gap-md border-b border-line-row py-md"
           >
-            <span className="flex items-center gap-sm type-prose">
+            <span className="flex items-center gap-sm type-body text-content-subtle">
               <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>
-            <span className="text-right type-label text-content-primary">{signal.value}</span>
+            <span className="text-right type-body-medium text-content-primary">{signal.value}</span>
           </div>
         ))}
       </div>

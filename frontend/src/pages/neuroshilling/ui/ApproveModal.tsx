@@ -58,9 +58,9 @@ function PauseBox({
           minField.onChange(event.target.value);
         }}
         onBlur={minField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-right type-caption tabular-nums outline-none"
+        className="tb-plain-number w-action border-none bg-transparent text-right type-small tabular-nums outline-none"
       />
-      <span className="type-caption">–</span>
+      <span className="type-small">–</span>
       <input
         type="number"
         min={0}
@@ -71,9 +71,9 @@ function PauseBox({
           maxField.onChange(event.target.value);
         }}
         onBlur={maxField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-left type-caption tabular-nums outline-none"
+        className="tb-plain-number w-action border-none bg-transparent text-left type-small tabular-nums outline-none"
       />
-      <span className="type-caption">{t('neuroshilling.scenario.steps.seconds')}</span>
+      <span className="type-small">{t('neuroshilling.scenario.steps.seconds')}</span>
     </span>
   );
 }
@@ -123,7 +123,7 @@ export function ApproveModal({
   return (
     <Modal onClose={onClose} size="table" label={t('neuroshilling.preview.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="type-dialog-title">{t('neuroshilling.preview.title')}</span>
+        <span className="type-h2">{t('neuroshilling.preview.title')}</span>
         {/* Два счётчика — двумя ключами, а не одним с двумя подстановками: склоняются
             они по РАЗНЫМ числам, и «5 реплик, 1 реакций» — ровно то, что получается,
             когда i18next разрешают склонять только по одному `count`. */}
@@ -139,7 +139,7 @@ export function ApproveModal({
         </Badge>
         <div className="flex-1" />
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
+          className={`shrink-0 rounded-full px-md py-xs text-small font-medium ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
@@ -147,13 +147,15 @@ export function ApproveModal({
 
       <div className="px-2xl py-lg">
         {dirty ? (
-          <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
+          <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
             {t('neuroshilling.preview.unsaved')}
           </div>
         ) : null}
 
         {steps.length === 0 ? (
-          <div className="py-xl text-center type-prose">{t('neuroshilling.preview.none')}</div>
+          <div className="py-xl text-center type-body text-content-subtle">
+            {t('neuroshilling.preview.none')}
+          </div>
         ) : (
           <div className="flex flex-col">
             {steps.map((step, index) => {
@@ -171,7 +173,7 @@ export function ApproveModal({
                     <div className="my-sm flex items-center gap-sm">
                       <span className="h-px flex-1 bg-line" />
                       {delays === null ? (
-                        <span className="type-caption tabular-nums">
+                        <span className="type-small tabular-nums">
                           {t('neuroshilling.preview.pause', {
                             min: step.delay_min_seconds ?? 60,
                             max: step.delay_max_seconds ?? 180,
@@ -196,21 +198,21 @@ export function ApproveModal({
                     style={{ animationDelay: `${String(index * 0.12)}s` }}
                   >
                     <span
-                      className={`flex size-icon shrink-0 items-center justify-center rounded-full text-tiny font-bold ${tone.on} ${tone.bg}`}
+                      className={`flex size-icon shrink-0 items-center justify-center rounded-full text-small font-medium ${tone.on} ${tone.bg}`}
                     >
                       {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="mb-xs flex items-center gap-sm">
-                        <span className={`type-item-title ${tone.text}`}>
+                        <span className={`type-body-medium ${tone.text}`}>
                           {role?.name ?? t('neuroshilling.preview.noRole')}
                         </span>
-                        <span className="type-caption tabular-nums">
+                        <span className="type-small tabular-nums">
                           {t('neuroshilling.preview.at', { time: clock(elapsed) })}
                         </span>
                       </div>
                       {step.kind === 'reaction' ? (
-                        <span className="inline-flex items-center gap-tight rounded-full border border-line bg-surface-card px-md py-xs text-tiny text-content-muted">
+                        <span className="inline-flex items-center gap-tight rounded-full border border-line bg-surface-card px-md py-xs text-small text-content-muted">
                           <span aria-hidden="true">{step.emoji ?? '·'}</span>
                           {step.target_position === null || step.target_position === undefined
                             ? t('neuroshilling.preview.reactionLoose')
@@ -222,7 +224,7 @@ export function ApproveModal({
                         <div className="rounded-lg rounded-tl-[3px] border border-line bg-surface px-md py-sm text-body">
                           {quoted ? (
                             <span
-                              className={`mb-tight block border-l-2 pl-sm type-caption ${tone.border}`}
+                              className={`mb-tight block border-l-2 pl-sm type-small ${tone.border}`}
                             >
                               {quoted.text}
                             </span>
@@ -240,7 +242,7 @@ export function ApproveModal({
       </div>
 
       <div className="flex flex-wrap items-center gap-sm border-t border-line-row px-2xl py-lg">
-        <span className="mr-auto type-caption tabular-nums">
+        <span className="mr-auto type-small tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
         <Button

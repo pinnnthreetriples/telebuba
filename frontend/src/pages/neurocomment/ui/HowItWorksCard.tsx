@@ -12,7 +12,7 @@ export function HowItWorksCard() {
       label={t('neurocomment.howto.title')}
       wrapperClassName="rounded-card border border-line bg-canvas"
       headerClassName="px-lg py-lg"
-      header={<span className="type-card-title">{t('neurocomment.howto.title')}</span>}
+      header={<span className="type-h3">{t('neurocomment.howto.title')}</span>}
     >
       <div className="flex flex-col gap-md">
         {HOW_STEPS.map((index) => (

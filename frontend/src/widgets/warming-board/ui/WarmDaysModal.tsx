@@ -80,7 +80,7 @@ export function WarmDaysModal({
               <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
             </svg>
           </div>
-          <div className="flex-1 type-dialog-title">{t('warming.days.title')}</div>
+          <div className="flex-1 type-h2">{t('warming.days.title')}</div>
           <span className="tb-tip inline-flex shrink-0">
             {/* Already a tab stop, so `:focus-within` reveals the bubble for free; the
                 `aria-describedby` is what names it. See app/styles/index.css. */}
@@ -111,11 +111,15 @@ export function WarmDaysModal({
             </span>
           </span>
         </div>
-        <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
+        <div className="mb-2xl type-body text-content-muted">
+          {t('warming.days.subtitle', { phone })}
+        </div>
 
         <div className="mb-xl text-center">
-          <div className="text-hero font-bold leading-none text-action-primary">{days}</div>
-          <div className="mt-xs type-dialog-body">{t('warming.days.label', { count: days })}</div>
+          <div className="text-h1 font-medium leading-none text-action-primary">{days}</div>
+          <div className="mt-xs type-body text-content-muted">
+            {t('warming.days.label', { count: days })}
+          </div>
         </div>
 
         <div
@@ -158,7 +162,7 @@ export function WarmDaysModal({
             style={{ left: `${String(pct)}%` }}
           />
         </div>
-        <div className="mx-md mb-xl flex justify-between type-caption">
+        <div className="mx-md mb-xl flex justify-between type-small">
           <span>{t('warming.days.min')}</span>
           <span>{t('warming.days.max')}</span>
         </div>
@@ -178,14 +182,14 @@ export function WarmDaysModal({
           }}
         />
 
-        <div className="mb-sm flex items-center gap-sm type-item-title">
+        <div className="mb-sm flex items-center gap-sm type-body-medium">
           {t('warming.persona.label')}
           <span className="tb-tip inline-flex">
             <button
               type="button"
               aria-label={t('warming.persona.label')}
               aria-describedby={personaTipId}
-              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-tiny font-bold text-content-subtle"
+              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-small font-medium text-content-subtle"
             >
               ?
             </button>
@@ -203,8 +207,8 @@ export function WarmDaysModal({
             value: p,
             label: (
               <>
-                <div className="type-item-title">{t(`warming.persona.${p}.name`)}</div>
-                <div className="mt-hair type-caption">{t(`warming.persona.${p}.hint`)}</div>
+                <div className="type-body-medium">{t(`warming.persona.${p}.name`)}</div>
+                <div className="mt-hair type-small">{t(`warming.persona.${p}.hint`)}</div>
               </>
             ),
           }))}

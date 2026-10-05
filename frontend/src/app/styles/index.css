@@ -15,12 +15,12 @@
     scrollbar-gutter: stable;
   }
   body {
-    @apply bg-canvas font-sans text-content-primary antialiased;
-    /* Явно, а не из preflight Tailwind. Значение то же, но раньше телесный интерлиньяж
-       приложения приходил из умолчания зависимости и не был написан нигде — то есть
-       единственная величина, которую наследует каждая строка интерфейса, лежала вне
-       дизайн-системы. */
-    line-height: theme('lineHeight.body');
+    /* `text-body` — ступень целиком: 14px, интерлиньяж 20px и трекинг. Текст без своего
+       класса наследует ровно её, а не 16px и 1.5 из умолчаний браузера и preflight. */
+    @apply bg-canvas font-sans text-body text-content-primary antialiased;
+    /* Ровные цифры во всём приложении: счётчики, «4 / 5», trust, время журнала стоят
+       колонками и обновляются на месте, и цифра разной ширины сдвигает строку. */
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -301,11 +301,11 @@
   color: theme('colors.on-inverse');
   border-radius: theme('borderRadius.md');
   padding: theme('spacing.sm') theme('spacing.md');
-  font-size: theme('fontSize.tiny');
-  /* Телесный интерлиньяж, а не литерал. Здесь он объявлен явно, потому что подсказка —
-     единственный элемент файла, который НЕ наследует его от `body`: она рисуется
-     псевдоэлементом в собственном контексте. */
-  line-height: theme('lineHeight.body');
+  /* Ступень `small` целиком, а не литералы. Объявлена явно, потому что подсказка рисуется
+     псевдоэлементом в собственном контексте и наследовать её ей не от кого. */
+  font-size: theme('typeScale.small.size');
+  line-height: theme('typeScale.small.leading');
+  letter-spacing: theme('typeScale.small.tracking');
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;

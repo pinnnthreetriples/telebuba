@@ -84,8 +84,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
     <Card className="px-xl py-lg">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div>
-          <span className="type-card-title">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-sm type-prose">{t('accounts.proxyPool.subtitle')}</span>
+          <span className="type-h3">{t('accounts.proxyPool.title')}</span>
+          <span className="ml-sm type-body text-content-subtle">
+            {t('accounts.proxyPool.subtitle')}
+          </span>
         </div>
         {!empty && (
           <Button variant="primary" size="md" onClick={onAdd}>
@@ -109,10 +111,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-xs type-card-title">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-xs type-h3">{t('accounts.proxyPool.emptyTitle')}</div>
           <div
             // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the sentence in this widget's own empty state
-            className="mb-lg max-w-[300px] type-prose"
+            className="mb-lg max-w-[300px] type-body text-content-subtle"
           >
             {t('accounts.proxyPool.emptyBody')}
           </div>
@@ -209,10 +211,10 @@ function ProxyCard({
           <span title={geoTitle} className="h-flag w-flag shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate type-item-title">
+          <div className="truncate type-body-medium">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex flex-wrap items-center gap-tight type-caption">
+          <div className="mt-px flex flex-wrap items-center gap-tight type-small">
             <span className="whitespace-nowrap">{proxyTypeLabel(proxy.proxy_type)}</span>
             <span
               className={`inline-flex items-center gap-xs whitespace-nowrap font-medium ${statusTone}`}
@@ -263,9 +265,9 @@ function ProxyCard({
       </div>
       <div>
         <div className="mb-tight flex items-center justify-between">
-          <span className="type-caption">{t('accounts.proxyPool.accounts')}</span>
+          <span className="type-small">{t('accounts.proxyPool.accounts')}</span>
           <span
-            className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
+            className={`text-small font-medium ${full ? 'text-danger-deep' : 'text-success-deep'}`}
           >
             {proxy.used} / {proxy.capacity}
           </span>
@@ -276,7 +278,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-tight text-tiny ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
+        <div className={`mt-tight text-small ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

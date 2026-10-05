@@ -35,14 +35,14 @@ export function PrivacyLevelRow({
       className="flex flex-col items-stretch gap-md rounded-lg border border-line px-lg py-md sm:flex-row sm:items-center"
     >
       <div className="min-w-0 sm:flex-1">
-        <div className="truncate type-card-title">{label}</div>
-        <div className="mt-hair type-caption">
+        <div className="truncate type-h3">{label}</div>
+        <div className="mt-hair type-small">
           {t('accounts.profile.privacy.current', {
             value: t(`accounts.profile.privacy.level.${current}`),
           })}
         </div>
         {current === 'unknown' && (
-          <div className="mt-hair type-caption">{t('accounts.profile.privacy.unknownNote')}</div>
+          <div className="mt-hair type-small">{t('accounts.profile.privacy.unknownNote')}</div>
         )}
       </div>
       <SegmentedControl

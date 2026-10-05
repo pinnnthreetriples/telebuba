@@ -22,8 +22,10 @@ export function Section({
 }) {
   return (
     <section id={id} className="scroll-mt-page border-t border-line pt-xl">
-      <h2 className="type-page-title">{title}</h2>
-      {note !== undefined && <p className="mt-tight max-w-page type-prose">{note}</p>}
+      <h2 className="type-h1">{title}</h2>
+      {note !== undefined && (
+        <p className="mt-tight max-w-page type-body text-content-subtle">{note}</p>
+      )}
       <div className="mt-lg flex flex-col gap-lg">{children}</div>
     </section>
   );
@@ -43,8 +45,8 @@ export function Row({
   return (
     <div className="flex flex-col gap-sm border-b border-line-row pb-lg sm:flex-row sm:gap-lg">
       <div className="w-col shrink-0">
-        <div className="type-label">{label}</div>
-        {hint !== undefined && <div className="mt-hair type-caption">{hint}</div>}
+        <div className="type-body-medium text-content-secondary">{label}</div>
+        {hint !== undefined && <div className="mt-hair type-small">{hint}</div>}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-md">{children}</div>
     </div>
@@ -74,7 +76,7 @@ export function Cell({
       >
         {children}
       </div>
-      <span className="type-caption">{caption}</span>
+      <span className="type-small">{caption}</span>
     </div>
   );
 }

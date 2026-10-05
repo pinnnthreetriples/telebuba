@@ -106,7 +106,9 @@ export function ScheduledPostsList({
     <section className="mt-xl" aria-label={t('accounts.schedule.listTitle')}>
       <div className="mb-md flex items-center gap-sm">
         <Icon name="clock" size={14} className="text-content-muted" />
-        <span className="type-label">{t('accounts.schedule.listTitle')}</span>
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.schedule.listTitle')}
+        </span>
         <Badge size="xs">{items.length}</Badge>
       </div>
       <ul className="flex flex-col gap-sm">
@@ -223,12 +225,12 @@ function ScheduledRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-sm">
-          <span className="type-item-title">{when}</span>
+          <span className="type-body-medium">{when}</span>
           <Badge tone={TONE[item.state]} size="xs">
             {t(`accounts.schedule.state.${item.state}`)}
           </Badge>
         </div>
-        <div className="mt-px truncate type-caption">
+        <div className="mt-px truncate type-small">
           {item.state === 'pending'
             ? formatRelativeTo(nextAt, now, i18n.language)
             : item.error_code

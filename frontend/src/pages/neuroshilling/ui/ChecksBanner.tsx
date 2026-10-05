@@ -37,17 +37,17 @@ export function ChecksBanner({ blockers }: { blockers: string[] }) {
               `contrast.test.ts` для предупреждения знает. */}
           <Icon name="alert-triangle" size={18} className="shrink-0 text-warning-deep" />
           <span className="min-w-0">
-            <span className="block type-item-title text-warning-deep">
+            <span className="block type-body-medium text-warning-deep">
               {t('neuroshilling.checks.title', { count: blockers.length })}
             </span>
-            <span className="block type-caption text-warning-deep">
+            <span className="block type-small text-warning-deep">
               {t('neuroshilling.checks.subtitle')}
             </span>
           </span>
         </span>
       }
     >
-      <ul className="flex list-none flex-col gap-xs type-caption text-warning-deep">
+      <ul className="flex list-none flex-col gap-xs type-small text-warning-deep">
         {blockers.map((reason) => (
           <li key={reason}>· {reason}</li>
         ))}

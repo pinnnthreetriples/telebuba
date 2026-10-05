@@ -77,7 +77,7 @@ export function TwoFactorForm({
 
   return (
     <>
-      <div className="mb-md type-prose">{t('accounts.edit.twofaExplain')}</div>
+      <div className="mb-md type-body text-content-subtle">{t('accounts.edit.twofaExplain')}</div>
       <SegmentedControl
         className="mb-md"
         value={mode}
@@ -148,7 +148,7 @@ export function TwoFactorForm({
           )}
         </twofaForm.Field>
       </div>
-      <div className="mb-lg type-caption">{t('accounts.edit.twofaHintWarn')}</div>
+      <div className="mb-lg type-small">{t('accounts.edit.twofaHintWarn')}</div>
       <Button
         fullWidth
         className="font-medium"

@@ -282,7 +282,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm type-caption">
+            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm type-small">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

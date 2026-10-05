@@ -61,7 +61,7 @@ export function CampaignsCard({
       label={t('neuroshilling.campaigns.title')}
       headerClassName="px-lg py-md"
       bodyClassName="px-lg pb-lg"
-      header={<span className="type-card-title">{t('neuroshilling.campaigns.title')}</span>}
+      header={<span className="type-h3">{t('neuroshilling.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-tight">
         {campaignList.map((campaign) => {
@@ -140,7 +140,9 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-lg text-center type-prose">{t('neuroshilling.campaigns.none')}</div>
+          <div className="py-lg text-center type-body text-content-subtle">
+            {t('neuroshilling.campaigns.none')}
+          </div>
         ) : null}
       </div>
 

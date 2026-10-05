@@ -86,9 +86,9 @@ function LimitRow({
   return (
     <div className="border-b border-line-row py-lg last:border-b-0">
       <div className="flex items-baseline justify-between gap-md">
-        <span className="type-card-title">{label}</span>
+        <span className="type-h3">{label}</span>
         <span
-          className={`font-mono text-body font-semibold tabular-nums ${
+          className={`font-mono text-body font-medium tabular-nums ${
             state === 'full' ? 'text-danger' : 'text-content-muted'
           }`}
         >
@@ -99,7 +99,7 @@ function LimitRow({
         <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
       </div>
       <div className="mt-md flex flex-wrap items-center justify-between gap-md">
-        <span className="min-w-col flex-1 type-caption">
+        <span className="min-w-col flex-1 type-small">
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
@@ -121,10 +121,10 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-readout rounded-md border border-line bg-surface-card px-md py-tight text-right font-mono text-body font-semibold text-content-primary"
+          className="w-readout rounded-md border border-line bg-surface-card px-md py-tight text-right font-mono text-body font-medium text-content-primary"
         />
       </div>
-      <div className="mt-tight type-caption">
+      <div className="mt-tight type-small">
         {value === ''
           ? t('neurocomment.modal.limits.fleetValue', { value: gauge.fleet_default })
           : t('neurocomment.modal.limits.ownValue', { value: gauge.fleet_default })}
@@ -216,8 +216,10 @@ export function AccountLimitsModal({
           </svg>
         </span>
         <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.limits.title', { name })}</div>
-          <div className="mt-hair type-prose">{t('neurocomment.modal.limits.sub')}</div>
+          <div className="type-h2">{t('neurocomment.modal.limits.title', { name })}</div>
+          <div className="mt-hair type-body text-content-subtle">
+            {t('neurocomment.modal.limits.sub')}
+          </div>
         </div>
       </div>
 
@@ -237,7 +239,7 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center type-prose">
+          <div className="px-md py-page text-center type-body text-content-subtle">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}
@@ -245,7 +247,7 @@ export function AccountLimitsModal({
         )}
       </div>
 
-      <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-tiny text-content-muted">
+      <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-small text-content-muted">
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 

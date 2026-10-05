@@ -146,7 +146,7 @@ export function Section({
       headerClassName="px-xl py-lg"
       bodyClassName={bodyClassName}
       header={
-        <span className="flex items-center gap-sm type-card-title">
+        <span className="flex items-center gap-sm type-h3">
           {title}
           {icon}
         </span>

@@ -19,7 +19,7 @@ function StreamChip({ stream, t }: { stream: DiscoveryStream; t: TFunction }) {
   return (
     <span className="inline-flex items-center gap-xs" title={title}>
       <span className={cn('size-dot shrink-0 rounded-full', dotTone(stream.state))} />
-      <span className="type-caption">{stream.name}</span>
+      <span className="type-small">{stream.name}</span>
       {stream.premium === true ? (
         <Badge size="xs" tone="info">
           {t(`${P}.premium`)}
@@ -69,10 +69,10 @@ export function SearchProgress({ work, phase }: Props) {
             reader re-announce the strip every tick for the run's whole duration. The
             stage label changes twice per run (searching → qualifying), which is worth
             announcing. */}
-        <span role="status" aria-live="polite" className="type-label">
+        <span role="status" aria-live="polite" className="type-body-medium text-content-secondary">
           {stageLabel}
         </span>
-        <span className="type-caption tabular-nums">{headerRight}</span>
+        <span className="type-small tabular-nums">{headerRight}</span>
       </div>
       <div
         role="progressbar"
@@ -95,7 +95,7 @@ export function SearchProgress({ work, phase }: Props) {
         ))}
       </div>
       {out.length > 0 ? (
-        <p className="type-caption text-warning-deep">
+        <p className="type-small text-warning-deep">
           {allOut(streams)
             ? t(`${P}.allOut`)
             : t(`${P}.someOut`, {

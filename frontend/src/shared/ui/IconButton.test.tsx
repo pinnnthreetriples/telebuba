@@ -137,10 +137,10 @@ test('aria-busy icon actions cannot show press feedback', () => {
 
 test('extra classes are appended, so a caller can size the glyph it puts inside', () => {
   render(
-    <IconButton aria-label="Закрыть" className="text-title">
+    <IconButton aria-label="Закрыть" className="text-h3">
       ×
     </IconButton>,
   );
 
-  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'size-icon');
+  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-h3', 'size-icon');
 });

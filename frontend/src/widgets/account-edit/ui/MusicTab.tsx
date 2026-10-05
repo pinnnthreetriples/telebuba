@@ -27,7 +27,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
+      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-body text-content-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -54,10 +54,10 @@ export function MusicTab({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate type-card-title">
+                <div className="truncate type-h3">
                   {track.title ?? t('accounts.profile.trackTitle')}
                 </div>
-                <div className="truncate type-prose">
+                <div className="truncate type-body text-content-subtle">
                   {track.performer ?? t('accounts.profile.trackArtist')}
                 </div>
               </div>

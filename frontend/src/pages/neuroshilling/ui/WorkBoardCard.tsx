@@ -83,9 +83,9 @@ export function WorkBoardCard({
         meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <>
-            <div className="truncate type-item-title">{row.original.name}</div>
+            <div className="truncate type-body-medium">{row.original.name}</div>
             {row.original.topic ? (
-              <div className="truncate type-caption">{row.original.topic}</div>
+              <div className="truncate type-small">{row.original.topic}</div>
             ) : null}
           </>
         ),
@@ -103,7 +103,7 @@ export function WorkBoardCard({
         header: t('neuroshilling.board.column.progress'),
         cell: ({ row }) => {
           const { sent, total } = row.original;
-          if (sent === null || total === null) return <span className="type-caption">—</span>;
+          if (sent === null || total === null) return <span className="type-small">—</span>;
           const percent = total === 0 ? 0 : Math.min(100, Math.round((sent / total) * 100));
           return (
             <>
@@ -113,7 +113,7 @@ export function WorkBoardCard({
                   style={{ width: `${String(percent)}%` }}
                 />
               </div>
-              <div className="mt-xs type-caption tabular-nums">
+              <div className="mt-xs type-small tabular-nums">
                 {sent}/{total}
               </div>
             </>
@@ -132,10 +132,10 @@ export function WorkBoardCard({
   return (
     <Card className="py-xl">
       <div className="mb-md flex flex-wrap items-center gap-md px-xl">
-        <span className="type-card-title">{t('neuroshilling.board.title')}</span>
+        <span className="type-h3">{t('neuroshilling.board.title')}</span>
         <Badge className="tabular-nums">{campaignList.length}</Badge>
         <div className="flex-1" />
-        <span className="type-caption tabular-nums">
+        <span className="type-small tabular-nums">
           {t('neuroshilling.board.running', { count: running })}
         </span>
       </div>

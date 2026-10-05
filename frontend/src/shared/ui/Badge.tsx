@@ -20,13 +20,13 @@ import { cn } from '@/shared/lib/cn';
 // top-down, so a size name means the same thing wherever it is written. The middle
 // rung is the one this component was missing and the reason it could not express
 // the app's commonest pill: all three status badges and eleven more written by hand
-// sit at `text-tiny`, which the type scale itself calls a pill's label. It had no
+// sit at `text-small`, which the type scale itself calls a pill's label. It had no
 // name of its own because the two rungs that happened to be written first took `sm`
 // and `md` between them; the smallest is `xs`, which is what it always measured.
 const SIZE = {
   md: 'px-md py-tight text-body',
-  sm: 'px-md py-xs text-tiny',
-  xs: 'px-sm py-hair text-tiny',
+  sm: 'px-md py-xs text-small',
+  xs: 'px-sm py-hair text-small',
 } as const;
 
 // 6px over the 5px also in use: four of the app's seven status dots are already

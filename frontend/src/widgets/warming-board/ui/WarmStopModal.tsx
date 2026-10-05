@@ -19,8 +19,10 @@ export function WarmStopModal({
   return (
     <Modal onClose={onClose} size="form" label={t('warming.stopModal.title')}>
       <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
-        <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
+        <div className="mb-sm type-h2">{t('warming.stopModal.title')}</div>
+        <div className="mb-2xl type-body text-content-muted">
+          {t('warming.stopModal.body', { phone })}
+        </div>
         <div className="flex flex-col gap-sm sm:flex-row">
           <Button
             variant="primary"

@@ -22,7 +22,7 @@ export function TerminalPane({
   return (
     <div
       className={cn(
-        'term tb-scroll overflow-y-auto bg-term px-md py-sm font-mono text-tiny leading-log',
+        'term tb-scroll overflow-y-auto bg-term px-md py-sm font-mono text-small',
         SIZE[size],
         className,
       )}

@@ -91,8 +91,8 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
     >
       {/* The same label + caption line as the keywords field it shares a row with. */}
       <div className="mb-tight flex flex-wrap items-baseline gap-sm">
-        <span className="type-label">{t(`${P}.label`)}</span>
-        <span className="type-caption">
+        <span className="type-body-medium text-content-secondary">{t(`${P}.label`)}</span>
+        <span className="type-small">
           {loading ? t(`${P}.loading`) : t(`${P}.selected`, { count: selected.length })}
         </span>
       </div>
@@ -122,7 +122,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
               // that focus moves between (Escape hands it back here), and none of them showed
               // where it sat.
               className={cn(
-                'flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-prose',
+                'flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-body text-content-subtle',
                 FOCUS_RING,
               )}
             >
@@ -169,7 +169,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                       toggle(account.account_id);
                     }}
                     className={cn(
-                      'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-prose hover:bg-action-hover disabled:opacity-50',
+                      'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-body text-content-subtle hover:bg-action-hover disabled:opacity-50',
                       FOCUS_RING,
                     )}
                   >
@@ -177,7 +177,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                       <span className="truncate">{account.name}</span>
                       {/* The handle tells two "Alisa"s apart, as the accounts table does. */}
                       {account.username != null ? (
-                        <span className="truncate type-caption">@{account.username}</span>
+                        <span className="truncate type-small">@{account.username}</span>
                       ) : null}
                       {account.premium === true ? (
                         <Badge tone="info" size="xs">
@@ -186,7 +186,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                       ) : null}
                     </span>
                     {busy ? (
-                      <span className="type-caption">{busyText}</span>
+                      <span className="type-small">{busyText}</span>
                     ) : picked ? (
                       <Icon name="check" size={14} className="shrink-0" />
                     ) : null}
@@ -195,14 +195,14 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
               })}
             </div>
           </div>
-          <p className="mt-tight type-caption">{t(`${P}.premiumHint`)}</p>
+          <p className="mt-tight type-small">{t(`${P}.premiumHint`)}</p>
           {/* An extra line, not a replacement: why premium is preselected still holds
               once the pick is full. */}
           {full ? (
-            <p className="mt-tight type-caption">{t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS })}</p>
+            <p className="mt-tight type-small">{t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS })}</p>
           ) : null}
           {errored ? (
-            <p role="status" className="mt-tight type-caption text-warning-deep">
+            <p role="status" className="mt-tight type-small text-warning-deep">
               {t(`${P}.stale`)}
             </p>
           ) : null}

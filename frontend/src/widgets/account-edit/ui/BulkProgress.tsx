@@ -30,11 +30,11 @@ export function BulkProgress({
   return (
     <div className="flex flex-col gap-md">
       <div className="flex items-center justify-between gap-md">
-        <span className="type-label">
+        <span className="type-body-medium text-content-secondary">
           {t('accounts.bulk.progress', { done, total: rows.length })}
         </span>
         {failed > 0 && (
-          <span className="type-caption text-danger-deep">
+          <span className="type-small text-danger-deep">
             {t('accounts.bulk.failedCount', { n: failed })}
           </span>
         )}
@@ -56,8 +56,8 @@ export function BulkProgress({
                 <span className="size-dot rounded-full bg-line-strong" />
               )}
             </span>
-            <span className="min-w-0 flex-1 truncate type-item-title">{label(row.accountId)}</span>
-            <span className="shrink-0 truncate type-caption">
+            <span className="min-w-0 flex-1 truncate type-body-medium">{label(row.accountId)}</span>
+            <span className="shrink-0 truncate type-small">
               {row.state === 'error'
                 ? // A rejected request is the error ENVELOPE, never an Error, so an
                   // `Error` here is one the batch raised itself (an account with no

@@ -50,7 +50,7 @@ export function Odometer({ value, className }: { value: number; className?: stri
   return (
     <span
       className={cn(
-        'inline-flex h-[1.1em] overflow-hidden type-stat leading-[1.1em] tabular-nums transition-[width] duration-roll ease-out',
+        'inline-flex h-[1.1em] overflow-hidden type-h1 leading-[1.1em] tabular-nums transition-[width] duration-roll ease-out',
         className,
       )}
       style={{ width: `${digits.length}ch` }}

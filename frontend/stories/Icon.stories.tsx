@@ -52,7 +52,7 @@ export const All: Story = {
       {names.map((name) => (
         <div key={name} className="flex items-center gap-sm text-content-primary">
           <Icon name={name} size={16} />
-          <span className="type-caption">{name}</span>
+          <span className="type-small">{name}</span>
         </div>
       ))}
     </div>

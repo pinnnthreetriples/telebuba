@@ -619,55 +619,45 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Основы</div>
       <h2>Типографика</h2>
       <p class="intro">Inter для всего читаемого, JetBrains Mono для машинного: строки журнала, идентификаторы, номера. Размеры заданы в точных пикселях, потому что плотные строки стоят рядом с крупными заголовками.</p>
-      <h3>Роли</h3>
+      <h3>Стили</h3>
       <!-- ds:gen type-roles -->
-      <p class="body">Двенадцать ролей, и над <code>shared/ui</code> страница называет одну из них вместо того, чтобы заново выписывать ступень, начертание и серый. Заменяемая запись была не восемью ступенями, а девяноста шестью написаниями: 528 мест писали ступень рядом с начертанием и чернилами, и одна и та же задача выходила тремя способами сразу — подпись была <code>ink-subtle</code> 53 раза, <code>ink-muted</code> 13 и без цвета 9. Роль обязана называться одним предложением без слова «или» и быть надетой двумя компонентами в разных слоях; именно это удержало набор на двенадцати. Межстрочное в роль не входит — по той же причине, по которой его нет в ступени.</p>
+      <p class="body">Семь ролей на пять ступеней и два веса. Стиль несёт ступень (размер, интерлиньяж, трекинг), вес и краску по умолчанию; над <code>shared/ui</code> страница называет стиль вместо того, чтобы заново выписывать ступень, вес и серый. Иерархию держит размер: 400 — то, что читают, 500 — то, что называют. Другой цвет поверх стиля пишется утилитой: <code>type-small text-danger</code>.</p>
       <table class="spec">
-        <tr><td><code>type-page-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22 · 700 · content-primary · -0.02em</span></td><td><span style="font-size:22px;font-weight:700;color:var(--content-primary);letter-spacing:-0.02em">Прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу</span></td></tr>
-        <tr><td><code>type-dialog-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 700 · content-primary</span></td><td><span style="font-size:16px;font-weight:700;color:var(--content-primary)">Удалить аккаунт?</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя</span></td></tr>
-        <tr><td><code>type-dialog-body</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-muted</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-muted)">Аккаунт и его сессия будут удалены безвозвратно.</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя</span></td></tr>
-        <tr><td><code>type-card-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 600 · content-primary</span></td><td><span style="font-size:16px;font-weight:600;color:var(--content-primary)">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием</span></td></tr>
-        <tr><td><code>type-item-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 600 · content-primary</span></td><td><span style="font-size:14px;font-weight:600;color:var(--content-primary)">Основной прокси</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей</span></td></tr>
-        <tr><td><code>type-eyebrow</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 600 · content-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:600;color:var(--content-subtle);letter-spacing:0.04em;text-transform:uppercase">Сессия</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em</span></td></tr>
-        <tr><td><code>type-label</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 500 · content-secondary</span></td><td><span style="font-size:14px;font-weight:500;color:var(--content-secondary)">Часовой пояс</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя контрола, стоящего рядом: подпись поля, название настройки в строке</span></td></tr>
-        <tr><td><code>type-value</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-secondary</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-secondary)">+7 900 123-45-67</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»</span></td></tr>
-        <tr><td><code>type-prose</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-subtle</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-subtle)">Пока ничего не найдено</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога</span></td></tr>
-        <tr><td><code>type-caption</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 400 · content-subtle</span></td><td><span style="font-size:12px;font-weight:400;color:var(--content-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения</span></td></tr>
-        <tr><td><code>type-table-header</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 500 · content-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:500;color:var(--content-subtle);letter-spacing:0.04em;text-transform:uppercase"></span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"></span></td></tr>
-        <tr><td><code>type-stat</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 · 700 · content-primary</span></td><td><span style="font-size:20px;font-weight:700;color:var(--content-primary)">1 284</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Число, которое счётчик выносит на экран</span></td></tr>
+        <tr><td><code>type-h1</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">24 / 32 · 500 · content-primary</span></td><td><span style="font-size:24px;line-height:32px;letter-spacing:-0.019em;font-weight:500;color:var(--content-primary)">Прогрев аккаунтов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, который называет экран, и число счётчика</span></td></tr>
+        <tr><td><code>type-h2</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 / 28 · 500 · content-primary</span></td><td><span style="font-size:20px;line-height:28px;letter-spacing:-0.017em;font-weight:500;color:var(--content-primary)">Удалить аккаунт?</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, с которого начинается диалог</span></td></tr>
+        <tr><td><code>type-h3</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 / 24 · 500 · content-primary</span></td><td><span style="font-size:16px;line-height:24px;letter-spacing:-0.011em;font-weight:500;color:var(--content-primary)">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок блока, в котором стоит</span></td></tr>
+        <tr><td><code>type-body</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 / 20 · 400 · content-secondary</span></td><td><span style="font-size:14px;line-height:20px;letter-spacing:-0.006em;font-weight:400;color:var(--content-secondary)">Аккаунт выйдет из прогрева через пять дней.</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Текст, который читают: пояснение, значение, фраза диалога</span></td></tr>
+        <tr><td><code>type-body-medium</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 / 20 · 500 · content-primary</span></td><td><span style="font-size:14px;line-height:20px;letter-spacing:-0.006em;font-weight:500;color:var(--content-primary)">Основной прокси</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">То, что называют: элемент списка, подпись поля, кнопка</span></td></tr>
+        <tr><td><code>type-small</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 / 16 · 400 · content-subtle</span></td><td><span style="font-size:12px;line-height:16px;letter-spacing:0em;font-weight:400;color:var(--content-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкая строка: подпись, время, подсказка</span></td></tr>
+        <tr><td><code>type-small-medium</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 / 16 · 500 · content-subtle</span></td><td><span style="font-size:12px;line-height:16px;letter-spacing:0em;font-weight:500;color:var(--content-subtle)">Статус</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкое название: шапка таблицы, плашка, подпись группы</span></td></tr>
       </table>
       <!-- /ds:gen type-roles -->
       <h3>Ступени</h3>
-      <p class="body">Восемь имён, и других размеров нет: шкала Tailwind заменена целиком, поэтому <code>text-sm</code> не существует, а <code>text-[12.5px]</code> больше не написать мимо канона. Имя говорит роль, а не число — <code>body</code> носит 262 вызова, и когда роль сменит размер, менять придётся одну строку в конфиге.</p>
+      <p class="body">Пять ступеней, и других размеров нет: шкала Tailwind заменена целиком, поэтому <code>text-sm</code> не существует, а <code>text-[13px]</code> не написать мимо канона. Каждый размер — один уровень иерархии, шаг между соседями не меньше 14%. Ступень несёт размер вместе со своим интерлиньяжем (кратным 4px) и оптическим трекингом Inter: <code>text-body</code> ставит все три.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen type-scale -->
-          <tr><td><code>tiny</code> · 12</td><td>Пилюля статуса, шапка таблицы, журнал</td></tr>
-          <tr><td><code>body</code> · 14</td><td>Основной размер интерфейса</td></tr>
-          <tr><td><code>title</code> · 16</td><td>Заголовок раздела и диалога</td></tr>
-          <tr><td><code>stat</code> · 20</td><td>Счётчик-одометр</td></tr>
-          <tr><td><code>display</code> · 22</td><td>Заголовок страницы</td></tr>
-          <tr><td><code>hero</code> · 42</td><td>Единственная крупная цифра</td></tr>
+          <tr><td><code>small</code> · 12 / 16 · 0em</td><td>Подпись, плашка, шапка таблицы, журнал</td></tr>
+          <tr><td><code>body</code> · 14 / 20 · -0.006em</td><td>Весь текст интерфейса</td></tr>
+          <tr><td><code>h3</code> · 16 / 24 · -0.011em</td><td>Заголовок карточки</td></tr>
+          <tr><td><code>h2</code> · 20 / 28 · -0.017em</td><td>Заголовок диалога</td></tr>
+          <tr><td><code>h1</code> · 24 / 32 · -0.019em</td><td>Заголовок страницы и число счётчика</td></tr>
           <!-- /ds:gen type-scale -->
         </table>
       </div>
-      <p class="body">Межстрочное не привязано к размеру: <code>leading-*</code> живёт отдельно, потому что одна и та же ступень стоит и в плотной строке, и в абзаце.</p>
 
       <h3>Межстрочное</h3>
-      <p class="body">Ступеней три, и ни одна из них не для абзаца. Основное межстрочное в приложении уже действует и не написано нигде: preflight ставит <code>line-height: 1.5</code> на <code>&lt;html&gt;</code>, поля и кнопки наследуют его, а ступени размера — голые строки и своего межстрочного не несут. Абзац получает 1.5 сам. Шестнадцать мест писали <code>leading-[1.5]</code> и все шестнадцать повторяли то, что уже имели; ещё двадцать одно тратило 1.35, 1.375, 1.4, 1.45, 1.6 и 1.625 на одну работу — предложение, которое читают. Ступень для этого была бы именем без носителя, поэтому её нет: класс просто удаляют.</p>
+      <p class="body">Интерлиньяж живёт в ступени: 16, 20, 24, 28 и 32px. Отдельной шкалой осталось одно имя — для глифа, у которого строки нет. <code>leading-stack</code> и <code>leading-log</code> ушли вместе со старой шкалой: заголовок строки и журнал получают интерлиньяж своей ступени.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen leading-scale -->
-          <tr><td><code>body</code> · 1.5</td><td></td></tr>
-          <tr><td><code>none</code> · 1</td><td>Одиночный глиф: крестик в плашке, знак вопроса подсказки, крупная цифра</td></tr>
-          <tr><td><code>stack</code> · 1.25</td><td>Заголовок строки над своей же подписью — имя над телефоном, метка над пояснением</td></tr>
-          <tr><td><code>log</code> · 1.4</td><td>Моноширинный поток на тёмной поверхности: журнал и его врезка в карточке</td></tr>
+          <tr><td><code>none</code> · 1</td><td>Одиночный глиф: крестик в плашке, знак вопроса подсказки. Интерлиньяж текста живёт в ступени</td></tr>
           <!-- /ds:gen leading-scale -->
         </table>
       </div>
 
       <h3>Трекинг</h3>
-      <p class="body">Шкалы нет, и это решение, а не пропуск. Два значения, которые тратит текст, объявлены ролями, которым они нужны: <code>type-eyebrow</code> несёт 0.04em, <code>type-page-title</code> — −0.02em. Отдельная ступень <code>tracking-*</code> для любого из них была бы вторым способом сказать то же самое. Остаётся одно имя, и оно не про шрифт, а про поле.</p>
+      <p class="body">Шкалы нет, и это решение, а не пропуск. Трекинг текста — часть ступени и считается по формуле Inter Dynamic Metrics: крупное собирается (−0.019em у <code>h1</code>), мелкое остаётся свободным (0 у <code>small</code>). Отдельная ступень <code>tracking-*</code> была бы вторым способом сказать то же самое. Остаётся одно имя, и оно не про шрифт, а про поле.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen tracking-scale -->

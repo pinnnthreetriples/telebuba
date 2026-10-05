@@ -23,7 +23,7 @@ export function BulkPrivacyTab({
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-lg">
-      <div className="rounded-lg bg-info-tint px-md py-md type-prose">
+      <div className="rounded-lg bg-info-tint px-md py-md type-body text-content-subtle">
         {t('accounts.bulk.privacyHint')}
       </div>
       {PRIVACY_KEYS.map((key) => {
@@ -47,7 +47,7 @@ export function BulkPrivacyTab({
                   <Icon name="check" size={14} className="stroke-on-action" />
                 )}
               </span>
-              <span className="type-card-title">{label}</span>
+              <span className="type-h3">{label}</span>
             </button>
             <SegmentedControl
               variant="outline"
@@ -66,7 +66,7 @@ export function BulkPrivacyTab({
           </div>
         );
       })}
-      <div className="type-caption">{t('accounts.bulk.privacyNote')}</div>
+      <div className="type-small">{t('accounts.bulk.privacyNote')}</div>
     </div>
   );
 }

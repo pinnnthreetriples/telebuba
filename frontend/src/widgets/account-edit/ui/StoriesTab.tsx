@@ -31,7 +31,7 @@ export function StoriesTab({
   const [viewing, setViewing] = useState<number | null>(null);
   return (
     <div>
-      <div className="mb-md type-prose">{t('accounts.profile.storiesHint')}</div>
+      <div className="mb-md type-body text-content-subtle">{t('accounts.profile.storiesHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         {stories.map((story, index) => (
           <div key={story.story_id} className="group relative">
@@ -53,7 +53,7 @@ export function StoriesTab({
               )}
             </button>
             {(story.views != null || story.reactions != null) && (
-              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-tiny font-medium text-on-inverse">
+              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-small font-medium text-on-inverse">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -111,13 +111,13 @@ export function StoriesTab({
                 onClick={() => {
                   onPinToggle(story);
                 }}
-                className={`pointer-events-auto truncate rounded-sm px-tight py-hair text-center text-tiny font-medium disabled:opacity-50 ${
+                className={`pointer-events-auto truncate rounded-sm px-tight py-hair text-center text-small font-medium disabled:opacity-50 ${
                   story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
                 }`}
               >
                 {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
               </button>
-              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-tiny font-medium text-on-inverse">
+              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-small font-medium text-on-inverse">
                 {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
               </span>
             </div>

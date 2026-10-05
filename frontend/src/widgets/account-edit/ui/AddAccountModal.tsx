@@ -56,8 +56,8 @@ function ChoiceCard({
         {icon}
       </span>
       <span className="flex-1">
-        <span className="block type-card-title">{title}</span>
-        <span className="mt-px block type-caption">{desc}</span>
+        <span className="block type-h3">{title}</span>
+        <span className="mt-px block type-small">{desc}</span>
       </span>
       {chevron && <Icon name="chevron-right" size={16} className="stroke-line-strong" />}
     </button>
@@ -223,12 +223,12 @@ export function AddAccountModal({
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>
-            <div className="type-dialog-title">
+            <div className="type-h2">
               {twofaResult
                 ? t('accounts.addWizard.twofaResultTitle')
                 : t('accounts.addWizard.title')}
             </div>
-            <div className="mt-hair type-prose">
+            <div className="mt-hair type-body text-content-subtle">
               {step === 1
                 ? t('accounts.addWizard.step1Label')
                 : step === 2
@@ -253,7 +253,7 @@ export function AddAccountModal({
                 />
               )}
               <span
-                className={`flex size-icon items-center justify-center rounded-full text-body font-semibold ${step >= n ? 'bg-action-primary text-on-action' : 'border border-line bg-surface-card text-content-muted'}`}
+                className={`flex size-icon items-center justify-center rounded-full text-body font-medium ${step >= n ? 'bg-action-primary text-on-action' : 'border border-line bg-surface-card text-content-muted'}`}
               >
                 {n}
               </span>
@@ -316,7 +316,7 @@ export function AddAccountModal({
 
               {method === 'phone' && (
                 <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-surface-card px-md py-lg">
-                  <label className="block type-caption font-medium">
+                  <label className="block type-small-medium">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
                   <input
@@ -344,7 +344,7 @@ export function AddAccountModal({
                         : t('accounts.addWizard.phoneContinue')}
                   </Button>
                   {startLogin.isError && (
-                    <div className="type-caption text-danger-deep">
+                    <div className="type-small text-danger-deep">
                       {t('accounts.addWizard.phoneError')}
                     </div>
                   )}
@@ -370,10 +370,8 @@ export function AddAccountModal({
                       <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block type-card-title">
-                        {t('accounts.addWizard.dropTitle')}
-                      </span>
-                      <span className="mt-px block type-caption">
+                      <span className="block type-h3">{t('accounts.addWizard.dropTitle')}</span>
+                      <span className="mt-px block type-small">
                         {method === 'tdata'
                           ? t('accounts.addWizard.dropDescTdata')
                           : t('accounts.addWizard.dropDescSession')}
@@ -425,7 +423,7 @@ export function AddAccountModal({
           <>
             <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
               <Icon name="check" size={16} className="stroke-success-deep" />
-              <span className="type-label text-success-deep">
+              <span className="type-body-medium text-success-deep">
                 {accountIds.length > 1
                   ? t('accounts.addWizard.addedMany', { count: accountIds.length })
                   : t('accounts.addWizard.added')}

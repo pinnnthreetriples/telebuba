@@ -8,7 +8,7 @@ import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@
 
 import { ApiKeyField } from './ApiKeyField';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = 'mb-tight block type-body-medium text-content-secondary';
 
 // The page is only what no other screen owns: the LLM keys, their pacing and the two
 // provider choices. The warming toggles live on the warming board's action-tuning card
@@ -341,7 +341,7 @@ export function SettingsPage() {
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
     <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-xl type-page-title">{t('settings.title')}</h1>
+      <h1 className="m-0 mb-xl type-h1">{t('settings.title')}</h1>
       {warming.isPending ? (
         <p className="text-content-muted">{t('settings.loading')}</p>
       ) : warming.isError || !warming.data ? (

@@ -579,7 +579,7 @@ export function NeuroshillingPage() {
     // страницы (1000px) сайдбар в 328px оставил бы главной колонке меньше, чем ей нужно
     // под шесть узлов конвейера и таблицу.
     <div className="tb-fadeup mx-auto max-w-shell">
-      <h1 className="m-0 mb-xl type-page-title">{t('neuroshilling.title')}</h1>
+      <h1 className="m-0 mb-xl type-h1">{t('neuroshilling.title')}</h1>
 
       {/* Колонки разъезжаются на `lg`, а ниже складываются в стопку. Порядок в стопке —
           порядок в разметке: сводка замечаний и выбор кампании стоят ВЫШЕ конвейера,

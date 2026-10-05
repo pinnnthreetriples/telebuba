@@ -27,8 +27,8 @@ export function MediaModal({
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.scenario.media.toggle')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="type-dialog-title">{t('neuroshilling.scenario.media.toggle')}</div>
-        <div className="mt-hair type-caption">{t('neuroshilling.scenario.media.hint')}</div>
+        <div className="type-h2">{t('neuroshilling.scenario.media.toggle')}</div>
+        <div className="mt-hair type-small">{t('neuroshilling.scenario.media.hint')}</div>
       </div>
 
       <div className="flex flex-col gap-md px-2xl py-lg">

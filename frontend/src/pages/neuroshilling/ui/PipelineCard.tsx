@@ -49,8 +49,8 @@ function Node({
         <span className={`h-rail hidden flex-1 bg-line sm:block ${last ? 'invisible' : ''}`} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
-        <span className={done ? 'type-item-title' : 'type-caption'}>{label}</span>
-        <span className="-mt-xs type-caption">{sub}</span>
+        <span className={done ? 'type-body-medium' : 'type-small'}>{label}</span>
+        <span className="-mt-xs type-small">{sub}</span>
       </div>
     </div>
   );
@@ -59,8 +59,8 @@ function Node({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-md py-md">
-      <div className="type-stat tabular-nums">{value}</div>
-      <div className="mt-xs type-caption">{label}</div>
+      <div className="type-h1 tabular-nums">{value}</div>
+      <div className="mt-xs type-small">{label}</div>
     </div>
   );
 }
@@ -123,7 +123,7 @@ export function PipelineCard({
         {/* Статус — ПОСЛЕ имени, а не перед заголовком: первым в карточке читают, о чём
             она, а плашка перед «Конвейер» отодвигала заголовок от края и отвечала на
             вопрос, который ещё не задан. */}
-        <div className="min-w-0 type-card-title">
+        <div className="min-w-0 type-h3">
           {t('neuroshilling.pipeline.title')}
           <span className="text-action-primary"> — {campaign.name}</span>
         </div>
@@ -215,7 +215,7 @@ export function PipelineCard({
         <Badge className="tabular-nums">
           {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
         </Badge>
-        <span className="ml-auto type-caption tabular-nums">
+        <span className="ml-auto type-small tabular-nums">
           {t(looping ? 'neuroshilling.launch.sentTotal' : 'neuroshilling.launch.progress', {
             sent,
             total,
@@ -241,7 +241,7 @@ export function PipelineCard({
       {/* Показывается только пока прогон действительно читает: три переключателя и так
           лежат в строке кампании, а чего по ним не видно — работает ли сейчас хоть один. */}
       {run.listening === true ? (
-        <div className="mt-md flex flex-wrap items-center gap-sm rounded-lg bg-canvas px-md py-sm type-caption tabular-nums">
+        <div className="mt-md flex flex-wrap items-center gap-sm rounded-lg bg-canvas px-md py-sm type-small tabular-nums">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>

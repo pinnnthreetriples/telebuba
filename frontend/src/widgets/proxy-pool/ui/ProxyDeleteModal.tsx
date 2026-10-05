@@ -23,10 +23,8 @@ export function ProxyDeleteModal({
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
       <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">
-          {t('accounts.proxyDeleteModal.title', { endpoint })}
-        </div>
-        <div className="mb-2xl type-dialog-body">
+        <div className="mb-sm type-h2">{t('accounts.proxyDeleteModal.title', { endpoint })}</div>
+        <div className="mb-2xl type-body text-content-muted">
           {used > 0
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}

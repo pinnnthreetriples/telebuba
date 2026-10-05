@@ -55,7 +55,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
     <AccountAvatar
       account={account}
       className="size-tile shrink-0 rounded-full"
-      fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
+      fallbackClassName={`text-body font-medium ${AVATAR_CLASS[ds]}`}
     />
   );
 }
@@ -125,8 +125,8 @@ export function AccountsTable({
           <div className="flex items-center gap-md">
             <RowAvatar account={account} />
             <div>
-              <div className="type-card-title">{accountDisplayName(account)}</div>
-              <div className="type-caption">{account.username ? `@${account.username}` : '—'}</div>
+              <div className="type-h3">{accountDisplayName(account)}</div>
+              <div className="type-small">{account.username ? `@${account.username}` : '—'}</div>
             </div>
           </div>
         );
@@ -154,10 +154,10 @@ export function AccountsTable({
                 className={`fi fi-${account.proxy_country_code.toLowerCase()} h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
-            <span className="type-value">{proxyMeta(account)}</span>
+            <span className="type-body">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         );
       },
     },
@@ -165,7 +165,9 @@ export function AccountsTable({
       id: 'device',
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
-      cell: ({ row }) => <span className="type-prose">{deviceLabel(row.original)}</span>,
+      cell: ({ row }) => (
+        <span className="type-body text-content-subtle">{deviceLabel(row.original)}</span>
+      ),
     },
     {
       id: 'trust',
@@ -174,7 +176,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         ) : (
           <div className="flex items-center gap-sm">
             <div
@@ -186,9 +188,7 @@ export function AccountsTable({
                 style={{ width: `${String(trust)}%` }}
               />
             </div>
-            <span className={`min-w-badge text-body font-semibold ${trustTone(trust)}`}>
-              {trust}
-            </span>
+            <span className={`min-w-badge text-body font-medium ${trustTone(trust)}`}>{trust}</span>
           </div>
         );
       },

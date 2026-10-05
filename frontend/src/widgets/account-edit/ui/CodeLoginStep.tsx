@@ -41,7 +41,7 @@ export function CodeLoginStep({
     <>
       {!requestCode.isSuccess ? (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg type-prose">
+          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg type-body text-content-subtle">
             {phone}
           </div>
           <Button
@@ -59,7 +59,7 @@ export function CodeLoginStep({
               : t('accounts.addWizard.sendCode')}
           </Button>
           {requestCode.isError && (
-            <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="type-body text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       ) : (
@@ -67,7 +67,7 @@ export function CodeLoginStep({
           <div className="rounded-lg bg-success-tint px-md py-md text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
-          <label className="block type-caption font-medium">
+          <label className="block type-small-medium">
             {t('accounts.addWizard.smsCode')}
             <input
               type="text"
@@ -80,7 +80,7 @@ export function CodeLoginStep({
               className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
             />
           </label>
-          <label className="block type-caption font-medium">
+          <label className="block type-small-medium">
             {t('accounts.addWizard.twoFA')}
             <input
               type="password"
@@ -96,7 +96,7 @@ export function CodeLoginStep({
             />
           </label>
           {submitCode.isError && (
-            <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="type-body text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       )}

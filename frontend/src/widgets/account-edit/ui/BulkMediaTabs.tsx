@@ -125,7 +125,7 @@ export function BulkPhotoTab({
   const urls = usePreviews(files);
   return (
     <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.photoHint')}</div>
+      <div className="type-body text-content-subtle">{t('accounts.bulk.photoHint')}</div>
       <SegmentedControl
         variant="outline"
         value={spread ? 'each' : 'one'}
@@ -166,7 +166,7 @@ export function BulkPhotoTab({
           {(open) => <DashedAdd ratio="1" label={t('accounts.profile.upload')} onClick={open} />}
         </FilePicker>
       </div>
-      <div className="type-caption">
+      <div className="type-small">
         {spread ? t('accounts.bulk.photoEachNote') : t('accounts.bulk.photoOneNote')}
       </div>
     </div>
@@ -193,7 +193,7 @@ export function BulkStoriesTab({
   const urls = usePreviews(files);
   return (
     <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.storyHint')}</div>
+      <div className="type-body text-content-subtle">{t('accounts.bulk.storyHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         <Picked
           files={files}
@@ -228,7 +228,9 @@ export function BulkStoriesTab({
         )}
       </div>
       <label className="flex flex-col gap-tight">
-        <span className="type-label">{t('accounts.addStory.caption')}</span>
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.addStory.caption')}
+        </span>
         <Input
           value={caption}
           placeholder={t('accounts.addStory.captionPlaceholder')}
@@ -238,7 +240,9 @@ export function BulkStoriesTab({
         />
       </label>
       <div className="flex flex-col gap-tight">
-        <span className="type-label">{t('accounts.addStory.audience')}</span>
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.addStory.audience')}
+        </span>
         <SegmentedControl
           variant="outline"
           value={audience}
@@ -253,7 +257,7 @@ export function BulkStoriesTab({
           }}
         />
       </div>
-      <div className="type-caption">{t('accounts.bulk.storyNote')}</div>
+      <div className="type-small">{t('accounts.bulk.storyNote')}</div>
     </div>
   );
 }
@@ -269,7 +273,7 @@ export function BulkMusicTab({
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.musicHint')}</div>
+      <div className="type-body text-content-subtle">{t('accounts.bulk.musicHint')}</div>
       {file ? (
         <div className="flex items-center gap-lg rounded-lg border border-line px-lg py-md">
           <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action">
@@ -277,7 +281,7 @@ export function BulkMusicTab({
               <path d="M8 5v14l11-7z" />
             </svg>
           </span>
-          <div className="min-w-0 flex-1 truncate type-card-title">{file.name}</div>
+          <div className="min-w-0 flex-1 truncate type-h3">{file.name}</div>
           <IconButton
             size="sm"
             shape="circle"
@@ -310,7 +314,7 @@ export function BulkMusicTab({
           )}
         </FilePicker>
       )}
-      <div className="type-caption">{t('accounts.bulk.musicNote')}</div>
+      <div className="type-small">{t('accounts.bulk.musicNote')}</div>
     </div>
   );
 }
@@ -354,7 +358,9 @@ export function BulkSchedulePanel({
               label={t('accounts.schedule.bulkBase')}
             />
             <label className="flex flex-col gap-tight">
-              <span className="type-label">{t('accounts.schedule.bulkSpread')}</span>
+              <span className="type-body-medium text-content-secondary">
+                {t('accounts.schedule.bulkSpread')}
+              </span>
               <Input
                 type="number"
                 size="xs"
@@ -370,9 +376,9 @@ export function BulkSchedulePanel({
               />
             </label>
           </div>
-          <div className="type-caption">{t('accounts.schedule.bulkNote', { n: spread })}</div>
+          <div className="type-small">{t('accounts.schedule.bulkNote', { n: spread })}</div>
           {tailTooFar && (
-            <div role="alert" className="type-caption text-danger-deep">
+            <div role="alert" className="type-small text-danger-deep">
               {t('accounts.schedule.bulkTooFar')}
             </div>
           )}

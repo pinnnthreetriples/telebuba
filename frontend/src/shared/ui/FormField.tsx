@@ -41,7 +41,7 @@ export function FieldError({ field, id }: { field: FormFieldApi; id?: string }) 
   const error = fieldError(field);
   if (!error) return null;
   return (
-    <span id={id} className="mt-tight block text-tiny font-medium text-danger-deep">
+    <span id={id} className="mt-tight block text-small font-medium text-danger-deep">
       {t(error)}
     </span>
   );

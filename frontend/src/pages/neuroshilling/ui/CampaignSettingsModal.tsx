@@ -43,12 +43,12 @@ export function CampaignSettingsModal({
     >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="min-w-0">
-          <div className="truncate type-dialog-title">{name}</div>
-          <div className="mt-hair type-caption">{t('neuroshilling.settings.subtitle')}</div>
+          <div className="truncate type-h2">{name}</div>
+          <div className="mt-hair type-small">{t('neuroshilling.settings.subtitle')}</div>
         </div>
         <div className="flex-1" />
         {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-tiny font-semibold text-warning-deep">
+          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-small font-medium text-warning-deep">
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null}
@@ -58,7 +58,7 @@ export function CampaignSettingsModal({
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
           дал бы вложенную цепочку прокрутки — ровно то, от чего оверлей и уводит. */}
       {conflict ? (
-        <p role="alert" className="mx-2xl mt-lg type-prose text-danger">
+        <p role="alert" className="mx-2xl mt-lg type-body text-danger">
           {t('neuroshilling.settings.conflict')}
         </p>
       ) : null}

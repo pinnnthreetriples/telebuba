@@ -40,7 +40,7 @@ function Row({
     >
       <div className="min-w-0 flex-1">
         <div className="text-body">{label}</div>
-        {hint === undefined ? null : <div className="mt-hair type-caption">{hint}</div>}
+        {hint === undefined ? null : <div className="mt-hair type-small">{hint}</div>}
       </div>
       {children}
     </div>
@@ -85,8 +85,8 @@ function NumberInput({
 function Eyebrow({ title, caption }: { title: string; caption: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-sm pb-sm">
-      <span className="type-eyebrow">{title}</span>
-      <span className="type-caption">{caption}</span>
+      <span className="type-small-medium">{title}</span>
+      <span className="type-small">{caption}</span>
     </div>
   );
 }
@@ -213,10 +213,10 @@ export function CampaignSetupSection({
               value: mode,
               label: (
                 <span className="block text-left">
-                  <span className="block type-item-title">
+                  <span className="block type-body-medium">
                     {t(`neuroshilling.scenario.mode.${mode}`)}
                   </span>
-                  <span className="mt-xs block type-caption">
+                  <span className="mt-xs block type-small">
                     {t(`neuroshilling.setup.mode.${mode}.body`)}
                   </span>
                 </span>
@@ -285,7 +285,7 @@ export function CampaignSetupSection({
                   }}
                 />
               ))}
-              <span className="type-caption">{t('neuroshilling.setup.pause.unit')}</span>
+              <span className="type-small">{t('neuroshilling.setup.pause.unit')}</span>
             </div>
           </Row>
 
@@ -346,11 +346,11 @@ export function CampaignSetupSection({
               {/* Показывается ровно на одном сочетании — том единственном, где
                   опубликованное спровоцировал посторонний человек. */}
               {draft.replyToHumans ? (
-                <div className="rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
+                <div className="rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
                   {t('neuroshilling.setup.replyToHumans.warning')}
                 </div>
               ) : (
-                <div className="rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
+                <div className="rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
                   {t('neuroshilling.setup.replyToHumans.idle')}
                 </div>
               )}
@@ -397,12 +397,12 @@ export function CampaignSetupSection({
                       onDraft({ ...draft, listenMinutes: clampInt(next, 1, MAX_LISTEN_MINUTES) });
                     }}
                   />
-                  <span className="type-caption">{t('neuroshilling.setup.listen.unit')}</span>
+                  <span className="type-small">{t('neuroshilling.setup.listen.unit')}</span>
                 </div>
               </Row>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-line-strong px-md py-md type-caption">
+            <div className="rounded-lg border border-dashed border-line-strong px-md py-md type-small">
               {t('neuroshilling.setup.autoresponder.hintOff')}
             </div>
           )}
@@ -413,7 +413,7 @@ export function CampaignSetupSection({
         label={t('neuroshilling.setup.limits.label')}
         hint={t('neuroshilling.setup.limits.caption')}
       >
-        <span className="type-caption tabular-nums">
+        <span className="type-small tabular-nums">
           {t('neuroshilling.setup.limits.summary', {
             hour: draft.messagesPerHour,
             chat: draft.messagesPerChatPerDay,

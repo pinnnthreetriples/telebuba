@@ -43,6 +43,7 @@ const PREFIXES = {
   minHeight: 'min-h',
   maxHeight: 'max-h',
   fontSize: 'text',
+  fontWeight: 'font',
   typeRole: 'type',
   lineHeight: 'leading',
   letterSpacing: 'tracking',

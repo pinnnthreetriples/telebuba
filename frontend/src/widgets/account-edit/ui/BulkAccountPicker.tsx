@@ -71,8 +71,8 @@ export function BulkAccountPicker({
       <div className="flex max-h-dialog flex-col overflow-hidden">
         <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate type-dialog-title">{t('accounts.bulk.pickTitle')}</h2>
-            <div className="truncate type-prose">
+            <h2 className="truncate type-h2">{t('accounts.bulk.pickTitle')}</h2>
+            <div className="truncate type-body text-content-subtle">
               {t('accounts.bulk.pickCount', { done: draft.length, total: candidates.length })}
             </div>
           </div>
@@ -119,7 +119,7 @@ export function BulkAccountPicker({
                   </svg>
                 ) : null}
               </span>
-              <span className="type-label">
+              <span className="type-body-medium text-content-secondary">
                 {t('accounts.bulk.pickAll', { n: shownIds.length })}
               </span>
             </button>
@@ -144,7 +144,7 @@ export function BulkAccountPicker({
             </div>
           ) : fleet.isError ? (
             <div className="flex flex-col items-center gap-md px-xl py-empty text-center">
-              <p role="alert" className="type-prose text-danger">
+              <p role="alert" className="type-body text-danger">
                 {t('accounts.error')}
               </p>
               <Button
@@ -156,7 +156,7 @@ export function BulkAccountPicker({
               </Button>
             </div>
           ) : shown.length === 0 ? (
-            <div className="px-xl py-empty text-center type-prose">
+            <div className="px-xl py-empty text-center type-body text-content-subtle">
               {t('accounts.bulk.pickEmpty')}
             </div>
           ) : (
@@ -181,16 +181,16 @@ export function BulkAccountPicker({
                   <AccountAvatar
                     account={account}
                     className="size-tile shrink-0 rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-label"
+                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate type-item-title">{label}</span>
-                    <span className="block truncate type-caption">
+                    <span className="block truncate type-body-medium">{label}</span>
+                    <span className="block truncate type-small">
                       {account.phone ?? account.account_id}
                     </span>
                   </span>
                   {account.username != null && account.username !== '' && (
-                    <span className="shrink-0 type-caption">@{account.username}</span>
+                    <span className="shrink-0 type-small">@{account.username}</span>
                   )}
                 </button>
               );

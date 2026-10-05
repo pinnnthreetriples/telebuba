@@ -3,6 +3,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 
 import {
   FONT_SIZE_NAMES,
+  FONT_WEIGHT_NAMES,
   LINE_HEIGHT_NAMES,
   RADIUS_NAMES,
   RHYTHM_NAMES,
@@ -29,8 +30,8 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // `leading` and `tracking` are a third case, and the reason they are listed is the
 // opposite of the `text-*` one: tailwind-merge DOES know both prefixes, but it matches
 // them against Tailwind's own names plus a length or an arbitrary value, and
-// `leading-stack`, `leading-log` and `tracking-code` are none of those. An unrecognised
-// class joins no group, so it conflicts with nothing and `cn('leading-log',
+// ``, `` and `tracking-code` are none of those. An unrecognised
+// class joins no group, so it conflicts with nothing and `cn('',
 // 'leading-none')` keeps BOTH — the winner then decided by the order the two rules
 // happen to sit in the stylesheet rather than by the caller's last word. That is the
 // same shape as the bug that switched off every filled Button's font size, one axis
@@ -40,7 +41,7 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // `text-body` delete all three and leave the text unweighted and unpainted — the same
 // shape of bug as the one above, one layer up. It gets its own group instead, declared
 // to beat the three groups it subsumes when it comes last, and NOT declared as
-// something they beat: `cn('type-caption', 'text-danger')` has to keep both, because
+// something they beat: `cn('type-small', 'text-danger')` has to keep both, because
 // naming the role and then recolouring it is the intended way to write an error line.
 //
 // The `override` below is the other half of that, and it is a conflict tailwind-merge
@@ -50,7 +51,7 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // strings for exactly the opposite reason — the note above `fontSize` says pairing a
 // line-height into them would silently re-space 694 sites — so `text-*` here sets a
 // size and nothing else, and letting it clear a line-height drops a class the caller
-// asked for: `cn('leading-log', 'text-tiny')` returned `text-tiny` alone. That is
+// asked for: `cn('', 'text-small')` returned `text-small` alone. That is
 // the same silent-drop shape as the Button bug, arriving from the other direction, and
 // it was reachable before this axis had names at all, because an arbitrary
 // `leading-[1.5]` lands in the same group a named rung does.
@@ -91,6 +92,7 @@ const merge = extendTailwindMerge<'type-role'>({
   extend: {
     classGroups: {
       'font-size': [{ text: FONT_SIZE_NAMES }],
+      'font-weight': [{ font: FONT_WEIGHT_NAMES }],
       // Шкала целиком, а не только незнакомые tailwind-merge имена. Отбирать
       // незнакомые пришлось бы по СТОКОВОМУ словарю (`sm`, `md`, `lg`, `full` он знает,
       // `card` — нет), то есть завести здесь литеральный список чужих имён — ровно та

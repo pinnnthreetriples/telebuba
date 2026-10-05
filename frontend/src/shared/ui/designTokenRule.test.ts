@@ -57,15 +57,15 @@ if (rule) {
       // The type roles, and the four things the role pattern deliberately cannot reach.
       // RuleTester reports no filename, so these run as if they were above `shared/ui`.
       {
-        code: 'const t1 = "mt-px type-caption"; const t2 = "type-caption text-danger";',
+        code: 'const t1 = "mt-px type-small"; const t2 = "type-small text-danger";',
         name: 'a role, and a role recoloured',
       },
       {
-        code: 'const t3 = "rounded-full border border-line bg-surface-card px-md py-xs text-tiny text-content-muted";',
+        code: 'const t3 = "rounded-full border border-line bg-surface-card px-md py-xs text-small text-content-muted";',
         name: 'a class list that paints a box is drawing a control',
       },
       {
-        code: 'const t3b = "px-lg py-empty text-center type-prose"; const t3c = "p-page type-prose text-content-primary";',
+        code: 'const t3b = "px-lg py-empty text-center type-body"; const t3c = "p-page type-body text-content-primary";',
         name: 'a padded gap holding a role, with and without a colour override',
       },
       {
@@ -77,13 +77,13 @@ if (rule) {
         name: 'at `lead` the scale doubles as a glyph size',
       },
       {
-        code: 'const t7 = "min-w-badge text-body font-semibold";',
+        code: 'const t7 = "min-w-badge text-body font-medium";',
         name: "a weight with no grey is a number's emphasis, which no role can absorb",
       },
       // The two line-heights and the one letter-spacing that are left, and the two
       // things the line-height pattern deliberately cannot reach.
       {
-        code: 'const u1 = "leading-stack leading-log tracking-code";',
+        code: 'const u1 = "tracking-code";',
         name: 'the named rungs, which is the whole point',
       },
       {
@@ -91,11 +91,11 @@ if (rule) {
         name: 'a single glyph has no line-height, and `none` is the rung that says so',
       },
       {
-        code: 'const u3 = "h-[1.1em] type-stat leading-[1.1em] tabular-nums";',
+        code: 'const u3 = "h-[1.1em] type-h1 leading-[1.1em] tabular-nums";',
         name: "the odometer's line-height is measured against the text, like the box beside it",
       },
       {
-        code: 'const u4 = "text-tiny font-medium uppercase tracking-[0.04em] text-content-subtle";',
+        code: 'const u4 = "text-small font-medium uppercase tracking-[0.04em] text-content-subtle";',
         filename: 'src/shared/ui/DataTable.tsx',
         name: '`shared/ui` composes a column label by hand, letter-spacing included',
       },
@@ -103,12 +103,30 @@ if (rule) {
         code: 'const sp2 = "inline-flex tb-spin";',
         name: '`tb-spin` alone is the refresh icon turning, which is not a ring',
       },
-      {
-        code: 'const w = "text-title font-bold tracking-[-0.01em]";',
-        name: "the wordmark keeps the design source's own spacing",
-      },
     ],
     invalid: [
+      // Старая типографика: имя не выпускает правила, и текст молча падает на то, что
+      // унаследовал.
+      {
+        code: 'const ot1 = "type-caption"; ',
+        errors: [{ message: /rebuilt into five steps/ }],
+      },
+      {
+        code: 'const ot2 = "md:text-tiny";',
+        errors: [{ message: /rebuilt into five steps/ }],
+      },
+      {
+        code: 'const ot3 = "truncate leading-stack";',
+        errors: [{ message: /rebuilt into five steps/ }],
+      },
+      {
+        code: 'const ow = "hover:font-semibold"; const ow2 = "font-bold";',
+        errors: [{ message: /Two weights/ }, { message: /Two weights/ }],
+      },
+      {
+        code: 'const wm = "text-h3 font-medium tracking-[-0.01em]";',
+        errors: [{ message: /optical tracking of each type step/ }],
+      },
       // The quiet one: `border-line-input` still renders a border, in preflight's own
       // grey, so nothing on screen says the token is gone.
       {
@@ -225,16 +243,16 @@ if (rule) {
       // The role pattern: a rung and a grey in one class list, in either order, is the
       // spelling the twelve roles replaced.
       {
-        code: 'const k = "mt-px text-tiny text-content-subtle";',
-        errors: [{ message: /A rung plus a grey/ }],
+        code: 'const k = "mt-px text-small text-content-subtle";',
+        errors: [{ message: /A step plus a grey/ }],
       },
       {
         code: 'const l = "text-content-muted mb-md text-body";',
-        errors: [{ message: /A rung plus a grey/ }],
+        errors: [{ message: /A step plus a grey/ }],
       },
       {
-        code: 'const m = "truncate text-body font-semibold text-content-primary";',
-        errors: [{ message: /A rung plus a grey/ }],
+        code: 'const m = "truncate text-body font-medium text-content-primary";',
+        errors: [{ message: /A step plus a grey/ }],
       },
       // Padding used to buy the same exemption a fill does, on the grounds that a control
       // pads its own label. It bought it for 18 class lists that draw no box at all —
@@ -242,32 +260,32 @@ if (rule) {
       // three greys. A gap with a sentence in it is not a control.
       {
         code: 'const n = "px-lg py-empty text-center text-body text-content-subtle";',
-        errors: [{ message: /A rung plus a grey/ }],
+        errors: [{ message: /A step plus a grey/ }],
       },
       {
         code: 'const o = "py-[40px] text-center text-body text-content-muted";',
-        errors: [{ message: /A rung plus a grey/ }],
+        errors: [{ message: /A step plus a grey/ }],
       },
       {
         code: 'const p = "p-page text-body text-content-primary";',
-        errors: [{ message: /A rung plus a grey/ }],
+        errors: [{ message: /A step plus a grey/ }],
       },
       // The line-height axis. `[1.5]` is the interesting one: it was the single most
       // written value in the tree and every one of its sixteen sites was restating the
       // line-height the element already inherited from preflight.
       {
-        code: 'const q = "type-dialog-body leading-[1.5]";',
-        errors: [{ message: /already has a body line-height/ }],
+        code: 'const q = "type-body text-content-muted leading-[1.5]";',
+        errors: [{ message: /Line-height belongs to the type step/ }],
       },
       {
         code: 'const r = "text-body leading-[1.45] md:leading-[1.7]";',
-        errors: [{ message: /already has a body line-height/ }],
+        errors: [{ message: /Line-height belongs to the type step/ }],
       },
       // The quiet half, and the reason the retired names are listed rather than left to
       // fail on their own: the scale is replaced, so these emit no rule at all and the
       // element keeps whatever it inherited. Nothing on screen says the name is gone.
       {
-        code: 'const s = "text-tiny leading-snug";',
+        code: 'const s = "text-small leading-snug";',
         errors: [{ message: /line-height scale is replaced/ }],
       },
       {
@@ -277,11 +295,11 @@ if (rule) {
       // The letter-spacing axis. Above `shared/ui` there is one name and it is not a
       // typographic rung; type's own spacing belongs to the roles that declare it.
       {
-        code: 'const v = "type-item-title tracking-[.04em]";',
+        code: 'const v = "type-body-medium tracking-[.04em]";',
         errors: [{ message: /Letter-spacing is not a scale/ }],
       },
       {
-        code: 'const x = "text-tiny uppercase tracking-wide";',
+        code: 'const x = "text-small uppercase tracking-wide";',
         errors: [{ message: /letter-spacing scale is replaced/ }],
       },
     ],

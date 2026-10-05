@@ -113,7 +113,7 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
   if (!updatedAt) return null;
   const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
-    <span className="type-caption">
+    <span className="type-small">
       {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
@@ -649,7 +649,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           {/* header */}
           <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
             <div
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-stat font-semibold text-content-primary"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-h1 font-medium text-content-primary"
               style={
                 avatarUri
                   ? {
@@ -666,8 +666,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate type-dialog-title">{fullName}</h2>
-              <div className="truncate type-prose">
+              <h2 className="truncate type-h2">{fullName}</h2>
+              <div className="truncate type-body text-content-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
@@ -753,7 +753,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
                 <Spinner size="lg" />
-                <span className="type-label">
+                <span className="type-body-medium text-content-secondary">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
                     : t('accounts.profile.syncing')}
@@ -797,7 +797,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
+                          className="mt-tight block type-small-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>
@@ -827,7 +827,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
+                          className="mt-tight block type-small-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>
@@ -836,7 +836,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-tight block type-caption font-medium text-warning-deep"
+                          className="mt-tight block type-small-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -976,7 +976,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               <div
                 role="alert"
                 title={saveErrorText}
-                className="mr-auto min-w-0 truncate type-label text-danger"
+                className="mr-auto min-w-0 truncate type-body-medium text-danger"
               >
                 {saveErrorText}
               </div>

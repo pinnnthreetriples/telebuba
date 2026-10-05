@@ -69,20 +69,20 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       </button>
 
       <Card className="flex flex-wrap items-center gap-lg px-xl py-xl">
-        <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-title font-semibold text-info-strong">
+        <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-h3 font-medium text-info-strong">
           {mono(account)}
         </div>
         <div className="min-w-col flex-1">
-          <div className="type-dialog-title">{account.phone ?? account.account_id}</div>
-          <div className="type-prose">
+          <div className="type-h2">{account.phone ?? account.account_id}</div>
+          <div className="type-body text-content-subtle">
             {account.username ? `@${account.username}` : (account.label ?? '—')}
           </div>
         </div>
         <StatusBadge status={account.status} />
         <div className="min-w-col">
           <div className="flex items-center justify-end gap-sm">
-            <span className="type-prose">{t('accounts.edit.trust')}</span>
-            <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
+            <span className="type-body text-content-subtle">{t('accounts.edit.trust')}</span>
+            <span className={`text-h3 font-medium ${tTone}`}>{trust}/100</span>
           </div>
           <div className={`mt-tight ${BAR_TRACK}`}>
             <div

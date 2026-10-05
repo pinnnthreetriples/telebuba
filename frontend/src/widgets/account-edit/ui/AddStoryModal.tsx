@@ -341,7 +341,7 @@ export function AddStoryModal({
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.addStory.title')}</span>
+          <span className="type-h2">{t('accounts.addStory.title')}</span>
           <CloseButton
             onClick={onClose}
             // Closing mid-publish unmounts the mutation observer, and RQ v5
@@ -373,7 +373,9 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>
+        <div className="mb-tight type-body-medium text-content-secondary">
+          {t('accounts.addStory.audience')}
+        </div>
         <SegmentedControl
           className="mb-lg"
           value={audience}
@@ -389,7 +391,9 @@ export function AddStoryModal({
         />
 
         <label className="mb-lg block">
-          <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>
+          <span className="mb-tight block type-body-medium text-content-secondary">
+            {t('accounts.addStory.caption')}
+          </span>
           <Input
             value={caption}
             // Read once at the click: an edit during the publish would be ignored.
@@ -418,15 +422,17 @@ export function AddStoryModal({
           >
             {noForward && <Icon name="check" size={14} className="stroke-on-action" />}
           </span>
-          <span className="type-dialog-body text-content-secondary">
+          <span className="type-body text-content-secondary">
             {t('accounts.addStory.noForward')}
           </span>
         </button>
 
         <div className="mb-tight flex items-center justify-between">
-          <span className="type-label">{t('accounts.addStory.media')}</span>
+          <span className="type-body-medium text-content-secondary">
+            {t('accounts.addStory.media')}
+          </span>
           {video === null && count > 0 && (
-            <span className="type-caption">
+            <span className="type-small">
               {t('accounts.addStory.photoCount', { n: count, max: MAX_COLLAGE_IMAGES })}
             </span>
           )}
@@ -461,17 +467,17 @@ export function AddStoryModal({
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate type-item-title">
+              <div className="truncate type-body-medium">
                 {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
               </div>
-              <div className="mt-px type-caption">
+              <div className="mt-px type-small">
                 {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
               </div>
             </div>
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-lg py-md type-caption">
+          <div className="rounded-lg border border-line bg-surface px-lg py-md type-small">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -502,7 +508,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-tiny font-semibold text-on-inverse">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-small font-medium text-on-inverse">
                     {index + 1}
                   </span>
                   <button
@@ -572,7 +578,9 @@ export function AddStoryModal({
         {/* Layout picker — only for a 2..6 photo collage. */}
         {isCollage && (
           <div className="mt-lg">
-            <div className="mb-sm type-label">{t('accounts.addStory.layout')}</div>
+            <div className="mb-sm type-body-medium text-content-secondary">
+              {t('accounts.addStory.layout')}
+            </div>
             <div className="flex flex-wrap gap-sm">
               {layoutsForCount(count).map((layout) => {
                 const selected = collageLayout === layout.id;
@@ -604,8 +612,8 @@ export function AddStoryModal({
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate type-item-title">{video.name}</div>
-                <div className={`mt-px text-tiny ${metaTone}`}>{metaText}</div>
+                <div className="truncate type-body-medium">{video.name}</div>
+                <div className={`mt-px text-small ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
                 <button
@@ -629,7 +637,7 @@ export function AddStoryModal({
         {hasMedia && (busy || done || failed) && (
           <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-surface-card px-md py-md">
             <div className="min-w-0 flex-1">
-              <div className={`type-caption font-medium ${metaTone}`}>{metaText}</div>
+              <div className={`type-small-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
                 <div className={`mt-sm ${BAR_TRACK}`}>
                   <div
@@ -661,7 +669,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal text-on-inverse shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-small font-normal text-on-inverse shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>

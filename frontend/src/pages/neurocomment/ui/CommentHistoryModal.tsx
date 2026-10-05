@@ -47,7 +47,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-stamp',
-          cellClassName: 'font-mono type-prose',
+          cellClassName: 'font-mono type-body text-content-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -57,7 +57,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => labelOf.get(row.original.account_id) ?? row.original.account_id,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-label text-content-primary',
+          cellClassName: 'type-body-medium text-content-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -66,7 +66,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => row.original.channel,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-prose text-action-primary',
+          cellClassName: 'type-body text-action-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -82,7 +82,7 @@ export function CommentHistoryModal({
             </span>
           );
         },
-        meta: { cellClassName: 'type-value' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'type-body' } satisfies DataTableColumnMeta,
       },
     ],
     [t, labelOf],
@@ -91,18 +91,22 @@ export function CommentHistoryModal({
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="type-dialog-title">{t('neurocomment.history.title')}</div>
+        <div className="type-h2">{t('neurocomment.history.title')}</div>
       </div>
 
       <div className="px-2xl pb-lg pt-md">
         {isPending ? (
-          <p className="py-empty text-center type-prose">{t('neurocomment.history.loading')}</p>
+          <p className="py-empty text-center type-body text-content-subtle">
+            {t('neurocomment.history.loading')}
+          </p>
         ) : isError ? (
-          <p role="alert" className="py-empty text-center type-prose text-danger">
+          <p role="alert" className="py-empty text-center type-body text-danger">
             {t('neurocomment.history.error')}
           </p>
         ) : items.length === 0 ? (
-          <div className="py-empty text-center type-prose">{t('neurocomment.history.empty')}</div>
+          <div className="py-empty text-center type-body text-content-subtle">
+            {t('neurocomment.history.empty')}
+          </div>
         ) : (
           <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">

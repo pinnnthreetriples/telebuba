@@ -1,6 +1,6 @@
 import { IconButton, Input } from '@/shared/ui';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = 'mb-tight block type-body-medium text-content-secondary';
 
 // Stays inline, both halves. The crossed-out eye is this file's own transcription
 // and is drawn nowhere else, so <Icon> can only take the open one — and the two

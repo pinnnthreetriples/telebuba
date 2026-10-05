@@ -14,7 +14,7 @@ import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-tight block type-label';
+const LABEL = 'mb-tight block type-body-medium text-content-secondary';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -208,7 +208,9 @@ export function ProxyForm({
       {detect !== 'idle' && (
         <div className="flex flex-wrap items-center gap-md">
           {detect === 'loading' && (
-            <span className="type-prose">{t('accounts.proxyForm.checking')}</span>
+            <span className="type-body text-content-subtle">
+              {t('accounts.proxyForm.checking')}
+            </span>
           )}
           {detect === 'ok' && (
             <Badge tone="success" size="md" className="tb-pop gap-sm">
@@ -221,7 +223,7 @@ export function ProxyForm({
             </Badge>
           )}
           {detect === 'err' && (
-            <span className="inline-flex items-center gap-sm type-label text-danger">
+            <span className="inline-flex items-center gap-sm type-body-medium text-danger">
               <Icon name="x-circle" size={14} />
               {t('accounts.proxyForm.resultErr')}
             </span>

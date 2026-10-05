@@ -102,7 +102,7 @@ export function TwoFactorBulkStep({
     const percent = bulk.rows.length === 0 ? 0 : Math.round((done / bulk.rows.length) * 100);
     return (
       <>
-        <div className="mb-sm type-caption">
+        <div className="mb-sm type-small">
           {t('accounts.addWizard.twofaRunning', { done, total: bulk.rows.length })}
         </div>
         <div className="mb-lg h-rail w-full overflow-hidden rounded-full bg-line">
@@ -130,11 +130,11 @@ export function TwoFactorBulkStep({
                   <span className="size-dot rounded-full bg-line-strong" />
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate type-item-title">
+              <span className="min-w-0 flex-1 truncate type-body-medium">
                 {label(row.accountId)}
               </span>
               <span
-                className={`shrink-0 type-caption ${row.state === 'error' ? 'text-danger-deep' : ''}`}
+                className={`shrink-0 type-small ${row.state === 'error' ? 'text-danger-deep' : ''}`}
               >
                 {row.state === 'queued'
                   ? t('accounts.addWizard.twofaQueued')
@@ -147,7 +147,7 @@ export function TwoFactorBulkStep({
             </div>
           ))}
         </div>
-        <div className="mt-md type-caption">{t('accounts.addWizard.twofaRunningNote')}</div>
+        <div className="mt-md type-small">{t('accounts.addWizard.twofaRunningNote')}</div>
         <div className="mt-xl flex justify-end gap-sm">
           <Button onClick={bulk.stop}>{t('accounts.addWizard.twofaStop')}</Button>
           <Button variant="primary" loading disabled>
@@ -167,7 +167,9 @@ export function TwoFactorBulkStep({
 
   return (
     <>
-      <div className="mb-lg type-prose">{t('accounts.addWizard.twofaIntro')}</div>
+      <div className="mb-lg type-body text-content-subtle">
+        {t('accounts.addWizard.twofaIntro')}
+      </div>
       <div className="overflow-hidden rounded-lg border border-line">
         <div className="flex items-center gap-md border-b border-line bg-surface px-md py-sm">
           <button
@@ -201,9 +203,11 @@ export function TwoFactorBulkStep({
                 </svg>
               ) : null}
             </span>
-            <span className="type-label">{t('accounts.addWizard.twofaSelectAll')}</span>
+            <span className="type-body-medium text-content-secondary">
+              {t('accounts.addWizard.twofaSelectAll')}
+            </span>
           </button>
-          <span className="ml-auto shrink-0 type-caption">
+          <span className="ml-auto shrink-0 type-small">
             {t('accounts.addWizard.twofaSelected', {
               done: selected.length,
               total: accountIds.length,
@@ -229,8 +233,8 @@ export function TwoFactorBulkStep({
                 {on && <Icon name="check" size={14} className="stroke-on-action" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate type-item-title">{label(accountId)}</span>
-                <span className="block truncate font-mono type-caption">
+                <span className="block truncate type-body-medium">{label(accountId)}</span>
+                <span className="block truncate font-mono type-small">
                   {sources[accountId] ?? ''}
                 </span>
               </span>
@@ -239,7 +243,7 @@ export function TwoFactorBulkStep({
         })}
       </div>
 
-      <div className="mb-sm mt-lg type-eyebrow">{t('accounts.addWizard.twofaModeTitle')}</div>
+      <div className="mb-sm mt-lg type-small-medium">{t('accounts.addWizard.twofaModeTitle')}</div>
       <SegmentedControl
         variant="tray"
         value={mode}
@@ -258,7 +262,7 @@ export function TwoFactorBulkStep({
           if (option === 'generate') form.setFieldValue('password', '');
         }}
       />
-      <div className="mt-sm type-caption">
+      <div className="mt-sm type-small">
         {mode === 'custom'
           ? t('accounts.addWizard.twofaShared')
           : t('accounts.addWizard.twofaPerAccount')}
@@ -320,7 +324,7 @@ export function TwoFactorBulkStep({
           )}
         </form.Field>
       </div>
-      <div className="mt-tight type-caption">{t('accounts.edit.twofaHintWarn')}</div>
+      <div className="mt-tight type-small">{t('accounts.edit.twofaHintWarn')}</div>
 
       <div className="mt-xl flex justify-end gap-sm">
         <Button onClick={onDone}>{t('accounts.addWizard.skip')}</Button>

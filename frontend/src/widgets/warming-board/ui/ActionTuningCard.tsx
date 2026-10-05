@@ -160,7 +160,7 @@ function ActionRow({
   return (
     <div className="flex items-center gap-md">
       <Switch checked={on} disabled={state !== 'live'} label={title} onChange={onToggle} />
-      <span className={`min-w-0 flex-1 type-label ${working ? '' : 'text-content-subtle'}`}>
+      <span className={`min-w-0 flex-1 type-body-medium ${working ? '' : 'text-content-subtle'}`}>
         {title}
       </span>
       <HelpHint
@@ -256,8 +256,8 @@ export function ActionTuningCard() {
             <Icon name="gear" size={18} />
           </span>
           <div className="min-w-0">
-            <div className="type-card-title">{t('warming.tune.title')}</div>
-            <div className="mt-hair type-caption">{t('warming.tune.subtitle')}</div>
+            <div className="type-h3">{t('warming.tune.title')}</div>
+            <div className="mt-hair type-small">{t('warming.tune.subtitle')}</div>
           </div>
         </>
       }
@@ -279,7 +279,7 @@ export function ActionTuningCard() {
         >
           {t('warming.tune.disableAll')}
         </Button>
-        <span className="ml-auto flex items-center gap-tight type-caption">
+        <span className="ml-auto flex items-center gap-tight type-small">
           <span className="size-dot shrink-0 rounded-full bg-action-primary" />
           {t('warming.tune.legend.working', { n: WORKING_COUNT })}
         </span>
@@ -290,7 +290,7 @@ export function ActionTuningCard() {
           <div key={group.key} className="rounded-lg border border-line bg-surface p-md">
             <div className="mb-md flex items-center gap-sm">
               <Icon name={group.icon} size={14} className="shrink-0 text-content-subtle" />
-              <span className="type-eyebrow">{t(`warming.tune.group.${group.key}`)}</span>
+              <span className="type-small-medium">{t(`warming.tune.group.${group.key}`)}</span>
               {group.heavy ? <Badge tone="warning">{t('warming.tune.trafficHeavy')}</Badge> : null}
             </div>
             <div className="flex flex-col gap-md">
@@ -319,8 +319,8 @@ export function ActionTuningCard() {
       <div className="mt-lg border-t border-line-row pt-lg">
         <div className="flex items-start justify-between gap-lg">
           <div className="min-w-0 flex-1">
-            <div className="type-item-title">{t('warming.tune.gate.title')}</div>
-            <div className="mt-hair type-caption">{t('warming.tune.gate.desc')}</div>
+            <div className="type-body-medium">{t('warming.tune.gate.title')}</div>
+            <div className="mt-hair type-small">{t('warming.tune.gate.desc')}</div>
           </div>
           <Switch
             checked={toggles.enforce_readiness}
@@ -334,7 +334,7 @@ export function ActionTuningCard() {
         {save.isError ? (
           // Тот же конкретный текст, что и в общем тосте мутаций: этот сигнал —
           // отчёт по месту, и он не должен быть менее внятным из двух.
-          <div role="alert" className="mt-md type-caption text-danger-deep">
+          <div role="alert" className="mt-md type-small text-danger-deep">
             {mutationErrorText(save.error)}
           </div>
         ) : null}

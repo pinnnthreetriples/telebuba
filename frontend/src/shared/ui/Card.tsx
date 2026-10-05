@@ -30,7 +30,7 @@ export function Card({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
     <div className={cn(surface('card'), className)} {...rest}>
-      {title ? <div className="mb-xs text-body font-semibold">{title}</div> : null}
+      {title ? <div className="mb-xs text-body font-medium">{title}</div> : null}
       {subtitle ? <div className="mb-lg text-body text-content-subtle">{subtitle}</div> : null}
       {children}
     </div>

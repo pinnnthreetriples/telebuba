@@ -36,10 +36,10 @@ test('the size picks one of the three pill rungs', () => {
     </>,
   );
 
-  expect(screen.getByText('10').className).toContain('text-tiny');
+  expect(screen.getByText('10').className).toContain('text-small');
   // The rung every status pill in the app sits on, and the one this component
   // could not express until it was added.
-  expect(screen.getByText('Забанен').className).toContain('text-tiny');
+  expect(screen.getByText('Забанен').className).toContain('text-small');
   expect(screen.getByText('Прогрев').className).toContain('text-body');
 });
 

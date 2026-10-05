@@ -76,7 +76,7 @@ export function ProxyPoolStep({
   return (
     <>
       {accountIds.length > 1 && (
-        <div className="mb-lg flex items-center justify-between gap-md type-caption">
+        <div className="mb-lg flex items-center justify-between gap-md type-small">
           <span className="flex flex-wrap gap-sm">
             <span>{t('accounts.addWizard.poolAssigned', { done, total: accountIds.length })}</span>
             {remaining.length > 0 && (
@@ -100,7 +100,7 @@ export function ProxyPoolStep({
       )}
       <div className="flex flex-col gap-sm">
         {freeProxies.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
+          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-body text-content-subtle">
             {t('accounts.addWizard.poolEmpty')}
           </div>
         ) : (
@@ -120,21 +120,21 @@ export function ProxyPoolStep({
                 />
               ) : null}
               <span className="flex-1">
-                <span className="block type-card-title">
+                <span className="block type-h3">
                   {(proxy.country_code ?? '—').toUpperCase()} · {proxyTypeLabel(proxy.proxy_type)}
                 </span>
-                <span className="block font-mono type-caption">
+                <span className="block font-mono type-small">
                   {proxy.host}:{proxy.port}
                 </span>
               </span>
-              <span className="type-label text-success-deep">
+              <span className="type-body-medium text-success-deep">
                 {t('accounts.addWizard.poolFree', { count: proxy.free })}
               </span>
             </button>
           ))
         )}
         {failed && (
-          <div role="alert" className="type-caption text-danger-deep">
+          <div role="alert" className="type-small text-danger-deep">
             {t(
               accountIds.length > 1
                 ? 'accounts.addWizard.proxyAssignPartial'

@@ -221,8 +221,8 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-hair type-caption">
+        <h2 className="type-h2">{t('neurocomment.modal.discovery.title')}</h2>
+        <p className="mt-hair type-small">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
       </div>
@@ -255,7 +255,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
 
         <div className="flex flex-col gap-sm empty:hidden">
           {refused ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
               {refusedName === null
                 ? null
@@ -267,7 +267,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               toast fires outside the modal with a raw error code, and the form alone
               would just re-enable its button. */}
           {startSearch.isError ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t('neurocomment.modal.discovery.startFailed')}
             </p>
           ) : null}
@@ -276,7 +276,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             ? null
             : NOTES.map(([field, key, tone]) =>
                 adopted[field] > 0 ? (
-                  <p key={key} role="status" className={`type-prose ${tone}`}>
+                  <p key={key} role="status" className={`type-body text-content-subtle ${tone}`}>
                     {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
                   </p>
                 ) : null,
@@ -285,7 +285,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           {/* The request itself never landed, so nothing can be read from the outcomes —
               silence would read as "nothing happened". */}
           {adopt.isError ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t('neurocomment.modal.discovery.addFailed')}
             </p>
           ) : null}

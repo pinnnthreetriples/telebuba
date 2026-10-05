@@ -43,10 +43,10 @@ export function CampaignPromptModal({
     <Modal onClose={onClose} size="form" label={t('neurocomment.modal.campaignPrompt.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center justify-between">
-          <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
+          <span className="type-h2">{t('neurocomment.modal.campaignPrompt.title')}</span>
           <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
         </div>
-        <div className="mb-lg type-prose">
+        <div className="mb-lg type-body text-content-subtle">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
         <Textarea
@@ -63,10 +63,10 @@ export function CampaignPromptModal({
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
-          <span className="type-item-title text-content-secondary">
+          <span className="type-body-medium text-content-secondary">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-info-tint px-sm py-hair text-tiny font-semibold text-info-strong">
+          <span className="rounded-full bg-info-tint px-sm py-hair text-small font-medium text-info-strong">
             {accounts.length}
           </span>
         </div>
@@ -77,12 +77,12 @@ export function CampaignPromptModal({
                 key={account.account_id}
                 className="flex items-center gap-md rounded-md border border-canvas bg-surface-card px-md py-sm"
               >
-                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-info-tint text-tiny font-bold text-info-strong">
+                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-info-tint text-small font-medium text-info-strong">
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate type-card-title">{account.phone}</div>
-                  <div className="mt-px type-caption">{account.channel}</div>
+                  <div className="truncate type-h3">{account.phone}</div>
+                  <div className="mt-px type-small">{account.channel}</div>
                 </div>
                 <span className="size-dot shrink-0 rounded-full bg-success" />
                 <IconButton
@@ -99,7 +99,7 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center type-prose">
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center type-body text-content-subtle">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}
@@ -134,10 +134,10 @@ export function CampaignPromptModal({
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-2xl">
-            <div className="mb-sm type-dialog-title">
+            <div className="mb-sm type-h2">
               {t('neurocomment.modal.campaignPrompt.removeTitle')}
             </div>
-            <div className="mb-xl type-dialog-body">
+            <div className="mb-xl type-body text-content-muted">
               {t('neurocomment.modal.campaignPrompt.removeBody', {
                 phone: confirm.phone,
                 channel: confirm.channel,

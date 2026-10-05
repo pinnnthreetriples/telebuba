@@ -7,7 +7,7 @@ import { cn } from '@/shared/lib/cn';
 // labels where the field's effect isn't obvious from its name.
 const BADGE =
   'flex size-glyph shrink-0 cursor-help items-center justify-center rounded-full ' +
-  'border border-line text-tiny font-bold leading-none text-content-subtle ' +
+  'border border-line text-small font-medium leading-none text-content-subtle ' +
   'transition-colors hover:border-action-primary hover:text-action-primary focus:outline-none ' +
   'focus-visible:border-focus focus-visible:text-focus';
 
@@ -26,7 +26,7 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        query, if the clipping ever actually bites. */
     <span
       className={cn(
-        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-md text-left text-tiny text-content-muted group-hover:block group-focus-within:block',
+        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-md text-left text-small text-content-muted group-hover:block group-focus-within:block',
         surface('panel'),
       )}
       role="tooltip"

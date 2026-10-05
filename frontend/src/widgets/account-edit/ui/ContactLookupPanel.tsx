@@ -178,7 +178,7 @@ export function ContactLookupPanel({
     <div className="border-t border-line-row pt-sm">
       <button
         type="button"
-        className="flex w-full items-center gap-sm type-label text-content-muted hover:text-content-primary"
+        className="flex w-full items-center gap-sm type-body-medium text-content-muted hover:text-content-primary"
         aria-expanded={open}
         onClick={() => {
           setOpen((value) => !value);
@@ -195,13 +195,16 @@ export function ContactLookupPanel({
               <section className="space-y-sm">
                 <div className="flex items-center justify-between gap-md">
                   <div className="flex items-center gap-sm">
-                    <label htmlFor="contact-lookup-phones" className="type-label">
+                    <label
+                      htmlFor="contact-lookup-phones"
+                      className="type-body-medium text-content-secondary"
+                    >
                       {t('accounts.messages.lookup.phones')}
                     </label>
                     <HelpHint text={t('accounts.messages.lookup.phonesHint')} />
                   </div>
                   <span
-                    className={`type-caption tabular-nums ${phoneList.length > MAX_PHONES ? 'text-danger-deep' : ''}`}
+                    className={`type-small tabular-nums ${phoneList.length > MAX_PHONES ? 'text-danger-deep' : ''}`}
                   >
                     {phoneList.length}/{MAX_PHONES}
                   </span>
@@ -217,9 +220,11 @@ export function ContactLookupPanel({
               </section>
 
               <section className="space-y-sm">
-                <h4 className="type-label">{t('accounts.messages.delay')}</h4>
+                <h4 className="type-body-medium text-content-secondary">
+                  {t('accounts.messages.delay')}
+                </h4>
                 <div className="grid grid-cols-2 gap-md">
-                  <label className="flex items-center gap-sm type-caption">
+                  <label className="flex items-center gap-sm type-small">
                     <span>{t('accounts.messages.delayFrom')}</span>
                     <Input
                       type="number"
@@ -235,7 +240,7 @@ export function ContactLookupPanel({
                     />
                     <span>{t('accounts.messages.secondsShort')}</span>
                   </label>
-                  <label className="flex items-center gap-sm type-caption">
+                  <label className="flex items-center gap-sm type-small">
                     <span>{t('accounts.messages.delayTo')}</span>
                     <Input
                       type="number"
@@ -255,12 +260,12 @@ export function ContactLookupPanel({
               </section>
 
               {accountIds.length === 0 && (
-                <p className="type-caption text-danger-deep">
+                <p className="type-small text-danger-deep">
                   {t('accounts.messages.lookup.needAccounts')}
                 </p>
               )}
               {start.isError && (
-                <p role="alert" className="type-caption text-danger-deep">
+                <p role="alert" className="type-small text-danger-deep">
                   {t(startErrorKey)}
                 </p>
               )}
@@ -275,7 +280,7 @@ export function ContactLookupPanel({
             </>
           ) : (
             <div className="space-y-sm">
-              <p role="status" className="type-prose tabular-nums">
+              <p role="status" className="type-body text-content-subtle tabular-nums">
                 {complete
                   ? [
                       t('accounts.messages.lookup.found', { count: found.length }),
@@ -290,17 +295,17 @@ export function ContactLookupPanel({
                     })}`}
               </p>
               {job.isError && errorCode(job.error) !== 'not_found' && (
-                <p role="alert" className="type-caption text-danger-deep">
+                <p role="alert" className="type-small text-danger-deep">
                   {t('accounts.messages.progressError')}
                 </p>
               )}
               {complete && idOnly > 0 && (
-                <p className="type-caption">
+                <p className="type-small">
                   {t('accounts.messages.lookup.idOnly', { count: idOnly })}
                 </p>
               )}
               {added !== null && (
-                <p className="type-caption">
+                <p className="type-small">
                   {t('accounts.messages.lookup.added', { count: added })}
                 </p>
               )}

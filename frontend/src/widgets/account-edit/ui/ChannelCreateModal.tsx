@@ -205,7 +205,7 @@ export function ChannelCreateModal({
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
+          <span className="type-h2">{t('accounts.channel.createTitle')}</span>
           <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
         </div>
 
@@ -219,7 +219,7 @@ export function ChannelCreateModal({
             }}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-xs block type-caption text-danger-deep">
+            <span className="mt-xs block type-small text-danger-deep">
               {t('accounts.channel.errTitle')}
             </span>
           )}
@@ -267,7 +267,7 @@ export function ChannelCreateModal({
               />
             </div>
             {usernameHint && (
-              <span className={`mt-xs block text-tiny ${hintColor}`}>{usernameHint.text}</span>
+              <span className={`mt-xs block text-small ${hintColor}`}>{usernameHint.text}</span>
             )}
           </label>
         )}

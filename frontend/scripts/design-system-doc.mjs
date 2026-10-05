@@ -66,6 +66,8 @@ function readConfig() {
     minHeight: entries(tokens.minHeight),
     maxHeight: entries(tokens.maxHeight),
     fontSize: entries(tokens.fontSize),
+    typeScale: tokens.typeScale,
+    fontWeight: tokens.fontWeight,
     typeRole: entries(tokens.typeRole),
     lineHeight: entries(tokens.lineHeight),
     letterSpacing: entries(tokens.letterSpacing),
@@ -181,66 +183,31 @@ const SWATCH_GROUPS = [
 // предложение на роль и без слова «или» — роль, которую нельзя описать одной фразой,
 // это две роли, слитые размером. `sample` — то, что роль реально набирает в интерфейсе.
 const TYPE_ROLE = {
-  'page-title': {
-    text: 'Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу',
-    sample: 'Прогрев',
+  h1: { text: 'Заголовок, который называет экран, и число счётчика', sample: 'Прогрев аккаунтов' },
+  h2: { text: 'Заголовок, с которого начинается диалог', sample: 'Удалить аккаунт?' },
+  h3: { text: 'Заголовок блока, в котором стоит', sample: 'Каналы кампании' },
+  body: {
+    text: 'Текст, который читают: пояснение, значение, фраза диалога',
+    sample: 'Аккаунт выйдет из прогрева через пять дней.',
   },
-  'dialog-title': {
-    text: 'Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя',
-    sample: 'Удалить аккаунт?',
-  },
-  'dialog-body': {
-    text: 'Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя',
-    sample: 'Аккаунт и его сессия будут удалены безвозвратно.',
-  },
-  'card-title': {
-    text: 'Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием',
-    sample: 'Каналы кампании',
-  },
-  'item-title': {
-    text: 'Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей',
+  'body-medium': {
+    text: 'То, что называют: элемент списка, подпись поля, кнопка',
     sample: 'Основной прокси',
   },
-  eyebrow: {
-    text: 'Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em',
-    sample: 'Сессия',
-  },
-  label: {
-    text: 'Имя контрола, стоящего рядом: подпись поля, название настройки в строке',
-    sample: 'Часовой пояс',
-  },
-  value: {
-    text: 'Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»',
-    sample: '+7 900 123-45-67',
-  },
-  prose: {
-    text: 'Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога',
-    sample: 'Пока ничего не найдено',
-  },
-  caption: {
-    text: 'Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения',
-    sample: 'Не больше 30 символов',
-  },
-  meta: {
-    text: 'Самая мелкая строка: то, что датирует или считает строку рядом',
-    sample: '18:42 · 12 сообщений',
-  },
-  stat: {
-    text: 'Число, которое счётчик выносит на экран',
-    sample: '1 284',
+  small: { text: 'Мелкая строка: подпись, время, подсказка', sample: 'Не больше 30 символов' },
+  'small-medium': {
+    text: 'Мелкое название: шапка таблицы, плашка, подпись группы',
+    sample: 'Статус',
   },
 };
 
 const RUNG = {
   fontSize: {
-    micro: 'Подпись под строкой, вторая строка плашки',
-    tiny: 'Пилюля статуса, шапка таблицы, журнал',
-    body: 'Основной размер интерфейса',
-    lead: 'Поле, список, подпись кнопки, заголовок карточки',
-    title: 'Заголовок раздела и диалога',
-    stat: 'Счётчик-одометр',
-    display: 'Заголовок страницы',
-    hero: 'Единственная крупная цифра',
+    small: 'Подпись, плашка, шапка таблицы, журнал',
+    body: 'Весь текст интерфейса',
+    h3: 'Заголовок карточки',
+    h2: 'Заголовок диалога',
+    h1: 'Заголовок страницы и число счётчика',
   },
   // Радиусы и тени подписываются внутри <i> под именем ступени, а там документ
   // пишет со строчной: это продолжение подписи, а не отдельная фраза.
@@ -358,9 +325,7 @@ const RUNG = {
   // %curve% — место, куда подставляется кривая: имя ступени берётся здесь, а её
   // значение из конфига, чтобы длительность и кривая одного жеста не разъехались.
   lineHeight: {
-    none: 'Одиночный глиф: крестик в плашке, знак вопроса подсказки, крупная цифра',
-    stack: 'Заголовок строки над своей же подписью — имя над телефоном, метка над пояснением',
-    log: 'Моноширинный поток на тёмной поверхности: журнал и его врезка в карточке',
+    none: 'Одиночный глиф: крестик в плашке, знак вопроса подсказки. Интерлиньяж текста живёт в ступени',
   },
   letterSpacing: {
     code: 'Разовый код в поле: SMS при входе и письмо второго фактора',
@@ -467,9 +432,14 @@ function px(value) {
 
 function renderTypeScale(config, indent) {
   return config.fontSize
-    .map((e) =>
-      specRow(indent, `<code>${e.name}</code> · ${px(e.value)}`, RUNG.fontSize[e.name] ?? ''),
-    )
+    .map((e) => {
+      const step = config.typeScale[e.name];
+      return specRow(
+        indent,
+        `<code>${e.name}</code> · ${px(step.size)} / ${px(step.leading)} · ${step.tracking}`,
+        RUNG.fontSize[e.name] ?? '',
+      );
+    })
     .join('\n');
 }
 
@@ -478,26 +448,20 @@ function renderTypeScale(config, indent) {
 // до образца на этой странице. Роль без русской подписи выводится с пустой ячейкой —
 // это и есть сигнал, что в конфиг добавили имя, которому ещё не назначили смысл.
 function renderTypeRoles(config, indent) {
-  const sizes = Object.fromEntries(config.fontSize.map((e) => [e.name, e.value]));
-  const prose = `${count(config.typeRole.length, 'ролей')}, и над <code>shared/ui</code> страница называет одну из них вместо того, чтобы заново выписывать ступень, начертание и серый. Заменяемая запись была не восемью ступенями, а девяноста шестью написаниями: 528 мест писали ступень рядом с начертанием и чернилами, и одна и та же задача выходила тремя способами сразу — подпись была <code>ink-subtle</code> 53 раза, <code>ink-muted</code> 13 и без цвета 9. Роль обязана называться одним предложением без слова «или» и быть надетой двумя компонентами в разных слоях; именно это удержало набор на двенадцати. Межстрочное в роль не входит — по той же причине, по которой его нет в ступени.`;
+  const prose = `${count(config.typeRole.length, 'ролей')} на пять ступеней и два веса. Стиль несёт ступень (размер, интерлиньяж, трекинг), вес и краску по умолчанию; над <code>shared/ui</code> страница называет стиль вместо того, чтобы заново выписывать ступень, вес и серый. Иерархию держит размер: 400 — то, что читают, 500 — то, что называют. Другой цвет поверх стиля пишется утилитой: <code>type-small text-danger</code>.`;
   const rows = config.typeRole.map((entry) => {
     const role = Object.fromEntries(entry.children.map((c) => [c.name, c.value]));
+    const step = config.typeScale[role.size];
+    const weight = config.fontWeight[role.weight];
     const note = TYPE_ROLE[entry.name] ?? { text: '', sample: '' };
-    const spec = [
-      `${px(sizes[role.size])} · ${role.weight} · ${role.ink}`,
-      role.tracking === undefined ? '' : ` · ${role.tracking}`,
-      role.caps === undefined ? '' : ' · заглавные',
-    ].join('');
+    const spec = `${px(step.size)} / ${px(step.leading)} · ${weight} · ${role.ink}`;
     const style = [
-      `font-size:${sizes[role.size]}`,
-      `font-weight:${role.weight}`,
+      `font-size:${step.size}`,
+      `line-height:${step.leading}`,
+      `letter-spacing:${step.tracking}`,
+      `font-weight:${weight}`,
       `color:var(--${role.ink})`,
-      role.tracking === undefined ? '' : `;letter-spacing:${role.tracking}`,
-      role.caps === undefined ? '' : `;text-transform:${role.caps}`,
-    ]
-      .join(';')
-      .replace(/;;/g, ';')
-      .replace(/;$/, '');
+    ].join(';');
     return specRow(
       `${indent}  `,
       `<code>type-${entry.name}</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${spec}</span>`,

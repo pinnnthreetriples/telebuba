@@ -106,13 +106,15 @@ function MediaAttachment({ media, index }: { media: ChatMedia; index: number }) 
           }
           size={16}
         />
-        <span className="min-w-0 flex-1 truncate type-label">{name}</span>
-        <span className="type-caption text-content-muted">{mediaLabel(t, media.kind)}</span>
+        <span className="min-w-0 flex-1 truncate type-body-medium text-content-secondary">
+          {name}
+        </span>
+        <span className="type-small text-content-muted">{mediaLabel(t, media.kind)}</span>
         {previewButton}
         <a
           href={media.download_url}
           download={name}
-          className="type-caption font-medium text-action-primary underline"
+          className="type-small-medium text-action-primary underline"
         >
           {t('accounts.edit.chats.download')}
         </a>
@@ -143,14 +145,14 @@ function ChatMessageView({ message, you }: { message: ChatMessage; you: string }
   return (
     <article className={`flex flex-col ${message.outgoing ? 'items-end' : 'items-start'}`}>
       <div
-        className={`max-w-col break-words rounded-lg px-lg py-md type-prose ${message.outgoing ? 'bg-info-tint text-content-primary' : 'border border-line bg-surface-card text-content-secondary'}`}
+        className={`max-w-col break-words rounded-lg px-lg py-md type-body ${message.outgoing ? 'bg-info-tint text-content-primary' : 'border border-line bg-surface-card text-content-secondary'}`}
       >
         {message.text ? <p className="m-0 whitespace-pre-wrap">{message.text}</p> : null}
         {message.media?.map((media, index) => (
           <MediaAttachment key={`${message.message_id}-${index}`} media={media} index={index} />
         ))}
       </div>
-      <span className="mt-xs px-xs tabular-nums type-caption text-content-subtle">
+      <span className="mt-xs px-xs tabular-nums type-small text-content-subtle">
         {messageTime(message.date)}
         {message.outgoing ? ` · ${you}` : ''}
       </span>
@@ -196,7 +198,7 @@ function ChatComposer({
           {files.map((file, i) => (
             <span
               key={`${file.name}-${i}`}
-              className="inline-flex max-w-full items-center gap-xs rounded-md bg-canvas px-sm py-xs type-caption"
+              className="inline-flex max-w-full items-center gap-xs rounded-md bg-canvas px-sm py-xs type-small"
             >
               <span className="truncate">{file.name}</span>
               <IconButton
@@ -212,7 +214,7 @@ function ChatComposer({
         </div>
       ) : null}
       {error ? (
-        <p role="alert" className="mb-sm type-caption text-danger">
+        <p role="alert" className="mb-sm type-small text-danger">
           {t(`accounts.edit.chats.${error}`)}
         </p>
       ) : null}
@@ -231,10 +233,10 @@ function ChatComposer({
           }}
           placeholder={t('accounts.edit.chats.messagePlaceholder')}
           aria-label={t('accounts.edit.chats.messagePlaceholder')}
-          className={`min-h-control min-w-0 w-full resize-none overflow-y-hidden rounded-lg border border-line bg-surface-card px-md py-sm type-prose text-content-primary outline-none ${FOCUS_RING} sm:w-auto sm:flex-1`}
+          className={`min-h-control min-w-0 w-full resize-none overflow-y-hidden rounded-lg border border-line bg-surface-card px-md py-sm type-body text-content-primary outline-none ${FOCUS_RING} sm:w-auto sm:flex-1`}
         />
         <div className="flex w-full items-center justify-between gap-sm sm:w-auto sm:justify-start">
-          <label className="inline-flex min-h-control cursor-pointer items-center rounded-lg border border-line px-md type-label hover:bg-canvas">
+          <label className="inline-flex min-h-control cursor-pointer items-center rounded-lg border border-line px-md type-body-medium text-content-secondary hover:bg-canvas">
             <Icon name="paperclip" size={16} />
             <span className="sr-only">{t('accounts.edit.chats.attachFiles')}</span>
             <input
@@ -261,7 +263,7 @@ function ChatComposer({
         </div>
       </div>
       {droppedFiles > 0 ? (
-        <p role="status" className="mb-0 mt-sm type-caption text-content-muted">
+        <p role="status" className="mb-0 mt-sm type-small text-content-muted">
           {t('accounts.edit.chats.filesSkipped', { count: droppedFiles })}
         </p>
       ) : null}
@@ -430,7 +432,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             aria-selected={tab === value}
             aria-controls={`account-panel-${value}`}
             onClick={() => setTab(value)}
-            className={`min-h-touch inline-flex items-center gap-sm rounded-full px-lg text-body font-semibold transition-colors ${tab === value ? 'bg-action-primary text-on-action' : 'text-content-muted hover:bg-canvas hover:text-content-primary'}`}
+            className={`min-h-touch inline-flex items-center gap-sm rounded-full px-lg text-body font-medium transition-colors ${tab === value ? 'bg-action-primary text-on-action' : 'text-content-muted hover:bg-canvas hover:text-content-primary'}`}
           >
             {t(`accounts.edit.chats.${value === 'chats' ? 'tab' : 'overview'}`)}
           </button>
@@ -457,14 +459,14 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             className="flex flex-col gap-xs lg:col-span-1"
             aria-label={t('accounts.edit.chats.allConversations')}
           >
-            <h2 className="mb-xs type-card-title">{t('accounts.edit.chats.allConversations')}</h2>
+            <h2 className="mb-xs type-h3">{t('accounts.edit.chats.allConversations')}</h2>
             {list.isPending ? (
-              <p role="status" className="type-prose text-content-muted">
+              <p role="status" className="type-body text-content-muted">
                 {t('accounts.edit.chats.listLoading')}
               </p>
             ) : null}
             {list.isError ? (
-              <div role="alert" className="type-prose text-danger">
+              <div role="alert" className="type-body text-danger">
                 {t('accounts.edit.chats.listError')}{' '}
                 <Button variant="secondary" size="sm" onClick={refreshList}>
                   {t('accounts.edit.chats.retry')}
@@ -472,7 +474,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
               </div>
             ) : null}
             {!list.isPending && !list.isError && dialogs.length === 0 ? (
-              <p className="type-prose text-content-muted">{t('accounts.edit.chats.emptyList')}</p>
+              <p className="type-body text-content-muted">{t('accounts.edit.chats.emptyList')}</p>
             ) : null}
             {dialogs.map((dialog) => (
               <button
@@ -486,19 +488,19 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                 onClick={() => open(dialog)}
                 className={`flex min-h-control w-full items-center gap-xs rounded-lg border px-md py-xs text-left transition-colors ${selected?.peer_id === dialog.peer_id && selected.peer_type === dialog.peer_type ? 'border-info-line bg-info-tint' : 'border-line bg-surface-card hover:border-line-strong hover:bg-canvas'}`}
               >
-                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-canvas text-content-primary type-label font-semibold">
+                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-canvas text-content-primary type-body-medium">
                   {dialog.title.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-sm">
-                    <span className="truncate type-label font-semibold text-content-primary">
+                    <span className="truncate type-body-medium text-content-primary">
                       {dialog.title}
                     </span>
                     {dialog.unread_count > 0 ? (
                       <Badge tone="info">{dialog.unread_count}</Badge>
                     ) : null}
                   </span>
-                  <span className="block truncate type-caption text-content-muted">
+                  <span className="block truncate type-small text-content-muted">
                     {dialog.last_message?.text ??
                       dialog.last_message?.media?.[0]?.file_name ??
                       t('accounts.edit.chats.noMessages')}
@@ -525,14 +527,14 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
           {selected ? (
             <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
               <header className="flex flex-wrap items-center gap-md border-b border-line-row px-lg py-md">
-                <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong type-label font-semibold">
+                <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong type-body-medium">
                   {selected.title.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate type-card-title text-content-primary">
+                  <span className="block truncate type-h3 text-content-primary">
                     {selected.title}
                   </span>
-                  <span className="type-caption text-content-muted">
+                  <span className="type-small text-content-muted">
                     {t(`accounts.edit.chats.kind.${selected.peer_type}`)}
                     {selected.username ? ` · @${selected.username}` : ''}
                   </span>
@@ -540,7 +542,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
               </header>
               <div className="flex flex-1 flex-col gap-md overflow-y-auto p-lg" aria-live="polite">
                 {readError ? (
-                  <div role="alert" className="type-caption text-danger">
+                  <div role="alert" className="type-small text-danger">
                     {t('accounts.edit.chats.readError')}{' '}
                     <Button
                       variant="secondary"
@@ -556,7 +558,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                   </div>
                 ) : null}
                 {historyError ? (
-                  <div role="alert" className="type-prose text-danger">
+                  <div role="alert" className="type-body text-danger">
                     {t('accounts.edit.chats.historyError')}{' '}
                     <Button
                       variant="secondary"
@@ -571,7 +573,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                   </div>
                 ) : null}
                 {history.isPending ? (
-                  <p role="status" className="type-prose text-content-muted">
+                  <p role="status" className="type-body text-content-muted">
                     {t('accounts.edit.chats.listLoading')}
                   </p>
                 ) : null}
@@ -595,7 +597,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                   />
                 ))}
                 {!history.isPending && messages.length === 0 ? (
-                  <p className="m-auto type-prose text-content-muted">
+                  <p className="m-auto type-body text-content-muted">
                     {t('accounts.edit.chats.emptyHistory')}
                   </p>
                 ) : null}
@@ -607,7 +609,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
               />
             </Card>
           ) : (
-            <Card className="flex min-h-0 items-center justify-center p-xl type-prose text-content-muted lg:col-span-2">
+            <Card className="flex min-h-0 items-center justify-center p-xl type-body text-content-muted lg:col-span-2">
               {t('accounts.edit.chats.chooseConversation')}
             </Card>
           )}

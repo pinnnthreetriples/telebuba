@@ -56,9 +56,9 @@ export function PipelineCard({
     <div className="rounded-card border border-info-hairline bg-info-tint px-xl py-lg text-content-primary">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
-          <span className="type-card-title">{t('neurocomment.pipeline.title')}</span>
+          <span className="type-h3">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
+            className={`rounded-full px-md py-xs text-small font-medium ${running ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -117,11 +117,11 @@ export function PipelineCard({
                   instead — the dots stay at every width and would otherwise mean
                   nothing on their own. */}
               <span
-                className={`hidden whitespace-nowrap text-tiny md:block ${
+                className={`hidden whitespace-nowrap text-small md:block ${
                   index < activeCell
                     ? 'font-medium text-success-deep'
                     : index === activeCell
-                      ? 'font-semibold text-info-strong'
+                      ? 'font-medium text-info-strong'
                       : 'text-content-subtle'
                 }`}
               >
@@ -133,14 +133,14 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-md text-center type-caption font-semibold text-info-strong md:hidden">
+        <div className="mb-md text-center type-small-medium text-info-strong md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
       <div className="mb-lg flex items-center gap-md rounded-lg border border-info-line bg-info-tint px-lg py-md">
         <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-        <span className="type-label text-info-strong">
+        <span className="type-body-medium text-info-strong">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}
@@ -154,7 +154,7 @@ export function PipelineCard({
           // tile across both columns, and stays right as stats are added or removed.
           <div key={stat.label} className="bg-surface-card px-lg py-lg max-md:odd:last:col-span-2">
             <Odometer value={stat.value} className={stat.color} />
-            <div className="mt-hair type-caption">{stat.label}</div>
+            <div className="mt-hair type-small">{stat.label}</div>
           </div>
         ))}
       </div>

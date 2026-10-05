@@ -22,7 +22,7 @@ export const InChipRow: Story = {
       {CHANNELS.map((channel) => (
         <span
           key={channel}
-          className="rounded-full border border-line bg-canvas px-md py-xs type-caption"
+          className="rounded-full border border-line bg-canvas px-md py-xs type-small"
         >
           {channel}
         </span>

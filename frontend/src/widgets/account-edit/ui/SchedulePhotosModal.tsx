@@ -220,14 +220,16 @@ export function SchedulePhotosModal({
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.schedule.photosTitle')}</span>
+          <span className="type-h2">{t('accounts.schedule.photosTitle')}</span>
           <CloseButton
             onClick={onClose}
             disabled={locked}
             aria-label={t('accounts.addStory.close')}
           />
         </div>
-        <div className="mb-lg type-prose">{t('accounts.schedule.photosHint')}</div>
+        <div className="mb-lg type-body text-content-subtle">
+          {t('accounts.schedule.photosHint')}
+        </div>
 
         <div className="mb-lg flex flex-wrap items-end gap-md">
           <ScheduleTimeField
@@ -238,7 +240,9 @@ export function SchedulePhotosModal({
             disabled={locked}
           />
           <label className="flex flex-col gap-tight">
-            <span className="type-label">{t('accounts.schedule.everyMinutes')}</span>
+            <span className="type-body-medium text-content-secondary">
+              {t('accounts.schedule.everyMinutes')}
+            </span>
             <Input
               type="number"
               size="xs"

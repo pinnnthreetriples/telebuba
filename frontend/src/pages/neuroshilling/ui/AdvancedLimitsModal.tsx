@@ -92,7 +92,7 @@ export function AdvancedLimitsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.setup.advanced.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl type-dialog-title">
+      <div className="border-b border-line-row px-2xl pb-lg pt-xl type-h2">
         {t('neuroshilling.setup.advanced.title')}
       </div>
 

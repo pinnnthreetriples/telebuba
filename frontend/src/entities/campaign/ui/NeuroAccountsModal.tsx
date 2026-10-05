@@ -99,7 +99,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
           );
         })}
       </span>
-      <span className="font-mono text-tiny font-semibold tabular-nums">
+      <span className="font-mono text-small font-medium tabular-nums">
         {binding
           ? `${binding.used}/${binding.limit > 0 ? binding.limit : '∞'}`
           : t('neurocomment.modal.neuroAccounts.limits')}
@@ -157,7 +157,7 @@ function AccountRow({
     <div className="border-b border-line-row py-md">
       <div className="flex flex-wrap items-center gap-md">
         <FeedbackMark result={result} />
-        <span className="min-w-0 flex-1 truncate type-card-title">{account.name}</span>
+        <span className="min-w-0 flex-1 truncate type-h3">{account.name}</span>
         {account.linked ? (
           <LimitsChip
             accountId={account.account_id}
@@ -223,7 +223,7 @@ function AccountRow({
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-tight type-caption text-danger-deep">
+        <div className="mt-tight type-small text-danger-deep">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -352,8 +352,8 @@ export function NeuroAccountsModal({
           </svg>
         </span>
         <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.neuroAccounts.title')}</div>
-          <div className="mt-hair type-prose">
+          <div className="type-h2">{t('neurocomment.modal.neuroAccounts.title')}</div>
+          <div className="mt-hair type-body text-content-subtle">
             {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
           </div>
         </div>
@@ -374,7 +374,7 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center type-prose">
+          <div className="px-md py-page text-center type-body text-content-subtle">
             {t('neurocomment.modal.neuroAccounts.empty')}
           </div>
         )}

@@ -45,9 +45,9 @@ import { Spinner, type SpinnerTone } from './Spinner';
 // задаётся отдельно. `fullWidth` переводит кнопку во flex: `w-full` на inline-flex
 // оставляет под ней интерлиньяж строки.
 const SIZE: Record<'lg' | 'md' | 'sm' | 'xs', { size: ControlSize; weight: string }> = {
-  lg: { size: 'lg', weight: 'font-semibold' },
-  md: { size: 'md', weight: 'font-semibold' },
-  sm: { size: 'sm', weight: 'font-semibold' },
+  lg: { size: 'lg', weight: 'font-medium' },
+  md: { size: 'md', weight: 'font-medium' },
+  sm: { size: 'sm', weight: 'font-medium' },
   xs: { size: 'xs', weight: 'font-medium' },
 };
 

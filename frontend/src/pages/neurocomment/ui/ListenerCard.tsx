@@ -61,7 +61,7 @@ export function ListenerCard({
           <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
-          <div className="type-item-title">{t('neurocomment.listener.title')}</div>
+          <div className="type-body-medium">{t('neurocomment.listener.title')}</div>
         </div>
       </div>
 
@@ -122,7 +122,7 @@ export function ListenerCard({
                     className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
                   />
                   <span
-                    className={`truncate type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-content-muted'}`}
+                    className={`truncate type-body-medium ${working ? 'tb-pulse text-success-deep' : 'text-content-muted'}`}
                   >
                     {statusLabel}
                   </span>
@@ -136,7 +136,7 @@ export function ListenerCard({
                       одно имя держало два решения. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-tiny font-bold ${working ? 'bg-success-deep text-on-success' : 'bg-content-muted text-on-neutral'}`}
+                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-small font-medium ${working ? 'bg-success-deep text-on-success' : 'bg-content-muted text-on-neutral'}`}
                   >
                     {activeCampaignCount}
                   </span>
@@ -178,7 +178,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-sm type-caption font-medium text-danger-deep">
+        <p className="mt-sm type-small-medium text-danger-deep">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

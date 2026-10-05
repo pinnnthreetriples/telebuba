@@ -90,7 +90,7 @@ export function CampaignsCard({
       label={t('neurocomment.campaigns.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="type-card-title">{t('neurocomment.campaigns.title')}</span>}
+      header={<span className="type-h3">{t('neurocomment.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
@@ -109,9 +109,7 @@ export function CampaignsCard({
                 accounts: campaign.account_count ?? 0,
               })}
               status={
-                <span
-                  className={`inline-flex items-center gap-tight type-caption font-medium ${tone}`}
-                >
+                <span className={`inline-flex items-center gap-tight type-small-medium ${tone}`}>
                   <span className="size-dot rounded-full bg-current" />
                   {t(`neurocomment.campaign.status.${campaign.status}`)}
                 </span>
@@ -177,7 +175,9 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-xl text-center type-prose">{t('neurocomment.campaigns.none')}</div>
+          <div className="py-xl text-center type-body text-content-subtle">
+            {t('neurocomment.campaigns.none')}
+          </div>
         ) : null}
       </div>
 
@@ -193,10 +193,10 @@ export function CampaignsCard({
           headerClassName="px-0 py-0"
           bodyClassName="px-0 pb-0 pt-md"
           label={t('neurocomment.channels.title')}
-          header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
+          header={<span className="type-body-medium">{t('neurocomment.channels.title')}</span>}
         >
           <div className="mb-md flex items-center justify-between gap-sm">
-            <span className="min-w-0 truncate type-caption font-medium text-action-primary">
+            <span className="min-w-0 truncate type-small-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
             <div className="flex shrink-0 items-center gap-sm">
@@ -206,9 +206,9 @@ export function CampaignsCard({
                 disabled={campaignId === null}
                 loading={checkingChannels}
                 onClick={onCheckChannels}
-                // `text-tiny` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
+                // `text-small` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
                 // рядом с именем кампании, и на рунге контрола имя не остаётся.
-                className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                className="text-small text-content-muted hover:border-action-primary hover:text-action-primary"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -232,7 +232,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-tight py-px text-tiny font-medium text-danger-deep"
+                    className="rounded-full bg-danger-tint px-tight py-px text-small font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>

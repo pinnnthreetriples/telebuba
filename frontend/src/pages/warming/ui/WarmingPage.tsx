@@ -68,8 +68,8 @@ function reasonKey(reason: string): string {
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
   return (
     <div className="text-right">
-      <div className={`type-stat ${cls}`}>{value}</div>
-      <div className="type-caption">{label}</div>
+      <div className={`type-h1 ${cls}`}>{value}</div>
+      <div className="type-small">{label}</div>
     </div>
   );
 }
@@ -230,7 +230,7 @@ export function WarmingPage() {
   return (
     <div className="tb-fadeup">
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 type-page-title">{t('warming.titleFull')}</h1>
+        <h1 className="m-0 type-h1">{t('warming.titleFull')}</h1>
         <div className="flex w-full flex-wrap items-center justify-between gap-md sm:w-auto sm:flex-nowrap sm:gap-lg">
           <div className="flex gap-md sm:gap-lg">
             <Counter
@@ -277,14 +277,16 @@ export function WarmingPage() {
         <div className="flex min-w-0 flex-col gap-lg">
           <Card className="p-lg">
             <div className="mb-md flex items-center justify-between">
-              <span className="type-card-title">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-surface-card px-sm py-hair type-caption">
+              <span className="type-h3">{t('warming.ready.title')}</span>
+              <span className="rounded-full border border-line bg-surface-card px-sm py-hair type-small">
                 {idle.length}
               </span>
             </div>
             <div className="flex flex-col gap-sm">
               {idle.length === 0 ? (
-                <div className="py-page text-center type-prose">{t('warming.ready.empty')}</div>
+                <div className="py-page text-center type-body text-content-subtle">
+                  {t('warming.ready.empty')}
+                </div>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;
@@ -318,31 +320,31 @@ export function WarmingPage() {
                       <AccountAvatar
                         account={account}
                         className="size-icon shrink-0 rounded-full"
-                        fallbackClassName="text-body font-semibold bg-info-tint text-info-strong"
+                        fallbackClassName="text-body font-medium bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
-                          <span className="truncate type-card-title">{name}</span>
+                          <span className="truncate type-h3">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
                           <div className="mt-px flex items-center gap-tight">
-                            <span className="truncate type-caption">{account.phone}</span>
+                            <span className="truncate type-small">{account.phone}</span>
                             {flag}
                           </div>
                         ) : null}
                         <div className="mt-hair flex items-center gap-sm">
                           <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
-                          <span className={`text-tiny font-semibold ${tTone}`}>{trust ?? '—'}</span>
+                          <span className={`text-small font-medium ${tTone}`}>{trust ?? '—'}</span>
                           {ptype ? (
                             <>
-                              <span className="type-caption">·</span>
+                              <span className="type-small">·</span>
                               {pc ? (
                                 <span
                                   className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
                                 />
                               ) : null}
-                              <span className="type-caption">{proxyTypeLabel(ptype)}</span>
+                              <span className="type-small">{proxyTypeLabel(ptype)}</span>
                             </>
                           ) : null}
                         </div>
@@ -377,10 +379,10 @@ export function WarmingPage() {
 
           <CollapsibleCard
             wrapperClassName="rounded-lg border border-line bg-surface-card"
-            header={<span className="type-card-title">{t('warming.channels.title')}</span>}
+            header={<span className="type-h3">{t('warming.channels.title')}</span>}
             label={t('warming.channels.title')}
           >
-            <div className="mb-md type-caption">{t('warming.channels.hint')}</div>
+            <div className="mb-md type-small">{t('warming.channels.hint')}</div>
             <div className="flex flex-wrap gap-sm">
               {channels.map((channel) => (
                 <Badge
@@ -440,8 +442,8 @@ export function WarmingPage() {
                       5.85:1. Гейт видит это сам — см. `contrast.test.ts`. */}
                   <Icon name="check" size={16} className="stroke-success-deep" />
                 </span>
-                <span className="type-card-title">{t('warming.warmed.title')}</span>
-                <Badge tone="success" className="font-bold">
+                <span className="type-h3">{t('warming.warmed.title')}</span>
+                <Badge tone="success" className="font-medium">
                   {warmed.length}
                 </Badge>
               </>
@@ -466,16 +468,16 @@ export function WarmingPage() {
                       <AccountAvatar
                         account={acc}
                         className="size-tile shrink-0 rounded-full ring-2 ring-success"
-                        fallbackClassName="text-tiny font-bold bg-info-tint text-info-strong"
+                        fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
-                          <span className="truncate type-card-title leading-stack">{name}</span>
+                          <span className="truncate type-h3">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
                           <div className="mt-px flex items-center gap-tight">
-                            <span className="truncate type-caption">{acc.phone}</span>
+                            <span className="truncate type-small">{acc.phone}</span>
                             {flag}
                           </div>
                         ) : null}
@@ -485,7 +487,7 @@ export function WarmingPage() {
                               className={`fi fi-${acc.proxy_country.toLowerCase()} h-flag w-flag rounded-[2px]`}
                             />
                           ) : null}
-                          <span className="type-caption">
+                          <span className="type-small">
                             {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
                           </span>
                         </div>
@@ -493,15 +495,15 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-small font-medium text-success-deep">
                         <Icon name="check" size={10} className="stroke-success-deep" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
                     <div className="mt-lg flex items-center rounded-lg bg-surface px-lg py-md">
                       <div className="flex-1">
-                        <div className="type-caption">{t('warming.warmed.days')}</div>
-                        <div className="text-body font-bold">
+                        <div className="type-small">{t('warming.warmed.days')}</div>
+                        <div className="text-body font-medium">
                           {t('warming.warmed.daysValue', {
                             days: acc.warming_days,
                             target: acc.target_days,
@@ -510,8 +512,8 @@ export function WarmingPage() {
                       </div>
                       <span className="h-compact w-px bg-line" />
                       <div className="flex-1 pl-lg">
-                        <div className="type-caption">{t('warming.warmed.trust')}</div>
-                        <div className="text-body font-bold text-success-deep">
+                        <div className="type-small">{t('warming.warmed.trust')}</div>
+                        <div className="text-body font-medium text-success-deep">
                           {acc.trust_score ?? '—'}
                         </div>
                       </div>
@@ -561,9 +563,9 @@ export function WarmingPage() {
           <CollapsibleCard
             label={t('warming.howto.title')}
             wrapperClassName="rounded-card border border-line bg-canvas"
-            header={<span className="type-card-title">{t('warming.howto.title')}</span>}
+            header={<span className="type-h3">{t('warming.howto.title')}</span>}
           >
-            <div className="mb-lg type-caption">{t('warming.howto.hint')}</div>
+            <div className="mb-lg type-small">{t('warming.howto.hint')}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <NumberedStep key={index} number={index + 1}>

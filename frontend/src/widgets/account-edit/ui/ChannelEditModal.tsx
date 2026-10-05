@@ -174,11 +174,11 @@ export function ChannelEditModal({
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate type-dialog-title">
+              <h2 className="truncate type-h2">
                 {detail.data?.title ?? t('accounts.channel.loading')}
               </h2>
               {!detailBlank && (
-                <div className="truncate type-prose">
+                <div className="truncate type-body text-content-subtle">
                   {detail.data?.username != null
                     ? `@${detail.data.username}`
                     : t('accounts.channel.privateBadge')}
@@ -218,7 +218,7 @@ export function ChannelEditModal({
                   }}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-xs block type-caption text-danger-deep">
+                  <span className="mt-xs block type-small text-danger-deep">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}

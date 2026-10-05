@@ -43,14 +43,14 @@ export function CaptchaSolverCard({
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-sm">
-              <span className="type-item-title">{t('neurocomment.captcha.title')}</span>
+              <span className="type-body-medium">{t('neurocomment.captcha.title')}</span>
               {/* `tabIndex` and not a <button>: there is nothing here to activate, only
                   something to read. See `.tb-tip-pop` in app/styles/index.css. */}
               <span className="tb-tip inline-flex">
                 <span
                   tabIndex={0}
                   aria-describedby={tipId}
-                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-surface-card text-tiny font-bold text-content-subtle"
+                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-surface-card text-small font-medium text-content-subtle"
                 >
                   ?
                 </span>
@@ -64,7 +64,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="type-caption">{t('neurocomment.captcha.sub')}</div>
+            <div className="type-small">{t('neurocomment.captcha.sub')}</div>
           </div>
         </div>
         <Switch
@@ -91,7 +91,7 @@ export function CaptchaSolverCard({
               <path d="M12 8v4" />
               <path d="M12 16h.01" />
             </svg>
-            <span className="type-eyebrow text-warning-deep">
+            <span className="type-small-medium text-warning-deep">
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>

@@ -197,7 +197,7 @@ export function ChannelPostsPanel({
 
   return (
     <div className="mt-xl border-t border-line-row pt-lg">
-      <div className="mb-md type-card-title">{t('accounts.channel.postsTitle')}</div>
+      <div className="mb-md type-h3">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
       {/* `gap-sm` вместо `mt-sm` у каждого ребёнка: все три несли одну и ту же ступень
@@ -226,7 +226,7 @@ export function ChannelPostsPanel({
                 <Icon name="video" size={16} />
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate type-item-title">{file.name}</span>
+            <span className="min-w-0 flex-1 truncate type-body-medium">{file.name}</span>
             {!busy && (
               <IconButton
                 size="sm"
@@ -265,7 +265,7 @@ export function ChannelPostsPanel({
                 <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
             </IconButton>
-            <span className="type-caption">
+            <span className="type-small">
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
@@ -314,7 +314,7 @@ export function ChannelPostsPanel({
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center type-prose">
+        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center type-body text-content-subtle">
           {t('accounts.channel.postsEmpty')}
         </div>
       )}
@@ -322,7 +322,7 @@ export function ChannelPostsPanel({
         <div className="mt-md flex flex-col gap-sm">
           {items.map((post) => (
             <div key={post.post_id} className="rounded-lg border border-line px-lg py-md">
-              <div className="flex items-center gap-sm type-caption">
+              <div className="flex items-center gap-sm type-small">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
                   <span className="rounded-sm bg-canvas px-tight py-px font-medium text-content-muted">
@@ -378,7 +378,7 @@ export function ChannelPostsPanel({
                     {/* The same readout the composer carries: without it the box
                         just stops accepting input at the media-aware cap with
                         nothing on screen explaining why. */}
-                    <span className="mr-auto type-caption">
+                    <span className="mr-auto type-small">
                       {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
                     </span>
                     <Button

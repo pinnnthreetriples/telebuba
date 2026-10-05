@@ -138,7 +138,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-tiny font-medium text-info-strong">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-small font-medium text-info-strong">
       <span className="size-dot rounded-full bg-action-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -161,7 +161,7 @@ function AccountComments({
       <div className="mb-sm flex items-center justify-between">
         <div className="flex items-center gap-sm">
           <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-          <span className="type-item-title">{t('neurocomment.feed.title')}</span>
+          <span className="type-body-medium">{t('neurocomment.feed.title')}</span>
           <Badge tone="neutral" size="xs">
             {comments.length}
           </Badge>
@@ -177,7 +177,9 @@ function AccountComments({
         ) : null}
       </div>
       {comments.length === 0 ? (
-        <div className="py-lg text-center type-prose">{t('neurocomment.feed.empty')}</div>
+        <div className="py-lg text-center type-body text-content-subtle">
+          {t('neurocomment.feed.empty')}
+        </div>
       ) : (
         <div className="tb-scroll max-h-feed overflow-y-auto">
           {comments.map((c) => {
@@ -249,7 +251,7 @@ export function NeurocommentBoard({
         header: t('neurocomment.board.col.account'),
         cell: (info) => info.getValue<string>(),
         meta: {
-          cellClassName: 'whitespace-nowrap type-item-title',
+          cellClassName: 'whitespace-nowrap type-body-medium',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -277,7 +279,7 @@ export function NeurocommentBoard({
           </span>
         ),
         meta: {
-          cellClassName: 'whitespace-nowrap type-prose text-action-primary',
+          cellClassName: 'whitespace-nowrap type-body text-action-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -303,7 +305,8 @@ export function NeurocommentBoard({
             row.original.text
           ),
         meta: {
-          cellClassName: 'max-w-name overflow-hidden text-ellipsis whitespace-nowrap type-prose',
+          cellClassName:
+            'max-w-name overflow-hidden text-ellipsis whitespace-nowrap type-body text-content-subtle',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -365,8 +368,8 @@ export function NeurocommentBoard({
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>
-          <span className="type-card-title">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-info-tint px-sm py-hair text-tiny font-semibold text-info-strong">
+          <span className="type-h3">{t('neurocomment.board.title')}</span>
+          <span className="rounded-full bg-info-tint px-sm py-hair text-small font-medium text-info-strong">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>
@@ -374,7 +377,7 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-tiny font-semibold text-info-strong">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-small font-medium text-info-strong">
               <span className="size-dot rounded-full bg-action-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>
@@ -382,7 +385,7 @@ export function NeurocommentBoard({
             // Hidden on a phone: the header already carries a title, a count pill, the
             // gear and the chevron, and this static label is the one part of it that
             // says nothing actionable — keeping it forced the row to wrap.
-            <span className="hidden type-caption sm:inline">{t('neurocomment.board.updated')}</span>
+            <span className="hidden type-small sm:inline">{t('neurocomment.board.updated')}</span>
           )}
           <IconButton
             size="touch"
@@ -411,7 +414,9 @@ export function NeurocommentBoard({
           )}
         />
       ) : (
-        <div className="px-lg py-page text-center type-prose">{t('neurocomment.board.empty')}</div>
+        <div className="px-lg py-page text-center type-body text-content-subtle">
+          {t('neurocomment.board.empty')}
+        </div>
       )}
     </CollapsibleCard>
   );

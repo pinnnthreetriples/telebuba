@@ -27,7 +27,7 @@ export function ImportFileList({
   return (
     <div className="flex flex-col gap-md">
       {files.length > 1 && (
-        <div className="type-caption">
+        <div className="type-small">
           {t('accounts.addWizard.importSummary', { ok, total: files.length })}
         </div>
       )}
@@ -41,9 +41,9 @@ export function ImportFileList({
               <Icon name="file" size={18} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate type-item-title">{file.name}</div>
+              <div className="truncate type-body-medium">{file.name}</div>
               <div
-                className={`mt-px text-tiny ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
+                className={`mt-px text-small ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
               >
                 {verdict(file)}
               </div>

@@ -419,8 +419,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               <Icon name="users" size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="type-dialog-title">{t('accounts.bulk.title')}</h2>
-              <div className="truncate type-prose">
+              <h2 className="type-h2">{t('accounts.bulk.title')}</h2>
+              <div className="truncate type-body text-content-subtle">
                 {t('accounts.bulk.selected', { count: ids.length })}
               </div>
             </div>
@@ -448,7 +448,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   <AccountAvatar
                     account={row}
                     className="size-tile rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-label"
+                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
                   />
                   {!locked && ids.length > 1 && (
                     <IconButton
@@ -567,12 +567,16 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   tailTooFar={tailTooFar}
                 />
               )}
-              {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
+              {!started && <div className="type-small sm:hidden">{NOTE[tab]}</div>}
             </div>
           </fieldset>
 
           <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
-            {!started && <div className="mr-auto hidden type-label sm:block">{NOTE[tab]}</div>}
+            {!started && (
+              <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
+                {NOTE[tab]}
+              </div>
+            )}
             {started ? (
               running ? (
                 <Button variant="danger" onClick={bulk.stop}>

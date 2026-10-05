@@ -30,19 +30,19 @@ export function Catalog({
     <div className="min-h-screen bg-canvas">
       <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur">
         <div className="mx-auto flex h-header max-w-shell items-center gap-lg px-lg">
-          <h1 className="type-card-title">Дизайн-система Telebuba</h1>
+          <h1 className="type-h3">Дизайн-система Telebuba</h1>
           <nav className="flex flex-wrap gap-md">
             {NAV.map(([id, label]) => (
-              <a key={id} href={`#${id}`} className="type-caption hover:text-info-strong">
+              <a key={id} href={`#${id}`} className="type-small hover:text-info-strong">
                 {label}
               </a>
             ))}
             {patterns && (
-              <a href="#patterns" className="hidden type-caption hover:text-info-strong md:inline">
+              <a href="#patterns" className="hidden type-small hover:text-info-strong md:inline">
                 Блоки продукта
               </a>
             )}
-            <a href="#typography" className="type-caption hover:text-info-strong">
+            <a href="#typography" className="type-small hover:text-info-strong">
               Типографика
             </a>
           </nav>

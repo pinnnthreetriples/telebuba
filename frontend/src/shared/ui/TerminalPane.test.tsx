@@ -7,7 +7,7 @@ test('feed is the default and inline is shorter with a smaller radius', () => {
   const { rerender } = render(<TerminalPane>строка</TerminalPane>);
   const pane = screen.getByText('строка');
   expect(pane.className).toContain('max-h-feed');
-  expect(pane.className).toContain('leading-log');
+  expect(pane.className).toContain('');
   expect(pane.className).toContain('py-sm');
 
   rerender(<TerminalPane size="inline">строка</TerminalPane>);

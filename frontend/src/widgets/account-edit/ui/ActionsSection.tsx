@@ -89,10 +89,10 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
       <Section title={t('accounts.edit.actions')} bodyClassName="px-xl pb-tight">
         <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>
-            <div className="type-card-title">{t('accounts.edit.aliveTitle')}</div>
+            <div className="type-h3">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
+              className={`mt-px text-small ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -136,8 +136,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         </div>
         <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>
-            <div className="type-card-title">{t('accounts.edit.resetSession')}</div>
-            <div className="mt-px type-caption">{t('accounts.edit.resetSessionHint')}</div>
+            <div className="type-h3">{t('accounts.edit.resetSession')}</div>
+            <div className="mt-px type-small">{t('accounts.edit.resetSessionHint')}</div>
           </div>
           <span className="flex shrink-0 items-center gap-sm">
             <FeedbackMark
@@ -150,8 +150,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         </div>
         <div className="flex items-center justify-between gap-md py-lg">
           <div>
-            <div className="type-card-title">{t('accounts.edit.deleteAccount')}</div>
-            <div className="mt-px type-caption">{t('accounts.edit.deleteHint')}</div>
+            <div className="type-h3">{t('accounts.edit.deleteAccount')}</div>
+            <div className="mt-px type-small">{t('accounts.edit.deleteHint')}</div>
           </div>
           <button
             type="button"

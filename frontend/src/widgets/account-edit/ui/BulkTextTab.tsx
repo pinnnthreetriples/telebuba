@@ -29,7 +29,7 @@ export function BulkTextTab({
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-lg">
-      <div className="rounded-lg bg-info-tint px-md py-md type-prose">
+      <div className="rounded-lg bg-info-tint px-md py-md type-body text-content-subtle">
         {t('accounts.bulk.hint')}
       </div>
       {TEXT_FIELDS.map((key) => {
@@ -51,7 +51,7 @@ export function BulkTextTab({
               >
                 {on[key] && <Icon name="check" size={14} className="stroke-on-action" />}
               </span>
-              <span className="type-label">{label}</span>
+              <span className="type-body-medium text-content-secondary">{label}</span>
             </button>
             {key === 'bio' ? (
               <Textarea
@@ -74,17 +74,17 @@ export function BulkTextTab({
               />
             )}
             {on[key] && value[key].trim().length > TEXT_MAX[key] && (
-              <span role="alert" className="type-caption font-medium text-danger-deep">
+              <span role="alert" className="type-small-medium text-danger-deep">
                 {t('accounts.bulk.tooLong', { max: TEXT_MAX[key] })}
               </span>
             )}
             {on[key] && empty && key === 'first_name' && (
-              <span role="alert" className="type-caption font-medium text-danger-deep">
+              <span role="alert" className="type-small-medium text-danger-deep">
                 {t('accounts.profile.errFirstName')}
               </span>
             )}
             {on[key] && empty && key !== 'first_name' && (
-              <span className="type-caption">{t('accounts.bulk.clears')}</span>
+              <span className="type-small">{t('accounts.bulk.clears')}</span>
             )}
           </div>
         );

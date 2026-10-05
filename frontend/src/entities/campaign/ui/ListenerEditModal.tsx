@@ -151,8 +151,10 @@ export function ListenerEditModal({
           <Icon name="chart" size={18} />
         </span>
         <div className="flex-1">
-          <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
-          <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
+          <div className="type-h2">{t('neurocomment.listener.title')}</div>
+          <div className="mt-px type-body text-content-subtle">
+            {t('neurocomment.modal.listenerEdit.sub')}
+          </div>
         </div>
         <CloseButton aria-label={t('neurocomment.modal.close')} onClick={close} disabled={saving} />
       </div>
@@ -177,7 +179,9 @@ export function ListenerEditModal({
       >
         {tab === 'commenting' ? (
           <>
-            <div className="mb-sm type-label">{t('neurocomment.modal.listenerEdit.account')}</div>
+            <div className="mb-sm type-body-medium text-content-secondary">
+              {t('neurocomment.modal.listenerEdit.account')}
+            </div>
             <Select
               value={pick ?? ''}
               onChange={setPick}
@@ -199,7 +203,9 @@ export function ListenerEditModal({
           </>
         ) : (
           <>
-            <p className="mb-lg mt-0 type-prose">{t('neurocomment.limits.note')}</p>
+            <p className="mb-lg mt-0 type-body text-content-subtle">
+              {t('neurocomment.limits.note')}
+            </p>
             {/* Touched fields over the read, so a read landing after the modal opened shows. */}
             <NeuroLimitsFields
               value={limitsValue}
@@ -214,7 +220,7 @@ export function ListenerEditModal({
         )}
 
         {partialSave ? (
-          <p role="alert" className="mt-sm type-caption text-danger">
+          <p role="alert" className="mt-sm type-small text-danger">
             {t('neurocomment.modal.listenerEdit.partialSave')}
           </p>
         ) : null}

@@ -76,7 +76,7 @@ export function PhotoTab({
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
-      <div className="mb-md type-prose">{t('accounts.profile.photoHint')}</div>
+      <div className="mb-md type-body text-content-subtle">{t('accounts.profile.photoHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
         {photos.map((photo, index) => (
           <div key={photo.photo_id} className="group relative">
@@ -110,7 +110,7 @@ export function PhotoTab({
               <Icon name="close" size={16} />
             </IconButton>
             {photo.is_main ? (
-              <span className="mt-tight block w-full py-hair text-tiny font-medium text-action-primary">
+              <span className="mt-tight block w-full py-hair text-small font-medium text-action-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -120,7 +120,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-tight block w-full py-hair text-left text-tiny font-medium text-action-primary hover:underline disabled:opacity-50"
+                className="mt-tight block w-full py-hair text-left text-small font-medium text-action-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>

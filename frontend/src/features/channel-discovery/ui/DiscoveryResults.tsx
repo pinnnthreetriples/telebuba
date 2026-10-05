@@ -53,7 +53,7 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   const { t } = useTranslation();
   if (sources.length === 0) return null;
   return (
-    <p className="type-caption">
+    <p className="type-small">
       {sources
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
@@ -106,7 +106,7 @@ function QualifyingCaption({
   // the qualifying phase.
   if (phase !== 'qualifying' && qualified >= total) return null;
   return (
-    <span role="status" className={cn('type-caption', running && 'tb-pulse')}>
+    <span role="status" className={cn('type-small', running && 'tb-pulse')}>
       {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
     </span>
   );
@@ -172,7 +172,7 @@ function CommentsCell({ candidate, running }: { candidate: DiscoveryCandidate; r
   const reason = nonSelectReasonKey(candidate);
   if (reason != null) {
     return (
-      <span className="type-caption">{t(`neurocomment.modal.discovery.results.${reason}`)}</span>
+      <span className="type-small">{t(`neurocomment.modal.discovery.results.${reason}`)}</span>
     );
   }
   const badge = commentBadgeKey(candidate, running);
@@ -185,7 +185,7 @@ function CommentsCell({ candidate, running }: { candidate: DiscoveryCandidate; r
         {t(`neurocomment.modal.discovery.results.${badge.key}`)}
       </Badge>
       {caveats.length > 0 ? (
-        <span className="type-caption text-warning-deep">{caveats.join(' · ')}</span>
+        <span className="type-small text-warning-deep">{caveats.join(' · ')}</span>
       ) : null}
     </div>
   );
@@ -282,10 +282,15 @@ function Row({
       <div className="flex items-center gap-md">
         <div className="flex w-action shrink-0 items-center justify-center">{checkbox}</div>
         <div className="min-w-0 flex-1">
-          <div className={cn('truncate type-label', !selectable && 'text-content-subtle')}>
+          <div
+            className={cn(
+              'truncate type-body-medium text-content-secondary',
+              !selectable && 'text-content-subtle',
+            )}
+          >
             {titleText}
           </div>
-          <div className="truncate type-caption">
+          <div className="truncate type-small">
             <span>{handle}</span>
             {deviations.length > 0 ? ` · ${deviations.join(' · ')}` : null}
           </div>
@@ -406,7 +411,7 @@ export function DiscoveryResults({
       // no `work` yet — the plain-text line it always showed stays the fallback.
       if (work != null) return <SearchProgress work={work} phase="searching" />;
       return (
-        <p role="status" className="py-page text-center type-prose">
+        <p role="status" className="py-page text-center type-body text-content-subtle">
           {t('neurocomment.modal.discovery.results.searching')}
         </p>
       );
@@ -435,7 +440,7 @@ export function DiscoveryResults({
 
     if (candidates.length === 0) {
       return (
-        <p className="py-page text-center type-prose">
+        <p className="py-page text-center type-body text-content-subtle">
           {t('neurocomment.modal.discovery.results.empty')}
         </p>
       );
@@ -482,14 +487,14 @@ export function DiscoveryResults({
             ]}
           />
           {filtered > 0 ? (
-            <span className="type-caption">
+            <span className="type-small">
               {t('neurocomment.modal.discovery.results.filtered', { count: filtered })}
             </span>
           ) : null}
           {/* The run's yield beyond what the segmented control already says, once
               nothing else will change it — suppressed when it would just repeat N. */}
           {settled && qualified > 0 && commentsOn !== eligible.length ? (
-            <span className="type-caption">
+            <span className="type-small">
               {t('neurocomment.modal.discovery.results.commentsOn', { count: commentsOn })}
             </span>
           ) : null}
@@ -505,10 +510,7 @@ export function DiscoveryResults({
           )}
           {hasProblem ? (
             <div className="ml-auto flex items-center gap-sm">
-              <span
-                role="status"
-                className="flex items-center gap-xs type-caption text-warning-deep"
-              >
+              <span role="status" className="flex items-center gap-xs type-small text-warning-deep">
                 <Icon name="alert-triangle" size={14} className="shrink-0" />
                 {problemText}
               </span>
@@ -526,7 +528,7 @@ export function DiscoveryResults({
         </div>
 
         {staleOrCappedCaption != null ? (
-          <span className="type-caption">{staleOrCappedCaption}</span>
+          <span className="type-small">{staleOrCappedCaption}</span>
         ) : null}
 
         {/* The source report only: `problemText` above already said the run's own
@@ -539,7 +541,7 @@ export function DiscoveryResults({
         ) : null}
 
         {wide ? (
-          <div className="flex items-center gap-md type-caption">
+          <div className="flex items-center gap-md type-small">
             <div className="flex w-action shrink-0 items-center justify-center">{selectAll}</div>
             <span className="flex-1">{t('neurocomment.modal.discovery.results.colChannel')}</span>
             <span className="w-number shrink-0 text-right">
@@ -552,7 +554,7 @@ export function DiscoveryResults({
         ) : (
           // The stacked layout has no column headers, and select-all lives in one — so
           // on a phone the operator could otherwise only tap candidates one at a time.
-          <label className="flex items-center gap-sm type-caption">
+          <label className="flex items-center gap-sm type-small">
             {selectAll}
             {t('neurocomment.modal.discovery.results.selectAll')}
           </label>
@@ -572,7 +574,7 @@ export function DiscoveryResults({
         </div>
 
         {sources.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-sm border-t border-line-row pt-sm type-caption">
+          <div className="flex flex-wrap items-center justify-between gap-sm border-t border-line-row pt-sm type-small">
             <span>
               {t('neurocomment.modal.discovery.results.sourcesPrefix')}{' '}
               {sources

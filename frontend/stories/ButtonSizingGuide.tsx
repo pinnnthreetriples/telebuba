@@ -10,8 +10,8 @@ const SIZES = [
 export function ButtonSizingGuide() {
   return (
     <div className="rounded-card border border-info-line bg-info-tint p-lg">
-      <h3 className="type-card-title">Как выбирать размер кнопки</h3>
-      <p className="mt-tight type-prose">
+      <h3 className="type-h3">Как выбирать размер кнопки</h3>
+      <p className="mt-tight type-body text-content-subtle">
         Высота отвечает за место действия, цвет — за его смысл. Эти оси показаны отдельно: сочетание
         размера и заливки не создаёт новый вид кнопки.
       </p>
@@ -21,7 +21,7 @@ export function ButtonSizingGuide() {
             <Button size={size} variant={size === 'lg' ? 'primary' : 'secondary'}>
               {label}
             </Button>
-            <span className="type-caption">
+            <span className="type-small">
               <strong>
                 {size} · {height}
               </strong>{' '}
@@ -31,7 +31,7 @@ export function ButtonSizingGuide() {
         ))}
       </div>
       <div className="mt-lg border-t border-info-line pt-md">
-        <p className="mb-sm type-caption">
+        <p className="mb-sm type-small">
           <strong>fullWidth</strong> — ширина на всю форму при высоте md. Это не отдельный размер.
         </p>
         <div className="w-menu max-w-full">

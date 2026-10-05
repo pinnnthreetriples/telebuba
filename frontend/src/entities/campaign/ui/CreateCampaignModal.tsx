@@ -33,13 +33,15 @@ export function CreateCampaignModal({
           <Icon name="plus" size={18} />
         </span>
         <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.createCampaign.title')}</div>
-          <div className="mt-hair type-prose">{t('neurocomment.modal.createCampaign.sub')}</div>
+          <div className="type-h2">{t('neurocomment.modal.createCampaign.title')}</div>
+          <div className="mt-hair type-body text-content-subtle">
+            {t('neurocomment.modal.createCampaign.sub')}
+          </div>
         </div>
       </div>
 
       <div className="px-2xl pb-xl pt-xl">
-        <div className="mb-sm type-item-title">
+        <div className="mb-sm type-body-medium">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
         <Input
@@ -52,7 +54,7 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.nameLabel')}
         />
 
-        <div className="mb-sm type-item-title">
+        <div className="mb-sm type-body-medium">
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
@@ -65,10 +67,10 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.promptLabel')}
         />
 
-        <div className="mb-sm type-item-title">
+        <div className="mb-sm type-body-medium">
           {t('neurocomment.modal.createCampaign.channelsLabel')}
         </div>
-        <div className="mb-md type-caption">
+        <div className="mb-md type-small">
           {t('neurocomment.modal.createCampaign.channelsHint')}
         </div>
         {channels.length > 0 ? (

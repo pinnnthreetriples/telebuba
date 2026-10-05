@@ -46,7 +46,9 @@ export function CommentModeFields({
 
   return (
     <div className="mt-xl">
-      <div className="mb-sm type-label">{t('neurocomment.mode.label')}</div>
+      <div className="mb-sm type-body-medium text-content-secondary">
+        {t('neurocomment.mode.label')}
+      </div>
       <SegmentedControl
         variant="outline"
         value={mode}
@@ -85,7 +87,9 @@ export function CommentModeFields({
           "пишем первыми" it would be a number the operator turns to no effect. */}
       {mode === 'reply' ? (
         <label className="mt-lg block">
-          <span className="mb-sm block type-label">{t('neurocomment.mode.waitLabel')}</span>
+          <span className="mb-sm block type-body-medium text-content-secondary">
+            {t('neurocomment.mode.waitLabel')}
+          </span>
           <span className="flex items-center gap-sm">
             <input
               type="number"
@@ -108,7 +112,7 @@ export function CommentModeFields({
               aria-label={t('neurocomment.mode.waitLabel')}
               className="tb-time w-number rounded-md border border-line bg-surface-card px-md py-tight text-body font-medium text-content-primary disabled:opacity-60"
             />
-            <span className="type-caption">{t('neurocomment.mode.waitHint')}</span>
+            <span className="type-small">{t('neurocomment.mode.waitHint')}</span>
           </span>
         </label>
       ) : null}

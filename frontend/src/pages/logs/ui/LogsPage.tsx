@@ -104,7 +104,7 @@ export function LogsPage() {
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-stamp',
-          cellClassName: 'font-mono type-prose',
+          cellClassName: 'font-mono type-body text-content-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -121,7 +121,7 @@ export function LogsPage() {
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'type-value',
+          cellClassName: 'type-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -130,7 +130,7 @@ export function LogsPage() {
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'truncate type-value',
+          cellClassName: 'truncate type-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -144,7 +144,7 @@ export function LogsPage() {
             {eventLabel(t, row.original.event)}
           </span>
         ),
-        meta: { cellClassName: 'type-value' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'type-body' } satisfies DataTableColumnMeta,
       },
       {
         id: 'reason',
@@ -157,7 +157,7 @@ export function LogsPage() {
         // remaining width and the table already scrolls horizontally.
         cell: ({ row }) => eventReason(t, row.original) || '—',
         meta: {
-          cellClassName: 'type-value',
+          cellClassName: 'type-body',
         } satisfies DataTableColumnMeta,
       },
     ],
@@ -173,7 +173,7 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-page-title">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-xl type-h1">{t('logs.title')}</h1>
 
       <div className="mb-lg flex flex-wrap items-center gap-sm">
         {/* The measured capsule that used to slide behind these pills is gone with
@@ -212,7 +212,9 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-empty text-center type-prose">{t('logs.empty')}</Card>
+        <Card className="px-lg py-empty text-center type-body text-content-subtle">
+          {t('logs.empty')}
+        </Card>
       ) : (
         <>
           <Card className="overflow-hidden">

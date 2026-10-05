@@ -20,8 +20,8 @@ import { Section } from './_shared';
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-md border-b border-line-row py-md">
-      <span className="type-prose">{label}</span>
-      <span className="text-right type-label text-content-primary">{value}</span>
+      <span className="type-body text-content-subtle">{label}</span>
+      <span className="text-right type-body-medium text-content-primary">{value}</span>
     </div>
   );
 }
@@ -175,7 +175,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <Spinner />
           ) : (
             <span
-              className={`shrink-0 rounded-full px-md py-xs text-tiny font-medium ${
+              className={`shrink-0 rounded-full px-md py-xs text-small font-medium ${
                 hasPassword ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'
               }`}
             >
@@ -196,7 +196,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             reset was requested against), and inside the 2FA-on arm that warning was
             silently dropped in exactly the case where it matters most. */}
         {status?.pending_reset_date ? (
-          <div className="border-b border-line-row py-md text-body font-semibold text-danger">
+          <div className="border-b border-line-row py-md text-body font-medium text-danger">
             {t('accounts.edit.twofaResetRequested', {
               date: status.pending_reset_date.slice(0, 10),
             })}
@@ -208,13 +208,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           </div>
         ) : created ? (
           <>
-            <div className="mb-md type-item-title">{t('accounts.edit.twofaCreatedTitle')}</div>
+            <div className="mb-md type-body-medium">{t('accounts.edit.twofaCreatedTitle')}</div>
             {created.stored === false && !keptPrevious ? (
               // The RPC landed but the DB write did not, so this response is the
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
+              <Notice tone="danger" className="mb-md py-md text-small font-medium">
                 {t('accounts.edit.twofaStoreFailed')}
               </Notice>
             ) : null}
@@ -228,7 +228,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
+              <Notice tone="danger" className="mb-md py-md text-small font-medium">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
@@ -266,10 +266,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               </Button>
             ) : null}
             {clipboard ? null : (
-              <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>
+              <div className="mb-md type-small">{t('accounts.edit.twofaCopyManual')}</div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-md type-caption font-medium text-danger-deep">
+              <div className="mb-md type-small-medium text-danger-deep">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
@@ -288,7 +288,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           <>
             {/* A set, change or disable against an account whose live state we could
                 not read is a guess, so this branch offers none of them. */}
-            <div className="type-caption text-danger-deep">
+            <div className="type-small text-danger-deep">
               {t('accounts.edit.twofaReadErr', {
                 reason: readError
                   ? t(`shell.code.${readError}`, { defaultValue: readError })
@@ -371,7 +371,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-md type-caption">{t('accounts.edit.twofaNotStoredNote')}</div>
+              <div className="mt-md type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
             )}
             <TwoFactorEmail
               // Keyed on the server-side email state: a write's optimistic

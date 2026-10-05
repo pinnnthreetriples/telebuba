@@ -18,6 +18,7 @@ const tokens = loadTokens();
 const SCALES = {
   colors: tokens.flatColors,
   fontSize: tokens.fontSize,
+  fontWeight: tokens.fontWeight,
   typeRole: tokens.typeRole,
   lineHeight: tokens.lineHeight,
   letterSpacing: tokens.letterSpacing,
@@ -69,12 +70,12 @@ export function colorRoots() {
   return Object.keys(tokens.flatColors);
 }
 
-// Ступень размера и краска, которые тратит роль. Без этого рунг, который носят только
+// Ступень размера, вес и краска, которые тратит стиль. Без этого рунг, который носят только
 // роли, выглядел бы мёртвым.
 export function roleRefs() {
   const refs = [];
   for (const role of Object.values(tokens.typeRole)) {
-    refs.push(`fontSize.${role.size}`, `colors.${role.ink}`);
+    refs.push(`fontSize.${role.size}`, `fontWeight.${role.weight}`, `colors.${role.ink}`);
   }
   return refs;
 }
