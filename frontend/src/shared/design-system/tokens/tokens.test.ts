@@ -117,7 +117,7 @@ test('краска теней и завес приходит только из �
 // Проверка идёт по ИСХОДНИКУ, а не по значениям. Сверка по значениям слепа именно там, где
 // нужна: `content.disabled` и `content.subtle` — один и тот же серый, поэтому «значение
 // носится» выполнялось бы для мёртвой ступени за счёт живой. Роль — это путь, а не цвет.
-const TECHNICAL = new Set(['transparent', 'current', 'white', 'black']);
+const TECHNICAL = new Set(['transparent', 'current', 'black']);
 const GROUPS = ['background', 'content', 'border', 'action', 'feedback', 'inverse'];
 
 async function semanticSource(): Promise<{ declared: string; projection: string }> {
@@ -165,14 +165,54 @@ test('каждая объявленная роль доходит до клас�
   expect(roles.filter((role) => !projection.includes(role))).toEqual([]);
 });
 
-test('градиент заглушки использует общую роль поверх существующей палитры', async () => {
-  const [{ background, flatColors }, { palette }] = await Promise.all([
-    import('./semantic'),
-    import('./primitives'),
-  ]);
+// ── Один цвет — одно имя ────────────────────────────────────────────────────────────
+//
+// Восемь имён белого, два синего действия, два его подложки — совпадения копились по
+// одному, и каждое приходило с доводом «это два решения». Гейт сверяет ЗНАЧЕНИЯ: два
+// класса с одной краской — это синоним, и единственный допущенный назван ниже вместе с
+// причиной (см. шапку `semantic.ts`).
+const ALLOWED_TWINS = [['on-fill', 'surface-card']];
 
-  expect(background.fallback).toEqual({ start: palette.blue200, end: palette.warmGrey300 });
-  expect(flatColors.fallback).toEqual(background.fallback);
+test('у каждой краски одно имя', async () => {
+  const { flatColors } = await import('./semantic');
+  const byValue = new Map<string, string[]>();
+  for (const [name, value] of Object.entries(flatColors)) {
+    const rungs: [string, string][] =
+      typeof value === 'string'
+        ? [[name, value]]
+        : Object.entries(value).map(([rung, hex]) => [
+            rung === 'DEFAULT' ? name : `${name}-${rung}`,
+            hex,
+          ]);
+    for (const [id, hex] of rungs) {
+      const key = hex.toLowerCase();
+      byValue.set(key, [...(byValue.get(key) ?? []), id]);
+    }
+  }
+  const twins = [...byValue.values()].filter((ids) => ids.length > 1).map((ids) => ids.sort());
+
+  // Если разбор перестанет находить краски, утверждение ниже выполнится на пустой карте.
+  expect(byValue.size).toBeGreaterThan(30);
+  expect(twins).toEqual(ALLOWED_TWINS);
+});
+
+// Почти-совпадение — то же самое, только незаметнее: `line-row` стоял в 1–2 единицах от
+// `canvas`. Три единицы на канал — порог, ниже которого плоская область не читается
+// другим цветом; две такие краски в палитре — одна краска, записанная дважды.
+test('в палитре нет двух красок ближе трёх единиц на канал', async () => {
+  const { palette } = await import('./primitives');
+  const hexes = Object.entries(palette).filter(([, value]) => value.startsWith('#'));
+  const rgb = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const close: string[] = [];
+  for (const [i, [a, x]] of hexes.entries()) {
+    for (const [b, y] of hexes.slice(i + 1)) {
+      const [p, q] = [rgb(x), rgb(y)];
+      if (p.every((v, k) => Math.abs(v - (q[k] ?? 0)) <= 3)) close.push(`${a} ~ ${b}`);
+    }
+  }
+
+  expect(hexes.length).toBeGreaterThan(30);
+  expect(close).toEqual([]);
 });
 
 test('ни один класс не обходит роль ссылкой на примитив', async () => {

@@ -196,7 +196,7 @@ export function ChannelPostsPanel({
   };
 
   return (
-    <div className="mt-xl border-t border-line-row pt-lg">
+    <div className="mt-xl border-t border-canvas pt-lg">
       <div className="mb-md type-h3">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}

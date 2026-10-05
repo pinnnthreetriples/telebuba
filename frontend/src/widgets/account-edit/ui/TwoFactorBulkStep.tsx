@@ -24,7 +24,7 @@ import { useBulkTwofa } from './useBulkTwofa';
 // Written out at both sites rather than hoisted into `BOX_ON`/`BOX_OFF` consts,
 // and that is not a style preference: `contrast.test.ts` reads the fill and the
 // ink out of the SAME class list, so a fill behind a hoisted name is invisible to
-// it and `stroke-on-action` floats up to whatever the row sits on — the header's
+// it and `stroke-on-fill` floats up to whatever the row sits on — the header's
 // `bg-surface`, which it reads at 1.05:1. `_CheckRow.tsx` writes it inline for
 // the same reason and is the shape the gate has a passing fixture for.
 
@@ -115,7 +115,7 @@ export function TwoFactorBulkStep({
           {bulk.rows.map((row) => (
             <div
               key={row.accountId}
-              className="flex items-center gap-md border-b border-line-row px-md py-sm last:border-b-0"
+              className="flex items-center gap-md border-b border-canvas px-md py-sm last:border-b-0"
             >
               <span className="flex size-glyph shrink-0 items-center justify-center">
                 {row.state === 'running' ? (
@@ -185,7 +185,7 @@ export function TwoFactorBulkStep({
               className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${selected.length > 0 ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
             >
               {allOn ? (
-                <Icon name="check" size={14} className="stroke-on-action" />
+                <Icon name="check" size={14} className="stroke-on-fill" />
               ) : selected.length > 0 ? (
                 // Indeterminate is a bar, not a check: a check here would claim
                 // the whole batch is picked when only part of it is.
@@ -196,7 +196,7 @@ export function TwoFactorBulkStep({
                   fill="none"
                   strokeWidth="2.5"
                   strokeLinecap="round"
-                  className="stroke-on-action"
+                  className="stroke-on-fill"
                   aria-hidden="true"
                 >
                   <path d="M6 12h12" />
@@ -225,12 +225,12 @@ export function TwoFactorBulkStep({
               onClick={() => {
                 toggle(accountId);
               }}
-              className="flex w-full items-center gap-md border-b border-line-row px-md py-sm text-left last:border-b-0"
+              className="flex w-full items-center gap-md border-b border-canvas px-md py-sm text-left last:border-b-0"
             >
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
               >
-                {on && <Icon name="check" size={14} className="stroke-on-action" />}
+                {on && <Icon name="check" size={14} className="stroke-on-fill" />}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate type-body-medium">{label(accountId)}</span>

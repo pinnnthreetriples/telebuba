@@ -157,7 +157,7 @@ function AccountComments({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="border-t border-line-row bg-surface px-lg py-md">
+    <div className="border-t border-canvas bg-surface px-lg py-md">
       <div className="mb-sm flex items-center justify-between">
         <div className="flex items-center gap-sm">
           <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
@@ -187,7 +187,7 @@ function AccountComments({
             return (
               <div
                 key={`${c.channel}:${String(c.post_id)}`}
-                className="flex flex-wrap items-baseline gap-x-md gap-y-hair border-b border-line-row py-sm text-body last:border-b-0"
+                className="flex flex-wrap items-baseline gap-x-md gap-y-hair border-b border-canvas py-sm text-body last:border-b-0"
               >
                 <span className="shrink-0 text-content-subtle">
                   {formatLocalTime(c.created_at)}
@@ -364,7 +364,7 @@ export function NeurocommentBoard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.board.title')}
-      headerClassName="border-b border-line-row px-lg py-lg"
+      headerClassName="border-b border-canvas px-lg py-lg"
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>

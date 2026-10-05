@@ -85,7 +85,7 @@ test('all tones have a hover treatment and retain the shared press state', () =>
   );
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
     'hover:border-info-line',
-    'hover:bg-action-hover',
+    'hover:bg-info-tint',
     'hover:text-info-strong',
     'active:scale-press',
   );
@@ -115,7 +115,7 @@ test('disabled is inert and dimmed, so a pending action cannot be fired twice', 
   expect(button).toHaveClass(
     'disabled:opacity-50',
     'disabled:pointer-events-none',
-    'focus-visible:outline-focus',
+    'focus-visible:outline-action-primary',
     'active:scale-press',
   );
   await userEvent.click(button);

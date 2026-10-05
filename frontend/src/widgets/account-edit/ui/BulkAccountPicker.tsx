@@ -69,7 +69,7 @@ export function BulkAccountPicker({
   return (
     <Modal onClose={onClose} size="panel" label={t('accounts.bulk.pickTitle')}>
       <div className="flex max-h-dialog flex-col overflow-hidden">
-        <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+        <div className="flex items-center gap-lg border-b border-canvas px-xl py-xl">
           <div className="min-w-0 flex-1">
             <h2 className="truncate type-h2">{t('accounts.bulk.pickTitle')}</h2>
             <div className="truncate type-body text-content-subtle">
@@ -79,7 +79,7 @@ export function BulkAccountPicker({
           <CloseButton onClick={onClose} aria-label={t('accounts.profile.close')} />
         </div>
 
-        <div className="flex flex-col gap-md border-b border-line-row px-xl py-lg">
+        <div className="flex flex-col gap-md border-b border-canvas px-xl py-lg">
           <Input
             value={search}
             placeholder={t('accounts.bulk.pickSearch')}
@@ -101,7 +101,7 @@ export function BulkAccountPicker({
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${someOn ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
               >
                 {allOn ? (
-                  <Icon name="check" size={14} className="stroke-on-action" />
+                  <Icon name="check" size={14} className="stroke-on-fill" />
                 ) : someOn ? (
                   // Indeterminate is a bar, not a check: a check would claim the
                   // whole visible list is picked when only part of it is.
@@ -112,7 +112,7 @@ export function BulkAccountPicker({
                     fill="none"
                     strokeWidth="2.5"
                     strokeLinecap="round"
-                    className="stroke-on-action"
+                    className="stroke-on-fill"
                     aria-hidden="true"
                   >
                     <path d="M6 12h12" />
@@ -171,12 +171,12 @@ export function BulkAccountPicker({
                   onClick={() => {
                     toggle(account.account_id);
                   }}
-                  className={`flex w-full items-center gap-md border-b border-line-row px-xl py-sm text-left last:border-b-0 ${on ? 'bg-action-hover' : ''}`}
+                  className={`flex w-full items-center gap-md border-b border-canvas px-xl py-sm text-left last:border-b-0 ${on ? 'bg-info-tint' : ''}`}
                 >
                   <span
                     className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
                   >
-                    {on && <Icon name="check" size={14} className="stroke-on-action" />}
+                    {on && <Icon name="check" size={14} className="stroke-on-fill" />}
                   </span>
                   <AccountAvatar
                     account={account}
@@ -198,7 +198,7 @@ export function BulkAccountPicker({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+        <div className="flex items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
           <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
           <Button
             variant="primary"

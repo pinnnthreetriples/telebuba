@@ -43,9 +43,7 @@ export function BulkPrivacyTab({
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${level !== undefined ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
               >
-                {level !== undefined && (
-                  <Icon name="check" size={14} className="stroke-on-action" />
-                )}
+                {level !== undefined && <Icon name="check" size={14} className="stroke-on-fill" />}
               </span>
               <span className="type-h3">{label}</span>
             </button>

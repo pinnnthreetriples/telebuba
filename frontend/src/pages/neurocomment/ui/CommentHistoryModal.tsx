@@ -90,7 +90,7 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="border-b border-canvas px-2xl pb-lg pt-xl">
         <div className="type-h2">{t('neurocomment.history.title')}</div>
       </div>
 
@@ -116,7 +116,7 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex items-center justify-between border-t border-canvas px-2xl pb-xl pt-lg">
         <div className="flex gap-sm">
           <Button
             size="sm"

@@ -26,7 +26,7 @@ export function CheckRow({
       <span
         className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
       >
-        {on && <Icon name="check" size={14} className="stroke-on-action" />}
+        {on && <Icon name="check" size={14} className="stroke-on-fill" />}
       </span>
       <span className="type-body text-content-secondary">{label}</span>
     </button>

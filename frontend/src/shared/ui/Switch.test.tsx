@@ -30,7 +30,7 @@ test('switch has the shared visible focus ring in its keyboard tab stop', async 
 
   await userEvent.tab();
   expect(control).toHaveFocus();
-  expect(control).toHaveClass('focus-visible:outline-focus');
+  expect(control).toHaveClass('focus-visible:outline-action-primary');
 });
 
 test('a disabled switch is inert, so a not-yet-wired feature cannot be toggled', async () => {

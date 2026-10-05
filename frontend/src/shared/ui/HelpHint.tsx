@@ -9,7 +9,7 @@ const BADGE =
   'flex size-glyph shrink-0 cursor-help items-center justify-center rounded-full ' +
   'border border-line text-small font-medium leading-none text-content-subtle ' +
   'transition-colors hover:border-action-primary hover:text-action-primary focus:outline-none ' +
-  'focus-visible:border-focus focus-visible:text-focus';
+  'focus-visible:border-action-primary focus-visible:text-action-primary';
 
 // The bubble on its own, for the callers whose trigger is the control itself rather than a
 // "?" beside it — a control that is already a <button> cannot host the badge, since the

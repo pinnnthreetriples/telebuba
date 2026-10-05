@@ -186,7 +186,7 @@ export function CampaignsCard({
       </Button>
 
       {/* campaign channels */}
-      <div className="mt-lg border-t border-line-row pt-md">
+      <div className="mt-lg border-t border-canvas pt-md">
         <CollapsibleCard
           defaultOpen
           wrapperClassName=""

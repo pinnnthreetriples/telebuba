@@ -169,7 +169,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                       toggle(account.account_id);
                     }}
                     className={cn(
-                      'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-body text-content-subtle hover:bg-action-hover disabled:opacity-50',
+                      'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-body text-content-subtle hover:bg-info-tint disabled:opacity-50',
                       FOCUS_RING,
                     )}
                   >

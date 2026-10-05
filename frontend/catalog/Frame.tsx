@@ -43,7 +43,7 @@ export function Row({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-sm border-b border-line-row pb-lg sm:flex-row sm:gap-lg">
+    <div className="flex flex-col gap-sm border-b border-canvas pb-lg sm:flex-row sm:gap-lg">
       <div className="w-col shrink-0">
         <div className="type-body-medium text-content-secondary">{label}</div>
         {hint !== undefined && <div className="mt-hair type-small">{hint}</div>}

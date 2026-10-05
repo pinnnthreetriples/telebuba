@@ -28,7 +28,7 @@ export function CreateCampaignModal({
 
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
         <span className={HEADING_ICON_TILE}>
           <Icon name="plus" size={18} />
         </span>
@@ -123,7 +123,7 @@ export function CreateCampaignModal({
         </div>
       </div>
 
-      <div className="flex gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex gap-sm border-t border-canvas px-2xl pb-xl pt-lg">
         <Button
           variant="primary"
           className="flex-1"

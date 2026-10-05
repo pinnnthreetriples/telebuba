@@ -188,7 +188,7 @@ test.each([
 test('every option carries the focus ring the hand-written versions had none of', () => {
   const { radios } = renderControl();
   for (const radio of radios) {
-    expect(radio).toHaveClass('focus-visible:outline-focus');
+    expect(radio).toHaveClass('focus-visible:outline-action-primary');
     // The glow this replaced measured 1.18:1, and it came with `outline-none`. On a
     // control that is one tab stop with an arrow-key cursor, an invisible focus ring
     // does not degrade the keyboard contract — it removes it.
@@ -211,8 +211,8 @@ test('cn keeps the size and the fill of a segment together', () => {
     'flex-1 rounded-sm py-sm text-body font-medium bg-surface-card text-content-primary shadow-seg',
   );
   expect(
-    cn('rounded-full px-lg py-tight text-body', 'bg-action-primary text-on-action shadow-pill'),
-  ).toBe('rounded-full px-lg py-tight text-body bg-action-primary text-on-action shadow-pill');
+    cn('rounded-full px-lg py-tight text-body', 'bg-action-primary text-on-fill shadow-pill'),
+  ).toBe('rounded-full px-lg py-tight text-body bg-action-primary text-on-fill shadow-pill');
 });
 
 /* ── per-option escape hatches ───────────────────────────────────────────── */

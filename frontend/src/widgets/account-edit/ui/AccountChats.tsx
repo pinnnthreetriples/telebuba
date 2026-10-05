@@ -192,7 +192,7 @@ function ChatComposer({
     }
   };
   return (
-    <form onSubmit={submit} className="border-t border-line-row p-lg">
+    <form onSubmit={submit} className="border-t border-canvas p-lg">
       {files.length ? (
         <div className="mb-sm flex flex-wrap gap-xs">
           {files.map((file, i) => (
@@ -432,7 +432,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             aria-selected={tab === value}
             aria-controls={`account-panel-${value}`}
             onClick={() => setTab(value)}
-            className={`min-h-touch inline-flex items-center gap-sm rounded-full px-lg text-body font-medium transition-colors ${tab === value ? 'bg-action-primary text-on-action' : 'text-content-muted hover:bg-canvas hover:text-content-primary'}`}
+            className={`min-h-touch inline-flex items-center gap-sm rounded-full px-lg text-body font-medium transition-colors ${tab === value ? 'bg-action-primary text-on-fill' : 'text-content-muted hover:bg-canvas hover:text-content-primary'}`}
           >
             {t(`accounts.edit.chats.${value === 'chats' ? 'tab' : 'overview'}`)}
           </button>
@@ -526,7 +526,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
           </section>
           {selected ? (
             <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
-              <header className="flex flex-wrap items-center gap-md border-b border-line-row px-lg py-md">
+              <header className="flex flex-wrap items-center gap-md border-b border-canvas px-lg py-md">
                 <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong type-body-medium">
                   {selected.title.slice(0, 1).toUpperCase()}
                 </span>

@@ -51,7 +51,7 @@ const SEG = {
 
 const ON = {
   tray: 'bg-surface-card text-content-primary shadow-seg',
-  pill: 'bg-action-primary text-on-action shadow-pill',
+  pill: 'bg-action-primary text-on-fill shadow-pill',
   outline: 'border-action-primary bg-info-tint text-info-strong',
 } as const;
 

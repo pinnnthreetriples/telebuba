@@ -76,8 +76,8 @@ test('proxy icon actions use the shared keyboard focus ring', async () => {
 
   expect(check).toHaveClass('size-touch', 'md:size-chip');
   expect(remove).toHaveClass('size-touch', 'md:size-chip');
-  expect(check).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
-  expect(remove).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+  expect(check).toHaveClass('focus-visible:outline', 'focus-visible:outline-action-primary');
+  expect(remove).toHaveClass('focus-visible:outline', 'focus-visible:outline-action-primary');
   const add = screen.getByText('Добавить').closest('button');
   expect(add).toHaveClass('h-control');
   expect(add).not.toHaveClass('h-field');

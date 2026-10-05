@@ -420,7 +420,7 @@ export function AddStoryModal({
           <span
             className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
           >
-            {noForward && <Icon name="check" size={14} className="stroke-on-action" />}
+            {noForward && <Icon name="check" size={14} className="stroke-on-fill" />}
           </span>
           <span className="type-body text-content-secondary">
             {t('accounts.addStory.noForward')}
@@ -508,7 +508,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-small font-medium text-on-inverse">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-small font-medium text-on-fill">
                     {index + 1}
                   </span>
                   <button
@@ -518,7 +518,7 @@ export function AddStoryModal({
                     }}
                     disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-inverse disabled:opacity-40"
+                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-fill disabled:opacity-40"
                   >
                     <Icon name="close" size={10} />
                   </button>
@@ -669,7 +669,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-small font-normal text-on-inverse shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-small font-normal text-on-fill shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>

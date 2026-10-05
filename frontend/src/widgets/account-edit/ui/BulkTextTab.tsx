@@ -49,7 +49,7 @@ export function BulkTextTab({
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on[key] ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
               >
-                {on[key] && <Icon name="check" size={14} className="stroke-on-action" />}
+                {on[key] && <Icon name="check" size={14} className="stroke-on-fill" />}
               </span>
               <span className="type-body-medium text-content-secondary">{label}</span>
             </button>

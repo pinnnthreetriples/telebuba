@@ -87,7 +87,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
   return (
     <>
       <Section title={t('accounts.edit.actions')} bodyClassName="px-xl pb-tight">
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
+        <div className="flex items-center justify-between gap-md border-b border-canvas py-lg">
           <div>
             <div className="type-h3">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
@@ -134,7 +134,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             )}
           </IconButton>
         </div>
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
+        <div className="flex items-center justify-between gap-md border-b border-canvas py-lg">
           <div>
             <div className="type-h3">{t('accounts.edit.resetSession')}</div>
             <div className="mt-px type-small">{t('accounts.edit.resetSessionHint')}</div>

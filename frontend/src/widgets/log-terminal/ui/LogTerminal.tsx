@@ -55,7 +55,7 @@ function LogLine({
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-logAccount shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
+          className="w-logAccount shrink-0 truncate text-left text-term-text hover:text-on-fill hover:underline"
         >
           {account}
         </button>

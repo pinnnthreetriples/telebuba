@@ -298,7 +298,7 @@
   background: theme('colors.term.DEFAULT');
   /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
      a one-line label on the same surface. */
-  color: theme('colors.on-inverse');
+  color: theme('colors.on-fill');
   border-radius: theme('borderRadius.md');
   padding: theme('spacing.sm') theme('spacing.md');
   /* Ступень `small` целиком, а не литералы. Объявлена явно, потому что подсказка рисуется

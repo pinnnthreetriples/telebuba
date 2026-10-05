@@ -46,14 +46,14 @@ export function StoriesTab({
             >
               {story.kind === 'video' && (
                 <span
-                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse ${HOVER_ONLY}`}
+                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-fill ${HOVER_ONLY}`}
                 >
                   <Icon name="play" size={16} />
                 </span>
               )}
             </button>
             {(story.views != null || story.reactions != null) && (
-              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-small font-medium text-on-inverse">
+              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-small font-medium text-on-fill">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -93,7 +93,7 @@ export function StoriesTab({
               onClick={() => {
                 onRemove(story);
               }}
-              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
+              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-fill hover:border-transparent hover:bg-content-primary hover:text-on-fill ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>
@@ -112,12 +112,12 @@ export function StoriesTab({
                   onPinToggle(story);
                 }}
                 className={`pointer-events-auto truncate rounded-sm px-tight py-hair text-center text-small font-medium disabled:opacity-50 ${
-                  story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
+                  story.is_pinned ? 'bg-action-primary text-on-fill' : 'bg-scrim text-on-fill'
                 }`}
               >
                 {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
               </button>
-              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-small font-medium text-on-inverse">
+              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-small font-medium text-on-fill">
                 {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
               </span>
             </div>

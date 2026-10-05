@@ -130,7 +130,7 @@ export function TwoFactorBulkResults({
           row.created ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row px-md py-sm last:border-b-0"
+              className="flex items-start gap-md border-b border-canvas px-md py-sm last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
@@ -186,7 +186,7 @@ export function TwoFactorBulkResults({
           ) : row.state === 'error' ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row bg-danger-tint px-md py-sm last:border-b-0"
+              className="flex items-start gap-md border-b border-canvas bg-danger-tint px-md py-sm last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
@@ -205,7 +205,7 @@ export function TwoFactorBulkResults({
             // error and accuse Telegram of refusing a request nobody sent.
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row px-md py-sm last:border-b-0"
+              className="flex items-start gap-md border-b border-canvas px-md py-sm last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}

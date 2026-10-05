@@ -28,7 +28,7 @@ export function Catalog({
 }) {
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur">
+      <header className="sticky top-0 z-sticky border-b border-line bg-surface-card/85 backdrop-blur">
         <div className="mx-auto flex h-header max-w-shell items-center gap-lg px-lg">
           <h1 className="type-h3">Дизайн-система Telebuba</h1>
           <nav className="flex flex-wrap gap-md">

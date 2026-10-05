@@ -44,9 +44,8 @@ const TONE = {
   // нажать нужно именно её, и обязана быть видна до наведения. Краска взята у
   // `Button variant="primary"` дословно, чтобы залитая иконка и залитая кнопка не
   // разошлись.
-  action: 'bg-action-primary text-on-action hover:bg-action-pressed',
-  primary:
-    'text-content-subtle hover:border-info-line hover:bg-action-hover hover:text-info-strong',
+  action: 'bg-action-primary text-on-fill hover:bg-action-pressed',
+  primary: 'text-content-subtle hover:border-info-line hover:bg-info-tint hover:text-info-strong',
   danger:
     'text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
 } as const;

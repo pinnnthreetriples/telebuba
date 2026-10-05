@@ -175,7 +175,7 @@ export function ContactLookupPanel({
         : 'accounts.messages.lookup.startError';
 
   return (
-    <div className="border-t border-line-row pt-sm">
+    <div className="border-t border-canvas pt-sm">
       <button
         type="button"
         className="flex w-full items-center gap-sm type-body-medium text-content-muted hover:text-content-primary"

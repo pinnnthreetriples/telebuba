@@ -19,7 +19,7 @@ import { Section } from './_shared';
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-md border-b border-line-row py-md">
+    <div className="flex items-center justify-between gap-md border-b border-canvas py-md">
       <span className="type-body text-content-subtle">{label}</span>
       <span className="text-right type-body-medium text-content-primary">{value}</span>
     </div>
@@ -196,7 +196,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             reset was requested against), and inside the 2FA-on arm that warning was
             silently dropped in exactly the case where it matters most. */}
         {status?.pending_reset_date ? (
-          <div className="border-b border-line-row py-md text-body font-medium text-danger">
+          <div className="border-b border-canvas py-md text-body font-medium text-danger">
             {t('accounts.edit.twofaResetRequested', {
               date: status.pending_reset_date.slice(0, 10),
             })}
@@ -303,7 +303,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // sitting on disk that the card neither showed nor could clear —
               // every control that can do it lived in the `hasPassword` arm.
               <div className="mt-md">
-                <div className="border-b border-line-row py-md text-body font-medium text-content-muted">
+                <div className="border-b border-canvas py-md text-body font-medium text-content-muted">
                   {t('accounts.edit.twofaStored')}
                 </div>
                 <div className="mt-md text-center">
@@ -364,7 +364,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 saw "Резервная почта / не привязана" twice. Neither state lost its
                 reachability: the row moved, it did not go. */}
             <div
-              className={`border-b border-line-row py-md text-body font-medium ${
+              className={`border-b border-canvas py-md text-body font-medium ${
                 hasStored ? 'text-content-muted' : 'text-danger'
               }`}
             >
@@ -438,7 +438,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // this account nor get rid of it: the backend's own stale branch (clear
               // the column, spend no RPC) was unreachable from the UI.
               <div className="mb-lg">
-                <div className="border-b border-line-row py-md text-body font-medium text-danger">
+                <div className="border-b border-canvas py-md text-body font-medium text-danger">
                   {t('accounts.edit.twofaStoredStale')}
                 </div>
                 <div className="mt-md text-center">

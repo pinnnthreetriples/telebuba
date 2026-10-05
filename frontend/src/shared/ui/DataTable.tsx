@@ -46,11 +46,11 @@ interface DataTableProps<TData> {
 // to emit `text-right` after `text-left`, so the column got its way through emit order
 // rather than through anyone deciding.
 const TH = 'px-lg py-md text-left type-small-medium';
-const ROW = 'tb-row border-t border-line-row transition-colors';
+const ROW = 'tb-row border-t border-canvas transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
-const CARD = 'tb-row overflow-hidden border-t border-line-row px-lg py-lg first:border-t-0';
+const CARD = 'tb-row overflow-hidden border-t border-canvas px-lg py-lg first:border-t-0';
 const CARD_LABEL = 'shrink-0 type-small-medium';
 const CARD_VALUE = 'min-w-0 break-words text-right text-body text-content-secondary';
 

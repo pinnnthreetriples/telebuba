@@ -177,7 +177,7 @@ export function TwoFactorEmail({
     });
 
   return (
-    <div className="mt-md border-t border-line-row pt-md">
+    <div className="mt-md border-t border-canvas pt-md">
       {/* Both rows when Telegram reports both, and the pending one is NOT hidden
           behind the confirmed one. Telegram answers with a confirmed address and a
           freshly pending one whenever the operator swaps the recovery address from

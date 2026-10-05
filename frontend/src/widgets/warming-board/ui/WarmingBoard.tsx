@@ -407,7 +407,7 @@ function WarmingCard({
                 <div className="flex size-glyph items-center justify-center">
                   {index < active ? (
                     <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                      <Icon name="check" size={10} className="stroke-on-success" />
+                      <Icon name="check" size={10} className="stroke-on-fill" />
                     </span>
                   ) : index === active ? (
                     <span className="tb-livedot size-node rounded-full bg-action-primary" />
@@ -451,7 +451,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-small text-content-muted"
+            className="mt-md flex w-full items-center justify-center gap-tight border-t border-canvas pt-md text-small text-content-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -529,7 +529,7 @@ function WarmingCard({
           {/* complete */}
           <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
             <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
-              <Icon name="check" size={14} className="stroke-on-success" />
+              <Icon name="check" size={14} className="stroke-on-fill" />
             </span>
             <div className="min-w-0">
               <div className="type-body-medium text-success-deep">
@@ -605,7 +605,7 @@ export function WarmingBoard({
               height="16"
               viewBox="0 0 24 24"
               fill="none"
-              className="stroke-on-action"
+              className="stroke-on-fill"
               strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"

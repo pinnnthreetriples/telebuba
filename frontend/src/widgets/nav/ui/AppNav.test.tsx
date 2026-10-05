@@ -85,7 +85,7 @@ test('logs out from the avatar menu and redirects to login', async () => {
   });
 
   const account = screen.getByLabelText('Аккаунт');
-  expect(account).toHaveClass('focus-visible:outline-focus');
+  expect(account).toHaveClass('focus-visible:outline-action-primary');
   await userEvent.click(account);
   await userEvent.click(screen.getByText('Выйти'));
 
@@ -152,7 +152,7 @@ test('the hamburger opens a drawer with the nav destinations', async () => {
   expect(drawer).toHaveTextContent('Настройки');
 
   const close = screen.getByLabelText('Закрыть меню');
-  expect(close).toHaveClass('focus-visible:outline-focus');
+  expect(close).toHaveClass('focus-visible:outline-action-primary');
   close.focus();
   await userEvent.keyboard('{Enter}');
   await waitFor(() => {

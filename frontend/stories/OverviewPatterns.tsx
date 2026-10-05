@@ -244,7 +244,7 @@ export function OverviewPatterns() {
             />
             {discoveryOpen && (
               <Modal onClose={() => setDiscoveryOpen(false)} size="table" label="Поиск каналов">
-                <div className="border-b border-line-row px-2xl pb-lg pt-xl">
+                <div className="border-b border-canvas px-2xl pb-lg pt-xl">
                   <h2 className="type-h2">Поиск каналов</h2>
                   <p className="mt-hair type-small">
                     Для кампании {campaigns.find((item) => item.campaign_id === campaignId)?.name}
@@ -253,7 +253,7 @@ export function OverviewPatterns() {
                 <div className="px-2xl py-xl type-body text-content-subtle">
                   Поиск и результаты доступны в подключённом приложении.
                 </div>
-                <div className="flex justify-end border-t border-line-row px-2xl py-lg">
+                <div className="flex justify-end border-t border-canvas px-2xl py-lg">
                   <Button onClick={() => setDiscoveryOpen(false)}>Закрыть</Button>
                 </div>
               </Modal>
