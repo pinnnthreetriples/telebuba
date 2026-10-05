@@ -101,19 +101,19 @@ function typographySection(spec) {
       `font-size:${style.fontSize}`,
       `font-weight:${style.fontWeight}`,
       `letter-spacing:${style.letterSpacing}`,
+      `line-height:${style.lineHeight}`,
       style.textTransform ? `text-transform:${style.textTransform}` : '',
     ]
       .filter(Boolean)
       .join(';');
-    const leading = Math.round(parseFloat(style.fontSize) * parseFloat(style.lineHeight) * 10) / 10;
     const names = roles
       .map(
         (r) =>
           `<button type="button" class="sname" data-copy="type-${esc(r.name)}" title="Скопировать type-${esc(r.name)}">${esc(r.name)}</button>`,
       )
       .join('');
-    const tracking = style.letterSpacing === '0' ? '' : ` · ${esc(style.letterSpacing)}`;
-    return `<div class="srow"><span class="sample" style="${css}">${SAMPLE}</span><span class="snames">${names}</span><span class="sval">${esc(style.fontSize)} · ${esc(style.fontWeight)}<br>${leading}px${tracking}</span></div>`;
+    const tracking = parseFloat(style.letterSpacing) === 0 ? '' : ` · ${esc(style.letterSpacing)}`;
+    return `<div class="srow"><span class="sample" style="${css}">${SAMPLE}</span><span class="snames">${names}</span><span class="sval">${esc(style.fontSize)} · ${esc(style.fontWeight)}<br>${esc(style.lineHeight)}${tracking}</span></div>`;
   });
   const fonts = Object.entries(spec.fontFamily)
     .map(
