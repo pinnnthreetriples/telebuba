@@ -29,9 +29,9 @@ export function Catalog({
   return (
     <div className="min-h-screen bg-canvas">
       <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur">
-        <div className="mx-auto flex h-header max-w-shell items-center gap-lg px-lg">
+        <div className="mx-auto flex h-header max-w-shell items-center gap-4 px-4">
           <h1 className="type-h3">Дизайн-система Telebuba</h1>
-          <nav className="flex flex-wrap gap-md">
+          <nav className="flex flex-wrap gap-3">
             {NAV.map(([id, label]) => (
               <a key={id} href={`#${id}`} className="type-small hover:text-info-strong">
                 {label}
@@ -48,7 +48,7 @@ export function Catalog({
           </nav>
         </div>
       </header>
-      <main className="mx-auto flex max-w-shell flex-col gap-page px-lg py-page">
+      <main className="mx-auto flex max-w-shell flex-col gap-8 px-4 py-8">
         <Controls intro={buttonGuide} />
         <Feedback />
         <Surfaces />

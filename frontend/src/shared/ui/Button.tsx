@@ -149,7 +149,7 @@ export function Button({
         // и все тринадцать рукописных обёрток вокруг кольца ставили `gap-sm` (8px). Это
         // решение, а не подгонка под прежнюю картинку, и оно живёт только на время
         // ожидания — обычный зазор кнопки не меняется.
-        loading && 'gap-sm',
+        loading && 'gap-2',
         SIZE[size].weight,
         fullWidth && 'flex w-full',
         VARIANT[variant],

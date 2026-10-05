@@ -265,7 +265,7 @@ export function BulkMessageModal({
     <>
       <Modal onClose={close} size="panel" label={t('accounts.messages.title')}>
         <div className="flex max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-lg">
+          <div className="flex items-center gap-4 border-b border-line-row px-6 py-4">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -275,17 +275,17 @@ export function BulkMessageModal({
             <CloseButton onClick={close} aria-label={t('accounts.profile.close')} />
           </div>
 
-          <div className="tb-scroll flex-1 space-y-lg overflow-y-auto p-xl">
+          <div className="tb-scroll flex-1 space-y-4 overflow-y-auto p-6">
             {started ? (
               stale ? (
-                <div className="space-y-sm">
+                <div className="space-y-2">
                   <h3 className="type-body-medium">{t('accounts.messages.staleTitle')}</h3>
                   <p className="type-body text-content-subtle">
                     {t('accounts.messages.staleHint')}
                   </p>
                 </div>
               ) : (
-                <div className="space-y-lg">
+                <div className="space-y-4">
                   <div>
                     <h3 className="type-body-medium">
                       {t(
@@ -296,7 +296,7 @@ export function BulkMessageModal({
                             : 'accounts.messages.running',
                       )}
                     </h3>
-                    <p role="status" className="mt-sm type-body text-content-subtle tabular-nums">
+                    <p role="status" className="mt-2 type-body text-content-subtle tabular-nums">
                       {t('accounts.messages.progress', {
                         done: job.data?.completed ?? 0,
                         total: job.data?.total ?? sendCount,
@@ -321,11 +321,11 @@ export function BulkMessageModal({
                       <h3 className="type-body-medium text-content-secondary">
                         {t('accounts.messages.attention', { count: attention.length })}
                       </h3>
-                      <ul className="mt-sm space-y-sm">
+                      <ul className="mt-2 space-y-2">
                         {attention.map((result) => (
                           <li
                             key={`${result.account_id}:${result.recipient}`}
-                            className="rounded-md bg-danger-tint px-md py-sm type-small"
+                            className="rounded-sm bg-danger-tint px-3 py-2 type-small"
                           >
                             {accountDisplayName(
                               byId.get(result.account_id) ?? {
@@ -359,11 +359,11 @@ export function BulkMessageModal({
                       <h3 className="type-body-medium text-content-secondary">
                         {t('accounts.messages.handedOverTitle', { count: handedOver.length })}
                       </h3>
-                      <ul className="mt-sm space-y-sm">
+                      <ul className="mt-2 space-y-2">
                         {handedOver.map((result) => (
                           <li
                             key={`${result.account_id}:${result.recipient}`}
-                            className="rounded-md bg-canvas px-md py-sm type-small"
+                            className="rounded-sm bg-canvas px-3 py-2 type-small"
                           >
                             {t('accounts.messages.handedOver', {
                               account: accountDisplayName(
@@ -381,8 +381,8 @@ export function BulkMessageModal({
               )
             ) : (
               <>
-                <section className="space-y-sm">
-                  <div className="flex items-center justify-between gap-md">
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
                     <h3 className="type-body-medium text-content-secondary">
                       {t('accounts.messages.accounts')}
                     </h3>
@@ -392,7 +392,7 @@ export function BulkMessageModal({
                       {ids.length}/{MAX_ACCOUNTS}
                     </span>
                   </div>
-                  <div className="flex min-h-control items-center gap-sm rounded-lg border border-line bg-canvas px-sm py-xs">
+                  <div className="flex min-h-control items-center gap-2 rounded-md border border-line bg-canvas px-2 py-1">
                     <IconButton
                       size="sm"
                       aria-label={t('accounts.bulk.add')}
@@ -405,7 +405,7 @@ export function BulkMessageModal({
                     {ids.length === 0 ? (
                       <span className="type-small">{t('accounts.messages.pickAccounts')}</span>
                     ) : (
-                      <div className="tb-scroll flex items-center gap-sm overflow-x-auto py-hair">
+                      <div className="tb-scroll flex items-center gap-2 overflow-x-auto py-1">
                         {ids.map((id) => {
                           const account = byId.get(id);
                           return (
@@ -424,7 +424,7 @@ export function BulkMessageModal({
                                 onClick={() => {
                                   setIds((prev) => prev.filter((value) => value !== id));
                                 }}
-                                className="absolute -right-hair -top-hair bg-surface-card sm:opacity-0 sm:transition-opacity sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
+                                className="absolute -right-1 -top-1 bg-surface-card sm:opacity-0 sm:transition-opacity sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
                               >
                                 <Icon name="close" size={16} />
                               </IconButton>
@@ -436,8 +436,8 @@ export function BulkMessageModal({
                   </div>
                 </section>
 
-                <section className="space-y-sm">
-                  <div className="flex items-center gap-sm">
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <h3 className="type-body-medium text-content-secondary">
                       {t('accounts.messages.mode')}
                     </h3>
@@ -459,9 +459,9 @@ export function BulkMessageModal({
                   />
                 </section>
 
-                <section className="space-y-sm">
-                  <div className="flex items-center justify-between gap-md">
-                    <div className="flex items-center gap-sm">
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                       <label
                         htmlFor="bulk-message-recipients"
                         className="type-body-medium text-content-secondary"
@@ -487,8 +487,8 @@ export function BulkMessageModal({
                   <ContactLookupPanel accountIds={ids} onAppendRecipients={appendRecipients} />
                 </section>
 
-                <section className="space-y-sm">
-                  <div className="flex items-center justify-between gap-md">
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
                     <label
                       htmlFor="bulk-message-text"
                       className="type-body-medium text-content-secondary"
@@ -509,7 +509,7 @@ export function BulkMessageModal({
                     </IconButton>
                   </div>
                   {generatorOpen && (
-                    <div className="space-y-sm rounded-lg bg-canvas p-md">
+                    <div className="space-y-2 rounded-md bg-canvas p-3">
                       <label
                         htmlFor="bulk-message-prompt"
                         className="type-body-medium text-content-secondary"
@@ -561,21 +561,21 @@ export function BulkMessageModal({
                   )}
                 </section>
 
-                <section className="space-y-sm">
-                  <div className="flex items-center gap-sm">
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <h3 className="type-body-medium text-content-secondary">
                       {t('accounts.messages.delay')}
                     </h3>
                     <HelpHint text={t('accounts.messages.delayHint')} />
                   </div>
-                  <div className="grid grid-cols-2 gap-md">
+                  <div className="grid grid-cols-2 gap-3">
                     {(
                       [
                         ['delayFrom', 'minDelay', minDelay, setMinDelay],
                         ['delayTo', 'maxDelay', maxDelay, setMaxDelay],
                       ] as const
                     ).map(([labelKey, ariaKey, value, setValue]) => (
-                      <label key={labelKey} className="flex items-center gap-sm type-small">
+                      <label key={labelKey} className="flex items-center gap-2 type-small">
                         <span>{t(`accounts.messages.${labelKey}`)}</span>
                         <Input
                           type="number"
@@ -603,7 +603,7 @@ export function BulkMessageModal({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-row px-6 py-4">
             {!started && (
               <div className="mr-auto min-w-0">
                 <span className="type-small tabular-nums">

@@ -76,8 +76,8 @@ export function ProxyPoolStep({
   return (
     <>
       {accountIds.length > 1 && (
-        <div className="mb-lg flex items-center justify-between gap-md type-small">
-          <span className="flex flex-wrap gap-sm">
+        <div className="mb-4 flex items-center justify-between gap-3 type-small">
+          <span className="flex flex-wrap gap-2">
             <span>{t('accounts.addWizard.poolAssigned', { done, total: accountIds.length })}</span>
             {remaining.length > 0 && (
               <span>{t('accounts.addWizard.poolRemaining', { count: remaining.length })}</span>
@@ -98,9 +98,9 @@ export function ProxyPoolStep({
           )}
         </div>
       )}
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-2">
         {freeProxies.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-body text-content-subtle">
+          <div className="rounded-md border border-dashed border-line bg-surface-card px-4 py-6 text-center type-body text-content-subtle">
             {t('accounts.addWizard.poolEmpty')}
           </div>
         ) : (
@@ -112,7 +112,7 @@ export function ProxyPoolStep({
               onClick={() => {
                 void assignTo([proxy]);
               }}
-              className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-lg py-md text-left transition-colors hover:border-info-line disabled:opacity-60"
+              className="flex items-center gap-3 rounded-md border border-line bg-surface-card px-4 py-3 text-left transition-colors hover:border-info-line disabled:opacity-60"
             >
               {proxy.country_code ? (
                 <span
@@ -143,7 +143,7 @@ export function ProxyPoolStep({
           </div>
         )}
       </div>
-      <div className="mt-xl flex justify-between gap-sm">
+      <div className="mt-6 flex justify-between gap-2">
         <Button onClick={onBack}>{t('accounts.addWizard.back')}</Button>
         <Button variant="primary" onClick={onDone} disabled={assignProxy.isPending}>
           {t('accounts.addWizard.done')}

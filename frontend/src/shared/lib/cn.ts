@@ -55,16 +55,14 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // the same silent-drop shape as the Button bug, arriving from the other direction, and
 // it was reachable before this axis had names at all, because an arbitrary
 // `leading-[1.5]` lands in the same group a named rung does.
-// The rhythm is the same case as `leading`/`tracking`, and it is the widest one: this
-// config replaces Tailwind's numeric `spacing` with names, and tailwind-merge validates
-// a padding, margin or gap value with `isLength` — which `tight`, `md` and `2xl` are
-// not. So they join no group, conflict with nothing, and `cn('py-tight', 'py-xs')` keeps
-// BOTH. The winner is then whichever class name happens to sort later in the emitted
-// stylesheet, in either caller order, which means a component's own padding can beat the
-// override its caller passed. Every `cn`-based component that takes a `className` is
-// affected, and it fails the way all of these fail: silently, looking right most of the
-// time. Found while trying to hold a button's height with a padding override — the
-// override would have been discarded.
+// The rhythm was the same case as `leading`/`tracking`, and the widest one: while the
+// config named its rungs (`tight`, `md`, `2xl`), tailwind-merge validated a padding,
+// margin or gap value with `isLength` — which those names are not — so they joined no
+// group and `cn('py-tight', 'py-xs')` kept BOTH, letting a component's own padding beat
+// its caller's override by stylesheet order. Since the Firecrawl pass the rungs are
+// numeric keys (`1`…`16`) that stock tailwind-merge parses by itself; the rhythm groups
+// below stay declared from the token list anyway, so a named rung added later cannot
+// reopen the hole silently.
 //
 // Все четыре списка ниже ВЫЧИСЛЯЮТСЯ из `shared/design-system/tokens`, а не набраны здесь.
 // Набранные, они были шестым экземпляром состава шкал — и самым опасным: расходясь, они
@@ -94,8 +92,8 @@ const merge = extendTailwindMerge<'type-role'>({
       'font-size': [{ text: FONT_SIZE_NAMES }],
       'font-weight': [{ font: FONT_WEIGHT_NAMES }],
       // Шкала целиком, а не только незнакомые tailwind-merge имена. Отбирать
-      // незнакомые пришлось бы по СТОКОВОМУ словарю (`sm`, `md`, `lg`, `full` он знает,
-      // `card` — нет), то есть завести здесь литеральный список чужих имён — ровно та
+      // незнакомые пришлось бы по СТОКОВОМУ словарю (сейчас он знает все пять имён, но
+      // знал не все), то есть завести здесь литеральный список чужих имён — ровно та
       // копия, от которой этот файл только что избавился. Повторное объявление имени,
       // которое и так в этой группе, — пустая операция: соответствие «класс → группа»
       // просто переписывается на ту же группу.

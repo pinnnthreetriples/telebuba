@@ -9,15 +9,15 @@ const SIZES = [
 
 export function ButtonSizingGuide() {
   return (
-    <div className="rounded-card border border-info-line bg-info-tint p-lg">
+    <div className="rounded-lg border border-info-line bg-info-tint p-4">
       <h3 className="type-h3">Как выбирать размер кнопки</h3>
-      <p className="mt-tight type-body text-content-subtle">
+      <p className="mt-2 type-body text-content-subtle">
         Высота отвечает за место действия, цвет — за его смысл. Эти оси показаны отдельно: сочетание
         размера и заливки не создаёт новый вид кнопки.
       </p>
-      <div className="mt-lg grid gap-lg md:grid-cols-2">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         {SIZES.map(({ size, height, label, use }) => (
-          <div key={size} className="flex flex-wrap items-center gap-md">
+          <div key={size} className="flex flex-wrap items-center gap-3">
             <Button size={size} variant={size === 'lg' ? 'primary' : 'secondary'}>
               {label}
             </Button>
@@ -30,8 +30,8 @@ export function ButtonSizingGuide() {
           </div>
         ))}
       </div>
-      <div className="mt-lg border-t border-info-line pt-md">
-        <p className="mb-sm type-small">
+      <div className="mt-4 border-t border-info-line pt-3">
+        <p className="mb-2 type-small">
           <strong>fullWidth</strong> — ширина на всю форму при высоте md. Это не отдельный размер.
         </p>
         <div className="w-menu max-w-full">

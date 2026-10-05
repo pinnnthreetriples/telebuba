@@ -50,9 +50,9 @@ function ChoiceCard({
       // Background lives in both branches, never in the base: two `bg-*` utilities in
       // one class list are resolved by stylesheet order, where `bg-surface-card` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-info-line ${PRESS_FEEDBACK} ${FOCUS_RING} ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+      className={`flex cursor-pointer items-center gap-3 rounded-md border px-4 py-4 text-left transition-colors hover:border-info-line ${PRESS_FEEDBACK} ${FOCUS_RING} ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
     >
-      <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-info-tint">
+      <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-info-tint">
         {icon}
       </span>
       <span className="flex-1">
@@ -220,15 +220,15 @@ export function AddAccountModal({
 
   return (
     <Modal onClose={onClose} size="form" label={t('accounts.addWizard.title')}>
-      <div className="px-2xl pb-xl pt-2xl">
-        <div className="mb-lg flex items-start justify-between">
+      <div className="px-6 pb-6 pt-6">
+        <div className="mb-4 flex items-start justify-between">
           <div>
             <div className="type-h2">
               {twofaResult
                 ? t('accounts.addWizard.twofaResultTitle')
                 : t('accounts.addWizard.title')}
             </div>
-            <div className="mt-hair type-body text-content-subtle">
+            <div className="mt-1 type-body text-content-subtle">
               {step === 1
                 ? t('accounts.addWizard.step1Label')
                 : step === 2
@@ -244,7 +244,7 @@ export function AddAccountModal({
         </div>
 
         {/* stepper */}
-        <div className="mb-xl flex items-center gap-md">
+        <div className="mb-6 flex items-center gap-3">
           {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
             <Fragment key={n}>
               {n > 1 && (
@@ -263,7 +263,7 @@ export function AddAccountModal({
 
         {step === 1 ? (
           <>
-            <div className="flex flex-col gap-md">
+            <div className="flex flex-col gap-3">
               <ChoiceCard
                 icon={<Icon name="file" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.sessionTitle')}
@@ -315,7 +315,7 @@ export function AddAccountModal({
               />
 
               {method === 'phone' && (
-                <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-surface-card px-md py-lg">
+                <div className="tb-fadeup flex flex-col gap-3 rounded-md border border-line bg-surface-card px-3 py-4">
                   <label className="block type-small-medium">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
@@ -328,7 +328,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-focus"
+                    className="rounded-md border border-line bg-surface-card px-3 py-3 text-body outline-none focus:border-focus"
                   />
                   <Button
                     variant="primary"
@@ -364,9 +364,9 @@ export function AddAccountModal({
                   <button
                     type="button"
                     onClick={() => fileInput.current?.click()}
-                    className="flex items-center gap-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-lg text-left"
+                    className="flex items-center gap-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-4 text-left"
                   >
-                    <span className="flex size-touch shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
+                    <span className="flex size-touch shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
                       <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -377,7 +377,7 @@ export function AddAccountModal({
                           : t('accounts.addWizard.dropDescSession')}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full border border-line px-lg py-tight text-body font-medium text-content-primary">
+                    <span className="shrink-0 rounded-full border border-line px-4 py-1 text-body font-medium text-content-primary">
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
@@ -385,7 +385,7 @@ export function AddAccountModal({
                 </>
               )}
             </div>
-            <div className="mt-xl flex justify-end gap-sm">
+            <div className="mt-6 flex justify-end gap-2">
               <Button onClick={onClose}>{t('accounts.addWizard.cancel')}</Button>
               {/* Locked until at least one account exists and no import is still
                   in flight: step 2 must see the whole batch, not its first half. */}
@@ -421,7 +421,7 @@ export function AddAccountModal({
           />
         ) : proxyStep === 'choice' ? (
           <>
-            <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
+            <div className="mb-4 flex items-center gap-2 rounded-md bg-success-tint px-3 py-3">
               <Icon name="check" size={16} className="stroke-success-deep" />
               <span className="type-body-medium text-success-deep">
                 {accountIds.length > 1
@@ -429,7 +429,7 @@ export function AddAccountModal({
                   : t('accounts.addWizard.added')}
               </span>
             </div>
-            <div className="flex flex-col gap-md">
+            <div className="flex flex-col gap-3">
               <ChoiceCard
                 icon={<Icon name="plus" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.proxyManual')}
@@ -460,7 +460,7 @@ export function AddAccountModal({
                 }}
               />
             </div>
-            <div className="mt-xl flex justify-between gap-sm">
+            <div className="mt-6 flex justify-between gap-2">
               <Button
                 onClick={() => {
                   setStep(1);
@@ -480,7 +480,7 @@ export function AddAccountModal({
               onChange={setProxyValue}
               onValidityChange={setProxyValid}
             />
-            <div className="mt-xl flex justify-between gap-sm">
+            <div className="mt-6 flex justify-between gap-2">
               <Button
                 onClick={() => {
                   setProxyStep('choice');

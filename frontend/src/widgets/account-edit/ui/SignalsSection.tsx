@@ -82,7 +82,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             aria-describedby={tipId}
             onClick={runSpamCheck}
             loading={spamCheck === 'loading'}
-            className={`gap-sm rounded-full ${
+            className={`gap-2 rounded-full ${
               spamCheck === 'ok'
                 ? 'border-success bg-success-deep text-on-success hover:border-success'
                 : spamCheck === 'err'
@@ -108,16 +108,14 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         </span>
       }
     >
-      <div className="mb-sm type-body text-content-subtle">
-        {t('accounts.edit.signalsReadonly')}
-      </div>
+      <div className="mb-2 type-body text-content-subtle">{t('accounts.edit.signalsReadonly')}</div>
       <div className="flex flex-col">
         {signals.map((signal) => (
           <div
             key={signal.label}
-            className="flex items-center justify-between gap-md border-b border-line-row py-md"
+            className="flex items-center justify-between gap-3 border-b border-line-row py-3"
           >
-            <span className="flex items-center gap-sm type-body text-content-subtle">
+            <span className="flex items-center gap-2 type-body text-content-subtle">
               <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>

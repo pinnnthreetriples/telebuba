@@ -90,7 +90,7 @@ export function StoryViewer({
     <Modal variant="viewer" label={t('accounts.profile.storyViewer')} onClose={onClose}>
       <div
         role="presentation"
-        className="absolute inset-0 flex items-center justify-center py-lg"
+        className="absolute inset-0 flex items-center justify-center py-4"
         onClick={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
@@ -99,7 +99,7 @@ export function StoryViewer({
           role="presentation"
           data-testid="story-stage"
           style={{ aspectRatio: '9 / 16' }}
-          className="relative h-full max-w-full cursor-pointer select-none overflow-hidden rounded-lg bg-term"
+          className="relative h-full max-w-full cursor-pointer select-none overflow-hidden rounded-md bg-term"
           onPointerDown={() => {
             pressedAt.current = Date.now();
             setPaused(true);
@@ -147,7 +147,7 @@ export function StoryViewer({
               />
             )
           )}
-          <div className="absolute inset-x-sm top-sm flex gap-xs">
+          <div className="absolute inset-x-2 top-2 flex gap-1">
             {stories.map((s, i) => (
               <div
                 key={s.story_id}
@@ -167,13 +167,13 @@ export function StoryViewer({
               onClick={() => {
                 setMuted((m) => !m);
               }}
-              className="right-sm top-xl"
+              className="right-2 top-6"
             >
               <Icon name={muted ? 'volume-off' : 'volume'} size={18} />
             </ViewerButton>
           )}
           {story.caption && (
-            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-md py-sm text-body text-on-inverse">
+            <div className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-body text-on-inverse">
               {story.caption}
             </div>
           )}
@@ -182,7 +182,7 @@ export function StoryViewer({
       <ViewerButton
         label={t('accounts.profile.closeViewer')}
         onClick={onClose}
-        className="right-lg top-lg"
+        className="right-4 top-4"
       >
         <Icon name="close" size={20} />
       </ViewerButton>
@@ -192,7 +192,7 @@ export function StoryViewer({
           onClick={() => {
             goTo(current - 1);
           }}
-          className="left-lg top-1/2 -translate-y-1/2"
+          className="left-4 top-1/2 -translate-y-1/2"
         >
           <Icon name="chevron-left" size={20} />
         </ViewerButton>
@@ -203,7 +203,7 @@ export function StoryViewer({
           onClick={() => {
             goTo(current + 1);
           }}
-          className="right-lg top-1/2 -translate-y-1/2"
+          className="right-4 top-1/2 -translate-y-1/2"
         >
           <Icon name="chevron-right" size={20} />
         </ViewerButton>

@@ -36,11 +36,11 @@ function Row({
 }) {
   return (
     <div
-      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-line-row'}`}
+      className={`flex min-h-touch flex-wrap items-center gap-3 py-2 ${first ? '' : 'border-t border-line-row'}`}
     >
       <div className="min-w-0 flex-1">
         <div className="text-body">{label}</div>
-        {hint === undefined ? null : <div className="mt-hair type-small">{hint}</div>}
+        {hint === undefined ? null : <div className="mt-1 type-small">{hint}</div>}
       </div>
       {children}
     </div>
@@ -84,7 +84,7 @@ function NumberInput({
 
 function Eyebrow({ title, caption }: { title: string; caption: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-sm pb-sm">
+    <div className="flex flex-wrap items-baseline gap-2 pb-2">
       <span className="type-small-medium">{title}</span>
       <span className="type-small">{caption}</span>
     </div>
@@ -147,11 +147,11 @@ export function CampaignSetupSection({
           волосяной рамкой, крестик простой кнопкой внутри, добавление — приглушённая
           пунктирная пилюля. Это один и тот же список коротких имён, который правят
           по одному, и двух его начертаний в приложении быть не должно. */}
-      <div className="flex flex-wrap items-center gap-sm pb-lg">
+      <div className="flex flex-wrap items-center gap-2 pb-4">
         {targets.map((target, index) => (
           <span
             key={`${target}-${String(index)}`}
-            className="inline-flex items-center gap-sm rounded-full border border-line bg-canvas px-md py-tight text-body text-content-secondary"
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-body text-content-secondary"
           >
             {target}
             <IconButton
@@ -195,8 +195,8 @@ export function CampaignSetupSection({
 
       {/* Две колонки, разделённые волосяной линией, как в макете. Ниже `sm` они
           складываются в стопку, и разделитель тогда лежит НАД правой колонкой. */}
-      <div className="grid gap-xl border-t border-line pt-lg sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
-        <div className="min-w-0 sm:pr-2xl">
+      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
+        <div className="min-w-0 sm:pr-6">
           <Eyebrow
             title={t('neuroshilling.setup.launch.eyebrow')}
             caption={t('neuroshilling.setup.launch.caption')}
@@ -208,7 +208,7 @@ export function CampaignSetupSection({
             disabled={live}
             ariaLabel={t('neuroshilling.scenario.mode.label')}
             variant="outline"
-            className="grid gap-sm pb-sm sm:grid-cols-2"
+            className="grid gap-2 pb-2 sm:grid-cols-2"
             options={(['campaign', 'revive'] as const).map((mode) => ({
               value: mode,
               label: (
@@ -216,7 +216,7 @@ export function CampaignSetupSection({
                   <span className="block type-body-medium">
                     {t(`neuroshilling.scenario.mode.${mode}`)}
                   </span>
-                  <span className="mt-xs block type-small">
+                  <span className="mt-1 block type-small">
                     {t(`neuroshilling.setup.mode.${mode}.body`)}
                   </span>
                 </span>
@@ -256,7 +256,7 @@ export function CampaignSetupSection({
           </Row>
 
           <Row label={t('neuroshilling.setup.pause.label')}>
-            <div className="flex items-center gap-sm">
+            <div className="flex items-center gap-2">
               {(['min', 'max'] as const).map((bound) => (
                 <NumberInput
                   key={bound}
@@ -304,7 +304,7 @@ export function CampaignSetupSection({
           </Row>
         </div>
 
-        <div className="min-w-0 sm:pl-2xl">
+        <div className="min-w-0 sm:pl-6">
           <Eyebrow
             title={t('neuroshilling.setup.listening.title')}
             caption={t('neuroshilling.setup.listening.caption')}
@@ -346,11 +346,11 @@ export function CampaignSetupSection({
               {/* Показывается ровно на одном сочетании — том единственном, где
                   опубликованное спровоцировал посторонний человек. */}
               {draft.replyToHumans ? (
-                <div className="rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
+                <div className="rounded-md bg-warning-tint px-3 py-2 text-small text-warning-deep">
                   {t('neuroshilling.setup.replyToHumans.warning')}
                 </div>
               ) : (
-                <div className="rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
+                <div className="rounded-md bg-warning-tint px-3 py-2 text-small text-warning-deep">
                   {t('neuroshilling.setup.replyToHumans.idle')}
                 </div>
               )}
@@ -386,7 +386,7 @@ export function CampaignSetupSection({
               </Row>
 
               <Row label={t('neuroshilling.setup.listen.row')}>
-                <div className="flex items-center gap-sm">
+                <div className="flex items-center gap-2">
                   <NumberInput
                     min={1}
                     max={MAX_LISTEN_MINUTES}
@@ -402,7 +402,7 @@ export function CampaignSetupSection({
               </Row>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-line-strong px-md py-md type-small">
+            <div className="rounded-md border border-dashed border-line-strong px-3 py-3 type-small">
               {t('neuroshilling.setup.autoresponder.hintOff')}
             </div>
           )}

@@ -30,7 +30,7 @@ const SIZE = {
 // корзине в модалке нейроаккаунтов, — и там это решение места вызова, которое видно в
 // разметке.
 const SHAPE = {
-  square: 'rounded-md',
+  square: 'rounded-sm',
   circle: 'rounded-full',
 } as const;
 

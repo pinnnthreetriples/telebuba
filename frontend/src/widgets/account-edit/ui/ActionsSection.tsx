@@ -86,8 +86,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
 
   return (
     <>
-      <Section title={t('accounts.edit.actions')} bodyClassName="px-xl pb-tight">
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
+      <Section title={t('accounts.edit.actions')} bodyClassName="px-6 pb-2">
+        <div className="flex items-center justify-between gap-3 border-b border-line-row py-4">
           <div>
             <div className="type-h3">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
@@ -134,12 +134,12 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             )}
           </IconButton>
         </div>
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
+        <div className="flex items-center justify-between gap-3 border-b border-line-row py-4">
           <div>
             <div className="type-h3">{t('accounts.edit.resetSession')}</div>
             <div className="mt-px type-small">{t('accounts.edit.resetSessionHint')}</div>
           </div>
-          <span className="flex shrink-0 items-center gap-sm">
+          <span className="flex shrink-0 items-center gap-2">
             <FeedbackMark
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
@@ -148,7 +148,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             </Button>
           </span>
         </div>
-        <div className="flex items-center justify-between gap-md py-lg">
+        <div className="flex items-center justify-between gap-3 py-4">
           <div>
             <div className="type-h3">{t('accounts.edit.deleteAccount')}</div>
             <div className="mt-px type-small">{t('accounts.edit.deleteHint')}</div>
@@ -158,7 +158,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-xs py-sm text-body font-medium text-danger"
+            className="shrink-0 px-1 py-2 text-body font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

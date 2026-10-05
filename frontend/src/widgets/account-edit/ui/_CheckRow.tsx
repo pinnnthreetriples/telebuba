@@ -21,7 +21,7 @@ export function CheckRow({
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      className="mb-lg flex w-full items-center gap-md text-left disabled:opacity-60"
+      className="mb-4 flex w-full items-center gap-3 text-left disabled:opacity-60"
     >
       <span
         className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}

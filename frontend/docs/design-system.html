@@ -73,10 +73,9 @@
 
   /* Форма */
   --r-none:0px;
-  --r-sm:6px;
-  --r-md:8px;
-  --r-lg:11px;
-  --r-card:16px;
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:16px;
   --r-full:9999px;
 
   /* Движение */
@@ -167,7 +166,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .toks { display:flex; flex-wrap:wrap; gap:6px; }
 
 /* Полоса состояний: ячейки на канве, разделённые волосяной линией */
-.wells { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); }
+.wells { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); }
 .wells.w2 { grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
 .wells.w3 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
 .wells > div { background:var(--canvas); padding:22px 16px 13px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:16px; min-height:96px; }
@@ -187,7 +186,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Свотчи */
 .sw-grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:20px; }
 .sw { display:flex; flex-direction:column; gap:8px; }
-.sw i { height:52px; border-radius:var(--r-lg); border:1px solid rgba(11,11,12,.07); display:block; }
+.sw i { height:52px; border-radius:var(--r-md); border:1px solid rgba(11,11,12,.07); display:block; }
 .sw b { font:500 11px/1 var(--mono); }
 .sw em { font:400 10.5px/1 var(--mono); color:var(--ink-subtle); font-style:normal; }
 .sw span { font-size:11.5px; color:var(--ink-muted); line-height:1.4; }
@@ -230,8 +229,8 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .btn { font-family:inherit; border:1px solid transparent; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; transition:background-color var(--t-state),border-color var(--t-state),color var(--t-state); }
 .btn-md { padding:10px 22px; font-size:13px; font-weight:600; }
 .btn-sm { padding:7px 18px; font-size:12.5px; font-weight:600; }
-.btn-xs { padding:5px 10px; font-size:12.5px; font-weight:500; border-radius:var(--r-md); }
-.btn-block { display:flex; width:100%; padding:10px 0; font-size:13px; font-weight:500; border-radius:var(--r-lg); }
+.btn-xs { padding:5px 10px; font-size:12.5px; font-weight:500; border-radius:var(--r-sm); }
+.btn-block { display:flex; width:100%; padding:10px 0; font-size:13px; font-weight:500; border-radius:var(--r-md); }
 .b-pri { background:var(--primary); color:#fff; }
 .b-pri:hover, .b-pri.is-hover { background:var(--primary-press); }
 .b-sec { background:var(--white); border-color:var(--line); color:var(--ink); }
@@ -250,9 +249,9 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Иконочная кнопка */
 .ib { display:grid; place-items:center; border:1px solid var(--line); background:var(--white); color:var(--ink-subtle); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
 .ib-22 { width:22px; height:22px; border-radius:var(--r-sm); }
-.ib-28 { width:28px; height:28px; border-radius:var(--r-md); }
+.ib-28 { width:28px; height:28px; border-radius:var(--r-sm); }
 .ib-34 { width:34px; height:34px; border-radius:999px; }
-.ib-44 { width:44px; height:44px; border-radius:var(--r-md); }
+.ib-44 { width:44px; height:44px; border-radius:var(--r-sm); }
 .ib-nut:hover, .ib-nut.is-hover { border-color:var(--line-strong); color:var(--ink); }
 .ib-pri:hover, .ib-pri.is-hover { border-color:var(--primary-line); background:var(--primary-tint); color:var(--primary); }
 .ib-dan:hover, .ib-dan.is-hover { border-color:var(--danger-line); background:var(--danger-tint); color:var(--danger); }
@@ -271,7 +270,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .sw-btn:disabled { opacity:.5; cursor:default; }
 
 /* Поля */
-.fld { width:100%; border:1px solid var(--line); background:var(--white); border-radius:var(--r-lg); padding:9px 12px; font:inherit; font-size:13px; color:var(--ink); outline:0; transition:border-color .18s,box-shadow .18s; }
+.fld { width:100%; border:1px solid var(--line); background:var(--white); border-radius:var(--r-md); padding:9px 12px; font:inherit; font-size:13px; color:var(--ink); outline:0; transition:border-color .18s,box-shadow .18s; }
 .fld::placeholder { color:var(--ink-subtle); }
 .fld:hover, .fld.is-hover { border-color:var(--line-strong); }
 .fld:focus, .fld.is-focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); }
@@ -287,9 +286,9 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Голый .seg — вид outline: лотка нет, каждый вариант своя коробка. Два других
    надевают лоток поверх этой же основы: различие между тремя — заливка активного. */
 .seg { display:flex; gap:7px; width:100%; }
-.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-lg); padding:7px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-md); padding:7px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
 .seg button.on { border-color:var(--primary); background:var(--primary-tint); color:var(--primary-deep); }
-.seg.tray { gap:5px; border-radius:var(--r-lg); background:var(--canvas); padding:3px; }
+.seg.tray { gap:5px; border-radius:var(--r-md); background:var(--canvas); padding:3px; }
 .seg.tray button { border-color:transparent; background:none; border-radius:var(--r-sm); }
 .seg.tray button.on { background:var(--white); color:var(--ink); box-shadow:var(--seg); }
 .seg.pill { display:inline-flex; width:auto; gap:0; border:1px solid var(--line); border-radius:999px; background:var(--white); padding:3px; }
@@ -302,7 +301,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Выпадающий список: поле-кнопка + панель, раскрывающаяся по max-height.
    Закрытая панель получает inert — иначе её кнопки остаются в порядке обхода. */
 .dd { position:relative; width:100%; }
-.dd-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--white); border-radius:var(--r-lg); padding:9px 13px; font:inherit; font-size:13px; color:var(--ink); text-align:left; cursor:pointer; outline:0; transition:border-color .18s,box-shadow .18s; }
+.dd-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--white); border-radius:var(--r-md); padding:9px 13px; font:inherit; font-size:13px; color:var(--ink); text-align:left; cursor:pointer; outline:0; transition:border-color .18s,box-shadow .18s; }
 .dd-btn .ph { color:var(--ink-subtle); }
 .dd-btn:hover, .dd-btn.is-hover { border-color:var(--line-strong); }
 .dd-btn.is-focus, .dd-btn:focus-visible { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); outline:0; }
@@ -310,7 +309,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .dd-btn:disabled { background:var(--surface); color:var(--ink-subtle); cursor:default; }
 .dd-btn .i { color:var(--ink-subtle); transition:transform .4s var(--e-spring); }
 .dd-btn[aria-expanded="true"] .i { transform:rotate(180deg); }
-.dd-panel { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:20; background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:4px; box-shadow:var(--pop); max-height:0; opacity:0; overflow:hidden; transition:max-height .42s cubic-bezier(.34,1.4,.6,1),opacity .22s ease; }
+.dd-panel { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:20; background:var(--white); border:1px solid var(--line); border-radius:var(--r-md); padding:4px; box-shadow:var(--pop); max-height:0; opacity:0; overflow:hidden; transition:max-height .42s cubic-bezier(.34,1.4,.6,1),opacity .22s ease; }
 .dd-panel.open { max-height:240px; opacity:1; overflow-y:auto; }
 .dd-opt { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:0; background:none; border-radius:var(--r-sm); padding:8px 10px; font:inherit; font-size:12.5px; color:var(--ink); text-align:left; cursor:pointer; transition:background-color var(--t-state); }
 .dd-opt:hover, .dd-opt.is-hover { background:var(--primary-tint); }
@@ -348,7 +347,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .dl i { width:6px; height:6px; border-radius:50%; background:currentColor; }
 
 /* Уведомления */
-.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-lg); padding:10px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
+.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-md); padding:10px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
 .n-info { border-color:var(--primary-line); background:var(--primary-tint); color:var(--ink-body); }
 .n-warn { border-color:var(--warning-line); background:var(--warning-tint); color:var(--ink-body); }
 .n-bad  { border-color:var(--danger-line); background:var(--danger-tint); color:var(--ink-body); }
@@ -357,35 +356,35 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .n-info .ic { color:var(--primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); } .n-ok .ic { color:var(--success); }
 
 /* Поверхности */
-.card { background:var(--white); border:1px solid var(--line); border-radius:var(--r-card); padding:18px; }
-.nest { background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:13px; }
+.card { background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:18px; }
+.nest { background:var(--white); border:1px solid var(--line); border-radius:var(--r-md); padding:13px; }
 .nest.rec { background:var(--surface); }
 .nest.sel { border-color:var(--primary); background:rgba(0,102,255,.06); }
-.acc { border:1px solid var(--line); border-radius:var(--r-card); background:var(--white); overflow:hidden; width:100%; }
+.acc { border:1px solid var(--line); border-radius:var(--r-lg); background:var(--white); overflow:hidden; width:100%; }
 .acc-h { width:100%; border:0; background:none; font:inherit; text-align:left; display:flex; align-items:center; gap:10px; padding:13px 16px; cursor:pointer; }
 .acc-h b { font-size:13px; font-weight:600; }
 .chev { margin-left:auto; color:var(--ink-subtle); display:flex; transition:transform .42s var(--e-spring); }
 .acc-h[aria-expanded="true"] .chev { transform:rotate(180deg); }
 .acc-b { padding:0 16px 16px; font-size:12.5px; color:var(--ink-muted); }
-.dialog { width:100%; max-width:300px; background:var(--white); border-radius:var(--r-card); box-shadow:0 18px 50px rgba(11,11,12,.18); padding:16px; display:flex; flex-direction:column; gap:10px; }
+.dialog { width:100%; max-width:300px; background:var(--white); border-radius:var(--r-lg); box-shadow:0 18px 50px rgba(11,11,12,.18); padding:16px; display:flex; flex-direction:column; gap:10px; }
 .dialog b { font-size:14px; font-weight:600; }
 .dialog p { margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
 .tip { position:relative; display:inline-flex; }
-.tip-pop { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(3px); background:var(--term); color:#fff; border-radius:var(--r-md); padding:6px 9px; font-size:11px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s,transform .15s; box-shadow:var(--pop); z-index:20; }
+.tip-pop { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(3px); background:var(--term); color:#fff; border-radius:var(--r-sm); padding:6px 9px; font-size:11px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s,transform .15s; box-shadow:var(--pop); z-index:20; }
 .tip:hover .tip-pop, .tip:focus-within .tip-pop, .tip.open .tip-pop { opacity:1; transform:translateX(-50%) translateY(0); }
 .tip-pop::before { content:''; position:absolute; bottom:100%; left:50%; transform:translateX(-50%); border:5px solid transparent; border-bottom-color:var(--term); }
-.hint-card { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%); width:210px; background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:10px; font-size:11.5px; line-height:1.45; color:var(--ink-muted); box-shadow:var(--pop); opacity:0; pointer-events:none; transition:opacity .15s; z-index:20; text-align:left; }
+.hint-card { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%); width:210px; background:var(--white); border:1px solid var(--line); border-radius:var(--r-md); padding:10px; font-size:11.5px; line-height:1.45; color:var(--ink-muted); box-shadow:var(--pop); opacity:0; pointer-events:none; transition:opacity .15s; z-index:20; text-align:left; }
 .tip:hover .hint-card, .tip:focus-within .hint-card, .tip.open .hint-card { opacity:1; }
 
 /* Плашка с действиями */
-.surf { position:relative; overflow:hidden; border-radius:var(--r-lg); margin-bottom:-2px; padding-bottom:2px; width:100%; }
-.surf-rail { position:absolute; left:0; right:0; top:0; bottom:2px; display:flex; align-items:stretch; justify-content:flex-end; border-radius:var(--r-lg); background:var(--canvas); }
+.surf { position:relative; overflow:hidden; border-radius:var(--r-md); margin-bottom:-2px; padding-bottom:2px; width:100%; }
+.surf-rail { position:absolute; left:0; right:0; top:0; bottom:2px; display:flex; align-items:stretch; justify-content:flex-end; border-radius:var(--r-md); background:var(--canvas); }
 .surf-rail button { width:48px; border:0; background:none; display:grid; place-items:center; cursor:pointer; }
 .surf-rail .run { color:var(--success); } .surf-rail .pause { color:var(--warning); }
 .surf-rail .edit { color:var(--primary); } .surf-rail .del { color:var(--danger); }
-.surf-face { position:relative; border-radius:var(--r-lg); background:var(--white); transition:transform var(--t-reveal) var(--e-out); will-change:transform; }
+.surf-face { position:relative; border-radius:var(--r-md); background:var(--white); transition:transform var(--t-reveal) var(--e-out); will-change:transform; }
 .surf:hover .surf-face, .surf.open .surf-face { transform:translateX(calc(-1 * var(--shift,144px))); }
-.plaque { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); padding:8px 10px; }
+.plaque { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); padding:8px 10px; }
 .plaque.on { background:var(--success-tint); border-color:var(--success-line); }
 .plaque .lhs { display:flex; align-items:center; gap:8px; min-width:0; }
 .plaque .st { font-size:12.5px; font-weight:600; color:var(--ink-muted); }
@@ -399,8 +398,8 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .tbl td { padding:11px 16px; border-top:1px solid var(--line-row); font-size:12.5px; }
 .tbl tbody tr:hover { background:var(--surface); }
 .tbl tbody tr.sel { background:var(--primary-tint); }
-.frame { border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; }
-.empty { border:1.5px dashed var(--primary-line); border-radius:var(--r-lg); padding:36px 16px; text-align:center; font-size:12.5px; color:var(--ink-subtle); width:100%; }
+.frame { border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; }
+.empty { border:1.5px dashed var(--primary-line); border-radius:var(--r-md); padding:36px 16px; text-align:center; font-size:12.5px; color:var(--ink-subtle); width:100%; }
 .skel { height:11px; border-radius:999px; background:linear-gradient(90deg,var(--canvas),var(--surface),var(--canvas)); background-size:200% 100%; animation:sheen 1.4s linear infinite; }
 
 /* Прогресс, аватар, журнал */
@@ -409,11 +408,11 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .bar-track.ind i { width:38%; animation:slide 1.4s ease-in-out infinite; }
 .av { border-radius:50%; display:grid; place-items:center; font-weight:600; background:var(--primary-tint); color:var(--primary); flex:none; }
 .av.solid { background:var(--primary); color:#fff; }
-.term { background:var(--term); border-radius:var(--r-lg); padding:12px 14px; font:400 11px/1.85 var(--mono); color:var(--term-text); overflow-x:auto; width:100%; }
+.term { background:var(--term); border-radius:var(--r-md); padding:12px 14px; font:400 11px/1.85 var(--mono); color:var(--term-text); overflow-x:auto; width:100%; }
 .term .t { color:var(--term-dim); } .term .c { color:var(--term-link); }
 .term .er { color:#e5736a; }
 .mark-ok { color:var(--success); display:inline-flex; } .mark-bad { color:var(--danger); display:inline-flex; }
-.toast { display:inline-flex; align-items:center; gap:8px; background:var(--term); color:#fff; border-radius:var(--r-lg); padding:9px 12px; font-size:12px; box-shadow:var(--pop); }
+.toast { display:inline-flex; align-items:center; gap:8px; background:var(--term); color:#fff; border-radius:var(--r-md); padding:9px 12px; font-size:12px; box-shadow:var(--pop); }
 
 /* Движение */
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -503,7 +502,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><b>3</b><span>оттенка основы</span></div>
         <div><b>1</b><span>акцент</span></div>
         <div><b>2</b><span>шрифта</span></div>
-        <div><b>5</b><span>радиусов</span></div>
+        <div><b>4</b><span>радиуса</span></div>
         <div><b>15</b><span>заменённых шкал</span></div>
         <div><b>23</b><span>компонента</span></div>
       </div>
@@ -517,7 +516,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td>Одно действие</td><td>На поверхности одна залитая синим кнопка. Всё остальное — контур или текст.</td></tr>
         <tr><td>Цвет — это смысл</td><td>Синий значит «действие», зелёный «работает», янтарный «ждёт», красный «сломалось». Ничего декоративного.</td></tr>
         <tr><td>Каждое изменение видно</td><td>Мутация заканчивается зелёной галочкой или красным крестом рядом с тем, что изменилось.</td></tr>
-        <tr><td>Форма говорит о роли</td><td>Пилюля — действие, прямоугольник с радиусом 10 — ввод, пунктир — «здесь можно добавить».</td></tr>
+        <tr><td>Форма говорит о роли</td><td>Пилюля — действие, прямоугольник с радиусом 12 — ввод, пунктир — «здесь можно добавить».</td></tr>
         <tr><td>Движение объясняет</td><td>Анимация подтверждает действие оператора или сообщает, что процесс жив. Больше её нет.</td></tr>
         <tr><td>Плотность без тесноты</td><td>13px основной текст, 11px подписи заглавными, воздух между группами — не внутри них.</td></tr>
       </table>
@@ -677,27 +676,23 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="wells" style="margin-top:20px">
         <!-- ds:gen radius-scale -->
         <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:0px"></div><span class="cap">none · 0<i>отсутствие скругления, а не ступень</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:6px"></div><span class="cap">sm · 6<i>чип-кнопка, иконка 24</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:8px"></div><span class="cap">md · 8<i>иконка 28, подсказка</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:11px"></div><span class="cap">lg · 11<i>поле, вложенная карточка, плашка</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:16px"></div><span class="cap">card · 16<i>карточка, диалог</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:9999px"></div><span class="cap">full · 9999<i>действие, статус, чип</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:8px"></div><span class="cap">sm · 8<i>контрол в коробке, чип, иконка, подсказка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:12px"></div><span class="cap">md · 12<i>поле, панель, меню, вложенная карточка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:16px"></div><span class="cap">lg · 16<i>карточка, диалог</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:9999px"></div><span class="cap">full · 9999<i>действие, статус, чип, аватар</i></span></div>
         <!-- /ds:gen radius-scale -->
       </div>
       <h3>Зазоры</h3>
       <!-- ds:gen spacing-scale -->
-      <p class="body">Десять ступеней — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>заменяет</em> числовую шкалу Tailwind целиком, и до сих пор это было невозможно: <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code> тоже, а 34px аватара — размер компонента, а не ступень ритма. Теперь у размеров свои шкалы, поэтому <code>p-md</code> рисует 10px, а <code>w-md</code> не рисует ничего. <code>0</code> и <code>px</code> в конфиге есть, но в таблице их нет: это не ступени.</p>
+      <p class="body">Семь ступеней — один ритм на зазор, отступ и поле, по сетке Firecrawl: основание 4px, ключ — число шагов, поэтому <code>p-3</code> — это 12px, а <code>gap-6</code> — 24px. Каденция тоже его: 8px внутри группы, 16px между группами, 24px — поле карточки, 32px — между секциями. Зазор и отступ — одна мера с двух сторон, и шкала у них одна. Объявлены только ступени, которые кто-то носит: 40 и 96px в сетке есть, но носителя у них нет. Шкала <em>заменяет</em> числовую шкалу Tailwind, а не расширяет её: <code>p-5</code> не рисует ничего, и правило линтера называет это ошибкой. <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code>, но у размеров свои шкалы, поэтому <code>p-3</code> есть, а <code>w-3</code> нет. <code>0</code> и <code>px</code> в конфиге есть, но в таблице их нет: это не ступени.</p>
       <table class="spec">
-        <tr><td><code>hair</code> · 2</td><td>Волосяной зазор сетки и стопки строк</td></tr>
-        <tr><td><code>xs</code> · 4</td><td>Счётчик над своей подписью</td></tr>
-        <tr><td><code>tight</code> · 6</td><td>Иконка и подпись, точка и текст</td></tr>
-        <tr><td><code>sm</code> · 8</td><td>Основной зазор внутри контрола и строки</td></tr>
-        <tr><td><code>md</code> · 12</td><td>Строки и поля внутри карточки</td></tr>
-        <tr><td><code>lg</code> · 16</td><td>Блоки карточки и формы</td></tr>
-        <tr><td><code>xl</code> · 20</td><td>Горизонтальный отступ контрола</td></tr>
-        <tr><td><code>2xl</code> · 24</td><td>Горизонтальный отступ крупного контрола</td></tr>
-        <tr><td><code>page</code> · 32</td><td>Воздух самой страницы: поля экрана входа, панели ошибки и блока «ничего нет»</td></tr>
-        <tr><td><code>empty</code> · 64</td><td>Пустое состояние: высота карточки, в которой нечего показать</td></tr>
+        <tr><td><code>1</code> · 4</td><td>Иконка и подпись, заголовок и подзаголовок, поле мелкого контрола</td></tr>
+        <tr><td><code>2</code> · 8</td><td>Внутри группы: подпись и поле, строки списка, вертикальное поле кнопки</td></tr>
+        <tr><td><code>3</code> · 12</td><td>Строки и поля внутри карточки, горизонтальное поле ввода</td></tr>
+        <tr><td><code>4</code> · 16</td><td>Между группами, поле компактной карточки и кнопки</td></tr>
+        <tr><td><code>6</code> · 24</td><td>Поле карточки и диалога</td></tr>
+        <tr><td><code>8</code> · 32</td><td>Между секциями: воздух страницы, поля экрана входа и блока «ничего нет»</td></tr>
+        <tr><td><code>16</code> · 64</td><td>Пустое состояние: высота карточки, в которой нечего показать</td></tr>
       </table>
       <!-- /ds:gen spacing-scale -->
 
@@ -720,7 +715,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <!-- /ds:gen size-scale -->
 
       <!-- ds:gen dimension-scale -->
-      <p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-md</code> есть, а <code>w-md</code> нет.</p>
+      <p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-3</code> есть, а <code>w-3</code> нет.</p>
       <p class="body">Каждое имя здесь — <em>роль</em>, и проверка у роли одна: она обязана называть то, что в этом продукте есть, и надо уметь показать компонент, который её носит. <code>coin</code> для 52px проверку не проходит, <code>touch</code> для цели пальца в 44px — проходит. Слово-величина не умеет спорить со следующим значением, а спорить со значениями — вся работа шкалы.</p>
       <h3>Высоты</h3>
       <p class="body">Высота, которая не является стороной квадрата: предмет либо лежит (дорожка, полоса), либо стоит в собственный рост контрола.</p>
@@ -1003,12 +998,12 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Что канон уже требует, а код ещё не даёт. Порядок — по отношению выигрыша к риску: сверху механика без визуальных последствий, снизу то, где нужно решение человека.</p>
 
       <h3>Сделано и проверено гейтами</h3>
-      <p class="body">Пятнадцать шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-2</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
+      <p class="body">Пятнадцать шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-5</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
       <div class="scroll">
         <table class="spec">
           <tr><td class="n">427 замен</td><td>Литеральные хексы → токены: классы, цвета из JS-объектов, инлайновые стили, атрибуты <code>stroke</code>. Точки, повторявшие цвет подписи, взяли <code>bg-current</code></td></tr>
           <tr><td class="n">5 семейств</td><td>Янтарный, зелёный, красный, синий, серый сведены к трём-четырём ролям каждое; три параллельных набора тёмной поверхности — к одному. Два несвязанных янтарных набора красили одну и ту же плашку «внимание» на разных страницах</td></tr>
-          <tr><td class="n">15 шкал</td><td>Заменены целиком, то есть объявлены вне <code>extend</code>: радиусы (20 → 5), ступени текста (19 → 8), зазоры (18 → 10 ступеней), длительности (8 → 4), кривые (2), слои (14 → 6), тени (6), роли текста (12), квадраты (11) и шесть размерных шкал — высоты, ширины, обе нижние границы, верхняя граница ширины и предел прокрутки. В <code>extend</code> остались цвета и семейства шрифтов, и только они</td></tr>
+          <tr><td class="n">15 шкал</td><td>Заменены целиком, то есть объявлены вне <code>extend</code>: радиусы (20 → 4, по шкале Firecrawl), ступени текста (19 → 8), зазоры (18 → 7 ступеней сетки Firecrawl), длительности (8 → 4), кривые (2), слои (14 → 6), тени (6), роли текста (12), квадраты (11) и шесть размерных шкал — высоты, ширины, обе нижние границы, верхняя граница ширины и предел прокрутки. В <code>extend</code> остались цвета и семейства шрифтов, и только они</td></tr>
           <tr><td class="n">16 → 1</td><td>Тени. Восемь литералов были <code>ring</code>, набранный вручную в двух написаниях, два — <code>thumb</code>, пять — четыре разных высоты для одного смысла «всплывает над страницей». <code>focus</code> стал ролью, потому что его рецепт встретился и в списке, и у каждого поля</td></tr>
           <tr><td class="n">9 → 6 семейств</td><td>Отступы: кнопка (три размера), чип, пилюля статуса, бейдж-счётчик, фильтр-пилюля, сегментная кнопка, строка меню. Одна ступень на семейство вместо десяти вертикальных и четырнадцати горизонтальных значений</td></tr>
           <tr><td class="n">3 жеста</td><td>Внутренне расходились и сведены: шеврон списка шёл 400ms против панели 420, тело карточки 500 против своего шеврона 420, и один и тот же контрол пользовался двумя пружинами, разными на 0.05 перелёта</td></tr>

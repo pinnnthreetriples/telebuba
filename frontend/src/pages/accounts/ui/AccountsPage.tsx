@@ -286,7 +286,7 @@ export function AccountsPage() {
           у этой страницы ритм из двух шагов — `lg` между блоками и `xl` под заголовком,
           что видно и на других страницах, — а `gap` умеет выразить только один. Замена
           обоих на один `lg` подровняла бы страницу, разойдясь с двумя соседними. */}
-      <div className="mb-lg">
+      <div className="mb-4">
         <ProxyPool
           onAdd={() => {
             setProxyAdding(true);
@@ -294,11 +294,11 @@ export function AccountsPage() {
         />
       </div>
 
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 type-h1">{t('accounts.title')}</h1>
-        <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {/* Collapsible search field */}
-          <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
+          <div className="flex w-full flex-1 items-center gap-2 sm:w-auto">
             <div
               // Свёрнутое поле — нулевой ширины, невидимое и вне табуляции; анимацию
               // ширины/прозрачности даёт `.tb-time` (index.css).
@@ -332,7 +332,7 @@ export function AccountsPage() {
                   }
                 }}
                 placeholder={t('accounts.searchPlaceholder')}
-                className="h-full w-full border-none bg-surface-card px-md py-0 text-body outline-none"
+                className="h-full w-full border-none bg-surface-card px-3 py-0 text-body outline-none"
               />
             </div>
             <IconButton
@@ -389,11 +389,11 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-lg flex flex-wrap gap-md">
+      <div className="mb-4 flex flex-wrap gap-3">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
+            className="min-w-col rounded-md border border-line bg-surface-card px-4 py-3"
           >
             <div className={`type-h1 ${stat.cls}`}>{stat.value}</div>
             <div className="mt-px type-small">{stat.label}</div>
@@ -410,7 +410,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center type-body text-content-subtle">
+            <Card className="px-4 py-16 text-center type-body text-content-subtle">
               {t('accounts.empty')}
             </Card>
           ) : (
@@ -435,7 +435,7 @@ export function AccountsPage() {
               else-branch the only ways back were the search box and a reload.
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
-            <div className="mt-lg flex items-center justify-end gap-sm">
+            <div className="mt-4 flex items-center justify-end gap-2">
               <Button
                 size="sm"
                 disabled={!hasPrev}

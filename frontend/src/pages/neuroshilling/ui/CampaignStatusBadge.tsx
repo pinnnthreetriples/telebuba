@@ -29,7 +29,7 @@ export function CampaignStatusBadge({
   const label = t(`neuroshilling.campaign.status.${status}`);
   if (plain) {
     return (
-      <span className={`inline-flex items-center gap-tight type-small-medium ${INK[TONE[status]]}`}>
+      <span className={`inline-flex items-center gap-1 type-small-medium ${INK[TONE[status]]}`}>
         {/* `bg-current` — точка не может разойтись с собственной подписью. */}
         <span className="size-dot shrink-0 rounded-full bg-current" />
         {label}

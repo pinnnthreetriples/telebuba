@@ -246,10 +246,10 @@ function WarmingCard({
   const primaryId = accountDisplayName(account);
 
   return (
-    <div className="rounded-lg border border-info-line bg-info-tint px-xl py-lg">
+    <div className="rounded-md border border-info-line bg-info-tint px-6 py-4">
       {/* header */}
-      <div className="mb-lg flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-md">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <AccountAvatar
             account={account}
             className="size-icon shrink-0 rounded-full"
@@ -264,7 +264,7 @@ function WarmingCard({
             <div className="truncate type-h3" title={primaryId}>
               {primaryId}
             </div>
-            <div className="mt-hair flex items-center gap-sm">
+            <div className="mt-1 flex items-center gap-2">
               {/* Deliberately the dense variant, off the status pill's `3px 10px`/`tiny`
                   rung: this is not a standalone state label but the second line inside a
                   card, paired in one flex row with the `micro` daily-actions counter to
@@ -272,7 +272,7 @@ function WarmingCard({
                   with, which is a worse disagreement than differing from the twelve
                   pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
-                className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-small font-medium ${statusTone}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-px text-small font-medium ${statusTone}`}
               >
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
@@ -301,7 +301,7 @@ function WarmingCard({
         </div>
         {/* shrink-0: without it the truncating name above just pushes its cost onto
             the actions instead, and the "Стоп" button loses its label. */}
-        <div className="flex shrink-0 items-center gap-sm">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="tb-tip inline-flex">
             <span
               tabIndex={0}
@@ -355,8 +355,8 @@ function WarmingCard({
           blues used to meet, and with them collapsed it would paint its parent's
           colour and have no edge at all. `primary-hairline` is the rung for exactly
           this — faint enough to double as a divider fill. */}
-      <div className="rounded-lg border border-info-hairline bg-info-tint px-lg pb-md pt-md">
-        <div className="mb-sm flex items-center justify-between">
+      <div className="rounded-md border border-info-hairline bg-info-tint px-4 pb-3 pt-3">
+        <div className="mb-2 flex items-center justify-between">
           <span className="type-small-medium">{t('warming.inProgress.days')}</span>
           <span className="type-small-medium text-content-primary">
             {t('warming.card.dayProgress', { days, target, count: target })}
@@ -364,7 +364,7 @@ function WarmingCard({
         </div>
 
         {/* day bar */}
-        <div className="flex items-end gap-hair">
+        <div className="flex items-end gap-px">
           {DAY_SEGMENTS.map((index) => (
             <span
               key={index}
@@ -374,14 +374,14 @@ function WarmingCard({
             />
           ))}
         </div>
-        <div className="mt-sm flex justify-between px-hair type-small">
+        <div className="mt-2 flex justify-between px-px type-small">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>
       </div>
 
-      <div className="px-tight">
+      <div className="px-1">
         {/* Stepper. Dot and label share ONE cell: as two rows they had different
             geometry — 14px dot cells against full-width label slots, both pinned
             flush by `justify-between` — and the ends drifted 45px apart on a 571px
@@ -416,7 +416,7 @@ function WarmingCard({
                   )}
                 </div>
                 <span
-                  className={`mt-sm text-center text-small ${
+                  className={`mt-2 text-center text-small ${
                     index < active
                       ? 'font-medium text-success-deep'
                       : index === active
@@ -435,7 +435,7 @@ function WarmingCard({
       {!complete ? (
         <>
           {/* current activity */}
-          <div className="mt-md flex items-center gap-md rounded-md border border-info-line bg-info-tint px-md py-sm">
+          <div className="mt-3 flex items-center gap-3 rounded-sm border border-info-line bg-info-tint px-3 py-2">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-action-primary" />
             <span className="tb-pulse type-small-medium text-info-strong">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
@@ -451,7 +451,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-small text-content-muted"
+            className="mt-3 flex w-full items-center justify-center gap-1 border-t border-line-row pt-3 text-small text-content-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -461,9 +461,9 @@ function WarmingCard({
             </span>
           </button>
           {open ? (
-            <div className="mt-md">
+            <div className="mt-3">
               {visibleLines.length > 0 ? (
-                <div className="mb-tight flex justify-end">
+                <div className="mb-2 flex justify-end">
                   <Button
                     size="xs"
                     onClick={() => {
@@ -506,7 +506,7 @@ function WarmingCard({
                     const reaction = extraStr(line.extra, 'reaction');
                     const detail = lineDetail(t, line);
                     return (
-                      <div key={line.id} className="flex gap-tight">
+                      <div key={line.id} className="flex gap-1">
                         <span className="shrink-0 text-term-dim">
                           {formatLocalTime(line.created_at)}
                         </span>
@@ -527,7 +527,7 @@ function WarmingCard({
       ) : (
         <>
           {/* complete */}
-          <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
+          <div className="mt-3 flex items-center gap-3 rounded-md border border-success-line bg-success-tint px-3 py-3">
             <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
               <Icon name="check" size={14} className="stroke-on-success" />
             </span>
@@ -548,7 +548,7 @@ function WarmingCard({
               </div>
             </div>
           </div>
-          <div className="mt-md flex items-center gap-sm">
+          <div className="mt-3 flex items-center gap-2">
             <FeedbackMark result={result} />
             <Button
               variant="primary"
@@ -558,7 +558,7 @@ function WarmingCard({
               }}
               // Зелёная заливка — решение места вызова, как у пяти белых `danger`: у
               // `VARIANT` нет залитого успеха, и одного носителя для имени мало.
-              className="flex-1 shrink gap-sm bg-success-deep hover:bg-success-press"
+              className="flex-1 shrink gap-2 bg-success-deep hover:bg-success-press"
             >
               <svg
                 width="14"
@@ -596,10 +596,10 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <Card className="p-lg">
-      <div className="mb-lg flex items-center justify-between">
-        <div className="flex items-center gap-md">
-          <span className="flex size-icon items-center justify-center rounded-md bg-action-primary">
+    <Card className="p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex size-icon items-center justify-center rounded-sm bg-action-primary">
             <svg
               width="16"
               height="16"
@@ -616,13 +616,13 @@ export function WarmingBoard({
           <span className="type-h3">{t('warming.inProgress.title')}</span>
         </div>
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-md py-xs text-small font-medium text-success-deep">
+          <span className="tb-pulse rounded-full bg-success-tint px-3 py-1 text-small font-medium text-success-deep">
             {t('warming.inProgress.live')}
           </span>
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-md sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
         {warming.map((account) => (
           <WarmingCard
             key={account.account_id}
@@ -636,7 +636,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-empty text-center type-body text-content-subtle">
+          <div className="col-span-full rounded-md border-[1.5px] border-dashed border-info-line px-3 py-16 text-center type-body text-content-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

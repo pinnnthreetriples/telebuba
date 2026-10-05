@@ -14,7 +14,7 @@ import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-tight block type-body-medium text-content-secondary';
+const LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -75,8 +75,8 @@ export function ProxyForm({
   };
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="grid grid-cols-1 items-end gap-md md:grid-cols-[2fr_1fr_auto]">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[2fr_1fr_auto]">
         <form.Field name="host">
           {(field) => (
             <FormField field={field} label={t('accounts.proxyForm.host')}>
@@ -119,7 +119,7 @@ export function ProxyForm({
         <IconButton
           size="md"
           tone="primary"
-          className="mb-xs"
+          className="mb-1"
           onClick={runDetect}
           disabled={!canProbe}
           aria-label={t('accounts.proxyForm.detect')}
@@ -142,7 +142,7 @@ export function ProxyForm({
           )}
         </IconButton>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <form.Field name="username">
           {(field) => (
             <FormField
@@ -178,7 +178,7 @@ export function ProxyForm({
                     setShowPass((shown) => !shown);
                   }}
                   aria-label={t('accounts.proxyForm.password')}
-                  className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                 </IconButton>
@@ -206,14 +206,14 @@ export function ProxyForm({
         </form.Field>
       </div>
       {detect !== 'idle' && (
-        <div className="flex flex-wrap items-center gap-md">
+        <div className="flex flex-wrap items-center gap-3">
           {detect === 'loading' && (
             <span className="type-body text-content-subtle">
               {t('accounts.proxyForm.checking')}
             </span>
           )}
           {detect === 'ok' && (
-            <Badge tone="success" size="md" className="tb-pop gap-sm">
+            <Badge tone="success" size="md" className="tb-pop gap-2">
               {country ? (
                 <span
                   className={`fi fi-${country.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
@@ -223,7 +223,7 @@ export function ProxyForm({
             </Badge>
           )}
           {detect === 'err' && (
-            <span className="inline-flex items-center gap-sm type-body-medium text-danger">
+            <span className="inline-flex items-center gap-2 type-body-medium text-danger">
               <Icon name="x-circle" size={14} />
               {t('accounts.proxyForm.resultErr')}
             </span>

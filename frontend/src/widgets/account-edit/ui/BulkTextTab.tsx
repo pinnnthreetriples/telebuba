@@ -28,15 +28,15 @@ export function BulkTextTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="rounded-lg bg-info-tint px-md py-md type-body text-content-subtle">
+    <div className="flex flex-col gap-4">
+      <div className="rounded-md bg-info-tint px-3 py-3 type-body text-content-subtle">
         {t('accounts.bulk.hint')}
       </div>
       {TEXT_FIELDS.map((key) => {
         const label = t(`accounts.bulk.field.${key}`);
         const empty = value[key].trim() === '';
         return (
-          <div key={key} className="flex flex-col gap-tight">
+          <div key={key} className="flex flex-col gap-2">
             <button
               type="button"
               role="checkbox"
@@ -44,7 +44,7 @@ export function BulkTextTab({
               onClick={() => {
                 onToggle(key);
               }}
-              className="flex items-center gap-md text-left"
+              className="flex items-center gap-3 text-left"
             >
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on[key] ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}

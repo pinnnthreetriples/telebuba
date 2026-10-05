@@ -193,7 +193,7 @@ test('add-channel chip hugs its neighbors and matches their height', async ({ pa
   await setup(page);
   await page.goto('/neurocomment');
   const channel = page
-    .locator('div.flex.flex-wrap.items-start.gap-sm > span')
+    .locator('div.flex.flex-wrap.items-start.gap-2 > span')
     .filter({ hasText: '@defi_news' });
   const add = page.getByRole('button', { name: '+ Канал' });
   await expect(channel).toBeVisible();

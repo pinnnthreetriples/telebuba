@@ -26,9 +26,9 @@ export function CaptchaSolverCard({
   const tipId = useId();
   return (
     <Card className="">
-      <div className="flex items-center justify-between gap-md px-lg py-md">
-        <div className="flex min-w-0 items-center gap-md">
-          <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-icon shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong">
             <svg
               width="15"
               height="15"
@@ -42,7 +42,7 @@ export function CaptchaSolverCard({
             </svg>
           </span>
           <div className="min-w-0">
-            <div className="flex items-center gap-sm">
+            <div className="flex items-center gap-2">
               <span className="type-body-medium">{t('neurocomment.captcha.title')}</span>
               {/* `tabIndex` and not a <button>: there is nothing here to activate, only
                   something to read. See `.tb-tip-pop` in app/styles/index.css. */}
@@ -57,7 +57,7 @@ export function CaptchaSolverCard({
                 <span
                   id={tipId}
                   role="tooltip"
-                  className="tb-tip-pop tb-tip-pop--wide max-sm:!-left-sm"
+                  className="tb-tip-pop tb-tip-pop--wide max-sm:!-left-2"
                   style={{ textAlign: 'left' }}
                 >
                   {t('neurocomment.captcha.tooltip')}
@@ -75,8 +75,8 @@ export function CaptchaSolverCard({
         />
       </div>
       {solverEnabled && captchaQueue.length > 0 ? (
-        <div className="px-lg pb-lg">
-          <div className="mb-md flex items-center gap-sm border-t border-line-row pt-md">
+        <div className="px-4 pb-4">
+          <div className="mb-3 flex items-center gap-2 border-t border-line-row pt-3">
             <svg
               width="13"
               height="13"

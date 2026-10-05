@@ -49,17 +49,17 @@ const CONTROL_TEXT = {
 } as const;
 
 const BUTTON_PAD = {
-  xs: 'px-md',
-  sm: 'px-xl',
-  md: 'px-2xl',
-  lg: 'px-2xl',
+  xs: 'px-3',
+  sm: 'px-4',
+  md: 'px-6',
+  lg: 'px-6',
 } as const;
 
 const FIELD_PAD = {
-  xs: 'px-md',
-  sm: 'px-md',
-  md: 'px-md',
-  lg: 'px-lg',
+  xs: 'px-3',
+  sm: 'px-3',
+  md: 'px-3',
+  lg: 'px-4',
 } as const;
 
 // Форма — по РОДУ контрола, а не по его ступени размера, и это правка, а не описание.
@@ -76,9 +76,9 @@ const SHAPE = {
   // Кнопка — любая, любого размера.
   pill: 'rounded-full',
   // Поле и триггер выпадающего списка.
-  field: 'rounded-lg',
+  field: 'rounded-md',
   // Поле внутри другой коробки.
-  inset: 'rounded-md',
+  inset: 'rounded-sm',
 } as const;
 
 // Фокус — ОБВОДКА, а не тень. Тенью он и был, и `shadow-focus` на белом мерит **1.18:1**
@@ -125,7 +125,7 @@ export type ControlSize = keyof typeof CONTROL_HEIGHT;
  */
 export function buttonBase({ size, className }: { size: ControlSize; className?: string }): string {
   return cn(
-    'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap',
+    'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap',
     CONTROL_HEIGHT[size],
     BUTTON_PAD[size],
     CONTROL_TEXT[size],
@@ -176,7 +176,7 @@ export function areaBase({
     // Вертикальные поля вместо высоты: область растёт вслед за текстом, и фиксировать
     // её значило бы обрезать написанное. Значения подобраны так, чтобы
     // однострочная область совпала по высоте с полем той же ступени.
-    size === 'md' || size === 'lg' ? 'py-sm' : 'py-tight',
+    size === 'md' || size === 'lg' ? 'py-2' : 'py-1',
     FIELD_PAD[size],
     CONTROL_TEXT[size],
     SHAPE[size === 'xs' ? 'inset' : 'field'],

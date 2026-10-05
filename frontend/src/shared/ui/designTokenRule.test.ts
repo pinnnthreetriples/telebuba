@@ -20,8 +20,8 @@ if (rule) {
   ruleTester.run('no-raw-values', rule, {
     valid: [
       // The named set, which is the whole point.
-      'const a = "bg-action-primary text-on-action px-2xl py-md rounded-full text-body";',
-      'const b = "gap-md mb-lg border-line-row shadow-pop duration-state";',
+      'const a = "bg-action-primary text-on-action px-6 py-3 rounded-full text-body";',
+      'const b = "gap-3 mb-4 border-line-row shadow-pop duration-state";',
       // The written exceptions.
       {
         // Роль названа в самом классе: белая поверхность и надпись на залитом действии
@@ -40,6 +40,14 @@ if (rule) {
         name: 'a dimension relative to the viewport or the text is not a rung',
       },
       { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
+      {
+        code: 'const g1 = "p-1 px-2 gap-3 mt-4 py-6 lg:px-8 py-16 -mt-1 sm:-translate-x-1/2 left-1/2 inset-0";',
+        name: 'the declared numeric rungs of the 4px grid, and fractions that are not rhythm',
+      },
+      {
+        code: 'const g1b = "rounded-sm rounded-md rounded-lg rounded-full rounded-t-lg";',
+        name: 'the three radii and the pill',
+      },
       {
         code: 'const g2 = "bg-white/85 bg-black/10 border-white/40 border-black/5";',
         name: 'an alpha on white or black is a wash over content the palette cannot know',
@@ -61,11 +69,11 @@ if (rule) {
         name: 'a role, and a role recoloured',
       },
       {
-        code: 'const t3 = "rounded-full border border-line bg-surface-card px-md py-xs text-small text-content-muted";',
+        code: 'const t3 = "rounded-full border border-line bg-surface-card px-3 py-1 text-small text-content-muted";',
         name: 'a class list that paints a box is drawing a control',
       },
       {
-        code: 'const t3b = "px-lg py-empty text-center type-body"; const t3c = "p-page type-body text-content-primary";',
+        code: 'const t3b = "px-4 py-16 text-center type-body"; const t3c = "p-8 type-body text-content-primary";',
         name: 'a padded gap holding a role, with and without a colour override',
       },
       {
@@ -73,7 +81,7 @@ if (rule) {
         name: 'a class list that reacts to the pointer is drawing a control',
       },
       {
-        code: 'const t5 = "text-body leading-none text-content-subtle"; const t6 = "absolute left-lg text-body text-content-subtle";',
+        code: 'const t5 = "text-body leading-none text-content-subtle"; const t6 = "absolute left-4 text-body text-content-subtle";',
         name: 'at `lead` the scale doubles as a glyph size',
       },
       {
@@ -203,17 +211,51 @@ if (rule) {
         code: 'const w = { color: "hsl(210 100% 50%)" };',
         errors: [{ message: /colour function in a string/ }],
       },
+      // The rhythm is Firecrawl's numeric grid: a declared key is legal (see `valid`), an
+      // undeclared one and every retired name emit no rule and are errors.
       {
-        code: 'const d = "px-3 py-2";',
-        errors: [{ message: /4px grid/ }],
+        code: 'const d = "px-5 py-2";',
+        errors: [{ message: /closed 4px grid/ }],
+      },
+      {
+        code: 'const d2 = "gap-0.5";',
+        errors: [{ message: /closed 4px grid/ }],
+      },
+      {
+        code: 'const d3 = "sm:-mt-7";',
+        errors: [{ message: /closed 4px grid/ }],
+      },
+      {
+        code: 'const d4 = "gap-tight";',
+        errors: [{ message: /named rungs are gone/ }],
+      },
+      {
+        code: 'const d5 = "hover:p-md";',
+        errors: [{ message: /named rungs are gone/ }],
+      },
+      {
+        code: 'const d6 = "-mt-hair";',
+        errors: [{ message: /named rungs are gone/ }],
+      },
+      {
+        code: 'const d7 = "scroll-mt-page top-xl";',
+        errors: [{ message: /named rungs are gone/ }],
       },
       {
         code: 'const e = "gap-[11px]";',
-        errors: [{ message: /rung within 2px/ }],
+        errors: [{ message: /rung near this value/ }],
       },
       {
         code: 'const f = "rounded-[9px]";',
-        errors: [{ message: /Five radii/ }],
+        errors: [{ message: /Three radii/ }],
+      },
+      {
+        code: 'const f2 = "rounded-card";',
+        errors: [{ message: /`card` is gone/ }],
+      },
+      {
+        code: 'const f3 = "md:rounded-t-card";',
+        errors: [{ message: /`card` is gone/ }],
       },
       {
         code: 'const g = "duration-[420ms]";',
@@ -221,7 +263,7 @@ if (rule) {
       },
       // The exemption this rule used to carry, now the pattern it enforces: while
       // `w-*`/`h-*` in pixels were allowed, 73 distinct dimensions grew beside the
-      // rhythm's eleven rungs.
+      // rhythm's rungs.
       {
         code: 'const i = "lg:w-[34px] max-w-[240px]";',
         errors: [{ message: /Dimensions are their own scale/ }],
@@ -247,7 +289,7 @@ if (rule) {
         errors: [{ message: /A step plus a grey/ }],
       },
       {
-        code: 'const l = "text-content-muted mb-md text-body";',
+        code: 'const l = "text-content-muted mb-3 text-body";',
         errors: [{ message: /A step plus a grey/ }],
       },
       {
@@ -259,7 +301,7 @@ if (rule) {
       // every empty, loading and error state in the app, spelled across three rungs and
       // three greys. A gap with a sentence in it is not a control.
       {
-        code: 'const n = "px-lg py-empty text-center text-body text-content-subtle";',
+        code: 'const n = "px-4 py-16 text-center text-body text-content-subtle";',
         errors: [{ message: /A step plus a grey/ }],
       },
       {
@@ -267,7 +309,7 @@ if (rule) {
         errors: [{ message: /A step plus a grey/ }],
       },
       {
-        code: 'const p = "p-page text-body text-content-primary";',
+        code: 'const p = "p-8 text-body text-content-primary";',
         errors: [{ message: /A step plus a grey/ }],
       },
       // The line-height axis. `[1.5]` is the interesting one: it was the single most

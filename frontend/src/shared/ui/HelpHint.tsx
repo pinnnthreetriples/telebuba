@@ -26,13 +26,13 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        query, if the clipping ever actually bites. */
     <span
       className={cn(
-        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-md text-left text-small text-content-muted group-hover:block group-focus-within:block',
+        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-3 text-left text-small text-content-muted group-hover:block group-focus-within:block',
         surface('panel'),
       )}
       role="tooltip"
     >
       {text}
-      {example ? <span className="mt-tight block text-content-subtle">{example}</span> : null}
+      {example ? <span className="mt-2 block text-content-subtle">{example}</span> : null}
     </span>
   );
 }

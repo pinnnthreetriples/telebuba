@@ -81,11 +81,11 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <Card className="px-xl py-lg">
-      <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
+    <Card className="px-6 py-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className="type-h3">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-sm type-body text-content-subtle">
+          <span className="ml-2 type-body text-content-subtle">
             {t('accounts.proxyPool.subtitle')}
           </span>
         </div>
@@ -97,8 +97,8 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
         )}
       </div>
       {empty ? (
-        <div className="flex flex-col items-center justify-center px-lg pb-page pt-page text-center">
-          <div className="mb-lg flex size-touch items-center justify-center rounded-lg bg-canvas text-content-subtle">
+        <div className="flex flex-col items-center justify-center px-4 pb-8 pt-8 text-center">
+          <div className="mb-4 flex size-touch items-center justify-center rounded-md bg-canvas text-content-subtle">
             <svg
               width="22"
               height="22"
@@ -111,20 +111,20 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-xs type-h3">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-1 type-h3">{t('accounts.proxyPool.emptyTitle')}</div>
           <div
             // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the sentence in this widget's own empty state
-            className="mb-lg max-w-[300px] type-body text-content-subtle"
+            className="mb-4 max-w-[300px] type-body text-content-subtle"
           >
             {t('accounts.proxyPool.emptyBody')}
           </div>
-          <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
+          <Button variant="primary" className="items-center gap-2" onClick={onAdd}>
             <Icon name="plus" size={16} />
             {t('accounts.proxyPool.emptyAdd')}
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-md">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-3">
           {proxies.map((proxy: ProxyRead) => (
             <ProxyCard
               key={proxy.id}
@@ -181,7 +181,7 @@ function ProxyCard({
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-md rounded-lg border px-lg py-lg ${
+      className={`flex flex-col gap-3 rounded-md border px-4 py-4 ${
         problem
           ? 'border-danger-line bg-danger-tint'
           : geoConflict
@@ -189,7 +189,7 @@ function ProxyCard({
             : 'border-line bg-surface-card'
       }`}
     >
-      <div className="flex items-center gap-sm">
+      <div className="flex items-center gap-2">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
@@ -214,10 +214,10 @@ function ProxyCard({
           <div className="truncate type-body-medium">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex flex-wrap items-center gap-tight type-small">
+          <div className="mt-px flex flex-wrap items-center gap-2 type-small">
             <span className="whitespace-nowrap">{proxyTypeLabel(proxy.proxy_type)}</span>
             <span
-              className={`inline-flex items-center gap-xs whitespace-nowrap font-medium ${statusTone}`}
+              className={`inline-flex items-center gap-1 whitespace-nowrap font-medium ${statusTone}`}
               title={
                 [
                   proxy.last_checked_at &&
@@ -236,7 +236,7 @@ function ProxyCard({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-tight">
+        <div className="flex shrink-0 items-center gap-1">
           <IconButton
             size="touch"
             shape="circle"
@@ -264,7 +264,7 @@ function ProxyCard({
         </div>
       </div>
       <div>
-        <div className="mb-tight flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
           <span className="type-small">{t('accounts.proxyPool.accounts')}</span>
           <span
             className={`text-small font-medium ${full ? 'text-danger-deep' : 'text-success-deep'}`}
@@ -278,7 +278,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-tight text-small ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
+        <div className={`mt-2 text-small ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

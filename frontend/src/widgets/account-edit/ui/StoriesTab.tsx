@@ -31,8 +31,8 @@ export function StoriesTab({
   const [viewing, setViewing] = useState<number | null>(null);
   return (
     <div>
-      <div className="mb-md type-body text-content-subtle">{t('accounts.profile.storiesHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
+      <div className="mb-3 type-body text-content-subtle">{t('accounts.profile.storiesHint')}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
         {stories.map((story, index) => (
           <div key={story.story_id} className="group relative">
             <button
@@ -41,7 +41,7 @@ export function StoriesTab({
               onClick={() => {
                 setViewing(index);
               }}
-              className="flex w-full items-center justify-center rounded-lg border border-black/5"
+              className="flex w-full items-center justify-center rounded-md border border-black/5"
               style={tileStyle(story.thumb_url, '9 / 16')}
             >
               {story.kind === 'video' && (
@@ -53,11 +53,11 @@ export function StoriesTab({
               )}
             </button>
             {(story.views != null || story.reactions != null) && (
-              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-small font-medium text-on-inverse">
+              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-2 rounded-sm bg-scrim px-1 py-px text-small font-medium text-on-inverse">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
-                    className="inline-flex items-center gap-xs"
+                    className="inline-flex items-center gap-1"
                   >
                     <svg
                       width="10"
@@ -76,7 +76,7 @@ export function StoriesTab({
                 {story.reactions != null && (
                   <span
                     title={t('accounts.profile.storyReactions', { n: story.reactions })}
-                    className="inline-flex items-center gap-xs"
+                    className="inline-flex items-center gap-1"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z" />
@@ -100,7 +100,7 @@ export function StoriesTab({
             {/* One stacked column, not two fixed `bottom-*` offsets: those overlapped
                 whenever a label's line box outgrew the gap between them. */}
             <div
-              className={`pointer-events-none absolute inset-x-[5px] bottom-[5px] flex flex-col gap-xs ${HOVER_ONLY}`}
+              className={`pointer-events-none absolute inset-x-[5px] bottom-[5px] flex flex-col gap-1 ${HOVER_ONLY}`}
             >
               <button
                 type="button"
@@ -111,13 +111,13 @@ export function StoriesTab({
                 onClick={() => {
                   onPinToggle(story);
                 }}
-                className={`pointer-events-auto truncate rounded-sm px-tight py-hair text-center text-small font-medium disabled:opacity-50 ${
+                className={`pointer-events-auto truncate rounded-sm px-1 py-px text-center text-small font-medium disabled:opacity-50 ${
                   story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
                 }`}
               >
                 {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
               </button>
-              <span className="truncate rounded-sm bg-scrim px-tight py-hair text-center text-small font-medium text-on-inverse">
+              <span className="truncate rounded-sm bg-scrim px-1 py-px text-center text-small font-medium text-on-inverse">
                 {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
               </span>
             </div>

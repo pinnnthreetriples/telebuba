@@ -41,10 +41,10 @@
 //   they already have and no new suppression is added to buy it.
 //
 //   `rounded-[1px|2px|3px]` (24 sites) — a hairline's radius. Snapping a 2px progress
-//   bar or a chat bubble's tail up to the 6px rung would round it away, so the radius
+//   bar or a chat bubble's tail up to the 8px rung would round it away, so the radius
 //   pattern starts at 4px.
 //
-//   arbitrary spacing above 34px (10 sites) — the rhythm is dense from 2 to 32px and
+//   arbitrary spacing above 34px (10 sites) — the rhythm is dense from 4 to 32px and
 //   that is the range the pattern covers. Above it are a page's own breathing room
 //   and the room a control takes up inside a field, one-offs by nature.
 //
@@ -100,7 +100,7 @@
 // A test file is exempt too, and for the opposite reason: `cn.test.ts` and
 // `designTokenRule.test.ts` assert on the very spellings this bans, and a fixture is
 // data about the code rather than a decision inside it.
-import { colorRoots, scaleNames } from '../scripts/configScales.mjs';
+import { colorRoots, scale, scaleNames } from '../scripts/configScales.mjs';
 
 // The composition of every scale comes from `src/shared/design-system/tokens` — the same
 // objects `ds:dead`, the doc generator, `cn.ts` and Tailwind itself read. That is the
@@ -179,6 +179,22 @@ const COLOUR =
   'ring|ring-offset|fill|stroke|from|to|via|divide|divide-x|divide-y|' +
   'outline|decoration|caret|accent|shadow|placeholder';
 const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y';
+// Всё, что читает `theme.spacing`, а не только поля и зазоры: `top-lg` и `scroll-mt-page`
+// после перехода на сетку молчат точно так же, как `p-md`.
+const SPACE_ALL =
+  `${SPACE}|ps|pe|ms|me|inset|inset-x|inset-y|top|right|bottom|left|start|end|` +
+  'translate-x|translate-y|scroll-m[xytrbl]?|scroll-p[xytrbl]?|indent';
+// Ступени ритма — из токенов, как и всё остальное здесь. `0` и `px` стоят в той же
+// шкале, но ступенями не считаются и в подсказке не называются.
+const RHYTHM = scale('spacing');
+const RHYTHM_NUMERIC = Object.keys(RHYTHM).filter((name) => /^\d+$/.test(name));
+const RHYTHM_RUNGS = RHYTHM_NUMERIC.filter((name) => name !== '0')
+  .map((name) => `\`${name}\` ${RHYTHM[name]}`)
+  .join(', ');
+// Имена, которые ритм носил до сетки Firecrawl. Перечислены по той же причине, что
+// `RETIRED`: незнакомая утилита не выпускает правила, и `gap-md` после перехода — не
+// ошибка сборки, а класс, который молча ничего не делает.
+const RETIRED_RHYTHM = 'hair|xs|tight|sm|md|lg|xl|2xl|page|empty';
 const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 
 // A utility class starts at the beginning of the string or after whitespace. Anchored
@@ -345,14 +361,21 @@ const PATTERNS = [
       'The type scale is closed: five steps — `text-small` 12, `text-body` 14, `text-h3` 16, `text-h2` 20, `text-h1` 24 — each carrying its own line-height and tracking, replacing Tailwind’s outright. A sixth size written in pixels is the drift those steps were introduced to end.',
   },
   {
-    test: at(String.raw`(?:${SPACE})-(?!0(?![\d.]))[0-9.]+(?![\w[])`),
+    test: at(String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?:${RETIRED_RHYTHM})(?![\w-])`),
     message:
-      "Tailwind's numeric spacing is a 4px grid; this app's rhythm is the design's own (`gap-md` is 10px, not 8 or 12). Mixing them is how `gap-md` came to sit beside `px-3` in one row. Use the named rung.",
+      'The rhythm is Firecrawl’s 4px grid with numeric keys now, and the named rungs are gone: this class emits no rule, so the element silently loses its spacing. `xs` → `1`, `sm` → `2`, `md` → `3`, `lg` → `4`, `2xl` → `6`, `page` → `8`, `empty` → `16`. `hair` (2px), `tight` (6px) and `xl` (20px) had no place on the grid and were mapped by role: `hair` → `1`, or `px` on a chip or between chart bars; `tight` → `1` inside a small control or between an icon and its label, `2` between lines; `xl` → `6` for a card’s or dialog’s padding, `4` for a button’s or between groups. docs/design-system.md, «Седьмой проход», carries the table.',
+  },
+  {
+    // Числовые ключи теперь законны — но только объявленные. `p-5` и `gap-0.5` есть в
+    // шкале Tailwind и нет в нашей, а шкала ЗАМЕНЕНА: класс молчит, как и старое имя.
+    test: at(
+      String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?!(?:${RHYTHM_NUMERIC.join('|')})(?![\w.]))\d[\d.]*(?![\w./[])`,
+    ),
+    message: `The rhythm is a closed 4px grid, and only the rungs the app wears are declared: ${RHYTHM_RUNGS}, plus \`0\` and the \`px\` hairline. Tailwind’s own numeric scale is replaced, so an undeclared step emits no rule and the element silently loses its spacing. Use the nearest rung; a rung nobody wears is rejected by \`ds:dead\`, so a new one lands together with its wearer.`,
   },
   {
     test: at(String.raw`(?:${SPACE})-\[(?:[0-9]|[12][0-9]|3[0-4])px\]`),
-    message:
-      'The rhythm has a rung within 2px of this value. Reach for it: twelve names is the whole point, and a thirteenth measurement in pixels is where two rhythms start again.',
+    message: `The rhythm has a rung near this value: ${RHYTHM_RUNGS}. Reach for it — a measurement in pixels beside a 4px grid is where two rhythms start again.`,
   },
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${DIMENSION})-\[[0-9.]+(?:px|rem)\](?![\w-])`),
@@ -360,9 +383,14 @@ const PATTERNS = [
       'Dimensions are their own scale now: `size-*` for a square, `width`/`height` for everything else, and each rung is named for the component that wears it. This rule used to exempt `w-*`/`h-*` in pixels on the grounds that a component’s size is not a rung of the rhythm — which was true, and is exactly how 73 distinct dimensions grew beside eleven rungs. Both halves are scales now, so a measurement here belongs in one of them.',
   },
   {
+    test: at(String.raw`(?:[\w-]+:)*rounded(?:-[a-z]{1,2})?-card(?![\w-])`),
+    message:
+      'The radius scale is Firecrawl’s now and `card` is gone: this class emits no rule, so the card silently loses its corners. The card and the dialog are `rounded-lg` (16px). The rename was one pass, never two: the old `lg` (11px) is `rounded-md` (12px), the old `md` (8px) and `sm` (6px) are both `rounded-sm` (8px).',
+  },
+  {
     test: at(String.raw`rounded(?:-[a-z]+)?-\[(?:[4-9]|[1-9][0-9])`),
     message:
-      'Five radii, each named for what wears it (`sm` inside a box, `md` a standalone control, `lg` a panel nested in a card, `card` the card, `full` the pill). Hairlines under 4px keep their own value; anything larger has a rung.',
+      'Three radii and two shapes, on Firecrawl’s scale: `sm` 8px — an everyday control, a chip, a small tile; `md` 12px — a field, a panel, a menu, a card nested in a card; `lg` 16px — the card and the dialog; `full` — the pill and the avatar; and `none`. Hairlines under 4px keep their own value; anything larger has a rung.',
   },
   {
     test: at(String.raw`duration-\[`),

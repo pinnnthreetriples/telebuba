@@ -40,8 +40,8 @@ export function CodeLoginStep({
   return (
     <>
       {!requestCode.isSuccess ? (
-        <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg type-body text-content-subtle">
+        <div className="flex flex-col gap-3">
+          <div className="rounded-md border border-line bg-surface-card px-4 py-4 type-body text-content-subtle">
             {phone}
           </div>
           <Button
@@ -63,8 +63,8 @@ export function CodeLoginStep({
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-md">
-          <div className="rounded-lg bg-success-tint px-md py-md text-body font-medium text-success-deep">
+        <div className="flex flex-col gap-3">
+          <div className="rounded-md bg-success-tint px-3 py-3 text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
           <label className="block type-small-medium">
@@ -77,7 +77,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
+              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-none focus:border-focus"
             />
           </label>
           <label className="block type-small-medium">
@@ -92,7 +92,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
+              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-none focus:border-focus"
             />
           </label>
           {submitCode.isError && (
@@ -100,7 +100,7 @@ export function CodeLoginStep({
           )}
         </div>
       )}
-      <div className="mt-xl flex justify-end gap-sm">
+      <div className="mt-6 flex justify-end gap-2">
         <Button
           variant="primary"
           onClick={onConfirmLogin}

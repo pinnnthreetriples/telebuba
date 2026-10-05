@@ -204,15 +204,15 @@ test('every option carries the focus ring the hand-written versions had none of'
 test('cn keeps the size and the fill of a segment together', () => {
   expect(
     cn(
-      'flex-1 rounded-sm py-sm text-body font-medium',
+      'flex-1 rounded-sm py-2 text-body font-medium',
       'bg-surface-card text-content-primary shadow-seg',
     ),
   ).toBe(
-    'flex-1 rounded-sm py-sm text-body font-medium bg-surface-card text-content-primary shadow-seg',
+    'flex-1 rounded-sm py-2 text-body font-medium bg-surface-card text-content-primary shadow-seg',
   );
   expect(
-    cn('rounded-full px-lg py-tight text-body', 'bg-action-primary text-on-action shadow-pill'),
-  ).toBe('rounded-full px-lg py-tight text-body bg-action-primary text-on-action shadow-pill');
+    cn('rounded-full px-4 py-1 text-body', 'bg-action-primary text-on-action shadow-pill'),
+  ).toBe('rounded-full px-4 py-1 text-body bg-action-primary text-on-action shadow-pill');
 });
 
 /* ── per-option escape hatches ───────────────────────────────────────────── */
@@ -246,8 +246,8 @@ test('a label may be rich content, not just a string', () => {
 });
 
 test('the wrapper takes the caller className without losing its own', () => {
-  renderControl({ className: 'mb-lg' });
+  renderControl({ className: 'mb-4' });
   const group = screen.getByRole('radiogroup');
-  expect(group).toHaveClass('mb-lg');
+  expect(group).toHaveClass('mb-4');
   expect(group).toHaveClass('bg-canvas');
 });

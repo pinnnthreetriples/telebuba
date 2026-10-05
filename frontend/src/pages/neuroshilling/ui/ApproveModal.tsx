@@ -47,7 +47,7 @@ function PauseBox({
     onDelay(index, Math.min(value, min), value);
   });
   return (
-    <span className="flex h-compact shrink-0 items-center gap-xs rounded-md border border-line bg-surface-card px-sm">
+    <span className="flex h-compact shrink-0 items-center gap-1 rounded-sm border border-line bg-surface-card px-2">
       <input
         type="number"
         min={0}
@@ -122,7 +122,7 @@ export function ApproveModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neuroshilling.preview.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-3 border-b border-line-row px-6 pb-4 pt-6">
         <span className="type-h2">{t('neuroshilling.preview.title')}</span>
         {/* Два счётчика — двумя ключами, а не одним с двумя подстановками: склоняются
             они по РАЗНЫМ числам, и «5 реплик, 1 реакций» — ровно то, что получается,
@@ -139,21 +139,21 @@ export function ApproveModal({
         </Badge>
         <div className="flex-1" />
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-small font-medium ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
+          className={`shrink-0 rounded-full px-3 py-1 text-small font-medium ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
       </div>
 
-      <div className="px-2xl py-lg">
+      <div className="px-6 py-4">
         {dirty ? (
-          <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-small text-warning-deep">
+          <div className="mb-3 rounded-md bg-warning-tint px-3 py-2 text-small text-warning-deep">
             {t('neuroshilling.preview.unsaved')}
           </div>
         ) : null}
 
         {steps.length === 0 ? (
-          <div className="py-xl text-center type-body text-content-subtle">
+          <div className="py-6 text-center type-body text-content-subtle">
             {t('neuroshilling.preview.none')}
           </div>
         ) : (
@@ -170,7 +170,7 @@ export function ApproveModal({
               return (
                 <div key={`${String(play)}-${step.step_id}`}>
                   {index > 0 ? (
-                    <div className="my-sm flex items-center gap-sm">
+                    <div className="my-2 flex items-center gap-2">
                       <span className="h-px flex-1 bg-line" />
                       {delays === null ? (
                         <span className="type-small tabular-nums">
@@ -194,7 +194,7 @@ export function ApproveModal({
                     </div>
                   ) : null}
                   <div
-                    className="tb-fadeup flex gap-md"
+                    className="tb-fadeup flex gap-3"
                     style={{ animationDelay: `${String(index * 0.12)}s` }}
                   >
                     <span
@@ -203,7 +203,7 @@ export function ApproveModal({
                       {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="mb-xs flex items-center gap-sm">
+                      <div className="mb-1 flex items-center gap-2">
                         <span className={`type-body-medium ${tone.text}`}>
                           {role?.name ?? t('neuroshilling.preview.noRole')}
                         </span>
@@ -212,7 +212,7 @@ export function ApproveModal({
                         </span>
                       </div>
                       {step.kind === 'reaction' ? (
-                        <span className="inline-flex items-center gap-tight rounded-full border border-line bg-surface-card px-md py-xs text-small text-content-muted">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-card px-3 py-1 text-small text-content-muted">
                           <span aria-hidden="true">{step.emoji ?? '·'}</span>
                           {step.target_position === null || step.target_position === undefined
                             ? t('neuroshilling.preview.reactionLoose')
@@ -221,10 +221,10 @@ export function ApproveModal({
                               })}
                         </span>
                       ) : (
-                        <div className="rounded-lg rounded-tl-[3px] border border-line bg-surface px-md py-sm text-body">
+                        <div className="rounded-md rounded-tl-[3px] border border-line bg-surface px-3 py-2 text-body">
                           {quoted ? (
                             <span
-                              className={`mb-tight block border-l-2 pl-sm type-small ${tone.border}`}
+                              className={`mb-2 block border-l-2 pl-2 type-small ${tone.border}`}
                             >
                               {quoted.text}
                             </span>
@@ -241,7 +241,7 @@ export function ApproveModal({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center gap-2 border-t border-line-row px-6 py-4">
         <span className="mr-auto type-small tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>

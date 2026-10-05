@@ -21,7 +21,7 @@ const meta = {
   ],
   args: {
     children: ROWS.map(({ time, channel, event }) => (
-      <div key={time + event} className="flex gap-sm">
+      <div key={time + event} className="flex gap-2">
         <span className="text-term-dim">{time}</span>
         <span className="text-term-link">{channel}</span>
         <span className="text-term-success">{event}</span>

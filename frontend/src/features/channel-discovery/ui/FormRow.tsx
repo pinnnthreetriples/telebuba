@@ -25,7 +25,7 @@ export function Row({
   return (
     <div
       className={cn(
-        'flex min-h-touch flex-wrap items-center gap-md py-sm',
+        'flex min-h-touch flex-wrap items-center gap-3 py-2',
         !first && 'border-t border-line-row',
       )}
     >
@@ -37,7 +37,7 @@ export function Row({
             {label}
           </label>
         )}
-        {hint === undefined ? null : <div className="mt-hair type-small">{hint}</div>}
+        {hint === undefined ? null : <div className="mt-1 type-small">{hint}</div>}
       </div>
       {children}
     </div>
@@ -46,7 +46,7 @@ export function Row({
 
 export function Eyebrow({ title, caption }: { title: string; caption?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-sm pb-sm">
+    <div className="flex flex-wrap items-baseline gap-2 pb-2">
       <span className="type-small-medium">{title}</span>
       {caption === undefined ? null : <span className="type-small">{caption}</span>}
     </div>

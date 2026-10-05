@@ -203,13 +203,13 @@ export function ChannelCreateModal({
       size="form"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
+      <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+        <div className="mb-4 flex items-center justify-between">
           <span className="type-h2">{t('accounts.channel.createTitle')}</span>
           <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
         </div>
 
-        <label className="mb-lg block">
+        <label className="mb-4 block">
           <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
           <Input
             value={title}
@@ -219,13 +219,13 @@ export function ChannelCreateModal({
             }}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-xs block type-small text-danger-deep">
+            <span className="mt-1 block type-small text-danger-deep">
               {t('accounts.channel.errTitle')}
             </span>
           )}
         </label>
 
-        <label className="mb-lg block">
+        <label className="mb-4 block">
           <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
           <Textarea
             className="[font-family:inherit]"
@@ -254,12 +254,12 @@ export function ChannelCreateModal({
         />
 
         {isPublic && (
-          <label className="mb-lg block">
+          <label className="mb-4 block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-lg text-body text-content-subtle">@</span>
+              <span className="absolute left-4 text-body text-content-subtle">@</span>
               <Input
-                className="pl-page"
+                className="pl-8"
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
@@ -267,7 +267,7 @@ export function ChannelCreateModal({
               />
             </div>
             {usernameHint && (
-              <span className={`mt-xs block text-small ${hintColor}`}>{usernameHint.text}</span>
+              <span className={`mt-1 block text-small ${hintColor}`}>{usernameHint.text}</span>
             )}
           </label>
         )}
@@ -281,7 +281,7 @@ export function ChannelCreateModal({
           </Notice>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <div className="mt-6 flex justify-end gap-2">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.channel.cancel')}
           </Button>

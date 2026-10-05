@@ -40,7 +40,7 @@ test('ступень задаёт коробку, а радиус у всех с
         <svg />
       </IconButton>,
     );
-    expect(screen.getByRole('button', { name: 'a' })).toHaveClass(box, 'rounded-md');
+    expect(screen.getByRole('button', { name: 'a' })).toHaveClass(box, 'rounded-sm');
     unmount();
   }
 });

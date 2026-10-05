@@ -17,7 +17,7 @@ function StreamChip({ stream, t }: { stream: DiscoveryStream; t: TFunction }) {
   const label = t(stateLabelKey(stream.state));
   const title = stream.error == null ? label : `${label} · ${stream.error}`;
   return (
-    <span className="inline-flex items-center gap-xs" title={title}>
+    <span className="inline-flex items-center gap-1" title={title}>
       <span className={cn('size-dot shrink-0 rounded-full', dotTone(stream.state))} />
       <span className="type-small">{stream.name}</span>
       {stream.premium === true ? (
@@ -62,8 +62,8 @@ export function SearchProgress({ work, phase }: Props) {
   const out = streamsOut(streams);
 
   return (
-    <div className="flex flex-col gap-sm">
-      <div className="flex items-center justify-between gap-sm">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
         {/* role=status on the STAGE only, not the whole line: the count/ETA change on
             every ~2s poll tick, and a live region around them would have a screen
             reader re-announce the strip every tick for the run's whole duration. The
@@ -89,7 +89,7 @@ export function SearchProgress({ work, phase }: Props) {
           />
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-md">
+      <div className="flex flex-wrap items-center gap-3">
         {streams.map((stream) => (
           <StreamChip key={stream.account_id} stream={stream} t={t} />
         ))}

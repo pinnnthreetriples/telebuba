@@ -19,7 +19,7 @@ import { Section } from './_shared';
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-md border-b border-line-row py-md">
+    <div className="flex items-center justify-between gap-3 border-b border-line-row py-3">
       <span className="type-body text-content-subtle">{label}</span>
       <span className="text-right type-body-medium text-content-primary">{value}</span>
     </div>
@@ -175,7 +175,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <Spinner />
           ) : (
             <span
-              className={`shrink-0 rounded-full px-md py-xs text-small font-medium ${
+              className={`shrink-0 rounded-full px-3 py-1 text-small font-medium ${
                 hasPassword ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'
               }`}
             >
@@ -196,25 +196,25 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             reset was requested against), and inside the 2FA-on arm that warning was
             silently dropped in exactly the case where it matters most. */}
         {status?.pending_reset_date ? (
-          <div className="border-b border-line-row py-md text-body font-medium text-danger">
+          <div className="border-b border-line-row py-3 text-body font-medium text-danger">
             {t('accounts.edit.twofaResetRequested', {
               date: status.pending_reset_date.slice(0, 10),
             })}
           </div>
         ) : null}
         {twofa.isPending ? (
-          <div className="py-sm">
+          <div className="py-2">
             <Spinner />
           </div>
         ) : created ? (
           <>
-            <div className="mb-md type-body-medium">{t('accounts.edit.twofaCreatedTitle')}</div>
+            <div className="mb-3 type-body-medium">{t('accounts.edit.twofaCreatedTitle')}</div>
             {created.stored === false && !keptPrevious ? (
               // The RPC landed but the DB write did not, so this response is the
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <Notice tone="danger" className="mb-md py-md text-small font-medium">
+              <Notice tone="danger" className="mb-3 py-3 text-small font-medium">
                 {t('accounts.edit.twofaStoreFailed')}
               </Notice>
             ) : null}
@@ -228,7 +228,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <Notice tone="danger" className="mb-md py-md text-small font-medium">
+              <Notice tone="danger" className="mb-3 py-3 text-small font-medium">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
@@ -249,13 +249,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               readOnly
               value={created.password}
               aria-label={t('accounts.edit.twofaNewPassword')}
-              className="mb-sm break-all font-mono text-content-primary"
+              className="mb-2 break-all font-mono text-content-primary"
             />
             {clipboard ? (
               <Button
                 type="button"
                 fullWidth
-                className="mb-md font-medium text-content-muted"
+                className="mb-3 font-medium text-content-muted"
                 onClick={() => {
                   copyPassword(created.password);
                 }}
@@ -266,10 +266,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               </Button>
             ) : null}
             {clipboard ? null : (
-              <div className="mb-md type-small">{t('accounts.edit.twofaCopyManual')}</div>
+              <div className="mb-3 type-small">{t('accounts.edit.twofaCopyManual')}</div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-md type-small-medium text-danger-deep">
+              <div className="mb-3 type-small-medium text-danger-deep">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
@@ -302,11 +302,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // transient `twofa_state_unreadable` left a plaintext cloud password
               // sitting on disk that the card neither showed nor could clear —
               // every control that can do it lived in the `hasPassword` arm.
-              <div className="mt-md">
-                <div className="border-b border-line-row py-md text-body font-medium text-content-muted">
+              <div className="mt-3">
+                <div className="border-b border-line-row py-3 text-body font-medium text-content-muted">
                   {t('accounts.edit.twofaStored')}
                 </div>
-                <div className="mt-md text-center">
+                <div className="mt-3 text-center">
                   <button
                     type="button"
                     onClick={() => {
@@ -364,14 +364,14 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 saw "Резервная почта / не привязана" twice. Neither state lost its
                 reachability: the row moved, it did not go. */}
             <div
-              className={`border-b border-line-row py-md text-body font-medium ${
+              className={`border-b border-line-row py-3 text-body font-medium ${
                 hasStored ? 'text-content-muted' : 'text-danger'
               }`}
             >
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-md type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
+              <div className="mt-3 type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
             )}
             <TwoFactorEmail
               // Keyed on the server-side email state: a write's optimistic
@@ -393,7 +393,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               onCodeLength={setEmailCodeLength}
               onChanged={invalidate}
             />
-            <div className="mt-lg">
+            <div className="mt-4">
               {changing ? (
                 <TwoFactorForm
                   accountId={accountId}
@@ -414,7 +414,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 </Button>
               )}
             </div>
-            <div className="mt-md text-center">
+            <div className="mt-3 text-center">
               <button
                 type="button"
                 onClick={() => {
@@ -437,11 +437,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the operator could neither SEE that a credential is still on disk for
               // this account nor get rid of it: the backend's own stale branch (clear
               // the column, spend no RPC) was unreachable from the UI.
-              <div className="mb-lg">
-                <div className="border-b border-line-row py-md text-body font-medium text-danger">
+              <div className="mb-4">
+                <div className="border-b border-line-row py-3 text-body font-medium text-danger">
                   {t('accounts.edit.twofaStoredStale')}
                 </div>
-                <div className="mt-md text-center">
+                <div className="mt-3 text-center">
                   <button
                     type="button"
                     onClick={() => {

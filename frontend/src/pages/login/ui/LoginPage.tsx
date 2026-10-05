@@ -31,9 +31,9 @@ export function LoginPage() {
 
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the login card, the only page in the app built as one
-    <main className="mx-auto mt-[96px] max-w-[384px] p-page">
-      <h1 className="mb-2xl type-h1">{t('auth.login.title')}</h1>
-      <form onSubmit={onSubmit} className="space-y-lg">
+    <main className="mx-auto mt-[96px] max-w-[384px] p-8">
+      <h1 className="mb-6 type-h1">{t('auth.login.title')}</h1>
+      <form onSubmit={onSubmit} className="space-y-4">
         <Input
           value={username}
           onChange={(event) => {

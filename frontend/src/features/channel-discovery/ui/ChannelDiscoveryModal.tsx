@@ -220,14 +220,14 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="border-b border-line-row px-6 pb-4 pt-6">
         <h2 className="type-h2">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-hair type-small">
+        <p className="mt-1 type-small">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
       </div>
 
-      <div className="flex flex-col gap-2xl px-2xl py-xl">
+      <div className="flex flex-col gap-6 px-6 py-6">
         <div ref={contentRef} tabIndex={-1} className="outline-none">
           {submitted ? (
             <DiscoveryResults
@@ -253,7 +253,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           )}
         </div>
 
-        <div className="flex flex-col gap-sm empty:hidden">
+        <div className="flex flex-col gap-2 empty:hidden">
           {refused ? (
             <p role="status" className="type-body text-danger">
               {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
@@ -292,7 +292,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-row px-6 py-4">
         {submitted ? (
           <>
             <Button

@@ -168,8 +168,8 @@ export function ChannelEditModal({
         // is a real (if rare) read result, which left the dialog nameless.
         label={t('accounts.channel.dialog')}
       >
-        <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-          <div className="mb-lg flex items-center justify-between gap-md">
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
@@ -208,7 +208,7 @@ export function ChannelEditModal({
 
           {detail.isSuccess && (
             <>
-              <label className="mb-lg block">
+              <label className="mb-4 block">
                 <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
                 <Input
                   value={shownTitle}
@@ -218,12 +218,12 @@ export function ChannelEditModal({
                   }}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-xs block type-small text-danger-deep">
+                  <span className="mt-1 block type-small text-danger-deep">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
               </label>
-              <label className="mb-lg block">
+              <label className="mb-4 block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
                 <Textarea
                   className="[font-family:inherit]"
@@ -256,7 +256,7 @@ export function ChannelEditModal({
                   не `gap` у тела; перевод тела на `gap` — отдельная правка (он снял бы
                   `mb-lg` у двух `label` и у общего `CheckRow`, который носит и диалог
                   создания), и картинку она сдвинет. */}
-              <div className="mt-lg flex items-center gap-sm">
+              <div className="mt-4 flex items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => photoInput.current?.click()}

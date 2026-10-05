@@ -13,7 +13,7 @@ const meta = {
       </IconButton>
     ),
     surface: (
-      <div className="rounded-lg border border-line bg-surface-card px-md py-sm">
+      <div className="rounded-md border border-line bg-surface-card px-3 py-2">
         <div className="type-body-medium">Кампания «Крипта»</div>
         <div className="type-small">4 канала · 120 комментариев</div>
       </div>
