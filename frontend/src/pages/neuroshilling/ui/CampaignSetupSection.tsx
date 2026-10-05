@@ -151,7 +151,7 @@ export function CampaignSetupSection({
         {targets.map((target, index) => (
           <span
             key={`${target}-${String(index)}`}
-            className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-body text-content-secondary"
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas h-control px-3 text-body text-content-secondary"
           >
             {target}
             <IconButton

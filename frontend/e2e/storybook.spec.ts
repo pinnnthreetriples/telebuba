@@ -12,7 +12,7 @@ test('product patterns render and campaign dialogs work', async ({ page }, testI
 
   // Wait until the number component has armed its roll; the screenshot then
   // fast-forwards CSS motion so the attached review image always shows real values.
-  const firstDigit = patterns.locator('.type-stat.tabular-nums [style*="translateY"]').first();
+  const firstDigit = patterns.locator('.type-h1.tabular-nums [style*="translateY"]').first();
   await expect(firstDigit).toHaveAttribute('style', /translateY\(-2\.2(?:0)?em\)/);
 
   // Keep a screenshot as a CI artifact without a platform-specific golden image.

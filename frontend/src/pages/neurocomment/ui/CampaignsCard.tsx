@@ -220,7 +220,7 @@ export function CampaignsCard({
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
+                className={`inline-flex items-center gap-2 rounded-full border h-control px-3 text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
