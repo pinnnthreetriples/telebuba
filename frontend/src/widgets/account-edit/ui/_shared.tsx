@@ -26,7 +26,7 @@ export function DashedAdd({
       onClick={onClick}
       style={{ aspectRatio: ratio }}
       className={tileAction(
-        'flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card text-body font-medium text-content-muted',
+        'flex flex-col items-center justify-center gap-2 rounded-md border-[1.5px] border-dashed border-line-strong bg-surface-card text-body font-medium text-content-muted',
       )}
     >
       <Icon name="plus" size={20} />
@@ -56,7 +56,7 @@ export function DashedEmptyAction({
       disabled={disabled}
       onClick={onClick}
       className={tileAction(
-        'group relative flex w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card px-lg py-2xl text-center text-body font-medium text-content-muted',
+        'group relative flex w-full items-center justify-center rounded-md border-[1.5px] border-dashed border-line-strong bg-surface-card px-4 py-6 text-center text-body font-medium text-content-muted',
       )}
     >
       {idleLabel && (
@@ -67,8 +67,8 @@ export function DashedEmptyAction({
       <span
         className={
           idleLabel
-            ? 'absolute inset-0 flex items-center justify-center gap-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'
-            : 'flex items-center justify-center gap-sm'
+            ? 'absolute inset-0 flex items-center justify-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'
+            : 'flex items-center justify-center gap-2'
         }
       >
         <Icon name="plus" size={16} />
@@ -124,7 +124,7 @@ export function Section({
   title,
   icon,
   right,
-  bodyClassName = 'px-xl pb-xl',
+  bodyClassName = 'px-6 pb-6',
   onOpenChange,
   children,
 }: {
@@ -142,11 +142,11 @@ export function Section({
       label={title}
       trailing={right}
       onOpenChange={onOpenChange}
-      wrapperClassName="self-start rounded-card border border-line bg-surface-card"
-      headerClassName="px-xl py-lg"
+      wrapperClassName="self-start rounded-lg border border-line bg-surface-card"
+      headerClassName="px-6 py-4"
       bodyClassName={bodyClassName}
       header={
-        <span className="flex items-center gap-sm type-h3">
+        <span className="flex items-center gap-2 type-h3">
           {title}
           {icon}
         </span>

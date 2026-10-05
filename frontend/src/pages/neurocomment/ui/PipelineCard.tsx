@@ -53,12 +53,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-info-hairline bg-info-tint px-xl py-lg text-content-primary">
-      <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
-        <div className="flex items-center gap-md">
+    <div className="rounded-lg border border-info-hairline bg-info-tint px-6 py-4 text-content-primary">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           <span className="type-h3">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-small font-medium ${running ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
+            className={`rounded-full px-3 py-1 text-small font-medium ${running ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -68,7 +68,7 @@ export function PipelineCard({
           size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className="gap-sm"
+          className="gap-2"
         >
           {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
@@ -83,7 +83,7 @@ export function PipelineCard({
           a dot. Derived, not a literal: the fills two lines up already read
           `STAGES.length`, and a seventh stage would leave a hardcoded inset behind
           with nothing to fail. */}
-      <div className="relative mb-md">
+      <div className="relative mb-3">
         <div
           className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-info-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
@@ -133,12 +133,12 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-md text-center type-small-medium text-info-strong md:hidden">
+        <div className="mb-3 text-center type-small-medium text-info-strong md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
-      <div className="mb-lg flex items-center gap-md rounded-lg border border-info-line bg-info-tint px-lg py-md">
+      <div className="mb-4 flex items-center gap-3 rounded-md border border-info-line bg-info-tint px-4 py-3">
         <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
         <span className="type-body-medium text-info-strong">
           {running
@@ -147,14 +147,14 @@ export function PipelineCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-info-hairline bg-info-hairline md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-info-hairline bg-info-hairline md:grid-cols-6">
         {stats.map((stat) => (
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
-          <div key={stat.label} className="bg-surface-card px-lg py-lg max-md:odd:last:col-span-2">
+          <div key={stat.label} className="bg-surface-card px-4 py-4 max-md:odd:last:col-span-2">
             <Odometer value={stat.value} className={stat.color} />
-            <div className="mt-hair type-small">{stat.label}</div>
+            <div className="mt-1 type-small">{stat.label}</div>
           </div>
         ))}
       </div>

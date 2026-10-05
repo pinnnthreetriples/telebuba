@@ -24,10 +24,10 @@ test('the size sets height and padding, the variant the fill', async () => {
     </>,
   );
 
-  expect(classesOf('Отмена')).toContain('px-2xl');
+  expect(classesOf('Отмена')).toContain('px-6');
   expect(classesOf('Отмена')).toContain('text-body');
   expect(classesOf('Отмена')).toContain('bg-surface-card');
-  expect(classesOf('Запустить')).toContain('px-xl');
+  expect(classesOf('Запустить')).toContain('px-4');
   // The rung has to survive the variant's colour: both are `text-*`, and an
   // untaught tailwind-merge drops the size in favour of the colour (see cn.ts).
   expect(classesOf('Запустить')).toContain('text-body');
@@ -100,7 +100,7 @@ test('dashed is a fill that keeps whatever rung it is given', () => {
     expect(classesOf(name)).toContain('text-info-strong');
   }
   expect(classesOf('Добавить кампанию')).toContain('w-full');
-  expect(classesOf('Добавить')).toContain('px-xl');
+  expect(classesOf('Добавить')).toContain('px-4');
   expect(classesOf('Добавить')).not.toContain('w-full');
 });
 
@@ -265,13 +265,13 @@ const PAD_X = /(?:^|\s)px-[\w[]/;
 // утверждение о механизме, и оно должно ломаться, даже когда в приложении всё чисто.
 test('гейт видит класс, вынесенный в константу', () => {
   const source = [
-    "const PILL = 'rounded-full border px-md';",
+    "const PILL = 'rounded-full border px-3';",
     '<button type="button" className={PILL}>x</button>',
   ].join('\n');
   const worn = wornClasses(source, source.indexOf('<button'));
 
   expect(worn).toContain('rounded-full');
-  expect(worn).toContain('px-md');
+  expect(worn).toContain('px-3');
 });
 
 test('обычная кнопка не собирается руками вне дизайн-системы', () => {

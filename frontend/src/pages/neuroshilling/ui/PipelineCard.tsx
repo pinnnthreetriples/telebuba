@@ -40,7 +40,7 @@ function Node({
   last?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-md text-left sm:flex-col sm:gap-sm sm:text-center">
+    <div className="flex min-w-0 items-center gap-3 text-left sm:flex-col sm:gap-2 sm:text-center">
       <div className="flex w-auto shrink-0 items-center sm:w-full">
         <span className={`h-rail hidden flex-1 bg-line sm:block ${first ? 'invisible' : ''}`} />
         <span
@@ -50,7 +50,7 @@ function Node({
       </div>
       <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
         <span className={done ? 'type-body-medium' : 'type-small'}>{label}</span>
-        <span className="-mt-xs type-small">{sub}</span>
+        <span className="-mt-1 type-small">{sub}</span>
       </div>
     </div>
   );
@@ -58,9 +58,9 @@ function Node({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-md py-md">
+    <div className="px-3 py-3">
       <div className="type-h1 tabular-nums">{value}</div>
-      <div className="mt-xs type-small">{label}</div>
+      <div className="mt-1 type-small">{label}</div>
     </div>
   );
 }
@@ -119,7 +119,7 @@ export function PipelineCard({
 
   return (
     <Card>
-      <div className="mb-2xl flex flex-wrap items-center gap-md">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         {/* Статус — ПОСЛЕ имени, а не перед заголовком: первым в карточке читают, о чём
             она, а плашка перед «Конвейер» отодвигала заголовок от края и отвечала на
             вопрос, который ещё не задан. */}
@@ -142,8 +142,8 @@ export function PipelineCard({
 
       {/* Шесть колонок без зазора: зазор разорвал бы рельсу, а расстояние между
           подписями уже задано самими колонками. */}
-      <div className="mb-xl">
-        <div className="grid grid-cols-1 gap-md sm:grid-cols-6 sm:gap-0">
+      <div className="mb-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-0">
           <Node
             first
             label={t('neuroshilling.pipeline.node.scenario')}
@@ -187,7 +187,7 @@ export function PipelineCard({
           заведена. Здесь называется ПЕРВАЯ причина и их число. */}
       {/* Отступ несёт обёртка, а не само уведомление: расстоянием до соседа
           распоряжается родитель — уведомление о том, что стоит под ним, не знает. */}
-      <div className="mb-lg">
+      <div className="mb-4">
         {blockers.length > 0 ? (
           <Notice tone="info">
             {t('neuroshilling.pipeline.remaining', { first: blockers[0], count: blockers.length })}
@@ -197,7 +197,7 @@ export function PipelineCard({
         )}
       </div>
 
-      <div className="mb-lg grid grid-cols-3 divide-line overflow-hidden rounded-lg border border-line sm:grid-cols-5 sm:divide-x">
+      <div className="mb-4 grid grid-cols-3 divide-line overflow-hidden rounded-md border border-line sm:grid-cols-5 sm:divide-x">
         <Stat label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
         <Stat label={t('neuroshilling.launch.tile.targets')} value={String(targets.length)} />
         <Stat label={t('neuroshilling.launch.tile.roles')} value={String(roles.length)} />
@@ -211,7 +211,7 @@ export function PipelineCard({
       {/* `sent` / `total` считают только шаги-СООБЩЕНИЯ: реакции журналируются, но
           пропущенная реакция — не потерянный прогресс, и полоса, считающая каждый шаг,
           врала бы вниз. */}
-      <div className="mb-sm flex flex-wrap items-center gap-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <Badge className="tabular-nums">
           {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
         </Badge>
@@ -241,7 +241,7 @@ export function PipelineCard({
       {/* Показывается только пока прогон действительно читает: три переключателя и так
           лежат в строке кампании, а чего по ним не видно — работает ли сейчас хоть один. */}
       {run.listening === true ? (
-        <div className="mt-md flex flex-wrap items-center gap-sm rounded-lg bg-canvas px-md py-sm type-small tabular-nums">
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-canvas px-3 py-2 type-small tabular-nums">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
@@ -251,7 +251,7 @@ export function PipelineCard({
       {/* Оба уведомления об исходе — в одной колонке с `gap`: расстояние между ними и
           до того, что выше, принадлежит ей, а не им. */}
       {status === 'failed' || halted.length > 0 ? (
-        <div className="mt-md flex flex-col gap-md">
+        <div className="mt-3 flex flex-col gap-3">
           {status === 'failed' && run.last_error_type ? (
             <Notice tone="danger" bordered={false}>
               {t('neuroshilling.launch.failed', { type: run.last_error_type })}

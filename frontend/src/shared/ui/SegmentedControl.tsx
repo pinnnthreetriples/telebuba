@@ -32,21 +32,21 @@ import { cn } from '@/shared/lib/cn';
 const WRAP = {
   // The inset tray: a sunken grey groove the options sit in, active one raised out of
   // it. Six wearers, all of them a full-width row inside a modal or a card section.
-  tray: `flex gap-tight p-xs ${surface('inset')}`,
+  tray: `flex gap-1 p-1 ${surface('inset')}`,
   // The same idea drawn as a stadium and sized by its labels, for the trays that sit
   // inline at the end of a row rather than spanning it. Its active segment is filled
   // blue instead of raised white — `shadow-pill` is the token for exactly that, "the
   // sliding pill of a segmented tab strip".
-  pill: 'inline-flex rounded-full border border-line bg-surface-card p-xs',
+  pill: 'inline-flex rounded-full border border-line bg-surface-card p-1',
   // No tray at all: each option is its own outlined box, and the active one is tinted
   // rather than lifted. Five wearers.
-  outline: 'flex gap-sm',
+  outline: 'flex gap-2',
 } as const;
 
 const SEG = {
-  tray: 'flex-1 rounded-sm py-sm text-body font-medium',
-  pill: 'rounded-full px-lg py-tight text-body font-medium',
-  outline: 'flex-1 rounded-lg border px-md py-sm text-body font-medium',
+  tray: 'flex-1 rounded-sm py-2 text-body font-medium',
+  pill: 'rounded-full px-4 py-1 text-body font-medium',
+  outline: 'flex-1 rounded-md border px-3 py-2 text-body font-medium',
 } as const;
 
 const ON = {

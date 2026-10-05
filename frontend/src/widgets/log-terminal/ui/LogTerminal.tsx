@@ -40,7 +40,7 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-tight" title={hint || undefined}>
+    <div className="flex gap-1" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
@@ -106,8 +106,8 @@ export function LogTerminal({
     <CollapsibleCard
       defaultOpen
       label={title}
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
       trailing={
         <>
           {onlyAccount ? (

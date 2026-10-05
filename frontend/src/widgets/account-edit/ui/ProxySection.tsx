@@ -225,9 +225,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.proxy')}>
-      <div className="mb-md type-body text-content-subtle">{t('accounts.edit.proxyRequired')}</div>
-      <div className="mb-md flex items-center justify-between gap-sm rounded-lg bg-canvas px-md py-md">
-        <span className="flex items-center gap-sm">
+      <div className="mb-3 type-body text-content-subtle">{t('accounts.edit.proxyRequired')}</div>
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-md bg-canvas px-3 py-3">
+        <span className="flex items-center gap-2">
           <span className={`size-dot rounded-full ${proxyDot}`} />
           <span className="type-body">{proxyStateText}</span>
         </span>
@@ -244,10 +244,10 @@ export function ProxySection({ account }: { account: AccountRead }) {
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-md type-small text-danger-deep">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-3 type-small text-danger-deep">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
       <SegmentedControl
-        className="mb-md"
+        className="mb-3"
         value={proxyMode}
         options={(['pool', 'manual'] as const).map((mode) => ({
           value: mode,
@@ -259,14 +259,14 @@ export function ProxySection({ account }: { account: AccountRead }) {
       />
       {proxyMode === 'manual' ? (
         <>
-          <div className="mb-md">
+          <div className="mb-3">
             <proxyForm.Field name="host">
               {(field) => (
                 <FormField field={field} label={t('accounts.edit.host')} className="font-mono" />
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
             <proxyForm.Field name="port">
               {(field) => (
                 <FormField
@@ -293,7 +293,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-sm grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="mb-2 grid grid-cols-1 md:grid-cols-2 gap-3">
             <proxyForm.Field name="username">
               {/* FormField emits name="username" — next to a password input that
                   is the formless login shape Chrome's password parser matches,
@@ -325,7 +325,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
                         setShowPass((value) => !value);
                       }}
                       aria-label={t('accounts.edit.password')}
-                      className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                     >
                       {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                     </IconButton>
@@ -334,12 +334,12 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-lg type-small text-content-muted">
+          <div className="mb-4 type-small text-content-muted">
             {t('accounts.edit.proxyExistingCredentials')}
           </div>
         </>
       ) : (
-        <div className="mb-lg">
+        <div className="mb-4">
           <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
           <Select
             value={account.proxy_id ?? ''}
@@ -354,10 +354,10 @@ export function ProxySection({ account }: { account: AccountRead }) {
           />
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-md">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           size="sm"
-          className="items-center gap-sm"
+          className="items-center gap-2"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
           loading={visibleCheck === 'loading'}
@@ -383,7 +383,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="type-body text-content-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}
         {visibleCheck === 'ok' && (
-          <Badge tone="success" size="md" className="tb-pop gap-sm">
+          <Badge tone="success" size="md" className="tb-pop gap-2">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
@@ -395,7 +395,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </Badge>
         )}
         {visibleCheck === 'err' && (
-          <span className="inline-flex items-center gap-sm type-body-medium text-danger">
+          <span className="inline-flex items-center gap-2 type-body-medium text-danger">
             <Icon name="x-circle" size={14} />
             {t('accounts.edit.proxyDown')}
           </span>

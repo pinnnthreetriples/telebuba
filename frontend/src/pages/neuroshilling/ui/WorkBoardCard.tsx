@@ -113,7 +113,7 @@ export function WorkBoardCard({
                   style={{ width: `${String(percent)}%` }}
                 />
               </div>
-              <div className="mt-xs type-small tabular-nums">
+              <div className="mt-1 type-small tabular-nums">
                 {sent}/{total}
               </div>
             </>
@@ -130,8 +130,8 @@ export function WorkBoardCard({
   );
 
   return (
-    <Card className="py-xl">
-      <div className="mb-md flex flex-wrap items-center gap-md px-xl">
+    <Card className="py-6">
+      <div className="mb-3 flex flex-wrap items-center gap-3 px-6">
         <span className="type-h3">{t('neuroshilling.board.title')}</span>
         <Badge className="tabular-nums">{campaignList.length}</Badge>
         <div className="flex-1" />

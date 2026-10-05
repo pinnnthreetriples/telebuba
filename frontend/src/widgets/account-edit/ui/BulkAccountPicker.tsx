@@ -69,7 +69,7 @@ export function BulkAccountPicker({
   return (
     <Modal onClose={onClose} size="panel" label={t('accounts.bulk.pickTitle')}>
       <div className="flex max-h-dialog flex-col overflow-hidden">
-        <div className="flex items-center gap-lg border-b border-canvas px-xl py-xl">
+        <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
           <div className="min-w-0 flex-1">
             <h2 className="truncate type-h2">{t('accounts.bulk.pickTitle')}</h2>
             <div className="truncate type-body text-content-subtle">
@@ -79,7 +79,7 @@ export function BulkAccountPicker({
           <CloseButton onClick={onClose} aria-label={t('accounts.profile.close')} />
         </div>
 
-        <div className="flex flex-col gap-md border-b border-canvas px-xl py-lg">
+        <div className="flex flex-col gap-3 border-b border-canvas px-6 py-4">
           <Input
             value={search}
             placeholder={t('accounts.bulk.pickSearch')}
@@ -88,14 +88,14 @@ export function BulkAccountPicker({
               setSearch(event.target.value);
             }}
           />
-          <div className="flex items-center justify-between gap-md">
+          <div className="flex items-center justify-between gap-3">
             <button
               type="button"
               role="checkbox"
               aria-checked={allOn ? true : someOn ? 'mixed' : false}
               disabled={shownIds.length === 0}
               onClick={toggleAll}
-              className="flex items-center gap-md text-left disabled:opacity-50"
+              className="flex items-center gap-3 text-left disabled:opacity-50"
             >
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${someOn ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
@@ -139,11 +139,11 @@ export function BulkAccountPicker({
 
         <div className="tb-scroll flex-1 overflow-y-auto">
           {fleet.isPending ? (
-            <div className="flex justify-center py-empty">
+            <div className="flex justify-center py-16">
               <Spinner size="lg" />
             </div>
           ) : fleet.isError ? (
-            <div className="flex flex-col items-center gap-md px-xl py-empty text-center">
+            <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
               <p role="alert" className="type-body text-danger">
                 {t('accounts.error')}
               </p>
@@ -156,7 +156,7 @@ export function BulkAccountPicker({
               </Button>
             </div>
           ) : shown.length === 0 ? (
-            <div className="px-xl py-empty text-center type-body text-content-subtle">
+            <div className="px-6 py-16 text-center type-body text-content-subtle">
               {t('accounts.bulk.pickEmpty')}
             </div>
           ) : (
@@ -171,7 +171,7 @@ export function BulkAccountPicker({
                   onClick={() => {
                     toggle(account.account_id);
                   }}
-                  className={`flex w-full items-center gap-md border-b border-canvas px-xl py-sm text-left last:border-b-0 ${on ? 'bg-info-tint' : ''}`}
+                  className={`flex w-full items-center gap-3 border-b border-canvas px-6 py-2 text-left last:border-b-0 ${on ? 'bg-info-tint' : ''}`}
                 >
                   <span
                     className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
@@ -198,7 +198,7 @@ export function BulkAccountPicker({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
+        <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
           <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
           <Button
             variant="primary"

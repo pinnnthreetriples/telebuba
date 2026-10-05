@@ -287,20 +287,20 @@
 }
 .tb-tip-pop {
   position: absolute;
-  top: calc(100% + theme('spacing.sm'));
+  top: calc(100% + theme('spacing.2'));
   left: 50%;
   /* The 3px is the distance the bubble slides, not a unit of rhythm: it is the `from`
-     half of the transition below, and the rung nearest it (`xs`) means "separate two
-     stacked hairlines". Naming travel with a spacing rung is how a token comes to mean
-     two things. */
+     half of the transition below, and the rung nearest it (`1`, 4px) is the smallest
+     gap of the layout grid. Naming travel with a spacing rung is how a token comes to
+     mean two things. */
   /* design-token-exception: tooltip entrance travel distance */
   transform: translateX(-50%) translateY(3px);
   background: theme('colors.term.DEFAULT');
   /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
      a one-line label on the same surface. */
   color: theme('colors.on-fill');
-  border-radius: theme('borderRadius.md');
-  padding: theme('spacing.sm') theme('spacing.md');
+  border-radius: theme('borderRadius.sm');
+  padding: theme('spacing.2') theme('spacing.3');
   /* Ступень `small` целиком, а не литералы. Объявлена явно, потому что подсказка рисуется
      псевдоэлементом в собственном контексте и наследовать её ей не от кого. */
   font-size: theme('typeScale.small.size');
@@ -349,18 +349,18 @@
 }
 
 .tb-scroll::-webkit-scrollbar {
-  width: theme('spacing.sm');
-  height: theme('spacing.sm');
+  width: theme('spacing.2');
+  height: theme('spacing.2');
 }
 .tb-scroll::-webkit-scrollbar-thumb {
   background: theme('colors.line.strong');
-  border-radius: theme('borderRadius.md');
+  border-radius: theme('borderRadius.sm');
 }
 .tb-scroll::-webkit-scrollbar-track {
   background: theme('colors.transparent');
 }
 .term::-webkit-scrollbar {
-  width: theme('spacing.tight');
+  width: theme('spacing.2');
 }
 .term::-webkit-scrollbar-thumb {
   /* A thumb that reads on `term` without becoming `term.dim` — which is the terminal's

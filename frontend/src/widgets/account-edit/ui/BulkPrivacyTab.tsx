@@ -22,15 +22,15 @@ export function BulkPrivacyTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="rounded-lg bg-info-tint px-md py-md type-body text-content-subtle">
+    <div className="flex flex-col gap-4">
+      <div className="rounded-md bg-info-tint px-3 py-3 type-body text-content-subtle">
         {t('accounts.bulk.privacyHint')}
       </div>
       {PRIVACY_KEYS.map((key) => {
         const level = levels[key];
         const label = t(`accounts.profile.privacy.row.${key}`);
         return (
-          <div key={key} className="flex flex-col gap-sm rounded-lg border border-line px-lg py-md">
+          <div key={key} className="flex flex-col gap-2 rounded-md border border-line px-4 py-3">
             <button
               type="button"
               role="checkbox"
@@ -38,7 +38,7 @@ export function BulkPrivacyTab({
               onClick={() => {
                 onPick(key, level === undefined ? 'everybody' : null);
               }}
-              className="flex items-center gap-md text-left"
+              className="flex items-center gap-3 text-left"
             >
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${level !== undefined ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}

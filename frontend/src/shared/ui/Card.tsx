@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
-// The app's card surface: white, hairline border, `rounded-card`. It lived as a
+// The app's card surface: white, hairline border, `rounded-lg`. It lived as a
 // local component on the settings page while fourteen other places spelled the
 // same three classes out, which is how one of them ended up a shade off.
 //
@@ -17,7 +17,7 @@ import { cn } from '@/shared/lib/cn';
 export function Card({
   title,
   subtitle,
-  className = 'px-xl py-xl',
+  className = 'px-6 py-6',
   children,
   ...rest
 }: {
@@ -30,8 +30,8 @@ export function Card({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
     <div className={cn(surface('card'), className)} {...rest}>
-      {title ? <div className="mb-xs text-body font-medium">{title}</div> : null}
-      {subtitle ? <div className="mb-lg text-body text-content-subtle">{subtitle}</div> : null}
+      {title ? <div className="mb-1 text-body font-medium">{title}</div> : null}
+      {subtitle ? <div className="mb-4 text-body text-content-subtle">{subtitle}</div> : null}
       {children}
     </div>
   );

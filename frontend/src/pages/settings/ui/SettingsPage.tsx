@@ -8,7 +8,7 @@ import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@
 
 import { ApiKeyField } from './ApiKeyField';
 
-const FIELD_LABEL = 'mb-tight block type-body-medium text-content-secondary';
+const FIELD_LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
 // The page is only what no other screen owns: the LLM keys, their pacing and the two
 // provider choices. The warming toggles live on the warming board's action-tuning card
@@ -202,18 +202,18 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
     <form
       noValidate
       // Зазор между карточками раздаёт форма, а не карточки: `mb` у `Card` больше нет.
-      className="flex flex-col gap-lg"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
       <Card title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
-        <div className="space-y-lg">
+        <div className="space-y-4">
           {PROVIDERS.map(keyField)}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-2`}>
                 {t('settings.api.retries')}
                 <HelpHint
                   text={t('settings.api.retriesHelp')}
@@ -233,7 +233,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
               />
             </label>
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-2`}>
                 {t('settings.api.interval')}
                 <HelpHint
                   text={t('settings.api.intervalHelp')}
@@ -258,7 +258,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
       </Card>
 
       <Card title={t('settings.textLlm.title')} subtitle={t('settings.textLlm.subtitle')}>
-        <div className="flex flex-col gap-md">
+        <div className="flex flex-col gap-3">
           <SegmentedControl
             variant="outline"
             value={textProvider}
@@ -276,7 +276,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
       </Card>
 
       <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
-        <div className="flex flex-col gap-md">
+        <div className="flex flex-col gap-3">
           <SegmentedControl
             variant="outline"
             value={provider}
@@ -293,7 +293,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
         </div>
       </Card>
 
-      <div className="flex justify-end gap-sm">
+      <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{t('settings.cancel')}</Button>
         <Button
           variant="primary"
@@ -308,7 +308,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
           }
         >
           {justSaved ? (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="tb-swapin inline-flex">
                 <Icon name="check" size={16} />
               </span>
@@ -317,7 +317,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
               </span>
             </span>
           ) : saveFailed ? (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="tb-swapin inline-flex">
                 <Icon name="close" size={16} />
               </span>
@@ -341,7 +341,7 @@ export function SettingsPage() {
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
     <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-xl type-h1">{t('settings.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('settings.title')}</h1>
       {warming.isPending ? (
         <p className="text-content-muted">{t('settings.loading')}</p>
       ) : warming.isError || !warming.data ? (

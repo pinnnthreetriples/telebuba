@@ -87,7 +87,7 @@ export function PhotoViewer({
       <ViewerButton
         label={t('accounts.profile.closeViewer')}
         onClick={onClose}
-        className="right-lg top-lg"
+        className="right-4 top-4"
       >
         <Icon name="close" size={20} />
       </ViewerButton>
@@ -98,7 +98,7 @@ export function PhotoViewer({
             onClick={() => {
               go(-1);
             }}
-            className="left-lg top-1/2 -translate-y-1/2"
+            className="left-4 top-1/2 -translate-y-1/2"
           >
             <Icon name="chevron-left" size={20} />
           </ViewerButton>
@@ -107,11 +107,11 @@ export function PhotoViewer({
             onClick={() => {
               go(1);
             }}
-            className="right-lg top-1/2 -translate-y-1/2"
+            className="right-4 top-1/2 -translate-y-1/2"
           >
             <Icon name="chevron-right" size={20} />
           </ViewerButton>
-          <span className="absolute bottom-lg left-1/2 -translate-x-1/2 rounded-sm bg-black/55 px-md py-hair text-small font-medium text-on-fill">
+          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-sm bg-black/55 px-3 py-px text-small font-medium text-on-fill">
             {current + 1} / {photos.length}
           </span>
         </>

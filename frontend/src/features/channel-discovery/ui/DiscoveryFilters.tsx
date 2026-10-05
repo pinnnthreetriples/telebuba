@@ -101,8 +101,8 @@ export function DiscoveryFilters({ form, onChange }: Props) {
   return (
     <section>
       <Eyebrow title={t(`${P}.sections.filters`)} />
-      <div className="grid gap-xl border-t border-line pt-lg sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
-        <div className="min-w-0 sm:pr-2xl">
+      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
+        <div className="min-w-0 sm:pr-6">
           <Row first label={t(`${P}.kind.label`)}>
             <SegmentedControl
               variant="pill"
@@ -133,7 +133,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
           </Row>
         </div>
 
-        <div className="min-w-0 sm:pl-2xl">
+        <div className="min-w-0 sm:pl-6">
           <Row first label={t(`${P}.access.label`)}>
             <SegmentedControl
               variant="pill"
@@ -160,7 +160,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               `text` + `inputMode`, not `type="number"`: a number field reports '' while
               it holds "1e3" or "-5", so the garbage silently became "no bound". */}
           <Row label={t(`${P}.subscribers`)} hint={t(`${P}.membersHint`)}>
-            <div className="flex items-center gap-sm">
+            <div className="flex items-center gap-2">
               <Input
                 size="xs"
                 type="text"

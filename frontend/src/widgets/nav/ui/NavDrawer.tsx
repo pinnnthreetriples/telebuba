@@ -18,9 +18,9 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
 
   return (
     <Modal onClose={onClose} variant="drawer-left" label={t('shell.menu')}>
-      <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">
-        <div className="flex items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+      <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-icon items-center justify-center rounded-md bg-content-primary">
             <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
@@ -34,17 +34,17 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           size="touch"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm"
+          className="-mr-2"
         />
       </div>
 
-      <nav className="flex flex-col gap-tight p-sm">
+      <nav className="flex flex-col gap-2 p-2">
         {NAV_LINKS.map((link, index) => (
           <Link
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-touch items-center rounded-lg px-md text-body font-medium transition-colors ${
+            className={`flex min-h-touch items-center rounded-md px-3 text-body font-medium transition-colors ${
               activeIdx === index ? 'bg-info-tint text-info-strong' : 'text-content-muted'
             }`}
           >

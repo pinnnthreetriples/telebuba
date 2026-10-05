@@ -45,12 +45,12 @@ interface DataTableProps<TData> {
 // win. It used to win by accident: both classes reached the element and Tailwind happens
 // to emit `text-right` after `text-left`, so the column got its way through emit order
 // rather than through anyone deciding.
-const TH = 'px-lg py-md text-left type-small-medium';
+const TH = 'px-4 py-3 text-left type-small-medium';
 const ROW = 'tb-row border-t border-canvas transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
-const CARD = 'tb-row overflow-hidden border-t border-canvas px-lg py-lg first:border-t-0';
+const CARD = 'tb-row overflow-hidden border-t border-canvas px-4 py-4 first:border-t-0';
 const CARD_LABEL = 'shrink-0 type-small-medium';
 const CARD_VALUE = 'min-w-0 break-words text-right text-body text-content-secondary';
 
@@ -156,7 +156,7 @@ export function DataTable<TData>({
               className={cn(CARD, rowProps?.className)}
             >
               {head.length > 0 ? (
-                <div className="flex items-center gap-md">
+                <div className="flex items-center gap-3">
                   {head.map((cell) => (
                     <div
                       key={cell.id}
@@ -168,7 +168,7 @@ export function DataTable<TData>({
                 </div>
               ) : null}
               {actions.map((cell) => (
-                <div key={cell.id} className="mt-md">
+                <div key={cell.id} className="mt-3">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </div>
               ))}
@@ -177,7 +177,7 @@ export function DataTable<TData>({
                 return (
                   <div
                     key={cell.id}
-                    className="mt-md flex items-baseline justify-between gap-md first:mt-0"
+                    className="mt-3 flex items-baseline justify-between gap-3 first:mt-0"
                   >
                     <span className={CARD_LABEL}>
                       {header
@@ -193,7 +193,7 @@ export function DataTable<TData>({
               {/* Bled out of the card's padding: sub-row content already carries its
                   own border-t/tint designed to sit flush under a table row. */}
               {renderSubRow ? (
-                <SubRow open={row.getIsExpanded()} className="-mx-lg -mb-lg mt-md">
+                <SubRow open={row.getIsExpanded()} className="-mx-4 -mb-4 mt-3">
                   {renderSubRow(row)}
                 </SubRow>
               ) : null}
@@ -234,7 +234,7 @@ export function DataTable<TData>({
                     <td
                       key={cell.id}
                       className={cn(
-                        'px-lg py-md',
+                        'px-4 py-3',
                         (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
                       )}
                     >

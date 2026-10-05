@@ -25,8 +25,8 @@ export function CollapsibleCard({
   defaultOpen = false,
   onOpenChange,
   wrapperClassName = SURFACE.card,
-  headerClassName = 'px-lg py-lg',
-  bodyClassName = 'px-lg pb-lg',
+  headerClassName = 'px-4 py-4',
+  bodyClassName = 'px-4 pb-4',
   children,
 }: {
   header: ReactNode;
@@ -88,7 +88,7 @@ export function CollapsibleCard({
     <div className={cn('overflow-hidden', wrapperClassName)}>
       <div
         className={cn(
-          'flex items-center gap-md transition-colors duration-state hover:bg-info-tint',
+          'flex items-center gap-3 transition-colors duration-state hover:bg-info-tint',
           headerClassName,
         )}
       >
@@ -98,7 +98,7 @@ export function CollapsibleCard({
           aria-expanded={open}
           aria-controls={bodyId}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-md text-left transition duration-state',
+            'flex min-w-0 flex-1 items-center gap-3 text-left transition duration-state',
             FOCUS_RING,
             PRESS_FEEDBACK,
           )}

@@ -76,7 +76,7 @@ export function CommentHistoryModal({
           const text = row.original.comment_text ?? '—';
           if (!row.original.deleted_at) return text;
           return (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="text-content-subtle line-through">{text}</span>
               <Badge tone="danger">{t('neurocomment.feed.deleted')}</Badge>
             </span>
@@ -90,21 +90,21 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
-      <div className="border-b border-canvas px-2xl pb-lg pt-xl">
+      <div className="border-b border-canvas px-6 pb-4 pt-6">
         <div className="type-h2">{t('neurocomment.history.title')}</div>
       </div>
 
-      <div className="px-2xl pb-lg pt-md">
+      <div className="px-6 pb-4 pt-3">
         {isPending ? (
-          <p className="py-empty text-center type-body text-content-subtle">
+          <p className="py-16 text-center type-body text-content-subtle">
             {t('neurocomment.history.loading')}
           </p>
         ) : isError ? (
-          <p role="alert" className="py-empty text-center type-body text-danger">
+          <p role="alert" className="py-16 text-center type-body text-danger">
             {t('neurocomment.history.error')}
           </p>
         ) : items.length === 0 ? (
-          <div className="py-empty text-center type-body text-content-subtle">
+          <div className="py-16 text-center type-body text-content-subtle">
             {t('neurocomment.history.empty')}
           </div>
         ) : (
@@ -116,8 +116,8 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-canvas px-2xl pb-xl pt-lg">
-        <div className="flex gap-sm">
+      <div className="flex items-center justify-between border-t border-canvas px-6 pb-6 pt-4">
+        <div className="flex gap-2">
           <Button
             size="sm"
             disabled={!hasPrev}

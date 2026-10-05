@@ -27,7 +27,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-body text-content-subtle">
+      <div className="rounded-md border border-dashed border-line bg-surface-card px-4 py-6 text-center type-body text-content-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -42,11 +42,11 @@ export function MusicTab({
   return (
     <div>
       {music.length > 0 ? (
-        <div className="flex flex-col gap-sm">
+        <div className="flex flex-col gap-2">
           {music.map((track) => (
             <div
               key={track.file_id}
-              className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
+              className="flex items-center gap-4 rounded-md border border-line px-4 py-3"
             >
               <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-fill">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">

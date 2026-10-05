@@ -28,8 +28,8 @@ export function BulkProgress({
   const failed = rows.filter((row) => row.state === 'error').length;
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="flex items-center justify-between gap-md">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
         <span className="type-body-medium text-content-secondary">
           {t('accounts.bulk.progress', { done, total: rows.length })}
         </span>
@@ -39,11 +39,11 @@ export function BulkProgress({
           </span>
         )}
       </div>
-      <div className="overflow-hidden rounded-lg border border-line">
+      <div className="overflow-hidden rounded-md border border-line">
         {rows.map((row) => (
           <div
             key={row.accountId}
-            className="flex items-center gap-md border-b border-canvas px-md py-sm last:border-b-0"
+            className="flex items-center gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
           >
             <span className="flex size-glyph shrink-0 items-center justify-center">
               {row.state === 'running' ? (

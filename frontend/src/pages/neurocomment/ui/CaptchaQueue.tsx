@@ -28,7 +28,7 @@ export function CaptchaQueue({
         id: 'account',
         header: t('neurocomment.board.col.account'),
         cell: ({ row }) => (
-          <div className="flex min-w-0 items-center gap-md">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-warning-press" />
             <div className="min-w-0">
               <div className="truncate type-body-medium">

@@ -41,14 +41,14 @@ export function CampaignSettingsModal({
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <div className="flex items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
         <div className="min-w-0">
           <div className="truncate type-h2">{name}</div>
-          <div className="mt-hair type-small">{t('neuroshilling.settings.subtitle')}</div>
+          <div className="mt-1 type-small">{t('neuroshilling.settings.subtitle')}</div>
         </div>
         <div className="flex-1" />
         {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-small font-medium text-warning-deep">
+          <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null}
@@ -58,18 +58,15 @@ export function CampaignSettingsModal({
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
           дал бы вложенную цепочку прокрутки — ровно то, от чего оверлей и уводит. */}
       {conflict ? (
-        <p role="alert" className="mx-2xl mt-lg type-body text-danger">
+        <p role="alert" className="mx-6 mt-4 type-body text-danger">
           {t('neuroshilling.settings.conflict')}
         </p>
       ) : null}
-      <fieldset
-        disabled={saving}
-        className="m-0 flex min-w-0 flex-col gap-2xl border-0 px-2xl py-xl"
-      >
+      <fieldset disabled={saving} className="m-0 flex min-w-0 flex-col gap-6 border-0 px-6 py-6">
         {children}
       </fieldset>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
         <Button size="sm" onClick={onClose} disabled={saving}>
           {t('neuroshilling.settings.cancel')}
         </Button>

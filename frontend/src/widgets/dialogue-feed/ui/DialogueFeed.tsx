@@ -34,8 +34,8 @@ function Age({ iso }: { iso: string }) {
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <span className="flex items-center gap-sm type-small">
-      <span className="flex items-center gap-xs">
+    <span className="flex items-center gap-2 type-small">
+      <span className="flex items-center gap-1">
         {[0, 1, 2].map((index) => (
           <span
             key={index}
@@ -95,7 +95,7 @@ export function DialogueTranscript({
   if (!oldest) return null;
 
   return (
-    <div className="flex flex-col gap-tight border-t border-canvas pt-md">
+    <div className="flex flex-col gap-2 border-t border-canvas pt-3">
       {/* The oldest line ON THIS PAGE — not the exchange's start: the feed is a
           sliding window of the last 30 messages app-wide, which is the same
           reason `pairs.ts` refuses to derive the sides from it. The only
@@ -113,7 +113,7 @@ export function DialogueTranscript({
             // `break-words` is the fix for the reason this widget could not move
             // into the narrow column: a joinchat link is one unbreakable token
             // and used to hang out of the bubble.
-            className={`max-w-[84%] break-words rounded-lg px-md py-sm text-body text-content-secondary ${
+            className={`max-w-[84%] break-words rounded-md px-3 py-2 text-body text-content-secondary ${
               left
                 ? 'self-start rounded-tl-[3px] border border-line bg-surface-card'
                 : 'self-end rounded-tr-[3px] bg-info-tint'
@@ -156,7 +156,7 @@ function PairRow({
       // только при `overflow: visible`). Без запрета сжатия восемь пар не
       // прокручивали список, а жались в 420px, обрезая себе вторую строку —
       // подпись с последней репликой и сроком пропадала совсем.
-      className={`tb-row shrink-0 overflow-hidden rounded-lg border ${
+      className={`tb-row shrink-0 overflow-hidden rounded-md border ${
         open ? 'border-line-strong bg-surface' : 'border-line bg-surface-card'
       } ${entering && !open ? 'tb-swapin' : ''}`}
     >
@@ -164,10 +164,10 @@ function PairRow({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className={`flex w-full flex-col px-md py-md text-left ${FOCUS_RING}`}
+        className={`flex w-full flex-col px-3 py-3 text-left ${FOCUS_RING}`}
       >
-        <span className="flex w-full items-center gap-sm">
-          <span className="flex min-w-0 flex-1 items-center gap-tight type-body-medium text-content-secondary">
+        <span className="flex w-full items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-1 type-body-medium text-content-secondary">
             {/* Both sides truncate. Two untruncated names plus the arrow and the
                 time is what wrapped the old header into three lines here. */}
             <span className={`truncate ${open ? 'font-medium text-content-primary' : ''}`}>
@@ -192,7 +192,7 @@ function PairRow({
           />
         </span>
         {open ? null : (
-          <span className="mt-hair flex w-full items-center gap-tight type-small">
+          <span className="mt-1 flex w-full items-center gap-1 type-small">
             {live ? (
               <TypingIndicator />
             ) : (
@@ -207,7 +207,7 @@ function PairRow({
         )}
       </button>
       {open ? (
-        <div className="px-md pb-md">
+        <div className="px-3 pb-3">
           <DialogueTranscript messages={pair.messages} leftAccount={pair.leftAccount} />
         </div>
       ) : null}
@@ -274,8 +274,8 @@ export function DialogueFeed() {
   const live = isFresh(pairs[0]?.newestAt ?? '');
 
   return (
-    <Card className="p-lg">
-      <div className="mb-lg flex items-center gap-md">
+    <Card className="p-4">
+      <div className="mb-4 flex items-center gap-3">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span
@@ -289,7 +289,7 @@ export function DialogueFeed() {
         ) : null}
       </div>
       {pairs.length === 0 ? (
-        <div className="py-page text-center type-body text-content-subtle">
+        <div className="py-8 text-center type-body text-content-subtle">
           {t('warming.dialogues.empty')}
         </div>
       ) : (
@@ -298,7 +298,7 @@ export function DialogueFeed() {
         // column are unusable. Taller than `max-h-feed` deliberately — the pairs
         // moved here to spend the column's height.
         // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own list height, one component's internal layout
-        <div className="tb-scroll flex max-h-[420px] flex-col gap-sm overflow-y-auto pr-xs">
+        <div className="tb-scroll flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
           {pairs.map((pair) => (
             <PairRow
               key={pair.key}

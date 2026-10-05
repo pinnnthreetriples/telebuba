@@ -41,7 +41,7 @@ export function TabList<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="tb-scroll flex gap-xl overflow-x-auto border-b border-canvas px-xl"
+      className="tb-scroll flex gap-4 overflow-x-auto border-b border-canvas px-6"
     >
       {options.map((option) => (
         <button
@@ -54,7 +54,7 @@ export function TabList<T extends string>({
           tabIndex={value === option.value ? 0 : -1}
           onKeyDown={(event) => onKeyDown(event, option.value)}
           onClick={() => onChange(option.value)}
-          className={`shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
+          className={`shrink-0 whitespace-nowrap border-b-2 py-4 text-body font-medium transition-colors ${FOCUS_RING} ${
             value === option.value
               ? 'border-action-primary text-content-primary'
               : 'border-transparent text-content-muted hover:border-info-line'

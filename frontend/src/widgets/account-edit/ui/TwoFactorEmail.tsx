@@ -177,7 +177,7 @@ export function TwoFactorEmail({
     });
 
   return (
-    <div className="mt-md border-t border-canvas pt-md">
+    <div className="mt-3 border-t border-canvas pt-3">
       {/* Both rows when Telegram reports both, and the pending one is NOT hidden
           behind the confirmed one. Telegram answers with a confirmed address and a
           freshly pending one whenever the operator swaps the recovery address from
@@ -190,8 +190,8 @@ export function TwoFactorEmail({
         // "not attached" while a verification is pending, which is where the parent's
         // row used to be the only one.
         <div
-          className={`flex items-center justify-between gap-md ${
-            pending || !hasRecovery ? 'mb-md' : ''
+          className={`flex items-center justify-between gap-3 ${
+            pending || !hasRecovery ? 'mb-3' : ''
           }`}
         >
           <span className="type-body text-content-subtle">
@@ -214,10 +214,10 @@ export function TwoFactorEmail({
       )}
       {pending ? (
         <>
-          <div className="mb-md type-body text-content-subtle">
+          <div className="mb-3 type-body text-content-subtle">
             {t('accounts.edit.twofaEmailSent', { pattern: pending })}
           </div>
-          <label className="mb-md block">
+          <label className="mb-3 block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
             <Input
               className="font-mono tracking-code"
@@ -231,7 +231,7 @@ export function TwoFactorEmail({
               maxLength={codeLength ?? MAX_CODE_LENGTH}
             />
           </label>
-          <div className="flex flex-wrap items-center gap-sm">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
@@ -265,7 +265,7 @@ export function TwoFactorEmail({
         <>
           {/* Only `false` invites an attach. `null` is "we could not read whether one
               is attached", and offering to attach one over that is a guess. */}
-          <label className="mb-tight block">
+          <label className="mb-2 block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailAddress')}</span>
             <Input
               value={address}
@@ -277,12 +277,12 @@ export function TwoFactorEmail({
               maxLength={MAX_EMAIL_LENGTH}
             />
             {email && !addressValid ? (
-              <span className="mt-tight block type-small-medium text-danger-deep">
+              <span className="mt-2 block type-small-medium text-danger-deep">
                 {t('accounts.edit.twofaEmailErrShape')}
               </span>
             ) : null}
           </label>
-          <div className="mb-md type-small">{t('accounts.edit.twofaEmailWarn')}</div>
+          <div className="mb-3 type-small">{t('accounts.edit.twofaEmailWarn')}</div>
           <Button
             fullWidth
             className="font-medium"

@@ -56,8 +56,8 @@ export function ScheduleTimeField({
   return (
     // The echo sits beside the label, not inside it: inside, it would become part of
     // the field's accessible name instead of its description.
-    <div className="flex min-w-0 flex-col gap-tight">
-      <label className="flex min-w-0 flex-col gap-tight">
+    <div className="flex min-w-0 flex-col gap-2">
+      <label className="flex min-w-0 flex-col gap-2">
         <span className="type-body-medium text-content-secondary">{label}</span>
         <Input
           type="datetime-local"

@@ -45,8 +45,8 @@ export function CommentModeFields({
   };
 
   return (
-    <div className="mt-xl">
-      <div className="mb-sm type-body-medium text-content-secondary">
+    <div className="mt-6">
+      <div className="mb-2 type-body-medium text-content-secondary">
         {t('neurocomment.mode.label')}
       </div>
       <SegmentedControl
@@ -86,11 +86,11 @@ export function CommentModeFields({
       {/* Only in reply mode, because that is the only mode the wait exists in: shown beside
           "пишем первыми" it would be a number the operator turns to no effect. */}
       {mode === 'reply' ? (
-        <label className="mt-lg block">
-          <span className="mb-sm block type-body-medium text-content-secondary">
+        <label className="mt-4 block">
+          <span className="mb-2 block type-body-medium text-content-secondary">
             {t('neurocomment.mode.waitLabel')}
           </span>
-          <span className="flex items-center gap-sm">
+          <span className="flex items-center gap-2">
             <input
               type="number"
               min={WAIT_MIN}
@@ -110,7 +110,7 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-number rounded-md border border-line bg-surface-card px-md py-tight text-body font-medium text-content-primary disabled:opacity-60"
+              className="tb-time w-number rounded-sm border border-line bg-surface-card px-3 py-1 text-body font-medium text-content-primary disabled:opacity-60"
             />
             <span className="type-small">{t('neurocomment.mode.waitHint')}</span>
           </span>

@@ -146,7 +146,7 @@ export function ListenerEditModal({
 
   return (
     <Modal onClose={close} size="panel" label={t('neurocomment.listener.title')}>
-      <div className="flex items-center gap-md px-xl pb-lg pt-xl">
+      <div className="flex items-center gap-3 px-6 pb-4 pt-6">
         <span className={HEADING_ICON_TILE}>
           <Icon name="chart" size={18} />
         </span>
@@ -175,11 +175,11 @@ export function ListenerEditModal({
         role="tabpanel"
         id="listener-tabpanel"
         aria-labelledby={`listener-tab-${tab}`}
-        className="p-xl"
+        className="p-6"
       >
         {tab === 'commenting' ? (
           <>
-            <div className="mb-sm type-body-medium text-content-secondary">
+            <div className="mb-2 type-body-medium text-content-secondary">
               {t('neurocomment.modal.listenerEdit.account')}
             </div>
             <Select
@@ -203,7 +203,7 @@ export function ListenerEditModal({
           </>
         ) : (
           <>
-            <p className="mb-lg mt-0 type-body text-content-subtle">
+            <p className="mb-4 mt-0 type-body text-content-subtle">
               {t('neurocomment.limits.note')}
             </p>
             {/* Touched fields over the read, so a read landing after the modal opened shows. */}
@@ -220,13 +220,13 @@ export function ListenerEditModal({
         )}
 
         {partialSave ? (
-          <p role="alert" className="mt-sm type-small text-danger">
+          <p role="alert" className="mt-2 type-small text-danger">
             {t('neurocomment.modal.listenerEdit.partialSave')}
           </p>
         ) : null}
       </div>
 
-      <div className="flex justify-end gap-sm px-xl pb-xl">
+      <div className="flex justify-end gap-2 px-6 pb-6">
         <Button onClick={close} disabled={saving}>
           {t('neurocomment.modal.cancel')}
         </Button>
@@ -238,7 +238,7 @@ export function ListenerEditModal({
           className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
         >
           {saved ? (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="inline-flex tb-swapin">
                 <Icon name="check" size={16} />
               </span>

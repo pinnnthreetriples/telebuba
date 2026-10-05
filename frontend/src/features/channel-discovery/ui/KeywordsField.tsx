@@ -66,7 +66,7 @@ export function KeywordsField({ form, onChange }: Props) {
     <section className="min-w-0">
       {/* Not a wrapping <label>: the suggest button's own text would join the input's
           accessible name. The same label + caption line as the account picker beside it. */}
-      <div className="mb-tight flex flex-wrap items-baseline gap-sm">
+      <div className="mb-2 flex flex-wrap items-baseline gap-2">
         <label htmlFor={id} className="type-body-medium text-content-secondary">
           {t(`${P}.keywords`)}
         </label>
@@ -78,7 +78,7 @@ export function KeywordsField({ form, onChange }: Props) {
           })}
         </span>
       </div>
-      <div className="flex items-start gap-sm">
+      <div className="flex items-start gap-2">
         <Input
           id={id}
           size="md"
@@ -107,7 +107,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* Naming the tokens, not counting them: a silently dropped word (or a submit
           button disabled because every word was too short) explains nothing. */}
       {dropped.length > 0 ? (
-        <span className="mt-tight block type-small">
+        <span className="mt-2 block type-small">
           {t(`${P}.keywordsDropped`, {
             tokens: dropped.join(', '),
             min: KEYWORD_MIN_LENGTH,
@@ -119,7 +119,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* Say why the button went dead rather than truncating a topic the operator
           wrote — a silent cut would ask the model about something else. */}
       {topicTooLong ? (
-        <p role="status" className="mt-tight type-small text-danger-deep">
+        <p role="status" className="mt-2 type-small text-danger-deep">
           {t(`${P}.expandTooLong`, { max: KEYWORD_MAX_LENGTH })}
         </p>
       ) : null}
@@ -127,7 +127,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* A 200 carrying a code: nothing was expanded, and each code points at a
           different fix. Unmapped codes fall back to the raw code. */}
       {expand.data?.error != null ? (
-        <p role="status" className="mt-tight type-small text-danger-deep">
+        <p role="status" className="mt-2 type-small text-danger-deep">
           {t(expandErrorKey(expand.data.error), { defaultValue: expand.data.error })}
         </p>
       ) : null}
@@ -135,7 +135,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* The request itself never landed, so there is no code to translate — and the
           button silently re-enabling would read as "the model had nothing to say". */}
       {expand.isError ? (
-        <p role="status" className="mt-tight type-small text-danger-deep">
+        <p role="status" className="mt-2 type-small text-danger-deep">
           {t(`${P}.expandFailed`)}
         </p>
       ) : null}

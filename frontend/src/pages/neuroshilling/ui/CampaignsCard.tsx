@@ -59,11 +59,11 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.campaigns.title')}
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
+      headerClassName="px-4 py-3"
+      bodyClassName="px-4 pb-4"
       header={<span className="type-h3">{t('neuroshilling.campaigns.title')}</span>}
     >
-      <div className="flex flex-col gap-tight">
+      <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           const status = campaign.status ?? 'idle';
@@ -140,7 +140,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-lg text-center type-body text-content-subtle">
+          <div className="py-4 text-center type-body text-content-subtle">
             {t('neuroshilling.campaigns.none')}
           </div>
         ) : null}
@@ -149,7 +149,7 @@ export function CampaignsCard({
       {creating ? (
         // Строкой, а не диалогом: создание спрашивает имя и больше ничего, и приложение
         // уже пишет эту форму именно так (пилюля «добавить канал»).
-        <div className="mt-sm flex items-center gap-sm">
+        <div className="mt-2 flex items-center gap-2">
           <Input
             size="sm"
             autoFocus
@@ -178,7 +178,7 @@ export function CampaignsCard({
           </IconButton>
         </div>
       ) : (
-        <Button variant="dashed" fullWidth className="mt-sm font-medium" onClick={onStartCreate}>
+        <Button variant="dashed" fullWidth className="mt-2 font-medium" onClick={onStartCreate}>
           {t('neuroshilling.campaigns.create')}
         </Button>
       )}

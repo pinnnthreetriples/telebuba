@@ -57,7 +57,7 @@ export function BulkChannelsTab({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-4">
       <SegmentedControl
         variant="outline"
         value={mode}
@@ -76,7 +76,7 @@ export function BulkChannelsTab({
           <div className="type-body text-content-subtle">
             {t('accounts.bulk.channelCreateHint')}
           </div>
-          <div className="flex items-center gap-lg">
+          <div className="flex items-center gap-4">
             {/* The circle IS the upload: an empty one shows the plus only under
                 the cursor, so a filled avatar is never covered by a control. */}
             <FilePicker
@@ -121,7 +121,7 @@ export function BulkChannelsTab({
             <div className="type-small">{t('accounts.bulk.channelAvatarNote')}</div>
           </div>
 
-          <label className="flex flex-col gap-tight">
+          <label className="flex flex-col gap-2">
             <span className="type-body-medium text-content-secondary">
               {t('accounts.channel.titleLabel')}
             </span>
@@ -134,7 +134,7 @@ export function BulkChannelsTab({
             />
           </label>
 
-          <label className="flex flex-col gap-tight">
+          <label className="flex flex-col gap-2">
             <span className="type-body-medium text-content-secondary">
               {t('accounts.channel.aboutLabel')}
             </span>
@@ -157,14 +157,14 @@ export function BulkChannelsTab({
           />
 
           {channel.isPublic && (
-            <label className="flex flex-col gap-tight">
+            <label className="flex flex-col gap-2">
               <span className="type-body-medium text-content-secondary">
                 {t('accounts.channel.usernameLabel')}
               </span>
               <div className="relative flex items-center">
-                <span className="absolute left-lg text-body text-content-subtle">@</span>
+                <span className="absolute left-4 text-body text-content-subtle">@</span>
                 <Input
-                  className="pl-page"
+                  className="pl-8"
                   aria-label={t('accounts.channel.usernameLabel')}
                   value={channel.username}
                   onChange={(event) => {
@@ -187,7 +187,7 @@ export function BulkChannelsTab({
       ) : (
         <>
           <div className="type-body text-content-subtle">{t('accounts.bulk.channelPostHint')}</div>
-          <div className="flex flex-col gap-tight">
+          <div className="flex flex-col gap-2">
             <Textarea
               className="[font-family:inherit]"
               value={post.text}
@@ -210,7 +210,7 @@ export function BulkChannelsTab({
               })}
             </span>
           </div>
-          <div className="flex items-center gap-md">
+          <div className="flex items-center gap-3">
             <FilePicker
               accept={PHOTO_SUFFIXES.join(',')}
               multiple={false}

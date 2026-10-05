@@ -14,7 +14,7 @@ import { Input, Textarea } from './Input';
 // (proxy add/edit, profile text, add-account) displays errors the same way.
 // `cn` is imported from the specific module (not the shared/lib barrel) to avoid
 // the shared/ui ↔ shared/lib import cycle.
-const LABEL = 'mb-tight block text-body font-medium text-content-secondary';
+const LABEL = 'mb-2 block text-body font-medium text-content-secondary';
 
 // Structural slice of a react-form string field — just what this primitive reads
 // and calls. Avoids depending on the library's exact FieldApi generics/export.
@@ -41,7 +41,7 @@ export function FieldError({ field, id }: { field: FormFieldApi; id?: string }) 
   const error = fieldError(field);
   if (!error) return null;
   return (
-    <span id={id} className="mt-tight block text-small font-medium text-danger-deep">
+    <span id={id} className="mt-2 block text-small font-medium text-danger-deep">
       {t(error)}
     </span>
   );

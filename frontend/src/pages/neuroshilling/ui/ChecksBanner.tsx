@@ -25,11 +25,11 @@ export function ChecksBanner({ blockers }: { blockers: string[] }) {
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.checks.title', { count: blockers.length })}
-      wrapperClassName="rounded-card border border-warning-line bg-warning-tint"
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
+      wrapperClassName="rounded-lg border border-warning-line bg-warning-tint"
+      headerClassName="px-4 py-3"
+      bodyClassName="px-4 pb-4"
       header={
-        <span className="flex min-w-0 items-center gap-md">
+        <span className="flex min-w-0 items-center gap-3">
           {/* Голый знак, а не залитый кружок. Кружок был `warning-deep` на
               `warning-line` и мерил 4.32:1 против пола в 4.5 — `line` это краска РАМКИ, и
               роли «чернила на рамке» в системе нет, потому что рамку не набирают. На
@@ -47,7 +47,7 @@ export function ChecksBanner({ blockers }: { blockers: string[] }) {
         </span>
       }
     >
-      <ul className="flex list-none flex-col gap-xs type-small text-warning-deep">
+      <ul className="flex list-none flex-col gap-1 type-small text-warning-deep">
         {blockers.map((reason) => (
           <li key={reason}>· {reason}</li>
         ))}

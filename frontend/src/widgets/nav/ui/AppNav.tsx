@@ -107,7 +107,7 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-line bg-surface-card/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-header max-w-shell items-center gap-tight px-md sm:gap-md sm:px-lg lg:gap-page lg:px-2xl">
+      <div className="mx-auto flex h-header max-w-shell items-center gap-1 px-3 sm:gap-3 sm:px-4 lg:gap-8 lg:px-6">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -130,8 +130,8 @@ export function AppNav() {
           </svg>
         </IconButton>
 
-        <div className="flex shrink-0 items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex size-icon items-center justify-center rounded-md bg-content-primary">
             <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
@@ -144,7 +144,7 @@ export function AppNav() {
 
         <nav
           ref={navRef}
-          className="relative hidden flex-1 items-center gap-lg self-stretch lg:flex"
+          className="relative hidden flex-1 items-center gap-4 self-stretch lg:flex"
         >
           {LINKS.map((link, index) => (
             <Link
@@ -173,9 +173,9 @@ export function AppNav() {
 
         {/* ml-auto: the hidden nav no longer contributes the flex-1 that pushed
             this cluster right below `lg`. */}
-        <div className="ml-auto flex shrink-0 items-center gap-sm sm:gap-md">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <div
-            className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-3 lg:px-3 lg:py-1 ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
             <span
               className={`size-dot rounded-full ${systemActive ? 'bg-success' : 'bg-content-subtle'}`}
@@ -217,10 +217,10 @@ export function AppNav() {
                   className="fixed inset-0 z-raised cursor-default"
                 />
                 <div
-                  className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-xs lg:top-[42px] ${SURFACE.panel}`}
+                  className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-1 lg:top-[42px] ${SURFACE.panel}`}
                 >
                   {me.data ? (
-                    <div className="truncate border-b border-canvas px-md py-sm text-body text-content-muted">
+                    <div className="truncate border-b border-canvas px-3 py-2 text-body text-content-muted">
                       {me.data.username}
                     </div>
                   ) : null}
@@ -238,7 +238,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-md py-sm text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

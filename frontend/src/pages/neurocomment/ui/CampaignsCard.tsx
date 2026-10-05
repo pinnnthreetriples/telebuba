@@ -88,11 +88,11 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.campaigns.title')}
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
       header={<span className="type-h3">{t('neurocomment.campaigns.title')}</span>}
     >
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           // Per-campaign run state comes from the campaign's own status,
@@ -109,7 +109,7 @@ export function CampaignsCard({
                 accounts: campaign.account_count ?? 0,
               })}
               status={
-                <span className={`inline-flex items-center gap-tight type-small-medium ${tone}`}>
+                <span className={`inline-flex items-center gap-1 type-small-medium ${tone}`}>
                   <span className="size-dot rounded-full bg-current" />
                   {t(`neurocomment.campaign.status.${campaign.status}`)}
                 </span>
@@ -175,31 +175,31 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-xl text-center type-body text-content-subtle">
+          <div className="py-6 text-center type-body text-content-subtle">
             {t('neurocomment.campaigns.none')}
           </div>
         ) : null}
       </div>
 
-      <Button variant="dashed" fullWidth className="mt-md font-medium" onClick={onCreate}>
+      <Button variant="dashed" fullWidth className="mt-3 font-medium" onClick={onCreate}>
         {t('neurocomment.campaigns.create')}
       </Button>
 
       {/* campaign channels */}
-      <div className="mt-lg border-t border-canvas pt-md">
+      <div className="mt-4 border-t border-canvas pt-3">
         <CollapsibleCard
           defaultOpen
           wrapperClassName=""
           headerClassName="px-0 py-0"
-          bodyClassName="px-0 pb-0 pt-md"
+          bodyClassName="px-0 pb-0 pt-3"
           label={t('neurocomment.channels.title')}
           header={<span className="type-body-medium">{t('neurocomment.channels.title')}</span>}
         >
-          <div className="mb-md flex items-center justify-between gap-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <span className="min-w-0 truncate type-small-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
-            <div className="flex shrink-0 items-center gap-sm">
+            <div className="flex shrink-0 items-center gap-2">
               {discoverySlot}
               <Button
                 size="xs"
@@ -216,11 +216,11 @@ export function CampaignsCard({
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-start gap-sm">
+          <div className="flex flex-wrap items-start gap-2">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className={`inline-flex items-center gap-sm rounded-full border px-md py-tight text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
@@ -232,7 +232,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-tight py-px text-small font-medium text-danger-deep"
+                    className="rounded-full bg-danger-tint px-1 py-px text-small font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>

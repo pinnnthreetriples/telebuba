@@ -173,9 +173,9 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-h1">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('logs.title')}</h1>
 
-      <div className="mb-lg flex flex-wrap items-center gap-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {/* The measured capsule that used to slide behind these pills is gone with
             them: it was one wearer of a two-wearer look, and the shared control paints
             the active pill directly. The rest is identical — same blue, same
@@ -212,7 +212,7 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-empty text-center type-body text-content-subtle">
+        <Card className="px-4 py-16 text-center type-body text-content-subtle">
           {t('logs.empty')}
         </Card>
       ) : (
@@ -222,7 +222,7 @@ export function LogsPage() {
               <DataTable data={items} columns={columns} />
             </div>
           </Card>
-          <div className="mt-lg flex items-center justify-end gap-sm">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <Button
               size="sm"
               disabled={!hasPrev}

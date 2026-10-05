@@ -42,7 +42,7 @@ export function DiscoveryForm({
   return (
     <form
       id={formId}
-      className="flex flex-col gap-2xl"
+      className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit(form, accountIds) && !submitting) onSubmit();
@@ -52,7 +52,7 @@ export function DiscoveryForm({
         <Eyebrow title={t(`${P}.sections.query`)} />
         {/* The same two columns as the filters below, so the picker sits under the
             right-hand filter column and the keywords under the left. */}
-        <div className="grid gap-xl sm:grid-cols-2 sm:gap-2xl">
+        <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
           <KeywordsField form={form} onChange={onChange} />
           <AccountPicker
             accounts={accounts}

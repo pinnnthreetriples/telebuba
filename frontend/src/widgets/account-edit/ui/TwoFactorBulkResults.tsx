@@ -95,11 +95,11 @@ export function TwoFactorBulkResults({
       </Notice>
       {/* The 16px to the Notice above is worn HERE: a caller may not hand
           Card/Notice an outer margin (classMerge.test). */}
-      <div className="mb-md mt-lg flex items-center justify-between gap-md">
+      <div className="mb-3 mt-4 flex items-center justify-between gap-3">
         <span className="type-small">
           {t('accounts.addWizard.twofaSelected', { done: created.length, total: rows.length })}
         </span>
-        <span className="flex shrink-0 gap-sm">
+        <span className="flex shrink-0 gap-2">
           {clipboard ? (
             <Button
               size="xs"
@@ -118,19 +118,17 @@ export function TwoFactorBulkResults({
         </span>
       </div>
       {clipboard ? null : (
-        <div className="mb-md type-small">{t('accounts.edit.twofaCopyManual')}</div>
+        <div className="mb-3 type-small">{t('accounts.edit.twofaCopyManual')}</div>
       )}
       {copyState.all === 'failed' ? (
-        <div className="mb-md type-small text-danger-deep">
-          {t('accounts.edit.twofaCopyFailed')}
-        </div>
+        <div className="mb-3 type-small text-danger-deep">{t('accounts.edit.twofaCopyFailed')}</div>
       ) : null}
-      <div className="overflow-hidden rounded-lg border border-line">
+      <div className="overflow-hidden rounded-md border border-line">
         {rows.map((row) =>
           row.created ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-canvas px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
@@ -138,17 +136,17 @@ export function TwoFactorBulkResults({
               <span className="min-w-0 flex-1">
                 <span className="block break-all font-mono type-body">{row.created.password}</span>
                 {row.created.stored === false ? (
-                  <span className="mt-hair block type-small text-warning-deep">
+                  <span className="mt-1 block type-small text-warning-deep">
                     {t('accounts.edit.twofaStoreFailed')}
                   </span>
                 ) : null}
                 {row.created.confirmed === false ? (
-                  <span className="mt-hair block type-small text-warning-deep">
+                  <span className="mt-1 block type-small text-warning-deep">
                     {t('accounts.edit.twofaUnconfirmed')}
                   </span>
                 ) : null}
                 {copyState[row.accountId] === 'failed' ? (
-                  <span className="mt-hair block type-small text-danger-deep">
+                  <span className="mt-1 block type-small text-danger-deep">
                     {t('accounts.edit.twofaCopyFailed')}
                   </span>
                 ) : null}
@@ -186,7 +184,7 @@ export function TwoFactorBulkResults({
           ) : row.state === 'error' ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-canvas bg-danger-tint px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas bg-danger-tint px-3 py-2 last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
@@ -205,7 +203,7 @@ export function TwoFactorBulkResults({
             // error and accuse Telegram of refusing a request nobody sent.
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-canvas px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
             >
               <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
@@ -217,7 +215,7 @@ export function TwoFactorBulkResults({
           ),
         )}
       </div>
-      <div className="mt-xl flex justify-end gap-sm">
+      <div className="mt-6 flex justify-end gap-2">
         <Button variant="primary" onClick={onDone}>
           {t('accounts.addWizard.done')}
         </Button>

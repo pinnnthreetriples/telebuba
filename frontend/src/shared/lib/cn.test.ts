@@ -22,8 +22,9 @@ test('two colours still collapse to the last one', () => {
   expect(cn('bg-action-primary', 'bg-success')).toBe('bg-success');
 });
 
-test('the card radius belongs to the radius group', () => {
-  expect(cn('rounded-lg', 'rounded-card')).toBe('rounded-card');
+test('the three radii share one group', () => {
+  expect(cn('rounded-md', 'rounded-lg')).toBe('rounded-lg');
+  expect(cn('rounded-lg', 'rounded-sm')).toBe('rounded-sm');
 });
 
 // A role sets a size, a weight and a colour at once, so it has to beat all three when
@@ -78,13 +79,16 @@ test('a line-height survives a rung and a role', () => {
 // cannot parse does not merely leave two classes on the element — it lets the component
 // beat its own caller, decided by which name sorts later in the stylesheet. Before the
 // rungs were named here, `cn('py-tight', 'py-xs')` returned both and rendered `py-tight`.
+// The rungs are Firecrawl's numeric keys now, which stock tailwind-merge parses on its own;
+// the cases stay so a future named rung cannot quietly reopen the hole.
 describe('a caller overrides the rhythm a component wrote first', () => {
   for (const [base, override] of [
-    ['py-tight', 'py-xs'],
-    ['px-md', 'px-lg'],
-    ['p-lg', 'p-2xl'],
-    ['gap-sm', 'gap-md'],
-    ['mt-page', 'mt-empty'],
+    ['py-1', 'py-2'],
+    ['px-3', 'px-4'],
+    ['p-4', 'p-6'],
+    ['gap-2', 'gap-3'],
+    ['mt-8', 'mt-16'],
+    ['-mt-1', 'mt-px'],
   ] as const) {
     test(`${base} then ${override}`, () => {
       expect(cn(base, override)).toBe(override);
@@ -95,8 +99,8 @@ describe('a caller overrides the rhythm a component wrote first', () => {
 // The lattice stock tailwind-merge already declares, which naming the values restores
 // rather than replaces: an axis clears the two sides it covers, and `p` clears all four.
 test('the shorthand still beats the sides it covers', () => {
-  expect(cn('pt-md', 'py-lg')).toBe('py-lg');
-  expect(cn('px-md', 'py-md', 'p-lg')).toBe('p-lg');
+  expect(cn('pt-3', 'py-4')).toBe('py-4');
+  expect(cn('px-3', 'py-3', 'p-4')).toBe('p-4');
   // ...and not the other way round: a side written after an axis survives it.
-  expect(cn('py-lg', 'pt-md')).toBe('py-lg pt-md');
+  expect(cn('py-4', 'pt-3')).toBe('py-4 pt-3');
 });

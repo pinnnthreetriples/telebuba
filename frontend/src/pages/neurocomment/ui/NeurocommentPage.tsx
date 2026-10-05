@@ -504,7 +504,7 @@ export function NeurocommentPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-h1">{t('neurocomment.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('neurocomment.title')}</h1>
 
       {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
           one-column grid sprout an implicit second column and sit both children side
@@ -515,9 +515,9 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-2 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={canStartListener}
@@ -551,7 +551,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-1 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}
@@ -587,7 +587,7 @@ export function NeurocommentPage() {
             onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-sm type-small-medium text-danger-deep">
+            <p className="mt-2 type-small-medium text-danger-deep">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

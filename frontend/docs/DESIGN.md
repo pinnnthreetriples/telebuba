@@ -106,23 +106,19 @@ typography:
     letterSpacing: 0em
     color: "{colors.content-subtle}"
 spacing:
+  1: 4px
+  2: 8px
+  3: 12px
+  4: 16px
+  6: 24px
+  8: 32px
+  16: 64px
   px: 1px
-  hair: 2px
-  xs: 4px
-  tight: 6px
+rounded:
+  none: 0px
   sm: 8px
   md: 12px
   lg: 16px
-  xl: 20px
-  2xl: 24px
-  page: 32px
-  empty: 64px
-rounded:
-  none: 0px
-  sm: 6px
-  md: 8px
-  lg: 11px
-  card: 16px
   full: 9999px
 shadows:
   pop: "0 10px 30px rgb(11 11 12 / 0.12)"
@@ -161,7 +157,7 @@ components:
     textColor: "{colors.on-fill}"
     hoverBackgroundColor: "{colors.action-pressed}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -170,7 +166,7 @@ components:
     textColor: "{colors.on-fill}"
     hoverBackgroundColor: "{colors.content-primary}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -181,7 +177,7 @@ components:
     textColor: "{colors.content-primary}"
     hoverBorderColor: "{colors.line-strong}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -192,7 +188,7 @@ components:
     textColor: "{colors.danger-deep}"
     hoverBorderColor: "{colors.danger}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -201,7 +197,7 @@ components:
     hoverBackgroundColor: "{colors.canvas}"
     hoverTextColor: "{colors.content-primary}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -214,7 +210,7 @@ components:
     hoverBorderColor: "{colors.action-primary}"
     hoverBackgroundColor: "{colors.info-tint}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -227,25 +223,25 @@ components:
     hoverBorderColor: "{colors.action-primary}"
     hoverTextColor: "{colors.action-primary}"
     height: "{height.control}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
   button-lg:
     height: "{height.touch}"
-    paddingX: "{spacing.2xl}"
+    paddingX: "{spacing.6}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
   button-sm:
     height: "{height.field}"
-    paddingX: "{spacing.xl}"
+    paddingX: "{spacing.4}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
   button-xs:
     height: "{height.compact}"
-    paddingX: "{spacing.md}"
+    paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
@@ -254,55 +250,55 @@ components:
     backgroundColor: "{colors.surface-card}"
     borderColor: "{colors.line}"
     height: "{height.control}"
-    paddingX: "{spacing.md}"
+    paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
   input-sm:
     borderWidth: 1px
     backgroundColor: "{colors.surface-card}"
     borderColor: "{colors.line}"
     height: "{height.field}"
-    paddingX: "{spacing.md}"
+    paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
   input-xs:
     borderWidth: 1px
     backgroundColor: "{colors.surface-card}"
     borderColor: "{colors.line}"
     height: "{height.compact}"
-    paddingX: "{spacing.md}"
+    paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.sm}"
   input-flat:
     borderWidth: 1px
     backgroundColor: "{colors.canvas}"
     borderColor: "{colors.line}"
     height: "{height.control}"
-    paddingX: "{spacing.md}"
+    paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
   card:
-    rounded: "{rounded.card}"
+    rounded: "{rounded.lg}"
     borderWidth: 1px
     borderColor: "{colors.line}"
     backgroundColor: "{colors.surface-card}"
-    paddingX: "{spacing.xl}"
-    paddingY: "{spacing.xl}"
+    paddingX: "{spacing.6}"
+    paddingY: "{spacing.6}"
   dialog:
-    rounded: "{rounded.card}"
+    rounded: "{rounded.lg}"
     backgroundColor: "{colors.surface-card}"
     shadow: "{shadows.pop}"
   panel:
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     borderWidth: 1px
     borderColor: "{colors.line}"
     backgroundColor: "{colors.surface-card}"
     shadow: "{shadows.pop}"
   inset:
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     backgroundColor: "{colors.canvas}"
   inverse:
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     backgroundColor: "{colors.term}"
     textColor: "{colors.term-text}"
   badge-neutral:
@@ -310,40 +306,40 @@ components:
     textColor: "{colors.content-muted}"
     rounded: "{rounded.full}"
     fontWeight: 500
-    paddingX: "{spacing.sm}"
-    paddingY: "{spacing.hair}"
+    paddingX: "{spacing.2}"
+    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-info:
     backgroundColor: "{colors.info-tint}"
     textColor: "{colors.info-strong}"
     rounded: "{rounded.full}"
     fontWeight: 500
-    paddingX: "{spacing.sm}"
-    paddingY: "{spacing.hair}"
+    paddingX: "{spacing.2}"
+    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-success:
     backgroundColor: "{colors.success-tint}"
     textColor: "{colors.success-deep}"
     rounded: "{rounded.full}"
     fontWeight: 500
-    paddingX: "{spacing.sm}"
-    paddingY: "{spacing.hair}"
+    paddingX: "{spacing.2}"
+    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-warning:
     backgroundColor: "{colors.warning-tint}"
     textColor: "{colors.warning-deep}"
     rounded: "{rounded.full}"
     fontWeight: 500
-    paddingX: "{spacing.sm}"
-    paddingY: "{spacing.hair}"
+    paddingX: "{spacing.2}"
+    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-danger:
     backgroundColor: "{colors.danger-tint}"
     textColor: "{colors.danger-deep}"
     rounded: "{rounded.full}"
     fontWeight: 500
-    paddingX: "{spacing.sm}"
-    paddingY: "{spacing.hair}"
+    paddingX: "{spacing.2}"
+    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
 ---
 
@@ -375,9 +371,9 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 
 ## Сетка и раскладка
 
-Одна шкала ритма на все зазоры, отбивки и поля: 2, 4, 6, 8, 12, 16, 20, 24, 32, 64px. Имена называют работу: `tight` — части одной вещи, `sm` — внутри контрола, `md` — строки внутри карточки, `lg` — блоки карточки, `2xl` — поля контрола, `page` — поля страницы.
+Одна шкала ритма на все зазоры, отбивки и поля — сетка Firecrawl с основанием 4px: 4, 8, 12, 16, 24, 32, 64px. Ключ — число шагов: `p-3` красит 12px, `gap-6` — 24px. Каденция: 8px внутри группы, 16px между группами, 24px — поле карточки (16 у компактной), 32px — между секциями. Кнопка: поля 16px по горизонтали.
 
-Размеры вещей — отдельные шкалы (`size`, `height`, `width`): `p-md` красит 12px, а `w-md` не существует. Брейкпоинты: `table` 880px, `wide` 1024px, `card` 640px, `split` 768px.
+Размеры вещей — отдельные шкалы (`size`, `height`, `width`): `p-3` есть, а `w-3` не существует. Брейкпоинты: `table` 880px, `wide` 1024px, `card` 640px, `split` 768px.
 
 ## Глубина
 
@@ -390,21 +386,20 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 ## Формы
 
 - `none` 0px — без скругления.
-- `sm` 6px — контрол внутри другой коробки.
-- `md` 8px — самостоятельный контрол, поле внутри коробки.
-- `lg` 11px — панель в карточке, поле ввода.
-- `card` 16px — карточка и диалог.
+- `sm` 8px — контрол в коробке, чип, мелкая плашка.
+- `md` 12px — поле ввода, панель, меню, вложенная карточка.
+- `lg` 16px — карточка и диалог.
 - `full` 9999px — кнопка, плашка, аватар.
 
-Форма зависит от рода контрола, а не от размера: кнопка — пилюля на всех ступенях, поле — `lg`, поле внутри коробки — `md`.
+Шкала радиусов — Firecrawl: 8px повседневному контролу, 12px полю, панели и меню, 16px карточке и диалогу. Форма зависит от рода контрола, а не от размера: кнопка — пилюля на всех ступенях, поле — `md`, поле внутри коробки — `sm`.
 
 ## Компоненты
 
 Компонент собирается из рецепта (`src/shared/design-system/recipes/`), и рецепт — единственное место, где решены его высота, поля, форма, фокус и disabled. Значения выше в `components` прочитаны из самих рецептов.
 
 - **Кнопка.** Высота 36px (`md`), пилюля, надпись 14px / 500. Варианты: `primary`, `neutral`, `secondary`, `danger`, `ghost`, `dashed`, `dashedMuted`. `primary` — одно главное действие экрана, остальное — `secondary`. `danger` — тонированная, а не красная: красная у неё надпись. Размеры `lg` (цель касания), `md` (подвал диалога), `sm` (в карточке), `xs` (в строке таблицы). Высоты общие с полями: `Button size="sm"` и `Input size="sm"` одинаковы.
-- **Поле.** Белое, рамка `line`, скругление `lg`. Фокус — свечение `shadow-focus` плюс синяя рамка; ошибка — рамка `danger` и сообщение рядом (`FieldError`), не только цвет.
-- **Поверхности.** `card`, `dialog`, `panel`, `inset`, `inverse` — `surface(variant)`. Карточка: `rounded-card`, рамка `line`, поля 20px.
+- **Поле.** Белое, рамка `line`, скругление `md`. Фокус — свечение `shadow-focus` плюс синяя рамка; ошибка — рамка `danger` и сообщение рядом (`FieldError`), не только цвет.
+- **Поверхности.** `card`, `dialog`, `panel`, `inset`, `inverse` — `surface(variant)`. Карточка: `rounded-lg`, рамка `line`, поля 24px.
 - **Плашка.** Заливка тона и его `-deep` надпись, пилюля, без рамки.
 
 Отключённое — 50% непрозрачности. Фокус клавиатуры у каждой кнопки — 2px обводка `action-primary` с отступом 2px.

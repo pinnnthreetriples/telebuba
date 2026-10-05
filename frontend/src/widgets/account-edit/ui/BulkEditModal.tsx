@@ -414,7 +414,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         label={t('accounts.bulk.title')}
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-canvas px-xl py-xl">
+          <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
@@ -431,7 +431,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             />
           </div>
 
-          <div className="flex items-center gap-md border-b border-canvas px-xl py-md">
+          <div className="flex items-center gap-3 border-b border-canvas px-6 py-3">
             <IconButton
               size="sm"
               disabled={locked}
@@ -442,7 +442,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             >
               <Icon name="plus" size={16} />
             </IconButton>
-            <div className="tb-scroll flex flex-1 items-center gap-sm overflow-x-auto py-hair">
+            <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
               {picked.map((row) => (
                 <span key={row.account_id} className="group relative shrink-0">
                   <AccountAvatar
@@ -458,7 +458,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                       onClick={() => {
                         setIds((prev) => prev.filter((id) => id !== row.account_id));
                       }}
-                      className="absolute -right-hair -top-hair bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       <Icon name="close" size={16} />
                     </IconButton>
@@ -489,7 +489,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               role={started ? undefined : 'tabpanel'}
               id={started ? undefined : 'bulk-tabpanel'}
               aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
-              className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+              className="tb-scroll flex flex-1 flex-col gap-4 overflow-y-auto p-6"
             >
               {started ? (
                 <BulkProgress
@@ -571,7 +571,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           </fieldset>
 
-          <div className="flex items-center justify-end gap-sm border-t border-canvas px-xl py-lg">
+          <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
             {!started && (
               <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
                 {NOTE[tab]}
@@ -589,12 +589,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               )
             ) : (
               <>
-                <Button onClick={onClose} disabled={preparing} className="px-md sm:px-2xl">
+                <Button onClick={onClose} disabled={preparing} className="px-3 sm:px-6">
                   {t('accounts.profile.cancel')}
                 </Button>
                 <Button
                   variant="primary"
-                  className="px-md sm:px-2xl"
+                  className="px-3 sm:px-6"
                   disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
                   loading={preparing}
                   onClick={apply}

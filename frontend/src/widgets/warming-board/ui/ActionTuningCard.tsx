@@ -158,7 +158,7 @@ function ActionRow({
   const { t } = useTranslation();
   const working = state !== 'external';
   return (
-    <div className="flex items-center gap-md">
+    <div className="flex items-center gap-3">
       <Switch checked={on} disabled={state !== 'live'} label={title} onChange={onToggle} />
       <span className={`min-w-0 flex-1 type-body-medium ${working ? '' : 'text-content-subtle'}`}>
         {title}
@@ -246,9 +246,9 @@ export function ActionTuningCard() {
 
   return (
     <CollapsibleCard
-      wrapperClassName="rounded-card border border-line bg-surface-card"
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
+      wrapperClassName="rounded-lg border border-line bg-surface-card"
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
       label={t('warming.tune.title')}
       header={
         <>
@@ -257,12 +257,12 @@ export function ActionTuningCard() {
           </span>
           <div className="min-w-0">
             <div className="type-h3">{t('warming.tune.title')}</div>
-            <div className="mt-hair type-small">{t('warming.tune.subtitle')}</div>
+            <div className="mt-1 type-small">{t('warming.tune.subtitle')}</div>
           </div>
         </>
       }
     >
-      <div className="mb-lg flex flex-wrap items-center gap-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button
           size="xs"
           onClick={() => {
@@ -279,21 +279,21 @@ export function ActionTuningCard() {
         >
           {t('warming.tune.disableAll')}
         </Button>
-        <span className="ml-auto flex items-center gap-tight type-small">
+        <span className="ml-auto flex items-center gap-1 type-small">
           <span className="size-dot shrink-0 rounded-full bg-action-primary" />
           {t('warming.tune.legend.working', { n: WORKING_COUNT })}
         </span>
       </div>
 
-      <div className="grid items-start gap-md sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {GROUPS.map((group) => (
-          <div key={group.key} className="rounded-lg border border-line bg-surface p-md">
-            <div className="mb-md flex items-center gap-sm">
+          <div key={group.key} className="rounded-md border border-line bg-surface p-3">
+            <div className="mb-3 flex items-center gap-2">
               <Icon name={group.icon} size={14} className="shrink-0 text-content-subtle" />
               <span className="type-small-medium">{t(`warming.tune.group.${group.key}`)}</span>
               {group.heavy ? <Badge tone="warning">{t('warming.tune.trafficHeavy')}</Badge> : null}
             </div>
-            <div className="flex flex-col gap-md">
+            <div className="flex flex-col gap-3">
               {group.actions.map((action) => (
                 <ActionRow
                   key={action.key}
@@ -316,11 +316,11 @@ export function ActionTuningCard() {
         ))}
       </div>
 
-      <div className="mt-lg border-t border-canvas pt-lg">
-        <div className="flex items-start justify-between gap-lg">
+      <div className="mt-4 border-t border-canvas pt-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="type-body-medium">{t('warming.tune.gate.title')}</div>
-            <div className="mt-hair type-small">{t('warming.tune.gate.desc')}</div>
+            <div className="mt-1 type-small">{t('warming.tune.gate.desc')}</div>
           </div>
           <Switch
             checked={toggles.enforce_readiness}
@@ -334,12 +334,12 @@ export function ActionTuningCard() {
         {save.isError ? (
           // Тот же конкретный текст, что и в общем тосте мутаций: этот сигнал —
           // отчёт по месту, и он не должен быть менее внятным из двух.
-          <div role="alert" className="mt-md type-small text-danger-deep">
+          <div role="alert" className="mt-3 type-small text-danger-deep">
             {mutationErrorText(save.error)}
           </div>
         ) : null}
 
-        <div className="mt-lg flex items-center gap-md">
+        <div className="mt-4 flex items-center gap-3">
           <Button
             variant="primary"
             size="sm"

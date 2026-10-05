@@ -25,13 +25,13 @@ export function Toaster() {
 
   if (items.length === 0) return null;
   return createPortal(
-    <div className="pointer-events-none fixed bottom-2xl left-1/2 z-toast flex -translate-x-1/2 flex-col items-center gap-md">
+    <div className="pointer-events-none fixed bottom-6 left-1/2 z-toast flex -translate-x-1/2 flex-col items-center gap-3">
       {items.map((toast) => (
         <div
           key={toast.id}
           role="alert"
           className={cn(
-            'pointer-events-auto max-w-[90vw] px-lg py-md text-body text-on-fill shadow-pop tb-arrive',
+            'pointer-events-auto max-w-[90vw] px-4 py-3 text-body text-on-fill shadow-pop tb-arrive',
             surface('inverse'),
           )}
         >

@@ -122,7 +122,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return (
-          <div className="flex items-center gap-md">
+          <div className="flex items-center gap-3">
             <RowAvatar account={account} />
             <div>
               <div className="type-h3">{accountDisplayName(account)}</div>
@@ -145,7 +145,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return account.proxy_id ? (
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <span
               className={`size-dot shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
@@ -178,7 +178,7 @@ export function AccountsTable({
         return trust == null ? (
           <span className="type-body text-content-subtle">—</span>
         ) : (
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <div
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
               className={`${BAR_TRACK} w-[46px]`}
@@ -209,7 +209,7 @@ export function AccountsTable({
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         return (
-          <div className="flex items-center justify-end gap-sm">
+          <div className="flex items-center justify-end gap-2">
             <IconButton
               size="touch"
               shape="circle"

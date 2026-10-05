@@ -10,11 +10,11 @@ export function HowItWorksCard() {
   return (
     <CollapsibleCard
       label={t('neuroshilling.howto.title')}
-      wrapperClassName="rounded-card border border-line bg-canvas"
-      headerClassName="px-lg py-lg"
+      wrapperClassName="rounded-lg border border-line bg-canvas"
+      headerClassName="px-4 py-4"
       header={<span className="type-h3">{t('neuroshilling.howto.title')}</span>}
     >
-      <div className="flex flex-col gap-md">
+      <div className="flex flex-col gap-3">
         {HOW_STEPS.map((index) => (
           <NumberedStep key={index} number={index + 1}>
             {t(`neuroshilling.howto.steps.${String(index)}`)}

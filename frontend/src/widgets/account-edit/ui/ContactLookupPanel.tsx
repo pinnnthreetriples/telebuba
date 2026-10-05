@@ -175,10 +175,10 @@ export function ContactLookupPanel({
         : 'accounts.messages.lookup.startError';
 
   return (
-    <div className="border-t border-canvas pt-sm">
+    <div className="border-t border-canvas pt-2">
       <button
         type="button"
-        className="flex w-full items-center gap-sm type-body-medium text-content-muted hover:text-content-primary"
+        className="flex w-full items-center gap-2 type-body-medium text-content-muted hover:text-content-primary"
         aria-expanded={open}
         onClick={() => {
           setOpen((value) => !value);
@@ -189,12 +189,12 @@ export function ContactLookupPanel({
       </button>
 
       {open && (
-        <div className="mt-md space-y-md">
+        <div className="mt-3 space-y-3">
           {!started ? (
             <>
-              <section className="space-y-sm">
-                <div className="flex items-center justify-between gap-md">
-                  <div className="flex items-center gap-sm">
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
                     <label
                       htmlFor="contact-lookup-phones"
                       className="type-body-medium text-content-secondary"
@@ -219,12 +219,12 @@ export function ContactLookupPanel({
                 />
               </section>
 
-              <section className="space-y-sm">
+              <section className="space-y-2">
                 <h4 className="type-body-medium text-content-secondary">
                   {t('accounts.messages.delay')}
                 </h4>
-                <div className="grid grid-cols-2 gap-md">
-                  <label className="flex items-center gap-sm type-small">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 type-small">
                     <span>{t('accounts.messages.delayFrom')}</span>
                     <Input
                       type="number"
@@ -240,7 +240,7 @@ export function ContactLookupPanel({
                     />
                     <span>{t('accounts.messages.secondsShort')}</span>
                   </label>
-                  <label className="flex items-center gap-sm type-small">
+                  <label className="flex items-center gap-2 type-small">
                     <span>{t('accounts.messages.delayTo')}</span>
                     <Input
                       type="number"
@@ -279,7 +279,7 @@ export function ContactLookupPanel({
               </Button>
             </>
           ) : (
-            <div className="space-y-sm">
+            <div className="space-y-2">
               <p role="status" className="type-body text-content-subtle tabular-nums">
                 {complete
                   ? [
@@ -309,7 +309,7 @@ export function ContactLookupPanel({
                   {t('accounts.messages.lookup.added', { count: added })}
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-sm">
+              <div className="flex flex-wrap items-center gap-2">
                 {!complete && (
                   <Button variant="danger" loading={cancel.isPending} onClick={onStop}>
                     {t('accounts.messages.stop')}

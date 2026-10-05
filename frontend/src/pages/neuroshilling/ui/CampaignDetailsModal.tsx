@@ -132,12 +132,10 @@ export function CampaignDetailsModal({
 
   return (
     <Modal onClose={onClose} size="table" label={campaign.name}>
-      <div className="flex flex-wrap items-center gap-md border-b border-canvas px-2xl pb-lg pt-xl">
+      <div className="flex flex-wrap items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
         <div className="min-w-0">
           <div className="truncate type-h2">{campaign.name}</div>
-          {campaign.topic ? (
-            <div className="mt-hair truncate type-small">{campaign.topic}</div>
-          ) : null}
+          {campaign.topic ? <div className="mt-1 truncate type-small">{campaign.topic}</div> : null}
         </div>
         <CampaignStatusBadge status={campaign.status ?? 'idle'} />
         <div className="flex-1" />
@@ -146,11 +144,11 @@ export function CampaignDetailsModal({
         </span>
       </div>
 
-      <div className="px-2xl py-lg">
+      <div className="px-6 py-4">
         {rows.length === 0 ? (
           // Пар «аккаунт × цель» нет, пока нет хотя бы одного из двух, и это не пустая
           // таблица, а незаконченная настройка — поэтому сюда же и кнопка.
-          <div className="py-xl text-center type-body text-content-subtle">
+          <div className="py-6 text-center type-body text-content-subtle">
             {t('neuroshilling.details.none')}
           </div>
         ) : (
@@ -158,7 +156,7 @@ export function CampaignDetailsModal({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-canvas px-2xl py-lg">
+      <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.details.close')}
         </Button>

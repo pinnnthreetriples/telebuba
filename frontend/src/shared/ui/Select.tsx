@@ -19,12 +19,12 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 // поэтому он гасится заливкой и краской, а не прозрачностью, как кнопка.
 const TRIGGER = cn(
   fieldBase({ size: 'md' }),
-  'flex items-center justify-between gap-sm text-left text-content-primary',
+  'flex items-center justify-between gap-2 text-left text-content-primary',
   'border-line hover:border-line-strong focus-visible:border-action-primary focus-visible:shadow-focus',
   'disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-content-subtle',
 );
 const OPTION =
-  'flex w-full items-center justify-between gap-sm rounded-sm border-none px-md py-sm text-left text-body hover:bg-info-tint disabled:text-content-subtle';
+  'flex w-full items-center justify-between gap-2 rounded-sm border-none px-3 py-2 text-left text-body hover:bg-info-tint disabled:text-content-subtle';
 
 export function Select({
   value,
@@ -179,13 +179,13 @@ export function Select({
         // and, unlike `hidden`, keeps the open/close transition.
         inert={!open}
         className={cn(
-          'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop p-xs',
+          'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop p-1',
           surface('panel'),
           open && 'open',
         )}
       >
         {options.length === 0 ? (
-          <div className="px-md py-sm text-body text-content-subtle">{emptyLabel}</div>
+          <div className="px-3 py-2 text-body text-content-subtle">{emptyLabel}</div>
         ) : (
           options.map((option, index) => (
             <button

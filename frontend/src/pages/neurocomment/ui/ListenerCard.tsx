@@ -55,9 +55,9 @@ export function ListenerCard({
       ? t('neurocomment.listener.listeningNoChannels')
       : t('neurocomment.listener.paused');
   return (
-    <Card className="relative z-raised px-lg py-lg">
-      <div className="mb-xs flex items-center gap-md">
-        <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+    <Card className="relative z-raised px-4 py-4">
+      <div className="mb-1 flex items-center gap-3">
+        <span className="flex size-icon shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong">
           <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
@@ -66,7 +66,7 @@ export function ListenerCard({
       </div>
 
       {listenerId ? (
-        <div className="mt-md">
+        <div className="mt-3">
           <SurfHover
             surfaceId="lsn-surf"
             open={listenerActionsOpen}
@@ -115,9 +115,9 @@ export function ListenerCard({
               // Running = the success tone, idle = the neutral surface; both sides
               // come from tokens so the card can't drift from the rest of the design.
               <div
-                className={`flex items-center justify-between gap-sm rounded-lg border px-md py-sm ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
+                className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
               >
-                <div className="flex min-w-0 items-center gap-sm">
+                <div className="flex min-w-0 items-center gap-2">
                   <span
                     className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
                   />
@@ -129,11 +129,14 @@ export function ListenerCard({
                   {/* Off the status-pill rung on purpose: a counter, not a state label. The
                       18px square minimum is what keeps a single digit CIRCULAR, and the
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
-                  {/* Залит счётчик тоном или серым, надпись на обеих заливках одна —
-                      `on-fill`: белый на `content-muted` мерит 6.18:1. */}
+                  {/* Краска надписи переехала в ветки вместе с заливкой: она была одна на
+                      обе — `text-on-action`, «чернила на ДЕЙСТВИИ», — притом что залит
+                      счётчик либо тоном, либо серым, и действием не бывает ни разу. Это не
+                      про контраст (белый на `content-muted` мерит 6.18:1), а про то, что
+                      одно имя держало два решения. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-small font-medium text-on-fill ${working ? 'bg-success-deep' : 'bg-content-muted'}`}
+                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-1 text-small font-medium ${working ? 'bg-success-deep text-on-fill' : 'bg-content-muted text-on-fill'}`}
                   >
                     {activeCampaignCount}
                   </span>
@@ -156,7 +159,7 @@ export function ListenerCard({
           />
         </div>
       ) : (
-        <div className="mt-md">
+        <div className="mt-3">
           <Select
             value=""
             onChange={onPickListener}
@@ -175,7 +178,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-sm type-small-medium text-danger-deep">
+        <p className="mt-2 type-small-medium text-danger-deep">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

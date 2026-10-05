@@ -24,9 +24,9 @@ import { cn } from '@/shared/lib/cn';
 // name of its own because the two rungs that happened to be written first took `sm`
 // and `md` between them; the smallest is `xs`, which is what it always measured.
 const SIZE = {
-  md: 'px-md py-tight text-body',
-  sm: 'px-md py-xs text-small',
-  xs: 'px-sm py-hair text-small',
+  md: 'px-3 py-1 text-body',
+  sm: 'px-3 py-1 text-small',
+  xs: 'px-2 py-px text-small',
 } as const;
 
 // 6px over the 5px also in use: four of the app's seven status dots are already
@@ -60,7 +60,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-tight whitespace-nowrap rounded-full font-medium',
+        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full font-medium',
         badgeTone(tone),
         SIZE[size],
         className,
