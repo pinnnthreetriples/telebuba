@@ -14,6 +14,7 @@ export type { DataTableColumnMeta } from './DataTable';
 export { FeedbackMark } from './FeedbackMark';
 export { FieldError, FormField } from './FormField';
 export { HelpHint, HintBubble } from './HelpHint';
+export { HowItWorksCard } from './HowItWorksCard';
 export { Icon } from './Icon';
 export { InlineChipEditor } from './InlineChipEditor';
 export type { IconName } from './Icon';

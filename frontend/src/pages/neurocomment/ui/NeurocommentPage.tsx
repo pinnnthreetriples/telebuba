@@ -34,14 +34,13 @@ import { ChannelDiscoveryButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { ConfirmModal, toastError } from '@/shared/ui';
+import { ConfirmModal, HowItWorksCard, toastError } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
 import { CommentHistoryModal } from './CommentHistoryModal';
 import { CampaignsCard } from './CampaignsCard';
 import { CaptchaSolverCard } from './CaptchaSolverCard';
-import { HowItWorksCard } from './HowItWorksCard';
 import { IdleBanner } from './IdleBanner';
 import { ListenerCard } from './ListenerCard';
 import { PipelineCard } from './PipelineCard';
@@ -76,6 +75,7 @@ const NEURO_QUERY_IDS = new Set([
   'listLogs',
 ]);
 
+const HOW_STEPS = [0, 1, 2, 3] as const;
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -649,7 +649,10 @@ export function NeurocommentPage() {
             }
           />
 
-          <HowItWorksCard />
+          <HowItWorksCard
+            title={t('neurocomment.howto.title')}
+            steps={HOW_STEPS.map((index) => t(`neurocomment.howto.steps.${String(index)}`))}
+          />
         </div>
       </div>
 

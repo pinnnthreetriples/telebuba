@@ -22,7 +22,7 @@ import type {
   NeuroshillingCampaignUpdate,
 } from '@/shared/api';
 import { useLogEventStream } from '@/shared/lib';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, HowItWorksCard } from '@/shared/ui';
 import { LogTerminal } from '@/widgets/log-terminal';
 
 import { ApproveModal } from './ApproveModal';
@@ -31,7 +31,6 @@ import { CampaignSettingsModal } from './CampaignSettingsModal';
 import { CampaignSetupSection } from './CampaignSetupSection';
 import { CampaignsCard } from './CampaignsCard';
 import { ChecksBanner } from './ChecksBanner';
-import { HowItWorksCard } from './HowItWorksCard';
 import { launchBlockers } from './launchChecks';
 import { PipelineCard } from './PipelineCard';
 import { ScenarioSection } from './ScenarioSection';
@@ -113,6 +112,7 @@ function campaignBody(
   };
 }
 
+const HOW_STEPS = [0, 1, 2, 3] as const;
 export function NeuroshillingPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -632,7 +632,10 @@ export function NeuroshillingPage() {
             onCreate={create}
           />
 
-          <HowItWorksCard />
+          <HowItWorksCard
+            title={t('neuroshilling.howto.title')}
+            steps={HOW_STEPS.map((index) => t(`neuroshilling.howto.steps.${String(index)}`))}
+          />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
