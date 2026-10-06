@@ -27,7 +27,6 @@ class ChatBroadcastSettings(BaseSettings):
     max_targets_per_campaign: int = Field(default=500, ge=1)
     max_target_length: int = Field(default=200, ge=1)
     max_accounts_per_campaign: int = Field(default=100, ge=1)
-    max_messages: int = Field(default=10, ge=1)
     # Dialogs scanned per account for "where it already is"; a bound, not a target.
     dialogs_scan_limit: int = Field(default=500, ge=1, le=2000)
     # Floor between two sends by the SAME account across every chat it serves, enforced by

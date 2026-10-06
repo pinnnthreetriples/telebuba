@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from sqlalchemy import ColumnElement, and_, func, insert, or_, select, update
+from sqlalchemy import ColumnElement, and_, delete, func, insert, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine
@@ -111,6 +111,18 @@ async def settle_message(  # noqa: PLR0913 - one keyword per journal column
     if status == "sent":
         fields["sent_unix"] = int(time.time())
     await asyncio.to_thread(_settle_message, key, fields)
+
+
+def _release_message(key: JournalKey) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_MESSAGES).where(_key_filter(key), _MESSAGES.c.status == "pending")
+        )
+
+
+async def release_message(key: JournalKey) -> None:
+    """Give a reserved step back: the send was refused before it could reach the chat."""
+    await asyncio.to_thread(_release_message, key)
 
 
 def _unconfirm_pending(run_id: str) -> int:

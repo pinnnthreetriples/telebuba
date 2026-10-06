@@ -27,10 +27,8 @@ ApprovalWaitHours = Literal[1, 3, 6, 12, 24]
 JoinDelayMinutes = Literal[0, 30, 60, 120]
 
 ChatBroadcastRefusalCode = Literal[
-    "campaign_not_found",
     "campaign_running",
     "campaign_changed",
-    "campaign_not_resumable",
     "no_accounts",
     "no_free_accounts",
     "no_targets",
@@ -45,7 +43,6 @@ ChatBroadcastRefusalCode = Literal[
     "account_not_in_campaign",
     "media_invalid",
     "media_too_large",
-    "media_not_found",
 ]
 
 _MAX_NAME = 120
@@ -55,7 +52,7 @@ _MAX_BRIEF = 2000
 _MAX_TARGETS = 2000
 _MAX_TARGET_CHARS = 300
 _MAX_EXCLUDED = 5000
-_MAX_MESSAGES = 20
+_MAX_MESSAGES = 10
 _MAX_ACCOUNTS = 500
 # A media id is ``<sha256>.<ext>`` from the upload endpoint, nothing else.
 MEDIA_ID_PATTERN = r"^[0-9a-f]{64}\.(jpg|jpeg|png|webp)$"

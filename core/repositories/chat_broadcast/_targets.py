@@ -218,21 +218,24 @@ async def finish_rounds(campaign_id: str) -> None:
 
 
 def _settle_interrupted(campaign_id: str) -> None:
-    """After a crash, a chat caught mid-join or mid-captcha starts that step again."""
+    """After a crash, a chat caught mid-join or mid-captcha joins again.
+
+    An account already inside is answered at once; a dropped connection is due now.
+    """
     now = int(time.time())
     with _get_engine().begin() as connection:
         connection.execute(
             update(_TARGETS)
-            .where(_TARGETS.c.campaign_id == campaign_id, _TARGETS.c.state == "joining")
-            .values(state="queued", updated_unix=now),
+            .where(
+                _TARGETS.c.campaign_id == campaign_id,
+                _TARGETS.c.state.in_(("joining", "captcha")),
+            )
+            .values(state="queued", next_action_unix=None, updated_unix=now),
         )
         connection.execute(
             update(_TARGETS)
-            .where(
-                _TARGETS.c.campaign_id == campaign_id,
-                _TARGETS.c.state.in_(("captcha", "reconnecting")),
-            )
-            .values(state="waiting", next_action_unix=now, updated_unix=now),
+            .where(_TARGETS.c.campaign_id == campaign_id, _TARGETS.c.state == "reconnecting")
+            .values(next_action_unix=now, updated_unix=now),
         )
 
 

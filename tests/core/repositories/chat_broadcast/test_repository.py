@@ -182,17 +182,18 @@ async def test_round_transitions_requeue_finished_and_error_skipped_chats() -> N
 @pytest.mark.asyncio
 async def test_settle_interrupted_restarts_half_done_steps() -> None:
     campaign_id = await _campaign()
-    await repository.replace_targets(campaign_id, [_seed("j"), _seed("c"), _seed("w")])
+    await repository.replace_targets(campaign_id, [_seed("j"), _seed("c"), _seed("r"), _seed("w")])
     await repository.update_target(campaign_id, "j", state="joining")
     await repository.update_target(campaign_id, "c", state="captcha")
+    await repository.update_target(campaign_id, "r", state="reconnecting", next_action_unix=1)
     await repository.update_target(campaign_id, "w", state="writing", step_index=1)
 
     await repository.settle_interrupted(campaign_id)
 
     rows = {t.chat_key: t for t in await repository.list_targets(campaign_id)}
-    assert rows["j"].state == "queued"
-    assert rows["c"].state == "waiting"
-    assert rows["c"].next_action_unix is not None
+    assert (rows["j"].state, rows["c"].state) == ("queued", "queued")
+    assert rows["r"].state == "reconnecting"
+    assert (rows["r"].next_action_unix or 0) > 1
     assert (rows["w"].state, rows["w"].step_index) == ("writing", 1)
 
 

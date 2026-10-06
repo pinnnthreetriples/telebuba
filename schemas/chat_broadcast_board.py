@@ -39,6 +39,7 @@ ChatBroadcastSkipReason = Literal[
     "admin_only",
     "deleted",
     "banned",
+    "captcha",
     "manual",
     "error",
     "invalid_link",
