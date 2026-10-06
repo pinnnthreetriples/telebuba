@@ -363,7 +363,7 @@ export function BulkSchedulePanel({
               </span>
               <Input
                 type="number"
-                size="xs"
+                size="sm"
                 min={0}
                 max={MAX_SPREAD_MINUTES}
                 value={spread}

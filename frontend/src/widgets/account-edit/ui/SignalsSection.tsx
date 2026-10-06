@@ -78,7 +78,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
       right={
         <span className="tb-tip">
           <Button
-            size="xs"
+            size="sm"
             aria-describedby={tipId}
             onClick={runSpamCheck}
             loading={spamCheck === 'loading'}

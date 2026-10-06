@@ -322,7 +322,7 @@ function WarmingCard({
             <>
               <FeedbackMark result={result} />
               <Button
-                size="xs"
+                size="sm"
                 disabled={busy}
                 onClick={() => {
                   setStopOpen(true);
@@ -467,7 +467,7 @@ function WarmingCard({
               {visibleLines.length > 0 ? (
                 <div className="mb-2 flex justify-end">
                   <Button
-                    size="xs"
+                    size="sm"
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}

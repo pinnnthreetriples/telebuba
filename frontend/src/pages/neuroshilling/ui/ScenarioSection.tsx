@@ -399,7 +399,7 @@ export function ScenarioSection({
           <Button
             key={kind}
             variant="dashed"
-            size="xs"
+            size="sm"
             disabled={draft.steps.length >= MAX_STEPS}
             onClick={() => {
               addStep(kind);
@@ -468,7 +468,7 @@ export function ScenarioSection({
               <div className="flex items-center gap-2">
                 <span className={`size-node shrink-0 rounded-full ${roleTone(index).bg}`} />
                 <Input
-                  size="xs"
+                  size="sm"
                   className="min-w-0 flex-1"
                   value={role.name}
                   maxLength={60}
@@ -539,7 +539,7 @@ export function ScenarioSection({
               />
 
               <Input
-                size="xs"
+                size="sm"
                 value={role.description}
                 maxLength={1000}
                 placeholder={t('neuroshilling.scenario.roles.descriptionPlaceholder')}

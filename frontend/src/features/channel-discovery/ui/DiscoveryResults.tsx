@@ -516,7 +516,7 @@ export function DiscoveryResults({
               </span>
               <Button
                 variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={() => {
                   setDetailsOpen((open) => !open);
                 }}
@@ -590,7 +590,7 @@ export function DiscoveryResults({
             </span>
             <Button
               variant="ghost"
-              size="xs"
+              size="sm"
               onClick={() => {
                 setDetailsOpen((open) => !open);
               }}

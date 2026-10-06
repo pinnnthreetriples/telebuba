@@ -245,7 +245,7 @@ export function SchedulePhotosModal({
             </span>
             <Input
               type="number"
-              size="xs"
+              size="sm"
               min={1}
               max={MAX_STEP_MINUTES}
               value={stepText}

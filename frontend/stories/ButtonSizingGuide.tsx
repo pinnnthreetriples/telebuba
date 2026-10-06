@@ -1,8 +1,7 @@
 import { Button } from '../src/shared/ui';
 
 const SIZES = [
-  { size: 'xs', height: '28 px', label: 'Проверить', use: 'Короткое действие в плотной строке' },
-  { size: 'sm', height: '32 px', label: 'Добавить', use: 'Действие внутри карточки' },
+  { size: 'sm', height: '32 px', label: 'Добавить', use: 'Действие внутри карточки или строки' },
   { size: 'md', height: '36 px', label: 'Сохранить', use: 'Форма или подвал диалога' },
   { size: 'lg', height: '44 px', label: 'Начать прогрев', use: 'Крупная цель для касания' },
 ] as const;

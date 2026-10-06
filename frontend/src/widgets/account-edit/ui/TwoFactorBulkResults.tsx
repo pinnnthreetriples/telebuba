@@ -102,7 +102,7 @@ export function TwoFactorBulkResults({
         <span className="flex shrink-0 gap-2">
           {clipboard ? (
             <Button
-              size="xs"
+              size="sm"
               onClick={() => {
                 copy('all', allText);
               }}
@@ -112,7 +112,7 @@ export function TwoFactorBulkResults({
                 : t('accounts.addWizard.twofaCopyAll')}
             </Button>
           ) : null}
-          <Button size="xs" onClick={download}>
+          <Button size="sm" onClick={download}>
             {t('accounts.addWizard.twofaDownload')}
           </Button>
         </span>

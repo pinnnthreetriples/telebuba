@@ -168,7 +168,7 @@ function AccountComments({
         </div>
         {onOpenHistory ? (
           <Button
-            size="xs"
+            size="sm"
             onClick={onOpenHistory}
             className="text-action-primary hover:border-action-primary"
           >

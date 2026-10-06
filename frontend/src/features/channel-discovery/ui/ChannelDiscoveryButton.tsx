@@ -28,7 +28,7 @@ export function ChannelDiscoveryButton({ campaignId, campaignName }: Props) {
   return (
     <>
       <Button
-        size="xs"
+        size="sm"
         disabled={campaignId === null}
         onClick={() => {
           setOpen(true);

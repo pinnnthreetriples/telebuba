@@ -163,7 +163,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
             result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck}
           />
           <Button
-            size="xs"
+            size="sm"
             className="text-content-muted"
             onClick={onLogout}
             loading={logout.isPending}
@@ -175,7 +175,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <div className="mb-3 mt-4 flex items-center justify-between gap-2">
         <span className="type-small-medium">{t('accounts.edit.loginByCode')}</span>
         <Button
-          size="xs"
+          size="sm"
           onClick={onRequestCode}
           loading={requestCode.isPending}
           className="text-action-primary"

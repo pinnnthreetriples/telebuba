@@ -234,7 +234,7 @@ export function OverviewPatterns() {
               channelCheckStatus={channelChecks}
               discoverySlot={
                 <Button
-                  size="xs"
+                  size="sm"
                   onClick={() => setDiscoveryOpen(true)}
                   className="text-small text-content-muted hover:border-action-primary hover:text-action-primary"
                 >

@@ -169,6 +169,9 @@ test('neurocomment counters expose their values while rolling without moving the
   await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible();
   const tile = page.locator('.type-h1.tabular-nums').first().locator('..');
   await expect(tile.locator('.sr-only')).toHaveText('2');
+  // Сначала шрифт: если Inter подгрузится между двумя замерами, плитка вырастет на
+  // разницу метрик запасного шрифта, и тест примет это за сдвиг от прокрутки цифр.
+  await page.evaluate(() => document.fonts.ready);
   const before = await tile.boundingBox();
   await expect
     .poll(async () =>

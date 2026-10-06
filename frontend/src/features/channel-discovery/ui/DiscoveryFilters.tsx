@@ -162,7 +162,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
           <Row label={t(`${P}.subscribers`)} hint={t(`${P}.membersHint`)}>
             <div className="flex items-center gap-2">
               <Input
-                size="xs"
+                size="sm"
                 type="text"
                 inputMode="numeric"
                 className="w-number tabular-nums"
@@ -177,7 +177,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               />
               <span className="type-small">—</span>
               <Input
-                size="xs"
+                size="sm"
                 type="text"
                 inputMode="numeric"
                 className="w-number tabular-nums"
@@ -217,7 +217,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
           >
             <Input
               id={limitId}
-              size="xs"
+              size="sm"
               type="text"
               inputMode="numeric"
               className="w-number tabular-nums"

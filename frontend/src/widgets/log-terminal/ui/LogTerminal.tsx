@@ -117,7 +117,7 @@ export function LogTerminal({
             // filter you scrolled past just looks like an empty log.
             <Button
               variant="ghost"
-              size="xs"
+              size="sm"
               title={t('logTerminal.showAll')}
               onClick={() => {
                 setOnlyAccount(null);

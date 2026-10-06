@@ -579,7 +579,7 @@ export function BulkMessageModal({
                         <span>{t(`accounts.messages.${labelKey}`)}</span>
                         <Input
                           type="number"
-                          size="xs"
+                          size="sm"
                           min={0}
                           max={MAX_DELAY_SECONDS}
                           step={1}

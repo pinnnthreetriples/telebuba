@@ -202,7 +202,7 @@ export function CampaignsCard({
             <div className="flex shrink-0 items-center gap-2">
               {discoverySlot}
               <Button
-                size="xs"
+                size="sm"
                 disabled={campaignId === null}
                 loading={checkingChannels}
                 onClick={onCheckChannels}

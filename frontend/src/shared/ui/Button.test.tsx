@@ -63,13 +63,12 @@ test('радиус у всех ступеней один, и ступень ег
     <>
       <Button size="md">Первая</Button>
       <Button size="sm">Вторая</Button>
-      <Button size="xs">Третья</Button>
       <Button fullWidth>Четвёртая</Button>
       <Button size="lg">Пятая</Button>
     </>,
   );
 
-  for (const name of ['Первая', 'Вторая', 'Третья', 'Четвёртая', 'Пятая']) {
+  for (const name of ['Первая', 'Вторая', 'Четвёртая', 'Пятая']) {
     const classes = classesOf(name).split(' ');
     expect(classes).toContain('rounded-full');
     // Прежние формы названы поимённо: неверная форма обычно приходит не «какой-то другой»,
@@ -109,7 +108,7 @@ test('dashed is a fill that keeps whatever rung it is given', () => {
 test('every button carries the same disabled and focus treatment', () => {
   render(
     <>
-      <Button size="xs">Проверить</Button>
+      <Button size="sm">Проверить</Button>
       <Button variant="ghost">Ещё</Button>
       <Button fullWidth>Готово</Button>
       <Button variant="dashed">Добавить</Button>

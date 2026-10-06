@@ -49,7 +49,7 @@ function NumberRow({
       <span className="min-w-0 flex-1 text-body">{label}</span>
       <HelpHint text={hint} />
       <Input
-        size="xs"
+        size="sm"
         className="w-number tabular-nums"
         type="number"
         min={min}

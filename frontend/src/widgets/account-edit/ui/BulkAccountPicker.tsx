@@ -125,7 +125,7 @@ export function BulkAccountPicker({
             </button>
             {draft.length > 0 && (
               <Button
-                size="xs"
+                size="sm"
                 variant="ghost"
                 onClick={() => {
                   setDraft([]);

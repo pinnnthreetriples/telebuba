@@ -267,7 +267,7 @@ function fieldShape(size) {
       sets.controlHeight[size],
       sets.fieldPad[size],
       sets.controlText[size],
-      sets.shape[size === 'xs' ? 'inset' : 'field'],
+      sets.shape.field,
     ].join(' '),
   );
 }
@@ -301,7 +301,7 @@ function components() {
     });
   }
   list.push({ group: 'input', name: 'input', note: 'Поле ввода (md)', props: fieldShape('md') });
-  for (const size of ['sm', 'xs']) {
+  for (const size of ['sm']) {
     list.push({
       group: 'input',
       name: `input-${size}`,
@@ -520,7 +520,7 @@ ${spec.rounded
     .map((v) => `\`${v}\``)
     .join(
       ', ',
-    )}. \`primary\` — одно главное действие экрана, остальное — \`secondary\`. \`danger\` — тонированная, а не красная: красная у неё надпись. Размеры \`lg\` (цель касания), \`md\` (подвал диалога), \`sm\` (в карточке), \`xs\` (в строке таблицы). Высоты общие с полями: \`Button size="sm"\` и \`Input size="sm"\` одинаковы.
+    )}. \`primary\` — одно главное действие экрана, остальное — \`secondary\`. \`danger\` — тонированная, а не красная: красная у неё надпись. Размеры \`lg\` (цель касания), \`md\` (подвал диалога), \`sm\` (в карточке и в строке таблицы). Высоты общие с полями: \`Button size="sm"\` и \`Input size="sm"\` одинаковы.
 - **Поле.** Белое, рамка \`line\`, скругление \`md\`. Фокус — свечение \`shadow-focus\` плюс синяя рамка; ошибка — рамка \`danger\` и сообщение рядом (\`FieldError\`), не только цвет.
 - **Поверхности.** ${Object.keys(sets.surface)
     .map((s) => `\`${s}\``)

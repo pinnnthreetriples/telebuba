@@ -264,7 +264,7 @@ export function ActionTuningCard() {
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button
-          size="xs"
+          size="sm"
           onClick={() => {
             setAllActions(true);
           }}
@@ -272,7 +272,7 @@ export function ActionTuningCard() {
           {t('warming.tune.enableAll')}
         </Button>
         <Button
-          size="xs"
+          size="sm"
           onClick={() => {
             setAllActions(false);
           }}

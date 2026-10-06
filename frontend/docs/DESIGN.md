@@ -126,7 +126,6 @@ shadows:
   seg: "0 1px 2px 0 rgb(0 0 0 / 0.05)"
   pill: "0 1px 2px rgb(0 102 255 / 0.3)"
 height:
-  compact: 28px
   field: 32px
   control: 36px
   touch: 44px
@@ -237,12 +236,6 @@ components:
     fontSize: "{fontSize.body}"
     rounded: "{rounded.full}"
     fontWeight: 500
-  button-xs:
-    height: "{height.compact}"
-    paddingX: "{spacing.3}"
-    fontSize: "{fontSize.body}"
-    rounded: "{rounded.full}"
-    fontWeight: 500
   input:
     borderWidth: 1px
     backgroundColor: "{colors.surface-card}"
@@ -259,14 +252,6 @@ components:
     paddingX: "{spacing.3}"
     fontSize: "{fontSize.body}"
     rounded: "{rounded.md}"
-  input-xs:
-    borderWidth: 1px
-    backgroundColor: "{colors.surface-card}"
-    borderColor: "{colors.line}"
-    height: "{height.compact}"
-    paddingX: "{spacing.3}"
-    fontSize: "{fontSize.body}"
-    rounded: "{rounded.sm}"
   input-flat:
     borderWidth: 1px
     backgroundColor: "{colors.canvas}"
@@ -389,7 +374,7 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 
 Компонент собирается из рецепта (`src/shared/design-system/recipes/`), и рецепт — единственное место, где решены его высота, поля, форма, фокус и disabled. Значения выше в `components` прочитаны из самих рецептов.
 
-- **Кнопка.** Высота 36px (`md`), пилюля, надпись 14px / 500. Варианты: `primary`, `neutral`, `secondary`, `danger`, `ghost`, `dashed`, `dashedMuted`. `primary` — одно главное действие экрана, остальное — `secondary`. `danger` — тонированная, а не красная: красная у неё надпись. Размеры `lg` (цель касания), `md` (подвал диалога), `sm` (в карточке), `xs` (в строке таблицы). Высоты общие с полями: `Button size="sm"` и `Input size="sm"` одинаковы.
+- **Кнопка.** Высота 36px (`md`), пилюля, надпись 14px / 500. Варианты: `primary`, `neutral`, `secondary`, `danger`, `ghost`, `dashed`, `dashedMuted`. `primary` — одно главное действие экрана, остальное — `secondary`. `danger` — тонированная, а не красная: красная у неё надпись. Размеры `lg` (цель касания), `md` (подвал диалога), `sm` (в карточке и в строке таблицы). Высоты общие с полями: `Button size="sm"` и `Input size="sm"` одинаковы.
 - **Поле.** Белое, рамка `line`, скругление `md`. Фокус — свечение `shadow-focus` плюс синяя рамка; ошибка — рамка `danger` и сообщение рядом (`FieldError`), не только цвет.
 - **Поверхности.** `card`, `dialog`, `panel`, `inset`, `inverse` — `surface(variant)`. Карточка: `rounded-lg`, рамка `line`, поля 24px.
 - **Плашка.** Заливка тона и его `-deep` надпись, пилюля, без рамки.

@@ -228,7 +228,7 @@ export function ContactLookupPanel({
                     <span>{t('accounts.messages.delayFrom')}</span>
                     <Input
                       type="number"
-                      size="xs"
+                      size="sm"
                       aria-label={t('accounts.messages.minDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}
@@ -244,7 +244,7 @@ export function ContactLookupPanel({
                     <span>{t('accounts.messages.delayTo')}</span>
                     <Input
                       type="number"
-                      size="xs"
+                      size="sm"
                       aria-label={t('accounts.messages.maxDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}

@@ -66,7 +66,7 @@ function NumberInput({
   const field = useNumberField(value, (raw) => clampInt(raw, min, max), onCommit);
   return (
     <Input
-      size="xs"
+      size="sm"
       className="w-number tabular-nums"
       type="number"
       min={min}
@@ -421,7 +421,7 @@ export function CampaignSetupSection({
           })}
         </span>
         <Button
-          size="xs"
+          size="sm"
           onClick={() => {
             setLimitsOpen(true);
           }}

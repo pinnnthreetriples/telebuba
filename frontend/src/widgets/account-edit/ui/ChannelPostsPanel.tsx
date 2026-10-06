@@ -302,7 +302,7 @@ export function ChannelPostsPanel({
         <Notice tone="danger" className="mt-3 flex items-center justify-between gap-3">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <Button
-            size="xs"
+            size="sm"
             variant="danger"
             className="bg-surface-card"
             onClick={() => {
@@ -382,7 +382,7 @@ export function ChannelPostsPanel({
                       {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
                     </span>
                     <Button
-                      size="xs"
+                      size="sm"
                       onClick={() => {
                         setEditingId(null);
                       }}
@@ -392,7 +392,7 @@ export function ChannelPostsPanel({
                     </Button>
                     <Button
                       variant="primary"
-                      size="xs"
+                      size="sm"
                       onClick={saveEdit}
                       disabled={editPost.isPending || !canSaveEdit}
                     >

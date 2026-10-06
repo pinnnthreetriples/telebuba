@@ -243,7 +243,7 @@ export function TwoFactorEmail({
               {t('accounts.edit.twofaEmailConfirm')}
             </Button>
             <Button
-              size="xs"
+              size="sm"
               className="text-content-muted"
               onClick={onResend}
               loading={resendEmail.isPending}

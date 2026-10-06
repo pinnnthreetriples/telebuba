@@ -233,7 +233,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
         </span>
         {account.proxy_id ? (
           <Button
-            size="xs"
+            size="sm"
             className="text-content-muted"
             onClick={onUnassign}
             disabled={proxyBusy}

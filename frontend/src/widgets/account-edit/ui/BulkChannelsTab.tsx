@@ -231,7 +231,7 @@ export function BulkChannelsTab({
               }}
             >
               {(open) => (
-                <Button size="xs" variant="dashedMuted" onClick={open}>
+                <Button size="sm" variant="dashedMuted" onClick={open}>
                   <Icon name="plus" size={16} />
                   {t('accounts.channel.attach')}
                 </Button>
