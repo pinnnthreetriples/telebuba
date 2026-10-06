@@ -76,6 +76,7 @@ function readConfig() {
     transitionDuration: entries(tokens.duration),
     transitionTimingFunction: entries(tokens.easing),
     scale: entries(tokens.pressScale),
+    spring: tokens.spring,
     zIndex: entries(tokens.layer),
   };
 }
@@ -326,6 +327,12 @@ const RUNG = {
   },
   letterSpacing: {
     code: 'Разовый код в поле: SMS при входе и письмо второго фактора',
+  },
+  spring: {
+    layout:
+      'Пружина <code>motion</code>: коробка меняет форму или место — плашка корзины, плитки времени, кружок даты',
+    swap: 'Пружина <code>motion</code>: вещь сменяется другой на месте — крышка корзины, глиф «изменить» ↔ «сохранить»',
+    press: 'Пружина <code>motion</code>: сжатие до <code>scale-press</code> и возврат',
   },
   transitionDuration: {
     state: { text: 'Смена состояния: цвет, граница, фон', curve: '' },
@@ -628,6 +635,14 @@ function renderMotionScale(config, indent) {
         : note.text;
       return specRow(indent, `<code>${e.name}</code> · ${e.value}`, text);
     }),
+    // Пружины `motion`: у них нет длительности, только жёсткость, затухание и масса.
+    ...Object.entries(config.spring).map(([name, s]) =>
+      specRow(
+        indent,
+        `<code>spring.${name}</code> · ${String(s.stiffness)}/${String(s.damping)}/${String(s.mass)}`,
+        RUNG.spring[name] ?? '',
+      ),
+    ),
   ].join('\n');
 }
 

@@ -136,7 +136,13 @@ body{margin:0;background:var(--canvas);color:var(--content-primary);font-family:
 function blockSection(block) {
   const home = definition(block.name);
   const used = usages(block.name, home);
-  if (used.total === 0) throw new Error(`blocks: ${block.name} нигде не стоит`);
+  // Блок библиотеки (`library: true` в `catalog/blocks/library.tsx`) законно стоит нигде:
+  // он пришёл раньше своего экрана. Пометка не может пережить первое место вызова — иначе
+  // она станет второй, ручной правдой о том, где блок стоит.
+  if (block.library && used.total > 0) {
+    throw new Error(`blocks: ${block.name} уже стоит в src — снимите пометку library`);
+  }
+  if (!block.library && used.total === 0) throw new Error(`blocks: ${block.name} нигде не стоит`);
   const variants = block.variants
     .map(
       (v) =>
@@ -149,7 +155,7 @@ function blockSection(block) {
 <div class="bk-grid">
 ${variants}
 </div>
-<div class="bk-used">${places(used.total)}${where}</div>
+<div class="bk-used">${block.library ? 'Библиотека · пока не стоит ни на одном экране' : places(used.total) + where}</div>
 </section>`;
 }
 

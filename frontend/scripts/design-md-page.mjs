@@ -261,10 +261,14 @@ function motionSection(spec) {
     (e) =>
       `<div class="blk motion"><div class="curve"><svg viewBox="-6 -40 112 180" aria-hidden="true"><path class="axis" d="M0,100 H100 M0,100 V0"/><path class="bez" d="${curvePath(e.value)}"/></svg><span class="track"><span class="ball" style="animation-timing-function:${esc(e.value)}"></span></span></div>${valueRow({ name: e.name, value: e.value, title: e.value })}</div>`,
   );
+  // Пружины `motion` длительности не имеют: строка — три числа и роль.
+  const springs = spec.spring.map(
+    (p) => `<div class="blk">${valueRow({ name: p.name, value: p.value, title: p.note })}</div>`,
+  );
   return section(
     'motion',
     'Движение',
-    `<h3 class="sub">Длительность</h3><div class="grid g4">${durations.join('\n')}</div><h3 class="sub">Кривые</h3><div class="grid g4">${easings.join('\n')}</div>`,
+    `<h3 class="sub">Длительность</h3><div class="grid g4">${durations.join('\n')}</div><h3 class="sub">Кривые</h3><div class="grid g4">${easings.join('\n')}</div><h3 class="sub">Пружины motion</h3><div class="grid g4">${springs.join('\n')}</div>`,
   );
 }
 

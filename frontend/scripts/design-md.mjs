@@ -221,6 +221,20 @@ const EASING_NOTE = {
   breathe: 'Уходит и возвращается',
 };
 
+// Пружины `motion` — три компонента из Devigner UI двигаются ими, а не переходами CSS.
+// Значение — три числа пружины одной строкой; длительности у пружины нет.
+const SPRING_NOTE = {
+  layout: 'Коробка меняет форму или место',
+  swap: 'Вещь сменяется другой на месте, с инерцией',
+  press: 'Сжатие под пальцем и возврат',
+};
+const springsOf = (springs) =>
+  Object.entries(springs).map(([name, s]) => ({
+    name,
+    value: `stiffness ${String(s.stiffness)} · damping ${String(s.damping)} · mass ${String(s.mass)}`,
+    note: SPRING_NOTE[name] ?? '',
+  }));
+
 const scaleOf = (scale, notes, skip = []) =>
   Object.entries(scale)
     .filter(([name]) => !skip.includes(name))
@@ -381,6 +395,7 @@ function buildSpec() {
     height: scaleOf(tokens.height, {}).filter((h) => usedHeights.has(h.name)),
     duration: scaleOf(tokens.duration, DURATION_NOTE, ['DEFAULT']),
     easing: scaleOf(tokens.easing, EASING_NOTE, ['DEFAULT']),
+    spring: springsOf(tokens.spring),
     breakpoint: scaleOf(tokens.breakpoint, {}),
     pressScale: tokens.pressScale.press,
     components: comps,
@@ -429,6 +444,7 @@ function renderFrontmatter(spec) {
   flat('height', spec.height);
   flat('duration', spec.duration);
   flat('easing', spec.easing);
+  flat('spring', spec.spring);
   flat(
     'breakpoints',
     spec.breakpoint.map((b) => ({ ...b, value: `${b.value}px` })),
@@ -500,6 +516,8 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 ## Движение
 
 Движение объясняет перемену и никогда не украшает. Наведение и смена краски — \`state\` (${px(spec.duration, 'state')}), появление — \`enter\` (${px(spec.duration, 'enter')}), раскрытие панели — \`reveal\` (${px(spec.duration, 'reveal')}). Нажатие сжимает контрол до \`scale(${spec.pressScale})\`. \`prefers-reduced-motion\` отключает сжатие и петли.
+
+Компоненты на \`motion\` (DeleteButton, InlineTimeEdit, DateRangePicker) берут ту же ось числами: твины — это рунги выше на кривой \`out\`, а своё у них только три пружины — ${spec.spring.map((s) => `\`${s.name}\` (${s.note.toLowerCase()})`).join(', ')}.
 
 ## Формы
 

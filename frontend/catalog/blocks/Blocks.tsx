@@ -23,11 +23,14 @@ import {
 } from '@/shared/ui';
 
 import { InCard, InDialog } from './frames';
+import { LIBRARY_BLOCKS } from './library';
 
 export type BlockDemo = {
   id: string;
   // Имя компонента: по нему генератор находит файл и все места, где блок стоит.
   name: string;
+  // Блок библиотеки: в `shared/ui` есть, на экранах ещё нет (`library.tsx`).
+  library?: true;
   variants: { label: string; node: ReactNode }[];
 };
 
@@ -236,3 +239,6 @@ export const BLOCKS: BlockDemo[] = [
     ],
   },
 ];
+
+// Библиотека — в конце и отдельным файлом: у этих блоков ещё нет экрана (см. `library.tsx`).
+BLOCKS.push(...LIBRARY_BLOCKS);

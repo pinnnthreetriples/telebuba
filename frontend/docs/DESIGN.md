@@ -143,6 +143,10 @@ easing:
   spring: "cubic-bezier(.34,1.45,.6,1)"
   linear: "linear"
   breathe: "cubic-bezier(.4,0,.6,1)"
+spring:
+  layout: "stiffness 360 · damping 32 · mass 0.6"
+  swap: "stiffness 460 · damping 30 · mass 0.55"
+  press: "stiffness 500 · damping 30 · mass 0.6"
 breakpoints:
   table: 880px
   wide: 1024px
@@ -360,6 +364,8 @@ Inter набирает весь интерфейс, JetBrains Mono — код, �
 ## Движение
 
 Движение объясняет перемену и никогда не украшает. Наведение и смена краски — `state` (150ms), появление — `enter` (250ms), раскрытие панели — `reveal` (420ms). Нажатие сжимает контрол до `scale(0.96)`. `prefers-reduced-motion` отключает сжатие и петли.
+
+Компоненты на `motion` (DeleteButton, InlineTimeEdit, DateRangePicker) берут ту же ось числами: твины — это рунги выше на кривой `out`, а своё у них только три пружины — `layout` (коробка меняет форму или место), `swap` (вещь сменяется другой на месте, с инерцией), `press` (сжатие под пальцем и возврат).
 
 ## Формы
 

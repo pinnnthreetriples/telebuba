@@ -10,6 +10,7 @@ export function renderBlocks() {
   return BLOCKS.map((block) => ({
     id: block.id,
     name: block.name,
+    library: block.library === true,
     variants: block.variants.map((variant) => ({
       label: variant.label,
       html: renderToStaticMarkup(variant.node),

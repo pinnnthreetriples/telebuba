@@ -830,6 +830,9 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td><code>roll</code> · 900ms</td><td>Одометр докручивается — <code>out</code>, <code>cubic-bezier(.16,1,.3,1)</code>. Плашка с действиями едет на <code>reveal</code></td></tr>
         <tr><td><code>pulse</code> · 1200ms</td><td></td></tr>
         <tr><td><code>stagger</code> · 90ms</td><td></td></tr>
+        <tr><td><code>spring.layout</code> · 360/32/0.6</td><td>Пружина <code>motion</code>: коробка меняет форму или место — плашка корзины, плитки времени, кружок даты</td></tr>
+        <tr><td><code>spring.swap</code> · 460/30/0.55</td><td>Пружина <code>motion</code>: вещь сменяется другой на месте — крышка корзины, глиф «изменить» ↔ «сохранить»</td></tr>
+        <tr><td><code>spring.press</code> · 500/30/0.6</td><td>Пружина <code>motion</code>: сжатие до <code>scale-press</code> и возврат</td></tr>
         <!-- /ds:gen motion-scale -->
         <tr><td>Цикл</td><td>Процесс жив: <code>pulsedot</code> у точки, <code>textpulse</code> у подписи, спиннер у запроса, <code>dotspin</code> у набора. Один пульс на всю систему — раньше их было два, с разным темпом и масштабом</td></tr>
         <tr><td>Уважение к настройке</td><td><code>prefers-reduced-motion</code> отключает всё декоративное; переходы, от которых зависит логика, становятся мгновенными</td></tr>
