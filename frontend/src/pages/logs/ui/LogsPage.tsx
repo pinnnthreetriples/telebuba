@@ -10,9 +10,10 @@ import {
   Button,
   Card,
   DataTable,
+  type DataTableColumnMeta,
+  EmptyState,
   SegmentedControl,
   Select,
-  type DataTableColumnMeta,
 } from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
@@ -212,8 +213,8 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-4 py-16 text-center type-body text-content-subtle">
-          {t('logs.empty')}
+        <Card className="px-4">
+          <EmptyState size="xl">{t('logs.empty')}</EmptyState>
         </Card>
       ) : (
         <>

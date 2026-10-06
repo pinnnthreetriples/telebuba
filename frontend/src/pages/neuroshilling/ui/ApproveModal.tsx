@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
-import { Badge, Button, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
+import { Badge, Button, EmptyState, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
 import { useNumberField } from './useNumberField';
 
@@ -152,9 +152,7 @@ export function ApproveModal({
         ) : null}
 
         {steps.length === 0 ? (
-          <div className="py-6 text-center type-body text-content-subtle">
-            {t('neuroshilling.preview.none')}
-          </div>
+          <EmptyState size="md">{t('neuroshilling.preview.none')}</EmptyState>
         ) : (
           <div className="flex flex-col">
             {steps.map((step, index) => {

@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileMusicView } from '@/shared/api';
-import { Icon, IconButton } from '@/shared/ui';
+import { EmptyState, Icon, IconButton } from '@/shared/ui';
 
 import { DashedEmptyAction } from './_shared';
 
@@ -27,9 +27,9 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-md border border-dashed border-line bg-surface-card px-4 py-6 text-center type-body text-content-subtle">
+      <EmptyState boxed size="md">
         {t('accounts.profile.musicUnsupported')}
-      </div>
+      </EmptyState>
     );
   }
 

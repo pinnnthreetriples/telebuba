@@ -11,9 +11,10 @@ import {
   Button,
   Card,
   DataTable,
+  type DataTableColumnMeta,
+  EmptyState,
   Modal,
   ModalHeader,
-  type DataTableColumnMeta,
 } from '@/shared/ui';
 
 const PAGE_SIZE = 50;
@@ -102,17 +103,13 @@ export function CommentHistoryModal({
 
       <div className="px-6 pb-4 pt-3">
         {isPending ? (
-          <p className="py-16 text-center type-body text-content-subtle">
-            {t('neurocomment.history.loading')}
-          </p>
+          <EmptyState size="xl">{t('neurocomment.history.loading')}</EmptyState>
         ) : isError ? (
-          <p role="alert" className="py-16 text-center type-body text-danger">
+          <EmptyState role="alert" size="xl" tone="danger">
             {t('neurocomment.history.error')}
-          </p>
+          </EmptyState>
         ) : items.length === 0 ? (
-          <div className="py-16 text-center type-body text-content-subtle">
-            {t('neurocomment.history.empty')}
-          </div>
+          <EmptyState size="xl">{t('neurocomment.history.empty')}</EmptyState>
         ) : (
           <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">

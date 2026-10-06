@@ -4,7 +4,16 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, AccountAvatar, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Button, CloseButton, Icon, Input, Modal, ModalFooter, Spinner } from '@/shared/ui';
+import {
+  Button,
+  CloseButton,
+  EmptyState,
+  Icon,
+  Input,
+  Modal,
+  ModalFooter,
+  Spinner,
+} from '@/shared/ui';
 
 // Everything the search box matches on, lowercased once per row rather than per
 // keystroke × row. `label` doubles as the row's rendered name.
@@ -156,9 +165,9 @@ export function BulkAccountPicker({
               </Button>
             </div>
           ) : shown.length === 0 ? (
-            <div className="px-6 py-16 text-center type-body text-content-subtle">
+            <EmptyState size="xl" className="px-6">
               {t('accounts.bulk.pickEmpty')}
-            </div>
+            </EmptyState>
           ) : (
             shown.map(({ account, label }) => {
               const on = draft.includes(account.account_id);

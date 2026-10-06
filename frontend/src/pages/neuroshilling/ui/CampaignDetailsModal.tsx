@@ -14,6 +14,7 @@ import {
   Button,
   DataTable,
   type DataTableColumnMeta,
+  EmptyState,
   Modal,
   ModalFooter,
   ModalHeader,
@@ -156,9 +157,7 @@ export function CampaignDetailsModal({
         {rows.length === 0 ? (
           // Пар «аккаунт × цель» нет, пока нет хотя бы одного из двух, и это не пустая
           // таблица, а незаконченная настройка — поэтому сюда же и кнопка.
-          <div className="py-6 text-center type-body text-content-subtle">
-            {t('neuroshilling.details.none')}
-          </div>
+          <EmptyState size="md">{t('neuroshilling.details.none')}</EmptyState>
         ) : (
           <DataTable data={rows} columns={columns} />
         )}

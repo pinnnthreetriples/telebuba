@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
-import { Button, Modal, ModalHeader, toastError } from '@/shared/ui';
+import { Button, EmptyState, Modal, ModalHeader, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -234,11 +234,11 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-3 py-8 text-center type-body text-content-subtle">
+          <EmptyState className="px-3">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}
-          </div>
+          </EmptyState>
         )}
       </div>
 

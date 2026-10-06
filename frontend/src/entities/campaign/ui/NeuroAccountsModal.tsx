@@ -7,6 +7,7 @@ import { SURFACE } from '@/shared/design-system';
 import {
   Button,
   ConfirmModal,
+  EmptyState,
   FeedbackMark,
   Icon,
   IconButton,
@@ -378,9 +379,7 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-3 py-8 text-center type-body text-content-subtle">
-            {t('neurocomment.modal.neuroAccounts.empty')}
-          </div>
+          <EmptyState className="px-3">{t('neurocomment.modal.neuroAccounts.empty')}</EmptyState>
         )}
       </div>
 

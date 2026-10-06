@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { assignProxyMutation, proxyPoolQueryOptions, proxyTypeLabel } from '@/entities/proxy';
-import { Button } from '@/shared/ui';
+import { Button, EmptyState } from '@/shared/ui';
 
 // Step 2 "pick from pool" of the add-account wizard, for MANY accounts: each
 // click hands a proxy up to its free slots' worth of the accounts still without
@@ -100,9 +100,9 @@ export function ProxyPoolStep({
       )}
       <div className="flex flex-col gap-2">
         {freeProxies.length === 0 ? (
-          <div className="rounded-md border border-dashed border-line bg-surface-card px-4 py-6 text-center type-body text-content-subtle">
+          <EmptyState boxed size="md">
             {t('accounts.addWizard.poolEmpty')}
-          </div>
+          </EmptyState>
         ) : (
           freeProxies.map((proxy) => (
             <button

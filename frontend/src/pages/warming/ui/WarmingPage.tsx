@@ -23,6 +23,7 @@ import {
   ChipAddButton,
   CollapsibleCard,
   ConfirmModal,
+  EmptyState,
   FeedbackMark,
   Icon,
   IconButton,
@@ -284,9 +285,7 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-col gap-2">
               {idle.length === 0 ? (
-                <div className="py-8 text-center type-body text-content-subtle">
-                  {t('warming.ready.empty')}
-                </div>
+                <EmptyState>{t('warming.ready.empty')}</EmptyState>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;

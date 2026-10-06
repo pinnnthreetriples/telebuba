@@ -8,6 +8,7 @@ export { SelectableCard } from './SelectableCard';
 export { CollapsibleCard } from './CollapsibleCard';
 export { ConfirmModal } from './ConfirmModal';
 export { DataTable } from './DataTable';
+export { EmptyState } from './EmptyState';
 export type { DataTableColumnMeta } from './DataTable';
 export { FeedbackMark } from './FeedbackMark';
 export { FieldError, FormField } from './FormField';

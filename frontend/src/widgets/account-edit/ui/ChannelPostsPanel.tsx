@@ -12,6 +12,7 @@ import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
 import {
   Button,
   ConfirmModal,
+  EmptyState,
   Icon,
   IconButton,
   Notice,
@@ -314,9 +315,9 @@ export function ChannelPostsPanel({
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-6 text-center type-body text-content-subtle">
+        <EmptyState boxed size="md" className="mt-3">
           {t('accounts.channel.postsEmpty')}
-        </div>
+        </EmptyState>
       )}
       {items.length > 0 && (
         <div className="mt-3 flex flex-col gap-2">
