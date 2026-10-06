@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-30
+last_updated: 2026-10-06
 edges:
   - target: context/conventions.md
     condition: shared repository conventions
@@ -37,7 +37,7 @@ Dependency versions, overrides, advisories and generated-client quirks are inten
 
 Storybook documents `shared/ui` and product patterns. CI builds it and runs a desktop/mobile Patterns smoke; its screenshot is a review artifact. Vite catalog Playwright snapshots remain the pixel gate. Page-specific compositions are not exhaustive.
 
-Account-editor empty actions share a visual shell; profile tabs signal hover lightly and selection strongly, while fixed dialog height prevents jumps. Keep page behavior in its owning slice. Shared bars share geometry while progress, capacity, and scores retain distinct meanings.
+Account-editor empty actions share a visual shell; profile tabs signal hover lightly and selection strongly, while fixed dialog height prevents jumps. Keep page behavior in its owning slice. Repeated blocks are one shared/ui component (docs/blocks.html); bars are progressbars only if labelled.
 
 Route loaders recheck stale first-screen data on return and wait up to 1.5s before swapping pages; the active rail tracks the displayed route. Pages still own errors and live refresh.
 
