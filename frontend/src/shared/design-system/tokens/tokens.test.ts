@@ -227,3 +227,21 @@ test('ни один класс не обходит роль ссылкой на 
 
   expect(offenders).toEqual([]);
 });
+
+// Движение в JavaScript — второй язык той же оси, а не вторая ось. Тихо разойтись они
+// могут в двух местах: кривая `out` записана и строкой для CSS, и массивом для `motion`,
+// а твин мог бы обзавестись собственной длительностью вместо рунга.
+test('твины и кривая motion — это рунги CSS, сказанные числами', async () => {
+  const { curve, duration, easing, tween } = await import('./motion');
+  const css = (rung: string) => Number.parseFloat(rung) / 1000;
+
+  const asCss = `cubic-bezier(${curve.out.map((n) => String(n).replace(/^0\./, '.')).join(',')})`;
+  expect(asCss).toBe(easing.out);
+
+  expect(tween.follow.duration).toBe(css(duration.state));
+  expect(tween.fade.duration).toBe(css(duration.enter));
+  expect(tween.roll.duration).toBe(css(duration.swap));
+  expect(tween.draw.duration).toBe(css(duration.swap));
+  expect(tween.handoff).toBe(css(duration.stagger));
+  for (const t of [tween.follow, tween.fade, tween.roll]) expect(t.ease).toBe(curve.out);
+});
