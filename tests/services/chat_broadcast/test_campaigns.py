@@ -144,3 +144,15 @@ def test_render_picks_variants_and_fills_variables() -> None:
     assert render("{group_username}!", title=None, username=None, rng=rng) == "!"
     assert has_variants("{a|b}")
     assert not has_variants("{a}")
+
+
+@pytest.mark.asyncio
+async def test_a_caption_longer_than_telegram_allows_is_refused() -> None:
+    campaign_id = await seed()
+    photo = {"media_id": "a" * 64 + ".png", "name": "a.png"}
+
+    with pytest.raises(ChatBroadcastInvalidError, match="caption_too_long"):
+        await service.save_settings(
+            campaign_id,
+            await _update(campaign_id, messages=[{"text": "x" * 1025, "photo": photo}]),
+        )

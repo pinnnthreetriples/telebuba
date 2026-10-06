@@ -974,7 +974,8 @@
       "target_state_changed": "The chat has already moved on — the board is refreshed, try again.",
       "account_not_in_campaign": "This account is not in the broadcast or has dropped out of it.",
       "media_invalid": "That is not a photo: JPG, PNG and WEBP work.",
-      "media_too_large": "The photo is too large."
+      "media_too_large": "The photo is too large.",
+      "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",

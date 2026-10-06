@@ -253,7 +253,11 @@ async def _settle(
         )
         await _moves.halt_account(ctx, account_id, halt_reason(result))
         return "halted"
-    await repository.settle_message(key, "failed", text=text, error_type=result.error_type)
+    if verdict == "failed" and not ctx.settings.skip_errors:
+        # The run stops for the operator to look; Continue must send this step again.
+        await repository.release_message(key)
+    else:
+        await repository.settle_message(key, "failed", text=text, error_type=result.error_type)
     if verdict == "admin_only" or verdict == "banned":  # noqa: PLR1714 - narrows for ty
         await _moves.skip(ctx, target, verdict, account_id)
         return "acted"

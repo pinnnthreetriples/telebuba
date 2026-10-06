@@ -265,3 +265,17 @@ async def test_an_account_at_its_hourly_limit_hands_unjoined_chats_to_others(
         "a1",
     )
     assert ("a1", "chat3") not in telegram.joins
+
+
+@pytest.mark.asyncio
+async def test_with_skip_errors_off_the_failed_step_is_sent_on_continue(
+    telegram: FakeTelegram,
+) -> None:
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha",), skip_errors=False)
+    telegram.send_answers["a1"] = [refused(error_type="RPCError")]
+    await run_to_end(campaign_id)
+
+    await run_to_end(campaign_id)
+
+    assert telegram.texts()[0] in {"Hello a", "Hello b"}
+    assert telegram.texts()[1:] == ["Second"]

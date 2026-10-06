@@ -97,10 +97,16 @@ async def _launchable_roster(record: CampaignRecord) -> list[str]:
 
 async def _publish(record: CampaignRecord, run_id: str, *, resume: bool) -> None:
     campaign_id = record.campaign_id
+    now = _seams.now()
     fields: dict[str, object] = {"last_error": None, "finished_unix": None}
     if not resume:
-        fields |= {"round": 0, "rest_until_unix": None, "started_unix": _seams.now()}
-        fields |= {"resumed_unix": None}
+        fields |= {"round": 0, "rest_until_unix": None, "started_unix": now, "resumed_unix": None}
+    else:
+        # A chat Stop caught mid-join or mid-captcha joins again, and the time budget
+        # does not count the hours the campaign stood stopped.
+        await repository.settle_interrupted(campaign_id)
+        if record.started_unix is not None and record.finished_unix is not None:
+            fields["started_unix"] = record.started_unix + max(0, now - record.finished_unix)
     try:
         generation = _state.begin_run(campaign_id, run_id)
         changed = await repository.set_status(

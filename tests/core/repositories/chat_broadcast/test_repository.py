@@ -149,13 +149,15 @@ async def test_merge_appends_new_chats_and_skips_removed_ones() -> None:
     await repository.replace_targets(campaign_id, [_seed("x"), _seed("y"), _seed("z")])
     await repository.update_target(campaign_id, "z", state="done")
 
-    await repository.merge_targets(campaign_id, [_seed("x"), _seed("w")])
+    await repository.merge_targets(
+        campaign_id, [_seed("x"), _seed("w")], round_number=2, removed={"y", "z"}
+    )
 
     rows = {t.chat_key: t for t in await repository.list_targets(campaign_id)}
     assert [t.chat_key for t in await repository.list_targets(campaign_id)] == ["x", "y", "z", "w"]
     assert (rows["y"].state, rows["y"].skip_reason) == ("skipped", "removed")
     assert rows["z"].state == "done"
-    assert rows["w"].state == "queued"
+    assert (rows["w"].state, rows["w"].round) == ("queued", 2)
 
 
 @pytest.mark.asyncio

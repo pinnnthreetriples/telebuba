@@ -33,6 +33,7 @@ from services.chat_broadcast.links import (
 
 if TYPE_CHECKING:
     from schemas.chat_broadcast import ChatBroadcastResolveRequest, ChatBroadcastSettings
+    from schemas.chat_broadcast_records import TargetRecord
 
 logger = logging.getLogger(__name__)
 _READ_ERRORS = (TelegramReadError, TelegramAccountNotFoundError)
@@ -191,3 +192,28 @@ async def _own_seeds(value: ChatBroadcastSettings, accounts: list[str]) -> list[
             )
         )
     return seeds
+
+
+def removed_keys(existing: list[TargetRecord], value: ChatBroadcastSettings) -> set[str]:
+    """Chats the operator took out of the settings since the run laid them out.
+
+    Decided from the settings alone, never from what Telegram answered this time: a
+    group whose account is out, or a folder that did not open, is still wanted.
+    """
+    limit = settings.chat_broadcast.max_target_length
+    parsed = [parse_target(raw, max_length=limit) for raw in split_targets(value.targets)]
+    listed = {item.key for item in parsed if item is not None and item.kind != "folder"}
+    folders = {item.token for item in parsed if item is not None and item.kind == "folder"}
+    excluded = set(value.own_excluded)
+    own = value.target_mode == "own"
+    removed: set[str] = set()
+    for target in existing:
+        if target.kind == "own":
+            gone = not own or str(target.peer_id) in excluded
+        elif target.kind == "folder":
+            gone = own or target.folder_slug not in folders
+        else:
+            gone = own or target.chat_key not in listed
+        if gone:
+            removed.add(target.chat_key)
+    return removed

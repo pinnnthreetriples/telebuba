@@ -35,6 +35,9 @@ export function SettingsDialog({
 }) {
   const { t } = useTranslation();
   const [baseline] = useState<Draft>(() => draftOf(read));
+  // The version the draft was built from: a refetch while the dialog is open must not
+  // move the optimistic lock under the operator's edits.
+  const [stamp] = useState(read.updated_at);
   const [draft, setDraft] = useState<Draft>(baseline);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [conflict, setConflict] = useState(false);
@@ -65,7 +68,7 @@ export function SettingsDialog({
     void save
       .mutateAsync({
         path: { campaign_id: read.campaign_id },
-        body: bodyOf(draft, read.updated_at),
+        body: bodyOf(draft, stamp),
       })
       .then((saved) => {
         onSaved(saved);

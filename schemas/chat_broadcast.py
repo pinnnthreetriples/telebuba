@@ -43,10 +43,13 @@ ChatBroadcastRefusalCode = Literal[
     "account_not_in_campaign",
     "media_invalid",
     "media_too_large",
+    "caption_too_long",
 ]
 
 _MAX_NAME = 120
 _MAX_TEXT = 4096
+# Telegram's ceiling on a media caption: the text of a message with a photo.
+MAX_CAPTION = 1024
 _MAX_POST_LINK = 200
 _MAX_BRIEF = 2000
 _MAX_TARGETS = 2000

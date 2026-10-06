@@ -42,8 +42,12 @@ async def run_campaign(campaign_id: str, run_id: str, *, refresh: bool) -> RunOu
         await repository.set_runtime(campaign_id, round=1)
         await _round_started(ctx, 1)
     elif refresh:
+        existing = await repository.list_targets(campaign_id)
         await repository.merge_targets(
-            campaign_id, await targets.materialize(campaign_id, ctx.settings, live)
+            campaign_id,
+            await targets.materialize(campaign_id, ctx.settings, live),
+            round_number=record.round,
+            removed=targets.removed_keys(existing, ctx.settings),
         )
     while True:
         record = await repository.fetch_campaign(campaign_id)

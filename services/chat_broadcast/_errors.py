@@ -26,6 +26,7 @@ TARGET_STATE_CHANGED: ChatBroadcastRefusalCode = "target_state_changed"
 ACCOUNT_NOT_IN_CAMPAIGN: ChatBroadcastRefusalCode = "account_not_in_campaign"
 MEDIA_INVALID: ChatBroadcastRefusalCode = "media_invalid"
 MEDIA_TOO_LARGE: ChatBroadcastRefusalCode = "media_too_large"
+CAPTION_TOO_LONG: ChatBroadcastRefusalCode = "caption_too_long"
 
 
 class ChatBroadcastRefusedError(Exception):

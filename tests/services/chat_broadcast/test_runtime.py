@@ -231,3 +231,38 @@ async def test_continue_after_a_stall_with_a_new_account(telegram: FakeTelegram)
 
     assert await _status(campaign_id) == "done"
     assert [s.account_id for s in telegram.sent] == ["a9"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telegram")
+async def test_continue_rejoins_a_chat_stop_caught_mid_join() -> None:
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha",), messages=("Hi",))
+    await run_to_end(campaign_id)
+    # As a Stop during the join leaves it: the run stopped, the chat still "joining".
+    await repository.set_status(campaign_id, "stopped", round=1, finished_unix=1)
+    await repository.update_target(campaign_id, "alpha", state="joining", member_account_id=None)
+    await repository.start_round(campaign_id, 1)
+
+    await run_to_end(campaign_id)
+
+    [target] = await repository.list_targets(campaign_id)
+    assert target.state == "done"
+
+
+@pytest.mark.asyncio
+async def test_continue_keeps_chats_whose_account_is_out_and_drops_removed_links(
+    telegram: FakeTelegram,
+) -> None:
+    from services.chat_broadcast.targets import removed_keys  # noqa: PLC0415
+
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
+    await run_to_end(campaign_id)
+    current = await service.load_settings(campaign_id)
+    assert current is not None
+    existing = await repository.list_targets(campaign_id)
+
+    kept = current.settings.model_copy(update={"targets": ["@alpha", "@gamma"]})
+    assert removed_keys(existing, kept) == {"beta"}
+    own = current.settings.model_copy(update={"target_mode": "own"})
+    assert removed_keys(existing, own) == {"alpha", "beta"}
+    assert telegram.sent

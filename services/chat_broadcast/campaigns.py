@@ -21,6 +21,7 @@ from core.repositories.neurocomment import (
 )
 from core.repositories.neuroshilling import list_running_campaign_account_names
 from schemas.chat_broadcast import (
+    MAX_CAPTION,
     ChatBroadcastCampaign,
     ChatBroadcastCampaigns,
     ChatBroadcastSettings,
@@ -33,6 +34,7 @@ from services.chat_broadcast._errors import (
     ACCOUNT_NOT_FOUND,
     CAMPAIGN_CHANGED,
     CAMPAIGN_RUNNING,
+    CAPTION_TOO_LONG,
     INVALID_POST_LINK,
     INVALID_TARGET,
     TOO_MANY_ACCOUNTS,
@@ -169,6 +171,8 @@ def _valid_settings(value: ChatBroadcastSettings) -> ChatBroadcastSettings:
     for message in value.messages:
         if message.kind == "post" and message.post.strip() and parse_post(message.post) is None:
             raise ChatBroadcastInvalidError(INVALID_POST_LINK)
+        if message.kind == "text" and message.photo is not None and len(message.text) > MAX_CAPTION:
+            raise ChatBroadcastInvalidError(CAPTION_TOO_LONG)
     if any(not peer.isdigit() for peer in value.own_excluded):
         raise ChatBroadcastInvalidError(INVALID_TARGET)
     return value.model_copy(update={"targets": list(targets.values())})

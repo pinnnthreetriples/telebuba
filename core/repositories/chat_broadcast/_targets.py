@@ -108,9 +108,10 @@ async def replace_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
     await asyncio.to_thread(_replace_targets, campaign_id, seeds)
 
 
-def _merge_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
+def _merge_targets(
+    campaign_id: str, seeds: list[TargetSeed], round_number: int, removed: set[str]
+) -> None:
     now = int(time.time())
-    keys = {seed.chat_key for seed in seeds}
     with _get_engine().begin() as connection:
         existing = {
             str(key): int(position)
@@ -124,7 +125,7 @@ def _merge_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
             update(_TARGETS)
             .where(
                 _TARGETS.c.campaign_id == campaign_id,
-                _TARGETS.c.chat_key.not_in(keys),
+                _TARGETS.c.chat_key.in_(removed),
                 _TARGETS.c.state.not_in(("done", "skipped")),
             )
             .values(state="skipped", skip_reason="removed", updated_unix=now),
@@ -138,15 +139,22 @@ def _merge_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
                 insert(_TARGETS).values(
                     campaign_id=campaign_id,
                     position=position,
+                    round=round_number,
                     updated_unix=now,
                     **seed.model_dump(),
                 ),
             )
 
 
-async def merge_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
-    """A resumed run's chats: new ones appended, removed ones skipped, the rest kept."""
-    await asyncio.to_thread(_merge_targets, campaign_id, seeds)
+async def merge_targets(
+    campaign_id: str, seeds: list[TargetSeed], *, round_number: int, removed: set[str]
+) -> None:
+    """A continued run's chats: new ones join the current round, ``removed`` are skipped.
+
+    Everything else keeps its state: a chat missing from ``seeds`` only because its
+    account is out right now, or a folder did not open this time, is not removed.
+    """
+    await asyncio.to_thread(_merge_targets, campaign_id, seeds, round_number, removed)
 
 
 def _update_target(
