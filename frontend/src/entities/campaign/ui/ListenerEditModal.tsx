@@ -3,8 +3,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal, Select, TabList, toastError } from '@/shared/ui';
+import {
+  Button,
+  CloseButton,
+  Icon,
+  Modal,
+  ModalHeader,
+  Select,
+  TabList,
+  toastError,
+} from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -146,18 +154,15 @@ export function ListenerEditModal({
 
   return (
     <Modal onClose={close} size="panel" label={t('neurocomment.listener.title')}>
-      <div className="flex items-center gap-3 px-6 pb-4 pt-6">
-        <span className={HEADING_ICON_TILE}>
-          <Icon name="chart" size={18} />
-        </span>
-        <div className="flex-1">
-          <div className="type-h2">{t('neurocomment.listener.title')}</div>
-          <div className="type-body text-content-subtle">
-            {t('neurocomment.modal.listenerEdit.sub')}
-          </div>
-        </div>
+      <ModalHeader
+        divided={false}
+        title={t('neurocomment.listener.title')}
+        subtitle={t('neurocomment.modal.listenerEdit.sub')}
+        icon={<Icon name="chart" size={18} />}
+      >
+        <div className="flex-1" />
         <CloseButton aria-label={t('neurocomment.modal.close')} onClick={close} disabled={saving} />
-      </div>
+      </ModalHeader>
 
       <TabList
         options={TABS.map((value) => ({

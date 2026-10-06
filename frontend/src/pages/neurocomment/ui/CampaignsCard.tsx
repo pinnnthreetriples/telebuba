@@ -7,6 +7,7 @@ import {
   Button,
   ChipAddButton,
   CollapsibleCard,
+  EmptyState,
   FeedbackMark,
   Icon,
   IconButton,
@@ -175,9 +176,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-6 text-center type-body text-content-subtle">
-            {t('neurocomment.campaigns.none')}
-          </div>
+          <EmptyState size="md">{t('neurocomment.campaigns.none')}</EmptyState>
         ) : null}
       </div>
 

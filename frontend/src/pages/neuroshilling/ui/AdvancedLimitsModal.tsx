@@ -1,6 +1,15 @@
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button, HelpHint, Input, Modal, Switch } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  HelpHint,
+  Input,
+  Modal,
+  ModalFooter,
+  ModalHeader,
+  Switch,
+} from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
 import { useNumberField } from './useNumberField';
@@ -92,9 +101,7 @@ export function AdvancedLimitsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.setup.advanced.title')}>
-      <div className="border-b border-canvas px-6 pb-4 pt-6 type-h2">
-        {t('neuroshilling.setup.advanced.title')}
-      </div>
+      <ModalHeader title={t('neuroshilling.setup.advanced.title')} />
 
       <div className="px-6 py-2">
         <NumberRow
@@ -164,11 +171,11 @@ export function AdvancedLimitsModal({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+      <ModalFooter>
         <Button variant="primary" size="sm" onClick={onClose}>
           {t('neuroshilling.setup.advanced.done')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

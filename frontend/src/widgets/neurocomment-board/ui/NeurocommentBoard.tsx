@@ -17,6 +17,7 @@ import {
   CollapsibleCard,
   DataTable,
   type DataTableColumnMeta,
+  EmptyState,
   Icon,
   IconButton,
 } from '@/shared/ui';
@@ -177,9 +178,7 @@ function AccountComments({
         ) : null}
       </div>
       {comments.length === 0 ? (
-        <div className="py-4 text-center type-body text-content-subtle">
-          {t('neurocomment.feed.empty')}
-        </div>
+        <EmptyState size="sm">{t('neurocomment.feed.empty')}</EmptyState>
       ) : (
         <div className="tb-scroll max-h-feed overflow-y-auto">
           {comments.map((c) => {
@@ -414,9 +413,7 @@ export function NeurocommentBoard({
           )}
         />
       ) : (
-        <div className="px-4 py-8 text-center type-body text-content-subtle">
-          {t('neurocomment.board.empty')}
-        </div>
+        <EmptyState className="px-4">{t('neurocomment.board.empty')}</EmptyState>
       )}
     </CollapsibleCard>
   );

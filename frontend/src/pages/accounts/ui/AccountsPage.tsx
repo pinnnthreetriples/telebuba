@@ -13,7 +13,7 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
+import { Button, Card, EmptyState, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -410,8 +410,8 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-4 py-16 text-center type-body text-content-subtle">
-              {t('accounts.empty')}
+            <Card className="px-4">
+              <EmptyState size="xl">{t('accounts.empty')}</EmptyState>
             </Card>
           ) : (
             <AccountsTable

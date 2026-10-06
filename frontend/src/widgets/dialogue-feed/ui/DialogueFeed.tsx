@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Card, Icon } from '@/shared/ui';
+import { Badge, Card, EmptyState, Icon } from '@/shared/ui';
 
 import { warmingDialoguesQueryOptions } from '@/entities/warming';
 import type { DialogueFeedMessage } from '@/shared/api';
@@ -289,9 +289,7 @@ export function DialogueFeed() {
         ) : null}
       </div>
       {pairs.length === 0 ? (
-        <div className="py-8 text-center type-body text-content-subtle">
-          {t('warming.dialogues.empty')}
-        </div>
+        <EmptyState>{t('warming.dialogues.empty')}</EmptyState>
       ) : (
         // The list is the ONE scroll: an open transcript grows inside it rather
         // than scrolling on its own, because two nested scrollbars in a 340px

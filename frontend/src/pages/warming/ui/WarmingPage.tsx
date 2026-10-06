@@ -23,11 +23,12 @@ import {
   ChipAddButton,
   CollapsibleCard,
   ConfirmModal,
+  EmptyState,
   FeedbackMark,
+  HowItWorksCard,
   Icon,
   IconButton,
   InlineChipEditor,
-  NumberedStep,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -284,9 +285,7 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-col gap-2">
               {idle.length === 0 ? (
-                <div className="py-8 text-center type-body text-content-subtle">
-                  {t('warming.ready.empty')}
-                </div>
+                <EmptyState>{t('warming.ready.empty')}</EmptyState>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;
@@ -560,20 +559,12 @@ export function WarmingPage() {
             </div>
           </CollapsibleCard>
 
-          <CollapsibleCard
-            label={t('warming.howto.title')}
-            wrapperClassName="rounded-lg border border-line bg-canvas"
-            header={<span className="type-h3">{t('warming.howto.title')}</span>}
-          >
-            <div className="mb-4 type-small">{t('warming.howto.hint')}</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-              {[0, 1, 2, 3, 4, 5].map((index) => (
-                <NumberedStep key={index} number={index + 1}>
-                  {t(`warming.howto.steps.${String(index)}`)}
-                </NumberedStep>
-              ))}
-            </div>
-          </CollapsibleCard>
+          <HowItWorksCard
+            title={t('warming.howto.title')}
+            hint={t('warming.howto.hint')}
+            columns={2}
+            steps={[0, 1, 2, 3, 4, 5].map((index) => t(`warming.howto.steps.${String(index)}`))}
+          />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">

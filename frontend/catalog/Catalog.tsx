@@ -8,6 +8,7 @@
 // только рендер настоящего компонента.
 import type { ReactNode } from 'react';
 
+import { BlocksSection } from './blocks/BlocksSection';
 import { Controls } from './Controls';
 import { Feedback } from './Feedback';
 import { Surfaces } from './Surfaces';
@@ -45,6 +46,9 @@ export function Catalog({
             <a href="#typography" className="type-small hover:text-info-strong">
               Типографика
             </a>
+            <a href="#blocks" className="type-small hover:text-info-strong">
+              Блоки
+            </a>
           </nav>
         </div>
       </header>
@@ -54,6 +58,9 @@ export function Catalog({
         <Surfaces />
         {patterns}
         <Typography />
+        {/* Последним: раздел выше по странице сдвинул бы всё, что под ним, и снимок
+            диалога поверх каталога. */}
+        <BlocksSection />
       </main>
     </div>
   );

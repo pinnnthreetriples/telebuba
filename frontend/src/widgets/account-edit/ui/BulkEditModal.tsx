@@ -39,7 +39,7 @@ import {
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
 import { formatLocalDateTime } from '@/shared/lib';
-import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal, ModalFooter, TabList } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
 import {
@@ -571,7 +571,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           </fieldset>
 
-          <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+          <ModalFooter>
             {!started && (
               <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
                 {NOTE[tab]}
@@ -605,7 +605,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 </Button>
               </>
             )}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {pickerOpen && (

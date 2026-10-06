@@ -19,6 +19,7 @@ import {
   IconButton,
   Input,
   Modal,
+  ModalFooter,
   SegmentedControl,
   Textarea,
 } from '@/shared/ui';
@@ -603,7 +604,7 @@ export function BulkMessageModal({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+          <ModalFooter>
             {!started && (
               <div className="mr-auto min-w-0">
                 <span className="type-small tabular-nums">
@@ -660,7 +661,7 @@ export function BulkMessageModal({
                 {t('accounts.messages.send')}
               </Button>
             )}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {pickerOpen && (

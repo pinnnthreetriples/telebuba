@@ -9,11 +9,12 @@ import type {
 } from '@/shared/api';
 import {
   Badge,
+  type BadgeTone,
   Button,
+  EmptyState,
   Icon,
   SegmentedControl,
   useWideContainer,
-  type BadgeTone,
 } from '@/shared/ui';
 import { cn } from '@/shared/lib/cn';
 
@@ -411,9 +412,7 @@ export function DiscoveryResults({
       // no `work` yet — the plain-text line it always showed stays the fallback.
       if (work != null) return <SearchProgress work={work} phase="searching" />;
       return (
-        <p role="status" className="py-8 text-center type-body text-content-subtle">
-          {t('neurocomment.modal.discovery.results.searching')}
-        </p>
+        <EmptyState role="status">{t('neurocomment.modal.discovery.results.searching')}</EmptyState>
       );
     }
 
@@ -422,28 +421,24 @@ export function DiscoveryResults({
     // operator has made with it.
     if (errored && candidates.length === 0) {
       return (
-        <p role="status" className="py-8 text-center text-body text-danger">
+        <EmptyState role="status" tone="danger">
           {t('neurocomment.modal.discovery.results.error')}
-        </p>
+        </EmptyState>
       );
     }
 
     if (failed && candidates.length === 0) {
       return (
-        <p role="status" className="py-8 text-center text-body text-danger">
+        <EmptyState role="status" tone="danger">
           {t('neurocomment.modal.discovery.results.failed', {
             reason: lastError == null ? '' : t(reasonKey(lastError), { defaultValue: lastError }),
           })}
-        </p>
+        </EmptyState>
       );
     }
 
     if (candidates.length === 0) {
-      return (
-        <p className="py-8 text-center type-body text-content-subtle">
-          {t('neurocomment.modal.discovery.results.empty')}
-        </p>
-      );
+      return <EmptyState>{t('neurocomment.modal.discovery.results.empty')}</EmptyState>;
     }
 
     const selectAll = (

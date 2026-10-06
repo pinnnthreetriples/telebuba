@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Modal } from '@/shared/ui';
+import { Button, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
 // Оболочка диалога настроек кампании: шапка с именем, прокручиваемое тело и подвал с
 // сохранением. Всё, что внутри, кладёт страница.
@@ -41,18 +41,14 @@ export function CampaignSettingsModal({
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <div className="min-w-0">
-          <div className="truncate type-h2">{name}</div>
-          <div className="mt-1 type-small">{t('neuroshilling.settings.subtitle')}</div>
-        </div>
+      <ModalHeader title={name} subtitle={t('neuroshilling.settings.subtitle')}>
         <div className="flex-1" />
         {dirty ? (
           <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null}
-      </div>
+      </ModalHeader>
 
       {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
@@ -66,7 +62,7 @@ export function CampaignSettingsModal({
         {children}
       </fieldset>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+      <ModalFooter>
         <Button size="sm" onClick={onClose} disabled={saving}>
           {t('neuroshilling.settings.cancel')}
         </Button>
@@ -79,7 +75,7 @@ export function CampaignSettingsModal({
         >
           {t('neuroshilling.settings.save')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

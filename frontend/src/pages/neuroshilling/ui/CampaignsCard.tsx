@@ -1,7 +1,15 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { Button, CollapsibleCard, Icon, IconButton, Input, SelectableCard } from '@/shared/ui';
+import {
+  Button,
+  CollapsibleCard,
+  EmptyState,
+  Icon,
+  IconButton,
+  Input,
+  SelectableCard,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 import { countTargets } from './setupDraft';
@@ -140,9 +148,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-4 text-center type-body text-content-subtle">
-            {t('neuroshilling.campaigns.none')}
-          </div>
+          <EmptyState size="sm">{t('neuroshilling.campaigns.none')}</EmptyState>
         ) : null}
       </div>
 

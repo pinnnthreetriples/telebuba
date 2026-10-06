@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HelpHint, Input, SegmentedControl, Select } from '@/shared/ui';
+import { HelpHint, Input, SectionLabel, SegmentedControl, Select, SettingRow } from '@/shared/ui';
 
 import { boundInvalid, boundsInverted, type DiscoveryFormState } from '../model/discovery';
 import {
@@ -17,7 +17,6 @@ import {
   parseLimit,
   seedInvalid,
 } from '../model/filters';
-import { Eyebrow, Row } from './FormRow';
 
 const P = 'neurocomment.modal.discovery.form';
 const SEEN = ['hide', 'show'] as const;
@@ -45,7 +44,7 @@ function SelectRow<K extends 'category' | 'language'>({
 }) {
   const { t } = useTranslation();
   return (
-    <Row label={t(`${P}.${field}.label`)}>
+    <SettingRow label={t(`${P}.${field}.label`)}>
       <div className="w-menu">
         <Select
           value={form[field]}
@@ -57,7 +56,7 @@ function SelectRow<K extends 'category' | 'language'>({
           }}
         />
       </div>
-    </Row>
+    </SettingRow>
   );
 }
 
@@ -100,10 +99,10 @@ export function DiscoveryFilters({ form, onChange }: Props) {
 
   return (
     <section>
-      <Eyebrow title={t(`${P}.sections.filters`)} />
+      <SectionLabel title={t(`${P}.sections.filters`)} />
       <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
         <div className="min-w-0 sm:pr-6">
-          <Row first label={t(`${P}.kind.label`)}>
+          <SettingRow first label={t(`${P}.kind.label`)}>
             <SegmentedControl
               variant="pill"
               value={form.kind}
@@ -114,12 +113,12 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 onChange(normalizeForKind({ ...form, kind }));
               }}
             />
-          </Row>
+          </SettingRow>
 
           <SelectRow field="category" codes={CATEGORIES} form={form} set={set} />
           <SelectRow field="language" codes={LANGUAGES} form={form} set={set} />
 
-          <Row label={t(`${P}.comments.label`)} hint={commentsHint}>
+          <SettingRow label={t(`${P}.comments.label`)} hint={commentsHint}>
             <SegmentedControl
               variant="pill"
               value={form.comments}
@@ -130,11 +129,11 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 set('comments', comments);
               }}
             />
-          </Row>
+          </SettingRow>
         </div>
 
         <div className="min-w-0 sm:pl-6">
-          <Row first label={t(`${P}.access.label`)}>
+          <SettingRow first label={t(`${P}.access.label`)}>
             <SegmentedControl
               variant="pill"
               value={form.access}
@@ -152,14 +151,14 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 set('access', access);
               }}
             />
-          </Row>
+          </SettingRow>
 
           {/* What the bounds actually do: Telegram returns a subscriber count for only
               some hits, and the rest enter the list unfiltered. The error line wraps onto
               its own row via `basis-full`.
               `text` + `inputMode`, not `type="number"`: a number field reports '' while
               it holds "1e3" or "-5", so the garbage silently became "no bound". */}
-          <Row label={t(`${P}.subscribers`)} hint={t(`${P}.membersHint`)}>
+          <SettingRow label={t(`${P}.subscribers`)} hint={t(`${P}.membersHint`)}>
             <div className="flex items-center gap-2">
               <Input
                 size="sm"
@@ -196,9 +195,9 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             <p id={membersMessageId} role="status" className={MESSAGE}>
               {membersMessage}
             </p>
-          </Row>
+          </SettingRow>
 
-          <Row label={t(`${P}.hideSeen.label`)} hint={t(`${P}.hideSeen.hint`)}>
+          <SettingRow label={t(`${P}.hideSeen.label`)} hint={t(`${P}.hideSeen.hint`)}>
             <SegmentedControl
               variant="pill"
               value={form.hideSeen ? 'hide' : 'show'}
@@ -208,9 +207,9 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 set('hideSeen', seen === 'hide');
               }}
             />
-          </Row>
+          </SettingRow>
 
-          <Row
+          <SettingRow
             label={t(`${P}.limit.label`)}
             hint={t(`${P}.limit.hint`, { min: LIMIT_MIN, max: LIMIT_MAX, default: LIMIT_DEFAULT })}
             htmlFor={limitId}
@@ -232,11 +231,11 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             <p id={limitMessageId} role="status" className={MESSAGE}>
               {badLimit ? t(`${P}.limit.invalid`, { min: LIMIT_MIN, max: LIMIT_MAX }) : null}
             </p>
-          </Row>
+          </SettingRow>
 
           {/* The HelpHint sits OUTSIDE the <label>: nested, its prose joined the
               field's accessible name. */}
-          <Row label={t(`${P}.seedChannel`)} htmlFor={seedId}>
+          <SettingRow label={t(`${P}.seedChannel`)} htmlFor={seedId}>
             <HelpHint text={t(`${P}.seedChannelHint`)} />
             <Input
               id={seedId}
@@ -255,7 +254,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             <p id={seedMessageId} role="status" className={MESSAGE}>
               {badSeed ? t(`${P}.seedInvalid`) : null}
             </p>
-          </Row>
+          </SettingRow>
         </div>
       </div>
     </section>
