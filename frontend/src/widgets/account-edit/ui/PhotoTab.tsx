@@ -110,7 +110,7 @@ export function PhotoTab({
               <Icon name="close" size={16} />
             </IconButton>
             {photo.is_main ? (
-              <span className="mt-2 block w-full py-px text-small font-medium text-action-primary">
+              <span className="mt-2 block w-full text-small font-medium text-action-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -120,7 +120,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-2 block w-full py-px text-left text-small font-medium text-action-primary hover:underline disabled:opacity-50"
+                className="mt-2 block w-full text-left text-small font-medium text-action-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>

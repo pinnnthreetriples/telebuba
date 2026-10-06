@@ -53,7 +53,7 @@ export function StoriesTab({
               )}
             </button>
             {(story.views != null || story.reactions != null) && (
-              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-2 rounded-sm bg-scrim px-1 py-px text-small font-medium text-on-fill">
+              <span className="pointer-events-none absolute left-[5px] top-[5px] inline-flex items-center gap-2 rounded-sm bg-scrim px-1 text-small font-medium text-on-fill">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -111,13 +111,13 @@ export function StoriesTab({
                 onClick={() => {
                   onPinToggle(story);
                 }}
-                className={`pointer-events-auto truncate rounded-sm px-1 py-px text-center text-small font-medium disabled:opacity-50 ${
+                className={`pointer-events-auto truncate rounded-sm px-1 text-center text-small font-medium disabled:opacity-50 ${
                   story.is_pinned ? 'bg-action-primary text-on-fill' : 'bg-scrim text-on-fill'
                 }`}
               >
                 {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
               </button>
-              <span className="truncate rounded-sm bg-scrim px-1 py-px text-center text-small font-medium text-on-fill">
+              <span className="truncate rounded-sm bg-scrim px-1 text-center text-small font-medium text-on-fill">
                 {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
               </span>
             </div>

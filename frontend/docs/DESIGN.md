@@ -113,7 +113,6 @@ spacing:
   6: 24px
   8: 32px
   16: 64px
-hairline: 1px
 rounded:
   sm: 8px
   md: 12px
@@ -306,7 +305,6 @@ components:
     rounded: "{rounded.full}"
     fontWeight: 500
     paddingX: "{spacing.2}"
-    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-info:
     backgroundColor: "{colors.info-tint}"
@@ -314,7 +312,6 @@ components:
     rounded: "{rounded.full}"
     fontWeight: 500
     paddingX: "{spacing.2}"
-    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-success:
     backgroundColor: "{colors.success-tint}"
@@ -322,7 +319,6 @@ components:
     rounded: "{rounded.full}"
     fontWeight: 500
     paddingX: "{spacing.2}"
-    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-warning:
     backgroundColor: "{colors.warning-tint}"
@@ -330,7 +326,6 @@ components:
     rounded: "{rounded.full}"
     fontWeight: 500
     paddingX: "{spacing.2}"
-    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
   badge-danger:
     backgroundColor: "{colors.danger-tint}"
@@ -338,7 +333,6 @@ components:
     rounded: "{rounded.full}"
     fontWeight: 500
     paddingX: "{spacing.2}"
-    paddingY: "{spacing.px}"
     fontSize: "{fontSize.small}"
 ---
 

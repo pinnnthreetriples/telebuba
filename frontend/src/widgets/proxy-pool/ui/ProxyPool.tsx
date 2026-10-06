@@ -214,7 +214,7 @@ function ProxyCard({
           <div className="truncate type-body-medium">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex flex-wrap items-center gap-2 type-small">
+          <div className="flex flex-wrap items-center gap-2 type-small">
             <span className="whitespace-nowrap">{proxyTypeLabel(proxy.proxy_type)}</span>
             <span
               className={`inline-flex items-center gap-1 whitespace-nowrap font-medium ${statusTone}`}

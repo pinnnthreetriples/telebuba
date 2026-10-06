@@ -278,7 +278,7 @@ export function WarmingPage() {
           <Card className="p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="type-h3">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-surface-card px-2 py-px type-small">
+              <span className="rounded-full border border-line bg-surface-card px-2 type-small">
                 {idle.length}
               </span>
             </div>
@@ -328,7 +328,7 @@ export function WarmingPage() {
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-px flex items-center gap-1">
+                          <div className="flex items-center gap-1">
                             <span className="truncate type-small">{account.phone}</span>
                             {flag}
                           </div>
@@ -476,7 +476,7 @@ export function WarmingPage() {
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-px flex items-center gap-1">
+                          <div className="flex items-center gap-1">
                             <span className="truncate type-small">{acc.phone}</span>
                             {flag}
                           </div>
@@ -510,7 +510,7 @@ export function WarmingPage() {
                           })}
                         </div>
                       </div>
-                      <span className="h-compact w-px bg-line" />
+                      <span className="h-compact border-l border-line" />
                       <div className="flex-1 pl-4">
                         <div className="type-small">{t('warming.warmed.trust')}</div>
                         <div className="text-body font-medium text-success-deep">

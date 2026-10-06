@@ -178,8 +178,8 @@ const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|s
 const SPACE_ALL =
   `${SPACE}|ps|pe|ms|me|inset|inset-x|inset-y|top|right|bottom|left|start|end|` +
   'translate-x|translate-y|scroll-m[xytrbl]?|scroll-p[xytrbl]?|indent';
-// Ступени ритма — из токенов, как и всё остальное здесь. `0` и `px` стоят в той же
-// шкале, но ступенями не считаются и в подсказке не называются.
+// Ступени ритма — из токенов, как и всё остальное здесь. `0` стоит в той же шкале, но
+// ступенью не считается и в подсказке не называется.
 const RHYTHM = scale('spacing');
 const RHYTHM_NUMERIC = Object.keys(RHYTHM).filter((name) => /^\d+$/.test(name));
 const RHYTHM_RUNGS = RHYTHM_NUMERIC.filter((name) => name !== '0')
@@ -350,7 +350,14 @@ const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?:${RETIRED_RHYTHM})(?![\w-])`),
     message:
-      'The rhythm is Firecrawl’s 4px grid with numeric keys now, and the named rungs are gone: this class emits no rule, so the element silently loses its spacing. `xs` → `1`, `sm` → `2`, `md` → `3`, `lg` → `4`, `2xl` → `6`, `page` → `8`, `empty` → `16`. `hair` (2px), `tight` (6px) and `xl` (20px) had no place on the grid and were mapped by role: `hair` → `1`, or `px` on a chip or between chart bars; `tight` → `1` inside a small control or between an icon and its label, `2` between lines; `xl` → `6` for a card’s or dialog’s padding, `4` for a button’s or between groups. docs/design-system.md, «Седьмой проход», carries the table.',
+      'The rhythm is Firecrawl’s 4px grid with numeric keys now, and the named rungs are gone: this class emits no rule, so the element silently loses its spacing. `xs` → `1`, `sm` → `2`, `md` → `3`, `lg` → `4`, `2xl` → `6`, `page` → `8`, `empty` → `16`. `hair` (2px), `tight` (6px) and `xl` (20px) had no place on the grid and were mapped by role: `hair` → `1`; `tight` → `1` inside a small control or between an icon and its label, `2` between lines; `xl` → `6` for a card’s or dialog’s padding, `4` for a button’s or between groups. docs/design-system.md, «Седьмой проход», carries the table.',
+  },
+  {
+    // Волосок ушёл из всех шкал разом: `mt-px` не выпускает правила, и подпись молча
+    // встаёт на место — что и есть замена, но `gap-px` без правила склеивает плитки.
+    test: at(String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL}|${DIMENSION})-px(?![\w-])`),
+    message:
+      'There is no 1px rung any more — not in the rhythm, not in widths or heights: this class emits no rule. The grid is 4px. A 1px nudge (`mt-px` under a title, `py-px` in a chip) is dropped, not rounded up; a divider is a border — `border-t`/`border-l` on the element, or on the tiles of a grid instead of a `gap-px` over a tinted background; a table column hugging its content is `w-0`.',
   },
   {
     // Числовые ключи теперь законны — но только объявленные. `p-5` и `gap-0.5` есть в
@@ -358,7 +365,7 @@ const PATTERNS = [
     test: at(
       String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?!(?:${RHYTHM_NUMERIC.join('|')})(?![\w.]))\d[\d.]*(?![\w./[])`,
     ),
-    message: `The rhythm is a closed 4px grid, and only the rungs the app wears are declared: ${RHYTHM_RUNGS}, plus \`0\` and the \`px\` hairline. Tailwind’s own numeric scale is replaced, so an undeclared step emits no rule and the element silently loses its spacing. Use the nearest rung; a rung nobody wears is rejected by \`ds:dead\`, so a new one lands together with its wearer.`,
+    message: `The rhythm is a closed 4px grid, and only the rungs the app wears are declared: ${RHYTHM_RUNGS}, plus \`0\`. Tailwind’s own numeric scale is replaced, so an undeclared step emits no rule and the element silently loses its spacing. Use the nearest rung; a rung nobody wears is rejected by \`ds:dead\`, so a new one lands together with its wearer.`,
   },
   {
     test: at(String.raw`(?:${SPACE})-\[(?:[0-9]|[12][0-9]|3[0-4])px\]`),
@@ -377,7 +384,7 @@ const PATTERNS = [
   {
     test: at(String.raw`rounded(?:-[a-z]+)?-\[(?:[4-9]|[1-9][0-9])`),
     message:
-      'Three radii and two shapes, on Firecrawl’s scale: `sm` 8px — an everyday control, a chip, a small tile; `md` 12px — a field, a panel, a menu, a card nested in a card; `lg` 16px — the card and the dialog; `full` — the pill and the avatar; and `none`. Hairlines under 4px keep their own value; anything larger has a rung.',
+      'Three radii and two shapes, on Firecrawl’s scale: `sm` 8px — an everyday control, a chip, a small tile; `md` 12px — a field, a panel, a menu, a card nested in a card; `lg` 16px — the card and the dialog; `full` — the pill and the avatar. Hairlines under 4px keep their own value; anything larger has a rung.',
   },
   {
     test: at(String.raw`duration-\[`),

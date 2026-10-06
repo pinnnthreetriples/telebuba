@@ -66,7 +66,7 @@ export function CampaignPromptModal({
           <span className="type-body-medium text-content-secondary">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-info-tint px-2 py-px text-small font-medium text-info-strong">
+          <span className="rounded-full bg-info-tint px-2 text-small font-medium text-info-strong">
             {accounts.length}
           </span>
         </div>
@@ -82,7 +82,7 @@ export function CampaignPromptModal({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate type-h3">{account.phone}</div>
-                  <div className="mt-px type-small">{account.channel}</div>
+                  <div className="type-small">{account.channel}</div>
                 </div>
                 <span className="size-dot shrink-0 rounded-full bg-success" />
                 <IconButton

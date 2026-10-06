@@ -272,7 +272,7 @@ function WarmingCard({
                   with, which is a worse disagreement than differing from the twelve
                   pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-px text-small font-medium ${statusTone}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2 text-small font-medium ${statusTone}`}
               >
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
@@ -364,17 +364,19 @@ function WarmingCard({
         </div>
 
         {/* day bar */}
-        <div className="flex items-end gap-px">
+        <div className="flex items-end">
           {DAY_SEGMENTS.map((index) => (
             <span
               key={index}
               // Days done, the day in progress, days to come — tokens, so the bar
-              // reads the same green/blue/grey as the rest of the board.
-              className={`h-bar flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-action-primary' : 'bg-line'}`}
+              // reads the same green/blue/grey as the rest of the board. The slit
+              // between days is a transparent border the fill stops short of
+              // (`bg-clip-padding`), not a 1px gap: the rhythm has no 1px rung.
+              className={`h-bar flex-1 rounded-[1.5px] border-r border-transparent bg-clip-padding transition-[background] last:border-r-0 duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-action-primary' : 'bg-line'}`}
             />
           ))}
         </div>
-        <div className="mt-2 flex justify-between px-px type-small">
+        <div className="mt-2 flex justify-between type-small">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
@@ -541,7 +543,7 @@ function WarmingCard({
                   only way it reaches AA — every green dark enough to pass on `success-tint`
                   is indistinguishable from the heading's `success-deep` (10.05:1 here
                   against 3.70:1 for the old literal). Do not "restore the family". */}
-              <div className="mt-px type-small text-content-secondary">
+              <div className="type-small text-content-secondary">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
                 })}

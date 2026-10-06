@@ -26,7 +26,7 @@ import { cn } from '@/shared/lib/cn';
 const SIZE = {
   md: 'px-3 py-1 text-body',
   sm: 'px-3 py-1 text-small',
-  xs: 'px-2 py-px text-small',
+  xs: 'px-2 text-small',
 } as const;
 
 // 6px over the 5px also in use: four of the app's seven status dots are already

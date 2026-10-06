@@ -66,7 +66,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                 <div className="truncate type-h3">{channel.title}</div>
                 <div className="mt-1 flex items-center gap-2 type-small">
                   <span
-                    className={`rounded-sm px-1 py-px font-medium ${
+                    className={`rounded-sm px-1 font-medium ${
                       channel.username != null
                         ? 'bg-info-tint text-info-strong'
                         : 'bg-canvas text-content-muted'

@@ -44,7 +44,7 @@ if (rule) {
         code: 'const f2 = "w-[min(84vw,300px)] max-w-[90vw] h-[1.1em]";',
         name: 'a dimension relative to the viewport or the text is not a rung',
       },
-      { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
+      { code: 'const g = "p-0 m-0 w-0";', name: 'zero is not a step' },
       {
         code: 'const g1 = "p-1 px-2 gap-3 mt-4 py-6 lg:px-8 py-16 -mt-1 sm:-translate-x-1/2 left-1/2 inset-0";',
         name: 'the declared numeric rungs of the 4px grid, and fractions that are not rhythm',
@@ -70,7 +70,7 @@ if (rule) {
       // The type roles, and the four things the role pattern deliberately cannot reach.
       // RuleTester reports no filename, so these run as if they were above `shared/ui`.
       {
-        code: 'const t1 = "mt-px type-small"; const t2 = "type-small text-danger";',
+        code: 'const t1 = "mt-1 type-small"; const t2 = "type-small text-danger";',
         name: 'a role, and a role recoloured',
       },
       {
@@ -118,6 +118,11 @@ if (rule) {
       },
     ],
     invalid: [
+      // The 1px hairline left every scale at once; a nudge is dropped, a divider is a border.
+      ...['mt-px', 'py-px', 'gap-px', 'md:px-px', '-mt-px', 'h-px', 'w-px'].map((cls) => ({
+        code: `const hair = "flex ${cls}";`,
+        errors: [{ message: /no 1px rung/ }],
+      })),
       // Старая типографика: имя не выпускает правила, и текст молча падает на то, что
       // унаследовал.
       {
@@ -319,7 +324,7 @@ if (rule) {
       // The role pattern: a rung and a grey in one class list, in either order, is the
       // spelling the twelve roles replaced.
       {
-        code: 'const k = "mt-px text-small text-content-subtle";',
+        code: 'const k = "mt-1 text-small text-content-subtle";',
         errors: [{ message: /A step plus a grey/ }],
       },
       {

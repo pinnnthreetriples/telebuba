@@ -246,7 +246,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         </div>
         <div className="min-w-0">
           <div className="type-body-medium">{t('accounts.edit.dropTitle')}</div>
-          <div className="mt-px type-small">{t('accounts.edit.dropHint')}</div>
+          <div className="type-small">{t('accounts.edit.dropHint')}</div>
         </div>
       </button>
       <input
@@ -274,9 +274,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate type-body-medium">{file.name}</div>
-                    <div className="mt-px type-small">
-                      {t(`accounts.edit.upload.${file.status}`)}
-                    </div>
+                    <div className="type-small">{t(`accounts.edit.upload.${file.status}`)}</div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     {file.status === 'done' ? (

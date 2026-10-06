@@ -171,7 +171,7 @@ export function ApproveModal({
                 <div key={`${String(play)}-${step.step_id}`}>
                   {index > 0 ? (
                     <div className="my-2 flex items-center gap-2">
-                      <span className="h-px flex-1 bg-line" />
+                      <span className="flex-1 border-t border-line" />
                       {delays === null ? (
                         <span className="type-small tabular-nums">
                           {t('neuroshilling.preview.pause', {
@@ -190,7 +190,7 @@ export function ApproveModal({
                           onDelay={onDelay}
                         />
                       )}
-                      <span className="h-px flex-1 bg-line" />
+                      <span className="flex-1 border-t border-line" />
                     </div>
                   ) : null}
                   <div

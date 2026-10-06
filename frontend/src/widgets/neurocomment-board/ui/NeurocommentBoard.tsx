@@ -347,8 +347,8 @@ export function NeurocommentBoard({
         ),
         // Last column, sized to the chevron so it hugs the row's right edge.
         meta: {
-          className: 'w-px',
-          cellClassName: 'w-px',
+          className: 'w-0',
+          cellClassName: 'w-0',
           cardSlot: 'control',
         } satisfies DataTableColumnMeta,
       },
@@ -369,7 +369,7 @@ export function NeurocommentBoard({
       header={
         <>
           <span className="type-h3">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-info-tint px-2 py-px text-small font-medium text-info-strong">
+          <span className="rounded-full bg-info-tint px-2 text-small font-medium text-info-strong">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>

@@ -147,12 +147,18 @@ export function PipelineCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-info-hairline bg-info-hairline md:grid-cols-6">
+      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-info-hairline md:grid-cols-6">
         {stats.map((stat) => (
-          // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
-          // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
-          // tile across both columns, and stays right as stats are added or removed.
-          <div key={stat.label} className="bg-surface-card px-4 py-4 max-md:odd:last:col-span-2">
+          // The dividers are the tiles' own borders, not a 1px gap over a tinted
+          // background: the rhythm has no 1px rung. Below `md` the tiles pair up — the
+          // left one draws the vertical line, every row after the first draws the
+          // horizontal one, and an ODD count spans its trailing tile across both
+          // columns (`odd:last:`), so it stays right as stats are added or removed.
+          // From `md` they sit in one row and each tile after the first draws its left edge.
+          <div
+            key={stat.label}
+            className="border-info-hairline bg-surface-card px-4 py-4 max-md:odd:border-r max-md:odd:last:col-span-2 max-md:odd:last:border-r-0 max-md:[&:nth-child(n+3)]:border-t md:border-l md:first:border-l-0"
+          >
             <Odometer value={stat.value} className={stat.color} />
             <div className="mt-1 type-small">{stat.label}</div>
           </div>

@@ -230,7 +230,7 @@ function ScheduledRow({
             {t(`accounts.schedule.state.${item.state}`)}
           </Badge>
         </div>
-        <div className="mt-px truncate type-small">
+        <div className="truncate type-small">
           {item.state === 'pending'
             ? formatRelativeTo(nextAt, now, i18n.language)
             : item.error_code

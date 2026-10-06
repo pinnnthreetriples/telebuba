@@ -43,7 +43,7 @@ export function ImportFileList({
             <div className="min-w-0 flex-1">
               <div className="truncate type-body-medium">{file.name}</div>
               <div
-                className={`mt-px text-small ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
+                className={`text-small ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
               >
                 {verdict(file)}
               </div>

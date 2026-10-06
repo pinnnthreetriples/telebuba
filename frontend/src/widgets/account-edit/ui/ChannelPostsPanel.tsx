@@ -325,7 +325,7 @@ export function ChannelPostsPanel({
               <div className="flex items-center gap-2 type-small">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
-                  <span className="rounded-sm bg-canvas px-1 py-px font-medium text-content-muted">
+                  <span className="rounded-sm bg-canvas px-1 font-medium text-content-muted">
                     {mediaLabel(post.media_kind ?? 'none')}
                   </span>
                 )}

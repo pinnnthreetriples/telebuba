@@ -85,7 +85,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
           same, and a gauge is not a flag. */}
       <span
         // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: the spend gauge's own chart
-        className="flex h-[13px] items-end gap-px"
+        className="flex h-[13px] items-end gap-1"
       >
         {GAUGES.map((key) => {
           const spent = data ? share(data[key]) : 0;

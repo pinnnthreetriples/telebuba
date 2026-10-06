@@ -57,7 +57,7 @@ function ChoiceCard({
       </span>
       <span className="flex-1">
         <span className="block type-h3">{title}</span>
-        <span className="mt-px block type-small">{desc}</span>
+        <span className="block type-small">{desc}</span>
       </span>
       {chevron && <Icon name="chevron-right" size={16} className="stroke-line-strong" />}
     </button>
@@ -371,7 +371,7 @@ export function AddAccountModal({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block type-h3">{t('accounts.addWizard.dropTitle')}</span>
-                      <span className="mt-px block type-small">
+                      <span className="block type-small">
                         {method === 'tdata'
                           ? t('accounts.addWizard.dropDescTdata')
                           : t('accounts.addWizard.dropDescSession')}

@@ -88,7 +88,7 @@ describe('a caller overrides the rhythm a component wrote first', () => {
     ['p-4', 'p-6'],
     ['gap-2', 'gap-3'],
     ['mt-8', 'mt-16'],
-    ['-mt-1', 'mt-px'],
+    ['-mt-1', 'mt-2'],
   ] as const) {
     test(`${base} then ${override}`, () => {
       expect(cn(base, override)).toBe(override);

@@ -396,7 +396,7 @@ export function AccountsPage() {
             className="min-w-col rounded-md border border-line bg-surface-card px-4 py-3"
           >
             <div className={`type-h1 ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px type-small">{stat.label}</div>
+            <div className="type-small">{stat.label}</div>
           </div>
         ))}
       </div>

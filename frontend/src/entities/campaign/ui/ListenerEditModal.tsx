@@ -152,7 +152,7 @@ export function ListenerEditModal({
         </span>
         <div className="flex-1">
           <div className="type-h2">{t('neurocomment.listener.title')}</div>
-          <div className="mt-px type-body text-content-subtle">
+          <div className="type-body text-content-subtle">
             {t('neurocomment.modal.listenerEdit.sub')}
           </div>
         </div>

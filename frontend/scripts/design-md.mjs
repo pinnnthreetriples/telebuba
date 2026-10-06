@@ -375,10 +375,7 @@ function buildSpec() {
     typography: typeRoles(),
     typeStyles: typeStyles(typeRoles()),
     fontFamily: { sans: tokens.font.sans.join(', '), mono: tokens.font.mono.join(', ') },
-    // `px` — не шаг сетки, а волосок в 1px (оптическая подгонка, щель-разделитель): он
-    // выводится отдельной строкой, а не последней ступенью шкалы.
-    spacing: scaleOf(tokens.rhythm, SPACING_NOTE, ['0', 'px']),
-    hairline: tokens.rhythm.px,
+    spacing: scaleOf(tokens.rhythm, SPACING_NOTE, ['0']),
     rounded: scaleOf(tokens.radius, RADIUS_NOTE),
     shadows: scaleOf(tokens.shadow, SHADOW_NOTE, ['none']),
     height: scaleOf(tokens.height, {}).filter((h) => usedHeights.has(h.name)),
@@ -427,7 +424,6 @@ function renderFrontmatter(spec) {
     for (const item of list) out.push(`  ${yamlKey(item.name)}: ${yamlValue(item.value)}`);
   };
   flat('spacing', spec.spacing);
-  out.push(`hairline: ${yamlValue(spec.hairline)}`);
   flat('rounded', spec.rounded);
   flat('shadows', spec.shadows);
   flat('height', spec.height);
@@ -448,10 +444,7 @@ function renderFrontmatter(spec) {
 
 function renderBody(spec) {
   const px = (scale, name) => scale.find((s) => s.name === name)?.value ?? '?';
-  const rhythm = spec.spacing
-    .filter((s) => s.name !== 'px')
-    .map((s) => s.value.replace('px', ''))
-    .join(', ');
+  const rhythm = spec.spacing.map((s) => s.value.replace('px', '')).join(', ');
   const control = spec.height.find((h) => h.name === 'control')?.value ?? '?';
   return `
 # Telebuba

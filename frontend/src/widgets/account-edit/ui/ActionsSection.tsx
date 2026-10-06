@@ -92,7 +92,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <div className="type-h3">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-small ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
+              className={`text-small ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -137,7 +137,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         <div className="flex items-center justify-between gap-3 border-b border-canvas py-4">
           <div>
             <div className="type-h3">{t('accounts.edit.resetSession')}</div>
-            <div className="mt-px type-small">{t('accounts.edit.resetSessionHint')}</div>
+            <div className="type-small">{t('accounts.edit.resetSessionHint')}</div>
           </div>
           <span className="flex shrink-0 items-center gap-2">
             <FeedbackMark
@@ -151,7 +151,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         <div className="flex items-center justify-between gap-3 py-4">
           <div>
             <div className="type-h3">{t('accounts.edit.deleteAccount')}</div>
-            <div className="mt-px type-small">{t('accounts.edit.deleteHint')}</div>
+            <div className="type-small">{t('accounts.edit.deleteHint')}</div>
           </div>
           <button
             type="button"

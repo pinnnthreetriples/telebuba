@@ -470,7 +470,7 @@ export function AddStoryModal({
               <div className="truncate type-body-medium">
                 {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
               </div>
-              <div className="mt-px type-small">
+              <div className="type-small">
                 {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
               </div>
             </div>
@@ -613,7 +613,7 @@ export function AddStoryModal({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate type-body-medium">{video.name}</div>
-                <div className={`mt-px text-small ${metaTone}`}>{metaText}</div>
+                <div className={`text-small ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
                 <button

@@ -111,7 +111,7 @@ export function PhotoViewer({
           >
             <Icon name="chevron-right" size={20} />
           </ViewerButton>
-          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-sm bg-black/55 px-3 py-px text-small font-medium text-on-fill">
+          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-sm bg-black/55 px-3 text-small font-medium text-on-fill">
             {current + 1} / {photos.length}
           </span>
         </>

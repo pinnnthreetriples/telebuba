@@ -24,7 +24,7 @@ export interface DataTableColumnMeta {
   // Card layout only: 'title' and 'control' go in the header row; 'actions' gets
   // its own row below it. Title grows and wraps; controls keep their column order.
   // meta.cellClassName is deliberately NOT applied on the card path: it encodes
-  // table-cell geometry — w-px would squeeze a chevron to 1px, and a nowrap ellipsis
+  // table-cell geometry — w-0 would squeeze a chevron to nothing, and a nowrap ellipsis
   // would truncate a comment inside a card where wrapping is the whole point.
   cardSlot?: 'title' | 'control' | 'actions';
 }
