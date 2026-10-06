@@ -1,4 +1,4 @@
-// The shell's six destinations, shared by the desktop top bar (AppNav) and the
+// The shell's seven destinations, shared by the desktop top bar (AppNav) and the
 // mobile drawer (NavDrawer) so the two can never drift apart. `key` indexes
 // `nav.*` in the locale files.
 export const NAV_LINKS = [
@@ -6,6 +6,7 @@ export const NAV_LINKS = [
   { to: '/warming', key: 'warming' },
   { to: '/neurocomment', key: 'neurocomment' },
   { to: '/neuroshilling', key: 'neuroshilling' },
+  { to: '/broadcast', key: 'broadcast' },
   { to: '/logs', key: 'logs' },
   { to: '/settings', key: 'settings' },
 ] as const;
