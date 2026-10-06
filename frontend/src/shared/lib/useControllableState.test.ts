@@ -16,7 +16,8 @@ test('uncontrolled: owns the value, starts from the default and reports each cha
 test('controlled: shows the prop, reports the request and waits for the owner', () => {
   const onValueChange = vi.fn();
   const { result, rerender } = renderHook(
-    ({ value }: { value: number }) => useControllableState({ value, defaultValue: 0, onValueChange }),
+    ({ value }: { value: number }) =>
+      useControllableState({ value, defaultValue: 0, onValueChange }),
     { initialProps: { value: 5 } },
   );
 
