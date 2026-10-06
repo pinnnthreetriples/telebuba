@@ -17,7 +17,13 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, InputChannelEmpty
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.types import (
+    ChatReactionsNone,
+    ChatReactionsSome,
+    InputChannelEmpty,
+    InputUserSelf,
+)
 
 from core.config import settings
 from core.telegram_client._channels import _input_channel
@@ -124,9 +130,14 @@ async def dispatch_get_own_channel(
     idiom as ``_read._resolve_linked_group_entity``). Index 0 once paired this
     channel's id with the discussion group's title/username — and the edit
     modal prefills from that title.
+
+    The profile pin lives on the account, not the channel: ``userFull`` names
+    the one personal channel, so a second read answers "is it this one".
     """
     entity = await _input_channel(client, action.channel_id)
     full = await client(GetFullChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
+    me = await client(GetFullUserRequest(InputUserSelf()))
+    pinned_id = getattr(getattr(me, "full_user", None), "personal_channel_id", None)
     full_chat = getattr(full, "full_chat", None)
     chat = next(
         (
@@ -143,6 +154,7 @@ async def dispatch_get_own_channel(
         about=str(getattr(full_chat, "about", "") or ""),
         participants_count=getattr(full_chat, "participants_count", None),
         reactions_enabled=_reactions_enabled(full_chat),
+        pinned_to_profile=pinned_id == action.channel_id,
     )
 
 

@@ -15959,6 +15959,11 @@
             "type": "boolean",
             "title": "Reactions Enabled",
             "default": true
+          },
+          "pinned_to_profile": {
+            "type": "boolean",
+            "title": "Pinned To Profile",
+            "default": false
           }
         },
         "type": "object",
@@ -16009,6 +16014,11 @@
             "type": "boolean",
             "title": "Reactions Enabled",
             "default": true
+          },
+          "pinned_to_profile": {
+            "type": "boolean",
+            "title": "Pinned To Profile",
+            "default": false
           }
         },
         "type": "object",
@@ -16140,6 +16150,17 @@
               }
             ],
             "title": "Reactions Enabled"
+          },
+          "pinned_to_profile": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned To Profile"
           }
         },
         "type": "object",

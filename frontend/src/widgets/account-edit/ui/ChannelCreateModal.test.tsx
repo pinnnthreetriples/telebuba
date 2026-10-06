@@ -73,10 +73,15 @@ function routeApi({
   });
 }
 
-async function openCreate() {
+// A new channel is public by default (username required); most tests here are
+// not about the handle, so they tick «Приватный канал» to keep it out of the way.
+async function openCreate({ isPrivate = true }: { isPrivate?: boolean } = {}) {
   renderWithClient(<ChannelsTab accountId="acc-1" />);
   await userEvent.click(await screen.findByText('Создать канал'));
   await screen.findByText('Новый канал');
+  if (isPrivate) {
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Приватный канал' }));
+  }
 }
 
 function createPosts(): Request[] {
@@ -116,6 +121,7 @@ test('the happy path posts the request and hands off into the editor', async () 
     about: '',
     username: null,
     reactions_enabled: true,
+    pinned_to_profile: false,
   });
 
   // onCreated lifts the created channel_id into the editor (create closes).
@@ -145,6 +151,7 @@ test('the reactions checkbox sends reactions_enabled=false for the new channel',
     about: '',
     username: null,
     reactions_enabled: false,
+    pinned_to_profile: false,
   });
 });
 
@@ -155,9 +162,8 @@ test('a public channel sends the username and the debounced check shows taken/fr
         ? jsonResponse({ available: false, code: 'channel_username_occupied' })
         : jsonResponse({ available: true, code: null }),
   });
-  await openCreate();
+  await openCreate({ isPrivate: false });
 
-  await userEvent.click(screen.getByText('Публичный канал'));
   // The label's text includes the visual '@' prefix span → match loosely.
   const usernameInput = screen.getByLabelText(/Юзернейм/);
 
@@ -187,6 +193,7 @@ test('a public channel sends the username and the debounced check shows taken/fr
     about: '',
     username: 'freshname',
     reactions_enabled: true,
+    pinned_to_profile: false,
   });
 });
 
@@ -194,10 +201,9 @@ test('a definite "taken" verdict disarms Create (no round-trip that cannot succe
   routeApi({
     onCheck: () => jsonResponse({ available: false, code: 'channel_username_occupied' }),
   });
-  await openCreate();
+  await openCreate({ isPrivate: false });
 
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
-  await userEvent.click(screen.getByText('Публичный канал'));
   await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
   expect(await screen.findByText('Юзернейм уже занят', {}, { timeout: 3000 })).toBeInTheDocument();
 
@@ -213,10 +219,9 @@ test('a FAILED availability probe says so and leaves Create armed', async () => 
   routeApi({
     onCheck: () => jsonResponse({ error: { code: 'bad_gateway', message: 'nope' } }, 502),
   });
-  await openCreate();
+  await openCreate({ isPrivate: false });
 
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
-  await userEvent.click(screen.getByText('Публичный канал'));
   await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
 
   // A failed probe rendered NOTHING, which reads exactly like "not checked yet".
@@ -333,10 +338,9 @@ test('an id-less PRE-create refusal keeps Create armed so the handle can be corr
           });
     },
   });
-  await openCreate();
+  await openCreate({ isPrivate: false });
 
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
-  await userEvent.click(screen.getByText('Публичный канал'));
   const usernameInput = screen.getByLabelText(/Юзернейм/);
   await userEvent.type(usernameInput, 'newshub');
   await userEvent.click(screen.getByText('Создать'));
@@ -363,6 +367,7 @@ test('an id-less PRE-create refusal keeps Create armed so the handle can be corr
     about: '',
     username: 'freshname',
     reactions_enabled: true,
+    pinned_to_profile: false,
   });
   expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
 });
@@ -406,5 +411,56 @@ test('the exits are locked while the create is in flight', async () => {
   // Settled → the dialog resolves into the editor hand-off.
   await waitFor(() => {
     expect(screen.queryByText('Новый канал')).not.toBeInTheDocument();
+  });
+});
+
+test('a new channel is public by default: the handle is required until «Приватный» is ticked', async () => {
+  routeApi();
+  await openCreate({ isPrivate: false });
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  expect(screen.getByLabelText(/Юзернейм/)).toBeInTheDocument();
+  expect(screen.getByText('Создать')).toBeDisabled();
+
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Приватный канал' }));
+  expect(screen.queryByLabelText(/Юзернейм/)).not.toBeInTheDocument();
+  expect(screen.getByText('Создать')).toBeEnabled();
+});
+
+test('a private channel cannot be pinned to the profile', async () => {
+  routeApi();
+  await openCreate({ isPrivate: false });
+
+  const pin = screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ });
+  await userEvent.click(pin);
+  expect(pin).toHaveAttribute('aria-checked', 'true');
+
+  // Going private clears the pin and locks it, with the reason under it.
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Приватный канал' }));
+  expect(pin).toBeDisabled();
+  expect(pin).toHaveAttribute('aria-checked', 'false');
+  expect(screen.getByText('Закрепить в профиле можно только публичный канал')).toBeInTheDocument();
+});
+
+test('a public channel with the pin ticked sends pinned_to_profile=true', async () => {
+  routeApi();
+  await openCreate({ isPrivate: false });
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.type(screen.getByLabelText(/Юзернейм/), 'freshname');
+  await userEvent.click(screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ }));
+  expect(await screen.findByText('Юзернейм свободен', {}, { timeout: 3000 })).toBeInTheDocument();
+  await userEvent.click(screen.getByText('Создать'));
+
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+  const body = (await (createPosts()[0] as Request).clone().json()) as Record<string, unknown>;
+  expect(body).toEqual({
+    title: 'Новости',
+    about: '',
+    username: 'freshname',
+    reactions_enabled: true,
+    pinned_to_profile: true,
   });
 });

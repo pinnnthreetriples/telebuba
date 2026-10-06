@@ -271,8 +271,11 @@ jobs:
       # the install buys no extra coverage -- it only adds a way for this job to go
       # red over registry flake or lockfile drift under a label that says "CVE".
       # Drift is the `frontend` job's business; it runs npm ci already.
+      #
+      # Run through scripts/npm-audit-gate.mjs: same audit and floor, plus the
+      # reviewed-ignore list (npm audit has no per-advisory ignore flag).
       - name: Run npm audit
-        run: npm audit --package-lock-only --audit-level=info
+        run: node scripts/npm-audit-gate.mjs
 
   # ---------------------------------------------------------------------------
   # SAST scan on every PR and push, so the security gate fires before merge

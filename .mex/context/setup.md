@@ -30,7 +30,7 @@ uv run pre-commit run --hook-stage pre-push arch-guard --all-files
 uv run pre-commit run --hook-stage pre-push aislop --all-files
 uv run python -m tools.gen_api
 uv run pip-audit --strict && uv run semgrep --config auto --error .
-npm audit --prefix frontend --package-lock-only --audit-level=info
+node frontend/scripts/npm-audit-gate.mjs  # npm audit + reviewed ignores
 npx --yes mex-agent@0.7.1 check && npx --yes mex-agent@0.7.1 doctor
 cd frontend && npm run gates && npm run build
 ```
