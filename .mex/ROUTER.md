@@ -18,11 +18,13 @@ edges:
     condition: neurocomment campaign channel discovery
   - target: context/runtime-neuroshilling.md
     condition: neuroshilling campaigns, scenarios, dialogue runs, or chat revival
+  - target: context/runtime-chat-broadcast.md
+    condition: chat broadcast campaigns, joins into lists, chains, rounds, or the board by chat
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-09-28
+last_updated: 2026-10-06
 ---
 
 # Telebuba Router
