@@ -20,6 +20,7 @@ import {
   Badge,
   Button,
   Card,
+  CardHeader,
   ChipAddButton,
   CollapsibleCard,
   ConfirmModal,
@@ -29,6 +30,7 @@ import {
   Icon,
   IconButton,
   InlineChipEditor,
+  StatGrid,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -64,15 +66,6 @@ function reasonKey(reason: string): string {
   return reason.startsWith('session ')
     ? 'warming.notReady.session'
     : (READINESS_REASON_KEY[reason] ?? '');
-}
-
-function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
-  return (
-    <div className="text-right">
-      <div className={`type-h1 ${cls}`}>{value}</div>
-      <div className="type-small">{label}</div>
-    </div>
-  );
 }
 
 export function WarmingPage() {
@@ -233,19 +226,14 @@ export function WarmingPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 type-h1">{t('warming.titleFull')}</h1>
         <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:gap-4">
-          <div className="flex gap-3 sm:gap-4">
-            <Counter
-              value={warming.length}
-              label={t('warming.counter.warming')}
-              cls="text-action-primary"
-            />
-            <Counter
-              value={idle.length}
-              label={t('warming.counter.ready')}
-              cls="text-content-primary"
-            />
-            <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
-          </div>
+          <StatGrid
+            className="w-full sm:w-auto"
+            stats={[
+              { value: warming.length, label: t('warming.counter.warming'), tone: 'primary' },
+              { value: idle.length, label: t('warming.counter.ready') },
+              { value: errors, label: t('warming.counter.errors'), tone: 'danger' },
+            ]}
+          />
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
@@ -277,12 +265,11 @@ export function WarmingPage() {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <Card className="p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="type-h3">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-surface-card px-2 type-small">
-                {idle.length}
-              </span>
-            </div>
+            <CardHeader
+              className="mb-3"
+              title={t('warming.ready.title')}
+              badge={<Badge>{idle.length}</Badge>}
+            />
             <div className="flex flex-col gap-2">
               {idle.length === 0 ? (
                 <EmptyState>{t('warming.ready.empty')}</EmptyState>
@@ -378,7 +365,7 @@ export function WarmingPage() {
 
           <CollapsibleCard
             wrapperClassName="rounded-md border border-line bg-surface-card"
-            header={<span className="type-h3">{t('warming.channels.title')}</span>}
+            title={t('warming.channels.title')}
             label={t('warming.channels.title')}
           >
             <div className="mb-3 type-small">{t('warming.channels.hint')}</div>
@@ -433,20 +420,13 @@ export function WarmingPage() {
             key={warmed.length > 0 ? 'warmed-has' : 'warmed-none'}
             defaultOpen={warmed.length > 0}
             label={t('warming.warmed.title')}
-            header={
-              <>
-                <span className="flex size-icon items-center justify-center rounded-md bg-success-tint">
-                  {/* `deep`, а не базовый: базовый зелёный на своём тоне мерит 2.97:1, а
-                      1.4.11 просит 3:1 у графики, которая несёт смысл. `success-deep` даёт
-                      5.85:1. Гейт видит это сам — см. `contrast.test.ts`. */}
-                  <Icon name="check" size={16} className="stroke-success-deep" />
-                </span>
-                <span className="type-h3">{t('warming.warmed.title')}</span>
-                <Badge tone="success" className="font-medium">
-                  {warmed.length}
-                </Badge>
-              </>
-            }
+            // Плитка `success` красит галочку `success-deep`, а не базовым зелёным: базовый
+            // на своём тоне мерит 2.97:1, а 1.4.11 просит 3:1 у графики, которая несёт
+            // смысл. `success-deep` даёт 5.85:1 — см. `contrast.test.ts`.
+            icon={<Icon name="check" size={16} />}
+            tone="success"
+            title={t('warming.warmed.title')}
+            badge={<Badge tone="success">{warmed.length}</Badge>}
           >
             <div className="flex flex-col gap-3">
               {warmed.map((acc) => {

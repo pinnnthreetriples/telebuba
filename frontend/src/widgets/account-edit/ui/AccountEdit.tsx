@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next';
 
-import { Card } from '@/shared/ui';
+import { Card, ProgressBar } from '@/shared/ui';
 
 import { StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 
 import { ActionsSection } from './ActionsSection';
 import { AccountChats } from './AccountChats';
@@ -84,12 +83,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="type-body text-content-subtle">{t('accounts.edit.trust')}</span>
             <span className={`text-h3 font-medium ${tTone}`}>{trust}/100</span>
           </div>
-          <div className={`mt-2 ${BAR_TRACK}`}>
-            <div
-              className={`${BAR_FILL} bg-current ${tTone}`}
-              style={{ width: `${String(trust)}%` }}
-            />
-          </div>
+          <ProgressBar tone="current" value={trust} className={`mt-2 ${tTone}`} />
         </div>
       </Card>
 

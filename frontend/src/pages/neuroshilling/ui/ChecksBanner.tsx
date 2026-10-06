@@ -28,24 +28,19 @@ export function ChecksBanner({ blockers }: { blockers: string[] }) {
       wrapperClassName="rounded-lg border border-warning-line bg-warning-tint"
       headerClassName="px-4 py-3"
       bodyClassName="px-4 pb-4"
-      header={
-        <span className="flex min-w-0 items-center gap-3">
-          {/* Голый знак, а не залитый кружок. Кружок был `warning-deep` на
-              `warning-line` и мерил 4.32:1 против пола в 4.5 — `line` это краска РАМКИ, и
-              роли «чернила на рамке» в системе нет, потому что рамку не набирают. На
-              самой плашке та же краска проходит, и это единственная пара, которую
-              `contrast.test.ts` для предупреждения знает. */}
-          <Icon name="alert-triangle" size={18} className="shrink-0 text-warning-deep" />
-          <span className="min-w-0">
-            <span className="block type-body-medium text-warning-deep">
-              {t('neuroshilling.checks.title', { count: blockers.length })}
-            </span>
-            <span className="block type-small text-warning-deep">
-              {t('neuroshilling.checks.subtitle')}
-            </span>
-          </span>
+      // Плитка `warning` на подложке того же тона: знак стоит голым, не залитым кружком.
+      // Кружок был `warning-deep` на `warning-line` и мерил 4.32:1 против пола в 4.5 —
+      // `line` это краска РАМКИ, и роли «чернила на рамке» в системе нет. На самой
+      // плашке та же краска проходит, и это единственная пара, которую
+      // `contrast.test.ts` для предупреждения знает.
+      icon={<Icon name="alert-triangle" size={18} />}
+      tone="warning"
+      title={
+        <span className="text-warning-deep">
+          {t('neuroshilling.checks.title', { count: blockers.length })}
         </span>
       }
+      subtitle={<span className="text-warning-deep">{t('neuroshilling.checks.subtitle')}</span>}
     >
       <ul className="flex list-none flex-col gap-1 type-small text-warning-deep">
         {blockers.map((reason) => (

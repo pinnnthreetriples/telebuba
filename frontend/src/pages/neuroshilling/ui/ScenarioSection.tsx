@@ -3,7 +3,17 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount, NeuroshillingCampaign } from '@/shared/api';
 import { FOCUS_RING } from '@/shared/design-system';
-import { Badge, Button, HelpHint, Icon, IconButton, Input, Select, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CardHeader,
+  HelpHint,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  Textarea,
+} from '@/shared/ui';
 
 import { MediaModal } from './MediaModal';
 import { useNumberField } from './useNumberField';
@@ -355,25 +365,29 @@ export function ScenarioSection({
 
   return (
     <section>
-      <div className="mb-3 flex items-center gap-3">
-        <span className="type-h3">{t('neuroshilling.scenario.title')}</span>
-        {/* Утверждение умирает в ЭТОЙ секции, поэтому здесь оно и должно быть видно:
-            любая правка ниже возвращает кампанию в черновик в момент сохранения, и
-            оператор, видевший плашку только на превью, узнал бы об этом из отказа. */}
-        <span
-          className={`shrink-0 rounded-full px-3 py-1 text-small font-medium ${
-            dirty && status === 'approved'
-              ? 'bg-warning-tint text-warning-deep'
-              : status === 'approved'
-                ? 'bg-success-tint text-success-deep'
-                : 'bg-canvas text-content-muted'
-          }`}
-        >
-          {dirty && status === 'approved'
-            ? t('neuroshilling.scenario.status.willReset')
-            : t(`neuroshilling.scenario.status.${status}`)}
-        </span>
-      </div>
+      {/* Утверждение умирает в ЭТОЙ секции, поэтому здесь оно и должно быть видно:
+          любая правка ниже возвращает кампанию в черновик в момент сохранения, и
+          оператор, видевший плашку только на превью, узнал бы об этом из отказа. */}
+      <CardHeader
+        className="mb-3"
+        title={t('neuroshilling.scenario.title')}
+        badge={
+          <Badge
+            size="sm"
+            tone={
+              dirty && status === 'approved'
+                ? 'warning'
+                : status === 'approved'
+                  ? 'success'
+                  : 'neutral'
+            }
+          >
+            {dirty && status === 'approved'
+              ? t('neuroshilling.scenario.status.willReset')
+              : t(`neuroshilling.scenario.status.${status}`)}
+          </Badge>
+        }
+      />
 
       {/* Тема и всё, что ею распоряжается, — одной строкой: бриф, две кнопки «добавить
           шаг», генерация и вложение. Тема была полем в три строки над панелью генерации;

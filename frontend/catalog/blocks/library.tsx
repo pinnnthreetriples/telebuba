@@ -10,7 +10,7 @@
 // собранная завтра, не должна расходиться с собранной сегодня.
 import { DateRangePicker, DeleteButton, InlineTimeEdit } from '@/shared/ui';
 
-import type { BlockDemo } from './Blocks';
+import type { BlockDemo } from './types';
 import { InCard } from './frames';
 
 const TODAY = new Date(2026, 9, 6);

@@ -152,17 +152,6 @@
     box-shadow: 0 0 7px 1px rgb(theme('channel.glow') / 0.9);
   }
 }
-/* Story-upload progress fill: no real upload-progress events, so simulate the
-   design's growing bar (settles at 92% while the post is in flight; success
-   snaps it to 100%). */
-@keyframes upbar {
-  from {
-    width: 8%;
-  }
-  to {
-    width: 92%;
-  }
-}
 /* `spring` and not the `(.34,1.56,.64,1)` this used to carry: the same overshoot-and-
    settle, written 0.11 of overshoot away from the token — 1.1px of bounce against
    0.75px on a 52px avatar. The config's two curves are the app's two intentions, and
@@ -201,9 +190,6 @@
 }
 .tb-swapin {
   animation: swapin theme('transitionDuration.swap') theme('transitionTimingFunction.out') both;
-}
-.tb-upbar {
-  animation: upbar theme('transitionDuration.roll') theme('transitionTimingFunction.out') forwards;
 }
 /* `out`, the app's decelerate-and-stop, and not the `(.22,1,.36,1)` this used to
    carry: neither curve overshoots, they part by 9.6% of the travel at their widest

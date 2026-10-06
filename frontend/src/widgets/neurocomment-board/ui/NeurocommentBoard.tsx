@@ -365,13 +365,9 @@ export function NeurocommentBoard({
       label={t('neurocomment.board.title')}
       headerClassName="border-b border-canvas px-4 py-4"
       bodyClassName="tb-scroll overflow-x-auto"
-      header={
-        <>
-          <span className="type-h3">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-info-tint px-2 text-small font-medium text-info-strong">
-            {t('neurocomment.board.accounts', { count: accountsCount })}
-          </span>
-        </>
+      title={t('neurocomment.board.title')}
+      badge={
+        <Badge tone="info">{t('neurocomment.board.accounts', { count: accountsCount })}</Badge>
       }
       trailing={
         <div className="flex shrink-0 items-center gap-3">

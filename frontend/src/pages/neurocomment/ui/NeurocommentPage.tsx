@@ -34,7 +34,7 @@ import { ChannelDiscoveryButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { ConfirmModal, HowItWorksCard, toastError } from '@/shared/ui';
+import { ConfirmModal, HowItWorksCard, type Stat, toastError } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
@@ -43,7 +43,7 @@ import { CampaignsCard } from './CampaignsCard';
 import { CaptchaSolverCard } from './CaptchaSolverCard';
 import { IdleBanner } from './IdleBanner';
 import { ListenerCard } from './ListenerCard';
-import { PipelineCard } from './PipelineCard';
+import { RuntimePipeline } from './RuntimePipeline';
 import { isWarmingConflict } from './listenerConflict';
 
 // SSE drives live runtime/board updates (onboarding now emits a transient bus
@@ -313,26 +313,26 @@ export function NeurocommentPage() {
   // account is not "idle neurocomment work".
   const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
-  const stats: { label: string; value: number; color: string }[] = [
+  const stats: Stat[] = [
     {
       label: t('neurocomment.stat.campaigns'),
       value: campaignList.length,
-      color: 'text-content-primary',
+      tone: 'default',
     },
     {
       label: t('neurocomment.stat.channels'),
       value: runtime.data?.active_channels ?? boardChannels.length,
-      color: 'text-action-primary',
+      tone: 'primary',
     },
     {
       label: t('neurocomment.stat.accounts'),
       value: boardAccounts.length,
-      color: 'text-content-primary',
+      tone: 'default',
     },
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
-      color: 'text-success-deep',
+      tone: 'success',
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
@@ -350,10 +350,10 @@ export function NeurocommentPage() {
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
-      color: 'text-danger',
+      tone: 'danger',
     },
     // The design's red "ошибок" odometer (#E5372A): today's error-level events.
-    { label: t('neurocomment.stat.errors'), value: errorCount, color: 'text-danger' },
+    { label: t('neurocomment.stat.errors'), value: errorCount, tone: 'danger' },
   ];
 
   const activeCampaignCount = campaignList.filter((c) => c.status === 'active').length;
@@ -518,7 +518,7 @@ export function NeurocommentPage() {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
         <div className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1">
-          <PipelineCard
+          <RuntimePipeline
             running={running}
             canStart={canStartListener}
             stats={stats}

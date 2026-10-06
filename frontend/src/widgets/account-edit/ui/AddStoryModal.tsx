@@ -19,8 +19,16 @@ import {
   useNow,
   type ScheduleMode,
 } from '@/features/schedule-post';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
+import {
+  Button,
+  CloseButton,
+  Icon,
+  Input,
+  Modal,
+  ProgressBar,
+  SegmentedControl,
+  Spinner,
+} from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -639,11 +647,13 @@ export function AddStoryModal({
             <div className="min-w-0 flex-1">
               <div className={`type-small-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className={`mt-2 ${BAR_TRACK}`}>
-                  <div
-                    className={`${BAR_FILL} ${done ? 'w-full bg-success' : 'tb-upbar bg-action-primary'}`}
-                  />
-                </div>
+                <ProgressBar
+                  className="mt-2"
+                  tone="success"
+                  value={1}
+                  max={1}
+                  indeterminate={!done}
+                />
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1">

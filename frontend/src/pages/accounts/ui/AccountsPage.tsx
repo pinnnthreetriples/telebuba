@@ -13,7 +13,17 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, EmptyState, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Icon,
+  IconButton,
+  Spinner,
+  type Stat,
+  StatGrid,
+  toastError,
+} from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -236,20 +246,20 @@ export function AccountsPage() {
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
   // problem, each with its own colour. Values come from the fleet-wide stats
   // query, not the current page, so they hold across pagination and search.
-  const stats: { label: string; value: number; cls: string }[] = [
+  const stats: Stat[] = [
     {
       label: t('accounts.stats.total'),
       value: fleetStats?.total ?? 0,
-      cls: 'text-content-primary',
+      tone: 'default',
     },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, tone: 'success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, tone: 'warning' },
     {
       label: t('accounts.stats.code'),
       value: fleetStats?.needs_code ?? 0,
-      cls: 'text-action-primary',
+      tone: 'primary',
     },
-    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
+    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, tone: 'danger' },
   ];
 
   const hasPrev = cursorStack.length > 1;
@@ -389,17 +399,7 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-3">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-col rounded-md border border-line bg-surface-card px-4 py-3"
-          >
-            <div className={`type-h1 ${stat.cls}`}>{stat.value}</div>
-            <div className="type-small">{stat.label}</div>
-          </div>
-        ))}
-      </div>
+      <StatGrid stats={stats} className="mb-4" />
 
       {isPending ? (
         <p className="text-content-muted">{t('accounts.loading')}</p>

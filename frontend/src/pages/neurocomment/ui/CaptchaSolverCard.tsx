@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ChallengeRow } from '@/shared/api';
-import { Card, Switch } from '@/shared/ui';
+import { Card, CardHeader, Switch } from '@/shared/ui';
 
 import { CaptchaQueue } from './CaptchaQueue';
 
@@ -26,54 +26,52 @@ export function CaptchaSolverCard({
   const tipId = useId();
   return (
     <Card className="">
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-icon shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+      <CardHeader
+        className="px-4 py-3"
+        icon={
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M9 12l2 2 4-4" />
+            <path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9z" />
+          </svg>
+        }
+        title={t('neurocomment.captcha.title')}
+        subtitle={t('neurocomment.captcha.sub')}
+        badge={
+          // `tabIndex` and not a <button>: there is nothing here to activate, only
+          // something to read. See `.tb-tip-pop` in app/styles/index.css.
+          <span className="tb-tip inline-flex">
+            <span
+              tabIndex={0}
+              aria-describedby={tipId}
+              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-surface-card text-small font-medium text-content-subtle"
             >
-              <path d="M9 12l2 2 4-4" />
-              <path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9z" />
-            </svg>
+              ?
+            </span>
+            <span
+              id={tipId}
+              role="tooltip"
+              className="tb-tip-pop tb-tip-pop--wide max-sm:!-left-2"
+              style={{ textAlign: 'left' }}
+            >
+              {t('neurocomment.captcha.tooltip')}
+            </span>
           </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="type-body-medium">{t('neurocomment.captcha.title')}</span>
-              {/* `tabIndex` and not a <button>: there is nothing here to activate, only
-                  something to read. See `.tb-tip-pop` in app/styles/index.css. */}
-              <span className="tb-tip inline-flex">
-                <span
-                  tabIndex={0}
-                  aria-describedby={tipId}
-                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-surface-card text-small font-medium text-content-subtle"
-                >
-                  ?
-                </span>
-                <span
-                  id={tipId}
-                  role="tooltip"
-                  className="tb-tip-pop tb-tip-pop--wide max-sm:!-left-2"
-                  style={{ textAlign: 'left' }}
-                >
-                  {t('neurocomment.captcha.tooltip')}
-                </span>
-              </span>
-            </div>
-            <div className="type-small">{t('neurocomment.captcha.sub')}</div>
-          </div>
-        </div>
+        }
+      >
         <Switch
           checked={solverEnabled}
           onChange={onToggleSolver}
           label={t('neurocomment.captcha.title')}
           disabled={campaignId === null}
         />
-      </div>
+      </CardHeader>
       {solverEnabled && captchaQueue.length > 0 ? (
         <div className="px-4 pb-4">
           <div className="mb-3 flex items-center gap-2 border-t border-canvas pt-3">

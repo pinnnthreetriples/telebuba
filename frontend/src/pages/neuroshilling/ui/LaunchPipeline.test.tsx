@@ -11,7 +11,7 @@ import type {
   NeuroshillingStep,
 } from '@/shared/api';
 
-import { PipelineCard } from './PipelineCard';
+import { LaunchPipeline } from './LaunchPipeline';
 
 const CAMPAIGN: NeuroshillingCampaign = {
   campaign_id: 'c1',
@@ -55,11 +55,11 @@ const POOL: NeuroshillingBoardAccount[] = [
   { account_id: 'a3', title: 'Виктор' },
 ];
 
-function renderCard(over: Partial<Parameters<typeof PipelineCard>[0]> = {}) {
+function renderCard(over: Partial<Parameters<typeof LaunchPipeline>[0]> = {}) {
   const onStart = vi.fn();
   const onStop = vi.fn();
   render(
-    <PipelineCard
+    <LaunchPipeline
       campaign={CAMPAIGN}
       run={{ status: 'idle', sent: 0, total: 4 }}
       pool={POOL}

@@ -1,10 +1,8 @@
 // Блоки — составные куски экрана, которые повторяются на разных страницах, каждый одним
-// компонентом из `src/shared/ui`. Этот список — единственное место, где описаны их
-// образцы: его рендерит раздел каталога (визуальный гейт) и он же, через
-// `react-dom/server`, становится `docs/blocks.html` (`scripts/blocks-doc.mjs`). Образец,
-// перерисованный в HTML руками, расходился бы с компонентом; этот рисует сам компонент.
-import type { ReactNode } from 'react';
-
+// компонентом (почти все — из `src/shared/ui`). Этот список — единственное место, где
+// описаны их образцы: его рендерит раздел каталога и он же, через `react-dom/server`,
+// становится `docs/blocks.html` (`scripts/blocks-doc.mjs`). Образец, перерисованный в HTML
+// руками, расходился бы с компонентом; этот рисует сам компонент.
 import {
   Badge,
   Button,
@@ -22,21 +20,15 @@ import {
   Switch,
 } from '@/shared/ui';
 
+import { CARD_BLOCKS } from './cards';
 import { InCard, InDialog } from './frames';
 import { LIBRARY_BLOCKS } from './library';
+import { PATTERN_BLOCKS } from './patterns';
+import { type BlockDemo, noop } from './types';
 
-export type BlockDemo = {
-  id: string;
-  // Имя компонента: по нему генератор находит файл и все места, где блок стоит.
-  name: string;
-  // Блок библиотеки: в `shared/ui` есть, на экранах ещё нет (`library.tsx`).
-  library?: true;
-  variants: { label: string; node: ReactNode }[];
-};
+export type { BlockDemo };
 
-const noop = () => undefined;
-
-export const BLOCKS: BlockDemo[] = [
+const BASE_BLOCKS: BlockDemo[] = [
   {
     id: 'modal-header',
     name: 'ModalHeader',
@@ -186,7 +178,7 @@ export const BLOCKS: BlockDemo[] = [
           <CollapsibleCard
             defaultOpen
             label="Каналы кампании"
-            header={<span className="type-h3">Каналы кампании</span>}
+            title="Каналы кампании"
             trailing={<Badge size="xs">3</Badge>}
           >
             <div className="flex flex-col gap-1 type-body text-content-muted">
@@ -200,7 +192,7 @@ export const BLOCKS: BlockDemo[] = [
       {
         label: 'свёрнута',
         node: (
-          <CollapsibleCard label="Журнал" header={<span className="type-h3">Журнал</span>}>
+          <CollapsibleCard label="Журнал" title="Журнал">
             <span />
           </CollapsibleCard>
         ),
@@ -240,5 +232,10 @@ export const BLOCKS: BlockDemo[] = [
   },
 ];
 
-// Библиотека — в конце и отдельным файлом: у этих блоков ещё нет экрана (см. `library.tsx`).
-BLOCKS.push(...LIBRARY_BLOCKS);
+// Библиотека — в конце: у этих блоков ещё нет экрана (см. `library.tsx`).
+export const BLOCKS: BlockDemo[] = [
+  ...BASE_BLOCKS,
+  ...CARD_BLOCKS,
+  ...PATTERN_BLOCKS,
+  ...LIBRARY_BLOCKS,
+];

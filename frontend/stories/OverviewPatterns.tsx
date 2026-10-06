@@ -9,8 +9,8 @@ import {
   type PromptAccount,
 } from '../src/entities/campaign';
 import { CampaignsCard } from '../src/pages/neurocomment/ui/CampaignsCard';
-import { PipelineCard as RuntimePipeline } from '../src/pages/neurocomment/ui/PipelineCard';
-import { PipelineCard as LaunchPipeline } from '../src/pages/neuroshilling/ui/PipelineCard';
+import { RuntimePipeline } from '../src/pages/neurocomment/ui/RuntimePipeline';
+import { LaunchPipeline } from '../src/pages/neuroshilling/ui/LaunchPipeline';
 import type {
   LogEntry,
   NeurocommentCampaign,
@@ -492,12 +492,12 @@ export function OverviewPatterns() {
           events={[]}
           onToggle={() => setRuntimeRunning((current) => !current)}
           stats={[
-            { label: 'Кампаний', value: 2, color: 'text-content-primary' },
-            { label: 'Каналов', value: 4, color: 'text-action-primary' },
-            { label: 'Аккаунтов', value: 2, color: 'text-content-primary' },
-            { label: 'Комментариев', value: 14, color: 'text-success-deep' },
-            { label: 'Удалено', value: 1, color: 'text-danger' },
-            { label: 'Ошибок', value: 2, color: 'text-danger' },
+            { label: 'Кампаний', value: 2, tone: 'default' },
+            { label: 'Каналов', value: 4, tone: 'primary' },
+            { label: 'Аккаунтов', value: 2, tone: 'default' },
+            { label: 'Комментариев', value: 14, tone: 'success' },
+            { label: 'Удалено', value: 1, tone: 'danger' },
+            { label: 'Ошибок', value: 2, tone: 'danger' },
           ]}
         />
       </div>

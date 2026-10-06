@@ -26,7 +26,7 @@ export function HowItWorksCard({
       label={title}
       defaultOpen={defaultOpen}
       wrapperClassName="rounded-lg border border-line bg-canvas"
-      header={<span className="type-h3">{title}</span>}
+      title={title}
     >
       {hint === undefined ? null : <div className="mb-4 type-small">{hint}</div>}
       <div className={cn('grid grid-cols-1 gap-x-4 gap-y-3', columns === 2 && 'md:grid-cols-2')}>

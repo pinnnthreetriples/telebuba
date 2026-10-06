@@ -8,7 +8,17 @@ import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Button, Card, FeedbackMark, Icon, TerminalPane } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  FeedbackMark,
+  Icon,
+  ProgressBar,
+  Stepper,
+  TerminalPane,
+} from '@/shared/ui';
 
 import { WarmStopModal } from './WarmStopModal';
 
@@ -33,7 +43,7 @@ type WarmingState = WarmingAccountState['state'];
 // and has been dropped; the rail advances by index, so the order must not fight
 // the emission order in services/warming (else a completed step would un-fill).
 const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
-const DAY_SEGMENTS = [...Array(42).keys()];
+const DAY_SEGMENTS = 42;
 const DAY_TICKS = [0, 4, 7, 11, 14];
 const WARMING_DAYS = 14;
 
@@ -234,10 +244,8 @@ function WarmingCard({
   const elapsed = account.warming_days ?? 0;
   const days = Math.min(elapsed, target);
   const complete = elapsed >= target;
-  const filled = Math.round((DAY_SEGMENTS.length * days) / target);
   const dayTicks =
     target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
-  const connectorPct = hold ? 0 : (active / (STAGES.length - 1)) * 100;
   const statusTone = badgeTone(WARM_STATUS[account.state]);
   // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
   const dailyActions = account.daily_actions ?? 0;
@@ -363,19 +371,8 @@ function WarmingCard({
           </span>
         </div>
 
-        {/* day bar */}
-        <div className="flex items-end">
-          {DAY_SEGMENTS.map((index) => (
-            <span
-              key={index}
-              // Days done, the day in progress, days to come — tokens, so the bar
-              // reads the same green/blue/grey as the rest of the board. The slit
-              // between days is a transparent border the fill stops short of
-              // (`bg-clip-padding`), not a 1px gap: the rhythm has no 1px rung.
-              className={`h-bar flex-1 rounded-[1.5px] border-r border-transparent bg-clip-padding transition-[background] last:border-r-0 duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-action-primary' : 'bg-line'}`}
-            />
-          ))}
-        </div>
+        {/* day bar: days done, the day in progress, days to come */}
+        <ProgressBar segments={DAY_SEGMENTS} value={days} max={target} />
         <div className="mt-2 flex justify-between type-small">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
@@ -383,56 +380,16 @@ function WarmingCard({
         </div>
       </div>
 
-      <div className="px-1">
-        {/* Stepper. Dot and label share ONE cell: as two rows they had different
-            geometry — 14px dot cells against full-width label slots, both pinned
-            flush by `justify-between` — and the ends drifted 45px apart on a 571px
-            card. Equal cells put the first and last dot centres one half-cell
-            (50%/STAGES.length) from the edges, which is where the rail has to start
-            and stop for the `active / (STAGES.length - 1)` fill to land on a dot. */}
-        <div className="relative">
-          <div
-            className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-info-line"
-            style={{
-              left: `${String(50 / STAGES.length)}%`,
-              right: `${String(50 / STAGES.length)}%`,
-            }}
-          >
-            <div
-              className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-reveal"
-              style={{ width: `${String(connectorPct)}%` }}
-            />
-          </div>
-          <div className="relative flex">
-            {STAGES.map((stage, index) => (
-              <div key={stage} className="flex flex-1 flex-col items-center">
-                <div className="flex size-glyph items-center justify-center">
-                  {index < active ? (
-                    <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                      <Icon name="check" size={10} className="stroke-on-fill" />
-                    </span>
-                  ) : index === active ? (
-                    <span className="tb-livedot size-node rounded-full bg-action-primary" />
-                  ) : (
-                    <span className="size-node rounded-full border-[1.5px] border-line-strong bg-surface-card" />
-                  )}
-                </div>
-                <span
-                  className={`mt-2 text-center text-small ${
-                    index < active
-                      ? 'font-medium text-success-deep'
-                      : index === active
-                        ? 'font-medium text-info-strong'
-                        : 'text-content-subtle'
-                  }`}
-                >
-                  {t(`warming.stage.${stage}`)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Pre-start hold (`active` -1) leaves every stage upcoming. */}
+      <Stepper
+        className="px-1"
+        pulse
+        steps={STAGES.map((stage, index) => ({
+          id: stage,
+          label: t(`warming.stage.${stage}`),
+          state: index < active ? 'done' : index === active ? 'current' : 'upcoming',
+        }))}
+      />
 
       {!complete ? (
         <>
@@ -599,30 +556,30 @@ export function WarmingBoard({
   const { t } = useTranslation();
   return (
     <Card className="p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex size-icon items-center justify-center rounded-sm bg-action-primary">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="stroke-on-fill"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 12h4l3 8 4-16 3 8h4" />
-            </svg>
-          </span>
-          <span className="type-h3">{t('warming.inProgress.title')}</span>
-        </div>
+      <CardHeader
+        className="mb-4"
+        title={t('warming.inProgress.title')}
+        icon={
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 12h4l3 8 4-16 3 8h4" />
+          </svg>
+        }
+      >
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-3 py-1 text-small font-medium text-success-deep">
+          <Badge size="sm" tone="success" className="tb-pulse">
             {t('warming.inProgress.live')}
-          </span>
+          </Badge>
         ) : null}
-      </div>
+      </CardHeader>
 
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
         {warming.map((account) => (

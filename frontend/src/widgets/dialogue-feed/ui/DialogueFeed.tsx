@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Card, EmptyState, Icon } from '@/shared/ui';
+import { Badge, Card, CardHeader, EmptyState, Icon } from '@/shared/ui';
 
 import { warmingDialoguesQueryOptions } from '@/entities/warming';
 import type { DialogueFeedMessage } from '@/shared/api';
@@ -275,19 +275,20 @@ export function DialogueFeed() {
 
   return (
     <Card className="p-4">
-      <div className="mb-4 flex items-center gap-3">
-        {/* Pulsing green only while the feed is genuinely fresh; otherwise the
-            static muted dot the design already uses for an idle listener. */}
-        <span
-          className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
-        />
-        <span className="min-w-0 flex-1 type-h3">{t('warming.dialogues.title')}</span>
-        {pairs.length > 0 ? (
-          <Badge tone={live ? 'success' : 'neutral'} className={live ? 'font-medium' : undefined}>
-            {t('warming.dialogues.pairs', { count: pairs.length })}
-          </Badge>
-        ) : null}
-      </div>
+      {/* Pulsing green only while the feed is genuinely fresh; otherwise the
+          static muted dot the design already uses for an idle listener. */}
+      <CardHeader
+        className="mb-4"
+        dot={live ? 'live' : 'idle'}
+        title={t('warming.dialogues.title')}
+        badge={
+          pairs.length > 0 ? (
+            <Badge tone={live ? 'success' : 'neutral'}>
+              {t('warming.dialogues.pairs', { count: pairs.length })}
+            </Badge>
+          ) : null
+        }
+      />
       {pairs.length === 0 ? (
         <EmptyState>{t('warming.dialogues.empty')}</EmptyState>
       ) : (

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
-import { Button, EmptyState, Modal, ModalHeader, toastError } from '@/shared/ui';
+import { Button, EmptyState, Modal, ModalHeader, ProgressBar, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -47,7 +47,7 @@ function tone(gauge: AccountLimitGauge): 'full' | 'near' | 'ok' {
   return ratio >= 0.8 ? 'near' : 'ok';
 }
 
-const BAR = { full: 'bg-danger', near: 'bg-warning', ok: 'bg-success' } as const;
+const BAR = { full: 'danger', near: 'warning', ok: 'success' } as const;
 
 // A rolling window frees one slot at a time, so the reset is a moment, not a countdown to
 // midnight. Local time and to the minute: the operator compares it against a log line.
@@ -78,7 +78,6 @@ function LimitRow({
 }) {
   const { t, i18n } = useTranslation();
   const state = tone(gauge);
-  const width = gauge.limit > 0 ? Math.min(100, Math.round(share(gauge) * 100)) : 0;
   const resets = resetLabel(gauge.resets_at, i18n.language);
   const value = draft === undefined ? (gauge.overridden ? gauge.limit : '') : draft;
 
@@ -94,9 +93,7 @@ function LimitRow({
           {gauge.used} / {gauge.limit > 0 ? gauge.limit : '∞'}
         </span>
       </div>
-      <div className="mt-2 h-meter overflow-hidden rounded-[3px] bg-canvas">
-        <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
-      </div>
+      <ProgressBar className="mt-2" tone={BAR[state]} value={gauge.used} max={gauge.limit} />
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <span className="min-w-col flex-1 type-small">
           {hint}
