@@ -145,12 +145,9 @@ export function Section({
       wrapperClassName="self-start rounded-lg border border-line bg-surface-card"
       headerClassName="px-6 py-4"
       bodyClassName={bodyClassName}
-      header={
-        <span className="flex items-center gap-2 type-h3">
-          {title}
-          {icon}
-        </span>
-      }
+      title={title}
+      // A marker after the title (the device card's lock), not a leading tile.
+      badge={icon}
     >
       {children}
     </CollapsibleCard>

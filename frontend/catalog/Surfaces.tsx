@@ -74,10 +74,7 @@ export function Surfaces() {
       <Row label="CollapsibleCard">
         <Cell caption="закрыта">
           <div className="w-panel max-w-full">
-            <CollapsibleCard
-              label="Ограничения"
-              header={<span className="type-h3">Ограничения</span>}
-            >
+            <CollapsibleCard label="Ограничения" title="Ограничения">
               <p className="type-body text-content-subtle">Тело раскрывается по клику на шапку.</p>
             </CollapsibleCard>
           </div>
@@ -87,7 +84,7 @@ export function Surfaces() {
             <CollapsibleCard
               defaultOpen
               label="Ограничения"
-              header={<span className="type-h3">Ограничения</span>}
+              title="Ограничения"
               trailing={<Badge tone="info">3</Badge>}
             >
               <p className="type-body text-content-subtle">

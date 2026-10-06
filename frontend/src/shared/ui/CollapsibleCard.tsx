@@ -3,10 +3,11 @@ import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 import { FOCUS_RING, PRESS_FEEDBACK, SURFACE } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
+import { CardHeader, type CardHeadingProps } from './CardHeader';
 import { Icon } from './Icon';
 
-// The design's collapsible accordion card: a header row (free-form content +
-// chevron) over a max-height-collapsing body. Used across the account-edit,
+// The design's collapsible accordion card: a `CardHeader` row (its title is the
+// toggle, the chevron sits on the right) over a max-height-collapsing body. Used across the account-edit,
 // warming and neurocomment screens, which all share this pattern in the design.
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -19,7 +20,6 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function CollapsibleCard({
-  header,
   trailing,
   label,
   defaultOpen = false,
@@ -28,8 +28,8 @@ export function CollapsibleCard({
   headerClassName = 'px-4 py-4',
   bodyClassName = 'px-4 pb-4',
   children,
-}: {
-  header: ReactNode;
+  ...heading
+}: CardHeadingProps & {
   trailing?: ReactNode;
   label: string;
   defaultOpen?: boolean;
@@ -86,25 +86,11 @@ export function CollapsibleCard({
 
   return (
     <div className={cn('overflow-hidden', wrapperClassName)}>
-      <div
-        className={cn(
-          'flex items-center gap-3 transition-colors duration-state hover:bg-info-tint',
-          headerClassName,
-        )}
+      <CardHeader
+        {...heading}
+        toggle={{ expanded: open, controls: bodyId, onToggle: toggle }}
+        className={cn('transition-colors duration-state hover:bg-info-tint', headerClassName)}
       >
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-controls={bodyId}
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-3 text-left transition duration-state',
-            FOCUS_RING,
-            PRESS_FEEDBACK,
-          )}
-        >
-          {header}
-        </button>
         {trailing}
         <button
           type="button"
@@ -120,7 +106,7 @@ export function CollapsibleCard({
         >
           <Chevron open={open} />
         </button>
-      </div>
+      </CardHeader>
       <div
         ref={collapseRef}
         id={bodyId}

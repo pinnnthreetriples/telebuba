@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Card, Icon, IconButton, Select, SurfHover } from '@/shared/ui';
+import { Card, CardHeader, Icon, IconButton, Select, SurfHover } from '@/shared/ui';
 
 // The listener-account card: shows the active listener with pause/edit/remove
 // actions (revealed via SurfHover), or a dropdown to choose one when none is set.
@@ -56,14 +56,11 @@ export function ListenerCard({
       : t('neurocomment.listener.paused');
   return (
     <Card className="relative z-raised px-4 py-4">
-      <div className="mb-1 flex items-center gap-3">
-        <span className="flex size-icon shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong">
-          <Icon name="chart" size={16} />
-        </span>
-        <div className="min-w-0">
-          <div className="type-body-medium">{t('neurocomment.listener.title')}</div>
-        </div>
-      </div>
+      <CardHeader
+        className="mb-1"
+        icon={<Icon name="chart" size={16} />}
+        title={t('neurocomment.listener.title')}
+      />
 
       {listenerId ? (
         <div className="mt-3">

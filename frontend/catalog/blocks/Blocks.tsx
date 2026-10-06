@@ -183,7 +183,7 @@ export const BLOCKS: BlockDemo[] = [
           <CollapsibleCard
             defaultOpen
             label="Каналы кампании"
-            header={<span className="type-h3">Каналы кампании</span>}
+            title="Каналы кампании"
             trailing={<Badge size="xs">3</Badge>}
           >
             <div className="flex flex-col gap-1 type-body text-content-muted">
@@ -197,7 +197,7 @@ export const BLOCKS: BlockDemo[] = [
       {
         label: 'свёрнута',
         node: (
-          <CollapsibleCard label="Журнал" header={<span className="type-h3">Журнал</span>}>
+          <CollapsibleCard label="Журнал" title="Журнал">
             <span />
           </CollapsibleCard>
         ),

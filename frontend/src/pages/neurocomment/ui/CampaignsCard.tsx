@@ -91,7 +91,7 @@ export function CampaignsCard({
       label={t('neurocomment.campaigns.title')}
       headerClassName="px-4 py-4"
       bodyClassName="px-4 pb-4"
-      header={<span className="type-h3">{t('neurocomment.campaigns.title')}</span>}
+      title={t('neurocomment.campaigns.title')}
     >
       <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {
@@ -192,7 +192,7 @@ export function CampaignsCard({
           headerClassName="px-0 py-0"
           bodyClassName="px-0 pb-0 pt-3"
           label={t('neurocomment.channels.title')}
-          header={<span className="type-body-medium">{t('neurocomment.channels.title')}</span>}
+          title={t('neurocomment.channels.title')}
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="min-w-0 truncate type-small-medium text-action-primary">

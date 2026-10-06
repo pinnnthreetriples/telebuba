@@ -67,9 +67,9 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.campaigns.title')}
-      headerClassName="px-4 py-3"
+      headerClassName="px-4 py-4"
       bodyClassName="px-4 pb-4"
-      header={<span className="type-h3">{t('neuroshilling.campaigns.title')}</span>}
+      title={t('neuroshilling.campaigns.title')}
     >
       <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {

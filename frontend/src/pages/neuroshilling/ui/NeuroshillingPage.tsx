@@ -32,7 +32,7 @@ import { CampaignSetupSection } from './CampaignSetupSection';
 import { CampaignsCard } from './CampaignsCard';
 import { ChecksBanner } from './ChecksBanner';
 import { launchBlockers } from './launchChecks';
-import { PipelineCard } from './PipelineCard';
+import { LaunchPipeline } from './LaunchPipeline';
 import { ScenarioSection } from './ScenarioSection';
 import { WorkBoardCard } from './WorkBoardCard';
 import type { ScenarioDraft } from './scenarioDraft';
@@ -642,7 +642,7 @@ export function NeuroshillingPage() {
           {campaign === undefined ||
           stored === undefined ||
           stored.campaign_id !== campaignId ? null : (
-            <PipelineCard
+            <LaunchPipeline
               campaign={campaign}
               run={run}
               pool={pool}

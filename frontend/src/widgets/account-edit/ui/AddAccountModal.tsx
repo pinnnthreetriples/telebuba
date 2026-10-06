@@ -1,11 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import { Fragment, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, Modal, Stepper } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
@@ -244,22 +244,14 @@ export function AddAccountModal({
         </div>
 
         {/* stepper */}
-        <div className="mb-6 flex items-center gap-3">
-          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
-            <Fragment key={n}>
-              {n > 1 && (
-                <span
-                  className={`h-rail flex-1 rounded-full ${step >= n ? 'bg-action-primary' : 'bg-line'}`}
-                />
-              )}
-              <span
-                className={`flex size-icon items-center justify-center rounded-full text-body font-medium ${step >= n ? 'bg-action-primary text-on-fill' : 'border border-line bg-surface-card text-content-muted'}`}
-              >
-                {n}
-              </span>
-            </Fragment>
-          ))}
-        </div>
+        <Stepper
+          className="mb-6"
+          numbered
+          steps={Array.from({ length: totalSteps }, (_, i) => ({
+            id: String(i + 1),
+            state: i + 1 < step ? 'done' : i + 1 === step ? 'current' : 'upcoming',
+          }))}
+        />
 
         {step === 1 ? (
           <>

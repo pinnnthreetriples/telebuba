@@ -111,7 +111,7 @@ export function LogTerminal({
       trailing={
         <>
           {onlyAccount ? (
-            // In `trailing`, not `header`: CollapsibleCard wraps `header` in its own
+            // In `trailing`, not the heading: CollapsibleCard wraps its heading in its own
             // toggle <button>, and a nested button is invalid HTML. Sits in the head
             // row either way, so it stays visible while the rows scroll — otherwise a
             // filter you scrolled past just looks like an empty log.
@@ -142,15 +142,9 @@ export function LogTerminal({
           ) : null}
         </>
       }
-      header={
-        <>
-          <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-          <span className="type-h3">{title}</span>
-          <Badge tone="neutral" size="xs">
-            {shown.length}
-          </Badge>
-        </>
-      }
+      dot="active"
+      title={title}
+      badge={<Badge tone="neutral">{shown.length}</Badge>}
     >
       <TerminalPane>
         {shown.length === 0 ? (

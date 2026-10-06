@@ -2,8 +2,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryStream, DiscoveryWork } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Badge } from '@/shared/ui';
+import { Badge, ProgressBar } from '@/shared/ui';
 import { cn } from '@/shared/lib/cn';
 
 import { allOut, dotTone, formatEta, stateLabelKey, streamsOut } from '../model/progress';
@@ -49,7 +48,6 @@ export function SearchProgress({ work, phase }: Props) {
   // rather than let the bar overshoot or hand the progressbar a valuenow above its
   // own valuemax.
   const clampedDone = indeterminate ? 0 : Math.min(done, planned);
-  const percent = indeterminate ? 0 : (clampedDone / planned) * 100;
 
   const stageKey = phase === 'searching' ? `${P}.stageSearching` : `${P}.stageQualifying`;
   const stageLabel = t(stageKey);
@@ -74,21 +72,13 @@ export function SearchProgress({ work, phase }: Props) {
         </span>
         <span className="type-small tabular-nums">{headerRight}</span>
       </div>
-      <div
-        role="progressbar"
-        aria-label={stageLabel}
-        aria-valuemin={0}
-        aria-valuemax={planned}
-        aria-valuenow={indeterminate ? undefined : clampedDone}
-        className={cn(BAR_TRACK, 'w-full', indeterminate && 'tb-pulse')}
-      >
-        {indeterminate ? null : (
-          <div
-            className={`${BAR_FILL} bg-action-primary transition-[width] duration-reveal`}
-            style={{ width: `${String(percent)}%` }}
-          />
-        )}
-      </div>
+      <ProgressBar
+        label={stageLabel}
+        value={clampedDone}
+        max={planned}
+        indeterminate={indeterminate}
+        className="w-full"
+      />
       <div className="flex flex-wrap items-center gap-3">
         {streams.map((stream) => (
           <StreamChip key={stream.account_id} stream={stream} t={t} />

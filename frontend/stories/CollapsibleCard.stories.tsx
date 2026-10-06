@@ -8,7 +8,7 @@ const meta = {
   tags: ['autodocs'],
   args: {
     label: 'Ограничения',
-    header: <span className="type-h3">Ограничения</span>,
+    title: 'Ограничения',
     children: <p className="type-body text-content-subtle">Тело раскрывается по клику на шапку.</p>,
   },
 } satisfies Meta<typeof CollapsibleCard>;

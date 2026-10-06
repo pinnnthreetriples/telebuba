@@ -3,8 +3,12 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/shared/lib/cn';
 
 function DigitColumns({ digits }: { digits: string }) {
+  // Rendered without a window (the blocks page is static markup) there is no roll to
+  // play, so the digits start where they belong.
   const [settled, setSettled] = useState(
-    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    () =>
+      typeof window === 'undefined' ||
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false),
   );
 
   useEffect(() => {

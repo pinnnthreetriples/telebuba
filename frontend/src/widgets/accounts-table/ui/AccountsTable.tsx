@@ -10,13 +10,14 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK, verdictFill } from '@/shared/design-system';
+import { verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
 import {
   Card,
   DataTable,
   Icon,
   IconButton,
+  ProgressBar,
   Spinner,
   StatusIcon,
   type DataTableColumnMeta,
@@ -179,15 +180,12 @@ export function AccountsTable({
           <span className="type-body text-content-subtle">—</span>
         ) : (
           <div className="flex items-center gap-2">
-            <div
+            <ProgressBar
+              tone="current"
+              value={trust}
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
-              className={`${BAR_TRACK} w-[46px]`}
-            >
-              <div
-                className={`${BAR_FILL} bg-current ${trustTone(trust)}`}
-                style={{ width: `${String(trust)}%` }}
-              />
-            </div>
+              className={`w-[46px] ${trustTone(trust)}`}
+            />
             <span className={`min-w-badge text-body font-medium ${trustTone(trust)}`}>{trust}</span>
           </div>
         );

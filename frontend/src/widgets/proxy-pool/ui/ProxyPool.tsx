@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Icon, IconButton, Spinner } from '@/shared/ui';
+import { Button, Card, CardHeader, Icon, IconButton, ProgressBar, Spinner } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -12,7 +12,6 @@ import {
   proxyTypeLabel,
 } from '@/entities/proxy';
 import type { ProxyRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { formatLocalTime } from '@/shared/lib';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
@@ -82,20 +81,19 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
 
   return (
     <Card className="px-6 py-4">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <span className="type-h3">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-2 type-body text-content-subtle">
-            {t('accounts.proxyPool.subtitle')}
-          </span>
-        </div>
+      <CardHeader
+        wrap
+        className="mb-4"
+        title={t('accounts.proxyPool.title')}
+        subtitle={t('accounts.proxyPool.subtitle')}
+      >
         {!empty && (
-          <Button variant="primary" size="md" onClick={onAdd}>
+          <Button variant="primary" size="md" onClick={onAdd} className="shrink-0">
             <Icon name="plus" size={14} />
             {t('accounts.proxyPool.add')}
           </Button>
         )}
-      </div>
+      </CardHeader>
       {empty ? (
         <div className="flex flex-col items-center justify-center px-4 pb-8 pt-8 text-center">
           <div className="mb-4 flex size-touch items-center justify-center rounded-md bg-canvas text-content-subtle">
@@ -178,7 +176,6 @@ function ProxyCard({
     maxmind: proxy.maxmind_country_code ?? '—',
   });
   const statusTone = PROXY_STATUS_TONE[proxy.status];
-  const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
       className={`flex flex-col gap-3 rounded-md border px-4 py-4 ${
@@ -272,12 +269,7 @@ function ProxyCard({
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
-        <div className={BAR_TRACK}>
-          <div
-            className={`${BAR_FILL} ${full ? 'bg-danger' : 'bg-action-primary'}`}
-            style={{ width: `${String(pct)}%` }}
-          />
-        </div>
+        <ProgressBar tone={full ? 'danger' : 'primary'} value={proxy.used} max={proxy.capacity} />
         <div className={`mt-2 text-small ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')

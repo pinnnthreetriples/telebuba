@@ -8,7 +8,6 @@ import {
   warmingSettingsQueryOptions,
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { mutationErrorText } from '@/shared/lib';
 import { Badge, Button, CollapsibleCard, FeedbackMark, HelpHint, Icon, Switch } from '@/shared/ui';
 import type { IconName } from '@/shared/ui';
@@ -250,17 +249,9 @@ export function ActionTuningCard() {
       headerClassName="px-4 py-4"
       bodyClassName="px-4 pb-4"
       label={t('warming.tune.title')}
-      header={
-        <>
-          <span className={HEADING_ICON_TILE}>
-            <Icon name="gear" size={18} />
-          </span>
-          <div className="min-w-0">
-            <div className="type-h3">{t('warming.tune.title')}</div>
-            <div className="mt-1 type-small">{t('warming.tune.subtitle')}</div>
-          </div>
-        </>
-      }
+      icon={<Icon name="gear" size={16} />}
+      title={t('warming.tune.title')}
+      subtitle={t('warming.tune.subtitle')}
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button

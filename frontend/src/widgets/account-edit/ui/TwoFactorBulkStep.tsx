@@ -6,7 +6,16 @@ import { useTranslation } from 'react-i18next';
 import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountTwoFactorUpdateRequest } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
-import { Button, FormField, Icon, Input, Notice, SegmentedControl, Spinner } from '@/shared/ui';
+import {
+  Button,
+  FormField,
+  Icon,
+  Input,
+  Notice,
+  ProgressBar,
+  SegmentedControl,
+  Spinner,
+} from '@/shared/ui';
 
 import { TwoFactorBulkResults } from './TwoFactorBulkResults';
 import {
@@ -99,18 +108,12 @@ export function TwoFactorBulkStep({
 
   if (phase === 'running') {
     const done = bulk.rows.filter((row) => row.state === 'ok' || row.state === 'error').length;
-    const percent = bulk.rows.length === 0 ? 0 : Math.round((done / bulk.rows.length) * 100);
     return (
       <>
         <div className="mb-2 type-small">
           {t('accounts.addWizard.twofaRunning', { done, total: bulk.rows.length })}
         </div>
-        <div className="mb-4 h-rail w-full overflow-hidden rounded-full bg-line">
-          <div
-            className="h-rail rounded-full bg-action-primary"
-            style={{ width: `${String(percent)}%` }}
-          />
-        </div>
+        <ProgressBar value={done} max={bulk.rows.length} className="mb-4 w-full" />
         <div className="overflow-hidden rounded-md border border-line">
           {bulk.rows.map((row) => (
             <div
