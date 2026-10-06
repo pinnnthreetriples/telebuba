@@ -18,7 +18,6 @@ const NAV = [
   ['controls', 'Контролы'],
   ['feedback', 'Обратная связь'],
   ['surfaces', 'Поверхности'],
-  ['blocks', 'Блоки'],
 ] as const;
 
 export function Catalog({
@@ -47,6 +46,9 @@ export function Catalog({
             <a href="#typography" className="type-small hover:text-info-strong">
               Типографика
             </a>
+            <a href="#blocks" className="type-small hover:text-info-strong">
+              Блоки
+            </a>
           </nav>
         </div>
       </header>
@@ -54,9 +56,11 @@ export function Catalog({
         <Controls intro={buttonGuide} />
         <Feedback />
         <Surfaces />
-        <BlocksSection />
         {patterns}
         <Typography />
+        {/* Последним: раздел выше по странице сдвинул бы всё, что под ним, и снимок
+            диалога поверх каталога. */}
+        <BlocksSection />
       </main>
     </div>
   );
