@@ -291,3 +291,30 @@ test('getRowProps reaches the card', async () => {
   await userEvent.click(card as HTMLElement);
   expect(clicked).toEqual(['a']);
 });
+
+// Without getRowId the expanded state is keyed by index: after a reorder the
+// NEIGHBOURING record shows its details. With it, the opened record stays open.
+test('getRowId keeps the expanded record open when the order changes', async () => {
+  const reversed = [...DATA].reverse();
+  const { rerender } = render(
+    <DataTable
+      data={DATA}
+      columns={COLUMNS}
+      getRowId={(item) => item.id}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+
+  await userEvent.click(screen.getByLabelText('Раскрыть first-row'));
+  rerender(
+    <DataTable
+      data={reversed}
+      columns={COLUMNS}
+      getRowId={(item) => item.id}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+
+  expect(screen.getByText('подробности first-row')).toBeInTheDocument();
+  expect(screen.queryByText('подробности second-row')).toBeNull();
+});

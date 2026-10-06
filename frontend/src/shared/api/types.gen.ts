@@ -875,6 +875,16 @@ export type BodySetAccountPhoto = {
 };
 
 /**
+ * Body_uploadChatBroadcastPhoto
+ */
+export type BodyUploadChatBroadcastPhoto = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * Body_uploadScheduledMedia
  */
 export type BodyUploadScheduledMedia = {
@@ -1333,6 +1343,676 @@ export type ChannelView = {
    * Participants Count
    */
   participants_count?: number | null;
+};
+
+/**
+ * ChatBroadcastBoard
+ */
+export type ChatBroadcastBoard = {
+  campaign: ChatBroadcastCampaign;
+  /**
+   * Phase
+   */
+  phase:
+    | 'draft'
+    | 'joining'
+    | 'running'
+    | 'resting'
+    | 'stopping'
+    | 'stopped'
+    | 'done'
+    | 'failed'
+    | 'stalled';
+  /**
+   * Chain Length
+   */
+  chain_length: number;
+  /**
+   * Started At
+   */
+  started_at?: string | null;
+  /**
+   * Resumed At
+   */
+  resumed_at?: string | null;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+  /**
+   * Accounts
+   */
+  accounts: Array<ChatBroadcastBoardAccount>;
+  counters: ChatBroadcastCounters;
+  /**
+   * Rows
+   */
+  rows: Array<ChatBroadcastBoardRow>;
+};
+
+/**
+ * ChatBroadcastBoardAccount
+ */
+export type ChatBroadcastBoardAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * State
+   */
+  state: 'active' | 'halted' | 'busy';
+  /**
+   * Halted Reason
+   */
+  halted_reason?: string | null;
+  /**
+   * Busy Owner
+   */
+  busy_owner?: 'warming' | 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'discovery' | null;
+};
+
+/**
+ * ChatBroadcastBoardRow
+ */
+export type ChatBroadcastBoardRow = {
+  /**
+   * Chat Key
+   */
+  chat_key: string;
+  /**
+   * Raw
+   */
+  raw: string;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Kind
+   */
+  kind: 'public' | 'invite' | 'folder' | 'own';
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Handed From
+   */
+  handed_from?: string | null;
+  /**
+   * State
+   */
+  state:
+    | 'queued'
+    | 'joining'
+    | 'captcha'
+    | 'pending_approval'
+    | 'waiting'
+    | 'writing'
+    | 'reconnecting'
+    | 'waiting_account'
+    | 'round_done'
+    | 'done'
+    | 'skipped';
+  /**
+   * Skip Reason
+   */
+  skip_reason?:
+    | 'rejected'
+    | 'not_approved'
+    | 'admin_only'
+    | 'deleted'
+    | 'banned'
+    | 'captcha'
+    | 'manual'
+    | 'error'
+    | 'invalid_link'
+    | 'unreachable'
+    | 'already_written'
+    | 'removed'
+    | null;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Sent Total
+   */
+  sent_total: number;
+  /**
+   * Planned Total
+   */
+  planned_total?: number | null;
+  /**
+   * Next Action At
+   */
+  next_action_at?: string | null;
+  /**
+   * Requested At
+   */
+  requested_at?: string | null;
+  /**
+   * Last Text
+   */
+  last_text?: string | null;
+  /**
+   * Last Sent At
+   */
+  last_sent_at?: string | null;
+  /**
+   * Message Deleted
+   */
+  message_deleted?: boolean;
+  /**
+   * Active
+   */
+  active: boolean;
+  /**
+   * History
+   */
+  history: Array<ChatBroadcastHistoryEntry>;
+};
+
+/**
+ * ChatBroadcastCampaign
+ *
+ * One campaign as the sidebar lists it.
+ */
+export type ChatBroadcastCampaign = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Status
+   */
+  status: 'draft' | 'running' | 'stopping' | 'stopped' | 'done' | 'failed' | 'stalled';
+  /**
+   * Target Mode
+   */
+  target_mode: 'list' | 'own';
+  /**
+   * Account Count
+   */
+  account_count: number;
+  /**
+   * Target Count
+   */
+  target_count: number;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Rest Until
+   */
+  rest_until?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * ChatBroadcastCampaigns
+ */
+export type ChatBroadcastCampaigns = {
+  /**
+   * Items
+   */
+  items: Array<ChatBroadcastCampaign>;
+};
+
+/**
+ * ChatBroadcastCounters
+ */
+export type ChatBroadcastCounters = {
+  /**
+   * Accounts
+   */
+  accounts: number;
+  /**
+   * Accounts Working
+   */
+  accounts_working: number;
+  /**
+   * Chats
+   */
+  chats: number;
+  /**
+   * Joined
+   */
+  joined: number;
+  /**
+   * Pending Approval
+   */
+  pending_approval: number;
+  /**
+   * Waiting
+   */
+  waiting: number;
+  /**
+   * Sent
+   */
+  sent: number;
+  /**
+   * Skipped
+   */
+  skipped: number;
+  /**
+   * Handed
+   */
+  handed: number;
+  /**
+   * Planned
+   */
+  planned?: number | null;
+  /**
+   * Rounds
+   */
+  rounds?: number | null;
+};
+
+/**
+ * ChatBroadcastCreate
+ */
+export type ChatBroadcastCreate = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastHistoryEntry
+ */
+export type ChatBroadcastHistoryEntry = {
+  /**
+   * At
+   */
+  at: string;
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Kind
+   */
+  kind:
+    | 'sent'
+    | 'unconfirmed'
+    | 'failed'
+    | 'deleted'
+    | 'joined'
+    | 'already_member'
+    | 'requested'
+    | 'approved'
+    | 'captcha'
+    | 'handed'
+    | 'skipped'
+    | 'reconnecting';
+  /**
+   * Text
+   */
+  text?: string | null;
+  /**
+   * Detail
+   */
+  detail?: string | null;
+};
+
+/**
+ * ChatBroadcastMediaRead
+ */
+export type ChatBroadcastMediaRead = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastMessage
+ *
+ * One message of the chain: text (optionally with a photo) or a forwarded post.
+ */
+export type ChatBroadcastMessage = {
+  /**
+   * Kind
+   */
+  kind?: 'text' | 'post';
+  /**
+   * Text
+   */
+  text?: string;
+  photo?: ChatBroadcastPhoto | null;
+  /**
+   * Post
+   */
+  post?: string;
+};
+
+/**
+ * ChatBroadcastOwnChats
+ */
+export type ChatBroadcastOwnChats = {
+  /**
+   * Groups
+   */
+  groups: Array<ChatBroadcastOwnGroup>;
+  /**
+   * Channels Skipped
+   */
+  channels_skipped: number;
+  /**
+   * Admin Only Skipped
+   */
+  admin_only_skipped: number;
+  /**
+   * Unavailable Account Ids
+   */
+  unavailable_account_ids: Array<string>;
+};
+
+/**
+ * ChatBroadcastOwnGroup
+ *
+ * A group selected accounts are in; ``peer_id`` is a decimal string (int64).
+ */
+export type ChatBroadcastOwnGroup = {
+  /**
+   * Peer Id
+   */
+  peer_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * ChatBroadcastPhoto
+ *
+ * An uploaded photo attached to a text message; the text becomes its caption.
+ */
+export type ChatBroadcastPhoto = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastResolveRequest
+ *
+ * Classify pasted chat links; a folder link is opened with one of the accounts.
+ */
+export type ChatBroadcastResolveRequest = {
+  /**
+   * Targets
+   */
+  targets: Array<string>;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+};
+
+/**
+ * ChatBroadcastResolved
+ */
+export type ChatBroadcastResolved = {
+  /**
+   * Items
+   */
+  items: Array<ChatBroadcastResolvedTarget>;
+};
+
+/**
+ * ChatBroadcastResolvedTarget
+ */
+export type ChatBroadcastResolvedTarget = {
+  /**
+   * Raw
+   */
+  raw: string;
+  /**
+   * Key
+   */
+  key?: string | null;
+  /**
+   * Kind
+   */
+  kind?: 'public' | 'invite' | 'folder' | 'own' | null;
+  /**
+   * Error
+   */
+  error?: 'invalid_target' | 'folder_unavailable' | null;
+  /**
+   * Folder Title
+   */
+  folder_title?: string | null;
+  /**
+   * Folder Count
+   */
+  folder_count?: number | null;
+};
+
+/**
+ * ChatBroadcastSettings
+ *
+ * Everything the settings dialog edits, persisted as one JSON document.
+ *
+ * Defaults are the ones agreed on the mockup; the accounts roster travels beside it
+ * (``ChatBroadcastSettingsUpdate.account_ids``) because it is a table, not a field.
+ */
+export type ChatBroadcastSettings = {
+  /**
+   * Target Mode
+   */
+  target_mode?: 'list' | 'own';
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+  /**
+   * Own Excluded
+   */
+  own_excluded?: Array<string>;
+  /**
+   * First Message
+   */
+  first_message?: 'template' | 'ai';
+  /**
+   * Ai Brief
+   */
+  ai_brief?: string;
+  /**
+   * Randomize
+   */
+  randomize?: boolean;
+  /**
+   * Messages
+   */
+  messages?: Array<ChatBroadcastMessage>;
+  /**
+   * Approval Wait Hours
+   */
+  approval_wait_hours?: 1 | 3 | 6 | 12 | 24;
+  /**
+   * Join Delay Minutes
+   */
+  join_delay_minutes?: 0 | 30 | 60 | 120;
+  between_chats?: SecondsRange;
+  between_messages?: SecondsRange;
+  /**
+   * Typing
+   */
+  typing?: boolean;
+  /**
+   * Stop Mode
+   */
+  stop_mode?: 'count' | 'time';
+  /**
+   * Stop Messages
+   */
+  stop_messages?: number;
+  /**
+   * Stop Hours
+   */
+  stop_hours?: number;
+  /**
+   * Loop
+   */
+  loop?: boolean;
+  rest_minutes?: MinutesRange;
+  /**
+   * Rounds
+   */
+  rounds?: number;
+  /**
+   * Skip Already Written
+   */
+  skip_already_written?: boolean;
+  /**
+   * Account Limit
+   */
+  account_limit?: boolean;
+  /**
+   * Per Hour
+   */
+  per_hour?: number;
+  /**
+   * Per Day
+   */
+  per_day?: number;
+  /**
+   * Skip Errors
+   */
+  skip_errors?: boolean;
+  /**
+   * Skip Deleted
+   */
+  skip_deleted?: boolean;
+  /**
+   * Max Consecutive Errors
+   */
+  max_consecutive_errors?: number;
+};
+
+/**
+ * ChatBroadcastSettingsRead
+ *
+ * What the settings dialog opens with; ``updated_at`` is the lock token.
+ */
+export type ChatBroadcastSettingsRead = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Status
+   */
+  status: 'draft' | 'running' | 'stopping' | 'stopped' | 'done' | 'failed' | 'stalled';
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  settings: ChatBroadcastSettings;
+};
+
+/**
+ * ChatBroadcastSettingsUpdate
+ *
+ * Whole-dialog save: name, roster and settings in one write.
+ */
+export type ChatBroadcastSettingsUpdate = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  settings: ChatBroadcastSettings;
+};
+
+/**
+ * ChatBroadcastTargetAction
+ *
+ * A manual action on one chat of the board.
+ */
+export type ChatBroadcastTargetAction = {
+  /**
+   * Chat Key
+   */
+  chat_key: string;
+  /**
+   * Action
+   */
+  action: 'now' | 'hand' | 'skip';
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+};
+
+/**
+ * ChatBroadcastVersionRequest
+ *
+ * The campaign version the operator actually viewed (optimistic lock).
+ */
+export type ChatBroadcastVersionRequest = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
 };
 
 /**
@@ -2450,6 +3130,20 @@ export type LoginRequest = {
 };
 
 /**
+ * MinutesRange
+ */
+export type MinutesRange = {
+  /**
+   * Min
+   */
+  min: number;
+  /**
+   * Max
+   */
+  max: number;
+};
+
+/**
  * MusicRemoveRequest
  */
 export type MusicRemoveRequest = {
@@ -2856,7 +3550,7 @@ export type NeuroshillingBoardAccount = {
   /**
    * Busy Owner
    */
-  busy_owner?: 'warming' | 'neuroshilling' | 'neurocomment' | null;
+  busy_owner?: 'warming' | 'neuroshilling' | 'neurocomment' | 'chat_broadcast' | null;
   /**
    * Busy Campaign Name
    */
@@ -4152,6 +4846,20 @@ export type ScheduledPostReschedule = {
    * Run At
    */
   run_at: string;
+};
+
+/**
+ * SecondsRange
+ */
+export type SecondsRange = {
+  /**
+   * Min
+   */
+  min: number;
+  /**
+   * Max
+   */
+  max: number;
 };
 
 /**
@@ -11319,3 +12027,519 @@ export type StopNeuroshillingCampaignResponses = {
 
 export type StopNeuroshillingCampaignResponse =
   StopNeuroshillingCampaignResponses[keyof StopNeuroshillingCampaignResponses];
+
+export type ListChatBroadcastCampaignsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns';
+};
+
+export type ListChatBroadcastCampaignsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatBroadcastCampaignsError =
+  ListChatBroadcastCampaignsErrors[keyof ListChatBroadcastCampaignsErrors];
+
+export type ListChatBroadcastCampaignsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastCampaigns;
+};
+
+export type ListChatBroadcastCampaignsResponse =
+  ListChatBroadcastCampaignsResponses[keyof ListChatBroadcastCampaignsResponses];
+
+export type CreateChatBroadcastCampaignData = {
+  body: ChatBroadcastCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns';
+};
+
+export type CreateChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateChatBroadcastCampaignError =
+  CreateChatBroadcastCampaignErrors[keyof CreateChatBroadcastCampaignErrors];
+
+export type CreateChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastCampaign;
+};
+
+export type CreateChatBroadcastCampaignResponse =
+  CreateChatBroadcastCampaignResponses[keyof CreateChatBroadcastCampaignResponses];
+
+export type DeleteChatBroadcastCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}';
+};
+
+export type DeleteChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteChatBroadcastCampaignError =
+  DeleteChatBroadcastCampaignErrors[keyof DeleteChatBroadcastCampaignErrors];
+
+export type DeleteChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteChatBroadcastCampaignResponse =
+  DeleteChatBroadcastCampaignResponses[keyof DeleteChatBroadcastCampaignResponses];
+
+export type GetChatBroadcastSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings';
+};
+
+export type GetChatBroadcastSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetChatBroadcastSettingsError =
+  GetChatBroadcastSettingsErrors[keyof GetChatBroadcastSettingsErrors];
+
+export type GetChatBroadcastSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type GetChatBroadcastSettingsResponse =
+  GetChatBroadcastSettingsResponses[keyof GetChatBroadcastSettingsResponses];
+
+export type SaveChatBroadcastSettingsData = {
+  body: ChatBroadcastSettingsUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings';
+};
+
+export type SaveChatBroadcastSettingsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatBroadcastSettingsError =
+  SaveChatBroadcastSettingsErrors[keyof SaveChatBroadcastSettingsErrors];
+
+export type SaveChatBroadcastSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type SaveChatBroadcastSettingsResponse =
+  SaveChatBroadcastSettingsResponses[keyof SaveChatBroadcastSettingsResponses];
+
+export type GetChatBroadcastBoardData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/board';
+};
+
+export type GetChatBroadcastBoardErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetChatBroadcastBoardError =
+  GetChatBroadcastBoardErrors[keyof GetChatBroadcastBoardErrors];
+
+export type GetChatBroadcastBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type GetChatBroadcastBoardResponse =
+  GetChatBroadcastBoardResponses[keyof GetChatBroadcastBoardResponses];
+
+export type StartChatBroadcastCampaignData = {
+  body: ChatBroadcastVersionRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/start';
+};
+
+export type StartChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StartChatBroadcastCampaignError =
+  StartChatBroadcastCampaignErrors[keyof StartChatBroadcastCampaignErrors];
+
+export type StartChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type StartChatBroadcastCampaignResponse =
+  StartChatBroadcastCampaignResponses[keyof StartChatBroadcastCampaignResponses];
+
+export type StopChatBroadcastCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/stop';
+};
+
+export type StopChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StopChatBroadcastCampaignError =
+  StopChatBroadcastCampaignErrors[keyof StopChatBroadcastCampaignErrors];
+
+export type StopChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type StopChatBroadcastCampaignResponse =
+  StopChatBroadcastCampaignResponses[keyof StopChatBroadcastCampaignResponses];
+
+export type ActOnChatBroadcastTargetData = {
+  body: ChatBroadcastTargetAction;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/targets/action';
+};
+
+export type ActOnChatBroadcastTargetErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ActOnChatBroadcastTargetError =
+  ActOnChatBroadcastTargetErrors[keyof ActOnChatBroadcastTargetErrors];
+
+export type ActOnChatBroadcastTargetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type ActOnChatBroadcastTargetResponse =
+  ActOnChatBroadcastTargetResponses[keyof ActOnChatBroadcastTargetResponses];
+
+export type ResolveChatBroadcastTargetsData = {
+  body: ChatBroadcastResolveRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/targets/resolve';
+};
+
+export type ResolveChatBroadcastTargetsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ResolveChatBroadcastTargetsError =
+  ResolveChatBroadcastTargetsErrors[keyof ResolveChatBroadcastTargetsErrors];
+
+export type ResolveChatBroadcastTargetsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastResolved;
+};
+
+export type ResolveChatBroadcastTargetsResponse =
+  ResolveChatBroadcastTargetsResponses[keyof ResolveChatBroadcastTargetsResponses];
+
+export type ListChatBroadcastOwnChatsData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Account Ids
+     */
+    account_ids: Array<string>;
+  };
+  url: '/api/v1/chat-broadcast/own-chats';
+};
+
+export type ListChatBroadcastOwnChatsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatBroadcastOwnChatsError =
+  ListChatBroadcastOwnChatsErrors[keyof ListChatBroadcastOwnChatsErrors];
+
+export type ListChatBroadcastOwnChatsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastOwnChats;
+};
+
+export type ListChatBroadcastOwnChatsResponse =
+  ListChatBroadcastOwnChatsResponses[keyof ListChatBroadcastOwnChatsResponses];
+
+export type UploadChatBroadcastPhotoData = {
+  body: BodyUploadChatBroadcastPhoto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/media';
+};
+
+export type UploadChatBroadcastPhotoErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UploadChatBroadcastPhotoError =
+  UploadChatBroadcastPhotoErrors[keyof UploadChatBroadcastPhotoErrors];
+
+export type UploadChatBroadcastPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastMediaRead;
+};
+
+export type UploadChatBroadcastPhotoResponse =
+  UploadChatBroadcastPhotoResponses[keyof UploadChatBroadcastPhotoResponses];

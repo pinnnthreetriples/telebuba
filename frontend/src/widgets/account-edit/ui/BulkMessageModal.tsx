@@ -6,6 +6,7 @@ import {
   accountDisplayName,
   AccountAvatar,
   allAccountsQueryOptions,
+  BulkAccountPicker,
   cancelBulkMessageJobMutation,
   generateBulkMessageMutation,
   getBulkMessageJobQueryOptions,
@@ -23,7 +24,6 @@ import {
   Textarea,
 } from '@/shared/ui';
 
-import { BulkAccountPicker } from './BulkAccountPicker';
 import { ContactLookupPanel } from './ContactLookupPanel';
 
 const MAX_ACCOUNTS = 50;

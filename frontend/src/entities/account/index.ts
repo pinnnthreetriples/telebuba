@@ -92,6 +92,7 @@ export {
 } from './api/accounts.mutations';
 export { accountDisplayName, accountInitials } from './model/displayName';
 export { AccountAvatar } from './ui/AccountAvatar';
+export { BulkAccountPicker } from './ui/BulkAccountPicker';
 export { StatusBadge } from './ui/StatusBadge';
 export {
   accountHealth,

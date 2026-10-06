@@ -11,6 +11,7 @@ import {
   accountScheduledPostsQueryKey,
   addAccountMusicMutation,
   allAccountsQueryOptions,
+  BulkAccountPicker,
   createAccountChannelMutation,
   invalidateAccountViews,
   postAccountStoryMutation,
@@ -41,7 +42,6 @@ import type { AccountRead } from '@/shared/api';
 import { formatLocalDateTime } from '@/shared/lib';
 import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
 
-import { BulkAccountPicker } from './BulkAccountPicker';
 import {
   BulkChannelsTab,
   USERNAME_SLOT,
