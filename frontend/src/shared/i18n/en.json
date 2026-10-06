@@ -959,7 +959,9 @@
       "web_login_relay_failed": "The local proxy relay for the web session could not be started. Try again in a moment.",
       "web_login_drive_failed": "The account could not be signed in to Telegram Web. Try again, or finish the login by hand in the window.",
       "web_login_reload_loop": "The API server is running with --reload, whose Windows event loop cannot start a browser process. Restart it without --reload to open web sessions.",
-      "web_login_shutting_down": "The server is shutting down, so no new web session can be opened."
+      "web_login_shutting_down": "The server is shutting down, so no new web session can be opened.",
+      "account_busy_chat_broadcast": "A chat broadcast is running with this account. Stop it, then start warming.",
+      "listener_busy_chat_broadcast": "A chat broadcast is running with this account. Stop the broadcast, or pick a different account for the listener."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1412,7 +1414,8 @@
     "no_account": "no account available in the chat",
     "llm_unavailable": "the model is unavailable",
     "generation_in_progress": "a generation is already running",
-    "llm_daily_limit_reached": "daily model budget spent"
+    "llm_daily_limit_reached": "daily model budget spent",
+    "busy_chat_broadcast": "the account is held by a running chat broadcast"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -1536,7 +1539,12 @@
       "warm_mute_peer": "Chat mute",
       "warm_consume_media": "Media playback",
       "warm_emoji_status": "Emoji status",
-      "lookup_contacts_by_phone": "Contact lookup by phone"
+      "lookup_contacts_by_phone": "Contact lookup by phone",
+      "broadcast_send_message": "Message to chat",
+      "broadcast_forward_post": "Forward post to chat",
+      "broadcast_join_chatlist": "Join folder chat",
+      "list_writable_groups": "List account groups",
+      "check_chatlist": "Check folder"
     },
     "status": {
       "failed": "failed",
@@ -2408,7 +2416,8 @@
         "busy": {
           "warming": "held by warming",
           "neuroshilling": "held by another neuroshilling campaign",
-          "neurocomment": "held by neurocomment"
+          "neurocomment": "held by neurocomment",
+          "chat_broadcast": "busy with a chat broadcast"
         },
         "busyNamed": "{{owner}} — {{name}}"
       },

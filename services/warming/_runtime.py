@@ -327,7 +327,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         assert_no_discovery_run(data.account_id)
         # The third holder of this session: a running neuroshilling campaign, whose
         # claim lives in the same registry ``_spawn_runtime_task`` writes below.
-        _exclusion.assert_not_neuroshilling(data.account_id)
+        _exclusion.assert_not_campaign_held(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
         # Revoke + cancel first, and publish a fresh generation only after the old
         # coroutine is terminal. A task that suppresses cancellation remains owned

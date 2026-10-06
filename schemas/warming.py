@@ -28,7 +28,10 @@ WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # Every start refusal that answers with a CODE, declared whole so the i18n parity test holds
 # ``shell.code.*`` to it. Two more (still-stopping task, listener conflict) answer in prose.
 WarmingRefusalCode = Literal[
-    "account_running_discovery", "account_cooling", "account_busy_neuroshilling"
+    "account_running_discovery",
+    "account_cooling",
+    "account_busy_neuroshilling",
+    "account_busy_chat_broadcast",
 ]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and

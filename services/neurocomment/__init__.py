@@ -27,6 +27,7 @@ from services.neurocomment._runtime import (
     stop_neurocomment,
 )
 from services.neurocomment._runtime_operations import (
+    ListenerBusyChatBroadcastError,
     ListenerBusyDiscoveryError,
     ListenerBusyNeuroshillingError,
 )
@@ -72,6 +73,7 @@ from services.neurocomment.settings_store import (
 __all__ = [
     "ChannelNotInCampaignError",
     "InvalidCursorError",
+    "ListenerBusyChatBroadcastError",
     "ListenerBusyDiscoveryError",
     "ListenerBusyNeuroshillingError",
     "ListenerBusyWarmingError",

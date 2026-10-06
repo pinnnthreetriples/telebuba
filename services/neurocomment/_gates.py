@@ -136,6 +136,7 @@ async def _account_quota_block_reason(
 # cap that was never the reason, and hide the one fact that resolves itself.
 _BLOCK_PRIORITY = (
     "busy_neuroshilling",
+    "busy_chat_broadcast",
     "quota_hour",
     "quota_day",
     "cooldown",
@@ -161,8 +162,9 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
     # EVERY incoming post, and a neuroshilling campaign can take the account between two
     # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
     # per-account I/O in this pass holds — there is nothing here to bulk-load.
-    if _account_owner.owner_of(account_id) == "neuroshilling":
-        return "busy_neuroshilling"
+    owner = _account_owner.owner_of(account_id)
+    if owner in {"neuroshilling", "chat_broadcast"}:
+        return f"busy_{owner}"
     if _state.in_cooldown(account_id, now, channel):
         return "cooldown"
     account = pool.accounts.get(account_id)

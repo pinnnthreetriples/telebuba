@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 DISCOVERY_CODE: WarmingRefusalCode = DISCOVERY_BUSY_CODE
 COOLING_CODE: WarmingRefusalCode = "account_cooling"
 NEUROSHILLING_CODE: WarmingRefusalCode = "account_busy_neuroshilling"
+CHAT_BROADCAST_CODE: WarmingRefusalCode = "account_busy_chat_broadcast"
 
 
 class AccountUnavailableError(ValueError):
@@ -93,8 +94,8 @@ def assert_no_discovery_run(account_id: str) -> None:
         raise AccountUnavailableError(DISCOVERY_CODE, account_id)
 
 
-def assert_not_neuroshilling(account_id: str) -> None:
-    """Raise ``AccountUnavailableError`` while a neuroshilling run holds this account.
+def assert_not_campaign_held(account_id: str) -> None:
+    """Raise ``AccountUnavailableError`` while a neuroshilling or broadcast run holds it.
 
     The reciprocal of the claim ``_spawn_runtime_task`` publishes: warming refuses an
     account neuroshilling is driving, and neuroshilling's own start refuses one warming
@@ -108,8 +109,11 @@ def assert_not_neuroshilling(account_id: str) -> None:
     caller makes it inside its lifecycle lock without an await for a concurrent start to
     slip through.
     """
-    if _account_owner.owner_of(account_id) == "neuroshilling":
+    owner = _account_owner.owner_of(account_id)
+    if owner == "neuroshilling":
         raise AccountUnavailableError(NEUROSHILLING_CODE, account_id)
+    if owner == "chat_broadcast":
+        raise AccountUnavailableError(CHAT_BROADCAST_CODE, account_id)
 
 
 def assert_not_cooling(account_id: str) -> None:

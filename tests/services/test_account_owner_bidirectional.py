@@ -1,7 +1,7 @@
 """The ownership registry, exercised from BOTH sides of a real campaign start.
 
 ``services._account_owner`` had one writer until now. Warming claimed and released,
-warming's ``assert_not_neuroshilling`` and neurocomment's ``busy_neuroshilling``
+warming's ``assert_not_campaign_held`` and neurocomment's ``busy_neuroshilling``
 selection branch read — and neither could ever fire, because nothing on the
 neuroshilling side wrote a claim. This file is the proof that both do now, driven
 through ``_runtime.start_campaign`` rather than through a hand-planted claim: a test
@@ -227,7 +227,7 @@ async def test_a_warming_start_cannot_evict_a_campaign_claiming_inside_its_windo
     """Warming's refusal and its eviction are several awaits apart, not one stretch.
 
     ``_spawn_runtime_task`` publishes with ``_account_owner.take_over``, which cannot be
-    told no, and between ``assert_not_neuroshilling`` above it and that write
+    told no, and between ``assert_not_campaign_held`` above it and that write
     ``start_warming`` awaits a readiness verdict and a bounded wait for the previous task
     to unwind — seconds, not instructions. What keeps a campaign out of that window is
     the per-account lifecycle lock: warming holds it across the whole of Start, and

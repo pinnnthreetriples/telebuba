@@ -15,8 +15,8 @@ BOTH the owner and the holder match. That is what stops a late done-callback fro
 an evicted generation releasing the claim its successor now holds — the same
 identity check ``services.warming._seams.revoke_lease`` already makes on leases.
 
-**There are two owners, not three.** Warming and neuroshilling write; neurocomment
-only ever reads. Neuroshilling asks the DATABASE whether an account is serving an
+**Neurocomment is not an owner.** Warming, neuroshilling and chat broadcast write;
+neurocomment only ever reads. Neuroshilling asks the DATABASE whether an account is serving an
 active neurocomment campaign. Drift between "the registry says free" and "the
 feature is using it" therefore cannot arise for neurocomment, because no line of
 code ever writes that value.
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-Owner = Literal["warming", "neuroshilling"]
+Owner = Literal["warming", "neuroshilling", "chat_broadcast"]
 
 # account_id -> (owner, holder)
 _OWNED: dict[str, tuple[Owner, str]] = {}
@@ -88,7 +88,7 @@ def take_over(account_id: str, owner: Owner, holder: str) -> None:
     per-account lifecycle lock, and NOT because they sit in one await-free stretch —
     several awaits separate them, one of them a bounded wait for the previous task to
     unwind. ``start_warming`` holds ``services.warming._runtime._account_lock`` across
-    both its ``assert_not_neuroshilling`` and this eviction, and every neuroshilling
+    both its ``assert_not_campaign_held`` and this eviction, and every neuroshilling
     claim is taken under that same lock (``services.neuroshilling._runtime.
     _claim_accounts`` enters it for every roster account before it reads or claims
     anything), so a campaign cannot take the account inside that window and be evicted
