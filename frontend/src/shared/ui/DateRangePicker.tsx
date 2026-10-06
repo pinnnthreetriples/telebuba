@@ -485,8 +485,8 @@ export function DateRangePicker({
   return (
     <div
       className={cn(
-        // eslint-disable-next-line design-tokens/no-raw-values -- the calendar's own width: seven 48px day columns plus the two paddings around them. One component's internal layout, not a rung.
-        'flex w-[384px] max-w-full flex-col rounded-lg bg-canvas p-2 shadow-pop',
+        // eslint-disable-next-line design-tokens/no-raw-values -- the calendar's own width, the original's: four presets and «Сбросить» fit one row, seven ~53px day columns. One component's internal layout, not a rung (that `width.confirm` is also 420px is a coincidence of value, not of role).
+        'flex w-[420px] max-w-full flex-col rounded-lg bg-canvas p-2 shadow-pop',
         className,
       )}
       {...rest}
@@ -872,6 +872,7 @@ function DayCell({
                 : 'text-content-secondary hover:border-line hover:bg-canvas',
         )}
       >
+        <span className="relative">{cell.date.getDate()}</span>
         <AnimatePresence initial={false}>
           {circle && (
             <motion.span
@@ -888,12 +889,11 @@ function DayCell({
             >
               {/* The white numeral rides inside the circle, so the ink and the fill it is
                   read on are one element: it can never land on the white card mid-glide.
-                  The plain numeral below stays where it is and the circle covers it. */}
+                  The plain numeral before it stays where it is and the circle covers it. */}
               {cell.date.getDate()}
             </motion.span>
           )}
         </AnimatePresence>
-        <span className="relative">{cell.date.getDate()}</span>
       </motion.button>
       {isToday && !circle && (
         <span

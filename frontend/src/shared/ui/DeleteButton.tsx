@@ -256,6 +256,11 @@ export function DeleteButton({
   const onLeft = side === 'left';
   const reduced = useReducedMotion() ?? false;
   const tile = useRef<HTMLButtonElement>(null);
+  const cancel = useRef<HTMLButtonElement>(null);
+  // Set by a press that arms the tile, so the pill opens on the safe choice — Enter right
+  // after arming keeps. Only a press: a pill that is open from the first render (a
+  // restored state, a static page) does not take focus it was never handed.
+  const focusCancel = useRef(false);
   const pillId = useId();
   // The pill's buttons stay tabbable under `pointer-events-none`, so a disabled control
   // stops rendering the prompt altogether.
@@ -307,6 +312,12 @@ export function DeleteButton({
     return () => clearTimeout(id);
   }, [phase, resetAfter, setPhase]);
 
+  useEffect(() => {
+    if (!armed || !focusCancel.current) return;
+    focusCancel.current = false;
+    cancel.current?.focus();
+  }, [armed]);
+
   // Otherwise re-enabling the control reopens a prompt the user never raised.
   useEffect(() => {
     if (disabled) setPhase('idle');
@@ -353,6 +364,7 @@ export function DeleteButton({
             close();
             return;
           }
+          focusCancel.current = true;
           setPhase('armed');
         }}
         whileTap={{ scale: PRESS, transition: spring.press }}
@@ -381,7 +393,9 @@ export function DeleteButton({
         </AnimatePresence>
         <StrokeGlyph d={CHECK} size={20} show={done} />
       </motion.button>
-      <AnimatePresence mode="popLayout">
+      {/* `initial={false}`: a pill that is open from the first render (a restored state,
+          a static page) is shown, not slid in. */}
+      <AnimatePresence initial={false} mode="popLayout">
         {armed && (
           <motion.div
             key="actions"
@@ -411,8 +425,7 @@ export function DeleteButton({
             <ActionButton
               label={cancelLabel}
               delay={reduced ? 0 : CANCEL_DELAY}
-              // The pill opens on the safe choice: Enter right after arming keeps.
-              autoFocus
+              ref={cancel}
               onClick={() => {
                 if (phase === 'armed') close();
               }}
