@@ -137,15 +137,16 @@ function spacingSection(spec) {
 }
 
 function shapesSection(spec) {
+  // Как у Firecrawl: залитая форма без рамки и строка значения под ней.
   const radius = spec.rounded.map(
     (r) =>
-      `<div class="blk"><div class="shape" style="border-radius:${esc(r.value)}"></div>${valueRow({ name: r.name, value: r.value })}</div>`,
+      `<div class="item"><div class="shape" style="border-radius:${esc(r.value)}"></div>${valueRow({ name: r.name, value: r.value })}</div>`,
   );
   const shadows = spec.shadows.map(
     (s) =>
       `<div class="blk"><div class="lift" style="box-shadow:${esc(s.value)}"></div>${valueRow({ name: s.name, value: s.value })}</div>`,
   );
-  return `${section('rounded', 'Скругления', `<div class="grid g3">${radius.join('\n')}</div>`)}
+  return `${section('rounded', 'Скругления', `<div class="grid g4 radii">${radius.join('\n')}</div>`)}
 ${section('shadows', 'Тени', `<div class="grid g3">${shadows.join('\n')}</div>`)}`;
 }
 
@@ -420,7 +421,8 @@ code{font-family:var(--mono);font-size:12px;color:var(--content-muted);backgroun
 .font .aa{font-size:56px;font-weight:500;padding:var(--s-2);color:var(--content-primary)}
 .step .ruler{height:40px;display:flex;align-items:center;padding:0 var(--s-2)}
 .step .ruler span{display:block;height:24px;min-width:1px;background:color-mix(in srgb,var(--action-primary) 18%,transparent);border-left:1px solid var(--action-primary);border-right:1px solid var(--action-primary)}
-.shape{height:56px;background:var(--surface);border:1px solid var(--line)}
+.shape{height:48px;background:var(--canvas)}
+.radii .item{gap:var(--s-2)}
 .lift{height:56px;border-radius:var(--r-md);background:var(--surface-card);border:1px solid var(--canvas);margin:var(--s-2) var(--s-2) var(--s-3)}
 .stage{position:relative;min-height:96px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--s-2);padding:var(--s-3);border-radius:var(--r-sm);background:var(--surface)}
 .comp .stage{min-height:84px}

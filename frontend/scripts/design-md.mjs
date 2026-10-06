@@ -182,7 +182,6 @@ function typeStyles(roles) {
 /* ── Шкалы с подписями ────────────────────────────────────────────────────── */
 
 const SPACING_NOTE = {
-  px: 'Волосок: рамка',
   1: 'Иконка и подпись, поле мелкого контрола',
   2: 'Внутри группы: подпись и поле, строки',
   3: 'Строки и поля внутри карточки',
@@ -192,7 +191,6 @@ const SPACING_NOTE = {
   16: 'Пустое состояние',
 };
 const RADIUS_NOTE = {
-  none: 'Без скругления',
   sm: 'Контрол в коробке, чип, мелкая плашка',
   md: 'Поле ввода, панель, меню, вложенная карточка',
   lg: 'Карточка и диалог',
@@ -377,7 +375,10 @@ function buildSpec() {
     typography: typeRoles(),
     typeStyles: typeStyles(typeRoles()),
     fontFamily: { sans: tokens.font.sans.join(', '), mono: tokens.font.mono.join(', ') },
-    spacing: scaleOf(tokens.rhythm, SPACING_NOTE, ['0']),
+    // `px` — не шаг сетки, а волосок в 1px (оптическая подгонка, щель-разделитель): он
+    // выводится отдельной строкой, а не последней ступенью шкалы.
+    spacing: scaleOf(tokens.rhythm, SPACING_NOTE, ['0', 'px']),
+    hairline: tokens.rhythm.px,
     rounded: scaleOf(tokens.radius, RADIUS_NOTE),
     shadows: scaleOf(tokens.shadow, SHADOW_NOTE, ['none']),
     height: scaleOf(tokens.height, {}).filter((h) => usedHeights.has(h.name)),
@@ -426,6 +427,7 @@ function renderFrontmatter(spec) {
     for (const item of list) out.push(`  ${yamlKey(item.name)}: ${yamlValue(item.value)}`);
   };
   flat('spacing', spec.spacing);
+  out.push(`hairline: ${yamlValue(spec.hairline)}`);
   flat('rounded', spec.rounded);
   flat('shadows', spec.shadows);
   flat('height', spec.height);
