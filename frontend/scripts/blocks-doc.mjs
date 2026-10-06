@@ -37,6 +37,11 @@ async function renderBlocks() {
     appType: 'custom',
     logLevel: 'error',
     optimizeDeps: { noDiscovery: true, include: [] },
+    // Свой кэш, не общий `node_modules/.vite`. Иначе этот сервер оставлял там
+    // урезанный набор собранных зависимостей, сервер каталога в e2e подхватывал его
+    // как готовый, на лету дособирал остальное и перезагружал страницу посреди
+    // теста («Execution context was destroyed» в CI, где `ds:doc:check` идёт раньше).
+    cacheDir: join(ROOT, 'node_modules', '.vite-blocks-doc'),
   });
   try {
     const mod = await server.ssrLoadModule(ENTRY);
