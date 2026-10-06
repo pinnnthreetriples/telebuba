@@ -90,7 +90,8 @@ function colorsSection(spec) {
 
 // Шкала, как её рисуют в типографских таблицах: строка — один стиль, от крупного к
 // мелкому, образец набран самим стилем. Справа — роли, которые его носят (клик копирует
-// класс), и числа: кегль · вес и интерлиньяж в пикселях · трекинг. Роли, отличающиеся
+// класс), и параметры, подписанные так же, как у Firecrawl и в YAML DESIGN.md:
+// `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`. Роли, отличающиеся
 // только серым, стоят в одной строке: строк столько, сколько ступеней на самом деле.
 const SAMPLE = 'Съешь же ещё этих мягких французских булок';
 
@@ -112,8 +113,15 @@ function typographySection(spec) {
           `<button type="button" class="sname" data-copy="type-${esc(r.name)}" title="Скопировать type-${esc(r.name)}">${esc(r.name)}</button>`,
       )
       .join('');
-    const tracking = parseFloat(style.letterSpacing) === 0 ? '' : ` · ${esc(style.letterSpacing)}`;
-    return `<div class="srow"><span class="sample" style="${css}">${SAMPLE}</span><span class="snames">${names}</span><span class="sval">${esc(style.fontSize)} · ${esc(style.fontWeight)}<br>${esc(style.lineHeight)}${tracking}</span></div>`;
+    const params = [
+      ['fontSize', style.fontSize],
+      ['fontWeight', style.fontWeight],
+      ['lineHeight', style.lineHeight],
+      ['letterSpacing', style.letterSpacing],
+    ]
+      .map(([k, v]) => `<span class="sk"><i>#</i>${k}</span><span class="sv">${esc(v)}</span>`)
+      .join('');
+    return `<div class="srow"><span class="sample" style="${css}">${SAMPLE}</span><span class="snames">${names}</span><span class="sval">${params}</span></div>`;
   });
   const fonts = Object.entries(spec.fontFamily)
     .map(
@@ -411,13 +419,16 @@ code{font-family:var(--mono);font-size:12px;color:var(--content-muted);backgroun
 .strip span{flex:1}
 .aa{line-height:1}
 .scale{margin-top:var(--s-6);border-top:1px dashed var(--line)}
-.srow{display:grid;grid-template-columns:minmax(0,1fr) auto 112px;align-items:center;gap:var(--s-6);padding:var(--s-3) 0;border-bottom:1px dashed var(--line)}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto 196px;align-items:center;gap:var(--s-6);padding:var(--s-3) 0;border-bottom:1px dashed var(--line)}
 .sample{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;color:var(--content-primary)}
 .snames{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 .sname{all:unset;cursor:pointer;font-size:13px;font-weight:500;color:var(--content-secondary);text-align:right}
 .sname:hover{color:var(--action-primary)}
 .sname:focus-visible{outline:2px solid var(--action-primary);outline-offset:2px}
-.sval{font:400 11px/1.6 var(--mono);color:var(--content-subtle);opacity:.85;text-align:right}
+.sval{display:grid;grid-template-columns:auto auto;justify-content:space-between;column-gap:var(--s-4);row-gap:2px;font-size:12px;line-height:1.5}
+.sk{color:var(--content-subtle)}
+.sk i{font-style:normal;display:inline-block;width:12px;margin-right:var(--s-1);color:var(--content-subtle);opacity:.6}
+.sv{font-family:var(--mono);color:var(--content-secondary);text-align:right}
 .font .aa{font-size:56px;font-weight:500;padding:var(--s-2);color:var(--content-primary)}
 .step .ruler{height:40px;display:flex;align-items:center;padding:0 var(--s-2)}
 .step .ruler span{display:block;height:24px;min-width:1px;background:color-mix(in srgb,var(--action-primary) 18%,transparent);border-left:1px solid var(--action-primary);border-right:1px solid var(--action-primary)}
@@ -512,9 +523,10 @@ details[open] summary::before{transform:rotate(90deg)}
   .head{flex-wrap:wrap}
   .meta{margin-left:0;text-align:left;white-space:normal}
   .g2,.g3{grid-template-columns:minmax(0,1fr)}
-  .srow{grid-template-columns:minmax(0,1fr) auto;gap:var(--s-2) var(--s-3)}
+  .srow{grid-template-columns:minmax(0,1fr);gap:var(--s-2) var(--s-3)}
+  .sval{max-width:240px}
   .srow .sample{grid-column:1/-1}
-  .snames{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:var(--s-2)}
+  .snames{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:var(--s-2)}
   .g4{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   .preview{padding:var(--s-4)}
   .md header{padding:var(--s-3) var(--s-4)}
