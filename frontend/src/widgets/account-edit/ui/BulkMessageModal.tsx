@@ -393,7 +393,7 @@ export function BulkMessageModal({
                       {ids.length}/{MAX_ACCOUNTS}
                     </span>
                   </div>
-                  <div className="flex min-h-control items-center gap-2 rounded-md border border-line bg-canvas px-2 py-1">
+                  <div className="flex items-center gap-2 rounded-md border border-line bg-canvas px-2 py-1">
                     <IconButton
                       size="sm"
                       aria-label={t('accounts.bulk.add')}

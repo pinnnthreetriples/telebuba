@@ -44,7 +44,7 @@ export function InlineChipEditor({
         }}
         placeholder={placeholder}
         aria-label={inputLabel}
-        className="w-col border-none bg-transparent text-body outline-none"
+        className="w-col border-none bg-transparent text-body outline-hidden"
       />
       <IconButton
         size="sm"

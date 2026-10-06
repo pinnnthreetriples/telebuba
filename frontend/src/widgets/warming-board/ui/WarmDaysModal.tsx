@@ -140,7 +140,7 @@ export function WarmDaysModal({
             if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
             if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
           }}
-          className="relative mx-3 mb-2 h-compact cursor-grab touch-none select-none outline-none"
+          className="relative mx-3 mb-2 h-compact cursor-grab touch-none select-none outline-hidden"
         >
           <div className="absolute inset-x-0 top-1/2 h-meter -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
             <div

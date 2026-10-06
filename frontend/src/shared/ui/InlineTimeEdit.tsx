@@ -33,9 +33,9 @@ const PRESS = Number(pressScale.press);
 // because a button focused quietly after a pointer save stays "not visible" through
 // later key presses.
 const RING_VISIBLE =
-  'has-[button:focus-visible]:outline has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-offset-2 has-[button:focus-visible]:outline-action-primary';
+  'has-[button:focus-visible]:outline-solid has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-offset-2 has-[button:focus-visible]:outline-action-primary';
 const RING_FOCUS =
-  'has-[button:focus]:outline has-[button:focus]:outline-2 has-[button:focus]:outline-offset-2 has-[button:focus]:outline-action-primary';
+  'has-[button:focus]:outline-solid has-[button:focus]:outline-2 has-[button:focus]:outline-offset-2 has-[button:focus]:outline-action-primary';
 
 /** Corner radii per tile. Closed, the three tiles butt together into one pill, so only
  *  the outer corners round; open, each tile is its own pill. */

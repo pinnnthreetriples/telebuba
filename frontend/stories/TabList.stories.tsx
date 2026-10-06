@@ -15,7 +15,7 @@ const options = [
 function Example() {
   const [value, setValue] = useState<(typeof options)[number]['value']>('text');
   return (
-    <div className="w-full max-w-panel rounded-lg border border-line bg-surface-card">
+    <div className="w-full rounded-lg border border-line bg-surface-card">
       <TabList
         options={options}
         value={value}

@@ -58,7 +58,7 @@ function PauseBox({
           minField.onChange(event.target.value);
         }}
         onBlur={minField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-right type-small tabular-nums outline-none"
+        className="tb-plain-number w-action border-none bg-transparent text-right type-small tabular-nums outline-hidden"
       />
       <span className="type-small">–</span>
       <input
@@ -71,7 +71,7 @@ function PauseBox({
           maxField.onChange(event.target.value);
         }}
         onBlur={maxField.onBlur}
-        className="tb-plain-number w-action border-none bg-transparent text-left type-small tabular-nums outline-none"
+        className="tb-plain-number w-action border-none bg-transparent text-left type-small tabular-nums outline-hidden"
       />
       <span className="type-small">{t('neuroshilling.scenario.steps.seconds')}</span>
     </span>

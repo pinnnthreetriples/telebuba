@@ -139,7 +139,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-1 rounded-full bg-info-tint px-3 py-1 text-small font-medium text-info-strong">
+    <span className="inline-flex tb-pulse items-center gap-1 rounded-full bg-info-tint px-3 py-1 text-small font-medium text-info-strong">
       <span className="size-dot rounded-full bg-action-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -372,7 +372,7 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-3">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-1 rounded-full bg-info-tint px-3 py-1 text-small font-medium text-info-strong">
+            <span className="inline-flex tb-pulse items-center gap-1 rounded-full bg-info-tint px-3 py-1 text-small font-medium text-info-strong">
               <span className="size-dot rounded-full bg-action-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>

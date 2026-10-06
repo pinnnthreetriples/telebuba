@@ -78,7 +78,7 @@ export function PhotoViewer({
               setZoomed(event.deltaY < 0);
             }}
             style={{ transform: `scale(${zoomed ? ZOOM : 1})`, transformOrigin: origin }}
-            className={`max-h-full max-w-full select-none object-contain transition-transform duration-swap ${
+            className={`max-w-full select-none object-contain transition-transform duration-swap ${
               zoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'
             }`}
           />
