@@ -11,7 +11,7 @@ import {
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
 import { useLogEventStream } from '@/shared/lib';
-import { Button, Modal, StatusIcon } from '@/shared/ui';
+import { Button, Modal, ModalFooter, ModalHeader, StatusIcon } from '@/shared/ui';
 
 import {
   buildSearchRequest,
@@ -220,12 +220,10 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="border-b border-canvas px-6 pb-4 pt-6">
-        <h2 className="type-h2">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-1 type-small">
-          {t('neurocomment.modal.discovery.sub', { name: campaignName })}
-        </p>
-      </div>
+      <ModalHeader
+        title={t('neurocomment.modal.discovery.title')}
+        subtitle={t('neurocomment.modal.discovery.sub', { name: campaignName })}
+      />
 
       <div className="flex flex-col gap-6 px-6 py-6">
         <div ref={contentRef} tabIndex={-1} className="outline-none">
@@ -292,7 +290,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+      <ModalFooter>
         {submitted ? (
           <>
             <Button
@@ -377,7 +375,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             </Button>
           </>
         )}
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

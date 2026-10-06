@@ -9,7 +9,15 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
-import { Badge, Button, DataTable, type DataTableColumnMeta, Modal } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  DataTable,
+  type DataTableColumnMeta,
+  Modal,
+  ModalFooter,
+  ModalHeader,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 
@@ -132,17 +140,17 @@ export function CampaignDetailsModal({
 
   return (
     <Modal onClose={onClose} size="table" label={campaign.name}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <div className="min-w-0">
-          <div className="truncate type-h2">{campaign.name}</div>
-          {campaign.topic ? <div className="mt-1 truncate type-small">{campaign.topic}</div> : null}
-        </div>
+      <ModalHeader
+        className="flex-wrap"
+        title={campaign.name}
+        subtitle={campaign.topic ? campaign.topic : undefined}
+      >
         <CampaignStatusBadge status={campaign.status ?? 'idle'} />
         <div className="flex-1" />
         <span className="type-small tabular-nums">
           {t('neuroshilling.launch.progress', { sent: run.sent ?? 0, total: run.total ?? 0 })}
         </span>
-      </div>
+      </ModalHeader>
 
       <div className="px-6 py-4">
         {rows.length === 0 ? (
@@ -156,14 +164,14 @@ export function CampaignDetailsModal({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+      <ModalFooter>
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.details.close')}
         </Button>
         <Button variant="primary" size="sm" onClick={onOpenSettings}>
           {t('neuroshilling.details.settings')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

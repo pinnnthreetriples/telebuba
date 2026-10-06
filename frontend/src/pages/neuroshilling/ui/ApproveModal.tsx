@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
-import { Badge, Button, Modal } from '@/shared/ui';
+import { Badge, Button, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
 import { useNumberField } from './useNumberField';
 
@@ -122,8 +122,7 @@ export function ApproveModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neuroshilling.preview.title')}>
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <span className="type-h2">{t('neuroshilling.preview.title')}</span>
+      <ModalHeader title={t('neuroshilling.preview.title')}>
         {/* Два счётчика — двумя ключами, а не одним с двумя подстановками: склоняются
             они по РАЗНЫМ числам, и «5 реплик, 1 реакций» — ровно то, что получается,
             когда i18next разрешают склонять только по одному `count`. */}
@@ -143,7 +142,7 @@ export function ApproveModal({
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
-      </div>
+      </ModalHeader>
 
       <div className="px-6 py-4">
         {dirty ? (
@@ -241,7 +240,7 @@ export function ApproveModal({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-canvas px-6 py-4">
+      <ModalFooter>
         <span className="mr-auto type-small tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
@@ -270,7 +269,7 @@ export function ApproveModal({
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.settings.cancel')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

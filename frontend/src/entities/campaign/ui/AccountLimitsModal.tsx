@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, Modal, toastError } from '@/shared/ui';
+import { Button, Modal, ModalHeader, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -200,8 +199,10 @@ export function AccountLimitsModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <span className={HEADING_ICON_TILE}>
+      <ModalHeader
+        title={t('neurocomment.modal.limits.title', { name })}
+        subtitle={t('neurocomment.modal.limits.sub')}
+        icon={
           <svg
             width="18"
             height="18"
@@ -214,14 +215,8 @@ export function AccountLimitsModal({
             <path d="m12 12 4-3" />
             <path d="M4 12H2M4.9 6.3 3.5 4.9M12 4V2" />
           </svg>
-        </span>
-        <div>
-          <div className="type-h2">{t('neurocomment.modal.limits.title', { name })}</div>
-          <div className="mt-1 type-body text-content-subtle">
-            {t('neurocomment.modal.limits.sub')}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="px-6 pb-1 pt-1">
         {view ? (

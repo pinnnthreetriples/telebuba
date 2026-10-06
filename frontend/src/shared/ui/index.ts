@@ -18,6 +18,8 @@ export type { IconName } from './Icon';
 export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';
+export { ModalFooter } from './ModalFooter';
+export { ModalHeader } from './ModalHeader';
 export { Notice } from './Notice';
 export { Odometer } from './Odometer';
 export { NumberedStep } from './NumberedStep';

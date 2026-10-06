@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, AccountAvatar, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Button, CloseButton, Icon, Input, Modal, Spinner } from '@/shared/ui';
+import { Button, CloseButton, Icon, Input, Modal, ModalFooter, Spinner } from '@/shared/ui';
 
 // Everything the search box matches on, lowercased once per row rather than per
 // keystroke × row. `label` doubles as the row's rendered name.
@@ -198,7 +198,7 @@ export function BulkAccountPicker({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+        <ModalFooter>
           <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
           <Button
             variant="primary"
@@ -209,7 +209,7 @@ export function BulkAccountPicker({
           >
             {t('accounts.bulk.pickApply', { n: draft.length })}
           </Button>
-        </div>
+        </ModalFooter>
       </div>
     </Modal>
   );

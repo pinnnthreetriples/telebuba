@@ -6,7 +6,15 @@ import { useTranslation } from 'react-i18next';
 import { neurocommentCommentsQueryOptions } from '@/entities/campaign';
 import type { CommentRecord, NeurocommentAccountCard } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Badge, Button, Card, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Modal,
+  ModalHeader,
+  type DataTableColumnMeta,
+} from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
@@ -90,9 +98,7 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
-      <div className="border-b border-canvas px-6 pb-4 pt-6">
-        <div className="type-h2">{t('neurocomment.history.title')}</div>
-      </div>
+      <ModalHeader title={t('neurocomment.history.title')} />
 
       <div className="px-6 pb-4 pt-3">
         {isPending ? (

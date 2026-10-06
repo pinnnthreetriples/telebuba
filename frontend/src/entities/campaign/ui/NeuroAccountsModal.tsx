@@ -3,8 +3,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
-import { HEADING_ICON_TILE, SURFACE } from '@/shared/design-system';
-import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Modal } from '@/shared/ui';
+import { SURFACE } from '@/shared/design-system';
+import {
+  Button,
+  ConfirmModal,
+  FeedbackMark,
+  Icon,
+  IconButton,
+  Modal,
+  ModalHeader,
+} from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
 import { AccountLimitsModal } from './AccountLimitsModal';
@@ -336,8 +344,10 @@ export function NeuroAccountsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.neuroAccounts.title')}>
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <span className={HEADING_ICON_TILE}>
+      <ModalHeader
+        title={t('neurocomment.modal.neuroAccounts.title')}
+        subtitle={t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
+        icon={
           <svg
             width="18"
             height="18"
@@ -350,14 +360,8 @@ export function NeuroAccountsModal({
             <circle cx="9" cy="7" r="4" />
             <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-        </span>
-        <div>
-          <div className="type-h2">{t('neurocomment.modal.neuroAccounts.title')}</div>
-          <div className="mt-1 type-body text-content-subtle">
-            {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="px-6 pb-4 pt-2">
         {accounts.length > 0 ? (

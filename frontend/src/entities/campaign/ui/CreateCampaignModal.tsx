@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Badge, Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import { Badge, Button, Icon, IconButton, Input, Modal, ModalHeader, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -28,17 +27,11 @@ export function CreateCampaignModal({
 
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <span className={HEADING_ICON_TILE}>
-          <Icon name="plus" size={18} />
-        </span>
-        <div>
-          <div className="type-h2">{t('neurocomment.modal.createCampaign.title')}</div>
-          <div className="mt-1 type-body text-content-subtle">
-            {t('neurocomment.modal.createCampaign.sub')}
-          </div>
-        </div>
-      </div>
+      <ModalHeader
+        title={t('neurocomment.modal.createCampaign.title')}
+        subtitle={t('neurocomment.modal.createCampaign.sub')}
+        icon={<Icon name="plus" size={18} />}
+      />
 
       <div className="px-6 pb-6 pt-6">
         <div className="mb-2 type-body-medium">

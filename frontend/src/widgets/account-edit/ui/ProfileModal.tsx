@@ -23,13 +23,14 @@ import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shar
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import {
   Button,
+  CloseButton,
   ConfirmModal,
   FormField,
   Icon,
-  CloseButton,
   IconButton,
   Input,
   Modal,
+  ModalFooter,
   Spinner,
   TabList,
   Textarea,
@@ -969,7 +970,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+          <ModalFooter>
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null ? (
@@ -1024,7 +1025,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 t('accounts.profile.save')
               )}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {bulkOpen && (
