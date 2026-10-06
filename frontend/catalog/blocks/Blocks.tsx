@@ -1,10 +1,8 @@
 // Блоки — составные куски экрана, которые повторяются на разных страницах, каждый одним
-// компонентом из `src/shared/ui`. Этот список — единственное место, где описаны их
-// образцы: его рендерит раздел каталога (визуальный гейт) и он же, через
-// `react-dom/server`, становится `docs/blocks.html` (`scripts/blocks-doc.mjs`). Образец,
-// перерисованный в HTML руками, расходился бы с компонентом; этот рисует сам компонент.
-import type { ReactNode } from 'react';
-
+// компонентом (почти все — из `src/shared/ui`). Этот список — единственное место, где
+// описаны их образцы: его рендерит раздел каталога и он же, через `react-dom/server`,
+// становится `docs/blocks.html` (`scripts/blocks-doc.mjs`). Образец, перерисованный в HTML
+// руками, расходился бы с компонентом; этот рисует сам компонент.
 import {
   Badge,
   Button,
@@ -22,18 +20,14 @@ import {
   Switch,
 } from '@/shared/ui';
 
+import { CARD_BLOCKS } from './cards';
 import { InCard, InDialog } from './frames';
+import { PATTERN_BLOCKS } from './patterns';
+import { type BlockDemo, noop } from './types';
 
-export type BlockDemo = {
-  id: string;
-  // Имя компонента: по нему генератор находит файл и все места, где блок стоит.
-  name: string;
-  variants: { label: string; node: ReactNode }[];
-};
+export type { BlockDemo };
 
-const noop = () => undefined;
-
-export const BLOCKS: BlockDemo[] = [
+const BASE_BLOCKS: BlockDemo[] = [
   {
     id: 'modal-header',
     name: 'ModalHeader',
@@ -236,3 +230,5 @@ export const BLOCKS: BlockDemo[] = [
     ],
   },
 ];
+
+export const BLOCKS: BlockDemo[] = [...BASE_BLOCKS, ...CARD_BLOCKS, ...PATTERN_BLOCKS];
