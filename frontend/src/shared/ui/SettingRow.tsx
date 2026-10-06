@@ -2,12 +2,11 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
-// Второй носитель `Row`/`Eyebrow` — первый живёт в pages/neuroshilling/ui/CampaignSetupSection.
-// Скопировано, а не импортировано: фича не тянет страницу. Третий носитель поднимает обе
-// в shared/ui. / Second wearer; a third promotes both to shared/ui.
-
-// Строка настройки: подпись слева, контрол справа, волосяной разделитель сверху.
-export function Row({
+// Строка настройки: подпись (и подсказка под ней) слева, контрол справа, волосяной
+// разделитель сверху. Жила двумя копиями — в настройках кампании нейрошиллинга и в поиске
+// каналов, — и копии успели разойтись подписью: одна набирала её `text-body`, другая
+// `type-body-medium` вторым серым. Осталась первая: её носит экран, а не диалог.
+export function SettingRow({
   label,
   hint,
   first = false,
@@ -31,9 +30,9 @@ export function Row({
     >
       <div className="min-w-0 flex-1">
         {htmlFor === undefined ? (
-          <span className="type-body-medium text-content-secondary">{label}</span>
+          <div className="text-body">{label}</div>
         ) : (
-          <label htmlFor={htmlFor} className="type-body-medium text-content-secondary">
+          <label htmlFor={htmlFor} className="block text-body">
             {label}
           </label>
         )}
@@ -44,7 +43,8 @@ export function Row({
   );
 }
 
-export function Eyebrow({ title, caption }: { title: string; caption?: string }) {
+// Подпись над группой строк: название группы и, через пробел, короткое уточнение.
+export function SectionLabel({ title, caption }: { title: string; caption?: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-2 pb-2">
       <span className="type-small-medium">{title}</span>

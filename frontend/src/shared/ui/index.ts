@@ -5,6 +5,7 @@ export { ChipAddButton } from './ChipAddButton';
 export { CloseButton } from './CloseButton';
 export { Card } from './Card';
 export { SelectableCard } from './SelectableCard';
+export { SectionLabel, SettingRow } from './SettingRow';
 export { CollapsibleCard } from './CollapsibleCard';
 export { ConfirmModal } from './ConfirmModal';
 export { DataTable } from './DataTable';

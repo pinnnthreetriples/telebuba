@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
+import { SectionLabel } from '@/shared/ui';
 
 import { canSubmit, type DiscoveryFormState } from '../model/discovery';
 import { AccountPicker } from './AccountPicker';
 import { DiscoveryFilters } from './DiscoveryFilters';
-import { Eyebrow } from './FormRow';
 import { KeywordsField } from './KeywordsField';
 
 const P = 'neurocomment.modal.discovery.form';
@@ -49,7 +49,7 @@ export function DiscoveryForm({
       }}
     >
       <section>
-        <Eyebrow title={t(`${P}.sections.query`)} />
+        <SectionLabel title={t(`${P}.sections.query`)} />
         {/* The same two columns as the filters below, so the picker sits under the
             right-hand filter column and the keywords under the left. */}
         <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
