@@ -8,7 +8,7 @@ is played later instead of being lost.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.config import settings
 from core.logging import log_event
@@ -190,7 +190,7 @@ async def _play_step(
         await _advance(ctx, target, step)
         return None
     result = await _seams.execute(account_id, action)
-    return await _settle(ctx, account_id, target, key, result, text=text, rewritten=rewritten)
+    return await _settle(ctx, account_id, target, result, _Outgoing(key, text, rewritten))
 
 
 async def _advance(ctx: RunContext, target: TargetRecord, step: int) -> None:
@@ -199,16 +199,23 @@ async def _advance(ctx: RunContext, target: TargetRecord, step: int) -> None:
     )
 
 
-async def _settle(  # noqa: PLR0913 - the step's whole outcome, read in one place
+class _Outgoing(NamedTuple):
+    """One step as it went out: its journal key and its text."""
+
+    key: JournalKey
+    text: str
+    rewritten: bool
+
+
+async def _settle(
     ctx: RunContext,
     account_id: str,
     target: TargetRecord,
-    key: JournalKey,
     result: ActionResult,
-    *,
-    text: str,
-    rewritten: bool,
+    outgoing: _Outgoing,
 ) -> Step | None:
+    """Journal, account and chat after one send."""
+    key, text, rewritten = outgoing
     verdict = classify_send(result)
     if verdict in {"sent", "unconfirmed"}:
         await repository.settle_message(

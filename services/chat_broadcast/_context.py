@@ -71,8 +71,14 @@ async def load_context(campaign_id: str, run_id: str) -> RunContext | None:
             continue
         try:
             photos[message.photo.media_id] = await read_photo(message.photo.media_id)
-        except BroadcastMediaError:
-            logger.warning("photo %s missing for campaign %s", message.photo.media_id, campaign_id)
+        except BroadcastMediaError as exc:
+            # The step still goes out, as text: a lost file must not stop the chain.
+            logger.warning(
+                "photo %s of campaign %s unusable: %s",
+                message.photo.media_id,
+                campaign_id,
+                exc.code,
+            )
     return RunContext(
         campaign_id=campaign_id,
         run_id=run_id,
