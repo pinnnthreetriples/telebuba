@@ -17,6 +17,9 @@ docs/design-system.html
 docs/DESIGN.md
 docs/design-md.html
 
+# Страница блоков собирается из настоящих компонентов (scripts/blocks-doc.mjs) по той же причине.
+docs/blocks.html
+
 # Артефакты прогона Playwright: трассы, .last-run.json и diff-картинки упавших снимков.
 # Машинный вывод, который переписывается каждым прогоном — форматировать его нечего, а
 # `--check` над ним падал бы после каждого `npm run visual`.

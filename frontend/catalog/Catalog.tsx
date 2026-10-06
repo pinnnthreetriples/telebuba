@@ -8,6 +8,7 @@
 // только рендер настоящего компонента.
 import type { ReactNode } from 'react';
 
+import { BlocksSection } from './blocks/BlocksSection';
 import { Controls } from './Controls';
 import { Feedback } from './Feedback';
 import { Surfaces } from './Surfaces';
@@ -17,6 +18,7 @@ const NAV = [
   ['controls', 'Контролы'],
   ['feedback', 'Обратная связь'],
   ['surfaces', 'Поверхности'],
+  ['blocks', 'Блоки'],
 ] as const;
 
 export function Catalog({
@@ -52,6 +54,7 @@ export function Catalog({
         <Controls intro={buttonGuide} />
         <Feedback />
         <Surfaces />
+        <BlocksSection />
         {patterns}
         <Typography />
       </main>

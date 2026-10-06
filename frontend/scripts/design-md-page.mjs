@@ -11,7 +11,7 @@
 //
 // Модуль ничего не читает сам: спецификацию собирает `design-md.mjs`.
 
-const esc = (s) =>
+export const esc = (s) =>
   String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -45,6 +45,48 @@ function resolver(tokens) {
     if (found === undefined) throw new Error(`design-md: ссылка ${value} никуда не ведёт`);
     return String(found);
   };
+}
+
+/* ── Верхняя полоса: общая у двух страниц ─────────────────────────────────── */
+
+// Две вкладки — эта страница и «Блоки» (`blocks.html`, собирает `blocks-doc.mjs`). Ссылки
+// относительные: обе страницы лежат в `docs/` рядом и открываются файлом.
+const TABS = [
+  ['design', 'design-md.html', 'Дизайн-система'],
+  ['blocks', 'blocks.html', 'Блоки'],
+];
+
+export const TOP_CSS = `
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--canvas) 86%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1200px;margin:0 auto;padding:0 var(--s-6);height:52px;display:flex;align-items:center;gap:var(--s-3)}
+.logo{width:22px;height:22px;flex:none;border-radius:var(--r-sm);background:var(--content-primary);display:grid;place-items:center}
+.logo i{width:7px;height:7px;border-radius:50%;background:var(--action-primary)}
+.crumb{display:flex;gap:var(--s-2);align-items:center;color:var(--content-subtle)}
+.crumb b{color:var(--content-primary);font-weight:600}
+.tabs{display:flex;gap:2px;padding:2px;border-radius:var(--r-full);background:var(--line)}
+.tabs a{padding:var(--s-1) var(--s-3);border-radius:var(--r-full);font-size:13px;font-weight:500;line-height:20px;color:var(--content-subtle);white-space:nowrap;text-decoration:none}
+.tabs a:hover{color:var(--content-primary)}
+.tabs a[aria-current=page]{background:var(--surface-card);color:var(--content-primary)}
+.top nav{margin-left:auto;display:flex;gap:var(--s-4);font-size:13px;min-width:0;overflow:hidden}
+.top nav a{color:var(--content-subtle);white-space:nowrap;text-decoration:none}
+.top nav a:hover{color:var(--content-primary)}
+@media (max-width:720px){
+  .top-in{padding:0 var(--s-4)}
+  .top nav{display:none}
+}
+`;
+
+export function topBar(active, nav) {
+  const tabs = TABS.map(
+    ([id, href, label]) =>
+      `<a href="${href}"${id === active ? ' aria-current="page"' : ''}>${esc(label)}</a>`,
+  ).join('');
+  return `<header class="top"><div class="top-in">
+<span class="logo"><i></i></span>
+<span class="crumb"><b>Telebuba</b></span>
+<div class="tabs" role="navigation" aria-label="Страницы">${tabs}</div>
+<nav>${nav}</nav>
+</div></header>`;
 }
 
 /* ── Строка значения ──────────────────────────────────────────────────────── */
@@ -337,7 +379,7 @@ function highlight(md) {
 
 /* ── Корневые переменные из токенов ───────────────────────────────────────── */
 
-function rootVars(tokens) {
+export function rootVars(tokens) {
   const lines = [];
   for (const [id, value] of Object.entries(flatColors(tokens.flatColors))) {
     if (id === 'transparent' || id === 'current') continue;
@@ -366,16 +408,6 @@ body{margin:0;background:var(--canvas);color:var(--content-primary);font:400 var
 a{color:var(--info-strong);text-decoration:none}
 code{font-family:var(--mono);font-size:12px;color:var(--content-muted);background:var(--surface);padding:1px 5px;border-radius:var(--r-sm)}
 :focus-visible{outline:2px solid var(--action-primary);outline-offset:2px}
-.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--canvas) 86%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.top-in{max-width:1200px;margin:0 auto;padding:0 var(--s-6);height:52px;display:flex;align-items:center;gap:var(--s-3)}
-.logo{width:22px;height:22px;border-radius:var(--r-sm);background:var(--content-primary);display:grid;place-items:center}
-.logo i{width:7px;height:7px;border-radius:50%;background:var(--action-primary)}
-.crumb{display:flex;gap:var(--s-2);align-items:center;color:var(--content-subtle)}
-.crumb b{color:var(--content-primary);font-weight:600}
-.crumb .sep{color:var(--line-strong)}
-.top nav{margin-left:auto;display:flex;gap:var(--s-4);font-size:13px}
-.top nav a{color:var(--content-subtle)}
-.top nav a:hover{color:var(--content-primary)}
 .wrap{max-width:1200px;margin:0 auto;padding:var(--s-8) var(--s-6) 96px;display:flex;flex-direction:column;gap:var(--s-6)}
 .head{display:flex;gap:var(--s-4);align-items:center}
 .head .icon{width:52px;height:52px;flex:none;border-radius:var(--r-lg);background:var(--content-primary);display:grid;place-items:center}
@@ -517,8 +549,6 @@ details[open] summary::before{transform:rotate(90deg)}
 .y-i{color:var(--danger-deep)}
 @media (max-width:720px){
   .wrap{padding:var(--s-6) var(--s-4) 64px}
-  .top-in{padding:0 var(--s-4)}
-  .top nav{display:none}
   .fs{padding:var(--s-4)}
   .head{flex-wrap:wrap}
   .meta{margin-left:0;text-align:left;white-space:normal}
@@ -613,15 +643,15 @@ export function renderPage(spec, md, tokens) {
 ${rootVars(tokens)}
 }
 ${CSS.trim()}
+${TOP_CSS.trim()}
 ${componentStyles}
 </style>
 </head>
 <body>
-<header class="top"><div class="top-in">
-<span class="logo"><i></i></span>
-<span class="crumb"><b>Telebuba</b><span class="sep">/</span><span>Design.md</span></span>
-<nav><a href="#how">Где менять</a><a href="#colors">Цвета</a><a href="#typography">Типографика</a><a href="#spacing">Сетка</a><a href="#motion">Движение</a><a href="#components">Компоненты</a><a href="#design-md-h">DESIGN.md</a><a href="design-system.html">Канон</a></nav>
-</div></header>
+${topBar(
+  'design',
+  '<a href="#how">Где менять</a><a href="#colors">Цвета</a><a href="#typography">Типографика</a><a href="#spacing">Сетка</a><a href="#motion">Движение</a><a href="#components">Компоненты</a><a href="#design-md-h">DESIGN.md</a><a href="design-system.html">Канон</a>',
+)}
 <main class="wrap">
 <div class="head"><span class="icon"><i></i></span><div><h1>Telebuba</h1><p>Операторский дашборд для Telegram: тёплый серый фон, белые карточки, один синий для действия и тона смысла с подложкой и рамкой.</p></div><div class="meta">${total} цветов · ${spec.typography.length} ролей текста · ${spec.components.length} компонентов<br>Источник: src/shared/design-system</div></div>
 ${preview(spec)}

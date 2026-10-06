@@ -11,16 +11,20 @@ export function HowItWorksCard({
   steps,
   hint,
   columns = 1,
+  defaultOpen = false,
 }: {
   title: string;
   steps: readonly string[];
   hint?: string;
   // Две колонки — с ширины `md`, когда шагов столько, что один столбец тянется на экран.
   columns?: 1 | 2;
+  // Экран держит её свёрнутой; раскрытой её показывает страница блоков.
+  defaultOpen?: boolean;
 }) {
   return (
     <CollapsibleCard
       label={title}
+      defaultOpen={defaultOpen}
       wrapperClassName="rounded-lg border border-line bg-canvas"
       header={<span className="type-h3">{title}</span>}
     >
