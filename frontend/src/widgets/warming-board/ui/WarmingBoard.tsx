@@ -8,7 +8,17 @@ import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Button, Card, FeedbackMark, Icon, TerminalPane } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  FeedbackMark,
+  Icon,
+  ProgressBar,
+  Stepper,
+  TerminalPane,
+} from '@/shared/ui';
 
 import { WarmStopModal } from './WarmStopModal';
 
@@ -33,7 +43,7 @@ type WarmingState = WarmingAccountState['state'];
 // and has been dropped; the rail advances by index, so the order must not fight
 // the emission order in services/warming (else a completed step would un-fill).
 const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
-const DAY_SEGMENTS = [...Array(42).keys()];
+const DAY_SEGMENTS = 42;
 const DAY_TICKS = [0, 4, 7, 11, 14];
 const WARMING_DAYS = 14;
 
@@ -153,7 +163,7 @@ function PauseCountdown({ nextRunAt }: { nextRunAt: string }) {
   const pad = (n: number) => String(n).padStart(2, '0');
   const time = h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
   return (
-    <span className="ml-auto shrink-0 font-mono text-tiny tabular-nums text-info-strong">
+    <span className="ml-auto shrink-0 font-mono text-small tabular-nums text-info-strong">
       {t('warming.card.pauseCountdown', { time })}
     </span>
   );
@@ -234,10 +244,8 @@ function WarmingCard({
   const elapsed = account.warming_days ?? 0;
   const days = Math.min(elapsed, target);
   const complete = elapsed >= target;
-  const filled = Math.round((DAY_SEGMENTS.length * days) / target);
   const dayTicks =
     target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
-  const connectorPct = hold ? 0 : (active / (STAGES.length - 1)) * 100;
   const statusTone = badgeTone(WARM_STATUS[account.state]);
   // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
   const dailyActions = account.daily_actions ?? 0;
@@ -246,14 +254,14 @@ function WarmingCard({
   const primaryId = accountDisplayName(account);
 
   return (
-    <div className="rounded-lg border border-info-line bg-info-tint px-xl py-lg">
+    <div className="rounded-md border border-info-line bg-info-tint px-6 py-4">
       {/* header */}
-      <div className="mb-lg flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-md">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <AccountAvatar
             account={account}
             className="size-icon shrink-0 rounded-full"
-            fallbackClassName="text-tiny font-semibold bg-info-tint text-info-strong"
+            fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
           />
           <div className="min-w-0">
             {/* Telegram supplies this name, so it can be one 90-char word with nowhere
@@ -261,10 +269,10 @@ function WarmingCard({
                 border. The card's own grid track has a fixed 320px minimum, so the
                 name cannot widen the track — it can only spill. `title` keeps the
                 whole name reachable now that the card shows a prefix of it. */}
-            <div className="truncate type-card-title" title={primaryId}>
+            <div className="truncate type-h3" title={primaryId}>
               {primaryId}
             </div>
-            <div className="mt-hair flex items-center gap-sm">
+            <div className="mt-1 flex items-center gap-2">
               {/* Deliberately the dense variant, off the status pill's `3px 10px`/`tiny`
                   rung: this is not a standalone state label but the second line inside a
                   card, paired in one flex row with the `micro` daily-actions counter to
@@ -272,7 +280,7 @@ function WarmingCard({
                   with, which is a worse disagreement than differing from the twelve
                   pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
-                className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-tiny font-semibold ${statusTone}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2 text-small font-medium ${statusTone}`}
               >
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
@@ -284,7 +292,7 @@ function WarmingCard({
                 <span
                   tabIndex={0}
                   aria-describedby={actionsTipId}
-                  className="cursor-help text-tiny font-medium text-content-subtle"
+                  className="cursor-help text-small font-medium text-content-subtle"
                 >
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
@@ -301,12 +309,12 @@ function WarmingCard({
         </div>
         {/* shrink-0: without it the truncating name above just pushes its cost onto
             the actions instead, and the "Стоп" button loses its label. */}
-        <div className="flex shrink-0 items-center gap-sm">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="tb-tip inline-flex">
             <span
               tabIndex={0}
               aria-describedby={cycleTipId}
-              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-info-line bg-surface-card text-tiny font-bold text-content-subtle"
+              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-info-line bg-surface-card text-small font-medium text-content-subtle"
             >
               ?
             </span>
@@ -322,7 +330,7 @@ function WarmingCard({
             <>
               <FeedbackMark result={result} />
               <Button
-                size="xs"
+                size="sm"
                 disabled={busy}
                 onClick={() => {
                   setStopOpen(true);
@@ -355,89 +363,40 @@ function WarmingCard({
           blues used to meet, and with them collapsed it would paint its parent's
           colour and have no edge at all. `primary-hairline` is the rung for exactly
           this — faint enough to double as a divider fill. */}
-      <div className="rounded-lg border border-info-hairline bg-info-tint px-lg pb-md pt-md">
-        <div className="mb-sm flex items-center justify-between">
-          <span className="type-caption font-medium">{t('warming.inProgress.days')}</span>
-          <span className="type-caption font-bold text-content-primary">
+      <div className="rounded-md border border-info-hairline bg-info-tint px-4 pb-3 pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="type-small-medium">{t('warming.inProgress.days')}</span>
+          <span className="type-small-medium text-content-primary">
             {t('warming.card.dayProgress', { days, target, count: target })}
           </span>
         </div>
 
-        {/* day bar */}
-        <div className="flex items-end gap-hair">
-          {DAY_SEGMENTS.map((index) => (
-            <span
-              key={index}
-              // Days done, the day in progress, days to come — tokens, so the bar
-              // reads the same green/blue/grey as the rest of the board.
-              className={`h-bar flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-action-primary' : 'bg-line'}`}
-            />
-          ))}
-        </div>
-        <div className="mt-sm flex justify-between px-hair type-caption">
+        {/* day bar: days done, the day in progress, days to come */}
+        <ProgressBar segments={DAY_SEGMENTS} value={days} max={target} />
+        <div className="mt-2 flex justify-between type-small">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>
       </div>
 
-      <div className="px-tight">
-        {/* Stepper. Dot and label share ONE cell: as two rows they had different
-            geometry — 14px dot cells against full-width label slots, both pinned
-            flush by `justify-between` — and the ends drifted 45px apart on a 571px
-            card. Equal cells put the first and last dot centres one half-cell
-            (50%/STAGES.length) from the edges, which is where the rail has to start
-            and stop for the `active / (STAGES.length - 1)` fill to land on a dot. */}
-        <div className="relative">
-          <div
-            className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-info-line"
-            style={{
-              left: `${String(50 / STAGES.length)}%`,
-              right: `${String(50 / STAGES.length)}%`,
-            }}
-          >
-            <div
-              className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-reveal"
-              style={{ width: `${String(connectorPct)}%` }}
-            />
-          </div>
-          <div className="relative flex">
-            {STAGES.map((stage, index) => (
-              <div key={stage} className="flex flex-1 flex-col items-center">
-                <div className="flex size-glyph items-center justify-center">
-                  {index < active ? (
-                    <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                      <Icon name="check" size={10} className="stroke-on-success" />
-                    </span>
-                  ) : index === active ? (
-                    <span className="tb-livedot size-node rounded-full bg-action-primary" />
-                  ) : (
-                    <span className="size-node rounded-full border-[1.5px] border-line-strong bg-surface-card" />
-                  )}
-                </div>
-                <span
-                  className={`mt-sm text-center text-tiny ${
-                    index < active
-                      ? 'font-medium text-success-deep'
-                      : index === active
-                        ? 'font-semibold text-info-strong'
-                        : 'text-content-subtle'
-                  }`}
-                >
-                  {t(`warming.stage.${stage}`)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Pre-start hold (`active` -1) leaves every stage upcoming. */}
+      <Stepper
+        className="px-1"
+        pulse
+        steps={STAGES.map((stage, index) => ({
+          id: stage,
+          label: t(`warming.stage.${stage}`),
+          state: index < active ? 'done' : index === active ? 'current' : 'upcoming',
+        }))}
+      />
 
       {!complete ? (
         <>
           {/* current activity */}
-          <div className="mt-md flex items-center gap-md rounded-md border border-info-line bg-info-tint px-md py-sm">
+          <div className="mt-3 flex items-center gap-3 rounded-sm border border-info-line bg-info-tint px-3 py-2">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-action-primary" />
-            <span className="tb-pulse type-caption font-semibold text-info-strong">
+            <span className="tb-pulse type-small-medium text-info-strong">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
             {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
@@ -451,7 +410,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-tiny text-content-muted"
+            className="mt-3 flex w-full items-center justify-center gap-1 border-t border-canvas pt-3 text-small text-content-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -461,11 +420,11 @@ function WarmingCard({
             </span>
           </button>
           {open ? (
-            <div className="mt-md">
+            <div className="mt-3">
               {visibleLines.length > 0 ? (
-                <div className="mb-tight flex justify-end">
+                <div className="mb-2 flex justify-end">
                   <Button
-                    size="xs"
+                    size="sm"
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
@@ -506,7 +465,7 @@ function WarmingCard({
                     const reaction = extraStr(line.extra, 'reaction');
                     const detail = lineDetail(t, line);
                     return (
-                      <div key={line.id} className="flex gap-tight">
+                      <div key={line.id} className="flex gap-1">
                         <span className="shrink-0 text-term-dim">
                           {formatLocalTime(line.created_at)}
                         </span>
@@ -527,12 +486,12 @@ function WarmingCard({
       ) : (
         <>
           {/* complete */}
-          <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
+          <div className="mt-3 flex items-center gap-3 rounded-md border border-success-line bg-success-tint px-3 py-3">
             <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
-              <Icon name="check" size={14} className="stroke-on-success" />
+              <Icon name="check" size={14} className="stroke-on-fill" />
             </span>
             <div className="min-w-0">
-              <div className="type-item-title text-success-deep">
+              <div className="type-body-medium text-success-deep">
                 {t('warming.card.completeTitle')}
               </div>
               {/* Grey, while the heading above it is green: the green is already carried by
@@ -541,14 +500,14 @@ function WarmingCard({
                   only way it reaches AA — every green dark enough to pass on `success-tint`
                   is indistinguishable from the heading's `success-deep` (10.05:1 here
                   against 3.70:1 for the old literal). Do not "restore the family". */}
-              <div className="mt-px type-caption text-content-secondary">
+              <div className="type-small text-content-secondary">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
                 })}
               </div>
             </div>
           </div>
-          <div className="mt-md flex items-center gap-sm">
+          <div className="mt-3 flex items-center gap-2">
             <FeedbackMark result={result} />
             <Button
               variant="primary"
@@ -558,7 +517,7 @@ function WarmingCard({
               }}
               // Зелёная заливка — решение места вызова, как у пяти белых `danger`: у
               // `VARIANT` нет залитого успеха, и одного носителя для имени мало.
-              className="flex-1 shrink gap-sm bg-success-deep hover:bg-success-press"
+              className="flex-1 shrink gap-2 bg-success-deep hover:bg-success-press"
             >
               <svg
                 width="14"
@@ -596,33 +555,33 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <Card className="p-lg">
-      <div className="mb-lg flex items-center justify-between">
-        <div className="flex items-center gap-md">
-          <span className="flex size-icon items-center justify-center rounded-md bg-action-primary">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="stroke-on-action"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 12h4l3 8 4-16 3 8h4" />
-            </svg>
-          </span>
-          <span className="type-card-title">{t('warming.inProgress.title')}</span>
-        </div>
+    <Card className="p-4">
+      <CardHeader
+        className="mb-4"
+        title={t('warming.inProgress.title')}
+        icon={
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 12h4l3 8 4-16 3 8h4" />
+          </svg>
+        }
+      >
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-md py-xs text-tiny font-semibold text-success-deep">
+          <Badge size="sm" tone="success" className="tb-pulse">
             {t('warming.inProgress.live')}
-          </span>
+          </Badge>
         ) : null}
-      </div>
+      </CardHeader>
 
-      <div className="grid grid-cols-1 items-start gap-md sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
         {warming.map((account) => (
           <WarmingCard
             key={account.account_id}
@@ -636,7 +595,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-empty text-center type-prose">
+          <div className="col-span-full rounded-md border-[1.5px] border-dashed border-info-line px-3 py-16 text-center type-body text-content-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

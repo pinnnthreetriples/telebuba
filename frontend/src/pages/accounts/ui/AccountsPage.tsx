@@ -13,7 +13,17 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Icon,
+  IconButton,
+  Spinner,
+  type Stat,
+  StatGrid,
+  toastError,
+} from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -236,20 +246,20 @@ export function AccountsPage() {
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
   // problem, each with its own colour. Values come from the fleet-wide stats
   // query, not the current page, so they hold across pagination and search.
-  const stats: { label: string; value: number; cls: string }[] = [
+  const stats: Stat[] = [
     {
       label: t('accounts.stats.total'),
       value: fleetStats?.total ?? 0,
-      cls: 'text-content-primary',
+      tone: 'default',
     },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, tone: 'success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, tone: 'warning' },
     {
       label: t('accounts.stats.code'),
       value: fleetStats?.needs_code ?? 0,
-      cls: 'text-action-primary',
+      tone: 'primary',
     },
-    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
+    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, tone: 'danger' },
   ];
 
   const hasPrev = cursorStack.length > 1;
@@ -286,7 +296,7 @@ export function AccountsPage() {
           у этой страницы ритм из двух шагов — `lg` между блоками и `xl` под заголовком,
           что видно и на других страницах, — а `gap` умеет выразить только один. Замена
           обоих на один `lg` подровняла бы страницу, разойдясь с двумя соседними. */}
-      <div className="mb-lg">
+      <div className="mb-4">
         <ProxyPool
           onAdd={() => {
             setProxyAdding(true);
@@ -294,11 +304,11 @@ export function AccountsPage() {
         />
       </div>
 
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
-        <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 type-h1">{t('accounts.title')}</h1>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {/* Collapsible search field */}
-          <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
+          <div className="flex w-full flex-1 items-center gap-2 sm:w-auto">
             <div
               // Свёрнутое поле — нулевой ширины, невидимое и вне табуляции; анимацию
               // ширины/прозрачности даёт `.tb-time` (index.css).
@@ -332,7 +342,7 @@ export function AccountsPage() {
                   }
                 }}
                 placeholder={t('accounts.searchPlaceholder')}
-                className="h-full w-full border-none bg-surface-card px-md py-0 text-body outline-none"
+                className="h-full w-full border-none bg-surface-card px-3 py-0 text-body outline-none"
               />
             </div>
             <IconButton
@@ -389,17 +399,7 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-lg flex flex-wrap gap-md">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
-          >
-            <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px type-caption">{stat.label}</div>
-          </div>
-        ))}
-      </div>
+      <StatGrid stats={stats} className="mb-4" />
 
       {isPending ? (
         <p className="text-content-muted">{t('accounts.loading')}</p>
@@ -410,7 +410,9 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center type-prose">{t('accounts.empty')}</Card>
+            <Card className="px-4">
+              <EmptyState size="xl">{t('accounts.empty')}</EmptyState>
+            </Card>
           ) : (
             <AccountsTable
               data={items}
@@ -433,7 +435,7 @@ export function AccountsPage() {
               else-branch the only ways back were the search box and a reload.
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
-            <div className="mt-lg flex items-center justify-end gap-sm">
+            <div className="mt-4 flex items-center justify-end gap-2">
               <Button
                 size="sm"
                 disabled={!hasPrev}

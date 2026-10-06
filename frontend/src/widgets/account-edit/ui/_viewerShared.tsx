@@ -27,7 +27,7 @@ export function ViewerButton({
       onPointerUp={(event) => {
         event.stopPropagation();
       }}
-      className={`absolute z-raised flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse transition-colors hover:bg-black/70 ${className}`}
+      className={`absolute z-raised flex size-tile items-center justify-center rounded-full bg-black/55 text-on-fill transition-colors hover:bg-black/70 ${className}`}
     >
       {children}
     </button>

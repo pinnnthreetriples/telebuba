@@ -148,7 +148,7 @@ test('a reaction step offers the eight emoji as one radio group', async () => {
   const heart = screen.getByRole('radio', { name: '❤️' });
   expect(heart).toHaveAttribute('aria-checked', 'true');
   expect(heart).toHaveFocus();
-  expect(heart).toHaveClass('focus-visible:outline-focus');
+  expect(heart).toHaveClass('focus-visible:outline-action-primary');
 
   await userEvent.keyboard('{End}');
   expect(screen.getByRole('radio', { name: '🙌' })).toHaveAttribute('aria-checked', 'true');

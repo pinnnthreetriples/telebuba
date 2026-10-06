@@ -24,11 +24,14 @@
 // `aria-label`, и общий компонент сделал бы это имя необязательным.
 import { cn } from '@/shared/lib/cn';
 
-// Высота — ФИКСИРОВАННАЯ, и это главное, что рецепт приносит. Четыре ступени, каждая
-// называет, где контрол стоит: `xs` — короче поля, `sm` — внутри строки, `md` —
-// самостоятельный контрол формы, `lg` — цель касания.
+// Высота — ФИКСИРОВАННАЯ, и это главное, что рецепт приносит. Три ступени, каждая
+// называет, где контрол стоит: `sm` — внутри строки, `md` — самостоятельный контрол
+// формы, `lg` — цель касания.
+//
+// Четвёртой, `xs` (28px — кнопка в строке таблицы, числовой степпер), больше нет: её
+// носители встали на `sm`. Две соседние ступени в 4px друг от друга различались не
+// местом, а привычкой, и строка с `sm` выглядит так же, только ровнее по сетке.
 const CONTROL_HEIGHT = {
-  xs: 'h-compact',
   sm: 'h-field',
   md: 'h-control',
   lg: 'h-touch',
@@ -37,34 +40,31 @@ const CONTROL_HEIGHT = {
 // Рунг размера по ступени — тоже общий: это то, что делает имя ступени одним и тем же у
 // кнопки и у поля.
 //
-// Все четыре ступени набраны `body`, и это не заготовка под различие, а следствие
-// слияния: `xs`/`sm` были `body` (12.5px), `md`/`lg` — `lead` (13px), то есть полшага
+// Все ступени набраны `body`, и это не заготовка под различие, а следствие
+// слияния: `sm` был `body` (12.5px), `md`/`lg` — `lead` (13px), то есть полшага
 // разницы, которой на контроле не видно. Ступени различает высота, а не кегль — она
 // теперь фиксированная, и её видно.
 const CONTROL_TEXT = {
-  xs: 'text-body',
   sm: 'text-body',
   md: 'text-body',
   lg: 'text-body',
 } as const;
 
 const BUTTON_PAD = {
-  xs: 'px-md',
-  sm: 'px-xl',
-  md: 'px-2xl',
-  lg: 'px-2xl',
+  sm: 'px-4',
+  md: 'px-6',
+  lg: 'px-6',
 } as const;
 
 const FIELD_PAD = {
-  xs: 'px-md',
-  sm: 'px-md',
-  md: 'px-md',
-  lg: 'px-lg',
+  sm: 'px-3',
+  md: 'px-3',
+  lg: 'px-4',
 } as const;
 
 // Форма — по РОДУ контрола, а не по его ступени размера, и это правка, а не описание.
 //
-// Раньше `Button` выбирал форму по ступени: `md`/`sm` — пилюля, `xs` — `inset`, `block` —
+// Раньше `Button` выбирал форму по ступени: `md`/`sm` — пилюля, `xs` — `rounded-md`, `block` —
 // `field`. То есть размер решал форму, и «сделать кнопку меньше» означало «сделать кнопку
 // другой формы». Объяснения у обоих исключений были, и оба не выдержали проверки счётом:
 // «на 28px полный радиус и прямоугольник — одна форма» неверно (14px против 8px радиуса
@@ -76,9 +76,7 @@ const SHAPE = {
   // Кнопка — любая, любого размера.
   pill: 'rounded-full',
   // Поле и триггер выпадающего списка.
-  field: 'rounded-lg',
-  // Поле внутри другой коробки.
-  inset: 'rounded-md',
+  field: 'rounded-md',
 } as const;
 
 // Фокус — ОБВОДКА, а не тень. Тенью он и был, и `shadow-focus` на белом мерит **1.18:1**
@@ -93,7 +91,7 @@ const SHAPE = {
 // являются контролами этой формы (у них своя высота и свой контракт доступности) и брали
 // те же четыре класса СПИСКОМ. Решение о фокусе одно, и место у него теперь тоже одно.
 export const FOCUS_RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary';
 
 // Поле анимирует рамку и свечение через `.tb-time` (index.css) — общий рецепт, а не класс
 // на каждом поле, и `:focus-within`, а не `:focus`, потому что поле бывает обёрткой
@@ -125,7 +123,7 @@ export type ControlSize = keyof typeof CONTROL_HEIGHT;
  */
 export function buttonBase({ size, className }: { size: ControlSize; className?: string }): string {
   return cn(
-    'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap',
+    'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap',
     CONTROL_HEIGHT[size],
     BUTTON_PAD[size],
     CONTROL_TEXT[size],
@@ -153,7 +151,7 @@ export function fieldBase({
     CONTROL_HEIGHT[size],
     FIELD_PAD[size],
     CONTROL_TEXT[size],
-    SHAPE[size === 'xs' ? 'inset' : 'field'],
+    SHAPE.field,
     FIELD_FOCUS,
     CONTROL_TRANSITION,
     invalid === true && INVALID,
@@ -176,10 +174,10 @@ export function areaBase({
     // Вертикальные поля вместо высоты: область растёт вслед за текстом, и фиксировать
     // её значило бы обрезать написанное. Значения подобраны так, чтобы
     // однострочная область совпала по высоте с полем той же ступени.
-    size === 'md' || size === 'lg' ? 'py-sm' : 'py-tight',
+    size === 'md' || size === 'lg' ? 'py-2' : 'py-1',
     FIELD_PAD[size],
     CONTROL_TEXT[size],
-    SHAPE[size === 'xs' ? 'inset' : 'field'],
+    SHAPE.field,
     FIELD_FOCUS,
     CONTROL_TRANSITION,
     invalid === true && INVALID,

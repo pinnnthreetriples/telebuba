@@ -26,6 +26,15 @@ const IGNORED = new Map([
     'GHSA-vfj7-8cjw-p6xm',
     'braces: build-time only, fed our own glob patterns; no patched release',
   ],
+  [
+    // postcss-selector-parser < 7.1.6: квадратичный разбор плоского селектора. Патч
+    // только в 7.x, а tailwindcss 3 (и его postcss-nested) требует ^6 — исправление
+    // приходит лишь с переходом на Tailwind 4, то есть с отдельной миграцией конфига.
+    // Работает только при сборке и разбирает НАШ CSS из `src/`; в бандл не попадает.
+    // Убрать вместе с переходом на Tailwind 4.
+    'GHSA-rj75-hqrm-r3gf',
+    'postcss-selector-parser: build-time only via tailwindcss 3, parses our own CSS',
+  ],
 ]);
 
 function runAudit() {

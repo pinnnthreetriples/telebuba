@@ -30,17 +30,17 @@ export function CheckRow({
       aria-describedby={hint ? hintId : undefined}
       disabled={disabled}
       onClick={onToggle}
-      className="mb-lg flex w-full items-center gap-md text-left disabled:opacity-60"
+      className="mb-4 flex w-full items-center gap-3 text-left disabled:opacity-60"
     >
       <span
         className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
       >
-        {on && <Icon name="check" size={14} className="stroke-on-action" />}
+        {on && <Icon name="check" size={14} className="stroke-on-fill" />}
       </span>
       <span className="flex flex-col">
-        <span className="type-dialog-body text-content-secondary">{label}</span>
+        <span className="type-body text-content-secondary">{label}</span>
         {hint && (
-          <span id={hintId} className="type-caption">
+          <span id={hintId} className="type-small">
             {hint}
           </span>
         )}

@@ -153,17 +153,17 @@ export function SessionSection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.session')}>
-      <div className="mb-md flex items-center justify-between gap-md rounded-lg bg-canvas px-md py-md">
-        <span className="flex items-center gap-sm">
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-canvas px-3 py-3">
+        <span className="flex items-center gap-2">
           <span className={`size-dot rounded-full ${sessionDot}`} />
-          <span className="type-value">{sessionText}</span>
+          <span className="type-body">{sessionText}</span>
         </span>
-        <span className="flex items-center gap-sm">
+        <span className="flex items-center gap-2">
           <FeedbackMark
             result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck}
           />
           <Button
-            size="xs"
+            size="sm"
             className="text-content-muted"
             onClick={onLogout}
             loading={logout.isPending}
@@ -172,10 +172,10 @@ export function SessionSection({ account }: { account: AccountRead }) {
           </Button>
         </span>
       </div>
-      <div className="mb-md mt-lg flex items-center justify-between gap-sm">
-        <span className="type-eyebrow">{t('accounts.edit.loginByCode')}</span>
+      <div className="mb-3 mt-4 flex items-center justify-between gap-2">
+        <span className="type-small-medium">{t('accounts.edit.loginByCode')}</span>
         <Button
-          size="xs"
+          size="sm"
           onClick={onRequestCode}
           loading={requestCode.isPending}
           className="text-action-primary"
@@ -183,7 +183,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           {t('accounts.edit.sendCode')}
         </Button>
       </div>
-      <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
+      <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
           <Input
@@ -222,10 +222,10 @@ export function SessionSection({ account }: { account: AccountRead }) {
       >
         {t('accounts.edit.confirmLogin')}
       </Button>
-      {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
-      <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>
+      {loginNote ? <div className="mt-2 type-small">{loginNote}</div> : null}
+      <div className="mb-3 mt-6 type-small-medium">{t('accounts.edit.import')}</div>
       <SegmentedControl
-        className="mb-md"
+        className="mb-3"
         value={importTab}
         ariaLabel={t('accounts.edit.import')}
         options={(['session', 'tdata'] as const).map((tab) => ({
@@ -239,14 +239,14 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <button
         type="button"
         onClick={() => uploadInput.current?.click()}
-        className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface px-lg py-lg text-left"
+        className="flex w-full items-center gap-3 rounded-md border border-dashed border-line bg-surface px-4 py-4 text-left"
       >
-        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
+        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
           <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
-          <div className="type-item-title">{t('accounts.edit.dropTitle')}</div>
-          <div className="mt-px type-caption">{t('accounts.edit.dropHint')}</div>
+          <div className="type-body-medium">{t('accounts.edit.dropTitle')}</div>
+          <div className="type-small">{t('accounts.edit.dropHint')}</div>
         </div>
       </button>
       <input
@@ -256,14 +256,14 @@ export function SessionSection({ account }: { account: AccountRead }) {
         className="hidden"
         onChange={onUploadFile}
       />
-      <div className="mt-md flex flex-col gap-sm">
+      <div className="mt-3 flex flex-col gap-2">
         {uploads.map((file) => (
           <div
             key={file.id}
-            className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md"
+            className="tb-fadeup rounded-md border border-line bg-surface-card px-3 py-3"
           >
-            <div className="flex items-center gap-md">
-              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
+            <div className="flex items-center gap-3">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-sm bg-canvas text-content-muted">
                 {file.archive ? (
                   <Icon name="alert-square" size={16} />
                 ) : (
@@ -271,20 +271,18 @@ export function SessionSection({ account }: { account: AccountRead }) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-sm">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate type-item-title">{file.name}</div>
-                    <div className="mt-px type-caption">
-                      {t(`accounts.edit.upload.${file.status}`)}
-                    </div>
+                    <div className="truncate type-body-medium">{file.name}</div>
+                    <div className="type-small">{t(`accounts.edit.upload.${file.status}`)}</div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-hair">
+                  <div className="flex shrink-0 items-center gap-1">
                     {file.status === 'done' ? (
-                      <span className="tb-pop m-xs inline-flex text-success-deep">
+                      <span className="tb-pop m-1 inline-flex text-success-deep">
                         <Icon name="check-circle" size={18} />
                       </span>
                     ) : file.status === 'error' ? (
-                      <span className="m-xs inline-flex text-danger">
+                      <span className="m-1 inline-flex text-danger">
                         <Icon name="x-circle" size={18} />
                       </span>
                     ) : (

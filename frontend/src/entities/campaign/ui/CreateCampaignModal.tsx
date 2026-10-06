@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Badge, Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import { Badge, Button, Icon, IconButton, Input, Modal, ModalHeader, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -28,22 +27,18 @@ export function CreateCampaignModal({
 
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className={HEADING_ICON_TILE}>
-          <Icon name="plus" size={18} />
-        </span>
-        <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.createCampaign.title')}</div>
-          <div className="mt-hair type-prose">{t('neurocomment.modal.createCampaign.sub')}</div>
-        </div>
-      </div>
+      <ModalHeader
+        title={t('neurocomment.modal.createCampaign.title')}
+        subtitle={t('neurocomment.modal.createCampaign.sub')}
+        icon={<Icon name="plus" size={18} />}
+      />
 
-      <div className="px-2xl pb-xl pt-xl">
-        <div className="mb-sm type-item-title">
+      <div className="px-6 pb-6 pt-6">
+        <div className="mb-2 type-body-medium">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
         <Input
-          className="mb-lg"
+          className="mb-4"
           value={name}
           onChange={(event) => {
             setName(event.target.value);
@@ -52,11 +47,11 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.nameLabel')}
         />
 
-        <div className="mb-sm type-item-title">
+        <div className="mb-2 type-body-medium">
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
-          className="mb-lg font-[inherit]"
+          className="mb-4 font-[inherit]"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
@@ -65,18 +60,16 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.promptLabel')}
         />
 
-        <div className="mb-sm type-item-title">
+        <div className="mb-2 type-body-medium">
           {t('neurocomment.modal.createCampaign.channelsLabel')}
         </div>
-        <div className="mb-md type-caption">
-          {t('neurocomment.modal.createCampaign.channelsHint')}
-        </div>
+        <div className="mb-3 type-small">{t('neurocomment.modal.createCampaign.channelsHint')}</div>
         {channels.length > 0 ? (
-          <div className="mb-md flex flex-wrap gap-sm">
+          <div className="mb-3 flex flex-wrap gap-2">
             {channels.map((channel, index) => (
               <Badge
                 size="md"
-                className="gap-sm border border-line text-content-secondary"
+                className="gap-2 border border-line text-content-secondary"
                 key={`${channel}-${String(index)}`}
               >
                 {channel}
@@ -94,7 +87,7 @@ export function CreateCampaignModal({
             ))}
           </div>
         ) : null}
-        <div className="flex gap-sm">
+        <div className="flex gap-2">
           <Input
             className="flex-1"
             value={channelInput}
@@ -113,7 +106,7 @@ export function CreateCampaignModal({
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-lg bg-info-tint text-info-strong"
+            className="rounded-md bg-info-tint text-info-strong"
             onClick={addChannel}
           >
             {t('neurocomment.modal.add')}
@@ -121,7 +114,7 @@ export function CreateCampaignModal({
         </div>
       </div>
 
-      <div className="flex gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex gap-2 border-t border-canvas px-6 pb-6 pt-4">
         <Button
           variant="primary"
           className="flex-1"

@@ -19,8 +19,16 @@ import {
   useNow,
   type ScheduleMode,
 } from '@/features/schedule-post';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
+import {
+  Button,
+  CloseButton,
+  Icon,
+  Input,
+  Modal,
+  ProgressBar,
+  SegmentedControl,
+  Spinner,
+} from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -339,9 +347,9 @@ export function AddStoryModal({
       size="form"
       label={t('accounts.addStory.title')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.addStory.title')}</span>
+      <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="type-h2">{t('accounts.addStory.title')}</span>
           <CloseButton
             onClick={onClose}
             // Closing mid-publish unmounts the mutation observer, and RQ v5
@@ -353,7 +361,7 @@ export function AddStoryModal({
         </div>
 
         <ScheduleModeControl
-          className="mb-md"
+          className="mb-3"
           value={mode}
           disabled={busy || done}
           onChange={(next) => {
@@ -362,7 +370,7 @@ export function AddStoryModal({
           }}
         />
         {later && (
-          <div className="mb-lg">
+          <div className="mb-4">
             <ScheduleTimeField
               value={runAt}
               onChange={setRunAt}
@@ -373,9 +381,11 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>
+        <div className="mb-2 type-body-medium text-content-secondary">
+          {t('accounts.addStory.audience')}
+        </div>
         <SegmentedControl
-          className="mb-lg"
+          className="mb-4"
           value={audience}
           ariaLabel={t('accounts.addStory.audience')}
           options={(['contacts', 'closeFriends', 'public'] as const).map((value) => ({
@@ -388,8 +398,10 @@ export function AddStoryModal({
           }}
         />
 
-        <label className="mb-lg block">
-          <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>
+        <label className="mb-4 block">
+          <span className="mb-2 block type-body-medium text-content-secondary">
+            {t('accounts.addStory.caption')}
+          </span>
           <Input
             value={caption}
             // Read once at the click: an edit during the publish would be ignored.
@@ -411,22 +423,24 @@ export function AddStoryModal({
           onClick={() => {
             setNoForward((value) => !value);
           }}
-          className="mb-lg flex w-full items-center gap-md text-left"
+          className="mb-4 flex w-full items-center gap-3 text-left"
         >
           <span
             className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
           >
-            {noForward && <Icon name="check" size={14} className="stroke-on-action" />}
+            {noForward && <Icon name="check" size={14} className="stroke-on-fill" />}
           </span>
-          <span className="type-dialog-body text-content-secondary">
+          <span className="type-body text-content-secondary">
             {t('accounts.addStory.noForward')}
           </span>
         </button>
 
-        <div className="mb-tight flex items-center justify-between">
-          <span className="type-label">{t('accounts.addStory.media')}</span>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="type-body-medium text-content-secondary">
+            {t('accounts.addStory.media')}
+          </span>
           {video === null && count > 0 && (
-            <span className="type-caption">
+            <span className="type-small">
               {t('accounts.addStory.photoCount', { n: count, max: MAX_COLLAGE_IMAGES })}
             </span>
           )}
@@ -444,9 +458,9 @@ export function AddStoryModal({
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy || done}
-            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-lg text-left disabled:opacity-50"
+            className="flex w-full items-center gap-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-4 text-left disabled:opacity-50"
           >
-            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
+            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
               <svg
                 width="20"
                 height="20"
@@ -461,17 +475,17 @@ export function AddStoryModal({
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate type-item-title">
+              <div className="truncate type-body-medium">
                 {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
               </div>
-              <div className="mt-px type-caption">
+              <div className="type-small">
                 {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
               </div>
             </div>
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-lg py-md type-caption">
+          <div className="rounded-md border border-line bg-surface px-4 py-3 type-small">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -487,22 +501,22 @@ export function AddStoryModal({
         {/* Image tiles: ordered previews with reorder (◀ ▶) + remove (×). The
             tile order is the collage cell order sent to the backend. */}
         {video === null && count > 0 && (
-          <div className="mt-md flex flex-wrap gap-sm">
+          <div className="mt-3 flex flex-wrap gap-2">
             {images.map((image, index) => (
               <div
                 key={`${image.name}-${index}`}
-                className="tb-fadeup flex w-readout flex-col gap-xs"
+                className="tb-fadeup flex w-readout flex-col gap-1"
               >
                 <div
                   // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the story preview's own portrait box, one component's internal layout
-                  className="relative h-[104px] w-readout overflow-hidden rounded-lg border border-line bg-canvas"
+                  className="relative h-[104px] w-readout overflow-hidden rounded-md border border-line bg-canvas"
                 >
                   <img
                     src={previews[index]}
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-tiny font-semibold text-on-inverse">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-1 text-small font-medium text-on-fill">
                     {index + 1}
                   </span>
                   <button
@@ -512,12 +526,12 @@ export function AddStoryModal({
                     }}
                     disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-inverse disabled:opacity-40"
+                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-fill disabled:opacity-40"
                   >
                     <Icon name="close" size={10} />
                   </button>
                 </div>
-                <div className="flex items-stretch gap-tight">
+                <div className="flex items-stretch gap-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -571,9 +585,11 @@ export function AddStoryModal({
 
         {/* Layout picker — only for a 2..6 photo collage. */}
         {isCollage && (
-          <div className="mt-lg">
-            <div className="mb-sm type-label">{t('accounts.addStory.layout')}</div>
-            <div className="flex flex-wrap gap-sm">
+          <div className="mt-4">
+            <div className="mb-2 type-body-medium text-content-secondary">
+              {t('accounts.addStory.layout')}
+            </div>
+            <div className="flex flex-wrap gap-2">
               {layoutsForCount(count).map((layout) => {
                 const selected = collageLayout === layout.id;
                 return (
@@ -586,7 +602,7 @@ export function AddStoryModal({
                     aria-label={t('accounts.addStory.layoutOption', { id: layout.id })}
                     aria-pressed={selected}
                     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the collage-layout tile's own box, one component's internal layout
-                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-action-primary transition ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-sm border text-action-primary transition ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
                   >
                     <LayoutIcon cells={layout.cells} selected={selected} />
                   </button>
@@ -598,14 +614,14 @@ export function AddStoryModal({
 
         {/* Single-video row: filename + size + remove (mirrors the photo path). */}
         {video !== null && (
-          <div className="mt-md tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md">
-            <div className="flex items-center gap-md">
-              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
+          <div className="mt-3 tb-fadeup rounded-md border border-line bg-surface-card px-3 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-sm bg-canvas text-content-muted">
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate type-item-title">{video.name}</div>
-                <div className={`mt-px text-tiny ${metaTone}`}>{metaText}</div>
+                <div className="truncate type-body-medium">{video.name}</div>
+                <div className={`text-small ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
                 <button
@@ -627,27 +643,29 @@ export function AddStoryModal({
         {/* Per-publish status: uploading spinner + bar → success check + full
             bar → error icon (hover = reason) + retry. Shared by both modes. */}
         {hasMedia && (busy || done || failed) && (
-          <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-surface-card px-md py-md">
+          <div className="mt-3 tb-fadeup flex items-center gap-3 rounded-md border border-line bg-surface-card px-3 py-3">
             <div className="min-w-0 flex-1">
-              <div className={`type-caption font-medium ${metaTone}`}>{metaText}</div>
+              <div className={`type-small-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className={`mt-sm ${BAR_TRACK}`}>
-                  <div
-                    className={`${BAR_FILL} ${done ? 'w-full bg-success' : 'tb-upbar bg-action-primary'}`}
-                  />
-                </div>
+                <ProgressBar
+                  className="mt-2"
+                  tone="success"
+                  value={1}
+                  max={1}
+                  indeterminate={!done}
+                />
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-hair">
-              {busy && <Spinner className="m-tight" />}
+            <div className="flex shrink-0 items-center gap-1">
+              {busy && <Spinner className="m-1" />}
               {done && (
-                <span className="tb-pop m-xs inline-flex text-success-deep">
+                <span className="tb-pop m-1 inline-flex text-success-deep">
                   <Icon name="check-circle" size={18} />
                 </span>
               )}
               {failed && (
                 <>
-                  <span className="group relative m-xs inline-flex text-danger">
+                  <span className="group relative m-1 inline-flex text-danger">
                     <svg
                       width="17"
                       height="17"
@@ -661,7 +679,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal text-on-inverse shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-sm bg-term px-3 py-2 text-left text-small font-normal text-on-fill shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>
@@ -691,7 +709,7 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <div className="mt-6 flex justify-end gap-2">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.addStory.cancel')}
           </Button>

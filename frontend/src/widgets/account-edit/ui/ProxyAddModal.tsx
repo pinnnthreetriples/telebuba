@@ -43,13 +43,13 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} size="form" label={t('accounts.proxyAdd.title')}>
-      <div className="p-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.proxyAdd.title')}</span>
+      <div className="p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="type-h2">{t('accounts.proxyAdd.title')}</span>
           <CloseButton onClick={onClose} aria-label={t('accounts.proxyAdd.close')} />
         </div>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
-        <div className="mt-xl flex justify-end gap-sm">
+        <div className="mt-6 flex justify-end gap-2">
           <Button onClick={onClose}>{t('accounts.proxyAdd.cancel')}</Button>
           <Button variant="primary" onClick={onAdd} disabled={!canAdd}>
             {t('accounts.proxyAdd.add')}

@@ -3,7 +3,17 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount, NeuroshillingCampaign } from '@/shared/api';
 import { FOCUS_RING } from '@/shared/design-system';
-import { Badge, Button, HelpHint, Icon, IconButton, Input, Select, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CardHeader,
+  HelpHint,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  Textarea,
+} from '@/shared/ui';
 
 import { MediaModal } from './MediaModal';
 import { useNumberField } from './useNumberField';
@@ -19,7 +29,7 @@ import {
 } from './scenarioDraft';
 
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-info-line bg-surface-card py-md text-body font-medium text-info-strong hover:border-action-primary hover:bg-action-hover disabled:opacity-50';
+  'flex items-center justify-center gap-1 rounded-md border border-dashed border-info-line bg-surface-card py-3 text-body font-medium text-info-strong hover:border-action-primary hover:bg-info-tint disabled:opacity-50';
 
 function StepRow({
   step,
@@ -53,14 +63,14 @@ function StepRow({
       : t('neuroshilling.scenario.steps.replyTo', { position });
 
   return (
-    <div className="rounded-lg border border-line bg-surface-card p-sm">
+    <div className="rounded-md border border-line bg-surface-card p-2">
       {/* Одна строка на всё, что описывает шаг: номер, роль, на что отвечает, пауза
           и удаление. Связь и пауза стояли ОТДЕЛЬНОЙ строкой под текстом, и карточка
           из-за этого была в три яруса — при том что читают её сверху вниз ровно
           один раз. `flex-wrap` оставлен: в узкой колонке строка переносится, а не
           выдавливает роль до нечитаемой ширины. */}
-      <div className="mb-sm flex flex-wrap items-center gap-tight">
-        <Badge className="font-semibold tabular-nums">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge className="font-medium tabular-nums">
           {t('neuroshilling.scenario.steps.position', { position })}
         </Badge>
         <div className="min-w-0 flex-1">
@@ -122,7 +132,7 @@ function StepRow({
         {/* Пауза — ОДНО поле с двумя числами: рамка, отбивка и подпись «с» у пары общие,
             и вдвое дешевле по ширине, чем два поля рядом. Числа прижаты К ТИРЕ, поэтому
             пара читается диапазоном «60–180», а не двумя значениями в своих коробках. */}
-        <div className="flex h-control shrink-0 items-center gap-xs rounded-lg border border-line bg-surface-card px-sm">
+        <div className="flex h-control shrink-0 items-center gap-1 rounded-md border border-line bg-surface-card px-2">
           <input
             type="number"
             min={0}
@@ -135,7 +145,7 @@ function StepRow({
             onBlur={minField.onBlur}
             className="tb-plain-number w-action border-none bg-transparent text-right text-body tabular-nums outline-none"
           />
-          <span className="type-caption">–</span>
+          <span className="type-small">–</span>
           <input
             type="number"
             min={0}
@@ -148,7 +158,7 @@ function StepRow({
             onBlur={maxField.onBlur}
             className="tb-plain-number w-action border-none bg-transparent text-left text-body tabular-nums outline-none"
           />
-          <span className="type-caption">{t('neuroshilling.scenario.steps.seconds')}</span>
+          <span className="type-small">{t('neuroshilling.scenario.steps.seconds')}</span>
         </div>
         {/* Смена вида: реплика ↔ реакция. Стрелки в разные стороны, а не карандаш
             макета: карандаш значит «править», а шаг правят и без этой кнопки — текстом
@@ -219,7 +229,7 @@ function StepRow({
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.steps.emoji', { position })}
-          className="flex flex-wrap gap-tight"
+          className="flex flex-wrap gap-2"
           onKeyDown={(event) => {
             const radios = Array.from(
               event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
@@ -257,7 +267,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`size-icon rounded-md border text-body ${FOCUS_RING} ${step.emoji === emoji ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+              className={`size-icon rounded-sm border text-body ${FOCUS_RING} ${step.emoji === emoji ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
             >
               {emoji}
             </button>
@@ -355,31 +365,37 @@ export function ScenarioSection({
 
   return (
     <section>
-      <div className="mb-md flex items-center gap-md">
-        <span className="type-card-title">{t('neuroshilling.scenario.title')}</span>
-        {/* Утверждение умирает в ЭТОЙ секции, поэтому здесь оно и должно быть видно:
-            любая правка ниже возвращает кампанию в черновик в момент сохранения, и
-            оператор, видевший плашку только на превью, узнал бы об этом из отказа. */}
-        <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${
-            dirty && status === 'approved'
-              ? 'bg-warning-tint text-warning-deep'
-              : status === 'approved'
-                ? 'bg-success-tint text-success-deep'
-                : 'bg-canvas text-content-muted'
-          }`}
-        >
-          {dirty && status === 'approved'
-            ? t('neuroshilling.scenario.status.willReset')
-            : t(`neuroshilling.scenario.status.${status}`)}
-        </span>
-      </div>
+      {/* Утверждение умирает в ЭТОЙ секции, поэтому здесь оно и должно быть видно:
+          любая правка ниже возвращает кампанию в черновик в момент сохранения, и
+          оператор, видевший плашку только на превью, узнал бы об этом из отказа. */}
+      <CardHeader
+        className="mb-3"
+        title={t('neuroshilling.scenario.title')}
+        badge={
+          <Badge
+            size="sm"
+            tone={
+              dirty && status === 'approved'
+                ? 'warning'
+                : status === 'approved'
+                  ? 'success'
+                  : 'neutral'
+            }
+          >
+            {dirty && status === 'approved'
+              ? t('neuroshilling.scenario.status.willReset')
+              : t(`neuroshilling.scenario.status.${status}`)}
+          </Badge>
+        }
+      />
 
       {/* Тема и всё, что ею распоряжается, — одной строкой: бриф, две кнопки «добавить
           шаг», генерация и вложение. Тема была полем в три строки над панелью генерации;
           в диалоге это две трети экрана под текст, который почти всегда — одна фраза. */}
-      <div className="mb-md flex flex-wrap items-center gap-sm">
-        <span className="type-label">{t('neuroshilling.scenario.topic.label')}</span>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="type-body-medium text-content-secondary">
+          {t('neuroshilling.scenario.topic.label')}
+        </span>
         <Input
           size="sm"
           // Пол ширины, а не голый `flex-1`: в строке с ней стоят пять контролов, и без
@@ -397,7 +413,7 @@ export function ScenarioSection({
           <Button
             key={kind}
             variant="dashed"
-            size="xs"
+            size="sm"
             disabled={draft.steps.length >= MAX_STEPS}
             onClick={() => {
               addStep(kind);
@@ -449,11 +465,11 @@ export function ScenarioSection({
 
       {/* Роли — карточками в сетку, а не строками во всю ширину: у роли всего два поля,
           которые читают на бегу, — имя и аккаунт, который её играет. */}
-      <div className="mb-sm flex items-center gap-sm type-item-title">
+      <div className="mb-2 flex items-center gap-2 type-body-medium">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
-      <div className="mb-md grid gap-sm sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {draft.roles.map((role, index) => {
           const playing = pool.find(
             (account) => account.assigned && account.role_id === role.roleId,
@@ -461,12 +477,12 @@ export function ScenarioSection({
           return (
             <div
               key={role.roleId}
-              className="flex flex-col gap-tight rounded-lg border border-line p-sm"
+              className="flex flex-col gap-2 rounded-md border border-line p-2"
             >
-              <div className="flex items-center gap-sm">
+              <div className="flex items-center gap-2">
                 <span className={`size-node shrink-0 rounded-full ${roleTone(index).bg}`} />
                 <Input
-                  size="xs"
+                  size="sm"
                   className="min-w-0 flex-1"
                   value={role.name}
                   maxLength={60}
@@ -537,7 +553,7 @@ export function ScenarioSection({
               />
 
               <Input
-                size="xs"
+                size="sm"
                 value={role.description}
                 maxLength={1000}
                 placeholder={t('neuroshilling.scenario.roles.descriptionPlaceholder')}
@@ -569,16 +585,18 @@ export function ScenarioSection({
         </button>
       </div>
       {draft.roles.length === 0 ? (
-        <div className="mb-md type-prose">{t('neuroshilling.scenario.roles.none')}</div>
+        <div className="mb-3 type-body text-content-subtle">
+          {t('neuroshilling.scenario.roles.none')}
+        </div>
       ) : null}
 
-      <div className="mb-sm flex items-center gap-sm type-item-title">
+      <div className="mb-2 flex items-center gap-2 type-body-medium">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
       {/* Две колонки: диалог из восьми реплик в один столбец — это экран с половиной
           прокрутки, а карточка шага своей ширины не требует. */}
-      <div className="mb-lg grid gap-sm sm:grid-cols-2">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2">
         {draft.steps.map((step, index) => (
           <StepRow
             key={step.key}
@@ -602,13 +620,15 @@ export function ScenarioSection({
           />
         ))}
         {draft.steps.length === 0 ? (
-          <div className="type-prose">{t('neuroshilling.scenario.steps.none')}</div>
+          <div className="type-body text-content-subtle">
+            {t('neuroshilling.scenario.steps.none')}
+          </div>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-sm">
+      <div className="flex flex-wrap items-center gap-2">
         {namelessRole ? (
-          <span className="mr-auto type-caption text-danger-deep">
+          <span className="mr-auto type-small text-danger-deep">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}

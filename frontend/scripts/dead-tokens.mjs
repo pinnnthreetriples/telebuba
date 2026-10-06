@@ -43,6 +43,7 @@ const PREFIXES = {
   minHeight: 'min-h',
   maxHeight: 'max-h',
   fontSize: 'text',
+  fontWeight: 'font',
   typeRole: 'type',
   lineHeight: 'leading',
   letterSpacing: 'tracking',
@@ -93,7 +94,7 @@ function themeRefs(text) {
 
 function worn(text, scale, name) {
   const prefix = PREFIXES[scale].split(' ').join('|');
-  // Отрицательный отступ пишется `-mt-lg`: минус перед приставкой — часть класса,
+  // Отрицательный отступ пишется `-mt-4`: минус перед приставкой — часть класса,
   // а не граница. Справа граница нужна, иначе `w-col` зачлось бы `w-column`;
   // `/` пропускается — это модификатор прозрачности, `bg-primary/40`.
   return new RegExp(`(?:^|[^\\w-])-?(?:${prefix})-${name}(?![\\w-])`, 'm').test(text);

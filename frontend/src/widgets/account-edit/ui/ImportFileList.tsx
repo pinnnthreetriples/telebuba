@@ -25,31 +25,31 @@ export function ImportFileList({
   };
 
   return (
-    <div className="flex flex-col gap-md">
+    <div className="flex flex-col gap-3">
       {files.length > 1 && (
-        <div className="type-caption">
+        <div className="type-small">
           {t('accounts.addWizard.importSummary', { ok, total: files.length })}
         </div>
       )}
       {files.map((file, index) => (
         <div
           key={index}
-          className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md"
+          className="tb-fadeup rounded-md border border-line bg-surface-card px-3 py-3"
         >
-          <div className="flex items-center gap-md">
-            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-canvas text-content-muted">
+          <div className="flex items-center gap-3">
+            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
               <Icon name="file" size={18} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate type-item-title">{file.name}</div>
+              <div className="truncate type-body-medium">{file.name}</div>
               <div
-                className={`mt-px text-tiny ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
+                className={`text-small ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
               >
                 {verdict(file)}
               </div>
             </div>
             {file.state === 'importing' ? (
-              <Spinner className="m-tight" />
+              <Spinner className="m-1" />
             ) : file.state === 'error' ? (
               <>
                 <Button
@@ -60,12 +60,12 @@ export function ImportFileList({
                 >
                   {t('accounts.addWizard.retry')}
                 </Button>
-                <span className="m-xs inline-flex text-danger">
+                <span className="m-1 inline-flex text-danger">
                   <Icon name="x-circle" size={18} />
                 </span>
               </>
             ) : (
-              <span className="tb-pop m-xs inline-flex text-success-deep">
+              <span className="tb-pop m-1 inline-flex text-success-deep">
                 <Icon name="check-circle" size={18} />
               </span>
             )}

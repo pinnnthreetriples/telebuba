@@ -54,8 +54,8 @@ export function Surfaces() {
         <Cell caption="только тело">
           <div className="w-panel max-w-full">
             <Card>
-              <p className="type-prose">
-                Карточка без шапки: белая, волосяная рамка, rounded-card.
+              <p className="type-body text-content-subtle">
+                Карточка без шапки: белая, волосяная рамка, rounded-lg.
               </p>
             </Card>
           </div>
@@ -63,7 +63,9 @@ export function Surfaces() {
         <Cell caption="с заголовком">
           <div className="w-panel max-w-full">
             <Card title="Прокси" subtitle="12 из 40 занято">
-              <p className="type-prose">Заголовок и подзаголовок — роли карточки, не размеры.</p>
+              <p className="type-body text-content-subtle">
+                Заголовок и подзаголовок — роли карточки, не размеры.
+              </p>
             </Card>
           </div>
         </Cell>
@@ -72,11 +74,8 @@ export function Surfaces() {
       <Row label="CollapsibleCard">
         <Cell caption="закрыта">
           <div className="w-panel max-w-full">
-            <CollapsibleCard
-              label="Ограничения"
-              header={<span className="type-card-title">Ограничения</span>}
-            >
-              <p className="type-prose">Тело раскрывается по клику на шапку.</p>
+            <CollapsibleCard label="Ограничения" title="Ограничения">
+              <p className="type-body text-content-subtle">Тело раскрывается по клику на шапку.</p>
             </CollapsibleCard>
           </div>
         </Cell>
@@ -85,10 +84,10 @@ export function Surfaces() {
             <CollapsibleCard
               defaultOpen
               label="Ограничения"
-              header={<span className="type-card-title">Ограничения</span>}
+              title="Ограничения"
               trailing={<Badge tone="info">3</Badge>}
             >
-              <p className="type-prose">
+              <p className="type-body text-content-subtle">
                 Раскрытие — один жест: и панель, и шеврон тратят рунг `reveal`.
               </p>
             </CollapsibleCard>
@@ -111,9 +110,9 @@ export function Surfaces() {
                 </>
               }
               surface={
-                <div className="rounded-lg border border-line bg-surface-card px-md py-sm">
-                  <div className="type-item-title">Кампания «Крипта»</div>
-                  <div className="type-caption">4 канала · 120 комментариев</div>
+                <div className="rounded-md border border-line bg-surface-card px-3 py-2">
+                  <div className="type-body-medium">Кампания «Крипта»</div>
+                  <div className="type-small">4 канала · 120 комментариев</div>
                 </div>
               }
             />
@@ -134,9 +133,9 @@ export function Surfaces() {
                 </>
               }
               surface={
-                <div className="rounded-lg border border-line bg-surface-card px-md py-sm">
-                  <div className="type-item-title">Кампания «Крипта»</div>
-                  <div className="type-caption">4 канала · 120 комментариев</div>
+                <div className="rounded-md border border-line bg-surface-card px-3 py-2">
+                  <div className="type-body-medium">Кампания «Крипта»</div>
+                  <div className="type-small">4 канала · 120 комментариев</div>
                 </div>
               }
             />
@@ -190,12 +189,12 @@ export function Surfaces() {
             setModal(false);
           }}
         >
-          <div className="flex flex-col gap-lg p-xl">
-            <h3 className="type-dialog-title">Настройки прогрева</h3>
-            <p className="type-dialog-body">
+          <div className="flex flex-col gap-4 p-6">
+            <h3 className="type-h2">Настройки прогрева</h3>
+            <p className="type-body text-content-muted">
               Диалог — та же поверхность, что карточка, только над завесой и с ловушкой Tab.
             </p>
-            <div className="flex justify-end gap-sm">
+            <div className="flex justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={() => {

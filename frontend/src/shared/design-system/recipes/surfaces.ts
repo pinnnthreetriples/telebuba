@@ -11,27 +11,27 @@ import { cn } from '@/shared/lib/cn';
 export const SURFACE = {
   // Карточка на странице: самый большой радиус, волосяная рамка, без тени — она лежит на
   // подложке, а не висит над ней.
-  card: 'rounded-card border border-line bg-surface-card',
+  card: 'rounded-lg border border-line bg-surface-card',
   // Диалог: та же карточка, но над завесой, поэтому с тенью всплывающего.
-  dialog: 'rounded-card bg-surface-card shadow-pop',
+  dialog: 'rounded-lg bg-surface-card shadow-pop',
   // Панель, вложенная в карточку: выпадающий список, меню, поповер. Радиус на ступень
   // меньше карточкиного — вложенная коробка с тем же радиусом читается как приклеенная.
-  panel: 'rounded-lg border border-line bg-surface-card shadow-pop',
+  panel: 'rounded-md border border-line bg-surface-card shadow-pop',
   // Вдавленная область: лоток сегментированного контрола, зона перетаскивания. Не белая —
   // это единственная поверхность, которая уходит ВНУТРЬ.
-  inset: 'rounded-lg bg-canvas',
+  inset: 'rounded-md bg-canvas',
   // Тёмная: терминал логов и подсказка, которая делит с ним чернила.
-  inverse: 'rounded-lg bg-term text-term-text',
+  inverse: 'rounded-md bg-term text-term-text',
 } as const;
 
 export const HEADING_ICON_TILE =
-  'flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong';
+  'flex size-tile shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong';
 
 export type SurfaceVariant = keyof typeof SURFACE;
 
 export function tileAction(className?: string): string {
   return cn(
-    'transition duration-state hover:border-info-line hover:bg-action-hover hover:text-info-strong disabled:pointer-events-none disabled:opacity-60',
+    'transition duration-state hover:border-info-line hover:bg-info-tint hover:text-info-strong disabled:pointer-events-none disabled:opacity-60',
     FOCUS_RING,
     PRESS_FEEDBACK,
     className,

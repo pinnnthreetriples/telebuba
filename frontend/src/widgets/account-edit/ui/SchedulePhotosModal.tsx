@@ -218,18 +218,20 @@ export function SchedulePhotosModal({
       size="form"
       label={t('accounts.schedule.photosTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.schedule.photosTitle')}</span>
+      <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="type-h2">{t('accounts.schedule.photosTitle')}</span>
           <CloseButton
             onClick={onClose}
             disabled={locked}
             aria-label={t('accounts.addStory.close')}
           />
         </div>
-        <div className="mb-lg type-prose">{t('accounts.schedule.photosHint')}</div>
+        <div className="mb-4 type-body text-content-subtle">
+          {t('accounts.schedule.photosHint')}
+        </div>
 
-        <div className="mb-lg flex flex-wrap items-end gap-md">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
           <ScheduleTimeField
             value={start}
             onChange={setStart}
@@ -237,11 +239,13 @@ export function SchedulePhotosModal({
             label={t('accounts.schedule.firstAt')}
             disabled={locked}
           />
-          <label className="flex flex-col gap-tight">
-            <span className="type-label">{t('accounts.schedule.everyMinutes')}</span>
+          <label className="flex flex-col gap-2">
+            <span className="type-body-medium text-content-secondary">
+              {t('accounts.schedule.everyMinutes')}
+            </span>
             <Input
               type="number"
-              size="xs"
+              size="sm"
               min={1}
               max={MAX_STEP_MINUTES}
               value={stepText}
@@ -263,16 +267,16 @@ export function SchedulePhotosModal({
           </Button>
         </div>
 
-        <ul className="flex flex-col gap-sm">
+        <ul className="flex flex-col gap-2">
           {rows.map((row) => (
             <li
               key={row.key}
-              className="flex items-center gap-md rounded-lg border border-line px-md py-sm"
+              className="flex items-center gap-3 rounded-md border border-line px-3 py-2"
             >
               <img
                 src={row.url}
                 alt=""
-                className="size-tile shrink-0 rounded-md border border-black/5 object-cover"
+                className="size-tile shrink-0 rounded-sm border border-black/5 object-cover"
               />
               <div className="min-w-0 flex-1">
                 <ScheduleTimeField
@@ -286,7 +290,7 @@ export function SchedulePhotosModal({
                   disabled={locked || row.state === 'done'}
                 />
               </div>
-              <span className="flex shrink-0 items-center justify-center gap-xs">
+              <span className="flex shrink-0 items-center justify-center gap-1">
                 {row.state !== 'idle' && (
                   <span className="sr-only">{t(`accounts.schedule.rowStatus.${row.state}`)}</span>
                 )}
@@ -316,7 +320,7 @@ export function SchedulePhotosModal({
           ))}
         </ul>
         {!locked && (
-          <div className="mt-md grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
+          <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
             <FilePicker accept={PHOTO_SUFFIXES.join(',')} multiple onPick={add}>
               {(open) => (
                 <DashedAdd ratio="1" label={t('accounts.schedule.addPhotos')} onClick={open} />
@@ -325,7 +329,7 @@ export function SchedulePhotosModal({
           </div>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <div className="mt-6 flex justify-end gap-2">
           <Button onClick={onClose} disabled={locked}>
             {t('accounts.addStory.cancel')}
           </Button>

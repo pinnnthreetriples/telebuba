@@ -58,7 +58,7 @@ export function BulkChannelsTab({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className="flex flex-col gap-4">
       <SegmentedControl
         variant="outline"
         value={mode}
@@ -74,8 +74,10 @@ export function BulkChannelsTab({
 
       {mode === 'create' ? (
         <>
-          <div className="type-prose">{t('accounts.bulk.channelCreateHint')}</div>
-          <div className="flex items-center gap-lg">
+          <div className="type-body text-content-subtle">
+            {t('accounts.bulk.channelCreateHint')}
+          </div>
+          <div className="flex items-center gap-4">
             {/* The circle IS the upload: an empty one shows the plus only under
                 the cursor, so a filled avatar is never covered by a control. */}
             <FilePicker
@@ -110,18 +112,20 @@ export function BulkChannelsTab({
                     <Icon name="plus" size={20} />
                   </span>
                   {channel.avatar && (
-                    <span className="absolute inset-0 flex items-center justify-center bg-canvas type-caption">
+                    <span className="absolute inset-0 flex items-center justify-center bg-canvas type-small">
                       {t('accounts.bulk.channelAvatarSet')}
                     </span>
                   )}
                 </button>
               )}
             </FilePicker>
-            <div className="type-caption">{t('accounts.bulk.channelAvatarNote')}</div>
+            <div className="type-small">{t('accounts.bulk.channelAvatarNote')}</div>
           </div>
 
-          <label className="flex flex-col gap-tight">
-            <span className="type-label">{t('accounts.channel.titleLabel')}</span>
+          <label className="flex flex-col gap-2">
+            <span className="type-body-medium text-content-secondary">
+              {t('accounts.channel.titleLabel')}
+            </span>
             <Input
               value={channel.title}
               maxLength={CHANNEL_TITLE_MAX}
@@ -131,8 +135,10 @@ export function BulkChannelsTab({
             />
           </label>
 
-          <label className="flex flex-col gap-tight">
-            <span className="type-label">{t('accounts.channel.aboutLabel')}</span>
+          <label className="flex flex-col gap-2">
+            <span className="type-body-medium text-content-secondary">
+              {t('accounts.channel.aboutLabel')}
+            </span>
             <Textarea
               className="[font-family:inherit]"
               value={channel.about}
@@ -152,12 +158,14 @@ export function BulkChannelsTab({
           />
 
           {!channel.isPrivate && (
-            <label className="flex flex-col gap-tight">
-              <span className="type-label">{t('accounts.channel.usernameLabel')}</span>
+            <label className="flex flex-col gap-2">
+              <span className="type-body-medium text-content-secondary">
+                {t('accounts.channel.usernameLabel')}
+              </span>
               <div className="relative flex items-center">
-                <span className="absolute left-lg text-body text-content-subtle">@</span>
+                <span className="absolute left-4 text-body text-content-subtle">@</span>
                 <Input
-                  className="pl-page"
+                  className="pl-8"
                   aria-label={t('accounts.channel.usernameLabel')}
                   value={channel.username}
                   onChange={(event) => {
@@ -165,7 +173,7 @@ export function BulkChannelsTab({
                   }}
                 />
               </div>
-              <span className="type-caption">{t('accounts.bulk.channelUsernameNote')}</span>
+              <span className="type-small">{t('accounts.bulk.channelUsernameNote')}</span>
             </label>
           )}
 
@@ -190,8 +198,8 @@ export function BulkChannelsTab({
         </>
       ) : (
         <>
-          <div className="type-prose">{t('accounts.bulk.channelPostHint')}</div>
-          <div className="flex flex-col gap-tight">
+          <div className="type-body text-content-subtle">{t('accounts.bulk.channelPostHint')}</div>
+          <div className="flex flex-col gap-2">
             <Textarea
               className="[font-family:inherit]"
               value={post.text}
@@ -206,7 +214,7 @@ export function BulkChannelsTab({
                 and `maxLength` cannot shorten what is already typed — the counter
                 turns red and the footer's Apply goes with it. */}
             <span
-              className={`self-end type-caption ${post.text.length > postTextMax(post.file) ? 'font-medium text-danger-deep' : ''}`}
+              className={`self-end type-small-medium ${post.text.length > postTextMax(post.file) ? 'text-danger-deep' : ''}`}
             >
               {t('accounts.channel.charCount', {
                 n: post.text.length,
@@ -214,7 +222,7 @@ export function BulkChannelsTab({
               })}
             </span>
           </div>
-          <div className="flex items-center gap-md">
+          <div className="flex items-center gap-3">
             <FilePicker
               accept={PHOTO_SUFFIXES.join(',')}
               multiple={false}
@@ -235,14 +243,14 @@ export function BulkChannelsTab({
               }}
             >
               {(open) => (
-                <Button size="xs" variant="dashedMuted" onClick={open}>
+                <Button size="sm" variant="dashedMuted" onClick={open}>
                   <Icon name="plus" size={16} />
                   {t('accounts.channel.attach')}
                 </Button>
               )}
             </FilePicker>
             {post.file && (
-              <span className="min-w-0 flex-1 truncate type-caption">{post.file.name}</span>
+              <span className="min-w-0 flex-1 truncate type-small">{post.file.name}</span>
             )}
             {post.file && (
               <IconButton
@@ -258,7 +266,7 @@ export function BulkChannelsTab({
               </IconButton>
             )}
           </div>
-          <div className="type-caption">{t('accounts.bulk.channelPostNote')}</div>
+          <div className="type-small">{t('accounts.bulk.channelPostNote')}</div>
         </>
       )}
     </div>

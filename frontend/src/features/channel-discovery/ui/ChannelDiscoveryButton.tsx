@@ -10,11 +10,11 @@ import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
 // `const PILL` — и именно поэтому её не видел гейт, читавший атрибуты элемента: класс
 // приходил идентификатором. Гейт с тех пор смотрит и в константы файла.
 //
-// `text-tiny` — решение места вызова, и оно не про форму: обе кнопки стоят в узкой колонке
+// `text-small` — решение места вызова, и оно не про форму: обе кнопки стоят в узкой колонке
 // рядом с именем кампании, которое и есть подлежащее строки. На рунге контрола (`body`)
 // пара занимает её целиком, и от имени остаётся «К…».
 const COMPACT =
-  'text-tiny text-content-muted hover:border-action-primary hover:text-action-primary';
+  'text-small text-content-muted hover:border-action-primary hover:text-action-primary';
 
 type Props = {
   campaignId: string | null;
@@ -28,7 +28,7 @@ export function ChannelDiscoveryButton({ campaignId, campaignName }: Props) {
   return (
     <>
       <Button
-        size="xs"
+        size="sm"
         disabled={campaignId === null}
         onClick={() => {
           setOpen(true);

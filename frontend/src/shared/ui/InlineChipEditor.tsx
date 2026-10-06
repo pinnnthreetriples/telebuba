@@ -29,7 +29,7 @@ export function InlineChipEditor({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs',
+        'inline-flex items-center gap-1 rounded-full border border-action-primary bg-surface-card py-1 pl-3 pr-1',
         className,
       )}
     >
@@ -65,7 +65,7 @@ export function InlineChipEditor({
           title={cancelLabel}
           aria-label={cancelLabel}
           onClick={onCancel}
-          className="bg-line-row text-content-muted"
+          className="bg-canvas text-content-muted"
         >
           <Icon name="close" size={16} />
         </IconButton>

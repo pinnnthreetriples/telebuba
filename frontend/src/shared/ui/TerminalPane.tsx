@@ -6,8 +6,8 @@ import { cn } from '@/shared/lib/cn';
 // `feed` — журнал, который владеет своим блоком; `inline` — тот же поток внутри карточки,
 // ниже и с меньшим радиусом. Строки внутри рисует вызывающий: он знает свои колонки.
 const SIZE = {
-  feed: 'max-h-feed rounded-lg',
-  inline: 'max-h-feedInline rounded-md',
+  feed: 'max-h-feed rounded-md',
+  inline: 'max-h-feedInline rounded-sm',
 } as const;
 
 export function TerminalPane({
@@ -22,7 +22,7 @@ export function TerminalPane({
   return (
     <div
       className={cn(
-        'term tb-scroll overflow-y-auto bg-term px-md py-sm font-mono text-tiny leading-log',
+        'term tb-scroll overflow-y-auto bg-term px-3 py-2 font-mono text-small',
         SIZE[size],
         className,
       )}

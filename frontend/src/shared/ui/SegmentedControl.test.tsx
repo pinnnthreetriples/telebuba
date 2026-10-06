@@ -188,7 +188,7 @@ test.each([
 test('every option carries the focus ring the hand-written versions had none of', () => {
   const { radios } = renderControl();
   for (const radio of radios) {
-    expect(radio).toHaveClass('focus-visible:outline-focus');
+    expect(radio).toHaveClass('focus-visible:outline-action-primary');
     // The glow this replaced measured 1.18:1, and it came with `outline-none`. On a
     // control that is one tab stop with an arrow-key cursor, an invisible focus ring
     // does not degrade the keyboard contract — it removes it.
@@ -204,15 +204,15 @@ test('every option carries the focus ring the hand-written versions had none of'
 test('cn keeps the size and the fill of a segment together', () => {
   expect(
     cn(
-      'flex-1 rounded-sm py-sm text-body font-medium',
+      'flex-1 rounded-sm py-2 text-body font-medium',
       'bg-surface-card text-content-primary shadow-seg',
     ),
   ).toBe(
-    'flex-1 rounded-sm py-sm text-body font-medium bg-surface-card text-content-primary shadow-seg',
+    'flex-1 rounded-sm py-2 text-body font-medium bg-surface-card text-content-primary shadow-seg',
   );
-  expect(
-    cn('rounded-full px-lg py-tight text-body', 'bg-action-primary text-on-action shadow-pill'),
-  ).toBe('rounded-full px-lg py-tight text-body bg-action-primary text-on-action shadow-pill');
+  expect(cn('rounded-full px-4 py-1 text-body', 'bg-action-primary text-on-fill shadow-pill')).toBe(
+    'rounded-full px-4 py-1 text-body bg-action-primary text-on-fill shadow-pill',
+  );
 });
 
 /* ── per-option escape hatches ───────────────────────────────────────────── */
@@ -246,8 +246,8 @@ test('a label may be rich content, not just a string', () => {
 });
 
 test('the wrapper takes the caller className without losing its own', () => {
-  renderControl({ className: 'mb-lg' });
+  renderControl({ className: 'mb-4' });
   const group = screen.getByRole('radiogroup');
-  expect(group).toHaveClass('mb-lg');
+  expect(group).toHaveClass('mb-4');
   expect(group).toHaveClass('bg-canvas');
 });

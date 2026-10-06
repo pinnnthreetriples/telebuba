@@ -3,6 +3,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 
 import {
   FONT_SIZE_NAMES,
+  FONT_WEIGHT_NAMES,
   LINE_HEIGHT_NAMES,
   RADIUS_NAMES,
   RHYTHM_NAMES,
@@ -17,7 +18,7 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // tailwind-merge carries Tailwind's DEFAULT scales, and this config replaces two of
 // them outright, so it has to be told the new names. Without that it cannot tell a
 // type rung from a text colour — both are spelled `text-*` — and resolves
-// `text-body text-white` to `text-white`, silently dropping the size. That is not
+// `text-body text-on-fill` to `text-on-fill`, silently dropping the size. That is not
 // hypothetical: it is what `Button` produced, since its variant paints the colour
 // after its size sets the rung.
 //
@@ -29,8 +30,8 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // `leading` and `tracking` are a third case, and the reason they are listed is the
 // opposite of the `text-*` one: tailwind-merge DOES know both prefixes, but it matches
 // them against Tailwind's own names plus a length or an arbitrary value, and
-// `leading-stack`, `leading-log` and `tracking-code` are none of those. An unrecognised
-// class joins no group, so it conflicts with nothing and `cn('leading-log',
+// ``, `` and `tracking-code` are none of those. An unrecognised
+// class joins no group, so it conflicts with nothing and `cn('',
 // 'leading-none')` keeps BOTH — the winner then decided by the order the two rules
 // happen to sit in the stylesheet rather than by the caller's last word. That is the
 // same shape as the bug that switched off every filled Button's font size, one axis
@@ -40,7 +41,7 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // `text-body` delete all three and leave the text unweighted and unpainted — the same
 // shape of bug as the one above, one layer up. It gets its own group instead, declared
 // to beat the three groups it subsumes when it comes last, and NOT declared as
-// something they beat: `cn('type-caption', 'text-danger')` has to keep both, because
+// something they beat: `cn('type-small', 'text-danger')` has to keep both, because
 // naming the role and then recolouring it is the intended way to write an error line.
 //
 // The `override` below is the other half of that, and it is a conflict tailwind-merge
@@ -50,20 +51,18 @@ import { pressScale } from '@/shared/design-system/tokens/motion';
 // strings for exactly the opposite reason — the note above `fontSize` says pairing a
 // line-height into them would silently re-space 694 sites — so `text-*` here sets a
 // size and nothing else, and letting it clear a line-height drops a class the caller
-// asked for: `cn('leading-log', 'text-tiny')` returned `text-tiny` alone. That is
+// asked for: `cn('', 'text-small')` returned `text-small` alone. That is
 // the same silent-drop shape as the Button bug, arriving from the other direction, and
 // it was reachable before this axis had names at all, because an arbitrary
 // `leading-[1.5]` lands in the same group a named rung does.
-// The rhythm is the same case as `leading`/`tracking`, and it is the widest one: this
-// config replaces Tailwind's numeric `spacing` with names, and tailwind-merge validates
-// a padding, margin or gap value with `isLength` — which `tight`, `md` and `2xl` are
-// not. So they join no group, conflict with nothing, and `cn('py-tight', 'py-xs')` keeps
-// BOTH. The winner is then whichever class name happens to sort later in the emitted
-// stylesheet, in either caller order, which means a component's own padding can beat the
-// override its caller passed. Every `cn`-based component that takes a `className` is
-// affected, and it fails the way all of these fail: silently, looking right most of the
-// time. Found while trying to hold a button's height with a padding override — the
-// override would have been discarded.
+// The rhythm was the same case as `leading`/`tracking`, and the widest one: while the
+// config named its rungs (`tight`, `md`, `2xl`), tailwind-merge validated a padding,
+// margin or gap value with `isLength` — which those names are not — so they joined no
+// group and `cn('py-tight', 'py-xs')` kept BOTH, letting a component's own padding beat
+// its caller's override by stylesheet order. Since the Firecrawl pass the rungs are
+// numeric keys (`1`…`16`) that stock tailwind-merge parses by itself; the rhythm groups
+// below stay declared from the token list anyway, so a named rung added later cannot
+// reopen the hole silently.
 //
 // Все четыре списка ниже ВЫЧИСЛЯЮТСЯ из `shared/design-system/tokens`, а не набраны здесь.
 // Набранные, они были шестым экземпляром состава шкал — и самым опасным: расходясь, они
@@ -91,9 +90,10 @@ const merge = extendTailwindMerge<'type-role'>({
   extend: {
     classGroups: {
       'font-size': [{ text: FONT_SIZE_NAMES }],
+      'font-weight': [{ font: FONT_WEIGHT_NAMES }],
       // Шкала целиком, а не только незнакомые tailwind-merge имена. Отбирать
-      // незнакомые пришлось бы по СТОКОВОМУ словарю (`sm`, `md`, `lg`, `full` он знает,
-      // `card` — нет), то есть завести здесь литеральный список чужих имён — ровно та
+      // незнакомые пришлось бы по СТОКОВОМУ словарю (сейчас он знает все пять имён, но
+      // знал не все), то есть завести здесь литеральный список чужих имён — ровно та
       // копия, от которой этот файл только что избавился. Повторное объявление имени,
       // которое и так в этой группе, — пустая операция: соответствие «класс → группа»
       // просто переписывается на ту же группу.

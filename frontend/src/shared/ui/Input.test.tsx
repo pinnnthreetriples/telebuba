@@ -15,13 +15,11 @@ test('the height and type size come from the size prop', async () => {
     <>
       <Input aria-label="Ключ" />
       <Input aria-label="Порог" size="sm" />
-      <Input aria-label="Лимит" size="xs" />
     </>,
   );
 
   expect(screen.getByLabelText('Ключ').className).toContain('h-control');
   expect(screen.getByLabelText('Порог').className).toContain('h-field');
-  expect(screen.getByLabelText('Лимит').className).toContain('h-compact');
   // Ни одна ступень не набирает вертикальный padding: он и был тем, из чего высота
   // складывалась.
   expect(screen.getByLabelText('Ключ').className).not.toMatch(/py-/);
@@ -87,7 +85,7 @@ test('Textarea starts at one row, prevents manual resize and keeps the field sty
   const area = screen.getByLabelText<HTMLTextAreaElement>('Промпт');
   expect(area.tagName).toBe('TEXTAREA');
   expect(area.getAttribute('rows')).toBe('1');
-  expect(area.className).toContain('py-tight');
+  expect(area.className).toContain('py-1');
   expect(area.className).toContain('resize-none');
   expect(area.className).not.toMatch(/h-/);
   await userEvent.type(area, 'ок');

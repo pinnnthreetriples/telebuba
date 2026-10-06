@@ -1,7 +1,15 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { Button, CollapsibleCard, Icon, IconButton, Input, SelectableCard } from '@/shared/ui';
+import {
+  Button,
+  CollapsibleCard,
+  EmptyState,
+  Icon,
+  IconButton,
+  Input,
+  SelectableCard,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 import { countTargets } from './setupDraft';
@@ -59,11 +67,11 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.campaigns.title')}
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
-      header={<span className="type-card-title">{t('neuroshilling.campaigns.title')}</span>}
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
+      title={t('neuroshilling.campaigns.title')}
     >
-      <div className="flex flex-col gap-tight">
+      <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           const status = campaign.status ?? 'idle';
@@ -140,14 +148,14 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-lg text-center type-prose">{t('neuroshilling.campaigns.none')}</div>
+          <EmptyState size="sm">{t('neuroshilling.campaigns.none')}</EmptyState>
         ) : null}
       </div>
 
       {creating ? (
         // Строкой, а не диалогом: создание спрашивает имя и больше ничего, и приложение
         // уже пишет эту форму именно так (пилюля «добавить канал»).
-        <div className="mt-sm flex items-center gap-sm">
+        <div className="mt-2 flex items-center gap-2">
           <Input
             size="sm"
             autoFocus
@@ -176,7 +184,7 @@ export function CampaignsCard({
           </IconButton>
         </div>
       ) : (
-        <Button variant="dashed" fullWidth className="mt-sm font-medium" onClick={onStartCreate}>
+        <Button variant="dashed" fullWidth className="mt-2 font-medium" onClick={onStartCreate}>
           {t('neuroshilling.campaigns.create')}
         </Button>
       )}

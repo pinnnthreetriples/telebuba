@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { assignProxyMutation, proxyPoolQueryOptions, proxyTypeLabel } from '@/entities/proxy';
-import { Button } from '@/shared/ui';
+import { Button, EmptyState } from '@/shared/ui';
 
 // Step 2 "pick from pool" of the add-account wizard, for MANY accounts: each
 // click hands a proxy up to its free slots' worth of the accounts still without
@@ -76,8 +76,8 @@ export function ProxyPoolStep({
   return (
     <>
       {accountIds.length > 1 && (
-        <div className="mb-lg flex items-center justify-between gap-md type-caption">
-          <span className="flex flex-wrap gap-sm">
+        <div className="mb-4 flex items-center justify-between gap-3 type-small">
+          <span className="flex flex-wrap gap-2">
             <span>{t('accounts.addWizard.poolAssigned', { done, total: accountIds.length })}</span>
             {remaining.length > 0 && (
               <span>{t('accounts.addWizard.poolRemaining', { count: remaining.length })}</span>
@@ -98,11 +98,11 @@ export function ProxyPoolStep({
           )}
         </div>
       )}
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-2">
         {freeProxies.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
+          <EmptyState boxed size="md">
             {t('accounts.addWizard.poolEmpty')}
-          </div>
+          </EmptyState>
         ) : (
           freeProxies.map((proxy) => (
             <button
@@ -112,7 +112,7 @@ export function ProxyPoolStep({
               onClick={() => {
                 void assignTo([proxy]);
               }}
-              className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-lg py-md text-left transition-colors hover:border-info-line disabled:opacity-60"
+              className="flex items-center gap-3 rounded-md border border-line bg-surface-card px-4 py-3 text-left transition-colors hover:border-info-line disabled:opacity-60"
             >
               {proxy.country_code ? (
                 <span
@@ -120,21 +120,21 @@ export function ProxyPoolStep({
                 />
               ) : null}
               <span className="flex-1">
-                <span className="block type-card-title">
+                <span className="block type-h3">
                   {(proxy.country_code ?? '—').toUpperCase()} · {proxyTypeLabel(proxy.proxy_type)}
                 </span>
-                <span className="block font-mono type-caption">
+                <span className="block font-mono type-small">
                   {proxy.host}:{proxy.port}
                 </span>
               </span>
-              <span className="type-label text-success-deep">
+              <span className="type-body-medium text-success-deep">
                 {t('accounts.addWizard.poolFree', { count: proxy.free })}
               </span>
             </button>
           ))
         )}
         {failed && (
-          <div role="alert" className="type-caption text-danger-deep">
+          <div role="alert" className="type-small text-danger-deep">
             {t(
               accountIds.length > 1
                 ? 'accounts.addWizard.proxyAssignPartial'
@@ -143,7 +143,7 @@ export function ProxyPoolStep({
           </div>
         )}
       </div>
-      <div className="mt-xl flex justify-between gap-sm">
+      <div className="mt-6 flex justify-between gap-2">
         <Button onClick={onBack}>{t('accounts.addWizard.back')}</Button>
         <Button variant="primary" onClick={onDone} disabled={assignProxy.isPending}>
           {t('accounts.addWizard.done')}

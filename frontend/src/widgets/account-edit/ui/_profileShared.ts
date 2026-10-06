@@ -7,8 +7,9 @@ import { flatColors } from '@/shared/design-system';
 
 import type { Translate } from './_channelsShared';
 
-// Fallback tile background when a media item carries no thumbnail.
-const TILE = `linear-gradient(135deg,${flatColors.fallback.start},${flatColors.fallback.end})`;
+// Fallback tile background when a media item carries no thumbnail: the same two colours
+// as the avatar's `from-info-line to-line`.
+const TILE = `linear-gradient(135deg,${flatColors.info.line},${flatColors.line.DEFAULT})`;
 
 // Telegram's own profile-text limits, mirroring `PROFILE_NAME_MAX_LENGTH` and
 // `PROFILE_BIO_MAX_LENGTH` in schemas/accounts.py. Here rather than inline in the

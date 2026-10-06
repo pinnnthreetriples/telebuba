@@ -21,28 +21,27 @@ import type {
 // editor's chips and by the preview's bubbles, so a role wears one colour on
 // both cards.
 //
-// `on` — чернила НА заливке роли, и до появления ролей `on-success`/`on-warning` их носил
-// один общий `text-on-action`: белая цифра на янтарном кружке была набрана «чернилами на
-// действии». Значение у всех трёх сегодня одно (белый), решений три, и янтарное из них
-// шаткое — см. группу `feedback` в `semantic.ts`.
+// `on` — чернила НА заливке роли: у всех трёх это `on-fill`. Янтарная заливка здесь —
+// `warning-deep`, а не `warning`: белый на базовом янтаре мерит 4.01:1 и пола AA не берёт
+// (держит `contrast.test.ts`).
 const ROLE_TONES = [
   {
     bg: 'bg-action-primary',
     text: 'text-action-primary',
     border: 'border-action-primary',
-    on: 'text-on-action',
+    on: 'text-on-fill',
   },
   {
     bg: 'bg-success-deep',
     text: 'text-success-deep',
     border: 'border-success',
-    on: 'text-on-success',
+    on: 'text-on-fill',
   },
   {
     bg: 'bg-warning-deep',
     text: 'text-warning-deep',
     border: 'border-warning',
-    on: 'text-on-warning',
+    on: 'text-on-fill',
   },
 ] as const;
 

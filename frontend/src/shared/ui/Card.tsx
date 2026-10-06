@@ -3,9 +3,13 @@ import type { ReactNode } from 'react';
 import { surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
-// The app's card surface: white, hairline border, `rounded-card`. It lived as a
+import { CardHeader } from './CardHeader';
+
+// The app's card surface: white, hairline border, `rounded-lg`. It lived as a
 // local component on the settings page while fourteen other places spelled the
 // same three classes out, which is how one of them ended up a shade off.
+//
+// Заголовок с подзаголовком рисует `CardHeader` — та же шапка, что у остальных карточек.
 //
 // `CollapsibleCard` is the other one — a card whose body folds away, with a header
 // row it owns. This is the plain surface; nothing is nested in it by default.
@@ -17,7 +21,7 @@ import { cn } from '@/shared/lib/cn';
 export function Card({
   title,
   subtitle,
-  className = 'px-xl py-xl',
+  className = 'px-6 py-6',
   children,
   ...rest
 }: {
@@ -30,8 +34,7 @@ export function Card({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
     <div className={cn(surface('card'), className)} {...rest}>
-      {title ? <div className="mb-xs text-body font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-lg text-body text-content-subtle">{subtitle}</div> : null}
+      {title ? <CardHeader className="mb-4" title={title} subtitle={subtitle} /> : null}
       {children}
     </div>
   );

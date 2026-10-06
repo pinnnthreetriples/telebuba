@@ -8,7 +8,7 @@ import {
   easing,
   flatColors,
   font,
-  fontSize,
+  fontWeight,
   height,
   layer,
   letterSpacing,
@@ -23,6 +23,7 @@ import {
   shadow,
   size,
   typeRole,
+  typeScale,
   width,
 } from './src/shared/design-system/tokens';
 
@@ -71,7 +72,19 @@ export default {
     // `theme()` в кейфреймах, которым нужна краска с альфой. См. заметку в `primitives.ts`.
     channel,
     fontFamily: font,
-    fontSize,
+    // Ступень — размер вместе со своим интерлиньяжем и трекингом: `text-body` ставит все три.
+    // Пара собирается здесь, а не в токенах, потому что форма `[размер, { … }]` — формат
+    // Tailwind, а не решение дизайна.
+    fontSize: Object.fromEntries(
+      Object.entries(typeScale).map(([name, step]) => [
+        name,
+        [step.size, { lineHeight: step.leading, letterSpacing: step.tracking }],
+      ]),
+    ),
+    fontWeight,
+    // Не шкала утилит, как и `channel`: ступени целиком для `theme()` в `index.css` и для
+    // плагина стилей ниже.
+    typeScale,
     typeRole,
     lineHeight,
     letterSpacing,
@@ -96,39 +109,38 @@ export default {
     maxHeight,
   },
   plugins: [
-    // По одной утилите на роль, в слой `components`, чтобы утилита на том же элементе всё
-    // ещё выигрывала: `type-caption text-danger` — подпись в цвете ошибки, а
-    // `type-card-title font-bold` — заголовок, за который кому-то ещё придётся спорить.
-    // Этот порядок и есть причина, по которой здесь плагин, а не рецепт на `@apply`.
+    // По одной утилите на стиль, в слой `components`, чтобы утилита на том же элементе всё
+    // ещё выигрывала: `type-small text-danger` — подпись в цвете ошибки. Этот порядок и
+    // есть причина, по которой здесь плагин, а не рецепт на `@apply`.
     plugin(({ addComponents, theme }) => {
-      type Role = {
-        size: string;
-        weight: string;
-        ink: string;
-        leading: string;
-        tracking?: string;
-        caps?: string;
-      };
+      type Step = { size: string; leading: string; tracking: string };
+      type Role = { size: string; weight: string; ink: string };
+      const steps = theme('typeScale') as Record<string, Step>;
+      const weights = theme('fontWeight') as Record<string, string>;
       const roles = theme('typeRole') as Record<string, Role>;
       addComponents(
         Object.fromEntries(
-          Object.entries(roles).map(([name, role]) => [
-            `.type-${name}`,
-            {
-              fontSize: theme(`fontSize.${role.size}`) as string,
-              fontWeight: role.weight,
-              // `content-primary` — как это пишет утилита; палитра рампу вкладывает,
-              // поэтому дефис на пути превращается в точку. Спецслучая для «краски без
-              // рунга» больше нет: у `content` каждая ступень названа, и `ink` как
-              // отдельное имя ушло вместе с переездом на роли.
-              color: theme(`colors.${role.ink.replace('-', '.')}`) as string,
-              // Роль называет интерлиньяж сама: иначе он приходил от предка, и роль внутри
-              // журнала (`leading-log`) выглядела не тем, чем называлась.
-              lineHeight: theme(`lineHeight.${role.leading}`) as string,
-              ...(role.tracking === undefined ? {} : { letterSpacing: role.tracking }),
-              ...(role.caps === undefined ? {} : { textTransform: role.caps }),
-            },
-          ]),
+          Object.entries(roles).map(([name, role]) => {
+            const step = steps[role.size];
+            const weight = weights[role.weight];
+            // Стиль, сославшийся на несуществующую ступень или вес, должен ронять сборку,
+            // а не выпускать класс без размера.
+            if (step === undefined || weight === undefined) {
+              throw new Error(`type-${name}: нет ступени «${role.size}» или веса «${role.weight}»`);
+            }
+            return [
+              `.type-${name}`,
+              {
+                fontSize: step.size,
+                lineHeight: step.leading,
+                letterSpacing: step.tracking,
+                fontWeight: weight,
+                // `content-primary` — как это пишет утилита; палитра рампу вкладывает,
+                // поэтому дефис на пути превращается в точку.
+                color: theme(`colors.${role.ink.replace('-', '.')}`) as string,
+              },
+            ];
+          }),
         ),
       );
     }),

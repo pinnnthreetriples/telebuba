@@ -185,7 +185,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-label={t('accounts.profile.privacy.loading')}
-          className="flex justify-center py-2xl"
+          className="flex justify-center py-6"
         >
           <Spinner size="md" />
         </div>
@@ -211,7 +211,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           // Prose on an amber surface, so `ink-body` rather than `ink-muted`: moving this
           // notice onto `warning-tint` left the muted grey at 4.26:1, just under the AA
           // floor it used to clear at 4.53:1 on the literal it replaced.
-          className="mb-lg rounded-lg border border-line bg-warning-tint px-md py-md text-body text-content-secondary"
+          className="mb-4 rounded-md border border-line bg-warning-tint px-3 py-3 text-body text-content-secondary"
         >
           {t('accounts.profile.privacy.writeReadError', { reason: writeReadError })}
         </div>
@@ -219,7 +219,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
 
       {settings && (
         <>
-          <div className="flex flex-col gap-sm">
+          <div className="flex flex-col gap-2">
             {KEYS.map((key) => (
               <PrivacyLevelRow
                 key={key}
@@ -235,7 +235,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             ))}
           </div>
 
-          <div className="mt-lg flex items-stretch gap-sm">
+          <div className="mt-4 flex items-stretch gap-2">
             <Button
               variant="primary"
               size="sm"
@@ -249,7 +249,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </Button>
             <Button
               size="sm"
-              className="h-auto min-h-touch min-w-0 flex-1 shrink whitespace-normal px-md py-sm text-center sm:h-field sm:min-h-0 sm:flex-none sm:shrink-0 sm:whitespace-nowrap sm:px-xl sm:py-0"
+              className="h-auto min-h-touch min-w-0 flex-1 shrink whitespace-normal px-3 py-2 text-center sm:h-field sm:min-h-0 sm:flex-none sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:py-0"
               disabled={locked || !canFleet}
               onClick={() => {
                 setConfirmFleet(true);
@@ -270,9 +270,9 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="mt-lg rounded-lg border border-line bg-surface-card px-lg py-md text-body"
+          className="mt-4 rounded-md border border-line bg-surface-card px-4 py-3 text-body"
         >
-          <div className="flex flex-wrap gap-x-lg gap-y-tight">
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
             <span>{t('accounts.profile.privacy.bulkOk', { n: bulk.ok })}</span>
             <span className={bulk.failed > 0 ? 'text-danger' : undefined}>
               {t('accounts.profile.privacy.bulkFailed', { n: bulk.failed })}
@@ -282,7 +282,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm type-caption">
+            <ul className="mt-2 flex flex-col gap-2 border-t border-canvas pt-2 type-small">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

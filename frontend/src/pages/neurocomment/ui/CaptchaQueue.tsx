@@ -28,13 +28,13 @@ export function CaptchaQueue({
         id: 'account',
         header: t('neurocomment.board.col.account'),
         cell: ({ row }) => (
-          <div className="flex min-w-0 items-center gap-md">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-warning-press" />
             <div className="min-w-0">
-              <div className="truncate type-item-title">
+              <div className="truncate type-body-medium">
                 {accountLabel(row.original.account_id)}
               </div>
-              <div className="type-caption">
+              <div className="type-small">
                 {row.original.channel} ·{' '}
                 {formatLocalTime(row.original.decided_at, { seconds: true })}
               </div>
@@ -54,7 +54,7 @@ export function CaptchaQueue({
         // seconds to that. A countdown would have to promise an exact moment the rule
         // deliberately does not have.
         cell: () => (
-          <span className="shrink-0 type-caption">{t('neurocomment.captcha.retrying')}</span>
+          <span className="shrink-0 type-small">{t('neurocomment.captcha.retrying')}</span>
         ),
         meta: { cellClassName: 'text-right', cardSlot: 'control' } satisfies DataTableColumnMeta,
       },

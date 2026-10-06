@@ -14,22 +14,16 @@
 //
 // What this rule deliberately does NOT flag, and why:
 //
-//   `bg-white` / `text-white` (213 sites) — white and black are the two colours a
-//   palette does not have to name. An alias would be a synonym rather than a role,
-//   and there is no second theme for it to point somewhere else in. They are rungs of
-//   `theme.colors` now rather than leftovers of Tailwind's palette underneath it, which
-//   is what makes them nameable at all: the palette REPLACES Tailwind's, so a colour the
-//   config does not carry does not compile.
-//
-//   an ALPHA modifier on white or black (13 sites) — `bg-white/85` under the nav bar's
-//   blur, `bg-white/70` over a photo grid mid-drag, `bg-black/55` over a story preview,
-//   `bg-black/10` over a syncing modal body, `border-black/5` and `border-white/40`
-//   hairlines drawn on a photograph. Same
-//   carve-out as the line above, and for a sharper reason: the palette holds flat
-//   colours, and what is behind each of these is a photograph or a scrolling page, so
-//   there is no composite for a token to be. The pattern below therefore bans an alpha
-//   only on a colour the palette DOES name, which is the case where a composite exists
-//   and something else already has its name. AddStoryModal's `bg-black/55` is the
+//   an ALPHA modifier on `surface-card` or `black` — `bg-surface-card/85` under the nav
+//   bar's blur, `bg-surface-card/70` over a photo grid mid-drag, `bg-black/55` over a
+//   story preview, `bg-black/10` over a syncing modal body, `border-black/5` hairlines
+//   drawn on a photograph. The two ends of the range: the palette holds flat colours,
+//   and what is behind each of these is a photograph or a scrolling page, so there is
+//   no composite for a token to be. White under an alpha used to have its own name,
+//   `white`, which was a third name for #ffffff; it is the white surface showing
+//   through, so it wears that surface's name. The pattern below therefore bans an alpha
+//   only on the OTHER colours the palette names, which is the case where a composite
+//   exists and something else already has its name. AddStoryModal's `bg-black/55` is the
 //   closest any of the eleven comes to failing that test — it is `scrim` with 11 units
 //   of warmth left out — and measuring it is what kept it out here: over the whitest
 //   thing a photograph can be, the two washes put a white numeral at 4.74:1 and 4.35:1.
@@ -41,10 +35,10 @@
 //   they already have and no new suppression is added to buy it.
 //
 //   `rounded-[1px|2px|3px]` (24 sites) — a hairline's radius. Snapping a 2px progress
-//   bar or a chat bubble's tail up to the 6px rung would round it away, so the radius
+//   bar or a chat bubble's tail up to the 8px rung would round it away, so the radius
 //   pattern starts at 4px.
 //
-//   arbitrary spacing above 34px (10 sites) — the rhythm is dense from 2 to 32px and
+//   arbitrary spacing above 34px (10 sites) — the rhythm is dense from 4 to 32px and
 //   that is the range the pattern covers. Above it are a page's own breathing room
 //   and the room a control takes up inside a field, one-offs by nature.
 //
@@ -80,22 +74,10 @@
 //   two sites used to spell it `[1.1]` and `[1.1em]`; they are one spelling now, so the
 //   carve-out has one shape to allow rather than two.
 //
-//   `tracking-[-0.01em]` on the wordmark (2 sites, `AppNav` and `NavDrawer`) — the mark
-//   is drawn from the design source `Telebuba.dc.html`, and that spacing is a value the
-//   source sets, not one this app chose. The sweep that closed this axis dropped it as
-//   sub-threshold, which it is — 0.16px per character — and that is the wrong test to
-//   apply: a lint rule about typographic scales has no standing over a brand mark. The
-//   same file already refuses to give the wordmark a type role for the same reason, so
-//   this is the second half of one decision rather than a new exception.
-//
-//   `tracking-[…]` inside `shared/ui` (2 sites, DataTable's `TH` and `CARD_LABEL`) —
-//   the same `above` carve-out the type-role pattern makes, for the same reason:
-//   `shared/ui` is the layer allowed to compose primitives by hand. Both are
-//   `text-tiny font-medium uppercase tracking-[0.04em] text-content-subtle`, which is
-//   `type-eyebrow` exactly except for the weight — the role is 600 and these are 500.
-//   That is worth knowing and is NOT worth fixing here: moving them onto the role would
-//   change what a table header looks like in every table in the app, to make a role fit.
-//   Left as it is, on purpose, and written down so the next reader does not rediscover it.
+//   `tracking-[…]` inside `shared/ui` — the same `above` carve-out the type-style
+//   pattern makes, for the same reason: `shared/ui` is the layer allowed to compose
+//   primitives by hand. No site in it spends one today; the carve-out stays so the layer
+//   that IS the design system is not asked to argue with its own rule.
 //
 //   two decorative gradients (ProfileModal, _profileShared) — placeholder fills
 //   behind an avatar or a thumbnail that has not loaded. They exist only to differ
@@ -112,7 +94,7 @@
 // A test file is exempt too, and for the opposite reason: `cn.test.ts` and
 // `designTokenRule.test.ts` assert on the very spellings this bans, and a fixture is
 // data about the code rather than a decision inside it.
-import { colorRoots, scaleNames } from '../scripts/configScales.mjs';
+import { colorRoots, scale, scaleNames } from '../scripts/configScales.mjs';
 
 // The composition of every scale comes from `src/shared/design-system/tokens` — the same
 // objects `ds:dead`, the doc generator, `cn.ts` and Tailwind itself read. That is the
@@ -124,11 +106,6 @@ const NOT_A_CONSUMER = /(?:^|[\\/])src[\\/]shared[\\/]ui[\\/]|\.test\.tsx?$/;
 // The token modules themselves: the one place a raw value is the correct thing to write.
 const IS_THE_SYSTEM = /(?:^|[\\/])src[\\/]shared[\\/]design-system[\\/]tokens[\\/]/;
 
-// `hero` is left out on purpose. The config calls it "the one empty-state numeral" and
-// means it: one element in the whole app is 42px, WarmDaysModal's day count. A role
-// needs two wearers in two slices — a rung worn once is a literal with a name — so
-// there is no `type-*` for it to move onto, and flagging it would be asking for a
-// thirteenth role with nothing to defend it.
 //
 // The rest of the set is READ from the config rather than spelled here. It used to be
 // spelled, with the note that "a name that leaves this file is a rename the sweep has to
@@ -136,9 +113,7 @@ const IS_THE_SYSTEM = /(?:^|[\\/])src[\\/]shared[\\/]design-system[\\/]tokens[\\
 // what actually happens: a ninth rung or a twelfth colour lands in the config, this list
 // does not grow, and the pattern below quietly stops covering it. A gate that goes green
 // by looking at less is the failure mode the design system's own gates exist to catch.
-const TYPE_RUNG = scaleNames('fontSize')
-  .filter((rung) => rung !== 'hero')
-  .join('|');
+const TYPE_RUNG = scaleNames('fontSize').join('|');
 const INK_RAMP = String.raw`text-content-(?:primary|secondary|muted|subtle)(?![\w-])`;
 
 // What this pattern deliberately does NOT reach, and why:
@@ -163,7 +138,7 @@ const INK_RAMP = String.raw`text-content-(?:primary|secondary|muted|subtle)(?![\
 //   draw no box but are still controls — a text button, a nav tab, a tooltip trigger.
 //
 //   a class list carrying `leading-none`, `absolute` or `fixed`. At `lead` the type
-//   scale doubles as a GLYPH size, exactly the way `IconButton` wears `text-title` to
+//   scale doubles as a GLYPH size, exactly the way `IconButton` wears `text-h3` to
 //   size a `×`: all six such sites in the tree are one character — the `×` that removes
 //   a chip in CreateCampaignModal, CampaignsCard and WarmingPage, and the `@` prefix
 //   inside the username fields of ChannelCreateModal and ProfileModal. A glyph is not
@@ -198,6 +173,22 @@ const COLOUR =
   'ring|ring-offset|fill|stroke|from|to|via|divide|divide-x|divide-y|' +
   'outline|decoration|caret|accent|shadow|placeholder';
 const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y';
+// Всё, что читает `theme.spacing`, а не только поля и зазоры: `top-lg` и `scroll-mt-page`
+// после перехода на сетку молчат точно так же, как `p-md`.
+const SPACE_ALL =
+  `${SPACE}|ps|pe|ms|me|inset|inset-x|inset-y|top|right|bottom|left|start|end|` +
+  'translate-x|translate-y|scroll-m[xytrbl]?|scroll-p[xytrbl]?|indent';
+// Ступени ритма — из токенов, как и всё остальное здесь. `0` стоит в той же шкале, но
+// ступенью не считается и в подсказке не называется.
+const RHYTHM = scale('spacing');
+const RHYTHM_NUMERIC = Object.keys(RHYTHM).filter((name) => /^\d+$/.test(name));
+const RHYTHM_RUNGS = RHYTHM_NUMERIC.filter((name) => name !== '0')
+  .map((name) => `\`${name}\` ${RHYTHM[name]}`)
+  .join(', ');
+// Имена, которые ритм носил до сетки Firecrawl. Перечислены по той же причине, что
+// `RETIRED`: незнакомая утилита не выпускает правила, и `gap-md` после перехода — не
+// ошибка сборки, а класс, который молча ничего не делает.
+const RETIRED_RHYTHM = 'hair|xs|tight|sm|md|lg|xl|2xl|page|empty';
 const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 
 // A utility class starts at the beginning of the string or after whitespace. Anchored
@@ -223,7 +214,16 @@ const RETIRED =
   // ink AND the dark blue that reads on a tint, `ink` was named after the material rather
   // than the role.
   'ink|ink-body|ink-muted|ink-subtle|' +
-  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline';
+  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline|' +
+  // Восьмой проход: один цвет — одно имя. Каждое из этих имён было вторым именем краски,
+  // которая уже называлась иначе; `focus` — отдельным паттерном ниже, потому что
+  // `shadow-focus` — законная тень, а не краска.
+  'white|on-action|on-success|on-warning|on-danger|on-inverse|on-neutral|' +
+  'action-hover|fallback-start|fallback-end|line-row';
+
+// `focus` ушёл из красок, но остался в тенях: `shadow-focus` — свечение поля. Поэтому для
+// него приставки краски без `shadow`.
+const COLOUR_BUT_SHADOW = COLOUR.replace('|shadow|', '|');
 
 // Tailwind's own line-height and letter-spacing names, which this config replaces
 // outright the way it replaced the type scale. They are listed rather than left to fail
@@ -235,60 +235,54 @@ const RETIRED =
 const RETIRED_LEADING = '10|3|4|5|6|7|8|9|tight|snug|normal|relaxed|loose';
 const RETIRED_TRACKING = 'tighter|tight|normal|wide|wider|widest';
 
+// The type scale that the five steps replaced, and Tailwind's own weights beyond the two
+// this app keeps. Listed for the reason the retired colours are: an unknown utility emits
+// no rule, so `type-caption` or `font-bold` after the rebuild is not an error, it is a
+// class that silently does nothing.
+const RETIRED_TYPE_STEP = 'tiny|title|stat|display|hero|lead|micro';
+const RETIRED_TYPE_ROLE =
+  'page-title|dialog-title|dialog-body|card-title|item-title|eyebrow|label|value|prose|caption|table-header|stat|meta';
+const RETIRED_TYPE_LEADING = 'stack|log|body';
+const RETIRED_WEIGHT = 'thin|extralight|light|semibold|bold|extrabold|black';
+
 // The palette's own names, as a class list spells them — the roots only, since a rung
 // (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. Read
 // from the config for the reason given at `TYPE_RUNG`.
 //
-// `white` and `black` come out: the pattern this feeds bans an alpha modifier on a named
-// colour, and alpha on those two is the documented exception — `border-black/5` on a
-// photograph, `bg-black/55` on a story tile. `transparent` and `current` come out because
-// an alpha on a keyword is not a colour the palette failed to name; it is nonsense that
-// emits nothing.
-const NOT_A_TINTABLE_COLOUR = new Set(['white', 'black', 'transparent', 'current']);
+// `black` comes out: the pattern this feeds bans an alpha modifier on a named colour, and
+// alpha on black is the documented exception — `border-black/5` on a photograph,
+// `bg-black/55` on a story tile. The other end of that range, white, is `surface-card`,
+// which is a rung of `surface` rather than a root, so it is let through by
+// `ALPHA_BASE` below instead. `transparent` and `current` come out because an alpha on a
+// keyword is not a colour the palette failed to name; it is nonsense that emits nothing.
+const NOT_A_TINTABLE_COLOUR = new Set(['black', 'transparent', 'current']);
 const TOKEN = colorRoots()
   .filter((name) => !NOT_A_TINTABLE_COLOUR.has(name))
   .join('|');
+const ALPHA_BASE = String.raw`(?!surface-card/)`;
 
 const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
     message:
-      'That colour was collapsed into another one and no longer exists: `track` and `primary-wash` are `canvas` and `primary-tint`, `line-input` is `line`, `success-dot` is `success`. The unification ledger in docs/design-system.html carries the reason for each.',
+      'That colour was collapsed into another one and no longer exists — one colour, one name. `white` is `surface-card` (with an alpha over a photograph too); every `on-*` ink (`on-action`, `on-success`, `on-warning`, `on-danger`, `on-inverse`, `on-neutral`) is `on-fill`; `action-hover` is `info-tint`; `fallback-start`/`fallback-end` are `info-line`/`line`; `line-row` is `canvas`. Older: `track` and `primary-wash` are `canvas` and `info-tint`, `line-input` is `line`, `success-dot` is `success`. docs/design-system.md carries the reason for each.',
   },
   {
-    // `bg-white` / `text-white` without an alpha: both were one class doing two jobs, and
-    // the split is the whole point of the semantic pass — a card's fill is
-    // `bg-surface-card`, a filled action's label is `text-on-action`, ink on the dark
-    // surface is `text-on-inverse`. WITH an alpha they stay legal: white at 85% under the
-    // nav's blur and white at 40% as a hairline on a photograph are the extreme of the
-    // range rather than a role, and there is no flat composite for them to be.
+    // `focus` был вторым именем синего действия. `shadow-focus` при этом законен — это
+    // тень из `boxShadow`, а не краска, — поэтому приставки здесь без `shadow`.
+    test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR_BUT_SHADOW})-focus(?![\w-])`),
+    message:
+      'The focus colour was a second name for the action blue and no longer exists: a focus ring is `outline-action-primary` (or `border-action-primary`). `shadow-focus` — the glow of a focused field — is an elevation, not a colour, and stays.',
+  },
+  {
+    // Голый `black` без альфы: чёрного как роли в интерфейсе нет. Белого тут нет вовсе —
+    // `white` ушёл в `RETIRED` выше и ловится там с альфой и без.
     // Прежний список знал `border-` и не знал `border-t-`, поэтому `border-t-white`
     // проходил насквозь — им была набрана дуга кольца ожидания в четырёх местах. Это
     // закрыто: направление не другая краска.
-    //
-    // `stroke` и `fill` были исключены ЦЕЛИКОМ, и причина была измеренная: `stroke-white`
-    // стоял в восьми местах — белая галочка на ЗАЛИТОМ контроле, тот же дефект, что у
-    // кольца, — но роли «чернила на залитом тоне» в системе не было, а надеть `on-action`
-    // на успех значило бы соврать именем. Правило, которое надо шесть раз подавить, чтобы
-    // оно прошло, — не правило, поэтому исключалась приставка, а не сайты.
-    //
-    // Роли появились (`on-success`, `on-warning`, `on-danger`), все восемь мест на них
-    // перешли, и исключение снято: список приставок здесь снова тот же `COLOUR`.
-    test: at(String.raw`(?:${COLOUR})-(?:white|black)(?![\w-/])`),
+    test: at(String.raw`(?:${COLOUR})-black(?![\w-/])`),
     message:
-      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on a filled feedback tone is `on-success`/`on-warning`/`on-danger`; ink on a filled NEUTRAL (the ink-dark button, the grey counter) is `text-on-neutral`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`; the muted ink ON a filled action (a waiting ring’s track) is `on-action-track`. An alpha form — `bg-white/85`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be: over a known flat fill the composite exists and has a name.',
-  },
-  {
-    // Индикатор фокуса краской ДЕЙСТВИЯ. `border.focus` был объявлен ступенью с самого
-    // начала и не доходил ни до одного класса: восемь контролов рисовали фокус через
-    // `outline-action-primary`, поэтому перекрасить кнопку означало перекрасить фокус.
-    // Значение у них одно и остаётся одним — разъединены имена, и это правило держит
-    // разъединение, потому что классы выглядят одинаково работающими.
-    test: at(
-      String.raw`focus(?:-visible|-within)?:(?:outline|border|shadow|ring)-action-(?:primary|hover|pressed)(?![\w-])`,
-    ),
-    message:
-      'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
+      'Bare `black` is not a colour this UI paints. Dark text is `content-primary`; a dark surface is `term`; a wash over a photograph is `bg-scrim`. An alpha form — `bg-black/55`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be. Ink on any filled control or surface is `on-fill`.',
   },
   {
     // Кольцо ожидания, собранное руками. Оно было собрано так семнадцать раз, и дорожка
@@ -326,10 +320,10 @@ const PATTERNS = [
   },
   {
     test: at(
-      String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${TOKEN})(?:-[a-z]+)?/(?:\[[0-9.]+\]|\d{1,3})(?![\w-])`,
+      String.raw`(?:[\w-]+:)*(?:${COLOUR})-${ALPHA_BASE}(?:${TOKEN})(?:-[a-z]+)?/(?:\[[0-9.]+\]|\d{1,3})(?![\w-])`,
     ),
     message:
-      'An alpha modifier on a named colour paints a colour the palette does not name, and the palette cannot see it: `contrast.test.ts` reads a token per class and its ink pattern stops at the `/`. Seven sites wrote one this way and every one already had a name — five selected cards and tiles spelled `bg-primary` at 0.06, 0.08 and 5 across four slices, all of them `bg-primary-tint` to within four units on the white they sit on; a drop zone spelled `bg-canvas/40`, which is `bg-surface` to within one; and a countdown spelled `text-primary/70`, which measured 2.81:1 on the tint it sits in. Alpha on `white` or `black` is the exception, and the header says why. Name the composite, or use the token that already is it.',
+      'An alpha modifier on a named colour paints a colour the palette does not name, and the palette cannot see it: `contrast.test.ts` reads a token per class and its ink pattern stops at the `/`. Seven sites wrote one this way and every one already had a name — five selected cards and tiles spelled `bg-primary` at 0.06, 0.08 and 5 across four slices, all of them `bg-info-tint` to within four units on the white they sit on; a drop zone spelled `bg-canvas/40`, which is `bg-surface` to within one; and a countdown spelled `text-primary/70`, which measured 2.81:1 on the tint it sits in. Alpha on `surface-card` (white) or `black` is the exception, and the header says why. Name the composite, or use the token that already is it.',
   },
   {
     test: /(?:rgba?|hsla?)\(/,
@@ -337,19 +331,45 @@ const PATTERNS = [
       'A CSS colour function in a string is a colour computed at the call site, which is where the modal backdrop lived: an unbounded `backdrop?: number` composed into `rgba(11,11,12,${n})` on the app’s only inline style-object colour, so twenty-two dialogs carried a continuous dimming knob no gate could read. A wash over the page is `bg-veil` and a wash over a photograph is `bg-scrim`; both are in tailwind.config.ts with the alpha they were argued down to.',
   },
   {
-    test: at(String.raw`text-\[[0-9.]+(?:px|rem|em)\]`),
+    test: at(
+      String.raw`(?:[\w-]+:)*(?:text-(?:${RETIRED_TYPE_STEP})|type-(?:${RETIRED_TYPE_ROLE})|leading-(?:${RETIRED_TYPE_LEADING}))(?![\w-])`,
+    ),
     message:
-      'The type scale is closed: eight rungs from `text-micro` to `text-hero`, replacing Tailwind’s outright. A ninth size written in pixels is the drift those rungs were introduced to end.',
+      'The type scale was rebuilt into five steps and seven styles, and this name went with the old one: it emits no rule, so the text silently falls back to whatever it inherits. Steps: `tiny` → `text-small`, `title` → `text-h3`, `stat`/`display`/`hero` → `text-h1`. Styles: `page-title`/`stat` → `type-h1`, `dialog-title` → `type-h2`, `card-title` → `type-h3`, `item-title`/`label` → `type-body-medium`, `prose`/`value`/`dialog-body` → `type-body` (plus its colour), `caption` → `type-small`, `eyebrow`/`table-header` → `type-small-medium`. `leading-stack`/`leading-log` are gone — line-height comes with the step.',
   },
   {
-    test: at(String.raw`(?:${SPACE})-(?!0(?![\d.]))[0-9.]+(?![\w[])`),
+    test: at(String.raw`(?:[\w-]+:)*font-(?:${RETIRED_WEIGHT})(?![\w-])`),
     message:
-      "Tailwind's numeric spacing is a 4px grid; this app's rhythm is the design's own (`gap-md` is 10px, not 8 or 12). Mixing them is how `gap-md` came to sit beside `px-3` in one row. Use the named rung.",
+      'Two weights, and the scale replaces Tailwind’s outright: `font-normal` (400) for what is read, `font-medium` (500) for what names something — a heading, an item, a field label, a button. Hierarchy is carried by the type step, not by boldness, so `semibold`/`bold` emit no rule here and the text silently stays at the weight it inherited.',
+  },
+  {
+    test: at(String.raw`text-\[[0-9.]+(?:px|rem|em)\]`),
+    message:
+      'The type scale is closed: five steps — `text-small` 12, `text-body` 14, `text-h3` 16, `text-h2` 20, `text-h1` 24 — each carrying its own line-height and tracking, replacing Tailwind’s outright. A sixth size written in pixels is the drift those steps were introduced to end.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?:${RETIRED_RHYTHM})(?![\w-])`),
+    message:
+      'The rhythm is Firecrawl’s 4px grid with numeric keys now, and the named rungs are gone: this class emits no rule, so the element silently loses its spacing. `xs` → `1`, `sm` → `2`, `md` → `3`, `lg` → `4`, `2xl` → `6`, `page` → `8`, `empty` → `16`. `hair` (2px), `tight` (6px) and `xl` (20px) had no place on the grid and were mapped by role: `hair` → `1`; `tight` → `1` inside a small control or between an icon and its label, `2` between lines; `xl` → `6` for a card’s or dialog’s padding, `4` for a button’s or between groups. docs/design-system.md, «Седьмой проход», carries the table.',
+  },
+  {
+    // Волосок ушёл из всех шкал разом: `mt-px` не выпускает правила, и подпись молча
+    // встаёт на место — что и есть замена, но `gap-px` без правила склеивает плитки.
+    test: at(String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL}|${DIMENSION})-px(?![\w-])`),
+    message:
+      'There is no 1px rung any more — not in the rhythm, not in widths or heights: this class emits no rule. The grid is 4px. A 1px nudge (`mt-px` under a title, `py-px` in a chip) is dropped, not rounded up; a divider is a border — `border-t`/`border-l` on the element, or on the tiles of a grid instead of a `gap-px` over a tinted background; a table column hugging its content is `w-0`.',
+  },
+  {
+    // Числовые ключи теперь законны — но только объявленные. `p-5` и `gap-0.5` есть в
+    // шкале Tailwind и нет в нашей, а шкала ЗАМЕНЕНА: класс молчит, как и старое имя.
+    test: at(
+      String.raw`(?:[\w-]+:)*-?(?:${SPACE_ALL})-(?!(?:${RHYTHM_NUMERIC.join('|')})(?![\w.]))\d[\d.]*(?![\w./[])`,
+    ),
+    message: `The rhythm is a closed 4px grid, and only the rungs the app wears are declared: ${RHYTHM_RUNGS}, plus \`0\`. Tailwind’s own numeric scale is replaced, so an undeclared step emits no rule and the element silently loses its spacing. Use the nearest rung; a rung nobody wears is rejected by \`ds:dead\`, so a new one lands together with its wearer.`,
   },
   {
     test: at(String.raw`(?:${SPACE})-\[(?:[0-9]|[12][0-9]|3[0-4])px\]`),
-    message:
-      'The rhythm has a rung within 2px of this value. Reach for it: twelve names is the whole point, and a thirteenth measurement in pixels is where two rhythms start again.',
+    message: `The rhythm has a rung near this value: ${RHYTHM_RUNGS}. Reach for it — a measurement in pixels beside a 4px grid is where two rhythms start again.`,
   },
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${DIMENSION})-\[[0-9.]+(?:px|rem)\](?![\w-])`),
@@ -357,9 +377,14 @@ const PATTERNS = [
       'Dimensions are their own scale now: `size-*` for a square, `width`/`height` for everything else, and each rung is named for the component that wears it. This rule used to exempt `w-*`/`h-*` in pixels on the grounds that a component’s size is not a rung of the rhythm — which was true, and is exactly how 73 distinct dimensions grew beside eleven rungs. Both halves are scales now, so a measurement here belongs in one of them.',
   },
   {
+    test: at(String.raw`(?:[\w-]+:)*rounded(?:-[a-z]{1,2})?-card(?![\w-])`),
+    message:
+      'The radius scale is Firecrawl’s now and `card` is gone: this class emits no rule, so the card silently loses its corners. The card and the dialog are `rounded-lg` (16px). The rename was one pass, never two: the old `lg` (11px) is `rounded-md` (12px), the old `md` (8px) and `sm` (6px) are both `rounded-sm` (8px).',
+  },
+  {
     test: at(String.raw`rounded(?:-[a-z]+)?-\[(?:[4-9]|[1-9][0-9])`),
     message:
-      'Five radii, each named for what wears it (`sm` inside a box, `md` a standalone control, `lg` a panel nested in a card, `card` the card, `full` the pill). Hairlines under 4px keep their own value; anything larger has a rung.',
+      'Three radii and two shapes, on Firecrawl’s scale: `sm` 8px — an everyday control, a chip, a small tile; `md` 12px — a field, a panel, a menu, a card nested in a card; `lg` 16px — the card and the dialog; `full` — the pill and the avatar. Hairlines under 4px keep their own value; anything larger has a rung.',
   },
   {
     test: at(String.raw`duration-\[`),
@@ -369,25 +394,23 @@ const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*leading-\[[0-9.]+(?:px|rem)?\](?![\w-])`),
     message:
-      'This app already has a body line-height and it is not written anywhere: preflight sets `html { line-height: 1.5 }` and the type rungs are bare strings, so everything inherits it. Sixteen sites wrote `leading-[1.5]` and every one was restating the value it already had; the rest spent 1.35, 1.375, 1.4, 1.45, 1.6 and 1.625 on the one job of setting a sentence. Delete the class and inherit, or use `leading-stack` (a heading over its own detail line) or `leading-log` (a monospace stream on a `term` surface).',
+      'Line-height belongs to the type step: `text-body` is 14px on 20px, `text-small` 12px on 16px, every one a multiple of 4. A sentence written with `leading-[…]` restates or fights the step it already wears. Delete the class; `leading-none` is the one rung left, for a single glyph.',
   },
   {
     test: at(String.raw`(?:[\w-]+:)*leading-(?:${RETIRED_LEADING})(?![\w-])`),
     message:
-      'Tailwind’s line-height scale is replaced, so this name no longer emits a rule — the element silently keeps whatever it inherited rather than failing visibly. Three rungs are left: `none` for a single glyph, `stack` for a heading over its own detail line, `log` for a monospace stream. A sentence needs none of them; it inherits 1.5 already.',
+      'Tailwind’s line-height scale is replaced, so this name no longer emits a rule — the element silently keeps whatever it inherited rather than failing visibly. Line-height comes with the type step (`text-*`, `type-*`); `leading-none` is the one rung left, for a single glyph.',
   },
   {
     above: NOT_A_CONSUMER,
-    // The wordmark keeps the source's own spacing; see the header.
-    unless: /tracking-\[-0\.01em\]/,
     test: at(String.raw`(?:[\w-]+:)*tracking-\[[^\]]*\]`),
     message:
-      'Letter-spacing is not a scale in this app, and that is the decision rather than an omission: the two values type actually spends are declared by the roles that need them — `type-eyebrow` carries 0.04em, `type-page-title` carries -0.02em — and a `tracking-*` rung for either would be a second way to say what the role already says. `tracking-code` is the one name, and it is a field’s affordance rather than typography: the spacing that lets a one-time code be read back character by character as it is typed.',
+      'Letter-spacing is not a scale in this app: the optical tracking of each type step is part of the step (`text-h1` carries -0.019em, `text-body` -0.006em, after Inter’s own Dynamic Metrics), and a `tracking-*` rung would be a second way to say what the step already says. `tracking-code` is the one name, and it is a field’s affordance rather than typography: the spacing that lets a one-time code be read back character by character as it is typed.',
   },
   {
     test: at(String.raw`(?:[\w-]+:)*tracking-(?:${RETIRED_TRACKING})(?![\w-])`),
     message:
-      'Tailwind’s letter-spacing scale is replaced, so this name emits nothing and the element silently keeps the spacing it inherited. `tracking-code` is the only rung; type’s own spacing belongs to `type-eyebrow` and `type-page-title`.',
+      'Tailwind’s letter-spacing scale is replaced, so this name emits nothing and the element silently keeps the spacing it inherited. `tracking-code` is the only rung; type’s own spacing belongs to the type steps.',
   },
   {
     above: NOT_A_CONSUMER,
@@ -398,7 +421,7 @@ const PATTERNS = [
         String.raw`|(?:^|\s)(?:[\w-]+:)*${INK_RAMP}[\s\S]*(?:^|\s)(?:[\w-]+:)*text-(?:${TYPE_RUNG})(?![\w-])`,
     ),
     message:
-      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `content-subtle` 53 times, `content-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in src/shared/design-system/tokens/typography.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
+      'A step plus a grey is a style spelled out, and spelling it out is how one job came to have three spellings: the same small caption was once written `content-subtle` 53 times, `content-muted` 13 times, and with no colour at all 9 times. Above `shared/ui` the page names the style instead: `type-h1`, `type-h2`, `type-h3`, `type-body`, `type-body-medium`, `type-small`, `type-small-medium`, declared as `typeRole` in src/shared/design-system/tokens/typography.ts. A style plus a colour — `type-small text-danger`, `type-body text-content-subtle` — is the intended way to say the same text in another colour.',
   },
 ];
 
