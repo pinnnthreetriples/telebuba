@@ -14,6 +14,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   testIgnore: 'storybook.spec.ts',
+  // Прогрев Vite до тестов: см. `e2e/global-setup.ts`.
+  globalSetup: './e2e/global-setup.ts',
   outputDir: './e2e/.artifacts',
   // Платформа и имя проекта в пути — оба обязательны, и оба выяснились падением.
   //
