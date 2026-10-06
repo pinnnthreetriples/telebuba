@@ -48,6 +48,7 @@ from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
+from core.migration_steps_chat_broadcast import _add_chat_broadcast_tables
 from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
@@ -196,6 +197,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (65, "add_warming_settings_deepseek_key", _add_warming_settings_deepseek_key),
     (66, "add_warming_settings_text_llm_provider", _add_warming_settings_text_llm_provider),
     (67, "add_scheduled_posts_tables", _add_scheduled_posts_tables),
+    (68, "add_chat_broadcast_tables", _add_chat_broadcast_tables),
 )
 
 

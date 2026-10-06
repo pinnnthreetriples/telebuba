@@ -120,6 +120,9 @@ def _delete_account(account_id: str) -> None:
     # a shared pool row (accounts.proxy_id → proxies.id) — it is NOT a child and
     # must outlive the account, so it is left untouched here.
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
+    from core.repositories.chat_broadcast._tables import (  # noqa: PLC0415
+        _chat_broadcast_accounts,
+    )
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
     from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
 
@@ -137,6 +140,12 @@ def _delete_account(account_id: str) -> None:
             ),
         )
         _purge_neurocomment(connection, account_id)
+        # The broadcast roster FKs accounts too; a RUNNING campaign never gets here.
+        connection.execute(
+            delete(_chat_broadcast_accounts).where(
+                _chat_broadcast_accounts.c.account_id == account_id,
+            ),
+        )
         connection.execute(
             delete(_warming_joined_channels).where(
                 _warming_joined_channels.c.account_id == account_id,
