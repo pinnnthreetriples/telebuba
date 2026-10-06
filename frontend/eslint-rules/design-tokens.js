@@ -1,4 +1,4 @@
-// The design system is a closed set — tailwind.config.ts names every colour, type
+// The design system is a closed set — the token tree names every colour, type
 // rung, radius, elevation, motion rung, line-height, letter-spacing and unit of rhythm
 // the UI has — and a closed set only stays closed if reopening it is an error rather
 // than a habit.
@@ -195,6 +195,43 @@ const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 // so `sub-p-2` or a URL that happens to contain `to-3` is not a hit.
 const at = (body) => new RegExp(String.raw`(?:^|\s)(?:${body})`);
 
+// Tailwind 4 resolves some values with no theme step at all, so a closed scale cannot stop
+// them: bare integers (`z-5`, `duration-300`, `scale-50`), fractions (`w-1/2`) and keywords
+// (`h-auto`, `w-fit`, `size-full`, `rounded-none`). It also lets `min-h-*`/`max-h-*` borrow
+// a step from the HEIGHT scale (`min-h-control` paints 36px). Under Tailwind 3 every one of
+// these emitted nothing — the dimension scales were their own and nothing else — and eight
+// such classes sat in `src` doing nothing until the move would have switched them on. So
+// the families whose scale is a token are closed here by name: a value outside the
+// family's own scale is an error, whatever Tailwind would make of it.
+const DIMENSION_SCALES = {
+  w: 'width',
+  h: 'height',
+  size: 'size',
+  'min-w': 'minWidth',
+  'max-w': 'maxWidth',
+  'min-h': 'minHeight',
+  'max-h': 'maxHeight',
+};
+const oneOf = (names) =>
+  names.map((name) => name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|');
+// A value is the rest of the class up to whitespace or a modifier: `w-1/2` and `w-fit!`
+// are one value each, `w-col` is a rung and `w-[46px]` is someone else's rule.
+const OFF_SCALE_DIMENSION = Object.entries(DIMENSION_SCALES)
+  .map(
+    ([prefix, name]) =>
+      String.raw`${prefix}-(?!(?:${oneOf(scaleNames(name))})(?![\w./-]))(?!\[)[\w./-]+`,
+  )
+  .join('|');
+const BARE_TOKEN_NUMBER = [
+  ['z', 'zIndex'],
+  ['duration', 'transitionDuration'],
+  ['scale', 'scale'],
+]
+  .map(
+    ([prefix, name]) => String.raw`${prefix}-(?!(?:${oneOf(scaleNames(name))})(?![\w./-]))\d[\d.]*`,
+  )
+  .join('|');
+
 // Colour names the canon collapsed into another. Listed rather than left to fail on
 // its own, because only half of them fail visibly: an unknown `bg-*` emits no rule at
 // all and the chip loses its fill, which anyone reviewing the screen sees — but an
@@ -304,19 +341,19 @@ const PATTERNS = [
     // выглядит работающим и молчит. Ровно тот же дефект, что у палитры Tailwind рядом.
     test: at(String.raw`(?:xl|2xl):[a-z]`),
     message:
-      "The breakpoint scale is closed at three rungs — `sm` (640), `md` (768), `lg` (1024) — and `theme.screens` REPLACES Tailwind's, so `xl:`/`2xl:` emit no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fourth.",
+      "The breakpoint scale is closed at three rungs — `sm` (640), `md` (768), `lg` (1024) — and the generated theme resets Tailwind's (`--*: initial`), so `xl:`/`2xl:` emit no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fourth.",
   },
   {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
-      "Tailwind's own palette is not this app's, and the config no longer keeps it reachable: `theme.colors` REPLACES it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",
+      "Tailwind's own palette is not this app's, and the theme no longer keeps it reachable: `--*: initial` resets it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",
   },
   {
     test: at(
       String.raw`(?:bg|text|border|ring|fill|stroke|from|to|via|shadow)-\[(?:#|rgb|hsl|oklch)`,
     ),
     message:
-      'A colour written into a class is a colour the design system does not know about. Name it in tailwind.config.ts — every colour there carries its role and, where it is text, its measured contrast — and use that name.',
+      'A colour written into a class is a colour the design system does not know about. Name it in the token tree (`tokens/semantic.ts`) — every colour there carries its role and, where it is text, its measured contrast — and use that name.',
   },
   {
     test: at(
@@ -328,7 +365,7 @@ const PATTERNS = [
   {
     test: /(?:rgba?|hsla?)\(/,
     message:
-      'A CSS colour function in a string is a colour computed at the call site, which is where the modal backdrop lived: an unbounded `backdrop?: number` composed into `rgba(11,11,12,${n})` on the app’s only inline style-object colour, so twenty-two dialogs carried a continuous dimming knob no gate could read. A wash over the page is `bg-veil` and a wash over a photograph is `bg-scrim`; both are in tailwind.config.ts with the alpha they were argued down to.',
+      'A CSS colour function in a string is a colour computed at the call site, which is where the modal backdrop lived: an unbounded `backdrop?: number` composed into `rgba(11,11,12,${n})` on the app’s only inline style-object colour, so twenty-two dialogs carried a continuous dimming knob no gate could read. A wash over the page is `bg-veil` and a wash over a photograph is `bg-scrim`; both are tokens, with the alpha they were argued down to.',
   },
   {
     test: at(
@@ -422,6 +459,21 @@ const PATTERNS = [
     ),
     message:
       'A step plus a grey is a style spelled out, and spelling it out is how one job came to have three spellings: the same small caption was once written `content-subtle` 53 times, `content-muted` 13 times, and with no colour at all 9 times. Above `shared/ui` the page names the style instead: `type-h1`, `type-h2`, `type-h3`, `type-body`, `type-body-medium`, `type-small`, `type-small-medium`, declared as `typeRole` in src/shared/design-system/tokens/typography.ts. A style plus a colour — `type-small text-danger`, `type-body text-content-subtle` — is the intended way to say the same text in another colour.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*!?-?(?:${OFF_SCALE_DIMENSION})!?(?![\w./-])`),
+    message:
+      'Dimensions are closed scales of their own — `size-*` for a square, `w-*`/`h-*` and the four `min-*`/`max-*` for the rest, each rung named for what wears it — and this value is not one of their rungs. Tailwind 4 would paint it anyway: bare fractions (`w-1/2`) and keywords (`h-auto`, `w-fit`, `size-full`) need no theme step, and `min-h-*`/`max-h-*` borrow from the height scale. Under Tailwind 3 every one of them emitted nothing, so a class like this has never done what it says. Use the rung, or add one to src/shared/design-system/tokens/spacing.ts together with its wearer.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*!?(?:${BARE_TOKEN_NUMBER})!?(?![\w./-])`),
+    message:
+      'Layers (`z-*`), durations (`duration-*`) and the press scale (`scale-*`) are named rungs — `z-pop`, `duration-state`, `scale-press` — and Tailwind 4 also accepts any bare number for them (`z-50`, `duration-300`, `scale-95`) without asking the theme. A number here is a second scale beside the tokens. Use the rung; a new one lands in src/shared/design-system/tokens together with its wearer.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*!?rounded(?:-(?:[trbl]|tl|tr|bl|br|[se]{1,2}))?-none(?![\w-])`),
+    message:
+      'There is no zero radius on the scale: a square corner is the default, so a square element simply carries no `rounded-*`. Tailwind 4 paints `rounded-none` regardless of the theme; under Tailwind 3 it emitted nothing.',
   },
 ];
 
