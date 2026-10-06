@@ -4,11 +4,33 @@
 @import '@fontsource/inter/700.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
-@import 'flag-icons/css/flag-icons.min.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind 4, собранный по частям, а не `@import 'tailwindcss'`: тот тянет
+   `tailwindcss/theme.css` — палитру, шкалу шрифта, радиусы, тени и `--spacing` Tailwind, —
+   а шкалы этой системы закрыты. Тема — только `tailwind-theme.css`, сгенерированный из
+   `src/shared/design-system/tokens` (`npm run ds:doc`).
+
+   Порядок слоёв повторяет порядок, в котором Tailwind 3 складывал этот файл:
+   чужой CSS и preflight, затем стили текста (`components`), затем утилиты и после них —
+   правила этого файла. Флаги поэтому в слое `base`, перед preflight: в Tailwind 3 они
+   стояли первыми, и `w-flag`/`h-flag` их перекрывали; без слоя они перекрыли бы утилиты. */
+@layer theme, base, components, utilities;
+@import 'flag-icons/css/flag-icons.min.css' layer(base);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import './tailwind-theme.css';
+
+/* Те же четыре места, что `content` в прежнем `tailwind.config.ts`, и ни одного больше:
+   автоматический поиск Tailwind 4 читал бы и `docs/`, и `scripts/`, и `e2e/`. Каталог и
+   истории носят те же классы, что `src`, поэтому они здесь. */
+@source '../../../index.html';
+@source '../../**/*.{ts,tsx}';
+@source '../../../catalog/**/*.{html,ts,tsx}';
+@source '../../../stories/**/*.{ts,tsx}';
+
+/* `hover:` в Tailwind 4 срабатывает только под `@media (hover: hover)`. Здесь — как в
+   Tailwind 3, на любом `:hover`: переезд не меняет поведения экранов. */
+@custom-variant hover (&:hover);
 
 @layer base {
   html {
@@ -19,210 +41,259 @@
        класса наследует ровно её, а не 16px и 1.5 из умолчаний браузера и preflight. */
     @apply bg-canvas font-sans text-body text-content-primary antialiased;
   }
+
+  /* ── Где preflight Tailwind 4 разошёлся с preflight Tailwind 3 ─────────────────────
+     Каждое правило ниже возвращает поведение Tailwind 3, а не вводит новое. */
+
+  /* Подсказка в пустом поле. Tailwind 3 красил её серым из своей палитры, Tailwind 4 —
+     половиной `currentColor`; без этого правила сдвинулась бы подсказка каждого поля. */
+  input::placeholder,
+  textarea::placeholder {
+    color: --theme(--color-content-placeholder);
+  }
+
+  /* Указатель над кнопкой: Tailwind 4 оставляет курсор браузера. */
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+
+  /* Поля даты и времени: Tailwind 4 перекладывает их внутренние части (высота, отбивки,
+     раскладка), Tailwind 3 их не трогал. `revert` — к умолчаниям браузера. */
+  ::-webkit-date-and-time-value {
+    min-height: revert;
+    text-align: revert;
+  }
+  ::-webkit-datetime-edit {
+    display: revert;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: revert;
+  }
+  ::-webkit-datetime-edit,
+  ::-webkit-datetime-edit-year-field,
+  ::-webkit-datetime-edit-month-field,
+  ::-webkit-datetime-edit-day-field,
+  ::-webkit-datetime-edit-hour-field,
+  ::-webkit-datetime-edit-minute-field,
+  ::-webkit-datetime-edit-second-field,
+  ::-webkit-datetime-edit-millisecond-field,
+  ::-webkit-datetime-edit-meridiem-field {
+    padding-block: revert;
+  }
+  ::-webkit-calendar-picker-indicator {
+    line-height: revert;
+  }
 }
 
-/* ───────────────────────────────────────────────────────────────────────────
+/* Всё ниже — в слое `utilities`, ПОСЛЕ утилит Tailwind. В Tailwind 3 эти правила стояли
+   за `@tailwind utilities` без слоя, и спор с утилитой на том же элементе решали
+   специфичность и порядок. Без слоя в Tailwind 4 они выигрывали бы у любой утилиты
+   независимо от специфичности; в том же слое и после неё — как раньше, с одной поправкой:
+   утилиты с вариантом (`hover:`, `focus-visible:`, `sm:`) Tailwind 3 ставил в самый конец
+   листа, ПОСЛЕ этих правил. Правило с псевдоклассом, которое с ними спорит, поэтому пишет
+   класс в `:where()` — см. `.tb-time` ниже. */
+@layer utilities {
+  /* ───────────────────────────────────────────────────────────────────────────
    Design vocabulary lifted verbatim from Telebuba.dc.html (<style> block).
    Only the parts Tailwind utilities can't express inline live here: keyframes,
    custom scrollbars, the tooltip pseudo-elements, and the collapse/switch/
    dropdown transitions. Colours, layout, and spacing use Tailwind utilities
    backed by design tokens; one-off geometry here is marked for the CSS gate.
    ─────────────────────────────────────────────────────────────────────────── */
-@keyframes plpulse {
-  0% {
-    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0.3);
+  @keyframes plpulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(--theme(--channel-action) / 0.3);
+    }
+    70% {
+      /* design-token-exception: animation ring expands around a single status dot */
+      box-shadow: 0 0 0 7px rgb(--theme(--channel-action) / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(--theme(--channel-action) / 0);
+    }
   }
-  70% {
-    /* design-token-exception: animation ring expands around a single status dot */
-    box-shadow: 0 0 0 7px rgb(theme('channel.action') / 0);
+  @keyframes fadeup {
+    from {
+      opacity: 0;
+      /* design-token-exception: keyframe travel distance, not layout rhythm */
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  100% {
-    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0);
+  @keyframes ovfade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
-}
-@keyframes fadeup {
-  from {
-    opacity: 0;
-    /* design-token-exception: keyframe travel distance, not layout rhythm */
-    transform: translateY(6px);
+  @keyframes drawerin {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
-}
-@keyframes ovfade {
-  from {
-    opacity: 0;
+  @keyframes swapin {
+    from {
+      opacity: 0;
+      /* design-token-exception: keyframe travel distance, not layout rhythm */
+      transform: translateY(7px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  to {
-    opacity: 1;
+  @keyframes okpop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
-}
-@keyframes drawerin {
-  from {
-    transform: translateX(-100%);
+  @keyframes blurswap {
+    0% {
+      opacity: 0;
+      /* design-token-exception: blur is the entry effect's local geometry */
+      filter: blur(6px);
+      transform: scale(0.78);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0);
+      transform: scale(1);
+    }
   }
-  to {
-    transform: translateX(0);
+  @keyframes dotspin {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.16;
+    }
   }
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+  @keyframes textpulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
   }
-}
-@keyframes swapin {
-  from {
-    opacity: 0;
-    /* design-token-exception: keyframe travel distance, not layout rhythm */
-    transform: translateY(7px);
+  @keyframes livepulse {
+    0% {
+      box-shadow: 0 0 0 0 rgb(--theme(--channel-action) / 0.55);
+      transform: scale(1);
+    }
+    60% {
+      /* design-token-exception: pulse ring expands around a single status dot */
+      box-shadow: 0 0 0 5px rgb(--theme(--channel-action) / 0);
+      transform: scale(1.18);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(--theme(--channel-action) / 0);
+      transform: scale(1);
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  @keyframes loadpulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(--theme(--channel-glow) / 0);
+    }
+    50% {
+      /* design-token-exception: loading ring glow is a single animation effect */
+      box-shadow: 0 0 7px 1px rgb(--theme(--channel-glow) / 0.9);
+    }
   }
-}
-@keyframes okpop {
-  0% {
-    transform: scale(0.6);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-@keyframes blurswap {
-  0% {
-    opacity: 0;
-    /* design-token-exception: blur is the entry effect's local geometry */
-    filter: blur(6px);
-    transform: scale(0.78);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: scale(1);
-  }
-}
-@keyframes dotspin {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.16;
-  }
-}
-@keyframes textpulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-@keyframes livepulse {
-  0% {
-    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0.55);
-    transform: scale(1);
-  }
-  60% {
-    /* design-token-exception: pulse ring expands around a single status dot */
-    box-shadow: 0 0 0 5px rgb(theme('channel.action') / 0);
-    transform: scale(1.18);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0);
-    transform: scale(1);
-  }
-}
-@keyframes loadpulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgb(theme('channel.glow') / 0);
-  }
-  50% {
-    /* design-token-exception: loading ring glow is a single animation effect */
-    box-shadow: 0 0 7px 1px rgb(theme('channel.glow') / 0.9);
-  }
-}
-/* `spring` and not the `(.34,1.56,.64,1)` this used to carry: the same overshoot-and-
+  /* `spring` and not the `(.34,1.56,.64,1)` this used to carry: the same overshoot-and-
    settle, written 0.11 of overshoot away from the token — 1.1px of bounce against
    0.75px on a 52px avatar. The config's two curves are the app's two intentions, and
    the sweep that tokenised the `transition:` declarations in this file never reached
    the `animation:` shorthands. */
-.tb-blur {
-  animation: blurswap theme('transitionDuration.swap') theme('transitionTimingFunction.spring') both;
-}
-.tb-spin {
-  animation: spin theme('transitionDuration.spin') theme('transitionTimingFunction.linear') infinite;
-}
-.tb-pop {
-  animation: okpop theme('transitionDuration.swap') theme('transitionTimingFunction.out') both;
-}
-.pl-pulse {
-  animation: plpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.out')
-    infinite;
-}
-.tb-pulse {
-  animation: textpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
-    infinite;
-}
-.tb-dotspin {
-  animation: spin theme('transitionDuration.spin') theme('transitionTimingFunction.linear') infinite;
-}
-.tb-livedot {
-  animation: livepulse theme('transitionDuration.pulse') theme('transitionTimingFunction.out')
-    infinite;
-}
-.tb-loadlead {
-  animation: loadpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
-    infinite;
-}
-.tb-fadeup {
-  animation: fadeup theme('transitionDuration.reveal') theme('transitionTimingFunction.out') both;
-}
-.tb-swapin {
-  animation: swapin theme('transitionDuration.swap') theme('transitionTimingFunction.out') both;
-}
-/* `out`, the app's decelerate-and-stop, and not the `(.22,1,.36,1)` this used to
+  .tb-blur {
+    animation: blurswap --theme(--transition-duration-swap) --theme(--ease-spring) both;
+  }
+  .tb-spin {
+    animation: spin --theme(--transition-duration-spin) --theme(--ease-linear) infinite;
+  }
+  .tb-pop {
+    animation: okpop --theme(--transition-duration-swap) --theme(--ease-out) both;
+  }
+  .pl-pulse {
+    animation: plpulse --theme(--transition-duration-pulse) --theme(--ease-out) infinite;
+  }
+  .tb-pulse {
+    animation: textpulse --theme(--transition-duration-pulse) --theme(--ease-breathe) infinite;
+  }
+  .tb-dotspin {
+    animation: spin --theme(--transition-duration-spin) --theme(--ease-linear) infinite;
+  }
+  .tb-livedot {
+    animation: livepulse --theme(--transition-duration-pulse) --theme(--ease-out) infinite;
+  }
+  .tb-loadlead {
+    animation: loadpulse --theme(--transition-duration-pulse) --theme(--ease-breathe) infinite;
+  }
+  .tb-fadeup {
+    animation: fadeup --theme(--transition-duration-reveal) --theme(--ease-out) both;
+  }
+  .tb-swapin {
+    animation: swapin --theme(--transition-duration-swap) --theme(--ease-out) both;
+  }
+  /* `out`, the app's decelerate-and-stop, and not the `(.22,1,.36,1)` this used to
    carry: neither curve overshoots, they part by 9.6% of the travel at their widest
    (29px of a 300px drawer, 29ms in) and agree to within 1% from the halfway point on.
    A drawer arriving is the same gesture as a rail filling. */
-.tb-drawerin {
-  animation: drawerin theme('transitionDuration.enter') theme('transitionTimingFunction.out');
-}
-/* Вторая половина парной подмены: тот же жест, что у `.tb-swapin`, со сдвигом. Класс, а
+  .tb-drawerin {
+    animation: drawerin --theme(--transition-duration-enter) --theme(--ease-out);
+  }
+  /* Вторая половина парной подмены: тот же жест, что у `.tb-swapin`, со сдвигом. Класс, а
    не `[animation:…]` на месте — сдвиг был написан как `0.09s` в двух диалогах, и правило
    линтера до арбитрарной утилиты не достаёт. */
-.tb-swapin-late {
-  animation: swapin theme('transitionDuration.swap') theme('transitionTimingFunction.out')
-    theme('transitionDuration.stagger') both;
-}
-/* Приезд: карточка диалога и тост. Тот же кадр, что у `.tb-fadeup`, но другой рунг, и это
+  .tb-swapin-late {
+    animation: swapin --theme(--transition-duration-swap) --theme(--ease-out)
+      --theme(--transition-duration-stagger) both;
+  }
+  /* Приезд: карточка диалога и тост. Тот же кадр, что у `.tb-fadeup`, но другой рунг, и это
    не расхождение, а два жеста на одном кадре: `.tb-fadeup` — раскрытие пятнадцати блоков
    страницы (`reveal`), здесь — прибытие одной вещи (`enter`). Раньше оба сайта писали
    `[animation:fadeup_0.25s_ease]`, то есть уже спорили с классом, просто молча. */
-.tb-arrive {
-  animation: fadeup theme('transitionDuration.enter') theme('transitionTimingFunction.out') both;
-}
-/* Проявление завесы: подложка диалога и мойка синхронизации. Оба писали `0.2s` инлайном. */
-.tb-ovfade {
-  animation: ovfade theme('transitionDuration.enter') theme('transitionTimingFunction.out');
-}
-/* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
+  .tb-arrive {
+    animation: fadeup --theme(--transition-duration-enter) --theme(--ease-out) both;
+  }
+  /* Проявление завесы: подложка диалога и мойка синхронизации. Оба писали `0.2s` инлайном. */
+  .tb-ovfade {
+    animation: ovfade --theme(--transition-duration-enter) --theme(--ease-out);
+  }
+  /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */
-.tb-typing-dot {
-  animation: dotspin theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
-    infinite;
-}
-/* Every animation in this file and every transition below it is decorative — a pulse
+  .tb-typing-dot {
+    animation: dotspin --theme(--transition-duration-pulse) --theme(--ease-breathe) infinite;
+  }
+  /* Every animation in this file and every transition below it is decorative — a pulse
    that says a process is alive, a spinner, an enter, a state change — so under
    `prefers-reduced-motion: reduce` they all stop. This used to name three classes, which
    covered the dialogue feed and the nav drawer and left the rest running: sixteen
@@ -251,125 +322,125 @@
    SHORTHANDS above and in the utilities: a media query adds no specificity, and a
    shorthand declared later resets whatever longhand a plain override set. That is the
    trap the old `.tb-subrow` exemption was written around; it is now this rule's job. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
-    transition-duration: 0.01ms !important;
-    transition-delay: 0ms !important;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+    }
   }
-}
 
-.tb-tip {
-  position: relative;
-}
-.tb-tip-pop {
-  position: absolute;
-  top: calc(100% + theme('spacing.2'));
-  left: 50%;
-  /* The 3px is the distance the bubble slides, not a unit of rhythm: it is the `from`
+  .tb-tip {
+    position: relative;
+  }
+  .tb-tip-pop {
+    position: absolute;
+    top: calc(100% + --theme(--rhythm-2));
+    left: 50%;
+    /* The 3px is the distance the bubble slides, not a unit of rhythm: it is the `from`
      half of the transition below, and the rung nearest it (`1`, 4px) is the smallest
      gap of the layout grid. Naming travel with a spacing rung is how a token comes to
      mean two things. */
-  /* design-token-exception: tooltip entrance travel distance */
-  transform: translateX(-50%) translateY(3px);
-  background: theme('colors.term.DEFAULT');
-  /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
+    /* design-token-exception: tooltip entrance travel distance */
+    transform: translateX(-50%) translateY(3px);
+    background: --theme(--color-term);
+    /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
      a one-line label on the same surface. */
-  color: theme('colors.on-fill');
-  border-radius: theme('borderRadius.sm');
-  padding: theme('spacing.2') theme('spacing.3');
-  /* Ступень `small` целиком, а не литералы. Объявлена явно, потому что подсказка рисуется
+    color: --theme(--color-on-fill);
+    border-radius: --theme(--radius-sm);
+    padding: --theme(--rhythm-2) --theme(--rhythm-3);
+    /* Ступень `small` целиком, а не литералы. Объявлена явно, потому что подсказка рисуется
      псевдоэлементом в собственном контексте и наследовать её ей не от кого. */
-  font-size: theme('typeScale.small.size');
-  line-height: theme('typeScale.small.leading');
-  letter-spacing: theme('typeScale.small.tracking');
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity theme('transitionDuration.state') theme('transitionTimingFunction.out'),
-    transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
-  /* This tooltip is a pseudo-element-bearing plain-CSS component, so it cannot take
+    font-size: --theme(--text-small);
+    line-height: --theme(--text-small--line-height);
+    letter-spacing: --theme(--text-small--letter-spacing);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity --theme(--transition-duration-state) --theme(--ease-out),
+      transform --theme(--transition-duration-state) --theme(--ease-out);
+    /* This tooltip is a pseudo-element-bearing plain-CSS component, so it cannot take
      `z-pop` as a class — but it can spend the same rung the class does. */
-  z-index: theme('zIndex.pop');
-  box-shadow: theme('boxShadow.pop');
-}
-/* `:focus-within` beside `:hover`, the same pair `HelpHint`'s light bubble already wears
+    z-index: --theme(--z-index-pop);
+    box-shadow: --theme(--shadow-pop);
+  }
+  /* `:focus-within` beside `:hover`, the same pair `HelpHint`'s light bubble already wears
    as `group-hover:block group-focus-within:block`. Keeping two tooltip LOOKS is a
    deliberate call in the canon — dark for a control's label, light for an explanation —
    but a look is not a reason for one of them to open on a pointer only. Each of the six
    wearers now has a focusable trigger and an `aria-describedby` pointing at its
    `role="tooltip"` bubble, so this selector is what those triggers actually reveal. */
-.tb-tip:hover .tb-tip-pop,
-.tb-tip:focus-within .tb-tip-pop {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-.tb-tip-pop::before {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  /* The arrow is a bordered box with three transparent sides; 5px is the leg of that
+  .tb-tip:hover .tb-tip-pop,
+  .tb-tip:focus-within .tb-tip-pop {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .tb-tip-pop::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    /* The arrow is a bordered box with three transparent sides; 5px is the leg of that
      triangle, which is geometry and not rhythm. */
-  /* design-token-exception: border width constructs the tooltip arrow */
-  border: 5px solid theme('colors.transparent');
-  border-bottom-color: theme('colors.term.DEFAULT');
-}
-/* Wider, wrapping variant for tooltips that carry a full explanation
+    /* design-token-exception: border width constructs the tooltip arrow */
+    border: 5px solid --theme(--color-transparent);
+    border-bottom-color: --theme(--color-term);
+  }
+  /* Wider, wrapping variant for tooltips that carry a full explanation
    (e.g. the daily-actions counter) instead of a one-word label. */
-.tb-tip-pop--wide {
-  white-space: normal;
-  width: theme('width.tip');
-  text-align: center;
-}
+  .tb-tip-pop--wide {
+    white-space: normal;
+    width: --theme(--width-tip);
+    text-align: center;
+  }
 
-.tb-scroll::-webkit-scrollbar {
-  width: theme('spacing.2');
-  height: theme('spacing.2');
-}
-.tb-scroll::-webkit-scrollbar-thumb {
-  background: theme('colors.line.strong');
-  border-radius: theme('borderRadius.sm');
-}
-.tb-scroll::-webkit-scrollbar-track {
-  background: theme('colors.transparent');
-}
-.term::-webkit-scrollbar {
-  width: theme('spacing.2');
-}
-.term::-webkit-scrollbar-thumb {
-  /* A thumb that reads on `term` without becoming `term.dim` — which is the terminal's
+  .tb-scroll::-webkit-scrollbar {
+    width: --theme(--rhythm-2);
+    height: --theme(--rhythm-2);
+  }
+  .tb-scroll::-webkit-scrollbar-thumb {
+    background: --theme(--color-line-strong);
+    border-radius: --theme(--radius-sm);
+  }
+  .tb-scroll::-webkit-scrollbar-track {
+    background: --theme(--color-transparent);
+  }
+  .term::-webkit-scrollbar {
+    width: --theme(--rhythm-2);
+  }
+  .term::-webkit-scrollbar-thumb {
+    /* A thumb that reads on `term` without becoming `term.dim` — which is the terminal's
      own muted TEXT, and a scrollbar is not text. Its own rung for that reason. */
-  background: theme('colors.term.thumb');
-  border-radius: theme('borderRadius.sm');
-}
+    background: --theme(--color-term-thumb);
+    border-radius: --theme(--radius-sm);
+  }
 
-.tb-row:hover {
-  background: theme('colors.surface.DEFAULT');
-}
+  .tb-row:hover {
+    background: --theme(--color-surface);
+  }
 
-.tb-collapse {
-  overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition:
-    max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
-    opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
-}
-.tb-collapse.tb-open {
-  /* design-token-exception: fallback lets measured content expand during transition */
-  max-height: var(--mh, 600px);
-  opacity: 1;
-}
-/* The body is `hidden` (display:none) while closed, so on open it becomes
+  .tb-collapse {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition:
+      max-height --theme(--transition-duration-reveal) --theme(--ease-spring),
+      opacity --theme(--transition-duration-enter) --theme(--ease-out);
+  }
+  .tb-collapse.tb-open {
+    /* design-token-exception: fallback lets measured content expand during transition */
+    max-height: var(--mh, 600px);
+    opacity: 1;
+  }
+  /* The body is `hidden` (display:none) while closed, so on open it becomes
    rendered and `.tb-open` applies in the same style-change event. An element
    that was not rendered has no before-change style, so without this the
    0 -> var(--mh) step generates NO transition: the body snapped straight to the
@@ -377,13 +448,13 @@
    600px -> 976px, i.e. from the fallback, not from 0). @starting-style supplies
    the missing before-change style, so the open animates and its transitionend
    fires — which is what drops the cap below. */
-@starting-style {
-  .tb-collapse.tb-open {
-    max-height: 0;
-    opacity: 0;
+  @starting-style {
+    .tb-collapse.tb-open {
+      max-height: 0;
+      opacity: 0;
+    }
   }
-}
-/* After the open transition settles, drop the cap so content taller than the
+  /* After the open transition settles, drop the cap so content taller than the
    measured height (added later, e.g. an expanding log) is never clipped.
    The price, and CollapsibleCard's onTransitionEnd is built around it: from here
    the computed max-height is `none`, and `none -> 0` is not interpolable, so the
@@ -395,11 +466,11 @@
    discrete max-height flips at the halfway point, so the body would hold full
    height for 250ms and then snap — worse than the immediate collapse under a
    fading opacity. */
-.tb-collapse.tb-open.tb-settled {
-  max-height: none;
-}
+  .tb-collapse.tb-open.tb-settled {
+    max-height: none;
+  }
 
-/* A DataTable sub-row, opening and closing on grid-template-rows. Both ends were
+  /* A DataTable sub-row, opening and closing on grid-template-rows. Both ends were
    a single frame before: for the LAST row that frame is the bottom of the
    document, so losing the sub-row's ~270px clamped the window scroll and slid the
    whole card while the chevron was still 420ms into its spring.
@@ -413,72 +484,77 @@
    min-content height pins the track open — measured in Chrome, `0fr` computed to the
    full 275px while `minmax(0, 0fr)` computed to 0. The `min-height: 0` below is still
    needed; it is not sufficient on its own. */
-.tb-subrow {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  transition: grid-template-rows theme('transitionDuration.reveal')
-    theme('transitionTimingFunction.out');
-}
-@starting-style {
   .tb-subrow {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    transition: grid-template-rows --theme(--transition-duration-reveal) --theme(--ease-out);
+  }
+  @starting-style {
+    .tb-subrow {
+      grid-template-rows: minmax(0, 0fr);
+    }
+  }
+  .tb-subrow.tb-closing {
     grid-template-rows: minmax(0, 0fr);
   }
-}
-.tb-subrow.tb-closing {
-  grid-template-rows: minmax(0, 0fr);
-}
-/* The reduced-motion exemption this rule used to carry lives in the blanket rule above
+  /* The reduced-motion exemption this rule used to carry lives in the blanket rule above
    now: `!important` wins over the shorthand here from anywhere in the file, which is what
    forced the old override to sit down here in the first place. Its reason survives in
    that comment — a near-zero duration and not `none`, so the transitionend below still
    fires and a closing sub-row still unmounts. */
-.tb-subrow > * {
-  min-height: 0;
-  overflow: hidden;
-}
-.tb-sw-thumb {
-  transition: transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
-}
-.tb-dd {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition:
-    max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
-    opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
-}
-.tb-dd.open {
-  /* design-token-exception: local cap keeps the dropdown scrollable */
-  max-height: 240px;
-  opacity: 1;
-  overflow-y: auto;
-}
-.tb-ddchev {
-  transition: transform theme('transitionDuration.reveal') theme('transitionTimingFunction.spring');
-}
-.tb-ddchev.open {
-  transform: rotate(180deg);
-}
-.tb-time {
-  transition:
-    border-color theme('transitionDuration.state') theme('transitionTimingFunction.out'),
-    box-shadow theme('transitionDuration.state') theme('transitionTimingFunction.out'),
-    width theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
-    max-width theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
-    opacity theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
-    visibility theme('transitionDuration.reveal') theme('transitionTimingFunction.out');
-}
-.tb-time:focus-within {
-  /* No `!important`, and the cascade is why it never needed one: `@layer base` closes at
-     the top of this file, so this rule is UNLAYERED and sits after `@tailwind utilities`.
-     It beats a field's own `border-line` (one class against a class plus a pseudo-class)
-     and its `focus-within:border-*` (equal specificity, later in the source), so the
-     override was winning an argument it had already won. */
-  border-color: theme('colors.action.primary');
-  box-shadow: theme('boxShadow.focus');
-}
+  .tb-subrow > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* `translate`, а не `transform`: ползунок двигают утилиты `translate-x-*`, а в Tailwind 4
+   они пишут отдельное свойство `translate`. Переход по `transform` перестал бы его вести,
+   и ползунок прыгал бы вместо того, чтобы ехать. */
+  .tb-sw-thumb {
+    transition: translate --theme(--transition-duration-state) --theme(--ease-out);
+  }
+  .tb-dd {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      max-height --theme(--transition-duration-reveal) --theme(--ease-spring),
+      opacity --theme(--transition-duration-enter) --theme(--ease-out);
+  }
+  .tb-dd.open {
+    /* design-token-exception: local cap keeps the dropdown scrollable */
+    max-height: 240px;
+    opacity: 1;
+    overflow-y: auto;
+  }
+  .tb-ddchev {
+    transition: transform --theme(--transition-duration-reveal) --theme(--ease-spring);
+  }
+  .tb-ddchev.open {
+    transform: rotate(180deg);
+  }
+  .tb-time {
+    transition:
+      border-color --theme(--transition-duration-state) --theme(--ease-out),
+      box-shadow --theme(--transition-duration-state) --theme(--ease-out),
+      width --theme(--transition-duration-reveal) --theme(--ease-out),
+      max-width --theme(--transition-duration-reveal) --theme(--ease-out),
+      opacity --theme(--transition-duration-reveal) --theme(--ease-out),
+      visibility --theme(--transition-duration-reveal) --theme(--ease-out);
+  }
+  /* `:where(.tb-time)`, and the specificity is the whole point. Tailwind 3 emitted VARIANT
+   utilities at the very end of the sheet, after this file, and plain ones before it: this
+   rule beat a field's own `border-line`/`border-danger` (later, and a class plus a
+   pseudo-class against a class) and LOST to its `hover:border-line-strong` and
+   `focus-visible:*` (same specificity, later). Tailwind 4 keeps variants with the other
+   utilities, so after them this rule would win both arguments — an open `Select` under
+   the pointer drew the blue border instead of the hover grey. At 0,1,0 it again wins the
+   first by order and loses the second by specificity. No `!important`, as before. */
+  :where(.tb-time):focus-within {
+    border-color: --theme(--color-action-primary);
+    box-shadow: --theme(--shadow-focus);
+  }
 
-/* Числовое поле без нативных стрелок.
+  /* Числовое поле без нативных стрелок.
  *
  * Chrome резервирует под них место справа И только при наведении, поэтому значение в
  * поле с `text-center` стоит по центру мимо центра, а на подходе курсора ещё и
@@ -488,11 +564,12 @@
  * Классом, а не утилитами в списке: правило состоит из трёх селекторов с вендорными
  * префиксами, и набирать их строкой на каждом поле — ровно то, ради чего в этом файле
  * заведены остальные `tb-*`. */
-.tb-plain-number {
-  appearance: textfield;
-}
-.tb-plain-number::-webkit-outer-spin-button,
-.tb-plain-number::-webkit-inner-spin-button {
-  appearance: none;
-  margin: 0;
+  .tb-plain-number {
+    appearance: textfield;
+  }
+  .tb-plain-number::-webkit-outer-spin-button,
+  .tb-plain-number::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
 }

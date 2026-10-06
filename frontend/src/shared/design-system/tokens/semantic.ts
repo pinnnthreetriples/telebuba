@@ -26,6 +26,7 @@
 //   background.card    → surface-card content.muted     → content-muted
 //   background.scrim   → scrim        content.subtle    → content-subtle
 //   background.veil    → veil         content.onFill    → on-fill
+//                                     content.placeholder → content-placeholder
 //
 //   border.default → line             action.primary        → action-primary
 //   border.strong  → line-strong      action.primaryPressed → action-pressed
@@ -70,6 +71,9 @@ export const content = {
   // держится измерением в `contrast.test.ts`, а не отдельным именем: белый на `warning`
   // мерит 4.01:1, поэтому янтарь под надписью — всегда `warning-deep`.
   onFill: palette.white,
+  // Подсказка в пустом поле. Не ступень рампы и не текст, который читают: её носит только
+  // `::placeholder` в `index.css`, и значение — наследство Tailwind 3 (см. `coolGrey400`).
+  placeholder: palette.coolGrey400,
 } as const;
 
 export const border = {
@@ -176,6 +180,7 @@ export const flatColors = {
     secondary: content.secondary,
     muted: content.muted,
     subtle: content.subtle,
+    placeholder: content.placeholder,
   },
   // Чернила на любой заливке. Отдельно от `surface-card` при том же #ffffff — см. шапку.
   'on-fill': content.onFill,

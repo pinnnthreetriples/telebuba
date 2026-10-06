@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import config from '../../../tailwind.config';
+import { flatColors, typeRole } from '@/shared/design-system/tokens';
 
 // WCAG 2.1 AA asks 4.5:1 of text under 18.66px bold / 24px regular. Every type rung
 // this app has is under that, so 4.5:1 is the floor for all of them — there is no
@@ -10,11 +10,10 @@ const AA = 4.5;
 const NON_TEXT = 3;
 
 type Ramp = Record<string, string> & { DEFAULT?: string };
-const colors = config.theme?.colors as Record<string, string | Ramp>;
+const colors: Record<string, string | Ramp> = flatColors;
 
 // The palette as a class list spells it: `content-primary`, `content-subtle`, `info-tint`.
-// The
-// config nests the ramps, so DEFAULT loses its rung on the way out. Anything that is
+// The tokens nest the ramps, so DEFAULT loses its rung on the way out. Anything that is
 // not a flat hex has no ratio to measure — `scrim` is an rgba wash over a photograph,
 // and `transparent`/`current` are keywords rather than colours.
 //
@@ -34,9 +33,9 @@ for (const [name, value] of Object.entries(colors)) {
 }
 
 // A `type-*` utility carries its own ink, so a role is a colour decision even where no
-// `text-*` class is written. Read off the config so the two cannot drift.
+// `text-*` class is written. Read off the tokens so the two cannot drift.
 const ROLE_INK: Record<string, string> = Object.fromEntries(
-  Object.entries(config.theme?.typeRole as Record<string, { ink: string }>).map(([name, role]) => [
+  Object.entries(typeRole as Record<string, { ink: string }>).map(([name, role]) => [
     name,
     role.ink,
   ]),

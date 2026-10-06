@@ -18,6 +18,7 @@ colors:
   content-secondary: "#3a3a3a"
   content-muted: "#63615d"
   content-subtle: "#6e6b66"
+  content-placeholder: "#9ca3af"
   # Чернила на заливке
   on-fill: "#ffffff"
   on-action-track: "#5ba3ff"

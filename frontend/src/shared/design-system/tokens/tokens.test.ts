@@ -18,8 +18,8 @@ function importsOf(file: string): string[] {
 // 1. Модули токенов не импортируют НИЧЕГО, кроме друг друга. На это свойство опираются
 //    три вещи: `scripts/loadTokens.mjs` собирает их замкнутой сборкой (и её `require`
 //    бросает, а не подставляет заглушку, именно чтобы нарушение было слышно),
-//    `tailwind.config.ts` тянет их рядом с плагином Tailwind, а `shared/lib/cn.ts` — в
-//    браузерный бандл.
+//    `scripts/tailwind-theme.mjs` переводит их в тему Tailwind, а `shared/lib/cn.ts`
+//    тянет в браузерный бандл.
 test('модули токенов импортируют только друг друга', () => {
   const dir = join(ROOT, 'tokens');
   const offenders: string[] = [];
