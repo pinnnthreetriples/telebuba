@@ -8,6 +8,11 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // `motion` подключён только библиотечными блоками каталога. На холодном кэше
+  // (CI) Vite находил его уже после загрузки страницы, пересобирал зависимости и
+  // перезагружал её посреди теста — «Execution context was destroyed». Собранный
+  // заранее, он к первому запросу уже готов.
+  optimizeDeps: { include: ['motion/react'] },
   server: {
     // Dev: proxy the JSON API to the single-worker uvicorn backend so the SPA
     // and API share an origin (no CORS) exactly like the prod static mount.
