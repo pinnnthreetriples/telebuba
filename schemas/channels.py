@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from schemas.telegram_actions_channels import (
     CHANNEL_ABOUT_MAX_LENGTH,
@@ -31,6 +31,16 @@ class ChannelCreateRequest(BaseModel):
     # Telegram's own default for a new channel; False turns reactions off right
     # after the create.
     reactions_enabled: bool = True
+    # Personal channel in the account's profile; Telegram takes only a public
+    # broadcast channel there, so it needs ``username``.
+    pinned_to_profile: bool = False
+
+    @model_validator(mode="after")
+    def _check_pin_needs_public(self) -> ChannelCreateRequest:
+        if self.pinned_to_profile and self.username is None:
+            msg = "pinned_to_profile requires a username (only public channels can be pinned)"
+            raise ValueError(msg)
+        return self
 
 
 class ChannelUpdateRequest(BaseModel):
@@ -43,6 +53,7 @@ class ChannelUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str | None = Field(default=None, max_length=CHANNEL_ABOUT_MAX_LENGTH)
     reactions_enabled: bool | None = None
+    pinned_to_profile: bool | None = None
 
 
 class ChannelPostEditRequest(BaseModel):
@@ -61,6 +72,7 @@ class ChannelView(BaseModel):
 class ChannelDetailView(ChannelView):
     about: str = ""
     reactions_enabled: bool = True
+    pinned_to_profile: bool = False
 
 
 class ChannelPostView(BaseModel):

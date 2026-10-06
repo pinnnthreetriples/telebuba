@@ -25,9 +25,10 @@ export type ChannelDraft = {
   avatar: File | null;
   title: string;
   about: string;
-  isPublic: boolean;
+  isPrivate: boolean;
   username: string;
   reactionsOff: boolean;
+  pinToProfile: boolean;
 };
 
 export type PostDraft = { text: string; file: File | null };
@@ -143,14 +144,14 @@ export function BulkChannelsTab({
           </label>
 
           <CheckRow
-            label={t('accounts.channel.publicToggle')}
-            on={channel.isPublic}
+            label={t('accounts.channel.privateToggle')}
+            on={channel.isPrivate}
             onToggle={() => {
-              onChannel({ ...channel, isPublic: !channel.isPublic });
+              onChannel({ ...channel, isPrivate: !channel.isPrivate, pinToProfile: false });
             }}
           />
 
-          {channel.isPublic && (
+          {!channel.isPrivate && (
             <label className="flex flex-col gap-tight">
               <span className="type-label">{t('accounts.channel.usernameLabel')}</span>
               <div className="relative flex items-center">
@@ -173,6 +174,17 @@ export function BulkChannelsTab({
             on={channel.reactionsOff}
             onToggle={() => {
               onChannel({ ...channel, reactionsOff: !channel.reactionsOff });
+            }}
+          />
+
+          {/* Telegram pins only a public channel to the profile. */}
+          <CheckRow
+            label={t('accounts.channel.pinToggle')}
+            on={channel.pinToProfile}
+            disabled={channel.isPrivate}
+            hint={channel.isPrivate ? t('accounts.channel.pinNeedsPublic') : undefined}
+            onToggle={() => {
+              onChannel({ ...channel, pinToProfile: !channel.pinToProfile });
             }}
           />
         </>

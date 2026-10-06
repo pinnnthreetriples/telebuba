@@ -57,6 +57,7 @@ export function ChannelEditModal({
   const [title, setTitle] = useState<string | null>(null);
   const [about, setAbout] = useState<string | null>(null);
   const [reactionsOff, setReactionsOff] = useState<boolean | null>(null);
+  const [pinned, setPinned] = useState<boolean | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const shownTitle = title ?? detail.data?.title ?? '';
@@ -70,12 +71,18 @@ export function ChannelEditModal({
   // Same "null until touched" rule as the text fields: the live detail shows
   // through, phrased as the create dialog phrases it (checked = reactions off).
   const shownReactionsOff = reactionsOff ?? liveReactionsOff;
+  // Same single-predicate rule as reactions (the field is optional in the client).
+  const livePinned = detail.data?.pinned_to_profile === true;
+  const shownPinned = pinned ?? livePinned;
+  // Telegram pins only a public channel; an already-pinned one may still unpin.
+  const pinBlocked = detail.data?.username == null && !livePinned;
   const titleChanged = detail.data != null && title !== null && title.trim() !== detail.data.title;
   const aboutChanged =
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const reactionsChanged =
     detail.data != null && reactionsOff !== null && reactionsOff !== liveReactionsOff;
-  const dirty = titleChanged || aboutChanged || reactionsChanged;
+  const pinChanged = detail.data != null && pinned !== null && pinned !== livePinned;
+  const dirty = titleChanged || aboutChanged || reactionsChanged || pinChanged;
   const busy = update.isPending || setPhoto.isPending;
   // The blank-title guard belongs to the title alone: the title is only sent
   // when it changed, so an about-only edit must stay saveable whatever the title
@@ -112,6 +119,7 @@ export function ChannelEditModal({
           ...(titleChanged ? { title: shownTitle.trim() } : {}),
           ...(aboutChanged ? { about: shownAbout.trim() } : {}),
           ...(reactionsChanged ? { reactions_enabled: !shownReactionsOff } : {}),
+          ...(pinChanged ? { pinned_to_profile: shownPinned } : {}),
         },
       },
       {
@@ -121,6 +129,7 @@ export function ChannelEditModal({
           setTitle(null);
           setAbout(null);
           setReactionsOff(null);
+          setPinned(null);
         },
         onSettled: invalidate,
       },
@@ -241,6 +250,16 @@ export function ChannelEditModal({
                 disabled={busy}
                 onToggle={() => {
                   setReactionsOff(!shownReactionsOff);
+                }}
+              />
+
+              <CheckRow
+                label={t('accounts.channel.pinToggle')}
+                on={shownPinned}
+                disabled={busy || pinBlocked}
+                hint={pinBlocked ? t('accounts.channel.pinNeedsPublic') : undefined}
+                onToggle={() => {
+                  setPinned(!shownPinned);
                 }}
               />
 

@@ -14,6 +14,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from telethon import errors
+from telethon.tl.functions.account import UpdatePersonalChannelRequest
 from telethon.tl.functions.channels import (
     CheckUsernameRequest,
     CreateChannelRequest,
@@ -26,12 +27,14 @@ from telethon.tl.functions.messages import (
     EditChatAboutRequest,
     SetChatAvailableReactionsRequest,
 )
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     ChatReactionsAll,
     ChatReactionsNone,
     DocumentAttributeVideo,
     InputChannelEmpty,
     InputChatUploadedPhoto,
+    InputUserSelf,
     PeerChannel,
 )
 
@@ -205,7 +208,53 @@ async def _create_channel(client: TelegramClient, action: CreateChannel) -> _Dis
         except errors.RPCError as exc:
             code = "channel_reactions_failed"
             raise ChannelGatewayError(code, channel_id=new_id) from exc
+    if action.pinned_to_profile:
+        await _pin_created_channel(client, entity, new_id)
     return _DispatchResult(channel_id=new_id)
+
+
+async def _pin_created_channel(client: TelegramClient, entity: object, new_id: int | None) -> None:
+    """Post-create pin; a refusal carries the created channel's id.
+
+    Same contract as the username and reactions steps: the channel exists, so
+    the operator pins it from the editor instead of re-creating it.
+    """
+    try:
+        await _pin_to_profile(client, entity)
+    except (errors.FloodWaitError, errors.PeerFloodError):
+        raise
+    except ChannelGatewayError as exc:
+        raise ChannelGatewayError(exc.code, channel_id=new_id) from exc
+    except errors.RPCError as exc:
+        code = "channel_pin_failed"
+        raise ChannelGatewayError(code, channel_id=new_id) from exc
+
+
+async def _pin_to_profile(client: TelegramClient, entity: object) -> None:
+    """Make the channel the account's personal channel (shown in its profile).
+
+    Telegram takes only a public broadcast channel and answers anything else
+    with ``PUBLIC_BROADCAST_EXPECTED``; Telethon has no class for it, so the
+    message is matched.
+    """
+    try:
+        await client(UpdatePersonalChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
+    except errors.RPCError as exc:
+        if exc.message == "PUBLIC_BROADCAST_EXPECTED":
+            code = "channel_pin_needs_public"
+            raise ChannelGatewayError(code) from exc
+        raise
+
+
+async def _unpin_from_profile(client: TelegramClient, channel_id: int) -> None:
+    """Clear the personal channel, but only when it is THIS channel.
+
+    A stale editor must not take another channel's pin down with it.
+    """
+    full = await client(GetFullUserRequest(InputUserSelf()))
+    pinned = getattr(getattr(full, "full_user", None), "personal_channel_id", None)
+    if pinned == channel_id:
+        await client(UpdatePersonalChannelRequest(channel=InputChannelEmpty()))
 
 
 async def _apply_reactions(client: TelegramClient, entity: object, *, enabled: bool) -> None:
@@ -260,6 +309,10 @@ async def _edit_channel(client: TelegramClient, action: EditChannel) -> None:
             await client(EditChatAboutRequest(peer=entity, about=action.about))  # ty: ignore[invalid-argument-type]
     if action.reactions_enabled is not None:
         await _apply_reactions(client, entity, enabled=action.reactions_enabled)
+    if action.pinned_to_profile is True:
+        await _pin_to_profile(client, entity)
+    elif action.pinned_to_profile is False:
+        await _unpin_from_profile(client, action.channel_id)
 
 
 async def _set_channel_photo(client: TelegramClient, action: SetChannelPhoto) -> None:
@@ -348,6 +401,7 @@ def _channel_log_extra(action: TelegramAction) -> dict[str, object]:
                 "title": action.title,
                 "has_username": action.username is not None,
                 "reactions_enabled": action.reactions_enabled,
+                "pinned_to_profile": action.pinned_to_profile,
             }
         case EditChannel():
             extra = {
@@ -355,6 +409,7 @@ def _channel_log_extra(action: TelegramAction) -> dict[str, object]:
                 "has_title": action.title is not None,
                 "has_about": action.about is not None,
                 "reactions_enabled": action.reactions_enabled,
+                "pinned_to_profile": action.pinned_to_profile,
             }
         case SetChannelPhoto():
             extra = {"channel_id": action.channel_id, "filename": action.filename}

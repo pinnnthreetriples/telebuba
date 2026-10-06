@@ -94,6 +94,7 @@ async def create_account_channel(
             about=data.about,
             username=data.username,
             reactions_enabled=data.reactions_enabled,
+            pinned_to_profile=data.pinned_to_profile,
         ),
     )
     # A timeout/unavailable result may mean Telegram applied the mutation but its
@@ -109,6 +110,7 @@ async def create_account_channel(
             "title": data.title,
             "has_username": data.username is not None,
             "reactions_enabled": data.reactions_enabled,
+            "pinned_to_profile": data.pinned_to_profile,
             "channel_id": result.channel_id,
         },
     )
@@ -145,6 +147,7 @@ async def get_account_channel(account_id: str, channel_id: int) -> ChannelDetail
         about=detail.about,
         participants_count=detail.participants_count,
         reactions_enabled=detail.reactions_enabled,
+        pinned_to_profile=detail.pinned_to_profile,
     )
 
 
@@ -160,6 +163,7 @@ async def update_account_channel(
             title=data.title,
             about=data.about,
             reactions_enabled=data.reactions_enabled,
+            pinned_to_profile=data.pinned_to_profile,
         ),
     )
     if data.reactions_enabled is not None:
@@ -174,6 +178,7 @@ async def update_account_channel(
             "has_title": data.title is not None,
             "has_about": data.about is not None,
             "reactions_enabled": data.reactions_enabled,
+            "pinned_to_profile": data.pinned_to_profile,
         },
     )
     return result

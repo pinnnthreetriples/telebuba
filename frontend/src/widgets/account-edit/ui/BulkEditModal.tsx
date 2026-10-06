@@ -89,9 +89,10 @@ const EMPTY_CHANNEL: ChannelDraft = {
   avatar: null,
   title: '',
   about: '',
-  isPublic: false,
+  isPrivate: false,
   username: '',
   reactionsOff: false,
+  pinToProfile: false,
 };
 
 // The profile editor's bulk twin: the same edit written to many accounts at once,
@@ -179,7 +180,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   // at the tenth account, and a handle exactly 32 chars long with `1` is 33 with
   // `10` — refused for accounts 10..N only, after nine had already been created.
   const handleReady =
-    !channel.isPublic ||
+    channel.isPrivate ||
     ([1, ids.length].every((n) =>
       CHANNEL_USERNAME_RE.test(handle.replace(USERNAME_SLOT, String(n))),
     ) &&
@@ -269,8 +270,9 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             title: channel.title.trim(),
             about: channel.about.trim(),
             // `{n}` is the account's position, so each channel gets its own handle.
-            username: channel.isPublic ? handle.replace(USERNAME_SLOT, String(index + 1)) : null,
+            username: channel.isPrivate ? null : handle.replace(USERNAME_SLOT, String(index + 1)),
             reactions_enabled: !channel.reactionsOff,
+            pinned_to_profile: !channel.isPrivate && channel.pinToProfile,
           },
         });
         channelId = result.channel_id ?? null;
