@@ -16,9 +16,9 @@ export function Eyebrow({
   hint?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-sm pb-sm">
-      <span className="type-eyebrow">{title}</span>
-      {caption === undefined ? null : <span className="type-caption">{caption}</span>}
+    <div className="flex flex-wrap items-center gap-2 pb-2">
+      <span className="type-small-medium">{title}</span>
+      {caption === undefined ? null : <span className="type-small">{caption}</span>}
       {hint}
     </div>
   );
@@ -42,9 +42,9 @@ export function Row({
 }) {
   return (
     <div
-      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-line-row'}`}
+      className={`flex min-h-touch flex-wrap items-center gap-3 py-2 ${first ? '' : 'border-t border-canvas'}`}
     >
-      <div className={`flex min-w-0 flex-1 items-center gap-sm ${stack ? 'basis-full' : ''}`}>
+      <div className={`flex min-w-0 flex-1 items-center gap-2 ${stack ? 'basis-full' : ''}`}>
         <span className="text-body">{label}</span>
         {hint === undefined ? null : <HelpHint text={hint} example={example} />}
       </div>
@@ -68,7 +68,7 @@ export function NumberField({
 }) {
   return (
     <Input
-      size="xs"
+      size="sm"
       className="w-number tabular-nums"
       type="number"
       min={min}
@@ -98,7 +98,7 @@ export function RangeField({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-sm">
+    <div className="flex items-center gap-2">
       <NumberField
         value={value.min}
         min={0}
@@ -108,7 +108,7 @@ export function RangeField({
           onChange({ min: next, max: Math.max(next, value.max) });
         }}
       />
-      <span className="type-caption">—</span>
+      <span className="type-small">—</span>
       <NumberField
         value={value.max}
         min={0}
@@ -118,7 +118,7 @@ export function RangeField({
           onChange({ min: Math.min(value.min, next), max: next });
         }}
       />
-      <span className="type-caption">{unit}</span>
+      <span className="type-small">{unit}</span>
     </div>
   );
 }

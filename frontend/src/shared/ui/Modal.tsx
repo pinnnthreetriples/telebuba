@@ -28,7 +28,7 @@ let overflowBeforeLock = '';
 
 // Presets rather than two free `className` props: both halves set the same
 // properties (radius, animation, height), and a caller's `rounded-none` beside the
-// base `rounded-card` would depend on Tailwind's emit order, which is no guarantee.
+// base `rounded-lg` would depend on Tailwind's emit order, which is no guarantee.
 //
 // A card taller than the viewport scrolls via the OVERLAY, never via the card. Both
 // alternatives are wrong: `overflow-y-auto` on the card computes `overflow-x` to
@@ -45,7 +45,7 @@ let overflowBeforeLock = '';
 // ни радиуса, ни тени, и «поверхность диалога» описывала бы её неверно.
 const SHELL = {
   center: {
-    overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
+    overlay: 'justify-center overflow-y-auto overscroll-contain p-4 sm:p-6',
     card: `m-auto tb-arrive ${surface('dialog')}`,
   },
   'drawer-left': {
@@ -203,7 +203,7 @@ export function Modal({
           event.stopPropagation();
         }}
         className={cn(
-          'max-w-full outline-none',
+          'max-w-full outline-hidden',
           SHELL[variant].card,
           variant === 'center' && SIZE[size],
         )}

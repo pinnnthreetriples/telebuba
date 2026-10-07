@@ -14,7 +14,7 @@ export * as typography from './typography';
 
 export { layer, radius, shadow, font, palette, channel } from './primitives';
 export { flatColors, background, content, border, action, feedback, inverse } from './semantic';
-export { fontSize, typeRole, lineHeight, letterSpacing } from './typography';
+export { fontSize, fontWeight, typeScale, typeRole, lineHeight, letterSpacing } from './typography';
 export {
   rhythm,
   size,
@@ -26,13 +26,14 @@ export {
   maxHeight,
   breakpoint,
 } from './spacing';
-export { duration, easing, pressScale } from './motion';
+export { curve, duration, easing, pressScale, spring, tween } from './motion';
 
 export type { TypeRoleName } from './names';
 export {
   TYPE_ROLE_NAMES,
   RHYTHM_NAMES,
   FONT_SIZE_NAMES,
+  FONT_WEIGHT_NAMES,
   RADIUS_NAMES,
   LINE_HEIGHT_NAMES,
   TRACKING_NAMES,

@@ -175,10 +175,10 @@ export function ContactLookupPanel({
         : 'accounts.messages.lookup.startError';
 
   return (
-    <div className="border-t border-line-row pt-sm">
+    <div className="border-t border-canvas pt-2">
       <button
         type="button"
-        className="flex w-full items-center gap-sm type-label text-content-muted hover:text-content-primary"
+        className="flex w-full items-center gap-2 type-body-medium text-content-muted hover:text-content-primary"
         aria-expanded={open}
         onClick={() => {
           setOpen((value) => !value);
@@ -189,19 +189,22 @@ export function ContactLookupPanel({
       </button>
 
       {open && (
-        <div className="mt-md space-y-md">
+        <div className="mt-3 space-y-3">
           {!started ? (
             <>
-              <section className="space-y-sm">
-                <div className="flex items-center justify-between gap-md">
-                  <div className="flex items-center gap-sm">
-                    <label htmlFor="contact-lookup-phones" className="type-label">
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="contact-lookup-phones"
+                      className="type-body-medium text-content-secondary"
+                    >
                       {t('accounts.messages.lookup.phones')}
                     </label>
                     <HelpHint text={t('accounts.messages.lookup.phonesHint')} />
                   </div>
                   <span
-                    className={`type-caption tabular-nums ${phoneList.length > MAX_PHONES ? 'text-danger-deep' : ''}`}
+                    className={`type-small tabular-nums ${phoneList.length > MAX_PHONES ? 'text-danger-deep' : ''}`}
                   >
                     {phoneList.length}/{MAX_PHONES}
                   </span>
@@ -216,14 +219,16 @@ export function ContactLookupPanel({
                 />
               </section>
 
-              <section className="space-y-sm">
-                <h4 className="type-label">{t('accounts.messages.delay')}</h4>
-                <div className="grid grid-cols-2 gap-md">
-                  <label className="flex items-center gap-sm type-caption">
+              <section className="space-y-2">
+                <h4 className="type-body-medium text-content-secondary">
+                  {t('accounts.messages.delay')}
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 type-small">
                     <span>{t('accounts.messages.delayFrom')}</span>
                     <Input
                       type="number"
-                      size="xs"
+                      size="sm"
                       aria-label={t('accounts.messages.minDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}
@@ -235,11 +240,11 @@ export function ContactLookupPanel({
                     />
                     <span>{t('accounts.messages.secondsShort')}</span>
                   </label>
-                  <label className="flex items-center gap-sm type-caption">
+                  <label className="flex items-center gap-2 type-small">
                     <span>{t('accounts.messages.delayTo')}</span>
                     <Input
                       type="number"
-                      size="xs"
+                      size="sm"
                       aria-label={t('accounts.messages.maxDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}
@@ -255,12 +260,12 @@ export function ContactLookupPanel({
               </section>
 
               {accountIds.length === 0 && (
-                <p className="type-caption text-danger-deep">
+                <p className="type-small text-danger-deep">
                   {t('accounts.messages.lookup.needAccounts')}
                 </p>
               )}
               {start.isError && (
-                <p role="alert" className="type-caption text-danger-deep">
+                <p role="alert" className="type-small text-danger-deep">
                   {t(startErrorKey)}
                 </p>
               )}
@@ -274,8 +279,8 @@ export function ContactLookupPanel({
               </Button>
             </>
           ) : (
-            <div className="space-y-sm">
-              <p role="status" className="type-prose tabular-nums">
+            <div className="space-y-2">
+              <p role="status" className="type-body text-content-subtle tabular-nums">
                 {complete
                   ? [
                       t('accounts.messages.lookup.found', { count: found.length }),
@@ -290,21 +295,21 @@ export function ContactLookupPanel({
                     })}`}
               </p>
               {job.isError && errorCode(job.error) !== 'not_found' && (
-                <p role="alert" className="type-caption text-danger-deep">
+                <p role="alert" className="type-small text-danger-deep">
                   {t('accounts.messages.progressError')}
                 </p>
               )}
               {complete && idOnly > 0 && (
-                <p className="type-caption">
+                <p className="type-small">
                   {t('accounts.messages.lookup.idOnly', { count: idOnly })}
                 </p>
               )}
               {added !== null && (
-                <p className="type-caption">
+                <p className="type-small">
                   {t('accounts.messages.lookup.added', { count: added })}
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-sm">
+              <div className="flex flex-wrap items-center gap-2">
                 {!complete && (
                   <Button variant="danger" loading={cancel.isPending} onClick={onStop}>
                     {t('accounts.messages.stop')}

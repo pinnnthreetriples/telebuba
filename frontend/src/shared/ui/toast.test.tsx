@@ -1,14 +1,14 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-import config from '../../../tailwind.config';
+import { layer } from '@/shared/design-system/tokens';
 
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Modal } from './Modal';
 import { Toaster } from './Toaster';
 import { toastError } from './toast';
 
-const zIndex = config.theme?.zIndex as Record<string, string>;
+const zIndex: Record<string, string> = layer;
 
 beforeEach(() => {
   vi.useFakeTimers();

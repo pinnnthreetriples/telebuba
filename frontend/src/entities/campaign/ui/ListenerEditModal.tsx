@@ -3,8 +3,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal, Select, TabList, toastError } from '@/shared/ui';
+import {
+  Button,
+  CloseButton,
+  Icon,
+  Modal,
+  ModalHeader,
+  Select,
+  TabList,
+  toastError,
+} from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -146,16 +154,15 @@ export function ListenerEditModal({
 
   return (
     <Modal onClose={close} size="panel" label={t('neurocomment.listener.title')}>
-      <div className="flex items-center gap-md px-xl pb-lg pt-xl">
-        <span className={HEADING_ICON_TILE}>
-          <Icon name="chart" size={18} />
-        </span>
-        <div className="flex-1">
-          <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
-          <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
-        </div>
+      <ModalHeader
+        divided={false}
+        title={t('neurocomment.listener.title')}
+        subtitle={t('neurocomment.modal.listenerEdit.sub')}
+        icon={<Icon name="chart" size={18} />}
+      >
+        <div className="flex-1" />
         <CloseButton aria-label={t('neurocomment.modal.close')} onClick={close} disabled={saving} />
-      </div>
+      </ModalHeader>
 
       <TabList
         options={TABS.map((value) => ({
@@ -173,11 +180,13 @@ export function ListenerEditModal({
         role="tabpanel"
         id="listener-tabpanel"
         aria-labelledby={`listener-tab-${tab}`}
-        className="p-xl"
+        className="p-6"
       >
         {tab === 'commenting' ? (
           <>
-            <div className="mb-sm type-label">{t('neurocomment.modal.listenerEdit.account')}</div>
+            <div className="mb-2 type-body-medium text-content-secondary">
+              {t('neurocomment.modal.listenerEdit.account')}
+            </div>
             <Select
               value={pick ?? ''}
               onChange={setPick}
@@ -199,7 +208,9 @@ export function ListenerEditModal({
           </>
         ) : (
           <>
-            <p className="mb-lg mt-0 type-prose">{t('neurocomment.limits.note')}</p>
+            <p className="mb-4 mt-0 type-body text-content-subtle">
+              {t('neurocomment.limits.note')}
+            </p>
             {/* Touched fields over the read, so a read landing after the modal opened shows. */}
             <NeuroLimitsFields
               value={limitsValue}
@@ -214,13 +225,13 @@ export function ListenerEditModal({
         )}
 
         {partialSave ? (
-          <p role="alert" className="mt-sm type-caption text-danger">
+          <p role="alert" className="mt-2 type-small text-danger">
             {t('neurocomment.modal.listenerEdit.partialSave')}
           </p>
         ) : null}
       </div>
 
-      <div className="flex justify-end gap-sm px-xl pb-xl">
+      <div className="flex justify-end gap-2 px-6 pb-6">
         <Button onClick={close} disabled={saving}>
           {t('neurocomment.modal.cancel')}
         </Button>
@@ -232,7 +243,7 @@ export function ListenerEditModal({
           className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
         >
           {saved ? (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="inline-flex tb-swapin">
                 <Icon name="check" size={16} />
               </span>

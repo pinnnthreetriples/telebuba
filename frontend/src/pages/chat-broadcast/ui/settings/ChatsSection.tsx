@@ -49,7 +49,7 @@ function TargetChip({
   const { t } = useTranslation();
   const kind = resolved?.kind ?? guessKind(raw);
   return (
-    <span className="inline-flex items-center gap-sm rounded-full border border-line bg-canvas px-md py-tight text-body text-content-secondary">
+    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-body text-content-secondary">
       {raw}
       {kind === 'invite' ? (
         <span title={t('chatBroadcast.settings.chats.inviteHint')}>
@@ -133,8 +133,8 @@ function ListTargets({
   };
 
   return (
-    <div className="flex flex-col gap-sm pt-sm">
-      <div className="flex flex-wrap items-center gap-sm">
+    <div className="flex flex-col gap-2 pt-2">
+      <div className="flex flex-wrap items-center gap-2">
         {settings.targets.map((raw) => (
           <TargetChip
             key={raw}
@@ -196,13 +196,11 @@ function OwnChats({
   });
   const byId = new Map(fleet.map((account) => [account.account_id, account]));
   if (accountIds.length === 0) {
-    return (
-      <div className="pt-sm type-caption">{t('chatBroadcast.settings.chats.ownNoAccounts')}</div>
-    );
+    return <div className="pt-2 type-small">{t('chatBroadcast.settings.chats.ownNoAccounts')}</div>;
   }
   if (query.data === undefined) {
     return (
-      <div className="flex items-center gap-sm pt-sm type-caption">
+      <div className="flex items-center gap-2 pt-2 type-small">
         <Spinner />
         {t('chatBroadcast.settings.chats.ownLoading')}
       </div>
@@ -214,9 +212,9 @@ function OwnChats({
     .map((id) => (byId.get(id) ? accountDisplayName(byId.get(id) as AccountRead) : id))
     .join(', ');
   return (
-    <div className="flex flex-col gap-sm pt-sm">
-      <div className="flex flex-wrap items-center gap-sm">
-        <span className="type-caption">
+    <div className="flex flex-col gap-2 pt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="type-small">
           {t('chatBroadcast.settings.chats.ownSummary', {
             groups: own.groups.length - own.groups.filter((g) => excluded.has(g.peer_id)).length,
             accounts: accountIds.length,
@@ -230,7 +228,7 @@ function OwnChats({
         />
         <div className="flex-1" />
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           onClick={() => {
             void query.refetch();
@@ -245,13 +243,13 @@ function OwnChats({
           {t('chatBroadcast.settings.chats.ownUnavailable', { names: unavailable })}
         </Notice>
       )}
-      <div className="flex flex-wrap items-center gap-sm">
+      <div className="flex flex-wrap items-center gap-2">
         {own.groups.map((group) => {
           const off = excluded.has(group.peer_id);
           return (
             <span
               key={group.peer_id}
-              className={`inline-flex items-center gap-sm rounded-full border border-line px-md py-tight text-body ${off ? 'bg-surface-card text-content-subtle line-through' : 'bg-canvas text-content-secondary'}`}
+              className={`inline-flex items-center gap-2 rounded-full border border-line px-3 py-1 text-body ${off ? 'bg-surface-card text-content-subtle line-through' : 'bg-canvas text-content-secondary'}`}
             >
               {group.title}
               <span className="flex items-center">
@@ -264,12 +262,12 @@ function OwnChats({
                       title={
                         account.username ? `@${account.username}` : accountDisplayName(account)
                       }
-                      className={`rounded-full border-2 border-surface-card ${index === 0 ? '' : '-ml-tight'}`}
+                      className={`rounded-full border-2 border-surface-card ${index === 0 ? '' : '-ml-2'}`}
                     >
                       <AccountAvatar
                         account={account}
                         className="size-chip rounded-full"
-                        fallbackClassName="bg-info-tint text-tiny font-semibold text-info-strong"
+                        fallbackClassName="bg-info-tint text-small font-medium text-info-strong"
                       />
                     </span>
                   );

@@ -12,6 +12,7 @@ import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
 import {
   Button,
   ConfirmModal,
+  EmptyState,
   Icon,
   IconButton,
   Notice,
@@ -196,14 +197,14 @@ export function ChannelPostsPanel({
   };
 
   return (
-    <div className="mt-xl border-t border-line-row pt-lg">
-      <div className="mb-md type-card-title">{t('accounts.channel.postsTitle')}</div>
+    <div className="mt-6 border-t border-canvas pt-4">
+      <div className="mb-3 type-h3">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
       {/* `gap-sm` вместо `mt-sm` у каждого ребёнка: все три несли одну и ту же ступень
           (чип файла, уведомление, строка контролов), поэтому зазор воспроизводит картинку
           побайтово, а уведомление перестаёт решать расстояние до соседа. */}
-      <div className="flex flex-col gap-sm rounded-lg border border-line bg-surface-card p-md">
+      <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-card p-3">
         <Textarea
           className="[font-family:inherit]"
           value={text}
@@ -214,19 +215,19 @@ export function ChannelPostsPanel({
           }}
         />
         {file && (
-          <div className="flex items-center gap-md rounded-lg border border-line bg-surface px-md py-sm">
+          <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2">
             {preview ? (
               <img
                 src={preview}
                 alt={file.name}
-                className="size-thumbnail rounded-md border border-black/5 object-cover"
+                className="size-thumbnail rounded-sm border border-black/5 object-cover"
               />
             ) : (
-              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
+              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-sm bg-canvas text-content-muted">
                 <Icon name="video" size={16} />
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate type-item-title">{file.name}</span>
+            <span className="min-w-0 flex-1 truncate type-body-medium">{file.name}</span>
             {!busy && (
               <IconButton
                 size="sm"
@@ -242,12 +243,12 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <Notice tone="danger" className="py-sm">
+          <Notice tone="danger" className="py-2">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
           </Notice>
         )}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <IconButton
               size="md"
               onClick={() => fileInput.current?.click()}
@@ -265,7 +266,7 @@ export function ChannelPostsPanel({
                 <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
             </IconButton>
-            <span className="type-caption">
+            <span className="type-small">
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
@@ -293,16 +294,16 @@ export function ChannelPostsPanel({
         <div
           role="status"
           aria-label={t('accounts.channel.loading')}
-          className="flex justify-center py-xl"
+          className="flex justify-center py-6"
         >
           <Spinner size="md" />
         </div>
       )}
       {posts.isError && (
-        <Notice tone="danger" className="mt-md flex items-center justify-between gap-md">
+        <Notice tone="danger" className="mt-3 flex items-center justify-between gap-3">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <Button
-            size="xs"
+            size="sm"
             variant="danger"
             className="bg-surface-card"
             onClick={() => {
@@ -314,18 +315,18 @@ export function ChannelPostsPanel({
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center type-prose">
+        <EmptyState boxed size="md" className="mt-3">
           {t('accounts.channel.postsEmpty')}
-        </div>
+        </EmptyState>
       )}
       {items.length > 0 && (
-        <div className="mt-md flex flex-col gap-sm">
+        <div className="mt-3 flex flex-col gap-2">
           {items.map((post) => (
-            <div key={post.post_id} className="rounded-lg border border-line px-lg py-md">
-              <div className="flex items-center gap-sm type-caption">
+            <div key={post.post_id} className="rounded-md border border-line px-4 py-3">
+              <div className="flex items-center gap-2 type-small">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
-                  <span className="rounded-sm bg-canvas px-tight py-px font-medium text-content-muted">
+                  <span className="rounded-sm bg-canvas px-1 font-medium text-content-muted">
                     {mediaLabel(post.media_kind ?? 'none')}
                   </span>
                 )}
@@ -359,7 +360,7 @@ export function ChannelPostsPanel({
               {/* Коробка правки: то же, что у композера — три ребёнка носили один `mt-sm`,
                   и его заменил `gap-sm` у родителя. */}
               {editingId === post.post_id ? (
-                <div className="mt-sm flex flex-col gap-sm">
+                <div className="mt-2 flex flex-col gap-2">
                   <Textarea
                     className="[font-family:inherit]"
                     value={editText}
@@ -370,19 +371,19 @@ export function ChannelPostsPanel({
                     }}
                   />
                   {editPost.isError && (
-                    <Notice tone="danger" className="py-sm">
+                    <Notice tone="danger" className="py-2">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </Notice>
                   )}
-                  <div className="flex items-center justify-end gap-sm">
+                  <div className="flex items-center justify-end gap-2">
                     {/* The same readout the composer carries: without it the box
                         just stops accepting input at the media-aware cap with
                         nothing on screen explaining why. */}
-                    <span className="mr-auto type-caption">
+                    <span className="mr-auto type-small">
                       {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
                     </span>
                     <Button
-                      size="xs"
+                      size="sm"
                       onClick={() => {
                         setEditingId(null);
                       }}
@@ -392,7 +393,7 @@ export function ChannelPostsPanel({
                     </Button>
                     <Button
                       variant="primary"
-                      size="xs"
+                      size="sm"
                       onClick={saveEdit}
                       disabled={editPost.isPending || !canSaveEdit}
                     >
@@ -402,7 +403,7 @@ export function ChannelPostsPanel({
                 </div>
               ) : (
                 post.text !== '' && (
-                  <div className="mt-tight whitespace-pre-wrap text-body">{post.text}</div>
+                  <div className="mt-2 whitespace-pre-wrap text-body">{post.text}</div>
                 )
               )}
             </div>
@@ -412,7 +413,7 @@ export function ChannelPostsPanel({
       {nextCursor !== null && (
         <Button
           size="sm"
-          className="mt-md w-full"
+          className="mt-3 w-full"
           onClick={() => {
             void loadMore();
           }}

@@ -82,27 +82,27 @@ export function SettingsDialog({
 
   return (
     <Modal onClose={onClose} size="table" label={t('chatBroadcast.settings.subtitle')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
+      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
         <div className="min-w-0">
-          <div className="truncate type-dialog-title">{draft.name}</div>
-          <div className="mt-hair type-caption">{t('chatBroadcast.settings.subtitle')}</div>
+          <div className="truncate type-h2">{draft.name}</div>
+          <div className="mt-1 type-small">{t('chatBroadcast.settings.subtitle')}</div>
         </div>
         <div className="flex-1" />
         {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-tiny font-semibold text-warning-deep">
+          <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
             {t('chatBroadcast.settings.unsaved')}
           </span>
         ) : null}
       </div>
       {running || conflict ? (
-        <div className="px-2xl pt-lg" role="alert">
+        <div className="px-6 pt-4" role="alert">
           <Notice tone={conflict ? 'danger' : 'info'}>
             {conflict ? t('chatBroadcast.settings.conflict') : t('chatBroadcast.settings.running')}
           </Notice>
         </div>
       ) : null}
       <fieldset disabled={running || save.isPending} className="m-0 min-w-0 border-0 p-0">
-        <div className="flex min-w-0 flex-col gap-2xl px-2xl py-xl">
+        <div className="flex min-w-0 flex-col gap-6 px-6 py-6">
           <AccountsSection
             ids={draft.accountIds}
             fleet={fleet}
@@ -120,7 +120,7 @@ export function SettingsDialog({
           <PaceSection settings={draft.settings} onPatch={patch} />
         </div>
       </fieldset>
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
         <Button size="sm" onClick={onClose}>
           {t('chatBroadcast.settings.cancel')}
         </Button>

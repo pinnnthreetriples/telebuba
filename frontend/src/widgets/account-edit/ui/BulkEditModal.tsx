@@ -40,7 +40,7 @@ import {
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
 import { formatLocalDateTime } from '@/shared/lib';
-import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal, ModalFooter, TabList } from '@/shared/ui';
 
 import {
   BulkChannelsTab,
@@ -89,9 +89,10 @@ const EMPTY_CHANNEL: ChannelDraft = {
   avatar: null,
   title: '',
   about: '',
-  isPublic: false,
+  isPrivate: false,
   username: '',
   reactionsOff: false,
+  pinToProfile: false,
 };
 
 // The profile editor's bulk twin: the same edit written to many accounts at once,
@@ -179,7 +180,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   // at the tenth account, and a handle exactly 32 chars long with `1` is 33 with
   // `10` — refused for accounts 10..N only, after nine had already been created.
   const handleReady =
-    !channel.isPublic ||
+    channel.isPrivate ||
     ([1, ids.length].every((n) =>
       CHANNEL_USERNAME_RE.test(handle.replace(USERNAME_SLOT, String(n))),
     ) &&
@@ -269,8 +270,9 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             title: channel.title.trim(),
             about: channel.about.trim(),
             // `{n}` is the account's position, so each channel gets its own handle.
-            username: channel.isPublic ? handle.replace(USERNAME_SLOT, String(index + 1)) : null,
+            username: channel.isPrivate ? null : handle.replace(USERNAME_SLOT, String(index + 1)),
             reactions_enabled: !channel.reactionsOff,
+            pinned_to_profile: !channel.isPrivate && channel.pinToProfile,
           },
         });
         channelId = result.channel_id ?? null;
@@ -414,13 +416,13 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         label={t('accounts.bulk.title')}
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="type-dialog-title">{t('accounts.bulk.title')}</h2>
-              <div className="truncate type-prose">
+              <h2 className="type-h2">{t('accounts.bulk.title')}</h2>
+              <div className="truncate type-body text-content-subtle">
                 {t('accounts.bulk.selected', { count: ids.length })}
               </div>
             </div>
@@ -431,7 +433,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             />
           </div>
 
-          <div className="flex items-center gap-md border-b border-line-row px-xl py-md">
+          <div className="flex items-center gap-3 border-b border-canvas px-6 py-3">
             <IconButton
               size="sm"
               disabled={locked}
@@ -442,13 +444,13 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             >
               <Icon name="plus" size={16} />
             </IconButton>
-            <div className="tb-scroll flex flex-1 items-center gap-sm overflow-x-auto py-hair">
+            <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
               {picked.map((row) => (
                 <span key={row.account_id} className="group relative shrink-0">
                   <AccountAvatar
                     account={row}
                     className="size-tile rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-label"
+                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
                   />
                   {!locked && ids.length > 1 && (
                     <IconButton
@@ -458,7 +460,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                       onClick={() => {
                         setIds((prev) => prev.filter((id) => id !== row.account_id));
                       }}
-                      className="absolute -right-hair -top-hair bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       <Icon name="close" size={16} />
                     </IconButton>
@@ -489,7 +491,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               role={started ? undefined : 'tabpanel'}
               id={started ? undefined : 'bulk-tabpanel'}
               aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
-              className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+              className="tb-scroll flex flex-1 flex-col gap-4 overflow-y-auto p-6"
             >
               {started ? (
                 <BulkProgress
@@ -567,12 +569,16 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   tailTooFar={tailTooFar}
                 />
               )}
-              {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
+              {!started && <div className="type-small sm:hidden">{NOTE[tab]}</div>}
             </div>
           </fieldset>
 
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
-            {!started && <div className="mr-auto hidden type-label sm:block">{NOTE[tab]}</div>}
+          <ModalFooter>
+            {!started && (
+              <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
+                {NOTE[tab]}
+              </div>
+            )}
             {started ? (
               running ? (
                 <Button variant="danger" onClick={bulk.stop}>
@@ -585,12 +591,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               )
             ) : (
               <>
-                <Button onClick={onClose} disabled={preparing} className="px-md sm:px-2xl">
+                <Button onClick={onClose} disabled={preparing} className="px-3 sm:px-6">
                   {t('accounts.profile.cancel')}
                 </Button>
                 <Button
                   variant="primary"
-                  className="px-md sm:px-2xl"
+                  className="px-3 sm:px-6"
                   disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
                   loading={preparing}
                   onClick={apply}
@@ -601,7 +607,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 </Button>
               </>
             )}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {pickerOpen && (

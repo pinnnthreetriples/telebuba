@@ -44,8 +44,9 @@ test('the pipeline stats include the errors odometer', async () => {
 
 const STAGE_NAMES = ['Слушатель', 'Новый пост', 'Фильтр', 'Генерация', 'Капча', 'Комментарий'];
 
-// Which of the six labels is active is only expressed by its weight, so this probes the
-// class. What narrows it to the rail is the stage NAMES, not a utility class: the labels
+// Which of the six labels is active is expressed by its colour — passed stages are
+// green, the current one blue, the rest grey; weight no longer separates them since the
+// scale kept two weights — so this probes the class. What narrows it to the rail is the stage NAMES, not a utility class: the labels
 // moved into the dot cells and the only class left marking them is `md:block`, which any
 // future card on this page could carry and quietly hijack the assertion. The `span`
 // filter also drops the below-`md` single-stage line, which is a div.
@@ -53,7 +54,7 @@ function activeStageLabel(container: HTMLElement): string {
   const labels = [...container.querySelectorAll<HTMLElement>('span')].filter((el) =>
     STAGE_NAMES.includes(el.textContent?.trim() ?? ''),
   );
-  return labels.find((el) => el.className.includes('font-semibold'))?.textContent ?? '';
+  return labels.find((el) => el.className.includes('text-info-strong'))?.textContent ?? '';
 }
 
 // Anti-decorative regression, the same one WarmingBoard.test.tsx keeps for its rail:

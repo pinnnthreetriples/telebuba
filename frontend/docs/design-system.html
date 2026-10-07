@@ -4,7 +4,7 @@
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    Telebuba Design System
-   Канон системы. Значения — из frontend/tailwind.config.ts и
+   Канон системы. Значения — из frontend/src/shared/design-system/tokens и
    app/styles/index.css; расхождения между кодом и этим документом решаются
    в пользу канона, отклонения перечислены в разделе «Унификация».
    Документ намеренно светлый: у продукта одна основа, инвертировать её —
@@ -13,32 +13,22 @@
 :root {
   /* ds:gen root-tokens */
   /* Цвет */
-  --white:#ffffff;
   --black:#000000;
   --canvas:#f1efed;
   --surface:#faf9f7;
   --surface-card:#ffffff;
   --scrim:rgb(11 11 12 / 0.55);
   --veil:rgb(11 11 12 / 0.40);
-  --fallback-start:#cbd7ec;
-  --fallback-end:#e6e5e3;
   --content-primary:#0b0b0c;
   --content-secondary:#3a3a3a;
   --content-muted:#63615d;
   --content-subtle:#6e6b66;
-  --on-action:#ffffff;
+  --content-placeholder:#9ca3af;
+  --on-fill:#ffffff;
   --on-action-track:#5ba3ff;
-  --on-success:#ffffff;
-  --on-warning:#ffffff;
-  --on-danger:#ffffff;
-  --on-inverse:#ffffff;
-  --on-neutral:#ffffff;
   --line:#e6e5e3;
   --line-strong:#d8d6d2;
-  --line-row:#f0eeeb;
-  --focus:#0066ff;
   --action-primary:#0066ff;
-  --action-hover:#eef4ff;
   --action-pressed:#0057db;
   --info-strong:#0052cc;
   --info-tint:#eef4ff;
@@ -72,12 +62,10 @@
   --mono:'JetBrains Mono',ui-monospace,monospace;
 
   /* Форма */
-  --r-none:0px;
-  --r-sm:6px;
-  --r-md:8px;
-  --r-lg:11px;
-  --r-card:16px;
-  --r-full:9999px;
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:16px;
+  --r-full:999px;
 
   /* Движение */
   --t-DEFAULT:150ms;
@@ -109,12 +97,12 @@
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body {
-  margin:0; background:var(--white); color:var(--ink);
+  margin:0; background:var(--surface-card); color:var(--content-primary);
   font-family:var(--sans); font-size:13px; line-height:1.55;
   -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
 }
-:focus-visible { outline:2px solid var(--primary); outline-offset:3px; border-radius:var(--r-sm); }
-a { color:var(--primary); text-decoration:none; }
+:focus-visible { outline:2px solid var(--action-primary); outline-offset:3px; border-radius:var(--r-sm); }
+a { color:var(--action-primary); text-decoration:none; }
 
 /* ── Каркас документа ───────────────────────────────────────────────────── */
 .bar {
@@ -122,64 +110,64 @@ a { color:var(--primary); text-decoration:none; }
   backdrop-filter:saturate(180%) blur(20px); border-bottom:1px solid var(--line);
 }
 .bar-in { max-width:1180px; margin:0 auto; padding:0 32px; height:48px; display:flex; align-items:center; gap:10px; }
-.logo { width:22px; height:22px; border-radius:6px; background:var(--ink); display:grid; place-items:center; flex:none; }
-.logo i { width:7px; height:7px; border-radius:50%; background:var(--primary); display:block; }
+.logo { width:22px; height:22px; border-radius:6px; background:var(--content-primary); display:grid; place-items:center; flex:none; }
+.logo i { width:7px; height:7px; border-radius:50%; background:var(--action-primary); display:block; }
 .bar b { font-size:13.5px; font-weight:600; letter-spacing:-.01em; }
 .bar .sep { color:var(--line-strong); }
-.bar span.sub { font-size:13.5px; color:var(--ink-muted); }
-.bar .ver { margin-left:auto; font:400 11px/1 var(--mono); color:var(--ink-subtle); }
+.bar span.sub { font-size:13.5px; color:var(--content-muted); }
+.bar .ver { margin-left:auto; font:400 11px/1 var(--mono); color:var(--content-subtle); }
 
 .shell { max-width:1180px; margin:0 auto; padding:0 32px; display:grid; grid-template-columns:196px minmax(0,1fr); gap:56px; }
 @media (max-width:960px) { .shell { grid-template-columns:minmax(0,1fr); gap:0; } .side { display:none; } }
 
 .side { position:sticky; top:48px; align-self:start; padding:56px 0 80px; max-height:calc(100vh - 48px); overflow-y:auto; }
-.side h4 { margin:22px 0 6px; font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-subtle); }
+.side h4 { margin:22px 0 6px; font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--content-subtle); }
 .side h4:first-child { margin-top:0; }
-.side a { display:block; padding:4px 0 4px 11px; margin-left:-1px; border-left:1px solid var(--line); color:var(--ink-muted); font-size:12.5px; }
-.side a:hover { color:var(--ink); border-left-color:var(--line-strong); }
-.side a.on { color:var(--ink); font-weight:500; border-left:2px solid var(--primary); padding-left:10px; }
+.side a { display:block; padding:4px 0 4px 11px; margin-left:-1px; border-left:1px solid var(--line); color:var(--content-muted); font-size:12.5px; }
+.side a:hover { color:var(--content-primary); border-left-color:var(--line-strong); }
+.side a.on { color:var(--content-primary); font-weight:500; border-left:2px solid var(--action-primary); padding-left:10px; }
 
 main { padding:56px 0 160px; min-width:0; }
 .hero { padding-bottom:56px; }
 h1 { margin:0 0 18px; font-size:40px; font-weight:700; letter-spacing:-.035em; line-height:1.08; text-wrap:balance; }
-.hero p { margin:0; max-width:62ch; font-size:15px; line-height:1.62; color:var(--ink-muted); }
+.hero p { margin:0; max-width:62ch; font-size:15px; line-height:1.62; color:var(--content-muted); }
 .facts { display:flex; flex-wrap:wrap; gap:32px; margin-top:32px; }
 .facts div { display:flex; flex-direction:column; gap:2px; }
 .facts b { font-size:22px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
-.facts span { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+.facts span { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--content-subtle); }
 
 section { padding:64px 0; border-top:1px solid var(--line); scroll-margin-top:60px; }
-section > .eyebrow { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-subtle); }
+section > .eyebrow { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--content-subtle); }
 h2 { margin:14px 0 0; font-size:26px; font-weight:600; letter-spacing:-.028em; line-height:1.15; }
-.intro { margin:14px 0 0; max-width:64ch; font-size:14px; line-height:1.65; color:var(--ink-muted); }
+.intro { margin:14px 0 0; max-width:64ch; font-size:14px; line-height:1.65; color:var(--content-muted); }
 h3 { margin:44px 0 0; font-size:15px; font-weight:600; letter-spacing:-.015em; }
 h3 + .intro, h2 + .intro { margin-top:10px; }
-.body { margin:12px 0 0; max-width:64ch; font-size:12.5px; line-height:1.6; color:var(--ink-muted); }
-.body strong { color:var(--ink); font-weight:500; }
+.body { margin:12px 0 0; max-width:64ch; font-size:12.5px; line-height:1.6; color:var(--content-muted); }
+.body strong { color:var(--content-primary); font-weight:500; }
 .block { margin-top:22px; }
-code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
+code { font:400 11.5px/1.4 var(--mono); color:var(--content-secondary); }
 
 /* ── Служебные элементы документа ───────────────────────────────────────── */
-.tok { font:400 11px/1.5 var(--mono); background:var(--surface); border:1px solid var(--line); color:var(--ink-body); border-radius:var(--r-sm); padding:2px 6px; cursor:copy; white-space:nowrap; }
+.tok { font:400 11px/1.5 var(--mono); background:var(--surface); border:1px solid var(--line); color:var(--content-secondary); border-radius:var(--r-sm); padding:2px 6px; cursor:copy; white-space:nowrap; }
 .tok:hover { border-color:var(--line-strong); }
-.tok.copied { border-color:var(--primary); background:var(--primary-tint); color:var(--primary); }
+.tok.copied { border-color:var(--action-primary); background:var(--info-tint); color:var(--action-primary); }
 .tok.fixed { cursor:default; }
 .toks { display:flex; flex-wrap:wrap; gap:6px; }
 
 /* Полоса состояний: ячейки на канве, разделённые волосяной линией */
-.wells { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); }
+.wells { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); }
 .wells.w2 { grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
 .wells.w3 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
 .wells > div { background:var(--canvas); padding:22px 16px 13px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:16px; min-height:96px; }
 .wells > div.left { align-items:stretch; }
-.cap { font:500 10px/1.3 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); text-align:center; }
-.cap i { display:block; margin-top:4px; font-style:normal; text-transform:none; letter-spacing:0; color:var(--ink-muted); font-size:10.5px; }
+.cap { font:500 10px/1.3 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--content-subtle); text-align:center; }
+.cap i { display:block; margin-top:4px; font-style:normal; text-transform:none; letter-spacing:0; color:var(--content-muted); font-size:10.5px; }
 
 /* Плоская таблица спецификации */
 .spec { width:100%; border-collapse:collapse; margin-top:18px; }
 .spec td { padding:10px 14px 10px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:top; line-height:1.5; }
 .spec tr:first-child td { border-top:0; }
-.spec td:first-child { width:30%; color:var(--ink-muted); white-space:nowrap; }
+.spec td:first-child { width:30%; color:var(--content-muted); white-space:nowrap; }
 .spec td:last-child { padding-right:0; }
 .spec .n { font-variant-numeric:tabular-nums; }
 .scroll { overflow-x:auto; }
@@ -187,28 +175,28 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Свотчи */
 .sw-grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:20px; }
 .sw { display:flex; flex-direction:column; gap:8px; }
-.sw i { height:52px; border-radius:var(--r-lg); border:1px solid rgba(11,11,12,.07); display:block; }
+.sw i { height:52px; border-radius:var(--r-md); border:1px solid rgba(11,11,12,.07); display:block; }
 .sw b { font:500 11px/1 var(--mono); }
-.sw em { font:400 10.5px/1 var(--mono); color:var(--ink-subtle); font-style:normal; }
-.sw span { font-size:11.5px; color:var(--ink-muted); line-height:1.4; }
+.sw em { font:400 10.5px/1 var(--mono); color:var(--content-subtle); font-style:normal; }
+.sw span { font-size:11.5px; color:var(--content-muted); line-height:1.4; }
 
 /* Таблица «убрано → канон» */
 .merge { width:100%; border-collapse:collapse; margin-top:18px; }
-.merge th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+.merge th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--content-subtle); }
 .merge td { padding:9px 14px 9px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:middle; }
-.merge .old { font:400 11px/1.4 var(--mono); color:var(--ink-subtle); text-decoration:line-through; }
-.merge .arw { color:var(--ink-subtle); }
-.merge .new { font:500 11px/1.4 var(--mono); color:var(--ink); }
+.merge .old { font:400 11px/1.4 var(--mono); color:var(--content-subtle); text-decoration:line-through; }
+.merge .arw { color:var(--content-subtle); }
+.merge .new { font:500 11px/1.4 var(--mono); color:var(--content-primary); }
 .done, .todo { display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.06em; border-radius:999px; padding:3px 8px; white-space:nowrap; }
 .done { background:var(--success-tint); color:var(--success); }
 .todo { background:var(--warning-tint); color:var(--warning); }
 .wl { width:100%; border-collapse:collapse; margin-top:18px; }
-.wl th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+.wl th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--content-subtle); }
 .wl td { padding:11px 14px 11px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:top; line-height:1.5; }
-.wl td:first-child { width:34px; font:500 11px/1.6 var(--mono); color:var(--ink-subtle); }
-.wl td:nth-child(2) { width:26%; color:var(--ink); }
-.wl td:last-child { padding-right:0; color:var(--ink-muted); }
-.wl .n { font-variant-numeric:tabular-nums; color:var(--ink); }
+.wl td:first-child { width:34px; font:500 11px/1.6 var(--mono); color:var(--content-subtle); }
+.wl td:nth-child(2) { width:26%; color:var(--content-primary); }
+.wl td:last-child { padding-right:0; color:var(--content-muted); }
+.wl .n { font-variant-numeric:tabular-nums; color:var(--content-primary); }
 .chipdot { width:11px; height:11px; border-radius:999px; display:inline-block; vertical-align:-1px; margin-right:6px; border:1px solid rgba(11,11,12,.08); }
 
 /* ═══ Компоненты продукта ══════════════════════════════════════════════════ */
@@ -230,71 +218,71 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .btn { font-family:inherit; border:1px solid transparent; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; transition:background-color var(--t-state),border-color var(--t-state),color var(--t-state); }
 .btn-md { padding:10px 22px; font-size:13px; font-weight:600; }
 .btn-sm { padding:7px 18px; font-size:12.5px; font-weight:600; }
-.btn-xs { padding:5px 10px; font-size:12.5px; font-weight:500; border-radius:var(--r-md); }
-.btn-block { display:flex; width:100%; padding:10px 0; font-size:13px; font-weight:500; border-radius:var(--r-lg); }
-.b-pri { background:var(--primary); color:#fff; }
-.b-pri:hover, .b-pri.is-hover { background:var(--primary-press); }
-.b-sec { background:var(--white); border-color:var(--line); color:var(--ink); }
+.btn-xs { padding:5px 10px; font-size:12.5px; font-weight:500; border-radius:var(--r-sm); }
+.btn-block { display:flex; width:100%; padding:10px 0; font-size:13px; font-weight:500; border-radius:var(--r-md); }
+.b-pri { background:var(--action-primary); color:#fff; }
+.b-pri:hover, .b-pri.is-hover { background:var(--action-pressed); }
+.b-sec { background:var(--surface-card); border-color:var(--line); color:var(--content-primary); }
 .b-sec:hover, .b-sec.is-hover { border-color:var(--line-strong); }
 .b-dan { background:var(--danger-tint); border-color:var(--danger-line); color:var(--danger-deep); font-weight:600; }
 .b-dan:hover, .b-dan.is-hover { border-color:var(--danger); }
-.b-gho { background:none; border-color:transparent; color:var(--ink-muted); }
-.b-gho:hover, .b-gho.is-hover { background:var(--canvas); color:var(--ink); }
-.b-dsh { background:var(--white); border:1px dashed var(--primary-line); color:var(--primary-deep); }
-.b-dsh:hover, .b-dsh.is-hover { border-color:var(--primary); background:var(--primary-tint); }
-.btn.is-focus { outline:2px solid var(--primary); outline-offset:2px; }
+.b-gho { background:none; border-color:transparent; color:var(--content-muted); }
+.b-gho:hover, .b-gho.is-hover { background:var(--canvas); color:var(--content-primary); }
+.b-dsh { background:var(--surface-card); border:1px dashed var(--info-line); color:var(--info-strong); }
+.b-dsh:hover, .b-dsh.is-hover { border-color:var(--action-primary); background:var(--info-tint); }
+.btn.is-focus { outline:2px solid var(--action-primary); outline-offset:2px; }
 .btn:disabled, .btn.is-off { opacity:.5; cursor:default; }
 .spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
-.spin.dark { border-color:var(--line-strong); border-top-color:var(--primary); }
+.spin.dark { border-color:var(--line-strong); border-top-color:var(--action-primary); }
 
 /* Иконочная кнопка */
-.ib { display:grid; place-items:center; border:1px solid var(--line); background:var(--white); color:var(--ink-subtle); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.ib { display:grid; place-items:center; border:1px solid var(--line); background:var(--surface-card); color:var(--content-subtle); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
 .ib-22 { width:22px; height:22px; border-radius:var(--r-sm); }
-.ib-28 { width:28px; height:28px; border-radius:var(--r-md); }
+.ib-28 { width:28px; height:28px; border-radius:var(--r-sm); }
 .ib-34 { width:34px; height:34px; border-radius:999px; }
-.ib-44 { width:44px; height:44px; border-radius:var(--r-md); }
-.ib-nut:hover, .ib-nut.is-hover { border-color:var(--line-strong); color:var(--ink); }
-.ib-pri:hover, .ib-pri.is-hover { border-color:var(--primary-line); background:var(--primary-tint); color:var(--primary); }
+.ib-44 { width:44px; height:44px; border-radius:var(--r-sm); }
+.ib-nut:hover, .ib-nut.is-hover { border-color:var(--line-strong); color:var(--content-primary); }
+.ib-pri:hover, .ib-pri.is-hover { border-color:var(--info-line); background:var(--info-tint); color:var(--action-primary); }
 .ib-dan:hover, .ib-dan.is-hover { border-color:var(--danger-line); background:var(--danger-tint); color:var(--danger); }
-.ib.is-focus { outline:2px solid var(--primary); outline-offset:2px; }
+.ib.is-focus { outline:2px solid var(--action-primary); outline-offset:2px; }
 .ib:disabled, .ib.is-off { opacity:.45; cursor:default; }
-.ib.solid { background:var(--primary); border-color:var(--primary); color:#fff; }
+.ib.solid { background:var(--action-primary); border-color:var(--action-primary); color:#fff; }
 
 /* Переключатель */
 .sw-btn { width:44px; height:26px; border:0; border-radius:999px; background:var(--line-strong); position:relative; cursor:pointer; flex:none; transition:background-color .18s; }
-.sw-btn[aria-checked="true"] { background:var(--primary); }
+.sw-btn[aria-checked="true"] { background:var(--action-primary); }
 .sw-btn i { position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:transform .18s; }
 .sw-btn[aria-checked="true"] i { transform:translateX(18px); }
 .sw-btn:active i { transform:scale(.86); }
 .sw-btn[aria-checked="true"]:active i { transform:translateX(18px) scale(.86); }
-.sw-btn.is-focus { outline:2px solid var(--primary); outline-offset:3px; }
+.sw-btn.is-focus { outline:2px solid var(--action-primary); outline-offset:3px; }
 .sw-btn:disabled { opacity:.5; cursor:default; }
 
 /* Поля */
-.fld { width:100%; border:1px solid var(--line); background:var(--white); border-radius:var(--r-lg); padding:9px 12px; font:inherit; font-size:13px; color:var(--ink); outline:0; transition:border-color .18s,box-shadow .18s; }
-.fld::placeholder { color:var(--ink-subtle); }
+.fld { width:100%; border:1px solid var(--line); background:var(--surface-card); border-radius:var(--r-md); padding:9px 12px; font:inherit; font-size:13px; color:var(--content-primary); outline:0; transition:border-color .18s,box-shadow .18s; }
+.fld::placeholder { color:var(--content-subtle); }
 .fld:hover, .fld.is-hover { border-color:var(--line-strong); }
-.fld:focus, .fld.is-focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); }
+.fld:focus, .fld.is-focus { border-color:var(--action-primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); }
 .fld.is-bad { border-color:var(--danger); }
-.fld:disabled, .fld.is-off { background:var(--surface); color:var(--ink-subtle); cursor:default; }
+.fld:disabled, .fld.is-off { background:var(--surface); color:var(--content-subtle); cursor:default; }
 .in-icon { position:relative; display:block; width:100%; }
-.in-icon > .i { position:absolute; left:12px; top:50%; margin-top:-7px; color:var(--ink-subtle); pointer-events:none; }
+.in-icon > .i { position:absolute; left:12px; top:50%; margin-top:-7px; color:var(--content-subtle); pointer-events:none; }
 .fld.pill { border-radius:999px; height:36px; padding:0 14px; }
 .lab { display:flex; flex-direction:column; gap:6px; width:100%; }
-.lab > .t { font-size:12px; font-weight:500; color:var(--ink-body); }
+.lab > .t { font-size:12px; font-weight:500; color:var(--content-secondary); }
 .lab > .err { font-size:11px; font-weight:500; color:var(--danger); }
-.lab > .hint { font-size:11px; color:var(--ink-subtle); }
+.lab > .hint { font-size:11px; color:var(--content-subtle); }
 /* Голый .seg — вид outline: лотка нет, каждый вариант своя коробка. Два других
    надевают лоток поверх этой же основы: различие между тремя — заливка активного. */
 .seg { display:flex; gap:7px; width:100%; }
-.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-lg); padding:7px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
-.seg button.on { border-color:var(--primary); background:var(--primary-tint); color:var(--primary-deep); }
-.seg.tray { gap:5px; border-radius:var(--r-lg); background:var(--canvas); padding:3px; }
+.seg button { flex:1; border:1px solid var(--line); background:var(--surface-card); color:var(--content-muted); border-radius:var(--r-md); padding:7px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.seg button.on { border-color:var(--action-primary); background:var(--info-tint); color:var(--info-strong); }
+.seg.tray { gap:5px; border-radius:var(--r-md); background:var(--canvas); padding:3px; }
 .seg.tray button { border-color:transparent; background:none; border-radius:var(--r-sm); }
-.seg.tray button.on { background:var(--white); color:var(--ink); box-shadow:var(--seg); }
-.seg.pill { display:inline-flex; width:auto; gap:0; border:1px solid var(--line); border-radius:999px; background:var(--white); padding:3px; }
+.seg.tray button.on { background:var(--surface-card); color:var(--content-primary); box-shadow:var(--seg); }
+.seg.pill { display:inline-flex; width:auto; gap:0; border:1px solid var(--line); border-radius:999px; background:var(--surface-card); padding:3px; }
 .seg.pill button { flex:none; border-color:transparent; background:none; border-radius:999px; padding:5px 14px; }
-.seg.pill button.on { background:var(--primary); color:#fff; box-shadow:var(--pill); }
+.seg.pill button.on { background:var(--action-primary); color:#fff; box-shadow:var(--pill); }
 .step { display:inline-flex; align-items:center; gap:6px; }
 .step .v { min-width:44px; text-align:center; font-size:12.5px; font-variant-numeric:tabular-nums; }
 
@@ -302,35 +290,35 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 /* Выпадающий список: поле-кнопка + панель, раскрывающаяся по max-height.
    Закрытая панель получает inert — иначе её кнопки остаются в порядке обхода. */
 .dd { position:relative; width:100%; }
-.dd-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--white); border-radius:var(--r-lg); padding:9px 13px; font:inherit; font-size:13px; color:var(--ink); text-align:left; cursor:pointer; outline:0; transition:border-color .18s,box-shadow .18s; }
-.dd-btn .ph { color:var(--ink-subtle); }
+.dd-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--surface-card); border-radius:var(--r-md); padding:9px 13px; font:inherit; font-size:13px; color:var(--content-primary); text-align:left; cursor:pointer; outline:0; transition:border-color .18s,box-shadow .18s; }
+.dd-btn .ph { color:var(--content-subtle); }
 .dd-btn:hover, .dd-btn.is-hover { border-color:var(--line-strong); }
-.dd-btn.is-focus, .dd-btn:focus-visible { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); outline:0; }
-.dd-btn[aria-expanded="true"] { border-color:var(--primary); }
-.dd-btn:disabled { background:var(--surface); color:var(--ink-subtle); cursor:default; }
-.dd-btn .i { color:var(--ink-subtle); transition:transform .4s var(--e-spring); }
+.dd-btn.is-focus, .dd-btn:focus-visible { border-color:var(--action-primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); outline:0; }
+.dd-btn[aria-expanded="true"] { border-color:var(--action-primary); }
+.dd-btn:disabled { background:var(--surface); color:var(--content-subtle); cursor:default; }
+.dd-btn .i { color:var(--content-subtle); transition:transform .4s var(--e-spring); }
 .dd-btn[aria-expanded="true"] .i { transform:rotate(180deg); }
-.dd-panel { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:20; background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:4px; box-shadow:var(--pop); max-height:0; opacity:0; overflow:hidden; transition:max-height .42s cubic-bezier(.34,1.4,.6,1),opacity .22s ease; }
+.dd-panel { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:20; background:var(--surface-card); border:1px solid var(--line); border-radius:var(--r-md); padding:4px; box-shadow:var(--pop); max-height:0; opacity:0; overflow:hidden; transition:max-height .42s cubic-bezier(.34,1.4,.6,1),opacity .22s ease; }
 .dd-panel.open { max-height:240px; opacity:1; overflow-y:auto; }
-.dd-opt { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:0; background:none; border-radius:var(--r-sm); padding:8px 10px; font:inherit; font-size:12.5px; color:var(--ink); text-align:left; cursor:pointer; transition:background-color var(--t-state); }
-.dd-opt:hover, .dd-opt.is-hover { background:var(--primary-tint); }
-.dd-opt.on { color:var(--primary); font-weight:500; }
-.dd-opt .i { color:var(--primary); }
-.dd-empty { padding:8px 10px; font-size:12.5px; color:var(--ink-subtle); }
+.dd-opt { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:0; background:none; border-radius:var(--r-sm); padding:8px 10px; font:inherit; font-size:12.5px; color:var(--content-primary); text-align:left; cursor:pointer; transition:background-color var(--t-state); }
+.dd-opt:hover, .dd-opt.is-hover { background:var(--info-tint); }
+.dd-opt.on { color:var(--action-primary); font-weight:500; }
+.dd-opt .i { color:var(--action-primary); }
+.dd-empty { padding:8px 10px; font-size:12.5px; color:var(--content-subtle); }
 
 /* Чипы */
 .chipset { display:flex; flex-wrap:wrap; gap:7px; }
-.chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; background:var(--canvas); color:var(--ink-body); padding:5px 11px; font-size:12px; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; background:var(--canvas); color:var(--content-secondary); padding:5px 11px; font-size:12px; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
 .chip.ok { border-color:var(--success-line); background:var(--success-tint); color:var(--success); }
 .chip.bad { border-color:var(--danger-line); background:var(--danger-tint); color:var(--danger); }
 .chip.off { opacity:.5; }
-.chip .x { border:0; background:none; padding:0; cursor:pointer; font-size:14px; line-height:1; color:var(--ink-subtle); }
+.chip .x { border:0; background:none; padding:0; cursor:pointer; font-size:14px; line-height:1; color:var(--content-subtle); }
 .chip .x:hover { color:var(--danger); }
-.chip-add { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--line-strong); border-radius:999px; background:var(--white); color:var(--ink-muted); padding:5px 11px; font:400 12px/1.3 var(--sans); cursor:pointer; transition:border-color var(--t-state),color var(--t-state); }
-.chip-add:hover { border-color:var(--primary); color:var(--primary); }
-.chip-edit { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--primary); border-radius:999px; background:var(--white); padding:3px 4px 3px 11px; }
+.chip-add { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--line-strong); border-radius:999px; background:var(--surface-card); color:var(--content-muted); padding:5px 11px; font:400 12px/1.3 var(--sans); cursor:pointer; transition:border-color var(--t-state),color var(--t-state); }
+.chip-add:hover { border-color:var(--action-primary); color:var(--action-primary); }
+.chip-edit { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--action-primary); border-radius:999px; background:var(--surface-card); padding:3px 4px 3px 11px; }
 .chip-edit input { width:132px; border:0; background:none; outline:0; font:inherit; font-size:12px; }
-.chip-edit .go { width:22px; height:22px; border:0; border-radius:50%; background:var(--primary); color:#fff; display:grid; place-items:center; cursor:pointer; flex:none; }
+.chip-edit .go { width:22px; height:22px; border:0; border-radius:50%; background:var(--action-primary); color:#fff; display:grid; place-items:center; cursor:pointer; flex:none; }
 .chip-edit .go:disabled { opacity:.5; cursor:default; }
 
 /* Статусы */
@@ -338,82 +326,82 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .pill i { width:6px; height:6px; border-radius:50%; background:currentColor; display:block; flex:none; }
 .s-ok   { background:var(--success-tint); color:var(--success); }
 .s-warn { background:var(--warning-tint); color:var(--warning); }
-.s-info { background:var(--primary-tint); color:var(--primary); }
+.s-info { background:var(--info-tint); color:var(--action-primary); }
 .s-bad  { background:var(--danger-tint); color:var(--danger); }
-.s-idle { background:var(--canvas); color:var(--ink-muted); }
-.cnt { border-radius:999px; background:var(--canvas); color:var(--ink-muted); padding:2px 8px; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; }
+.s-idle { background:var(--canvas); color:var(--content-muted); }
+.cnt { border-radius:999px; background:var(--canvas); color:var(--content-muted); padding:2px 8px; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; }
 .cnt.live { height:18px; min-width:18px; padding:0 5px; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:10.5px; background:var(--success); }
-.cnt.live.off { background:var(--ink-muted); }
+.cnt.live.off { background:var(--content-muted); }
 .dl { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; }
 .dl i { width:6px; height:6px; border-radius:50%; background:currentColor; }
 
 /* Уведомления */
-.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-lg); padding:10px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
-.n-info { border-color:var(--primary-line); background:var(--primary-tint); color:var(--ink-body); }
-.n-warn { border-color:var(--warning-line); background:var(--warning-tint); color:var(--ink-body); }
-.n-bad  { border-color:var(--danger-line); background:var(--danger-tint); color:var(--ink-body); }
-.n-ok   { border-color:var(--success-line); background:var(--success-tint); color:var(--ink-body); }
+.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-md); padding:10px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
+.n-info { border-color:var(--info-line); background:var(--info-tint); color:var(--content-secondary); }
+.n-warn { border-color:var(--warning-line); background:var(--warning-tint); color:var(--content-secondary); }
+.n-bad  { border-color:var(--danger-line); background:var(--danger-tint); color:var(--content-secondary); }
+.n-ok   { border-color:var(--success-line); background:var(--success-tint); color:var(--content-secondary); }
 .note .ic { flex:none; margin-top:1px; }
-.n-info .ic { color:var(--primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); } .n-ok .ic { color:var(--success); }
+.n-info .ic { color:var(--action-primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); } .n-ok .ic { color:var(--success); }
 
 /* Поверхности */
-.card { background:var(--white); border:1px solid var(--line); border-radius:var(--r-card); padding:18px; }
-.nest { background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:13px; }
+.card { background:var(--surface-card); border:1px solid var(--line); border-radius:var(--r-lg); padding:18px; }
+.nest { background:var(--surface-card); border:1px solid var(--line); border-radius:var(--r-md); padding:13px; }
 .nest.rec { background:var(--surface); }
-.nest.sel { border-color:var(--primary); background:rgba(0,102,255,.06); }
-.acc { border:1px solid var(--line); border-radius:var(--r-card); background:var(--white); overflow:hidden; width:100%; }
+.nest.sel { border-color:var(--action-primary); background:rgba(0,102,255,.06); }
+.acc { border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface-card); overflow:hidden; width:100%; }
 .acc-h { width:100%; border:0; background:none; font:inherit; text-align:left; display:flex; align-items:center; gap:10px; padding:13px 16px; cursor:pointer; }
 .acc-h b { font-size:13px; font-weight:600; }
-.chev { margin-left:auto; color:var(--ink-subtle); display:flex; transition:transform .42s var(--e-spring); }
+.chev { margin-left:auto; color:var(--content-subtle); display:flex; transition:transform .42s var(--e-spring); }
 .acc-h[aria-expanded="true"] .chev { transform:rotate(180deg); }
-.acc-b { padding:0 16px 16px; font-size:12.5px; color:var(--ink-muted); }
-.dialog { width:100%; max-width:300px; background:var(--white); border-radius:var(--r-card); box-shadow:0 18px 50px rgba(11,11,12,.18); padding:16px; display:flex; flex-direction:column; gap:10px; }
+.acc-b { padding:0 16px 16px; font-size:12.5px; color:var(--content-muted); }
+.dialog { width:100%; max-width:300px; background:var(--surface-card); border-radius:var(--r-lg); box-shadow:0 18px 50px rgba(11,11,12,.18); padding:16px; display:flex; flex-direction:column; gap:10px; }
 .dialog b { font-size:14px; font-weight:600; }
-.dialog p { margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+.dialog p { margin:0; font-size:12px; color:var(--content-muted); line-height:1.5; }
 .tip { position:relative; display:inline-flex; }
-.tip-pop { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(3px); background:var(--term); color:#fff; border-radius:var(--r-md); padding:6px 9px; font-size:11px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s,transform .15s; box-shadow:var(--pop); z-index:20; }
+.tip-pop { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(3px); background:var(--term); color:#fff; border-radius:var(--r-sm); padding:6px 9px; font-size:11px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s,transform .15s; box-shadow:var(--pop); z-index:20; }
 .tip:hover .tip-pop, .tip:focus-within .tip-pop, .tip.open .tip-pop { opacity:1; transform:translateX(-50%) translateY(0); }
 .tip-pop::before { content:''; position:absolute; bottom:100%; left:50%; transform:translateX(-50%); border:5px solid transparent; border-bottom-color:var(--term); }
-.hint-card { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%); width:210px; background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg); padding:10px; font-size:11.5px; line-height:1.45; color:var(--ink-muted); box-shadow:var(--pop); opacity:0; pointer-events:none; transition:opacity .15s; z-index:20; text-align:left; }
+.hint-card { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%); width:210px; background:var(--surface-card); border:1px solid var(--line); border-radius:var(--r-md); padding:10px; font-size:11.5px; line-height:1.45; color:var(--content-muted); box-shadow:var(--pop); opacity:0; pointer-events:none; transition:opacity .15s; z-index:20; text-align:left; }
 .tip:hover .hint-card, .tip:focus-within .hint-card, .tip.open .hint-card { opacity:1; }
 
 /* Плашка с действиями */
-.surf { position:relative; overflow:hidden; border-radius:var(--r-lg); margin-bottom:-2px; padding-bottom:2px; width:100%; }
-.surf-rail { position:absolute; left:0; right:0; top:0; bottom:2px; display:flex; align-items:stretch; justify-content:flex-end; border-radius:var(--r-lg); background:var(--canvas); }
+.surf { position:relative; overflow:hidden; border-radius:var(--r-md); margin-bottom:-2px; padding-bottom:2px; width:100%; }
+.surf-rail { position:absolute; left:0; right:0; top:0; bottom:2px; display:flex; align-items:stretch; justify-content:flex-end; border-radius:var(--r-md); background:var(--canvas); }
 .surf-rail button { width:48px; border:0; background:none; display:grid; place-items:center; cursor:pointer; }
 .surf-rail .run { color:var(--success); } .surf-rail .pause { color:var(--warning); }
-.surf-rail .edit { color:var(--primary); } .surf-rail .del { color:var(--danger); }
-.surf-face { position:relative; border-radius:var(--r-lg); background:var(--white); transition:transform var(--t-reveal) var(--e-out); will-change:transform; }
+.surf-rail .edit { color:var(--action-primary); } .surf-rail .del { color:var(--danger); }
+.surf-face { position:relative; border-radius:var(--r-md); background:var(--surface-card); transition:transform var(--t-reveal) var(--e-out); will-change:transform; }
 .surf:hover .surf-face, .surf.open .surf-face { transform:translateX(calc(-1 * var(--shift,144px))); }
-.plaque { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); padding:8px 10px; }
+.plaque { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); padding:8px 10px; }
 .plaque.on { background:var(--success-tint); border-color:var(--success-line); }
 .plaque .lhs { display:flex; align-items:center; gap:8px; min-width:0; }
-.plaque .st { font-size:12.5px; font-weight:600; color:var(--ink-muted); }
+.plaque .st { font-size:12.5px; font-weight:600; color:var(--content-muted); }
 .plaque.on .st { color:var(--success); }
-.plaque .pd { width:8px; height:8px; border-radius:50%; background:var(--ink-subtle); flex:none; }
+.plaque .pd { width:8px; height:8px; border-radius:50%; background:var(--content-subtle); flex:none; }
 .plaque.on .pd { background:var(--success); }
 
 /* Таблица */
-.tbl { width:100%; border-collapse:collapse; background:var(--white); }
-.tbl th { padding:11px 16px; text-align:left; font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-subtle); background:var(--surface); white-space:nowrap; }
-.tbl td { padding:11px 16px; border-top:1px solid var(--line-row); font-size:12.5px; }
+.tbl { width:100%; border-collapse:collapse; background:var(--surface-card); }
+.tbl th { padding:11px 16px; text-align:left; font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.04em; color:var(--content-subtle); background:var(--surface); white-space:nowrap; }
+.tbl td { padding:11px 16px; border-top:1px solid var(--canvas); font-size:12.5px; }
 .tbl tbody tr:hover { background:var(--surface); }
-.tbl tbody tr.sel { background:var(--primary-tint); }
-.frame { border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; }
-.empty { border:1.5px dashed var(--primary-line); border-radius:var(--r-lg); padding:36px 16px; text-align:center; font-size:12.5px; color:var(--ink-subtle); width:100%; }
+.tbl tbody tr.sel { background:var(--info-tint); }
+.frame { border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; }
+.empty { border:1.5px dashed var(--info-line); border-radius:var(--r-md); padding:36px 16px; text-align:center; font-size:12.5px; color:var(--content-subtle); width:100%; }
 .skel { height:11px; border-radius:999px; background:linear-gradient(90deg,var(--canvas),var(--surface),var(--canvas)); background-size:200% 100%; animation:sheen 1.4s linear infinite; }
 
 /* Прогресс, аватар, журнал */
 .bar-track { height:5px; border-radius:999px; background:var(--canvas); overflow:hidden; width:100%; }
-.bar-track i { display:block; height:100%; border-radius:999px; background:var(--primary); }
+.bar-track i { display:block; height:100%; border-radius:999px; background:var(--action-primary); }
 .bar-track.ind i { width:38%; animation:slide 1.4s ease-in-out infinite; }
-.av { border-radius:50%; display:grid; place-items:center; font-weight:600; background:var(--primary-tint); color:var(--primary); flex:none; }
-.av.solid { background:var(--primary); color:#fff; }
-.term { background:var(--term); border-radius:var(--r-lg); padding:12px 14px; font:400 11px/1.85 var(--mono); color:var(--term-text); overflow-x:auto; width:100%; }
+.av { border-radius:50%; display:grid; place-items:center; font-weight:600; background:var(--info-tint); color:var(--action-primary); flex:none; }
+.av.solid { background:var(--action-primary); color:#fff; }
+.term { background:var(--term); border-radius:var(--r-md); padding:12px 14px; font:400 11px/1.85 var(--mono); color:var(--term-text); overflow-x:auto; width:100%; }
 .term .t { color:var(--term-dim); } .term .c { color:var(--term-link); }
 .term .er { color:#e5736a; }
 .mark-ok { color:var(--success); display:inline-flex; } .mark-bad { color:var(--danger); display:inline-flex; }
-.toast { display:inline-flex; align-items:center; gap:8px; background:var(--term); color:#fff; border-radius:var(--r-lg); padding:9px 12px; font-size:12px; box-shadow:var(--pop); }
+.toast { display:inline-flex; align-items:center; gap:8px; background:var(--term); color:#fff; border-radius:var(--r-md); padding:9px 12px; font-size:12px; box-shadow:var(--pop); }
 
 /* Движение */
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -425,16 +413,16 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 @keyframes dotspin { 0%,100% { opacity:1; } 50% { opacity:.16; } }
 @keyframes sheen { to { background-position:-200% 0; } }
 @keyframes slide { 0% { transform:translateX(-100%); } 100% { transform:translateX(320%); } }
-.dot { width:9px; height:9px; border-radius:50%; background:var(--primary); }
+.dot { width:9px; height:9px; border-radius:50%; background:var(--action-primary); }
 .a-live { animation:pulsedot 1.6s ease-out infinite; }
 .a-pulse { animation:textpulse 1.4s ease-in-out infinite; }
 .a-enter { animation:enter var(--t-enter) ease both; }
 .a-pop { animation:okpop .35s ease both; }
 .a-blur { animation:blurswap .34s cubic-bezier(.34,1.56,.64,1) both; }
 .typing { display:inline-flex; gap:4px; align-items:center; }
-.typing span { width:4px; height:4px; border-radius:50%; background:var(--primary); animation:dotspin 1.2s ease-in-out infinite; }
+.typing span { width:4px; height:4px; border-radius:50%; background:var(--action-primary); animation:dotspin 1.2s ease-in-out infinite; }
 .typing span:nth-child(2) { animation-delay:.15s; } .typing span:nth-child(3) { animation-delay:.3s; }
-.replay { font:500 10.5px/1 var(--mono); color:var(--primary); background:none; border:0; padding:0; cursor:pointer; }
+.replay { font:500 10.5px/1 var(--mono); color:var(--action-primary); background:none; border:0; padding:0; cursor:pointer; }
 
 @media (prefers-reduced-motion:reduce) {
   html { scroll-behavior:auto; }
@@ -443,7 +431,7 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 }
 .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .col { display:flex; flex-direction:column; gap:10px; width:100%; }
-footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; color:var(--ink-subtle); display:flex; flex-direction:column; gap:6px; max-width:64ch; }
+footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; color:var(--content-subtle); display:flex; flex-direction:column; gap:6px; max-width:64ch; }
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -503,7 +491,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><b>3</b><span>оттенка основы</span></div>
         <div><b>1</b><span>акцент</span></div>
         <div><b>2</b><span>шрифта</span></div>
-        <div><b>5</b><span>радиусов</span></div>
+        <div><b>4</b><span>радиуса</span></div>
         <div><b>15</b><span>заменённых шкал</span></div>
         <div><b>23</b><span>компонента</span></div>
       </div>
@@ -517,7 +505,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td>Одно действие</td><td>На поверхности одна залитая синим кнопка. Всё остальное — контур или текст.</td></tr>
         <tr><td>Цвет — это смысл</td><td>Синий значит «действие», зелёный «работает», янтарный «ждёт», красный «сломалось». Ничего декоративного.</td></tr>
         <tr><td>Каждое изменение видно</td><td>Мутация заканчивается зелёной галочкой или красным крестом рядом с тем, что изменилось.</td></tr>
-        <tr><td>Форма говорит о роли</td><td>Пилюля — действие, прямоугольник с радиусом 10 — ввод, пунктир — «здесь можно добавить».</td></tr>
+        <tr><td>Форма говорит о роли</td><td>Пилюля — действие, прямоугольник с радиусом 12 — ввод, пунктир — «здесь можно добавить».</td></tr>
         <tr><td>Движение объясняет</td><td>Анимация подтверждает действие оператора или сообщает, что процесс жив. Больше её нет.</td></tr>
         <tr><td>Плотность без тесноты</td><td>13px основной текст, 11px подписи заглавными, воздух между группами — не внутри них.</td></tr>
       </table>
@@ -531,26 +519,43 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <!-- ds:gen color-swatches -->
       <h3>Основа</h3>
-      <p class="body">Тон отвечает на вопрос «где я нахожусь»: белое — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом и внутри него всё, что заполняется. Отдельного тона для заполняемого нет: он отличался от <strong>canvas</strong> на три единицы, а на фоне страницы ни один чип в приложении не лежит. <strong>scrim</strong> стоит особняком: это не тон основы, а завеса поверх фотографии, единственное полупрозрачное значение в наборе.</p>
+      <p class="body">Тон отвечает на вопрос «где я нахожусь»: <strong>surface-card</strong> — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом и внутри него всё, что заполняется, вместе с разделителем строк. Отдельных тонов для заполняемого и для разделителя нет: они отличались от <strong>canvas</strong> на одну–три единицы. <strong>scrim</strong> и <strong>veil</strong> стоят особняком: это не тона основы, а завесы, единственные полупрозрачные значения в наборе. <strong>black</strong> носится только под альфой над фотографией.</p>
       <div class="sw-grid">
-        <div class="sw"><i style="background:#ffffff"></i><b>white</b><em>#ffffff</em><span>Карточки, поля, шапка</span></div>
         <div class="sw"><i style="background:#000000"></i><b>black</b><em>#000000</em><span>Только под альфой над фотографией: рамка снимка, плашка на кадре истории</span></div>
-        <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, рельс под плашкой и всё заполняемое: дорожка прогресса, чип, счётчик</span></div>
+        <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, всё заполняемое на карточке (дорожка прогресса, чип, счётчик) и разделитель строк таблицы</span></div>
         <div class="sw"><i style="background:#faf9f7"></i><b>surface</b><em>#faf9f7</em><span>Шапка таблицы, наведение на строку, вложенный блок</span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>surface-card</b><em>#ffffff</em><span></span></div>
+        <div class="sw"><i style="background:#ffffff"></i><b>surface-card</b><em>#ffffff</em><span>Карточки, диалоги, панели, поля; под альфой — шапка под размытием и белое над фотографией</span></div>
         <div class="sw"><i style="background:rgb(11 11 12 / 0.55)"></i><b>scrim</b><em>rgb(11 11 12 / 0.55)</em><span>Завеса над фотографией: тёмные чернила на 55%, чтобы кнопка поверх снимка осталась читаемой</span></div>
+        <div class="sw"><i style="background:rgb(11 11 12 / 0.40)"></i><b>veil</b><em>rgb(11 11 12 / 0.40)</em><span>Завеса над страницей под диалогом: приглушает, на ней ничего не пишут</span></div>
+      </div>
+
+      <h3>Текст</h3>
+      <p class="body"><strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на заливке чипа, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>secondary</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть. <strong>on-fill</strong> — одни чернила на любой заливке; у неё и у <strong>surface-card</strong> одно значение, и это единственная такая пара: разные имена нужны гейту контраста, чтобы белое на белом оставалось измеримым.</p>
+      <div class="sw-grid">
+        <div class="sw"><i style="background:#0b0b0c"></i><b>content-primary</b><em>#0b0b0c</em><span>Заголовки, основной текст</span></div>
+        <div class="sw"><i style="background:#3a3a3a"></i><b>content-secondary</b><em>#3a3a3a</em><span>Плотные строки, значения в чипах</span></div>
+        <div class="sw"><i style="background:#63615d"></i><b>content-muted</b><em>#63615d</em><span>Второстепенный текст, контурные кнопки</span></div>
+        <div class="sw"><i style="background:#6e6b66"></i><b>content-subtle</b><em>#6e6b66</em><span>Подписи, плейсхолдеры, иконки в покое</span></div>
+        <div class="sw"><i style="background:#9ca3af"></i><b>content-placeholder</b><em>#9ca3af</em><span></span></div>
+        <div class="sw"><i style="background:#ffffff"></i><b>on-fill</b><em>#ffffff</em><span>Надпись и иконка на любой заливке: действие, тон, серый счётчик, тост, подсказка</span></div>
+        <div class="sw"><i style="background:#5ba3ff"></i><b>on-action-track</b><em>#5ba3ff</em><span>Дорожка кольца ожидания внутри залитой кнопки</span></div>
       </div>
 
       <h3>Линии</h3>
       <div class="sw-grid">
-        <div class="sw"><i style="background:#e6e5e3"></i><b>line</b><em>#e6e5e3</em><span>Граница по умолчанию, в том числе у поля ввода</span></div>
+        <div class="sw"><i style="background:#e6e5e3"></i><b>line</b><em>#e6e5e3</em><span>Граница по умолчанию, в том числе у поля ввода; конец градиента заглушки</span></div>
         <div class="sw"><i style="background:#d8d6d2"></i><b>line-strong</b><em>#d8d6d2</em><span>Наведение, пунктир, полоса прокрутки</span></div>
-        <div class="sw"><i style="background:#f0eeeb"></i><b>line-row</b><em>#f0eeeb</em><span>Разделитель строк таблицы</span></div>
       </div>
 
       <h3>Смысл</h3>
-      <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>press</strong>, наведение на залитую кнопку, а его <strong>tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
+      <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий — один на действие и «в работе»: <strong>action-primary</strong> — заливка, ссылка и кольцо фокуса, <strong>action-pressed</strong> — нажатие, а <strong>info-tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
       <div class="sw-grid">
+        <div class="sw"><i style="background:#0066ff"></i><b>action-primary</b><em>#0066ff</em><span>Действие, ссылка, живое состояние, кольцо фокуса</span></div>
+        <div class="sw"><i style="background:#0057db"></i><b>action-pressed</b><em>#0057db</em><span>Нажатие залитой кнопки</span></div>
+        <div class="sw"><i style="background:#0052cc"></i><b>info-strong</b><em>#0052cc</em><span>Синий для мелкого текста на tint: основной даёт там 4.38:1</span></div>
+        <div class="sw"><i style="background:#eef4ff"></i><b>info-tint</b><em>#eef4ff</em><span>Подложка «в работе», выбранная строка и плитка, заливка наведения</span></div>
+        <div class="sw"><i style="background:#cbd7ec"></i><b>info-line</b><em>#cbd7ec</em><span>Граница синей подложки и пунктира; начало градиента заглушки</span></div>
+        <div class="sw"><i style="background:#e4ecfa"></i><b>info-hairline</b><em>#e4ecfa</em><span>Рамка настолько бледная, что работает и разделителем плитки</span></div>
         <div class="sw"><i style="background:#12a150"></i><b>success</b><em>#12a150</em><span>Работает, проверено</span></div>
         <div class="sw"><i style="background:#0b6b37"></i><b>success-deep</b><em>#0b6b37</em><span>Заголовок на зелёной подложке — единственный проходит по читаемости</span></div>
         <div class="sw"><i style="background:#0a5c2f"></i><b>success-press</b><em>#0a5c2f</em><span>Наведение и нажатие залитой зелёной кнопки</span></div>
@@ -558,7 +563,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="sw"><i style="background:#b8ecce"></i><b>success-line</b><em>#b8ecce</em><span>Граница зелёной подложки</span></div>
         <div class="sw"><i style="background:#9a7b22"></i><b>warning</b><em>#9a7b22</em><span>Пауза, ожидание, спам-блок</span></div>
         <div class="sw"><i style="background:#7a5e12"></i><b>warning-deep</b><em>#7a5e12</em><span>Заголовок или иконка на янтарном чипе</span></div>
-        <div class="sw"><i style="background:#c47d12"></i><b>warning-press</b><em>#c47d12</em><span></span></div>
+        <div class="sw"><i style="background:#c47d12"></i><b>warning-press</b><em>#c47d12</em><span>Нажатие янтарной заливки: единственный тон, где оно ярче базового</span></div>
         <div class="sw"><i style="background:#fff0d2"></i><b>warning-tint</b><em>#fff0d2</em><span>Подложка предупреждения</span></div>
         <div class="sw"><i style="background:#efd79a"></i><b>warning-line</b><em>#efd79a</em><span>Граница янтарной подложки</span></div>
         <div class="sw"><i style="background:#c0473f"></i><b>danger</b><em>#c0473f</em><span>Ошибка, удаление, бан</span></div>
@@ -566,7 +571,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="sw"><i style="background:#fbecec"></i><b>danger-tint</b><em>#fbecec</em><span>Лицо разрушительной кнопки</span></div>
         <div class="sw"><i style="background:#f0c9c5"></i><b>danger-line</b><em>#f0c9c5</em><span>Граница красной подложки</span></div>
         <div class="sw"><i style="background:#16161a"></i><b>term</b><em>#16161a</em><span>Журнал, тёмная подсказка, тост</span></div>
-        <div class="sw"><i style="background:#2b2b2e"></i><b>term-thumb</b><em>#2b2b2e</em><span></span></div>
+        <div class="sw"><i style="background:#2b2b2e"></i><b>term-thumb</b><em>#2b2b2e</em><span>Ползунок прокрутки журнала</span></div>
         <div class="sw"><i style="background:#80808c"></i><b>term-dim</b><em>#80808c</em><span>Время и разделители в строке журнала</span></div>
         <div class="sw"><i style="background:#c9c9d3"></i><b>term-text</b><em>#c9c9d3</em><span>Текст журнала</span></div>
         <div class="sw"><i style="background:#6ea8fe"></i><b>term-link</b><em>#6ea8fe</em><span>Канал и ссылка в журнале</span></div>
@@ -574,40 +579,14 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="sw"><i style="background:#7be0a6"></i><b>term-success</b><em>#7be0a6</em><span>Удачный исход в журнале</span></div>
         <div class="sw"><i style="background:#ffd27f"></i><b>term-warning</b><em>#ffd27f</em><span>Предупреждение в журнале</span></div>
       </div>
-
-      <h3>Прочее</h3>
-      <div class="sw-grid">
-        <div class="sw"><i style="background:rgb(11 11 12 / 0.40)"></i><b>veil</b><em>rgb(11 11 12 / 0.40)</em><span></span></div>
-        <div class="sw"><i style="background:#cbd7ec"></i><b>fallback-start</b><em>#cbd7ec</em><span></span></div>
-        <div class="sw"><i style="background:#e6e5e3"></i><b>fallback-end</b><em>#e6e5e3</em><span></span></div>
-        <div class="sw"><i style="background:#0b0b0c"></i><b>content-primary</b><em>#0b0b0c</em><span></span></div>
-        <div class="sw"><i style="background:#3a3a3a"></i><b>content-secondary</b><em>#3a3a3a</em><span></span></div>
-        <div class="sw"><i style="background:#63615d"></i><b>content-muted</b><em>#63615d</em><span></span></div>
-        <div class="sw"><i style="background:#6e6b66"></i><b>content-subtle</b><em>#6e6b66</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-action</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#5ba3ff"></i><b>on-action-track</b><em>#5ba3ff</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-success</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-warning</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-danger</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-inverse</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#ffffff"></i><b>on-neutral</b><em>#ffffff</em><span></span></div>
-        <div class="sw"><i style="background:#0066ff"></i><b>focus</b><em>#0066ff</em><span></span></div>
-        <div class="sw"><i style="background:#0066ff"></i><b>action-primary</b><em>#0066ff</em><span></span></div>
-        <div class="sw"><i style="background:#eef4ff"></i><b>action-hover</b><em>#eef4ff</em><span></span></div>
-        <div class="sw"><i style="background:#0057db"></i><b>action-pressed</b><em>#0057db</em><span></span></div>
-        <div class="sw"><i style="background:#0052cc"></i><b>info-strong</b><em>#0052cc</em><span></span></div>
-        <div class="sw"><i style="background:#eef4ff"></i><b>info-tint</b><em>#eef4ff</em><span></span></div>
-        <div class="sw"><i style="background:#cbd7ec"></i><b>info-line</b><em>#cbd7ec</em><span></span></div>
-        <div class="sw"><i style="background:#e4ecfa"></i><b>info-hairline</b><em>#e4ecfa</em><span></span></div>
-      </div>
       <!-- /ds:gen color-swatches -->
 
       <h3>Копировать</h3>
       <div class="block toks">
-        <span class="tok">bg-canvas</span><span class="tok">bg-surface</span>
-        <span class="tok">text-ink</span><span class="tok">text-ink-muted</span><span class="tok">text-ink-subtle</span>
-        <span class="tok">border-line</span><span class="tok">border-line-row</span>
-        <span class="tok">bg-primary</span><span class="tok">bg-primary-tint</span>
+        <span class="tok">bg-canvas</span><span class="tok">bg-surface</span><span class="tok">bg-surface-card</span>
+        <span class="tok">text-content-primary</span><span class="tok">text-content-muted</span><span class="tok">text-content-subtle</span><span class="tok">text-on-fill</span>
+        <span class="tok">border-line</span><span class="tok">border-line-strong</span><span class="tok">border-canvas</span>
+        <span class="tok">bg-action-primary</span><span class="tok">bg-info-tint</span><span class="tok">outline-action-primary</span>
         <span class="tok">text-success</span><span class="tok">bg-success-tint</span>
                 <span class="tok">text-warning</span><span class="tok">bg-warning-tint</span><span class="tok">border-warning-line</span>
         <span class="tok">text-danger</span><span class="tok">bg-danger-tint</span>
@@ -619,55 +598,45 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Основы</div>
       <h2>Типографика</h2>
       <p class="intro">Inter для всего читаемого, JetBrains Mono для машинного: строки журнала, идентификаторы, номера. Размеры заданы в точных пикселях, потому что плотные строки стоят рядом с крупными заголовками.</p>
-      <h3>Роли</h3>
+      <h3>Стили</h3>
       <!-- ds:gen type-roles -->
-      <p class="body">Двенадцать ролей, и над <code>shared/ui</code> страница называет одну из них вместо того, чтобы заново выписывать ступень, начертание и серый. Заменяемая запись была не восемью ступенями, а девяноста шестью написаниями: 528 мест писали ступень рядом с начертанием и чернилами, и одна и та же задача выходила тремя способами сразу — подпись была <code>ink-subtle</code> 53 раза, <code>ink-muted</code> 13 и без цвета 9. Роль обязана называться одним предложением без слова «или» и быть надетой двумя компонентами в разных слоях; именно это удержало набор на двенадцати. Межстрочное в роль не входит — по той же причине, по которой его нет в ступени.</p>
+      <p class="body">Семь ролей на пять ступеней и два веса. Стиль несёт ступень (размер, интерлиньяж, трекинг), вес и краску по умолчанию; над <code>shared/ui</code> страница называет стиль вместо того, чтобы заново выписывать ступень, вес и серый. Иерархию держит размер: 400 — то, что читают, 500 — то, что называют. Другой цвет поверх стиля пишется утилитой: <code>type-small text-danger</code>.</p>
       <table class="spec">
-        <tr><td><code>type-page-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22 · 700 · content-primary · -0.02em</span></td><td><span style="font-size:22px;font-weight:700;color:var(--content-primary);letter-spacing:-0.02em">Прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу</span></td></tr>
-        <tr><td><code>type-dialog-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 700 · content-primary</span></td><td><span style="font-size:16px;font-weight:700;color:var(--content-primary)">Удалить аккаунт?</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя</span></td></tr>
-        <tr><td><code>type-dialog-body</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-muted</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-muted)">Аккаунт и его сессия будут удалены безвозвратно.</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя</span></td></tr>
-        <tr><td><code>type-card-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 600 · content-primary</span></td><td><span style="font-size:16px;font-weight:600;color:var(--content-primary)">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием</span></td></tr>
-        <tr><td><code>type-item-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 600 · content-primary</span></td><td><span style="font-size:14px;font-weight:600;color:var(--content-primary)">Основной прокси</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей</span></td></tr>
-        <tr><td><code>type-eyebrow</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 600 · content-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:600;color:var(--content-subtle);letter-spacing:0.04em;text-transform:uppercase">Сессия</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em</span></td></tr>
-        <tr><td><code>type-label</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 500 · content-secondary</span></td><td><span style="font-size:14px;font-weight:500;color:var(--content-secondary)">Часовой пояс</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя контрола, стоящего рядом: подпись поля, название настройки в строке</span></td></tr>
-        <tr><td><code>type-value</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-secondary</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-secondary)">+7 900 123-45-67</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»</span></td></tr>
-        <tr><td><code>type-prose</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-subtle</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-subtle)">Пока ничего не найдено</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога</span></td></tr>
-        <tr><td><code>type-caption</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 400 · content-subtle</span></td><td><span style="font-size:12px;font-weight:400;color:var(--content-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения</span></td></tr>
-        <tr><td><code>type-table-header</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 500 · content-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:500;color:var(--content-subtle);letter-spacing:0.04em;text-transform:uppercase"></span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"></span></td></tr>
-        <tr><td><code>type-stat</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 · 700 · content-primary</span></td><td><span style="font-size:20px;font-weight:700;color:var(--content-primary)">1 284</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Число, которое счётчик выносит на экран</span></td></tr>
+        <tr><td><code>type-h1</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">24 / 32 · 500 · content-primary</span></td><td><span style="font-size:24px;line-height:32px;letter-spacing:-0.019em;font-weight:500;color:var(--content-primary)">Прогрев аккаунтов</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Заголовок, который называет экран, и число счётчика</span></td></tr>
+        <tr><td><code>type-h2</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">20 / 28 · 500 · content-primary</span></td><td><span style="font-size:20px;line-height:28px;letter-spacing:-0.017em;font-weight:500;color:var(--content-primary)">Удалить аккаунт?</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Заголовок, с которого начинается диалог</span></td></tr>
+        <tr><td><code>type-h3</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">16 / 24 · 500 · content-primary</span></td><td><span style="font-size:16px;line-height:24px;letter-spacing:-0.011em;font-weight:500;color:var(--content-primary)">Каналы кампании</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Заголовок блока, в котором стоит</span></td></tr>
+        <tr><td><code>type-body</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">14 / 20 · 400 · content-secondary</span></td><td><span style="font-size:14px;line-height:20px;letter-spacing:-0.006em;font-weight:400;color:var(--content-secondary)">Аккаунт выйдет из прогрева через пять дней.</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Текст, который читают: пояснение, значение, фраза диалога</span></td></tr>
+        <tr><td><code>type-body-medium</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">14 / 20 · 500 · content-primary</span></td><td><span style="font-size:14px;line-height:20px;letter-spacing:-0.006em;font-weight:500;color:var(--content-primary)">Основной прокси</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">То, что называют: элемент списка, подпись поля, кнопка</span></td></tr>
+        <tr><td><code>type-small</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">12 / 16 · 400 · content-subtle</span></td><td><span style="font-size:12px;line-height:16px;letter-spacing:0em;font-weight:400;color:var(--content-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Мелкая строка: подпись, время, подсказка</span></td></tr>
+        <tr><td><code>type-small-medium</code><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">12 / 16 · 500 · content-subtle</span></td><td><span style="font-size:12px;line-height:16px;letter-spacing:0em;font-weight:500;color:var(--content-subtle)">Статус</span><br><span class="n" style="color:var(--content-subtle);font-size:11.5px">Мелкое название: шапка таблицы, плашка, подпись группы</span></td></tr>
       </table>
       <!-- /ds:gen type-roles -->
       <h3>Ступени</h3>
-      <p class="body">Восемь имён, и других размеров нет: шкала Tailwind заменена целиком, поэтому <code>text-sm</code> не существует, а <code>text-[12.5px]</code> больше не написать мимо канона. Имя говорит роль, а не число — <code>body</code> носит 262 вызова, и когда роль сменит размер, менять придётся одну строку в конфиге.</p>
+      <p class="body">Пять ступеней, и других размеров нет: шкала Tailwind заменена целиком, поэтому <code>text-sm</code> не существует, а <code>text-[13px]</code> не написать мимо канона. Каждый размер — один уровень иерархии, шаг между соседями не меньше 14%. Ступень несёт размер вместе со своим интерлиньяжем (кратным 4px) и оптическим трекингом Inter: <code>text-body</code> ставит все три.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen type-scale -->
-          <tr><td><code>tiny</code> · 12</td><td>Пилюля статуса, шапка таблицы, журнал</td></tr>
-          <tr><td><code>body</code> · 14</td><td>Основной размер интерфейса</td></tr>
-          <tr><td><code>title</code> · 16</td><td>Заголовок раздела и диалога</td></tr>
-          <tr><td><code>stat</code> · 20</td><td>Счётчик-одометр</td></tr>
-          <tr><td><code>display</code> · 22</td><td>Заголовок страницы</td></tr>
-          <tr><td><code>hero</code> · 42</td><td>Единственная крупная цифра</td></tr>
+          <tr><td><code>small</code> · 12 / 16 · 0em</td><td>Подпись, плашка, шапка таблицы, журнал</td></tr>
+          <tr><td><code>body</code> · 14 / 20 · -0.006em</td><td>Весь текст интерфейса</td></tr>
+          <tr><td><code>h3</code> · 16 / 24 · -0.011em</td><td>Заголовок карточки</td></tr>
+          <tr><td><code>h2</code> · 20 / 28 · -0.017em</td><td>Заголовок диалога</td></tr>
+          <tr><td><code>h1</code> · 24 / 32 · -0.019em</td><td>Заголовок страницы и число счётчика</td></tr>
           <!-- /ds:gen type-scale -->
         </table>
       </div>
-      <p class="body">Межстрочное не привязано к размеру: <code>leading-*</code> живёт отдельно, потому что одна и та же ступень стоит и в плотной строке, и в абзаце.</p>
 
       <h3>Межстрочное</h3>
-      <p class="body">Ступеней три, и ни одна из них не для абзаца. Основное межстрочное в приложении уже действует и не написано нигде: preflight ставит <code>line-height: 1.5</code> на <code>&lt;html&gt;</code>, поля и кнопки наследуют его, а ступени размера — голые строки и своего межстрочного не несут. Абзац получает 1.5 сам. Шестнадцать мест писали <code>leading-[1.5]</code> и все шестнадцать повторяли то, что уже имели; ещё двадцать одно тратило 1.35, 1.375, 1.4, 1.45, 1.6 и 1.625 на одну работу — предложение, которое читают. Ступень для этого была бы именем без носителя, поэтому её нет: класс просто удаляют.</p>
+      <p class="body">Интерлиньяж живёт в ступени: 16, 20, 24, 28 и 32px. Отдельной шкалой осталось одно имя — для глифа, у которого строки нет. <code>leading-stack</code> и <code>leading-log</code> ушли вместе со старой шкалой: заголовок строки и журнал получают интерлиньяж своей ступени.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen leading-scale -->
-          <tr><td><code>body</code> · 1.5</td><td></td></tr>
-          <tr><td><code>none</code> · 1</td><td>Одиночный глиф: крестик в плашке, знак вопроса подсказки, крупная цифра</td></tr>
-          <tr><td><code>stack</code> · 1.25</td><td>Заголовок строки над своей же подписью — имя над телефоном, метка над пояснением</td></tr>
-          <tr><td><code>log</code> · 1.4</td><td>Моноширинный поток на тёмной поверхности: журнал и его врезка в карточке</td></tr>
+          <tr><td><code>none</code> · 1</td><td>Одиночный глиф: крестик в плашке, знак вопроса подсказки. Интерлиньяж текста живёт в ступени</td></tr>
           <!-- /ds:gen leading-scale -->
         </table>
       </div>
 
       <h3>Трекинг</h3>
-      <p class="body">Шкалы нет, и это решение, а не пропуск. Два значения, которые тратит текст, объявлены ролями, которым они нужны: <code>type-eyebrow</code> несёт 0.04em, <code>type-page-title</code> — −0.02em. Отдельная ступень <code>tracking-*</code> для любого из них была бы вторым способом сказать то же самое. Остаётся одно имя, и оно не про шрифт, а про поле.</p>
+      <p class="body">Шкалы нет, и это решение, а не пропуск. Трекинг текста — часть ступени и считается по формуле Inter Dynamic Metrics: крупное собирается (−0.019em у <code>h1</code>), мелкое остаётся свободным (0 у <code>small</code>). Отдельная ступень <code>tracking-*</code> была бы вторым способом сказать то же самое. Остаётся одно имя, и оно не про шрифт, а про поле.</p>
       <div class="scroll">
         <table class="spec">
           <!-- ds:gen tracking-scale -->
@@ -686,28 +655,23 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Радиус кодирует уровень вложенности, а не вкус: чем глубже элемент, тем меньше скругление. Всё, что можно нажать и что стоит в строке, — пилюля.</p>
       <div class="wells" style="margin-top:20px">
         <!-- ds:gen radius-scale -->
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:0px"></div><span class="cap">none · 0<i>отсутствие скругления, а не ступень</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:6px"></div><span class="cap">sm · 6<i>чип-кнопка, иконка 24</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:8px"></div><span class="cap">md · 8<i>иконка 28, подсказка</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:11px"></div><span class="cap">lg · 11<i>поле, вложенная карточка, плашка</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:16px"></div><span class="cap">card · 16<i>карточка, диалог</i></span></div>
-        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:9999px"></div><span class="cap">full · 9999<i>действие, статус, чип</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--info-tint);border:1px solid var(--info-line);border-radius:8px"></div><span class="cap">sm · 8<i>контрол в коробке, чип, иконка, подсказка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--info-tint);border:1px solid var(--info-line);border-radius:12px"></div><span class="cap">md · 12<i>поле, панель, меню, вложенная карточка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--info-tint);border:1px solid var(--info-line);border-radius:16px"></div><span class="cap">lg · 16<i>карточка, диалог</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--info-tint);border:1px solid var(--info-line);border-radius:999px"></div><span class="cap">full · 999<i>действие, статус, чип, аватар</i></span></div>
         <!-- /ds:gen radius-scale -->
       </div>
       <h3>Зазоры</h3>
       <!-- ds:gen spacing-scale -->
-      <p class="body">Десять ступеней — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>заменяет</em> числовую шкалу Tailwind целиком, и до сих пор это было невозможно: <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code> тоже, а 34px аватара — размер компонента, а не ступень ритма. Теперь у размеров свои шкалы, поэтому <code>p-md</code> рисует 10px, а <code>w-md</code> не рисует ничего. <code>0</code> и <code>px</code> в конфиге есть, но в таблице их нет: это не ступени.</p>
+      <p class="body">Семь ступеней — один ритм на зазор, отступ и поле, по сетке Firecrawl: основание 4px, ключ — число шагов, поэтому <code>p-3</code> — это 12px, а <code>gap-6</code> — 24px. Каденция тоже его: 8px внутри группы, 16px между группами, 24px — поле карточки, 32px — между секциями. Зазор и отступ — одна мера с двух сторон, и шкала у них одна. Объявлены только ступени, которые кто-то носит: 40 и 96px в сетке есть, но носителя у них нет. Шкала <em>заменяет</em> числовую шкалу Tailwind, а не расширяет её: <code>p-5</code> не рисует ничего, и правило линтера называет это ошибкой. <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code>, но у размеров свои шкалы, поэтому <code>p-3</code> есть, а <code>w-3</code> нет. <code>0</code> в конфиге есть, но в таблице его нет: это не ступень, а отсутствие отступа. Волоска в 1px в сетке нет: линия — это граница, а не отступ.</p>
       <table class="spec">
-        <tr><td><code>hair</code> · 2</td><td>Волосяной зазор сетки и стопки строк</td></tr>
-        <tr><td><code>xs</code> · 4</td><td>Счётчик над своей подписью</td></tr>
-        <tr><td><code>tight</code> · 6</td><td>Иконка и подпись, точка и текст</td></tr>
-        <tr><td><code>sm</code> · 8</td><td>Основной зазор внутри контрола и строки</td></tr>
-        <tr><td><code>md</code> · 12</td><td>Строки и поля внутри карточки</td></tr>
-        <tr><td><code>lg</code> · 16</td><td>Блоки карточки и формы</td></tr>
-        <tr><td><code>xl</code> · 20</td><td>Горизонтальный отступ контрола</td></tr>
-        <tr><td><code>2xl</code> · 24</td><td>Горизонтальный отступ крупного контрола</td></tr>
-        <tr><td><code>page</code> · 32</td><td>Воздух самой страницы: поля экрана входа, панели ошибки и блока «ничего нет»</td></tr>
-        <tr><td><code>empty</code> · 64</td><td>Пустое состояние: высота карточки, в которой нечего показать</td></tr>
+        <tr><td><code>1</code> · 4</td><td>Иконка и подпись, заголовок и подзаголовок, поле мелкого контрола</td></tr>
+        <tr><td><code>2</code> · 8</td><td>Внутри группы: подпись и поле, строки списка, вертикальное поле кнопки</td></tr>
+        <tr><td><code>3</code> · 12</td><td>Строки и поля внутри карточки, горизонтальное поле ввода</td></tr>
+        <tr><td><code>4</code> · 16</td><td>Между группами, поле компактной карточки и кнопки</td></tr>
+        <tr><td><code>6</code> · 24</td><td>Поле карточки и диалога</td></tr>
+        <tr><td><code>8</code> · 32</td><td>Между секциями: воздух страницы, поля экрана входа и блока «ничего нет»</td></tr>
+        <tr><td><code>16</code> · 64</td><td>Пустое состояние: высота карточки, в которой нечего показать</td></tr>
       </table>
       <!-- /ds:gen spacing-scale -->
 
@@ -730,12 +694,11 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <!-- /ds:gen size-scale -->
 
       <!-- ds:gen dimension-scale -->
-      <p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-md</code> есть, а <code>w-md</code> нет.</p>
+      <p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-3</code> есть, а <code>w-3</code> нет.</p>
       <p class="body">Каждое имя здесь — <em>роль</em>, и проверка у роли одна: она обязана называть то, что в этом продукте есть, и надо уметь показать компонент, который её носит. <code>coin</code> для 52px проверку не проходит, <code>touch</code> для цели пальца в 44px — проходит. Слово-величина не умеет спорить со следующим значением, а спорить со значениями — вся работа шкалы.</p>
       <h3>Высоты</h3>
       <p class="body">Высота, которая не является стороной квадрата: предмет либо лежит (дорожка, полоса), либо стоит в собственный рост контрола.</p>
       <table class="spec">
-        <tr><td><code>px</code> · 1px</td><td>Волосяная линия: разделитель, который рисуют высотой, а не границей</td></tr>
         <tr><td><code>full</code> · 100%</td><td>Вся высота родителя — отказ от ступени, а не ступень</td></tr>
         <tr><td><code>rail</code> · 2px</td><td>Дорожка, которая заполняется: подчёркивание раздела в шапке, связка обоих степперов, шаги мастера в AddAccountModal</td></tr>
         <tr><td><code>meter</code> · 6px</td><td>Полоса прогресса: прогрев в AccountEdit, ёмкость прокси в ProxyPool, рельс ползунка в WarmDaysModal</td></tr>
@@ -754,7 +717,6 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="body">Ширины — это в основном полосы, а не размеры: колонка, обрезка, диалог. Последние четыре ступени и есть причина, по которой шкала существует: двадцать два диалога тратили одиннадцать ширин — 380, 420, 440, 460, 468, 480, 540, 560, 580, 760 и 920, — а это не шкала, а протокол того, кто с какой родился.</p>
       <table class="spec">
         <tr><td><code>0</code> · 0px</td><td></td></tr>
-        <tr><td><code>px</code> · 1px</td><td>Вертикальный разделитель в строке — на странице прогрева он единственный</td></tr>
         <tr><td><code>auto</code> · auto</td><td>Ширина по содержимому: строка, которая на широком экране перестаёт быть колонкой</td></tr>
         <tr><td><code>max</code> · max-content</td><td>Ширина по самой длинной строке: подсказка над кнопкой в AddStoryModal</td></tr>
         <tr><td><code>full</code> · 100%</td><td>Вся ширина родителя — отказ от ступени, а не ступень</td></tr>
@@ -833,13 +795,13 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <!-- ds:gen shadow-scale -->
       <p class="body">Семь высот, по одной на задачу. У плоского интерфейса тень — способ сказать «я поверх», а не украшение, поэтому высота даётся смыслу, а не элементу: тост, подсказка, меню и список всплывают одинаково, потому что делают одно и то же.</p>
       <div class="wells w2" style="margin-top:16px">
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:none;display:block"></span><span class="cap">none<i>отсутствие тени, а не высота</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 10px 30px rgb(11 11 12 / 0.12);display:block"></span><span class="cap">pop<i>всплывает над страницей: список, подсказка, тост, меню</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 0 0 1px rgb(11 11 12 / 0.07);display:block"></span><span class="cap">ring<i>волосяной контур вместо границы на подложке</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 3px rgb(0 0 0 / 0.3);display:block"></span><span class="cap">thumb<i>палец, который тянут</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 0 0 3px rgb(0 102 255 / 0.12);display:block"></span><span class="cap">focus<i>кольцо на поле и списке</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);display:block"></span><span class="cap">seg<i>поднятый сегмент вложенного лотка</i></span></div>
-        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px rgb(0 102 255 / 0.3);display:block"></span><span class="cap">pill<i>едущая капсула сегментной группы: лежит на лотке, а не в нём</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:none;display:block"></span><span class="cap">none<i>отсутствие тени, а не высота</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 10px 30px rgb(11 11 12 / 0.12);display:block"></span><span class="cap">pop<i>всплывает над страницей: список, подсказка, тост, меню</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 0 0 1px rgb(11 11 12 / 0.07);display:block"></span><span class="cap">ring<i>волосяной контур вместо границы на подложке</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 1px 3px rgb(0 0 0 / 0.3);display:block"></span><span class="cap">thumb<i>палец, который тянут</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 0 0 3px rgb(0 102 255 / 0.12);display:block"></span><span class="cap">focus<i>кольцо на поле и списке</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);display:block"></span><span class="cap">seg<i>поднятый сегмент вложенного лотка</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--surface-card);border:1px solid var(--line);box-shadow:0 1px 2px rgb(0 102 255 / 0.3);display:block"></span><span class="cap">pill<i>едущая капсула сегментной группы: лежит на лотке, а не в нём</i></span></div>
       </div>
       <!-- /ds:gen shadow-scale -->
       <table class="spec">
@@ -870,6 +832,9 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td><code>roll</code> · 900ms</td><td>Одометр докручивается — <code>out</code>, <code>cubic-bezier(.16,1,.3,1)</code>. Плашка с действиями едет на <code>reveal</code></td></tr>
         <tr><td><code>pulse</code> · 1200ms</td><td></td></tr>
         <tr><td><code>stagger</code> · 90ms</td><td></td></tr>
+        <tr><td><code>spring.layout</code> · 360/32/0.6</td><td>Пружина <code>motion</code>: коробка меняет форму или место — плашка корзины, плитки времени, кружок даты</td></tr>
+        <tr><td><code>spring.swap</code> · 460/30/0.55</td><td>Пружина <code>motion</code>: вещь сменяется другой на месте — крышка корзины, глиф «изменить» ↔ «сохранить»</td></tr>
+        <tr><td><code>spring.press</code> · 500/30/0.6</td><td>Пружина <code>motion</code>: сжатие до <code>scale-press</code> и возврат</td></tr>
         <!-- /ds:gen motion-scale -->
         <tr><td>Цикл</td><td>Процесс жив: <code>pulsedot</code> у точки, <code>textpulse</code> у подписи, спиннер у запроса, <code>dotspin</code> у набора. Один пульс на всю систему — раньше их было два, с разным темпом и масштабом</td></tr>
         <tr><td>Уважение к настройке</td><td><code>prefers-reduced-motion</code> отключает всё декоративное; переходы, от которых зависит логика, становятся мгновенными</td></tr>
@@ -891,24 +856,24 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h2>Иконки</h2>
       <p class="intro">Набор <strong>Lucide</strong>: сетка 24, скругления round, зримая толщина 1.3px на любой ступени. Заливка только у «пуск» и «пауза» — сплошная фигура читается на 16px там, где контур сливается. Геометрия хранится один раз в спрайте, вызов задаёт только размер.</p>
       <div class="wells" style="margin-top:18px">
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-settings"/></svg></span><span class="cap">settings<i>действия</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-settings"/></svg></span><span class="cap">settings<i>действия</i></span></div>
         <div><span style="color:var(--success)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-play"/></svg></span><span class="cap">play<i>запустить</i></span></div>
         <div><span style="color:var(--warning)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-pause"/></svg></span><span class="cap">pause<i>остановить</i></span></div>
-        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-pencil"/></svg></span><span class="cap">pencil-line<i>изменить</i></span></div>
+        <div><span style="color:var(--action-primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-pencil"/></svg></span><span class="cap">pencil-line<i>изменить</i></span></div>
         <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-trash"/></svg></span><span class="cap">trash<i>удалить</i></span></div>
         <div><span style="color:var(--success)"><svg class="i i-18" aria-hidden="true"><use href="#ic-check"/></svg></span><span class="cap">check<i>получилось</i></span></div>
         <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-x"/></svg></span><span class="cap">x<i>не получилось</i></span></div>
-        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-info"/></svg></span><span class="cap">info<i>так устроено</i></span></div>
+        <div><span style="color:var(--action-primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-info"/></svg></span><span class="cap">info<i>так устроено</i></span></div>
         <div><span style="color:var(--warning)"><svg class="i i-18" aria-hidden="true"><use href="#ic-alert"/></svg></span><span class="cap">triangle-alert<i>внимание</i></span></div>
         <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span class="cap">circle-x<i>ошибка</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-help"/></svg></span><span class="cap">circle-help<i>подсказка</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-refresh"/></svg></span><span class="cap">rotate-cw<i>обновить</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-search"/></svg></span><span class="cap">search<i>поиск</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-arrow-right"/></svg></span><span class="cap">arrow-right<i>перейти</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-chevron"/></svg></span><span class="cap">chevron-down<i>раскрыть</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-bell"/></svg></span><span class="cap">bell<i>уведомления</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></span><span class="cap">menu<i>навигация</i></span></div>
-        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-audio"/></svg></span><span class="cap">audio-lines<i>слушатель</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-help"/></svg></span><span class="cap">circle-help<i>подсказка</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-refresh"/></svg></span><span class="cap">rotate-cw<i>обновить</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-search"/></svg></span><span class="cap">search<i>поиск</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-arrow-right"/></svg></span><span class="cap">arrow-right<i>перейти</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-chevron"/></svg></span><span class="cap">chevron-down<i>раскрыть</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-bell"/></svg></span><span class="cap">bell<i>уведомления</i></span></div>
+        <div><span style="color:var(--content-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></span><span class="cap">menu<i>навигация</i></span></div>
+        <div><span style="color:var(--action-primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-audio"/></svg></span><span class="cap">audio-lines<i>слушатель</i></span></div>
       </div>
       <table class="spec">
         <tr><td>Размеры</td><td class="n">Чётные ступени 10 · 12 · 14 · 16 · 18 · 20, и своего умолчания у них нет: 12 в кнопке 22, 14 в кнопке 28, 16 в шапке и рельсе, 18 в списке</td></tr>
@@ -937,6 +902,20 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Свод</div>
       <h2>Унификация</h2>
       <p class="intro">Канон против кода: слева литералы и копии, которые расползлись по компонентам, справа то, что их заменяет. Зелёная метка — уже в коде и проверено гейтами; янтарная — в плане работ ниже.</p>
+
+      <h3>Одна краска — одно имя: 12 синонимов → 0 <span class="done">сведено</span></h3>
+      <p class="body">Имена с одинаковым значением слиты в одно; довод «это два решения» снят — второй темы нет, и ни одно из них не перекрашивалось отдельно. Осталась одна пара, <strong>surface-card</strong> и <strong>on-fill</strong>: гейт контраста узнаёт пару по имени, и только разные имена оставляют белое на белом измеримым. Отдельных имён теперь не допускает <code>tokens.test.ts</code>, ушедшие ловит линтер. Причины — в <code>docs/design-system.md</code>, «Восьмой проход».</p>
+      <div class="scroll">
+        <table class="merge">
+          <thead><tr><th>Было</th><th></th><th>Канон</th><th>Где встречалось</th></tr></thead>
+          <tr><td><span class="chipdot" style="background:#ffffff"></span><span class="old">white</span> под альфой</td><td class="arw">→</td><td><span class="new">surface-card</span></td><td>Шапка под размытием, белое над фотографией — 4 места</td></tr>
+          <tr><td><span class="chipdot" style="background:#ffffff"></span><span class="old">on-action, on-success, on-warning, on-danger, on-inverse, on-neutral</span></td><td class="arw">→</td><td><span class="new">on-fill</span></td><td>Надпись и иконка на любой заливке — 63 места</td></tr>
+          <tr><td><span class="chipdot" style="background:#0066ff"></span><span class="old">focus</span></td><td class="arw">→</td><td><span class="new">action-primary</span></td><td>Кольцо и рамка фокуса — 30 мест; <code>shadow-focus</code> остаётся тенью</td></tr>
+          <tr><td><span class="chipdot" style="background:#eef4ff"></span><span class="old">action-hover</span></td><td class="arw">→</td><td><span class="new">info-tint</span></td><td>Наведение на незалитый контрол — 15 мест</td></tr>
+          <tr><td><span class="chipdot" style="background:#cbd7ec"></span><span class="old">fallback-start</span> / <span class="chipdot" style="background:#e6e5e3"></span><span class="old">fallback-end</span></td><td class="arw">→</td><td><span class="new">info-line</span> / <span class="new">line</span></td><td>Градиент заглушки медиа</td></tr>
+          <tr><td><span class="chipdot" style="background:#f0eeeb"></span><span class="old">line-row #f0eeeb</span></td><td class="arw">→</td><td><span class="new">canvas #f1efed</span></td><td>Разделитель строк — 74 места; 1–2 единицы на канал, ниже порога различимости</td></tr>
+        </table>
+      </div>
 
       <h3>Оттенки основы: 8 → 3 <span class="done">сведено</span></h3>
       <div class="scroll">
@@ -1013,12 +992,12 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Что канон уже требует, а код ещё не даёт. Порядок — по отношению выигрыша к риску: сверху механика без визуальных последствий, снизу то, где нужно решение человека.</p>
 
       <h3>Сделано и проверено гейтами</h3>
-      <p class="body">Пятнадцать шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-2</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
+      <p class="body">Пятнадцать шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-5</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
       <div class="scroll">
         <table class="spec">
           <tr><td class="n">427 замен</td><td>Литеральные хексы → токены: классы, цвета из JS-объектов, инлайновые стили, атрибуты <code>stroke</code>. Точки, повторявшие цвет подписи, взяли <code>bg-current</code></td></tr>
           <tr><td class="n">5 семейств</td><td>Янтарный, зелёный, красный, синий, серый сведены к трём-четырём ролям каждое; три параллельных набора тёмной поверхности — к одному. Два несвязанных янтарных набора красили одну и ту же плашку «внимание» на разных страницах</td></tr>
-          <tr><td class="n">15 шкал</td><td>Заменены целиком, то есть объявлены вне <code>extend</code>: радиусы (20 → 5), ступени текста (19 → 8), зазоры (18 → 10 ступеней), длительности (8 → 4), кривые (2), слои (14 → 6), тени (6), роли текста (12), квадраты (11) и шесть размерных шкал — высоты, ширины, обе нижние границы, верхняя граница ширины и предел прокрутки. В <code>extend</code> остались цвета и семейства шрифтов, и только они</td></tr>
+          <tr><td class="n">15 шкал</td><td>Заменены целиком, то есть объявлены вне <code>extend</code>: радиусы (20 → 4, по шкале Firecrawl), ступени текста (19 → 8), зазоры (18 → 7 ступеней сетки Firecrawl), длительности (8 → 4), кривые (2), слои (14 → 6), тени (6), роли текста (12), квадраты (11) и шесть размерных шкал — высоты, ширины, обе нижние границы, верхняя граница ширины и предел прокрутки. В <code>extend</code> остались цвета и семейства шрифтов, и только они</td></tr>
           <tr><td class="n">16 → 1</td><td>Тени. Восемь литералов были <code>ring</code>, набранный вручную в двух написаниях, два — <code>thumb</code>, пять — четыре разных высоты для одного смысла «всплывает над страницей». <code>focus</code> стал ролью, потому что его рецепт встретился и в списке, и у каждого поля</td></tr>
           <tr><td class="n">9 → 6 семейств</td><td>Отступы: кнопка (три размера), чип, пилюля статуса, бейдж-счётчик, фильтр-пилюля, сегментная кнопка, строка меню. Одна ступень на семейство вместо десяти вертикальных и четырнадцати горизонтальных значений</td></tr>
           <tr><td class="n">3 жеста</td><td>Внутренне расходились и сведены: шеврон списка шёл 400ms против панели 420, тело карточки 500 против своего шеврона 420, и один и тот же контрол пользовался двумя пружинами, разными на 0.05 перелёта</td></tr>
@@ -1046,7 +1025,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Свод</div>
       <h2>Источник правды</h2>
       <div class="scroll"><table class="spec">
-        <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пятнадцать шкал <em>заменены</em>, а не расширены: всё, что объявлено вне <code>extend</code>, отменяет одноимённую шкалу Tailwind, и имя мимо канона не рисует ничего. В <code>extend</code> остались только цвета и семейства шрифтов. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
+        <tr><td>Токены</td><td><code>frontend/src/shared/design-system/tokens/</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Tailwind 4 получает их темой <code>src/app/styles/tailwind-theme.css</code>, которую генерирует <code>npm run ds:doc</code>: она начинается с <code>--*: initial</code>, поэтому ни одной шкалы Tailwind в ней нет, и имя мимо канона не рисует ничего. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
         <tr><td>Кейфреймы, подсказки, раскрытие, полосы прокрутки</td><td><code>frontend/src/app/styles/index.css</code></td></tr>
         <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — двадцать три компонента, и <code>Button</code> среди них: 49 файлов зовут его вместо собственной разметки. Вид и размер приходят пропсами, класс рядом с ними — только то, чего база не назначает</td></tr>
         <tr><td>Иконочная кнопка</td><td><code>shared/ui/IconButton</code> — размеры <code>sm 22</code> / <code>md 28</code> / <code>lg 34</code> / <code>touch 44</code>, тона <code>neutral | primary | danger</code></td></tr>
@@ -1057,7 +1036,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       </table></div>
       <footer>
         <span>Значения проверены на живом приложении: аккаунты, прогрев, нейрокомментинг, логи, настройки. НейроШиллинг не эталон — страница не закончена.</span>
-        <span>Если значение здесь расходится с <code>tailwind.config.ts</code> — правится код, а расхождение перечислено в «Унификации».</span>
+        <span>Если значение здесь расходится с токенами — правится код, а расхождение перечислено в «Унификации».</span>
       </footer>
     </section>
   </main>

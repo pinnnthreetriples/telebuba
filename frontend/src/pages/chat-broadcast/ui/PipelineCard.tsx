@@ -2,8 +2,7 @@
 // the counters, and the progress over everything the run is meant to send.
 import { useTranslation } from 'react-i18next';
 
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Badge, Button, Card, Notice } from '@/shared/ui';
+import { Badge, Button, Card, Notice, ProgressBar } from '@/shared/ui';
 
 import type { PipelineView } from '../model/pipeline';
 
@@ -21,7 +20,7 @@ function Node({
   last: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-md text-left sm:flex-col sm:gap-sm sm:text-center">
+    <div className="flex min-w-0 items-center gap-3 text-left sm:flex-col sm:gap-2 sm:text-center">
       <div className="flex w-auto shrink-0 items-center sm:w-full">
         <span className={`hidden h-rail flex-1 bg-line sm:block ${first ? 'invisible' : ''}`} />
         <span
@@ -30,14 +29,14 @@ function Node({
         <span className={`hidden h-rail flex-1 bg-line sm:block ${last ? 'invisible' : ''}`} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
-        <span className={done ? 'type-item-title' : 'type-caption'}>{label}</span>
-        <span className="-mt-xs type-caption">{sub}</span>
+        <span className={done ? 'type-body-medium' : 'type-small'}>{label}</span>
+        <span className="-mt-1 type-small">{sub}</span>
       </div>
     </div>
   );
 }
 
-export function PipelineCard({
+export function BroadcastPipelineCard({
   name,
   view,
   busy,
@@ -52,8 +51,8 @@ export function PipelineCard({
   const { progress } = view;
   return (
     <Card>
-      <div className="mb-2xl flex flex-wrap items-center gap-md">
-        <div className="min-w-0 type-card-title">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="min-w-0 type-h3">
           {t('chatBroadcast.pipeline.title')}
           <span className="text-action-primary"> — {name}</span>
         </div>
@@ -67,8 +66,8 @@ export function PipelineCard({
           {view.action.label}
         </Button>
       </div>
-      <div className="mb-xl">
-        <div className="grid grid-cols-1 gap-md sm:grid-cols-5 sm:gap-0">
+      <div className="mb-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:gap-0">
           {view.nodes.map((node, index) => (
             <Node
               key={node.id}
@@ -81,26 +80,26 @@ export function PipelineCard({
           ))}
         </div>
       </div>
-      <div className="mb-lg">
+      <div className="mb-4">
         <Notice tone={view.notice.tone}>{view.notice.text}</Notice>
       </div>
-      <div className="mb-lg grid grid-cols-3 divide-line overflow-hidden rounded-lg border border-line sm:grid-cols-5 sm:divide-x">
+      <div className="mb-4 grid grid-cols-3 divide-line overflow-hidden rounded-lg border border-line sm:grid-cols-5 sm:divide-x">
         {view.stats.map((stat) => (
-          <div key={stat.id} className="px-md py-md">
-            <div className="type-stat tabular-nums">{stat.value}</div>
-            <div className="mt-xs type-caption">{stat.label}</div>
+          <div key={stat.id} className="px-3 py-3">
+            <div className="type-h1 tabular-nums">{stat.value}</div>
+            <div className="mt-1 type-small">{stat.label}</div>
           </div>
         ))}
       </div>
       {progress === null ? null : (
         <>
-          <div className="mb-sm flex flex-wrap items-center gap-sm">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             {view.chips.map((chip) => (
               <Badge key={chip.label} tone={chip.tone} className="tabular-nums">
                 {chip.label}
               </Badge>
             ))}
-            <span className="ml-auto type-caption tabular-nums">
+            <span className="ml-auto type-small tabular-nums">
               {progress.total === null
                 ? t('chatBroadcast.pipeline.progressEndless', { sent: progress.sent })
                 : t('chatBroadcast.pipeline.progress', {
@@ -110,19 +109,12 @@ export function PipelineCard({
             </span>
           </div>
           {progress.total === null || progress.total === 0 ? null : (
-            <div className={`${BAR_TRACK} w-full`}>
-              <div
-                className={`${BAR_FILL} bg-action-primary`}
-                style={{
-                  width: `${String(Math.min(100, Math.round((progress.sent / progress.total) * 100)))}%`,
-                }}
-              />
-            </div>
+            <ProgressBar value={progress.sent} max={progress.total} className="w-full" />
           )}
         </>
       )}
       {view.extras.length === 0 ? null : (
-        <div className="mt-md flex flex-col gap-md">
+        <div className="mt-3 flex flex-col gap-3">
           {view.extras.map((extra) => (
             <Notice key={extra.text} tone={extra.tone} bordered={false}>
               {extra.text}

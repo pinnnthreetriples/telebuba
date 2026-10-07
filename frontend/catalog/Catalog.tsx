@@ -8,6 +8,7 @@
 // только рендер настоящего компонента.
 import type { ReactNode } from 'react';
 
+import { BlocksSection } from './blocks/BlocksSection';
 import { Controls } from './Controls';
 import { Feedback } from './Feedback';
 import { Surfaces } from './Surfaces';
@@ -28,32 +29,38 @@ export function Catalog({
 }) {
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur">
-        <div className="mx-auto flex h-header max-w-shell items-center gap-lg px-lg">
-          <h1 className="type-card-title">Дизайн-система Telebuba</h1>
-          <nav className="flex flex-wrap gap-md">
+      <header className="sticky top-0 z-sticky border-b border-line bg-surface-card/85 backdrop-blur-[8px]">
+        <div className="mx-auto flex h-header max-w-shell items-center gap-4 px-4">
+          <h1 className="type-h3">Дизайн-система Telebuba</h1>
+          <nav className="flex flex-wrap gap-3">
             {NAV.map(([id, label]) => (
-              <a key={id} href={`#${id}`} className="type-caption hover:text-info-strong">
+              <a key={id} href={`#${id}`} className="type-small hover:text-info-strong">
                 {label}
               </a>
             ))}
             {patterns && (
-              <a href="#patterns" className="hidden type-caption hover:text-info-strong md:inline">
+              <a href="#patterns" className="hidden type-small hover:text-info-strong md:inline">
                 Блоки продукта
               </a>
             )}
-            <a href="#typography" className="type-caption hover:text-info-strong">
+            <a href="#typography" className="type-small hover:text-info-strong">
               Типографика
+            </a>
+            <a href="#blocks" className="type-small hover:text-info-strong">
+              Блоки
             </a>
           </nav>
         </div>
       </header>
-      <main className="mx-auto flex max-w-shell flex-col gap-page px-lg py-page">
+      <main className="mx-auto flex max-w-shell flex-col gap-8 px-4 py-8">
         <Controls intro={buttonGuide} />
         <Feedback />
         <Surfaces />
         {patterns}
         <Typography />
+        {/* Последним: раздел выше по странице сдвинул бы всё, что под ним, и снимок
+            диалога поверх каталога. */}
+        <BlocksSection />
       </main>
     </div>
   );

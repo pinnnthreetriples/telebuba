@@ -22,7 +22,7 @@ import type {
   NeuroshillingCampaignUpdate,
 } from '@/shared/api';
 import { useLogEventStream } from '@/shared/lib';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, HowItWorksCard } from '@/shared/ui';
 import { LogTerminal } from '@/widgets/log-terminal';
 
 import { ApproveModal } from './ApproveModal';
@@ -31,9 +31,8 @@ import { CampaignSettingsModal } from './CampaignSettingsModal';
 import { CampaignSetupSection } from './CampaignSetupSection';
 import { CampaignsCard } from './CampaignsCard';
 import { ChecksBanner } from './ChecksBanner';
-import { HowItWorksCard } from './HowItWorksCard';
 import { launchBlockers } from './launchChecks';
-import { PipelineCard } from './PipelineCard';
+import { LaunchPipeline } from './LaunchPipeline';
 import { ScenarioSection } from './ScenarioSection';
 import { WorkBoardCard } from './WorkBoardCard';
 import type { ScenarioDraft } from './scenarioDraft';
@@ -113,6 +112,7 @@ function campaignBody(
   };
 }
 
+const HOW_STEPS = [0, 1, 2, 3] as const;
 export function NeuroshillingPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -579,13 +579,13 @@ export function NeuroshillingPage() {
     // страницы (1000px) сайдбар в 328px оставил бы главной колонке меньше, чем ей нужно
     // под шесть узлов конвейера и таблицу.
     <div className="tb-fadeup mx-auto max-w-shell">
-      <h1 className="m-0 mb-xl type-page-title">{t('neuroshilling.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('neuroshilling.title')}</h1>
 
       {/* Колонки разъезжаются на `lg`, а ниже складываются в стопку. Порядок в стопке —
           порядок в разметке: сводка замечаний и выбор кампании стоят ВЫШЕ конвейера,
           потому что на узком экране сначала выбирают, а потом смотрят. */}
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
-        <div className="flex flex-col gap-md lg:w-sidebar lg:shrink-0">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-3 lg:w-sidebar lg:shrink-0">
           <ChecksBanner blockers={blockers} />
 
           <CampaignsCard
@@ -632,14 +632,17 @@ export function NeuroshillingPage() {
             onCreate={create}
           />
 
-          <HowItWorksCard />
+          <HowItWorksCard
+            title={t('neuroshilling.howto.title')}
+            steps={HOW_STEPS.map((index) => t(`neuroshilling.howto.steps.${String(index)}`))}
+          />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-lg">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
           {campaign === undefined ||
           stored === undefined ||
           stored.campaign_id !== campaignId ? null : (
-            <PipelineCard
+            <LaunchPipeline
               campaign={campaign}
               run={run}
               pool={pool}

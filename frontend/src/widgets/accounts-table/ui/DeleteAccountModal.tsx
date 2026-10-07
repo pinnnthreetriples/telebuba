@@ -15,10 +15,10 @@ export function DeleteAccountModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="confirm" label={t('accounts.deleteModal.title', { phone })}>
-      <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">{t('accounts.deleteModal.title', { phone })}</div>
-        <div className="mb-2xl type-dialog-body">{t('accounts.deleteModal.body')}</div>
-        <div className="flex justify-end gap-sm">
+      <div className="p-6">
+        <div className="mb-2 type-h2">{t('accounts.deleteModal.title', { phone })}</div>
+        <div className="mb-6 type-body text-content-muted">{t('accounts.deleteModal.body')}</div>
+        <div className="flex justify-end gap-2">
           <Button onClick={onClose}>{t('accounts.deleteModal.cancel')}</Button>
           <Button
             variant="danger"

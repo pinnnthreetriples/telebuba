@@ -167,14 +167,17 @@ test('neurocomment counters expose their values while rolling without moving the
   await setup(page);
   await page.goto('/neurocomment');
   await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible();
-  const tile = page.locator('.type-stat.tabular-nums').first().locator('..');
+  const tile = page.locator('.type-h1.tabular-nums').first().locator('..');
   await expect(tile.locator('.sr-only')).toHaveText('2');
+  // Сначала шрифт: если Inter подгрузится между двумя замерами, плитка вырастет на
+  // разницу метрик запасного шрифта, и тест примет это за сдвиг от прокрутки цифр.
+  await page.evaluate(() => document.fonts.ready);
   const before = await tile.boundingBox();
   await expect
     .poll(async () =>
       page.evaluate(() => {
         const clip = document.querySelector<HTMLElement>(
-          '.type-stat.tabular-nums [aria-hidden="true"] > span',
+          '.type-h1.tabular-nums [aria-hidden="true"] > span',
         );
         const digits = clip?.firstElementChild;
         if (!clip || !digits) return Number.POSITIVE_INFINITY;
@@ -193,7 +196,7 @@ test('add-channel chip hugs its neighbors and matches their height', async ({ pa
   await setup(page);
   await page.goto('/neurocomment');
   const channel = page
-    .locator('div.flex.flex-wrap.items-start.gap-sm > span')
+    .locator('div.flex.flex-wrap.items-start.gap-2 > span')
     .filter({ hasText: '@defi_news' });
   const add = page.getByRole('button', { name: '+ Канал' });
   await expect(channel).toBeVisible();

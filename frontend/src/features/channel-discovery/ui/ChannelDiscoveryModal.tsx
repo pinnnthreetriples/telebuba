@@ -11,7 +11,7 @@ import {
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
 import { useLogEventStream } from '@/shared/lib';
-import { Button, Modal, StatusIcon } from '@/shared/ui';
+import { Button, Modal, ModalFooter, ModalHeader, StatusIcon } from '@/shared/ui';
 
 import {
   buildSearchRequest,
@@ -220,15 +220,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-hair type-caption">
-          {t('neurocomment.modal.discovery.sub', { name: campaignName })}
-        </p>
-      </div>
+      <ModalHeader
+        title={t('neurocomment.modal.discovery.title')}
+        subtitle={t('neurocomment.modal.discovery.sub', { name: campaignName })}
+      />
 
-      <div className="flex flex-col gap-2xl px-2xl py-xl">
-        <div ref={contentRef} tabIndex={-1} className="outline-none">
+      <div className="flex flex-col gap-6 px-6 py-6">
+        <div ref={contentRef} tabIndex={-1} className="outline-hidden">
           {submitted ? (
             <DiscoveryResults
               board={board.data}
@@ -253,9 +251,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           )}
         </div>
 
-        <div className="flex flex-col gap-sm empty:hidden">
+        <div className="flex flex-col gap-2 empty:hidden">
           {refused ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
               {refusedName === null
                 ? null
@@ -267,7 +265,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               toast fires outside the modal with a raw error code, and the form alone
               would just re-enable its button. */}
           {startSearch.isError ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t('neurocomment.modal.discovery.startFailed')}
             </p>
           ) : null}
@@ -276,7 +274,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             ? null
             : NOTES.map(([field, key, tone]) =>
                 adopted[field] > 0 ? (
-                  <p key={key} role="status" className={`type-prose ${tone}`}>
+                  <p key={key} role="status" className={`type-body text-content-subtle ${tone}`}>
                     {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
                   </p>
                 ) : null,
@@ -285,14 +283,14 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           {/* The request itself never landed, so nothing can be read from the outcomes —
               silence would read as "nothing happened". */}
           {adopt.isError ? (
-            <p role="status" className="type-prose text-danger">
+            <p role="status" className="type-body text-danger">
               {t('neurocomment.modal.discovery.addFailed')}
             </p>
           ) : null}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter>
         {submitted ? (
           <>
             <Button
@@ -377,7 +375,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             </Button>
           </>
         )}
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

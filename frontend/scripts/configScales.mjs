@@ -13,11 +13,13 @@ import { loadTokens } from './loadTokens.mjs';
 
 const tokens = loadTokens();
 
-// Шкала Tailwind → её объект в токенах. Ключи совпадают с `theme` в tailwind.config.ts, и
-// это единственное место, где надо помнить, что во что переименовано.
+// Шкала → её объект в токенах. Ключи — прежние имена шкал темы Tailwind (`borderRadius`,
+// `spacing`, `zIndex`): по ним шкалы зовут правило ESLint, `ds:dead` и генераторы, и это
+// единственное место, где надо помнить, что во что переименовано.
 const SCALES = {
   colors: tokens.flatColors,
   fontSize: tokens.fontSize,
+  fontWeight: tokens.fontWeight,
   typeRole: tokens.typeRole,
   lineHeight: tokens.lineHeight,
   letterSpacing: tokens.letterSpacing,
@@ -35,6 +37,54 @@ const SCALES = {
   maxWidth: tokens.maxWidth,
   minHeight: tokens.minHeight,
   maxHeight: tokens.maxHeight,
+};
+
+// Шкала → пространства имён `@theme` Tailwind 4, в которые она выходит. Читают его
+// генератор темы (`tailwind-theme.mjs`, он пишет переменные) и `ds:dead` (он узнаёт по
+// `--theme(--…)` в CSS, какую ступень тот носит), — второй копии соответствия нет.
+//
+// Ритм выходит НЕ в `--spacing-*`, и это главное решение переезда. В Tailwind 4 размеры
+// (`w-*`, `h-*`, `size-*`, `min-*`/`max-*`), `leading-*` и ещё десяток утилит откатываются
+// на `--spacing-*`, когда своей ступени не нашли, — объяви ритм там, и `w-3` начал бы
+// красить 12px, хотя шкала ширин ступени `3` не знает. В Tailwind 3 он не красил ничего,
+// и `spacing.ts` называет это свойство своим главным решением. Поэтому ритм объявлен
+// ровно в тех пространствах, которые в Tailwind 3 питала `theme.spacing`, и только в них.
+const RHYTHM_NAMESPACES = [
+  'padding',
+  'margin',
+  'gap',
+  'space',
+  'inset',
+  'translate',
+  'scroll-margin',
+  'scroll-padding',
+  'text-indent',
+  'flex-basis',
+  'border-spacing',
+];
+
+export const THEME_NAMESPACES = {
+  colors: ['color'],
+  fontSize: ['text'],
+  fontWeight: ['font-weight'],
+  lineHeight: ['leading'],
+  letterSpacing: ['tracking'],
+  borderRadius: ['radius'],
+  boxShadow: ['shadow'],
+  transitionDuration: ['transition-duration'],
+  transitionTimingFunction: ['ease'],
+  scale: ['scale'],
+  zIndex: ['z-index'],
+  // `--rhythm-*` не питает ни одной утилиты: это имя ступени для `--theme()` в
+  // `index.css` — у подсказки и полосы прокрутки ритм не отбивка и не зазор.
+  spacing: [...RHYTHM_NAMESPACES, 'rhythm'],
+  size: ['size'],
+  height: ['height'],
+  width: ['width'],
+  minWidth: ['min-width'],
+  maxWidth: ['max-width'],
+  minHeight: ['min-height'],
+  maxHeight: ['max-height'],
 };
 
 export function scale(name) {
@@ -69,12 +119,12 @@ export function colorRoots() {
   return Object.keys(tokens.flatColors);
 }
 
-// Ступень размера и краска, которые тратит роль. Без этого рунг, который носят только
+// Ступень размера, вес и краска, которые тратит стиль. Без этого рунг, который носят только
 // роли, выглядел бы мёртвым.
 export function roleRefs() {
   const refs = [];
   for (const role of Object.values(tokens.typeRole)) {
-    refs.push(`fontSize.${role.size}`, `colors.${role.ink}`);
+    refs.push(`fontSize.${role.size}`, `fontWeight.${role.weight}`, `colors.${role.ink}`);
   }
   return refs;
 }

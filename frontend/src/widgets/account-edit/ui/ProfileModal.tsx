@@ -23,13 +23,14 @@ import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shar
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import {
   Button,
+  CloseButton,
   ConfirmModal,
   FormField,
   Icon,
-  CloseButton,
   IconButton,
   Input,
   Modal,
+  ModalFooter,
   Spinner,
   TabList,
   Textarea,
@@ -113,7 +114,7 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
   if (!updatedAt) return null;
   const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
-    <span className="type-caption">
+    <span className="type-small">
       {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
@@ -647,9 +648,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       >
         <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
           {/* header */}
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
             <div
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-stat font-semibold text-content-primary"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br/srgb from-info-line to-line text-h1 font-medium text-content-primary"
               style={
                 avatarUri
                   ? {
@@ -666,21 +667,21 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate type-dialog-title">{fullName}</h2>
-              <div className="truncate type-prose">
+              <h2 className="truncate type-h2">{fullName}</h2>
+              <div className="truncate type-body text-content-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-tight">
-              <div className="flex items-center gap-sm">
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={refreshState === 'loading' || syncing}
                   onClick={() => {
                     void onRefresh();
                   }}
-                  className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium transition duration-state hover:bg-canvas disabled:pointer-events-none disabled:opacity-70 ${PRESS_FEEDBACK} ${FOCUS_RING} ${refreshLook.border}`}
+                  className={`inline-flex items-center gap-2 rounded-full border bg-surface-card px-3 py-1 text-body font-medium transition duration-state hover:bg-canvas disabled:pointer-events-none disabled:opacity-70 ${PRESS_FEEDBACK} ${FOCUS_RING} ${refreshLook.border}`}
                 >
                   <span
                     className={`inline-flex ${
@@ -733,7 +734,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex min-h-0 flex-1 flex-col gap-lg overflow-y-auto p-xl"
+            className="tb-scroll relative flex flex-1 flex-col gap-4 overflow-y-auto p-6"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
@@ -747,13 +748,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 role="status"
                 aria-live="polite"
                 aria-label={t('accounts.profile.syncing')}
-                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 tb-ovfade"
+                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-3 bg-black/10 tb-ovfade"
               >
                 {/* `line-strong`, not the default line: this ring sits on the modal's own
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
                 <Spinner size="lg" />
-                <span className="type-label">
+                <span className="type-body-medium text-content-secondary">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
                     : t('accounts.profile.syncing')}
@@ -771,8 +772,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               />
             )}
             {tab === 'text' && (
-              <div className="flex flex-col gap-lg">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <form.Field name="first_name">
                     {(field) => <FormField field={field} label={t('accounts.profile.firstName')} />}
                   </form.Field>
@@ -784,9 +785,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
-                        <span className="absolute left-lg text-body text-content-subtle">@</span>
+                        <span className="absolute left-4 text-body text-content-subtle">@</span>
                         <Input
-                          className="pl-page"
+                          className="pl-8"
                           value={field.state.value}
                           onChange={(event) => {
                             field.handleChange(event.target.value);
@@ -797,7 +798,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
+                          className="mt-2 block type-small-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>
@@ -827,7 +828,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
+                          className="mt-2 block type-small-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>
@@ -836,7 +837,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-tight block type-caption font-medium text-warning-deep"
+                          className="mt-2 block type-small-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -969,14 +970,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
+          <ModalFooter>
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null ? (
               <div
                 role="alert"
                 title={saveErrorText}
-                className="mr-auto min-w-0 truncate type-label text-danger"
+                className="mr-auto min-w-0 truncate type-body-medium text-danger"
               >
                 {saveErrorText}
               </div>
@@ -1012,7 +1013,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {updateProfile.isPending ? (
                 t('accounts.profile.saving')
               ) : saved ? (
-                <span className="inline-flex items-center gap-sm">
+                <span className="inline-flex items-center gap-2">
                   <span className="tb-swapin inline-flex">
                     <Icon name="check" size={16} />
                   </span>
@@ -1024,7 +1025,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 t('accounts.profile.save')
               )}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
       {bulkOpen && (

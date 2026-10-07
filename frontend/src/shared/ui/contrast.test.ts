@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import config from '../../../tailwind.config';
+import { flatColors, typeRole } from '@/shared/design-system/tokens';
 
 // WCAG 2.1 AA asks 4.5:1 of text under 18.66px bold / 24px regular. Every type rung
 // this app has is under that, so 4.5:1 is the floor for all of them — there is no
@@ -10,11 +10,10 @@ const AA = 4.5;
 const NON_TEXT = 3;
 
 type Ramp = Record<string, string> & { DEFAULT?: string };
-const colors = config.theme?.colors as Record<string, string | Ramp>;
+const colors: Record<string, string | Ramp> = flatColors;
 
 // The palette as a class list spells it: `content-primary`, `content-subtle`, `info-tint`.
-// The
-// config nests the ramps, so DEFAULT loses its rung on the way out. Anything that is
+// The tokens nest the ramps, so DEFAULT loses its rung on the way out. Anything that is
 // not a flat hex has no ratio to measure — `scrim` is an rgba wash over a photograph,
 // and `transparent`/`current` are keywords rather than colours.
 //
@@ -34,9 +33,9 @@ for (const [name, value] of Object.entries(colors)) {
 }
 
 // A `type-*` utility carries its own ink, so a role is a colour decision even where no
-// `text-*` class is written. Read off the config so the two cannot drift.
+// `text-*` class is written. Read off the tokens so the two cannot drift.
 const ROLE_INK: Record<string, string> = Object.fromEntries(
-  Object.entries(config.theme?.typeRole as Record<string, { ink: string }>).map(([name, role]) => [
+  Object.entries(typeRole as Record<string, { ink: string }>).map(([name, role]) => [
     name,
     role.ink,
   ]),
@@ -273,10 +272,10 @@ const BG = /(?:^|\s)(?:[\w-]+:)*bg-(\S+)/g;
 //
 //   • элемент, который САМ является глифом, не опознавался глифом. `glyphOnly` спрашивает,
 //     что элемент СОДЕРЖИТ, — верно для обёртки и неверно для `<Icon className=
-//     "stroke-on-success" />`, у которого тело пусто: его держали у пола текста 4.5:1
+//     "stroke-on-fill" />`, у которого тело пусто: его держали у пола текста 4.5:1
 //     вместо 3:1, которые графике даёт 1.4.11. Теперь имя тега отвечает на тот же вопрос
 //     напрямую — см. `GLYPH_TAG`.
-//   • условный РЕБЁНОК не был ветвью. `{on && <Icon className="stroke-on-action" />}` для
+//   • условный РЕБЁНОК не был ветвью. `{on && <Icon className="stroke-on-fill" />}` для
 //     обхода был всегда применённым куском, поэтому его белая краска сходилась с ОБЕИМИ
 //     половинами родительского `on ? bg-action-primary : bg-surface-card` и давала белое на
 //     белом, 1.00:1 — сочетание, которого не рисует ничто.
@@ -418,7 +417,7 @@ function scan(path: string, src: string): { offenders: string[]; pairings: strin
     // Та же семантика «всегда», что у кусков шаблонного литерала, только осью выше:
     // ребёнок внутри `{…}` в теле предка применяется НЕ всегда, поэтому встретиться он
     // может только с заливкой, которая применяется всегда. Иначе `{on && <Icon
-    // className="stroke-on-action"/>}` сходится с обеими половинами родительского
+    // className="stroke-on-fill"/>}` сходится с обеими половинами родительского
     // тернарника и приносит белое на белом — пару, которой не рисует ничто.
     const reach = braceDepth(src, nearest.open + 1, at) === 0 ? nearest.fills : nearest.always;
     const where = `${path}:${lineAt(src, at)}`;
@@ -448,13 +447,18 @@ test('the scan reads the tree it claims to', () => {
   expect(Object.keys(sources).length).toBeGreaterThan(100);
   expect(cssPainted.size).toBeGreaterThan(0);
   expect(pairings.size).toBeGreaterThan(40);
-  // Две пары-часовых, и вторая из них — то, чего до переезда на роли измерить было
-  // нельзя: `white on primary` описывало и надпись на кнопке, и белую карточку одним
-  // именем. Теперь «чернила НА залитом действии» — своя пара, и она под своим полом.
+  // Две пары-часовых, и вторая держит единственное допущенное совпадение значений:
+  // `on-fill` и `surface-card` — оба белые, и именно разные имена делают белое на белом
+  // измеримым — пару с одинаковым именем `record` пропускает.
   expect([...pairings]).toContain('content-subtle on surface-card');
-  expect([...pairings]).toContain('on-action on action-primary');
+  expect([...pairings]).toContain('on-fill on action-primary');
   // И третья: краска ГЛИФА, которой этот обход до правки не видел вовсе.
-  expect([...pairings]).toContain('on-success on success');
+  expect([...pairings]).toContain('on-fill on success');
+});
+
+test('белое на белом гейт видит: у поверхности и чернил на заливке разные имена', () => {
+  const found = scan('fixture.tsx', `<span className="bg-surface-card text-on-fill">x</span>`);
+  expect(found.offenders.join()).toContain('on-fill on surface-card — 1.00:1');
 });
 
 test('every text-on-fill pairing the source paints clears its floor', () => {
@@ -487,14 +491,14 @@ const FIXTURES: { name: string; source: string; offends: boolean; because: strin
   },
   {
     name: 'СЛОВО, а не глиф, на залитом тоне',
-    source: `<span className="bg-success"><span className="text-on-success">жив</span></span>`,
+    source: `<span className="bg-success"><span className="text-on-fill">жив</span></span>`,
     offends: true,
     because: 'белый на базовом зелёном — 3.37:1, а слово держат у 4.5:1',
   },
   {
     name: 'глиф, который берёт 3:1 и не берёт 4.5:1',
     source: `<span className="bg-success">
-      <Icon name="check" size={10} className="stroke-on-success" />
+      <Icon name="check" size={10} className="stroke-on-fill" />
     </span>`,
     offends: false,
     because: 'те же 3.37:1, но это графика: пол 3:1, и она его берёт',
@@ -502,7 +506,7 @@ const FIXTURES: { name: string; source: string; offends: boolean; because: strin
   {
     name: 'условный ребёнок под условной заливкой',
     source: `<span className={\`flex \${on ? 'bg-action-primary' : 'bg-surface-card'}\`}>
-      {on && <Icon name="check" size={14} className="stroke-on-action" />}
+      {on && <Icon name="check" size={14} className="stroke-on-fill" />}
     </span>`,
     offends: false,
     because: 'не-всегда не встречается с не-всегда: белое на белом тут не рисуется',
@@ -536,22 +540,22 @@ test('term.text reads on the terminal surface it is written for', () => {
 });
 
 // The other shape the scan cannot see: ink painted with `stroke`/`fill`, and ink chosen
-// by an index (`roleTone(i).on`) rather than written as a class. Both are how the three
-// `on-*` roles are worn, so each is measured here against the fill it is actually worn
-// on — read off the sites, not off the tone's name.
+// by an index (`roleTone(i).on`) rather than written as a class. Both are how `on-fill`
+// is worn on a tone, so it is measured here against each fill it is actually worn on —
+// read off the sites, not off the tone's name.
 //
-// `on-success on success` is 3.37:1: the graphic floor, and it is a graphic — the five
+// `on-fill on success` is 3.37:1: the graphic floor, and it is a graphic — the five
 // wearers are all a check inside a filled circle. It does NOT clear the text floor, and
 // asserting that is the point: putting a WORD on `bg-success` is the mistake this line
 // exists to catch, and the tone already has `deep` for it.
 test('ink on a filled tone reads on the fill it is worn on', () => {
-  expect(ratio('on-success', 'success')).toBeGreaterThanOrEqual(NON_TEXT);
-  expect(ratio('on-success', 'success')).toBeLessThan(AA);
-  expect(ratio('on-success', 'success-deep')).toBeGreaterThanOrEqual(AA);
-  expect(ratio('on-danger', 'danger')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-fill', 'success')).toBeGreaterThanOrEqual(NON_TEXT);
+  expect(ratio('on-fill', 'success')).toBeLessThan(AA);
+  expect(ratio('on-fill', 'success-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-fill', 'danger')).toBeGreaterThanOrEqual(AA);
   // Янтарный носится ТОЛЬКО на `deep`, и это не случайность: на базовом янтаре белый
   // мерит 4.01:1, то есть под полом. Второе утверждение держит первое честным — оно
-  // ломается в тот день, когда кто-нибудь наденет `on-warning` на `bg-warning`.
-  expect(ratio('on-warning', 'warning-deep')).toBeGreaterThanOrEqual(AA);
-  expect(ratio('on-warning', 'warning')).toBeLessThan(AA);
+  // ломается в тот день, когда кто-нибудь наденет `on-fill` на `bg-warning`.
+  expect(ratio('on-fill', 'warning-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-fill', 'warning')).toBeLessThan(AA);
 });

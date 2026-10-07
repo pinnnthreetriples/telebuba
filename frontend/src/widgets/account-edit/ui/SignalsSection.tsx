@@ -78,26 +78,26 @@ export function SignalsSection({ account }: { account: AccountRead }) {
       right={
         <span className="tb-tip">
           <Button
-            size="xs"
+            size="sm"
             aria-describedby={tipId}
             onClick={runSpamCheck}
             loading={spamCheck === 'loading'}
-            className={`gap-sm rounded-full ${
+            className={`gap-2 rounded-full ${
               spamCheck === 'ok'
-                ? 'border-success bg-success-deep text-on-success hover:border-success'
+                ? 'border-success bg-success-deep text-on-fill hover:border-success'
                 : spamCheck === 'err'
-                  ? 'border-danger bg-danger text-on-danger hover:border-danger'
+                  ? 'border-danger bg-danger text-on-fill hover:border-danger'
                   : 'text-content-muted'
             }`}
           >
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">
-                <Icon name="check" size={14} className="stroke-on-success" />
+                <Icon name="check" size={14} className="stroke-on-fill" />
               </span>
             )}
             {spamCheck === 'err' && (
               <span className="tb-blur inline-flex">
-                <Icon name="close" size={14} className="stroke-on-danger" />
+                <Icon name="close" size={14} className="stroke-on-fill" />
               </span>
             )}
             {t('accounts.edit.signalsCheck')}
@@ -108,18 +108,18 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         </span>
       }
     >
-      <div className="mb-sm type-prose">{t('accounts.edit.signalsReadonly')}</div>
+      <div className="mb-2 type-body text-content-subtle">{t('accounts.edit.signalsReadonly')}</div>
       <div className="flex flex-col">
         {signals.map((signal) => (
           <div
             key={signal.label}
-            className="flex items-center justify-between gap-md border-b border-line-row py-md"
+            className="flex items-center justify-between gap-3 border-b border-canvas py-3"
           >
-            <span className="flex items-center gap-sm type-prose">
+            <span className="flex items-center gap-2 type-body text-content-subtle">
               <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>
-            <span className="text-right type-label text-content-primary">{signal.value}</span>
+            <span className="text-right type-body-medium text-content-primary">{signal.value}</span>
           </div>
         ))}
       </div>

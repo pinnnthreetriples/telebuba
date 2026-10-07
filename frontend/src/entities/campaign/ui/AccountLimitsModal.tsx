@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
-import { HEADING_ICON_TILE } from '@/shared/design-system';
-import { Button, Modal, toastError } from '@/shared/ui';
+import { Button, EmptyState, Modal, ModalHeader, ProgressBar, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -48,7 +47,7 @@ function tone(gauge: AccountLimitGauge): 'full' | 'near' | 'ok' {
   return ratio >= 0.8 ? 'near' : 'ok';
 }
 
-const BAR = { full: 'bg-danger', near: 'bg-warning', ok: 'bg-success' } as const;
+const BAR = { full: 'danger', near: 'warning', ok: 'success' } as const;
 
 // A rolling window frees one slot at a time, so the reset is a moment, not a countdown to
 // midnight. Local time and to the minute: the operator compares it against a log line.
@@ -79,27 +78,24 @@ function LimitRow({
 }) {
   const { t, i18n } = useTranslation();
   const state = tone(gauge);
-  const width = gauge.limit > 0 ? Math.min(100, Math.round(share(gauge) * 100)) : 0;
   const resets = resetLabel(gauge.resets_at, i18n.language);
   const value = draft === undefined ? (gauge.overridden ? gauge.limit : '') : draft;
 
   return (
-    <div className="border-b border-line-row py-lg last:border-b-0">
-      <div className="flex items-baseline justify-between gap-md">
-        <span className="type-card-title">{label}</span>
+    <div className="border-b border-canvas py-4 last:border-b-0">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="type-h3">{label}</span>
         <span
-          className={`font-mono text-body font-semibold tabular-nums ${
+          className={`font-mono text-body font-medium tabular-nums ${
             state === 'full' ? 'text-danger' : 'text-content-muted'
           }`}
         >
           {gauge.used} / {gauge.limit > 0 ? gauge.limit : '∞'}
         </span>
       </div>
-      <div className="mt-sm h-meter overflow-hidden rounded-[3px] bg-canvas">
-        <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
-      </div>
-      <div className="mt-md flex flex-wrap items-center justify-between gap-md">
-        <span className="min-w-col flex-1 type-caption">
+      <ProgressBar className="mt-2" tone={BAR[state]} value={gauge.used} max={gauge.limit} />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <span className="min-w-col flex-1 type-small">
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
@@ -121,10 +117,10 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-readout rounded-md border border-line bg-surface-card px-md py-tight text-right font-mono text-body font-semibold text-content-primary"
+          className="w-readout rounded-sm border border-line bg-surface-card px-3 py-1 text-right font-mono text-body font-medium text-content-primary"
         />
       </div>
-      <div className="mt-tight type-caption">
+      <div className="mt-2 type-small">
         {value === ''
           ? t('neurocomment.modal.limits.fleetValue', { value: gauge.fleet_default })
           : t('neurocomment.modal.limits.ownValue', { value: gauge.fleet_default })}
@@ -200,8 +196,10 @@ export function AccountLimitsModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className={HEADING_ICON_TILE}>
+      <ModalHeader
+        title={t('neurocomment.modal.limits.title', { name })}
+        subtitle={t('neurocomment.modal.limits.sub')}
+        icon={
           <svg
             width="18"
             height="18"
@@ -214,14 +212,10 @@ export function AccountLimitsModal({
             <path d="m12 12 4-3" />
             <path d="M4 12H2M4.9 6.3 3.5 4.9M12 4V2" />
           </svg>
-        </span>
-        <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.limits.title', { name })}</div>
-          <div className="mt-hair type-prose">{t('neurocomment.modal.limits.sub')}</div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="px-2xl pb-xs pt-xs">
+      <div className="px-6 pb-1 pt-1">
         {view ? (
           KEYS.map((key) => (
             <LimitRow
@@ -237,19 +231,19 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center type-prose">
+          <EmptyState className="px-3">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}
-          </div>
+          </EmptyState>
         )}
       </div>
 
-      <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-tiny text-content-muted">
+      <div className="mx-6 mb-1 rounded-md border border-line bg-surface px-3 py-3 text-small text-content-muted">
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 
-      <div className="flex justify-between gap-md border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex justify-between gap-3 border-t border-canvas px-6 pb-6 pt-4">
         <Button
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
@@ -258,7 +252,7 @@ export function AccountLimitsModal({
         >
           {t('neurocomment.modal.limits.resetAll')}
         </Button>
-        <div className="flex gap-sm">
+        <div className="flex gap-2">
           <Button onClick={onClose} className="border-line-strong text-content-muted">
             {t('neurocomment.modal.cancel')}
           </Button>

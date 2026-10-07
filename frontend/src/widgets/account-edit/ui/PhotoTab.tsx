@@ -69,15 +69,15 @@ export function PhotoTab({
         );
         onUpload(images);
       }}
-      className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-action-primary' : 'border-transparent'}`}
+      className={`relative rounded-md border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-action-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-body font-medium text-action-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-md bg-surface-card/70 text-body font-medium text-action-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
-      <div className="mb-md type-prose">{t('accounts.profile.photoHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
+      <div className="mb-3 type-body text-content-subtle">{t('accounts.profile.photoHint')}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
         {photos.map((photo, index) => (
           <div key={photo.photo_id} className="group relative">
             <button
@@ -87,12 +87,12 @@ export function PhotoTab({
               onClick={() => {
                 setViewing(index);
               }}
-              className="flex w-full cursor-zoom-in items-center justify-center rounded-lg border border-black/5 disabled:cursor-default"
+              className="flex w-full cursor-zoom-in items-center justify-center rounded-md border border-black/5 disabled:cursor-default"
               style={tileStyle(photo.thumb_url, '1')}
             >
               {photo.thumb_url && (
                 <span
-                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-inverse ${HOVER_ONLY}`}
+                  className={`flex size-tile items-center justify-center rounded-full bg-black/55 text-on-fill ${HOVER_ONLY}`}
                 >
                   <Icon name="zoom-in" size={18} />
                 </span>
@@ -105,12 +105,12 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse ${HOVER_ONLY}`}
+              className={`absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-fill hover:border-transparent hover:bg-content-primary hover:text-on-fill ${HOVER_ONLY}`}
             >
               <Icon name="close" size={16} />
             </IconButton>
             {photo.is_main ? (
-              <span className="mt-tight block w-full py-hair text-tiny font-medium text-action-primary">
+              <span className="mt-2 block w-full text-small font-medium text-action-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -120,7 +120,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-tight block w-full py-hair text-left text-tiny font-medium text-action-primary hover:underline disabled:opacity-50"
+                className="mt-2 block w-full text-left text-small font-medium text-action-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>

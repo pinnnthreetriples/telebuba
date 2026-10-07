@@ -31,13 +31,13 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-md type-prose">{t('accounts.channel.hint')}</div>
+      <div className="mb-3 type-body text-content-subtle">{t('accounts.channel.hint')}</div>
 
       {channels.isPending && (
         <div
           role="status"
           aria-label={t('accounts.channel.loading')}
-          className="flex justify-center py-2xl"
+          className="flex justify-center py-6"
         >
           <Spinner size="md" />
         </div>
@@ -56,17 +56,17 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {items.length > 0 && (
-        <div className="flex flex-col gap-sm">
+        <div className="flex flex-col gap-2">
           {items.map((channel) => (
             <div
               key={channel.channel_id}
-              className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
+              className="flex items-center gap-4 rounded-md border border-line px-4 py-3"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate type-card-title">{channel.title}</div>
-                <div className="mt-hair flex items-center gap-sm type-caption">
+                <div className="truncate type-h3">{channel.title}</div>
+                <div className="mt-1 flex items-center gap-2 type-small">
                   <span
-                    className={`rounded-sm px-tight py-px font-medium ${
+                    className={`rounded-sm px-1 font-medium ${
                       channel.username != null
                         ? 'bg-info-tint text-info-strong'
                         : 'bg-canvas text-content-muted'
@@ -87,7 +87,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                 </div>
               </div>
               <Button
-                size="xs"
+                size="sm"
                 className="rounded-full hover:border-info-line hover:text-action-primary"
                 onClick={() => {
                   setEditingId(channel.channel_id);
@@ -111,7 +111,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isSuccess && (
-        <div className={items.length > 0 ? 'mt-md' : undefined}>
+        <div className={items.length > 0 ? 'mt-3' : undefined}>
           <DashedEmptyAction
             idleLabel={items.length === 0 ? t('accounts.channel.empty') : undefined}
             actionLabel={t('accounts.channel.create')}

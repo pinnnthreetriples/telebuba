@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import type { AccountRead, ChatBroadcastBoard, ChatBroadcastBoardRow } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import {
   Badge,
   Button,
@@ -17,6 +16,7 @@ import {
   DataTable,
   HelpHint,
   Icon,
+  ProgressBar,
   SegmentedControl,
   Select,
 } from '@/shared/ui';
@@ -73,7 +73,7 @@ function AccountDot({
       <AccountAvatar
         account={account}
         className="size-chip rounded-full"
-        fallbackClassName="bg-info-tint text-tiny font-semibold text-info-strong"
+        fallbackClassName="bg-info-tint text-small font-medium text-info-strong"
       />
     </span>
   );
@@ -101,13 +101,13 @@ function ChatHistory({
     (account) => account.state === 'active' && account.account_id !== row.account_id,
   );
   return (
-    <div className="border-t border-line-row bg-surface px-lg py-md">
+    <div className="border-t border-canvas bg-surface px-4 py-3">
       {row.active ? (
-        <div className="mb-md flex flex-wrap items-center gap-md">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
           {waiting ? (
-            <span className="flex items-center gap-xs">
+            <span className="flex items-center gap-1">
               <Button
-                size="xs"
+                size="sm"
                 variant="primary"
                 disabled={busy}
                 onClick={() => {
@@ -124,7 +124,7 @@ function ChatHistory({
             </span>
           ) : null}
           {crew.length === 0 ? null : (
-            <span className="flex items-center gap-xs">
+            <span className="flex items-center gap-1">
               <span className="w-col">
                 <Select
                   value=""
@@ -146,9 +146,9 @@ function ChatHistory({
               />
             </span>
           )}
-          <span className="flex items-center gap-xs">
+          <span className="flex items-center gap-1">
             <Button
-              size="xs"
+              size="sm"
               variant="danger"
               disabled={busy}
               onClick={() => {
@@ -164,9 +164,9 @@ function ChatHistory({
           </span>
         </div>
       ) : null}
-      <div className="mb-sm flex items-center gap-sm">
+      <div className="mb-2 flex items-center gap-2">
         <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-        <span className="type-item-title">{t('chatBroadcast.board.history')}</span>
+        <span className="type-body-medium">{t('chatBroadcast.board.history')}</span>
         <Badge tone="neutral" size="xs">
           {row.history.length}
         </Badge>
@@ -181,7 +181,7 @@ function ChatHistory({
           return (
             <div
               key={`${entry.at}-${String(index)}`}
-              className="flex flex-wrap items-center gap-x-md gap-y-hair border-b border-line-row py-sm text-body last:border-b-0"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-canvas py-2 text-body last:border-b-0"
             >
               <span className="shrink-0 text-content-subtle tabular-nums">
                 {shared.time(entry.at)}
@@ -213,7 +213,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
       id: 'chat',
       header: t('chatBroadcast.board.columns.chat'),
       cell: ({ row }) => (
-        <span className="inline-flex items-center gap-sm whitespace-nowrap">
+        <span className="inline-flex items-center gap-2 whitespace-nowrap">
           {row.original.title ?? row.original.raw}
           {row.original.message_deleted ? (
             <span title={t('chatBroadcast.board.deletedHint')}>
@@ -223,7 +223,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
         </span>
       ),
       meta: {
-        cellClassName: 'whitespace-nowrap type-prose text-action-primary',
+        cellClassName: 'whitespace-nowrap type-body text-action-primary',
         cardSlot: 'title',
       },
     },
@@ -231,7 +231,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
       id: 'when',
       header: t('chatBroadcast.board.columns.when'),
       cell: ({ row }) => row.original.view.when,
-      meta: { cellClassName: 'whitespace-nowrap type-prose tabular-nums' },
+      meta: { cellClassName: 'whitespace-nowrap type-body text-content-subtle tabular-nums' },
     },
     {
       id: 'account',
@@ -248,16 +248,9 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
         return (
           <div className="w-col">
             {total === null || total === 0 ? null : (
-              <div className={`${BAR_TRACK} w-full`}>
-                <div
-                  className={`${BAR_FILL} bg-action-primary`}
-                  style={{
-                    width: `${String(Math.min(100, Math.round((item.sent_total / total) * 100)))}%`,
-                  }}
-                />
-              </div>
+              <ProgressBar value={item.sent_total} max={total} className="w-full" />
             )}
-            <div className="mt-xs whitespace-nowrap type-caption tabular-nums">
+            <div className="mt-1 whitespace-nowrap type-small tabular-nums">
               {total === null || rounds === null
                 ? t('chatBroadcast.board.leftEndless', { sent: item.sent_total, round: item.round })
                 : t('chatBroadcast.board.left', {
@@ -286,12 +279,12 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
           aria-label={t('chatBroadcast.board.columns.details')}
           aria-expanded={row.getIsExpanded()}
           onClick={row.getToggleExpandedHandler()}
-          className={`-m-md flex p-md text-content-subtle transition duration-reveal ease-spring hover:text-content-primary ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+          className={`-m-3 flex p-3 text-content-subtle transition duration-reveal ease-spring hover:text-content-primary ${row.getIsExpanded() ? 'rotate-180' : ''}`}
         >
           <Icon name="chevron-down" size={16} />
         </button>
       ),
-      meta: { className: 'w-px', cellClassName: 'w-px', cardSlot: 'control' },
+      meta: { className: 'w-0', cellClassName: 'w-0', cardSlot: 'control' },
     },
   ];
 }
@@ -340,20 +333,22 @@ export function BoardCard({
   let body;
   if (draft) {
     body = (
-      <div className="px-lg py-page text-center type-prose">{t('chatBroadcast.board.empty')}</div>
+      <div className="px-4 py-8 text-center type-body text-content-subtle">
+        {t('chatBroadcast.board.empty')}
+      </div>
     );
   } else if (resting && !showResting) {
     body = (
-      <div className="flex flex-col items-center gap-sm px-lg py-page text-center">
+      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
         <Icon name="clock" size={20} className="text-content-subtle" />
-        <div className="type-item-title">
+        <div className="type-body-medium">
           {t('chatBroadcast.board.resting', {
             time: board.campaign.rest_until ? time(board.campaign.rest_until) : '—',
           })}
         </div>
-        <div className="type-prose">{t('chatBroadcast.board.restingNote')}</div>
+        <div className="type-body text-content-subtle">{t('chatBroadcast.board.restingNote')}</div>
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           onClick={() => {
             setShowResting(true);
@@ -365,7 +360,7 @@ export function BoardCard({
     );
   } else if (inTab.length === 0) {
     body = (
-      <div className="px-lg py-page text-center type-prose">
+      <div className="px-4 py-8 text-center type-body text-content-subtle">
         {tab === 'active' ? t('chatBroadcast.board.noneActive') : t('chatBroadcast.board.noneDone')}
       </div>
     );
@@ -373,13 +368,13 @@ export function BoardCard({
     body = (
       <>
         {groups.length > 1 ? (
-          <div className="flex flex-wrap items-center gap-sm border-b border-line-row px-lg py-sm">
+          <div className="flex flex-wrap items-center gap-2 border-b border-canvas px-4 py-2">
             {[{ id: 'all' as const, count: inTab.length }, ...groups].map((item) => {
               const on = item.id === group || (item.id === 'all' && picked === undefined);
               return (
                 <Button
                   key={item.id}
-                  size="xs"
+                  size="sm"
                   variant={on ? 'primary' : 'secondary'}
                   onClick={() => {
                     setGroup(item.id);
@@ -417,9 +412,9 @@ export function BoardCard({
     <CollapsibleCard
       defaultOpen
       label={t('chatBroadcast.board.title')}
-      headerClassName="border-b border-line-row px-lg py-lg"
+      headerClassName="border-b border-canvas px-4 py-4"
       bodyClassName="tb-scroll overflow-x-auto"
-      header={<span className="type-card-title">{t('chatBroadcast.board.title')}</span>}
+      title={t('chatBroadcast.board.title')}
       trailing={
         <SegmentedControl
           variant="pill"

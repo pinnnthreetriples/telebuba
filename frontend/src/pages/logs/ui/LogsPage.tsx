@@ -10,9 +10,10 @@ import {
   Button,
   Card,
   DataTable,
+  type DataTableColumnMeta,
+  EmptyState,
   SegmentedControl,
   Select,
-  type DataTableColumnMeta,
 } from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
@@ -104,7 +105,7 @@ export function LogsPage() {
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-stamp',
-          cellClassName: 'font-mono type-prose',
+          cellClassName: 'font-mono type-body text-content-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -121,7 +122,7 @@ export function LogsPage() {
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'type-value',
+          cellClassName: 'type-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -130,7 +131,7 @@ export function LogsPage() {
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'truncate type-value',
+          cellClassName: 'truncate type-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -144,7 +145,7 @@ export function LogsPage() {
             {eventLabel(t, row.original.event)}
           </span>
         ),
-        meta: { cellClassName: 'type-value' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'type-body' } satisfies DataTableColumnMeta,
       },
       {
         id: 'reason',
@@ -157,7 +158,7 @@ export function LogsPage() {
         // remaining width and the table already scrolls horizontally.
         cell: ({ row }) => eventReason(t, row.original) || '—',
         meta: {
-          cellClassName: 'type-value',
+          cellClassName: 'type-body',
         } satisfies DataTableColumnMeta,
       },
     ],
@@ -173,9 +174,9 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-page-title">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('logs.title')}</h1>
 
-      <div className="mb-lg flex flex-wrap items-center gap-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {/* The measured capsule that used to slide behind these pills is gone with
             them: it was one wearer of a two-wearer look, and the shared control paints
             the active pill directly. The rest is identical — same blue, same
@@ -212,7 +213,9 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-empty text-center type-prose">{t('logs.empty')}</Card>
+        <Card className="px-4">
+          <EmptyState size="xl">{t('logs.empty')}</EmptyState>
+        </Card>
       ) : (
         <>
           <Card className="overflow-hidden">
@@ -220,7 +223,7 @@ export function LogsPage() {
               <DataTable data={items} columns={columns} />
             </div>
           </Card>
-          <div className="mt-lg flex items-center justify-end gap-sm">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <Button
               size="sm"
               disabled={!hasPrev}

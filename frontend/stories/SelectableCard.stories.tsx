@@ -19,7 +19,7 @@ function Example({
         name="Крипта"
         meta="4 канала · 3 аккаунта"
         status={
-          <span className="inline-flex items-center gap-tight type-caption font-medium text-success-deep">
+          <span className="inline-flex items-center gap-1 type-small-medium text-success-deep">
             <span className="size-dot rounded-full bg-current" />
             Активна
           </span>
@@ -72,7 +72,7 @@ const meta = {
     name: 'Крипта',
     meta: '4 канала · 3 аккаунта',
     status: (
-      <span className="inline-flex items-center gap-tight type-caption font-medium text-success-deep">
+      <span className="inline-flex items-center gap-1 type-small-medium text-success-deep">
         <span className="size-dot rounded-full bg-current" />
         Активна
       </span>

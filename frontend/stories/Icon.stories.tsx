@@ -48,11 +48,11 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const All: Story = {
   render: () => (
-    <div className="grid grid-cols-3 gap-lg">
+    <div className="grid grid-cols-3 gap-4">
       {names.map((name) => (
-        <div key={name} className="flex items-center gap-sm text-content-primary">
+        <div key={name} className="flex items-center gap-2 text-content-primary">
           <Icon name={name} size={16} />
-          <span className="type-caption">{name}</span>
+          <span className="type-small">{name}</span>
         </div>
       ))}
     </div>

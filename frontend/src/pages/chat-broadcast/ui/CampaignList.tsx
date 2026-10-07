@@ -11,7 +11,7 @@ import {
   Icon,
   IconButton,
   Input,
-  NumberedStep,
+  HowItWorksCard,
   SelectableCard,
 } from '@/shared/ui';
 
@@ -61,11 +61,11 @@ export function CampaignList({
     <CollapsibleCard
       defaultOpen
       label={t('chatBroadcast.campaigns.title')}
-      headerClassName="px-lg py-md"
-      bodyClassName="px-lg pb-lg"
-      header={<span className="type-card-title">{t('chatBroadcast.campaigns.title')}</span>}
+      headerClassName="px-4 py-3"
+      bodyClassName="px-4 pb-4"
+      title={t('chatBroadcast.campaigns.title')}
     >
-      <div className="flex flex-col gap-tight">
+      <div className="flex flex-col gap-2">
         {campaigns.map((campaign) => {
           const running = campaign.status === 'running' || campaign.status === 'stopping';
           const accounts = t('chatBroadcast.campaigns.accounts', { count: campaign.account_count });
@@ -146,11 +146,13 @@ export function CampaignList({
           );
         })}
         {campaigns.length === 0 ? (
-          <div className="py-lg text-center type-prose">{t('chatBroadcast.campaigns.none')}</div>
+          <div className="py-4 text-center type-body text-content-subtle">
+            {t('chatBroadcast.campaigns.none')}
+          </div>
         ) : null}
       </div>
       {creating ? (
-        <div className="mt-sm flex items-center gap-sm">
+        <div className="mt-2 flex items-center gap-2">
           <Input
             size="sm"
             autoFocus
@@ -179,7 +181,7 @@ export function CampaignList({
           </IconButton>
         </div>
       ) : (
-        <Button variant="dashed" fullWidth className="mt-sm font-medium" onClick={onStartCreate}>
+        <Button variant="dashed" fullWidth className="mt-2 font-medium" onClick={onStartCreate}>
           {t('chatBroadcast.campaigns.create')}
         </Button>
       )}
@@ -189,23 +191,13 @@ export function CampaignList({
 
 const HOW_STEPS = ['step1', 'step2', 'step3', 'step4'] as const;
 
-export function HowItWorksCard() {
+export function BroadcastHowItWorks() {
   const { t } = useTranslation();
   return (
-    <CollapsibleCard
+    <HowItWorksCard
       defaultOpen
-      label={t('chatBroadcast.howto.title')}
-      wrapperClassName="rounded-card border border-line bg-canvas"
-      headerClassName="px-lg py-lg"
-      header={<span className="type-card-title">{t('chatBroadcast.howto.title')}</span>}
-    >
-      <div className="flex flex-col gap-md">
-        {HOW_STEPS.map((step, index) => (
-          <NumberedStep key={step} number={index + 1}>
-            {t(`chatBroadcast.howto.${step}`)}
-          </NumberedStep>
-        ))}
-      </div>
-    </CollapsibleCard>
+      title={t('chatBroadcast.howto.title')}
+      steps={HOW_STEPS.map((step) => t(`chatBroadcast.howto.${step}`))}
+    />
   );
 }

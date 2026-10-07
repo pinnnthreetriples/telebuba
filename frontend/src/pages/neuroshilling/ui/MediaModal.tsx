@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Modal, Select } from '@/shared/ui';
+import { Button, Input, Modal, ModalFooter, ModalHeader, Select } from '@/shared/ui';
 
 import type { ScenarioDraft } from './scenarioDraft';
 
@@ -26,12 +26,12 @@ export function MediaModal({
 
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.scenario.media.toggle')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="type-dialog-title">{t('neuroshilling.scenario.media.toggle')}</div>
-        <div className="mt-hair type-caption">{t('neuroshilling.scenario.media.hint')}</div>
-      </div>
+      <ModalHeader
+        title={t('neuroshilling.scenario.media.toggle')}
+        subtitle={t('neuroshilling.scenario.media.hint')}
+      />
 
-      <div className="flex flex-col gap-md px-2xl py-lg">
+      <div className="flex flex-col gap-3 px-6 py-4">
         <Input
           autoFocus
           size="sm"
@@ -67,7 +67,7 @@ export function MediaModal({
         />
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter>
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.settings.cancel')}
         </Button>
@@ -88,7 +88,7 @@ export function MediaModal({
         >
           {t('neuroshilling.scenario.media.attach')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

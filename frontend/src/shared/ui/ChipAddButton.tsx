@@ -14,7 +14,7 @@ export function ChipAddButton({ className, ...props }: ChipAddButtonProps) {
     <Button
       variant="dashedMuted"
       size="md"
-      className={cn('px-md font-medium', className)}
+      className={cn('px-3 font-medium', className)}
       {...props}
     />
   );

@@ -1188,6 +1188,10 @@ export type ChannelCreateRequest = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean;
 };
 
 /**
@@ -1218,6 +1222,10 @@ export type ChannelDetailView = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean;
 };
 
 /**
@@ -1299,6 +1307,10 @@ export type ChannelUpdateRequest = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean | null;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean | null;
 };
 
 /**

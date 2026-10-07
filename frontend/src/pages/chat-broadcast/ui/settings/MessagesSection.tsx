@@ -27,7 +27,7 @@ function TextFate({ text, randomize }: { text: string; randomize: boolean }) {
   const { t } = useTranslation();
   if (randomize) {
     return (
-      <div className="flex items-center gap-sm rounded-lg bg-info-tint px-md py-sm text-tiny text-info-strong">
+      <div className="flex items-center gap-2 rounded-lg bg-info-tint px-3 py-2 text-small text-info-strong">
         <Icon name="sparkles" size={14} className="shrink-0" />
         {t('chatBroadcast.settings.messages.fateAi')}
       </div>
@@ -36,14 +36,14 @@ function TextFate({ text, randomize }: { text: string; randomize: boolean }) {
   if (text.trim() === '') return null;
   if (VARIANTS.test(text)) {
     return (
-      <div className="rounded-lg bg-canvas px-md py-sm text-tiny text-content-muted">
+      <div className="rounded-lg bg-canvas px-3 py-2 text-small text-content-muted">
         {t('chatBroadcast.settings.messages.fateVariants')}
       </div>
     );
   }
   return (
-    <div className="flex items-start gap-sm rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
-      <Icon name="alert-triangle" size={14} className="mt-hair shrink-0" />
+    <div className="flex items-start gap-2 rounded-lg bg-warning-tint px-3 py-2 text-small text-warning-deep">
+      <Icon name="alert-triangle" size={14} className="mt-1 shrink-0" />
       <span>{t('chatBroadcast.settings.messages.fateSame')}</span>
     </div>
   );
@@ -87,19 +87,19 @@ function PhotoPicker({
         }}
       />
       {upload.isPending ? (
-        <div className="flex items-center gap-sm type-caption">
+        <div className="flex items-center gap-2 type-small">
           <Spinner />
           {t('chatBroadcast.settings.messages.uploading')}
         </div>
       ) : message.photo === null ? (
         <div>
-          <Button size="xs" variant="ghost" onClick={pick}>
+          <Button size="sm" variant="ghost" onClick={pick}>
             <Icon name="paperclip" size={14} />
             {t('chatBroadcast.settings.messages.attach')}
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-md rounded-lg border border-line bg-canvas p-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-line bg-canvas p-2">
           {message.photo.url === null ? (
             <span className="flex size-face shrink-0 items-center justify-center rounded-md bg-info-tint text-info-strong">
               <Icon name="paperclip" size={18} />
@@ -113,11 +113,9 @@ function PhotoPicker({
           )}
           <span className="min-w-0 flex-1">
             <span className="block truncate text-body">{message.photo.name}</span>
-            <span className="block type-caption">
-              {t('chatBroadcast.settings.messages.caption')}
-            </span>
+            <span className="block type-small">{t('chatBroadcast.settings.messages.caption')}</span>
           </span>
-          <Button size="xs" variant="ghost" onClick={pick}>
+          <Button size="sm" variant="ghost" onClick={pick}>
             {t('chatBroadcast.settings.messages.replace')}
           </Button>
           <IconButton
@@ -164,19 +162,19 @@ function MessageCard({
     <div
       className={`rounded-lg border bg-surface-card ${open ? 'border-action-primary' : 'border-line'}`}
     >
-      <div className="flex items-center gap-sm px-md py-sm">
+      <div className="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-sm text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           <span
-            className={`flex size-glyph shrink-0 items-center justify-center rounded-full text-tiny font-semibold ${open ? 'bg-action-primary text-on-action' : 'bg-canvas text-content-muted'}`}
+            className={`flex size-glyph shrink-0 items-center justify-center rounded-full text-small font-medium ${open ? 'bg-action-primary text-on-fill' : 'bg-canvas text-content-muted'}`}
           >
             {index + 1}
           </span>
-          <span className="shrink-0 type-label">{kind}</span>
+          <span className="shrink-0 type-body-medium">{kind}</span>
           {message.photo === null || message.kind === 'post' ? null : (
             <Icon name="paperclip" size={14} className="shrink-0 text-content-subtle" />
           )}
@@ -188,11 +186,11 @@ function MessageCard({
               <Icon name="sparkles" size={14} className="text-action-primary" />
             </span>
           ) : null}
-          <span className="min-w-0 flex-1 truncate type-caption">
+          <span className="min-w-0 flex-1 truncate type-small">
             {preview === '' ? t('chatBroadcast.settings.messages.empty') : preview}
           </span>
           {index === 0 ? null : (
-            <span className="hidden shrink-0 type-caption sm:inline">
+            <span className="hidden shrink-0 type-small sm:inline">
               {t('chatBroadcast.settings.messages.after', settings.between_messages)}
             </span>
           )}
@@ -212,7 +210,7 @@ function MessageCard({
         </IconButton>
       </div>
       {open ? (
-        <div className="flex flex-col gap-sm border-t border-line-row px-md py-md">
+        <div className="flex flex-col gap-2 border-t border-canvas px-3 py-3">
           <SegmentedControl
             variant="pill"
             value={message.kind}
@@ -236,7 +234,7 @@ function MessageCard({
                   onChange({ ...message, post: event.target.value });
                 }}
               />
-              <span className="type-caption">{t('chatBroadcast.settings.messages.postNote')}</span>
+              <span className="type-small">{t('chatBroadcast.settings.messages.postNote')}</span>
             </>
           ) : (
             <>
@@ -317,7 +315,7 @@ export function MessagesSection({
           />
         </Row>
       ) : (
-        <div className="pb-sm">
+        <div className="pb-2">
           <Textarea
             size="sm"
             value={settings.ai_brief}
@@ -329,7 +327,7 @@ export function MessagesSection({
           />
         </div>
       )}
-      <div className="flex flex-col gap-sm pt-sm">
+      <div className="flex flex-col gap-2 pt-2">
         {messages.map((message, index) => (
           <MessageCard
             key={message.id}
@@ -349,7 +347,7 @@ export function MessagesSection({
           />
         ))}
         {messages.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-line-strong px-md py-lg text-center type-caption">
+          <div className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-center type-small">
             {t('chatBroadcast.settings.messages.none')}
           </div>
         ) : null}

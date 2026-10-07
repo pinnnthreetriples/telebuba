@@ -65,8 +65,8 @@ export function WarmDaysModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={t('warming.days.title')}>
-      <div className="p-2xl">
-        <div className="mb-xs flex items-start gap-md">
+      <div className="p-6">
+        <div className="mb-1 flex items-start gap-3">
           <div className={HEADING_ICON_TILE}>
             <svg
               width="17"
@@ -80,7 +80,7 @@ export function WarmDaysModal({
               <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
             </svg>
           </div>
-          <div className="flex-1 type-dialog-title">{t('warming.days.title')}</div>
+          <div className="flex-1 type-h2">{t('warming.days.title')}</div>
           <span className="tb-tip inline-flex shrink-0">
             {/* Already a tab stop, so `:focus-within` reveals the bubble for free; the
                 `aria-describedby` is what names it. See app/styles/index.css. */}
@@ -89,7 +89,7 @@ export function WarmDaysModal({
               aria-describedby={spamTipId}
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
-              className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium disabled:opacity-60 ${
+              className={`inline-flex items-center gap-2 rounded-full border bg-surface-card px-3 py-1 text-body font-medium disabled:opacity-60 ${
                 spam === 'clean'
                   ? 'border-success text-success-deep'
                   : spam === 'limited'
@@ -111,11 +111,15 @@ export function WarmDaysModal({
             </span>
           </span>
         </div>
-        <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
+        <div className="mb-6 type-body text-content-muted">
+          {t('warming.days.subtitle', { phone })}
+        </div>
 
-        <div className="mb-xl text-center">
-          <div className="text-hero font-bold leading-none text-action-primary">{days}</div>
-          <div className="mt-xs type-dialog-body">{t('warming.days.label', { count: days })}</div>
+        <div className="mb-6 text-center">
+          <div className="text-h1 font-medium leading-none text-action-primary">{days}</div>
+          <div className="mt-1 type-body text-content-muted">
+            {t('warming.days.label', { count: days })}
+          </div>
         </div>
 
         <div
@@ -136,7 +140,7 @@ export function WarmDaysModal({
             if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
             if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
           }}
-          className="relative mx-md mb-tight h-compact cursor-grab touch-none select-none outline-none"
+          className="relative mx-3 mb-2 h-compact cursor-grab touch-none select-none outline-hidden"
         >
           <div className="absolute inset-x-0 top-1/2 h-meter -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
             <div
@@ -158,14 +162,14 @@ export function WarmDaysModal({
             style={{ left: `${String(pct)}%` }}
           />
         </div>
-        <div className="mx-md mb-xl flex justify-between type-caption">
+        <div className="mx-3 mb-6 flex justify-between type-small">
           <span>{t('warming.days.min')}</span>
           <span>{t('warming.days.max')}</span>
         </div>
 
         <SegmentedControl
           variant="outline"
-          className="mb-2xl"
+          className="mb-6"
           // The presets are numbers and the control keys on strings, so the value it
           // carries is the number's own text; the handler puts the number back.
           value={String(days)}
@@ -178,14 +182,14 @@ export function WarmDaysModal({
           }}
         />
 
-        <div className="mb-sm flex items-center gap-sm type-item-title">
+        <div className="mb-2 flex items-center gap-2 type-body-medium">
           {t('warming.persona.label')}
           <span className="tb-tip inline-flex">
             <button
               type="button"
               aria-label={t('warming.persona.label')}
               aria-describedby={personaTipId}
-              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-tiny font-bold text-content-subtle"
+              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-small font-medium text-content-subtle"
             >
               ?
             </button>
@@ -196,15 +200,15 @@ export function WarmDaysModal({
         </div>
         <SegmentedControl
           variant="outline"
-          className="mb-2xl"
+          className="mb-6"
           value={persona}
           ariaLabel={t('warming.persona.label')}
           options={PERSONAS.map((p) => ({
             value: p,
             label: (
               <>
-                <div className="type-item-title">{t(`warming.persona.${p}.name`)}</div>
-                <div className="mt-hair type-caption">{t(`warming.persona.${p}.hint`)}</div>
+                <div className="type-body-medium">{t(`warming.persona.${p}.name`)}</div>
+                <div className="mt-1 type-small">{t(`warming.persona.${p}.hint`)}</div>
               </>
             ),
           }))}
@@ -213,7 +217,7 @@ export function WarmDaysModal({
           }}
         />
 
-        <div className="flex justify-end gap-sm">
+        <div className="flex justify-end gap-2">
           <Button
             variant="primary"
             onClick={() => {

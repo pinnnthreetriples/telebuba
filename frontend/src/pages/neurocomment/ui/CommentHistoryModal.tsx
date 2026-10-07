@@ -6,7 +6,16 @@ import { useTranslation } from 'react-i18next';
 import { neurocommentCommentsQueryOptions } from '@/entities/campaign';
 import type { CommentRecord, NeurocommentAccountCard } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Badge, Button, Card, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  type DataTableColumnMeta,
+  EmptyState,
+  Modal,
+  ModalHeader,
+} from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
@@ -47,7 +56,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-stamp',
-          cellClassName: 'font-mono type-prose',
+          cellClassName: 'font-mono type-body text-content-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -57,7 +66,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => labelOf.get(row.original.account_id) ?? row.original.account_id,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-label text-content-primary',
+          cellClassName: 'type-body-medium text-content-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -66,7 +75,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => row.original.channel,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-prose text-action-primary',
+          cellClassName: 'type-body text-action-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -76,13 +85,13 @@ export function CommentHistoryModal({
           const text = row.original.comment_text ?? '—';
           if (!row.original.deleted_at) return text;
           return (
-            <span className="inline-flex items-center gap-sm">
+            <span className="inline-flex items-center gap-2">
               <span className="text-content-subtle line-through">{text}</span>
               <Badge tone="danger">{t('neurocomment.feed.deleted')}</Badge>
             </span>
           );
         },
-        meta: { cellClassName: 'type-value' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'type-body' } satisfies DataTableColumnMeta,
       },
     ],
     [t, labelOf],
@@ -90,19 +99,17 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="type-dialog-title">{t('neurocomment.history.title')}</div>
-      </div>
+      <ModalHeader title={t('neurocomment.history.title')} />
 
-      <div className="px-2xl pb-lg pt-md">
+      <div className="px-6 pb-4 pt-3">
         {isPending ? (
-          <p className="py-empty text-center type-prose">{t('neurocomment.history.loading')}</p>
+          <EmptyState size="xl">{t('neurocomment.history.loading')}</EmptyState>
         ) : isError ? (
-          <p role="alert" className="py-empty text-center type-prose text-danger">
+          <EmptyState role="alert" size="xl" tone="danger">
             {t('neurocomment.history.error')}
-          </p>
+          </EmptyState>
         ) : items.length === 0 ? (
-          <div className="py-empty text-center type-prose">{t('neurocomment.history.empty')}</div>
+          <EmptyState size="xl">{t('neurocomment.history.empty')}</EmptyState>
         ) : (
           <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">
@@ -112,8 +119,8 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-line-row px-2xl pb-xl pt-lg">
-        <div className="flex gap-sm">
+      <div className="flex items-center justify-between border-t border-canvas px-6 pb-6 pt-4">
+        <div className="flex gap-2">
           <Button
             size="sm"
             disabled={!hasPrev}

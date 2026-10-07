@@ -29,10 +29,10 @@ const BUTTON_VARIANTS = [
   'dashed',
   'dashedMuted',
 ] as const;
-const BUTTON_EXAMPLES = ['md', 'sm', 'xs', 'fullWidth'] as const;
+const BUTTON_EXAMPLES = ['md', 'sm', 'fullWidth'] as const;
 const ICON_SIZES = ['sm', 'md', 'lg', 'touch'] as const;
 const ICON_TONES = ['neutral', 'primary', 'action', 'danger'] as const;
-const FIELD_SIZES = ['md', 'sm', 'xs'] as const;
+const FIELD_SIZES = ['md', 'sm'] as const;
 const SEG_VARIANTS = ['tray', 'pill', 'outline'] as const;
 
 const SEG_OPTIONS = [

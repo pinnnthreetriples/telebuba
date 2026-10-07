@@ -54,7 +54,7 @@ const COLUMNS: ColumnDef<Item>[] = [
         ▾
       </button>
     ),
-    meta: { cardSlot: 'control', cellClassName: 'w-px' } satisfies DataTableColumnMeta,
+    meta: { cardSlot: 'control', cellClassName: 'w-0' } satisfies DataTableColumnMeta,
   },
   {
     id: 'actions',

@@ -23,7 +23,7 @@ function Pauses({
   const { t } = useTranslation();
   const sec = t('chatBroadcast.settings.pace.sec');
   return (
-    <div className="min-w-0 sm:pr-2xl">
+    <div className="min-w-0 sm:pr-6">
       <Eyebrow title={t('chatBroadcast.settings.pace.pauses')} />
       <Row
         first
@@ -120,7 +120,7 @@ function Volume({
   const { t } = useTranslation();
   const byCount = settings.stop_mode === 'count';
   return (
-    <div className="min-w-0 sm:pl-2xl">
+    <div className="min-w-0 sm:pl-6">
       <Eyebrow title={t('chatBroadcast.settings.pace.volume')} />
       <Row
         first
@@ -226,7 +226,7 @@ function Safety({
     />
   );
   return (
-    <div className="mt-lg border-t border-line pt-lg">
+    <div className="mt-4 border-t border-line pt-4">
       <Eyebrow title={t('chatBroadcast.settings.pace.safety')} />
       <Row
         first
@@ -242,7 +242,7 @@ function Safety({
         example={t('chatBroadcast.settings.pace.limitExample')}
       >
         {settings.account_limit ? (
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <NumberField
               value={settings.per_hour}
               min={1}
@@ -252,7 +252,7 @@ function Safety({
                 onPatch({ per_hour: value });
               }}
             />
-            <span className="type-caption">{t('chatBroadcast.settings.pace.perHour')}</span>
+            <span className="type-small">{t('chatBroadcast.settings.pace.perHour')}</span>
             <NumberField
               value={settings.per_day}
               min={1}
@@ -262,7 +262,7 @@ function Safety({
                 onPatch({ per_day: value });
               }}
             />
-            <span className="type-caption">{t('chatBroadcast.settings.pace.perDay')}</span>
+            <span className="type-small">{t('chatBroadcast.settings.pace.perDay')}</span>
           </div>
         ) : null}
         <Switch
@@ -315,7 +315,7 @@ export function PaceSection({
 }) {
   return (
     <section>
-      <div className="grid gap-xl sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
+      <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
         <Pauses settings={settings} onPatch={onPatch} />
         <Volume settings={settings} onPatch={onPatch} />
       </div>

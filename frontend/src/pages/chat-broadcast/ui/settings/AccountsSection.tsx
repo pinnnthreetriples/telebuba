@@ -27,7 +27,7 @@ export function AccountsSection({
         title={t('chatBroadcast.settings.accounts.title')}
         caption={t('chatBroadcast.settings.accounts.selected', { count: ids.length })}
       />
-      <div className="flex items-center gap-md">
+      <div className="flex items-center gap-3">
         <IconButton
           size="sm"
           aria-label={t('chatBroadcast.settings.accounts.add')}
@@ -37,21 +37,21 @@ export function AccountsSection({
         >
           <Icon name="plus" size={16} />
         </IconButton>
-        <div className="tb-scroll flex flex-1 items-center gap-sm overflow-x-auto py-hair">
+        <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
           {ids.map((id) => {
             const account = byId.get(id);
             const name = account === undefined ? id : accountDisplayName(account);
             return (
               <span key={id} className="group relative shrink-0" title={name}>
                 {account === undefined ? (
-                  <span className="flex size-tile items-center justify-center rounded-full bg-canvas text-content-muted type-label">
+                  <span className="flex size-tile items-center justify-center rounded-full bg-canvas text-content-muted type-body-medium">
                     ?
                   </span>
                 ) : (
                   <AccountAvatar
                     account={account}
                     className="size-tile rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-label"
+                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
                   />
                 )}
                 <IconButton
@@ -61,7 +61,7 @@ export function AccountsSection({
                   onClick={() => {
                     onChange(ids.filter((other) => other !== id));
                   }}
-                  className="absolute -right-hair -top-hair bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                  className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   <Icon name="close" size={16} />
                 </IconButton>

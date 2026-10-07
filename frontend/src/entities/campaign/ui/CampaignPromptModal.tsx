@@ -41,12 +41,12 @@ export function CampaignPromptModal({
 
   return (
     <Modal onClose={onClose} size="form" label={t('neurocomment.modal.campaignPrompt.title')}>
-      <div className="p-2xl">
-        <div className="mb-tight flex items-center justify-between">
-          <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
+      <div className="p-6">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="type-h2">{t('neurocomment.modal.campaignPrompt.title')}</span>
           <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
         </div>
-        <div className="mb-lg type-prose">
+        <div className="mb-4 type-body text-content-subtle">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
         <Textarea
@@ -59,30 +59,30 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="px-lg py-md font-[inherit]"
+          className="px-4 py-3 font-[inherit]"
         />
 
-        <div className="my-xl mb-md flex items-center justify-between">
-          <span className="type-item-title text-content-secondary">
+        <div className="my-6 mb-3 flex items-center justify-between">
+          <span className="type-body-medium text-content-secondary">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-info-tint px-sm py-hair text-tiny font-semibold text-info-strong">
+          <span className="rounded-full bg-info-tint px-2 text-small font-medium text-info-strong">
             {accounts.length}
           </span>
         </div>
         {accounts.length > 0 ? (
-          <div className="tb-scroll flex max-h-feed flex-col gap-sm overflow-y-auto rounded-lg border border-canvas bg-surface p-tight">
+          <div className="tb-scroll flex max-h-feed flex-col gap-2 overflow-y-auto rounded-md border border-canvas bg-surface p-2">
             {accounts.map((account) => (
               <div
                 key={account.account_id}
-                className="flex items-center gap-md rounded-md border border-canvas bg-surface-card px-md py-sm"
+                className="flex items-center gap-3 rounded-sm border border-canvas bg-surface-card px-3 py-2"
               >
-                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-info-tint text-tiny font-bold text-info-strong">
+                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-info-tint text-small font-medium text-info-strong">
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate type-card-title">{account.phone}</div>
-                  <div className="mt-px type-caption">{account.channel}</div>
+                  <div className="truncate type-h3">{account.phone}</div>
+                  <div className="type-small">{account.channel}</div>
                 </div>
                 <span className="size-dot shrink-0 rounded-full bg-success" />
                 <IconButton
@@ -99,19 +99,19 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center type-prose">
+          <div className="rounded-md border border-dashed border-line-strong bg-surface p-4 text-center type-body text-content-subtle">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}
 
-        <div className="mt-xl flex justify-end gap-sm">
+        <div className="mt-6 flex justify-end gap-2">
           <Button
             variant="primary"
             onClick={save}
             className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
           >
             {saved ? (
-              <span className="inline-flex items-center gap-sm">
+              <span className="inline-flex items-center gap-2">
                 <span className="inline-flex tb-swapin">
                   <Icon name="check" size={16} />
                 </span>
@@ -133,17 +133,15 @@ export function CampaignPromptModal({
           size="confirm"
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
-          <div className="p-2xl">
-            <div className="mb-sm type-dialog-title">
-              {t('neurocomment.modal.campaignPrompt.removeTitle')}
-            </div>
-            <div className="mb-xl type-dialog-body">
+          <div className="p-6">
+            <div className="mb-2 type-h2">{t('neurocomment.modal.campaignPrompt.removeTitle')}</div>
+            <div className="mb-6 type-body text-content-muted">
               {t('neurocomment.modal.campaignPrompt.removeBody', {
                 phone: confirm.phone,
                 channel: confirm.channel,
               })}
             </div>
-            <div className="flex justify-end gap-sm">
+            <div className="flex justify-end gap-2">
               <Button
                 onClick={() => {
                   setConfirm(null);

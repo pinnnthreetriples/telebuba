@@ -23,8 +23,8 @@ import { draftOf, isFilled } from '../model/draft';
 import { pipelineView } from '../model/pipeline';
 
 import { BoardCard } from './BoardCard';
-import { CampaignList, HowItWorksCard } from './CampaignList';
-import { PipelineCard } from './PipelineCard';
+import { BroadcastHowItWorks, CampaignList } from './CampaignList';
+import { BroadcastPipelineCard } from './PipelineCard';
 import { SettingsDialog } from './settings/SettingsDialog';
 
 // The query ids this page owns: the SSE stream fires on every log row of the whole app,
@@ -169,9 +169,9 @@ export function ChatBroadcastPage() {
 
   return (
     <div className="tb-fadeup mx-auto max-w-shell">
-      <h1 className="m-0 mb-xl type-page-title">{t('chatBroadcast.title')}</h1>
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
-        <div className="flex flex-col gap-md lg:w-sidebar lg:shrink-0">
+      <h1 className="m-0 mb-6 type-h1">{t('chatBroadcast.title')}</h1>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-3 lg:w-sidebar lg:shrink-0">
           <CampaignList
             campaigns={list}
             selectedId={campaignId}
@@ -206,21 +206,23 @@ export function ChatBroadcastPage() {
             onCreateName={setCreateName}
             onCreate={createCampaign}
           />
-          <HowItWorksCard />
+          <BroadcastHowItWorks />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-lg">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
           {list.length === 0 && campaigns.data !== undefined ? (
             <Card>
-              <div className="py-page text-center">
-                <div className="type-card-title">{t('chatBroadcast.empty.title')}</div>
-                <div className="mt-sm type-prose">{t('chatBroadcast.empty.text')}</div>
+              <div className="py-8 text-center">
+                <div className="type-h3">{t('chatBroadcast.empty.title')}</div>
+                <div className="mt-2 type-body text-content-subtle">
+                  {t('chatBroadcast.empty.text')}
+                </div>
               </div>
             </Card>
           ) : null}
           {pipeline !== null && current !== undefined && board.data !== undefined ? (
             <>
-              <PipelineCard
+              <BroadcastPipelineCard
                 name={current.name}
                 view={pipeline}
                 busy={busy}
