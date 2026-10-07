@@ -4,7 +4,7 @@
 import type { TFunction } from 'i18next';
 
 import type { ChatBroadcastBoard } from '@/shared/api';
-import type { BadgeTone } from '@/shared/ui';
+import type { BadgeTone, StepState } from '@/shared/ui';
 
 import type { Settings } from './draft';
 
@@ -16,7 +16,7 @@ export type PipelineAction = 'start' | 'stop' | 'resume' | 'restart';
 export type PipelineView = {
   badge: { label: string; tone: BadgeTone };
   action: { kind: PipelineAction; label: string; disabled: boolean };
-  nodes: { id: string; label: string; sub: string; done: boolean }[];
+  nodes: { id: string; label: string; sub: string; state: StepState }[];
   notice: { tone: NoticeTone; text: string };
   extras: { tone: NoticeTone; text: string }[];
   stats: { id: string; label: string; value: number }[];
@@ -24,10 +24,12 @@ export type PipelineView = {
   chips: { label: string; tone: BadgeTone }[];
 };
 
+// A live run is green, as on the neighbours' pipelines. It used to be info, and an info
+// badge is the pipeline card's own tint: on the card it lost its pill and read as loose text.
 const BADGE_TONE: Record<ChatBroadcastPhase, BadgeTone> = {
   draft: 'neutral',
-  joining: 'info',
-  running: 'info',
+  joining: 'success',
+  running: 'success',
   resting: 'neutral',
   stopping: 'neutral',
   stopped: 'neutral',
@@ -79,6 +81,14 @@ function actionOf(t: TFunction, phase: ChatBroadcastPhase, inputs: Inputs): Pipe
     label: t('chatBroadcast.pipeline.resume'),
     disabled: !anyFree || inputs.missing.length > 0,
   };
+}
+
+// Accounts, chats and the chain are conditions: met or not. Joining and the rounds are
+// where a run actually is, so while it is there that node is current — otherwise the
+// stepper's rail showed the step being worked on as not reached, between two done ones.
+function roundsState(phase: ChatBroadcastPhase): StepState {
+  if (phase === 'done') return 'done';
+  return phase === 'running' || phase === 'resting' ? 'current' : 'upcoming';
 }
 
 function nodesOf(t: TFunction, inputs: Inputs): PipelineView['nodes'] {
@@ -143,31 +153,31 @@ function nodesOf(t: TFunction, inputs: Inputs): PipelineView['nodes'] {
               working: counters.accounts_working,
               total: counters.accounts,
             }),
-      done: counters.accounts_working > 0,
+      state: counters.accounts_working > 0 ? 'done' : 'upcoming',
     },
     {
       id: 'chats',
       label: t('chatBroadcast.pipeline.nodes.chats'),
       sub: chatsSub,
-      done: counters.chats > 0 || own || settings.targets.length > 0,
+      state: counters.chats > 0 || own || settings.targets.length > 0 ? 'done' : 'upcoming',
     },
     {
       id: 'join',
       label: t('chatBroadcast.pipeline.nodes.join'),
       sub: joinSub,
-      done: started && board.phase !== 'joining',
+      state: board.phase === 'joining' ? 'current' : started ? 'done' : 'upcoming',
     },
     {
       id: 'chain',
       label: t('chatBroadcast.pipeline.nodes.chain'),
       sub: ai && board.chain_length > 0 ? t('chatBroadcast.pipeline.sub.ai', { chain }) : chain,
-      done: board.chain_length > 0,
+      state: board.chain_length > 0 ? 'done' : 'upcoming',
     },
     {
       id: 'rounds',
       label: t('chatBroadcast.pipeline.nodes.rounds'),
       sub: roundSub,
-      done: board.phase === 'done' || board.phase === 'resting',
+      state: roundsState(board.phase),
     },
   ];
 }

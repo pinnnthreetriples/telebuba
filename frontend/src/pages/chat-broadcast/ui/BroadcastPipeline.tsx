@@ -24,12 +24,11 @@ export function BroadcastPipeline({
 }) {
   const { t } = useTranslation();
   const { progress, action } = view;
-  // A node is reached or not; the broadcast has no single "you are here" to point at.
   const steps: StepperStep[] = view.nodes.map((node) => ({
     id: node.id,
     label: node.label,
     caption: node.sub,
-    state: node.done ? 'done' : 'upcoming',
+    state: node.state,
   }));
   const under =
     progress !== null || view.extras.length > 0 ? (
