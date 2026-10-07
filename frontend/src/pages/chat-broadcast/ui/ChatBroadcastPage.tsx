@@ -24,7 +24,7 @@ import { pipelineView } from '../model/pipeline';
 
 import { BoardCard } from './BoardCard';
 import { BroadcastHowItWorks, CampaignList } from './CampaignList';
-import { BroadcastPipelineCard } from './PipelineCard';
+import { BroadcastPipeline } from './BroadcastPipeline';
 import { SettingsDialog } from './settings/SettingsDialog';
 
 // The query ids this page owns: the SSE stream fires on every log row of the whole app,
@@ -222,7 +222,7 @@ export function ChatBroadcastPage() {
           ) : null}
           {pipeline !== null && current !== undefined && board.data !== undefined ? (
             <>
-              <BroadcastPipelineCard
+              <BroadcastPipeline
                 name={current.name}
                 view={pipeline}
                 busy={busy}

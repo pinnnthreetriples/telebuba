@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import type { FeedbackTone } from '@/shared/design-system';
+
 import { Button } from './Button';
 import { CardHeader } from './CardHeader';
 import { Icon } from './Icon';
@@ -42,8 +44,9 @@ export function PipelineCard({
   steps: readonly StepperStep[];
   stepsLabel?: string;
   narrow?: StepperNarrow;
-  // Строка под этапами: что происходит или что мешает начать.
-  notice: { tone: 'info' | 'success'; text: string };
+  // Строка под этапами: что происходит или что мешает начать. `danger` — прогон упал или
+  // встал (у рассылки).
+  notice: { tone: FeedbackTone; text: string };
   stats: readonly Stat[];
   children?: ReactNode;
 }) {
