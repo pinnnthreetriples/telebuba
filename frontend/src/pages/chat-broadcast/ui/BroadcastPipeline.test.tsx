@@ -13,8 +13,8 @@ function view(over: Partial<PipelineView> = {}): PipelineView {
     badge: { label: 'Встала', tone: 'danger' },
     action: { kind: 'resume', label: 'Продолжить', disabled: false },
     nodes: [
-      { id: 'accounts', label: 'Аккаунты', sub: '1 из 2 работают', done: true },
-      { id: 'chats', label: 'Чаты', sub: 'Нет чатов', done: false },
+      { id: 'accounts', label: 'Аккаунты', sub: '1 из 2 работают', state: 'done' },
+      { id: 'chats', label: 'Чаты', sub: 'Нет чатов', state: 'upcoming' },
     ],
     notice: { tone: 'danger', text: 'Рассылка встала' },
     extras: [{ tone: 'warning', text: 'Остановлены: Иван' }],

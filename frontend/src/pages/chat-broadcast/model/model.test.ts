@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import type { ChatBroadcastBoard } from '@/shared/api';
 
 import { i18n } from '@/shared/i18n';
 
@@ -202,6 +203,25 @@ test('the pipeline view for a draft, a run and a stall', () => {
     });
     expect(view.notice.text).not.toBe('');
   }
+});
+
+test('the node a run is on is current, and a live run is green', () => {
+  const settings = draftOf(SETTINGS_READ).settings;
+  const at = (phase: ChatBroadcastBoard['phase']) =>
+    pipelineView(t, { board: board({ phase }), settings, missing: [], time, nameOf: (id) => id });
+  const states = (phase: ChatBroadcastBoard['phase']) =>
+    Object.fromEntries(at(phase).nodes.map((node) => [node.id, node.state]));
+
+  // Joining is where the run is, not a step it skipped on the way to the chain.
+  expect(states('joining')).toMatchObject({ join: 'current', chain: 'done', rounds: 'upcoming' });
+  expect(states('running')).toMatchObject({ join: 'done', rounds: 'current' });
+  expect(states('resting')).toMatchObject({ rounds: 'current' });
+  expect(states('done')).toMatchObject({ join: 'done', rounds: 'done' });
+  expect(states('stopped')).toMatchObject({ join: 'done', rounds: 'upcoming' });
+  expect(states('draft')).toMatchObject({ join: 'upcoming', rounds: 'upcoming' });
+  // An info badge would be the card's own tint and lose its pill.
+  expect(at('joining').badge.tone).toBe('success');
+  expect(at('running').badge.tone).toBe('success');
 });
 
 test('the preview plays the draft with its own numbers', () => {
