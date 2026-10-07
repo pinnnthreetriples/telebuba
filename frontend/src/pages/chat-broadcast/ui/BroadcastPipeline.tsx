@@ -57,7 +57,9 @@ export function BroadcastPipeline({
           </div>
         )}
         {view.extras.map((extra) => (
-          <Notice key={extra.text} tone={extra.tone} bordered={false}>
+          // The card itself is `info-tint`: an info note without its line would be text
+          // floating on the card, so only that tone keeps the border.
+          <Notice key={extra.text} tone={extra.tone} bordered={extra.tone === 'info'}>
             {extra.text}
           </Notice>
         ))}

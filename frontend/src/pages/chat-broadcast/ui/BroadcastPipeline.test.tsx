@@ -40,7 +40,19 @@ test('every broadcast part lands on the shared card', () => {
   expect(screen.getByText('4 из 18 сообщений')).toBeInTheDocument();
   // The bar is decorative: the count beside it is what a screen reader reads.
   expect(container.querySelector('.h-meter > div')?.getAttribute('style')).toContain('width');
-  expect(screen.getByText('Остановлены: Иван')).toBeInTheDocument();
+  expect(screen.getByText('Остановлены: Иван').className).not.toContain('border');
+});
+
+test('an info note keeps its line, or it would vanish into the card', () => {
+  render(
+    <BroadcastPipeline
+      name="Крипто"
+      view={view({ extras: [{ tone: 'info', text: 'Заняты: Юлия' }] })}
+      busy={false}
+      onAction={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('Заняты: Юлия').className).toContain('border-info-line');
 });
 
 test('Resume is the start side of the toggle, Stop the other', async () => {
