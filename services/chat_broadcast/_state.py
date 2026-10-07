@@ -8,14 +8,22 @@ persisting — a restart is a full repair from the campaign rows.
 * ``_RUN_OWNER`` is the run entitled to write the terminal row, so a late finisher
   cannot settle ``done`` over its successor's ``running``.
 * Start and settings saves exclude each other through counted claims.
+* The pauses the board's gear saved while a run works, and when the current rest
+  began: the run reads both instead of its start-time copy. A restart loses them
+  harmlessly — the run reloads the pauses from the row, and a rest whose start is
+  unknown keeps its end until the next one.
 """
 
 from __future__ import annotations
 
 from collections import deque
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from core.config import settings
+
+if TYPE_CHECKING:
+    from schemas.chat_broadcast import ChatBroadcastPace
 
 _RUN_GENERATIONS: dict[str, int] = {}
 _RUN_OWNER: dict[str, str] = {}
@@ -24,6 +32,8 @@ _EDITING: dict[str, int] = {}
 _LLM_CALLS: deque[datetime] = deque()
 _LLM_WINDOW = timedelta(days=1)
 _FALLBACKS: set[tuple[str, str]] = set()
+_PACE: dict[str, ChatBroadcastPace] = {}
+_REST_STARTED: dict[str, int] = {}
 
 
 def begin_run(campaign_id: str, run_id: str) -> int:
@@ -116,6 +126,34 @@ def first_fallback(run_id: str, reason: str) -> bool:
     return True
 
 
+def set_pace(campaign_id: str, pace: ChatBroadcastPace) -> None:
+    _PACE[campaign_id] = pace
+
+
+def live_pace(campaign_id: str) -> ChatBroadcastPace | None:
+    """Pauses saved since the run read its settings; ``None`` = the run's own copy holds."""
+    return _PACE.get(campaign_id)
+
+
+def forget_pace(campaign_id: str) -> None:
+    """A run about to read its settings from the row needs no override on top."""
+    _PACE.pop(campaign_id, None)
+
+
+def forget_campaign(campaign_id: str) -> None:
+    """A run settled or a campaign deleted: its live pauses and rest start go too."""
+    _PACE.pop(campaign_id, None)
+    _REST_STARTED.pop(campaign_id, None)
+
+
+def note_rest_started(campaign_id: str, at_unix: int) -> None:
+    _REST_STARTED[campaign_id] = at_unix
+
+
+def rest_started(campaign_id: str) -> int | None:
+    return _REST_STARTED.get(campaign_id)
+
+
 def reset_for_tests() -> None:
     _FALLBACKS.clear()
     _RUN_GENERATIONS.clear()
@@ -123,3 +161,5 @@ def reset_for_tests() -> None:
     _STARTING.clear()
     _EDITING.clear()
     _LLM_CALLS.clear()
+    _PACE.clear()
+    _REST_STARTED.clear()

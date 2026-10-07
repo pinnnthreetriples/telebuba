@@ -2,7 +2,9 @@ import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import type { LogEntry } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
 import { Badge, Button, CollapsibleCard, Icon, IconButton, TerminalPane } from '@/shared/ui';
 
@@ -15,6 +17,19 @@ const LOG_TONE: Record<'success' | 'warning' | 'error', string> = {
   error: 'text-term-error',
 };
 
+/** What a journal line needs to know about its account: the avatar's fields and a name.
+ * Structural, so callers pass their fleet's `AccountRead` as is. */
+type LogAccount = Parameters<typeof AccountAvatar>[0]['account'] & {
+  username?: string | null;
+};
+
+// The one name an account goes by in the journal — the avatar's hover and its accessible
+// name: the Telegram display name, with the @handle beside it when there is one.
+function logAccountName(account: LogAccount): string {
+  const name = accountDisplayName(account);
+  return account.username ? `${name} · @${account.username}` : name;
+}
+
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
   const value = extra?.[key];
   return typeof value === 'string' ? value : undefined;
@@ -24,43 +39,63 @@ function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
 function LogLine({
   line,
   t,
-  accountName,
+  accountOf,
   onPickAccount,
 }: {
   line: LogEntry;
   t: TFunction;
-  accountName?: (accountId: string) => string;
+  accountOf?: (accountId: string) => LogAccount | undefined;
   onPickAccount: (accountId: string) => void;
 }) {
   const channel = extraStr(line.extra, 'channel');
   // Who did it — a burst of identical rows is unattributable without this. Rows
   // with no account_id (listener / sweep) leave the column empty, like `channel`.
   const accountId = line.account_id;
-  const account = accountId ? (accountName?.(accountId) ?? accountId) : undefined;
+  const account = accountId ? accountOf?.(accountId) : undefined;
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-1" title={hint || undefined}>
+    <div className="flex items-center gap-1" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
-      {/* Clicking a name narrows the feed to it — the point of the column is following
-          ONE account through a burst, which reading alone can't do at 80 rows. Listener /
-          sweep rows have no account and render a blank spacer instead of an empty
-          <button> (no accessible name), so the columns after it still line up. */}
-      {accountId ? (
+      {/* Clicking an account narrows the feed to it — the point of the column is
+          following ONE account through a burst, which reading alone can't do at 80 rows.
+          A known account is its round face (photo or initials), named on hover and to a
+          screen reader; one the fleet no longer has (deleted) is a neutral face of the same
+          size, named by its id. Listener / sweep rows have no account and render a blank
+          spacer of the face's size instead of an empty <button> (no accessible name), so
+          the columns after it line up whatever mix of the three a burst holds. */}
+      {accountId && account ? (
         <button
           type="button"
-          title={t('logTerminal.filterByAccount')}
+          aria-label={logAccountName(account)}
+          title={logAccountName(account)}
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-logAccount shrink-0 truncate text-left text-term-text hover:text-on-fill hover:underline"
+          className={`mr-1 inline-flex shrink-0 rounded-full ${FOCUS_RING}`}
         >
-          {account}
+          <AccountAvatar
+            account={account}
+            className="size-glyph rounded-full"
+            fallbackClassName="bg-info-tint text-small font-medium text-info-strong"
+          />
+        </button>
+      ) : accountId ? (
+        <button
+          type="button"
+          aria-label={accountId}
+          title={`${accountId} · ${t('logTerminal.filterByAccount')}`}
+          onClick={() => {
+            onPickAccount(accountId);
+          }}
+          className={`mr-1 inline-flex size-glyph shrink-0 items-center justify-center rounded-full bg-term-thumb text-term-text hover:text-on-fill ${FOCUS_RING}`}
+        >
+          <Icon name="user-round" size={10} />
         </button>
       ) : (
-        <span className="w-logAccount shrink-0" />
+        <span className="mr-1 size-glyph shrink-0" />
       )}
       {channel ? <span className="shrink-0 text-term-link">{channel}</span> : null}
       <span className={LOG_TONE[logSeverity(line)]}>{eventLabel(t, line.event)}</span>
@@ -89,12 +124,13 @@ export function LogTerminal({
   title,
   logLines,
   onClear,
-  accountName,
+  accountOf,
 }: {
   title: string;
   logLines: LogEntry[];
   onClear?: () => void;
-  accountName?: (accountId: string) => string;
+  /** The caller's fleet lookup; an id it does not know shows as text. */
+  accountOf?: (accountId: string) => LogAccount | undefined;
 }) {
   const { t } = useTranslation();
   // Which account the feed is narrowed to, or null for everything. Card-local on
@@ -102,6 +138,8 @@ export function LogTerminal({
   // the stream keeps delivering every account, this only hides the rest.
   const [onlyAccount, setOnlyAccount] = useState<string | null>(null);
   const shown = onlyAccount ? logLines.filter((l) => l.account_id === onlyAccount) : logLines;
+  const filteredAccount = onlyAccount ? accountOf?.(onlyAccount) : undefined;
+  const filteredName = filteredAccount ? accountDisplayName(filteredAccount) : onlyAccount;
   return (
     <CollapsibleCard
       defaultOpen
@@ -124,9 +162,7 @@ export function LogTerminal({
               }}
               className="bg-info-tint text-info-strong hover:bg-danger-tint hover:text-danger-deep"
             >
-              {t('logTerminal.filteredBy', {
-                name: accountName?.(onlyAccount) ?? onlyAccount,
-              })}
+              {t('logTerminal.filteredBy', { name: filteredName })}
             </Button>
           ) : null}
           {onClear && logLines.length > 0 ? (
@@ -155,7 +191,7 @@ export function LogTerminal({
               key={line.id}
               line={line}
               t={t}
-              accountName={accountName}
+              accountOf={accountOf}
               onPickAccount={setOnlyAccount}
             />
           ))

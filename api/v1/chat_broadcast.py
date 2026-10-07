@@ -1,8 +1,8 @@
 """Chat-broadcast endpoints — thin routes over ``services.chat_broadcast``.
 
-Campaigns, the whole-dialog settings save, and the board are here; running a campaign,
-the board's per-chat actions, link resolution and photo upload are in
-``_chat_broadcast_run`` and mounted onto this router. Refusals answer 400 or 409 with
+Campaigns, the whole-dialog settings save, the board's pauses, and the board are here;
+running a campaign, the board's per-chat actions, link resolution and photo upload are
+in ``_chat_broadcast_run`` and mounted onto this router. Refusals answer 400 or 409 with
 the domain's stable code as the envelope ``message``.
 """
 
@@ -17,6 +17,7 @@ from schemas.chat_broadcast import (
     ChatBroadcastCampaign,
     ChatBroadcastCampaigns,
     ChatBroadcastCreate,
+    ChatBroadcastPace,
     ChatBroadcastSettingsRead,
     ChatBroadcastSettingsUpdate,
 )
@@ -91,6 +92,26 @@ async def save_settings(
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=exc.code) from exc
     except cb_service.ChatBroadcastInvalidError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc
+    if saved is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return saved
+
+
+@router.put(
+    "/campaigns/{campaign_id}/pace",
+    response_model=ChatBroadcastSettingsRead,
+    operation_id="saveChatBroadcastPace",
+    responses=error_responses(404, 409),
+)
+async def save_pace(campaign_id: str, body: ChatBroadcastPace) -> ChatBroadcastSettingsRead:
+    """Save the pauses only — accepted while the campaign runs; the run reads them live.
+
+    409 ``campaign_changed`` when the campaign moved between the read and the write.
+    """
+    try:
+        saved = await cb_service.save_pace(campaign_id, body)
+    except cb_service.ChatBroadcastConflictError as exc:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=exc.code) from exc
     if saved is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
     return saved

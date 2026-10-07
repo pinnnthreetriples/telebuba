@@ -340,6 +340,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  SaveChatBroadcastPaceData,
+  SaveChatBroadcastPaceErrors,
+  SaveChatBroadcastPaceResponses,
   SaveChatBroadcastSettingsData,
   SaveChatBroadcastSettingsErrors,
   SaveChatBroadcastSettingsResponses,
@@ -2984,6 +2987,29 @@ export const saveChatBroadcastSettings = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Save Pace
+ *
+ * Save the pauses only — accepted while the campaign runs; the run reads them live.
+ *
+ * 409 ``campaign_changed`` when the campaign moved between the read and the write.
+ */
+export const saveChatBroadcastPace = <ThrowOnError extends boolean = false>(
+  options: Options<SaveChatBroadcastPaceData, ThrowOnError>,
+): RequestResult<SaveChatBroadcastPaceResponses, SaveChatBroadcastPaceErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SaveChatBroadcastPaceResponses,
+    SaveChatBroadcastPaceErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/pace',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Get Board
  *
  * The pipeline, the board by chat with its history, and the accounts.
@@ -3046,9 +3072,11 @@ export const stopChatBroadcastCampaign = <ThrowOnError extends boolean = false>(
 /**
  * Act On Target
  *
- * Write now, hand to another account, or skip one chat of the board.
+ * Write now, hand to another account, skip, or keep one chat of the board.
  *
- * 409 ``target_state_changed`` when the chat moved on before the click landed.
+ * ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+ * 409 ``target_state_changed`` when the chat moved on before the click landed, or
+ * ``keep`` was asked of a chat not skipped for deletions.
  */
 export const actOnChatBroadcastTarget = <ThrowOnError extends boolean = false>(
   options: Options<ActOnChatBroadcastTargetData, ThrowOnError>,

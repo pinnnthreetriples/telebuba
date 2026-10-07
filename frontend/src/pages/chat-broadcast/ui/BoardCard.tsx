@@ -1,7 +1,8 @@
-// The work board, by chat: "in progress" and "finished" tabs, filter buttons by status
-// group, an order by importance fixed when the board first loads, and a row that opens
-// into its actions and its history. While every chat rests, one sentence replaces the
-// table of identical "resting until" rows.
+// The work board, by chat: "in progress" and "finished" tabs beside the title, the gear
+// for the pauses at the right, filter buttons by status group, an order by importance
+// fixed when the board first loads, and a row that opens into its actions and its
+// history. While every chat rests, one sentence replaces the table of identical
+// "resting until" rows.
 import type { ColumnDef } from '@tanstack/react-table';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
@@ -16,6 +17,7 @@ import {
   DataTable,
   HelpHint,
   Icon,
+  IconButton,
   ProgressBar,
   SegmentedControl,
   Select,
@@ -27,13 +29,15 @@ import {
   allResting,
   applyOrder,
   DONE_GROUPS,
+  HISTORY_PREVIEW,
   historyLine,
   inGroup,
   orderOf,
   rowView,
 } from '../model/board';
 
-export type RowAction = { kind: 'now' } | { kind: 'skip' } | { kind: 'hand'; accountId: string };
+export type RowAction =
+  { kind: 'now' } | { kind: 'skip' } | { kind: 'keep' } | { kind: 'hand'; accountId: string };
 
 type Shared = {
   board: ChatBroadcastBoard;
@@ -100,8 +104,36 @@ function ChatHistory({
   const crew = shared.board.accounts.filter(
     (account) => account.state === 'active' && account.account_id !== row.account_id,
   );
+  // Local to the row: the board refetches on every log event, the row (keyed by its
+  // chat) stays mounted, and an opened history stays opened.
+  const [full, setFull] = useState(false);
+  const long = row.history.length > HISTORY_PREVIEW;
+  // A chat skipped only because an admin deleted our message can come back: from then on
+  // deletions no longer stop it, only a ban or a write restriction does.
+  const keep = row.state === 'skipped' && row.skip_reason === 'deleted' && !row.ignore_deleted;
+  const entries = long && !full ? row.history.slice(0, HISTORY_PREVIEW) : row.history;
   return (
     <div className="border-t border-canvas bg-surface px-4 py-3">
+      {keep ? (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={busy}
+              onClick={() => {
+                onAction({ kind: 'keep' });
+              }}
+            >
+              {t('chatBroadcast.board.keep')}
+            </Button>
+            <HelpHint
+              text={t('chatBroadcast.board.keepHint')}
+              example={t('chatBroadcast.board.keepExample')}
+            />
+          </span>
+        </div>
+      ) : null}
       {row.active ? (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           {waiting ? (
@@ -172,7 +204,7 @@ function ChatHistory({
         </Badge>
       </div>
       <div className="tb-scroll max-h-feed overflow-y-auto">
-        {row.history.map((entry, index) => {
+        {entries.map((entry, index) => {
           const line = historyLine(t, entry, {
             time: shared.time,
             nameOf: (id) => nameOf(shared.fleet, id),
@@ -200,6 +232,26 @@ function ChatHistory({
           );
         })}
       </div>
+      {long ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-expanded={full}
+          className="mt-1"
+          onClick={() => {
+            setFull((value) => !value);
+          }}
+        >
+          {full
+            ? t('chatBroadcast.board.historyLess')
+            : t('chatBroadcast.board.historyAll', { count: row.history.length })}
+          <span
+            className={`flex transition-transform duration-reveal ease-spring ${full ? 'rotate-180' : ''}`}
+          >
+            <Icon name="chevron-down" size={12} />
+          </span>
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -219,6 +271,14 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
             <span title={t('chatBroadcast.board.deletedHint')}>
               <Badge tone="danger">{t('chatBroadcast.board.deleted')}</Badge>
             </span>
+          ) : null}
+          {row.original.ignore_deleted ? (
+            <Badge tone="info">
+              {/* A finished campaign only keeps the flag: the chat is written on the next run. */}
+              {shared.board.campaign.status === 'done' && row.original.state === 'skipped'
+                ? t('chatBroadcast.board.keptNextRun')
+                : t('chatBroadcast.board.kept')}
+            </Badge>
           ) : null}
         </span>
       ),
@@ -297,6 +357,7 @@ export function BoardCard({
   approvalHours,
   busy,
   onAction,
+  onPace,
 }: {
   board: ChatBroadcastBoard;
   fleet: Map<string, AccountRead>;
@@ -305,6 +366,7 @@ export function BoardCard({
   approvalHours: number;
   busy: boolean;
   onAction: (row: ChatBroadcastBoardRow, action: RowAction) => void;
+  onPace: () => void;
 }) {
   const { t } = useTranslation();
   const shared: Shared = { board, fleet, time, now, approvalHours };
@@ -415,7 +477,7 @@ export function BoardCard({
       headerClassName="border-b border-canvas px-4 py-4"
       bodyClassName="tb-scroll overflow-x-auto"
       title={t('chatBroadcast.board.title')}
-      trailing={
+      aside={
         <SegmentedControl
           variant="pill"
           value={tab}
@@ -429,6 +491,18 @@ export function BoardCard({
             setGroup('all');
           }}
         />
+      }
+      trailing={
+        <IconButton
+          size="touch"
+          tone="primary"
+          title={t('chatBroadcast.board.pace')}
+          aria-label={t('chatBroadcast.board.pace')}
+          onClick={onPace}
+          className="rounded-md sm:size-tile lg:size-icon"
+        >
+          <Icon name="gear" size={16} />
+        </IconButton>
       }
     >
       {body}

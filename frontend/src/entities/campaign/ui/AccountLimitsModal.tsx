@@ -194,79 +194,96 @@ export function AccountLimitsModal({
     onClose();
   };
 
+  // A box differs from what the account stores: the same rule LimitRow shows by.
+  const dirty =
+    view !== undefined &&
+    KEYS.some((key) => {
+      const typed = draft[key];
+      return typed !== undefined && typed !== (view[key].overridden ? view[key].limit : '');
+    });
+
   return (
-    <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
-      <ModalHeader
-        title={t('neurocomment.modal.limits.title', { name })}
-        subtitle={t('neurocomment.modal.limits.sub')}
-        icon={
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 20a8 8 0 1 0-8-8" />
-            <path d="m12 12 4-3" />
-            <path d="M4 12H2M4.9 6.3 3.5 4.9M12 4V2" />
-          </svg>
-        }
-      />
+    <Modal
+      onClose={onClose}
+      dirty={dirty}
+      size="confirm"
+      label={t('neurocomment.modal.limits.title', { name })}
+    >
+      {(close) => (
+        <>
+          <ModalHeader
+            title={t('neurocomment.modal.limits.title', { name })}
+            subtitle={t('neurocomment.modal.limits.sub')}
+            icon={
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 20a8 8 0 1 0-8-8" />
+                <path d="m12 12 4-3" />
+                <path d="M4 12H2M4.9 6.3 3.5 4.9M12 4V2" />
+              </svg>
+            }
+          />
 
-      <div className="px-6 pb-1 pt-1">
-        {view ? (
-          KEYS.map((key) => (
-            <LimitRow
-              key={key}
-              gauge={view[key]}
-              label={t(`neurocomment.modal.limits.cap.${key}`)}
-              hint={hints[key]}
-              min={MIN[key]}
-              draft={draft[key]}
-              onDraft={(value) => {
-                setDraft((d) => ({ ...d, [key]: value }));
+          <div className="px-6 pb-1 pt-1">
+            {view ? (
+              KEYS.map((key) => (
+                <LimitRow
+                  key={key}
+                  gauge={view[key]}
+                  label={t(`neurocomment.modal.limits.cap.${key}`)}
+                  hint={hints[key]}
+                  min={MIN[key]}
+                  draft={draft[key]}
+                  onDraft={(value) => {
+                    setDraft((d) => ({ ...d, [key]: value }));
+                  }}
+                />
+              ))
+            ) : (
+              <EmptyState className="px-3">
+                {query.isError
+                  ? t('neurocomment.modal.limits.loadFailed')
+                  : t('neurocomment.modal.limits.loading')}
+              </EmptyState>
+            )}
+          </div>
+
+          <div className="mx-6 mb-1 rounded-md border border-line bg-surface px-3 py-3 text-small text-content-muted">
+            {t('neurocomment.modal.limits.sharedJoins')}
+          </div>
+
+          <div className="flex justify-between gap-3 border-t border-canvas px-6 pb-6 pt-4">
+            <Button
+              onClick={() => {
+                setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
               }}
-            />
-          ))
-        ) : (
-          <EmptyState className="px-3">
-            {query.isError
-              ? t('neurocomment.modal.limits.loadFailed')
-              : t('neurocomment.modal.limits.loading')}
-          </EmptyState>
-        )}
-      </div>
-
-      <div className="mx-6 mb-1 rounded-md border border-line bg-surface px-3 py-3 text-small text-content-muted">
-        {t('neurocomment.modal.limits.sharedJoins')}
-      </div>
-
-      <div className="flex justify-between gap-3 border-t border-canvas px-6 pb-6 pt-4">
-        <Button
-          onClick={() => {
-            setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
-          }}
-          className="border-line-strong text-content-muted"
-        >
-          {t('neurocomment.modal.limits.resetAll')}
-        </Button>
-        <div className="flex gap-2">
-          <Button onClick={onClose} className="border-line-strong text-content-muted">
-            {t('neurocomment.modal.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              void submit();
-            }}
-            disabled={!view || save.isPending}
-          >
-            {t('neurocomment.modal.limits.save')}
-          </Button>
-        </div>
-      </div>
+              className="border-line-strong text-content-muted"
+            >
+              {t('neurocomment.modal.limits.resetAll')}
+            </Button>
+            <div className="flex gap-2">
+              <Button onClick={close} className="border-line-strong text-content-muted">
+                {t('neurocomment.modal.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  void submit();
+                }}
+                disabled={!view || save.isPending}
+              >
+                {t('neurocomment.modal.limits.save')}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

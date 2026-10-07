@@ -17,6 +17,7 @@ import {
   buildSearchRequest,
   canSubmit,
   EMPTY_FORM,
+  isFormTouched,
   resolveSelection,
   type DiscoveryFormState,
 } from '../model/discovery';
@@ -218,164 +219,183 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // OVERLAY, because overflow-y on the card computes overflow-x to auto and clips the
   // HelpHint tooltips — including the only place the seed channel is documented.
   // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
+  // What closing would lose: a filled-in form before the search, ticked channels not yet
+  // added after it. The search itself is the server's and survives the close.
+  const dirty = submitted ? adopted === null && picks.length > 0 : isFormTouched(form);
+
   return (
-    <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <ModalHeader
-        title={t('neurocomment.modal.discovery.title')}
-        subtitle={t('neurocomment.modal.discovery.sub', { name: campaignName })}
-      />
+    <Modal
+      onClose={onClose}
+      dirty={dirty}
+      size="table"
+      label={t('neurocomment.modal.discovery.title')}
+    >
+      {(close) => (
+        <>
+          <ModalHeader
+            title={t('neurocomment.modal.discovery.title')}
+            subtitle={t('neurocomment.modal.discovery.sub', { name: campaignName })}
+          />
 
-      <div className="flex flex-col gap-6 px-6 py-6">
-        <div ref={contentRef} tabIndex={-1} className="outline-hidden">
-          {submitted ? (
-            <DiscoveryResults
-              board={board.data}
-              loading={board.isPending || (running && phase === 'searching')}
-              errored={board.isError}
-              selected={selected}
-              onToggle={toggle}
-              onToggleAll={toggleAll}
-            />
-          ) : (
-            <DiscoveryForm
-              form={form}
-              formId={formId}
-              accounts={accountList}
-              accountsLoading={accounts.isPending}
-              accountsErrored={accounts.isError}
-              accountIds={accountIds}
-              submitting={startSearch.isPending}
-              onChange={setForm}
-              onSubmit={runSearch}
-            />
-          )}
-        </div>
+          <div className="flex flex-col gap-6 px-6 py-6">
+            <div ref={contentRef} tabIndex={-1} className="outline-hidden">
+              {submitted ? (
+                <DiscoveryResults
+                  board={board.data}
+                  loading={board.isPending || (running && phase === 'searching')}
+                  errored={board.isError}
+                  selected={selected}
+                  onToggle={toggle}
+                  onToggleAll={toggleAll}
+                />
+              ) : (
+                <DiscoveryForm
+                  form={form}
+                  formId={formId}
+                  accounts={accountList}
+                  accountsLoading={accounts.isPending}
+                  accountsErrored={accounts.isError}
+                  accountIds={accountIds}
+                  submitting={startSearch.isPending}
+                  onChange={setForm}
+                  onSubmit={runSearch}
+                />
+              )}
+            </div>
 
-        <div className="flex flex-col gap-2 empty:hidden">
-          {refused ? (
-            <p role="status" className="type-body text-danger">
-              {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
-              {refusedName === null
-                ? null
-                : ` — ${t('neurocomment.modal.discovery.refused.account', { name: refusedName })}`}
-            </p>
-          ) : null}
+            <div className="flex flex-col gap-2 empty:hidden">
+              {refused ? (
+                <p role="status" className="type-body text-danger">
+                  {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
+                  {refusedName === null
+                    ? null
+                    : ` — ${t('neurocomment.modal.discovery.refused.account', { name: refusedName })}`}
+                </p>
+              ) : null}
 
-          {/* The request never landed, so there is no status to translate — the global
+              {/* The request never landed, so there is no status to translate — the global
               toast fires outside the modal with a raw error code, and the form alone
               would just re-enable its button. */}
-          {startSearch.isError ? (
-            <p role="status" className="type-body text-danger">
-              {t('neurocomment.modal.discovery.startFailed')}
-            </p>
-          ) : null}
+              {startSearch.isError ? (
+                <p role="status" className="type-body text-danger">
+                  {t('neurocomment.modal.discovery.startFailed')}
+                </p>
+              ) : null}
 
-          {adopted === null
-            ? null
-            : NOTES.map(([field, key, tone]) =>
-                adopted[field] > 0 ? (
-                  <p key={key} role="status" className={`type-body text-content-subtle ${tone}`}>
-                    {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
-                  </p>
-                ) : null,
-              )}
+              {adopted === null
+                ? null
+                : NOTES.map(([field, key, tone]) =>
+                    adopted[field] > 0 ? (
+                      <p
+                        key={key}
+                        role="status"
+                        className={`type-body text-content-subtle ${tone}`}
+                      >
+                        {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
+                      </p>
+                    ) : null,
+                  )}
 
-          {/* The request itself never landed, so nothing can be read from the outcomes —
+              {/* The request itself never landed, so nothing can be read from the outcomes —
               silence would read as "nothing happened". */}
-          {adopt.isError ? (
-            <p role="status" className="type-body text-danger">
-              {t('neurocomment.modal.discovery.addFailed')}
-            </p>
-          ) : null}
-        </div>
-      </div>
+              {adopt.isError ? (
+                <p role="status" className="type-body text-danger">
+                  {t('neurocomment.modal.discovery.addFailed')}
+                </p>
+              ) : null}
+            </div>
+          </div>
 
-      <ModalFooter>
-        {submitted ? (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-auto"
-              onClick={() => {
-                setSubmitted(false);
-                // The only way back to the form, so it owns dropping the picks: the
-                // next run's rows have nothing to do with the ones ticked here.
-                setSelected(new Set());
-                // And the outcome: `already_running` describes the board just left, and
-                // would otherwise stay pinned under the form as if it refused this one.
-                startSearch.reset();
-                // Same for the adopt: its notes and its failure describe picks from the
-                // board just left, not the form.
-                setAdopted(null);
-                adopt.reset();
-                // The list was not polled during the run; the form must not reopen on it.
-                void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
-              }}
-            >
-              {t('neurocomment.modal.discovery.results.back')}
-            </Button>
-            <Button size="sm" onClick={onClose}>
-              {t('neurocomment.modal.close')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              // The outcome stays set through the close delay, so a fast second click
-              // cannot re-post channels that are already settled. Failed links are the
-              // one outcome worth retrying, so they keep the button live.
-              disabled={
-                picks.length === 0 || adopt.isPending || (adopted !== null && adopted.failed === 0)
-              }
-              onClick={submitAdopt}
-            >
-              {adopted === null ? (
-                picks.length === 0 ? (
-                  t('neurocomment.modal.discovery.addEmpty')
-                ) : (
-                  t('neurocomment.modal.discovery.add', { count: picks.length })
-                )
-              ) : adopted.linked === 0 ? (
-                <>
-                  <StatusIcon kind="err" />
-                  {t('neurocomment.modal.discovery.addedNone')}
-                </>
-              ) : (
-                <>
-                  <StatusIcon kind="ok" />
-                  {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
-                </>
-              )}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setForm(EMPTY_FORM);
-              }}
-            >
-              {t('neurocomment.modal.discovery.form.reset')}
-            </Button>
-            {/* Outside the <form>, reached by `form={formId}`; Enter inside the form
+          <ModalFooter>
+            {submitted ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mr-auto"
+                  onClick={() => {
+                    setSubmitted(false);
+                    // The only way back to the form, so it owns dropping the picks: the
+                    // next run's rows have nothing to do with the ones ticked here.
+                    setSelected(new Set());
+                    // And the outcome: `already_running` describes the board just left, and
+                    // would otherwise stay pinned under the form as if it refused this one.
+                    startSearch.reset();
+                    // Same for the adopt: its notes and its failure describe picks from the
+                    // board just left, not the form.
+                    setAdopted(null);
+                    adopt.reset();
+                    // The list was not polled during the run; the form must not reopen on it.
+                    void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
+                  }}
+                >
+                  {t('neurocomment.modal.discovery.results.back')}
+                </Button>
+                <Button size="sm" onClick={close}>
+                  {t('neurocomment.modal.close')}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  // The outcome stays set through the close delay, so a fast second click
+                  // cannot re-post channels that are already settled. Failed links are the
+                  // one outcome worth retrying, so they keep the button live.
+                  disabled={
+                    picks.length === 0 ||
+                    adopt.isPending ||
+                    (adopted !== null && adopted.failed === 0)
+                  }
+                  onClick={submitAdopt}
+                >
+                  {adopted === null ? (
+                    picks.length === 0 ? (
+                      t('neurocomment.modal.discovery.addEmpty')
+                    ) : (
+                      t('neurocomment.modal.discovery.add', { count: picks.length })
+                    )
+                  ) : adopted.linked === 0 ? (
+                    <>
+                      <StatusIcon kind="err" />
+                      {t('neurocomment.modal.discovery.addedNone')}
+                    </>
+                  ) : (
+                    <>
+                      <StatusIcon kind="ok" />
+                      {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setForm(EMPTY_FORM);
+                  }}
+                >
+                  {t('neurocomment.modal.discovery.form.reset')}
+                </Button>
+                {/* Outside the <form>, reached by `form={formId}`; Enter inside the form
                 still submits through the form's own handler. */}
-            <Button
-              type="submit"
-              form={formId}
-              variant="primary"
-              size="sm"
-              disabled={!canSubmit(form, accountIds) || startSearch.isPending}
-              loading={startSearch.isPending}
-            >
-              {startSearch.isPending
-                ? t('neurocomment.modal.discovery.form.searching')
-                : t('neurocomment.modal.discovery.form.submit')}
-            </Button>
-          </>
-        )}
-      </ModalFooter>
+                <Button
+                  type="submit"
+                  form={formId}
+                  variant="primary"
+                  size="sm"
+                  disabled={!canSubmit(form, accountIds) || startSearch.isPending}
+                  loading={startSearch.isPending}
+                >
+                  {startSearch.isPending
+                    ? t('neurocomment.modal.discovery.form.searching')
+                    : t('neurocomment.modal.discovery.form.submit')}
+                </Button>
+              </>
+            )}
+          </ModalFooter>
+        </>
+      )}
     </Modal>
   );
 }

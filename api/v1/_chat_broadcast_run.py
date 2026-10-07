@@ -84,9 +84,11 @@ async def stop_campaign(campaign_id: str) -> ChatBroadcastBoard:
     responses=error_responses(400, 404, 409),
 )
 async def act_on_target(campaign_id: str, body: ChatBroadcastTargetAction) -> ChatBroadcastBoard:
-    """Write now, hand to another account, or skip one chat of the board.
+    """Write now, hand to another account, skip, or keep one chat of the board.
 
-    409 ``target_state_changed`` when the chat moved on before the click landed.
+    ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+    409 ``target_state_changed`` when the chat moved on before the click landed, or
+    ``keep`` was asked of a chat not skipped for deletions.
     """
     try:
         found = await cb_service.act_on_target(campaign_id, body)

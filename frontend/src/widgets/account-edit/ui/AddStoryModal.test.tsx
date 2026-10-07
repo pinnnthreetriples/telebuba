@@ -57,7 +57,10 @@ test('audience, caption and no-forward interact and the modal closes', async () 
   await userEvent.type(caption, 'привет');
   expect(caption).toHaveValue('привет');
 
+  // A composed, unpublished story asks before × throws it away.
   await userEvent.click(screen.getByLabelText('Закрыть'));
+  expect(onClose).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   expect(onClose).toHaveBeenCalled();
 });
 

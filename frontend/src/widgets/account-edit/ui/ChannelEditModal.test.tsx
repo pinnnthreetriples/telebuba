@@ -272,9 +272,9 @@ test('closing with unsaved edits asks for confirmation first', async () => {
   await userEvent.type(title, ' 2');
   await userEvent.click(screen.getByLabelText('Закрыть'));
   expect(onClose).not.toHaveBeenCalled();
-  expect(await screen.findByText('Отменить изменения?')).toBeInTheDocument();
+  expect(await screen.findByText('Закрыть без сохранения?')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByText('Не сохранять'));
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   expect(onClose).toHaveBeenCalled();
 });
 

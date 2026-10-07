@@ -16,7 +16,15 @@ import {
 import { conflictCode } from './errors';
 import { board, row, SETTINGS_READ } from './fixtures.test-helpers';
 import { pipelineView } from './pipeline';
-import { buildBlocks, clock, resolveText, roundsOf, upToOf, warningsOf } from './preview';
+import {
+  buildBlocks,
+  clock,
+  resolveText,
+  roundSteps,
+  roundsOf,
+  upToOf,
+  warningsOf,
+} from './preview';
 
 const t = i18n.t.bind(i18n);
 const time = (iso: string) => iso.slice(11, 16);
@@ -34,15 +42,40 @@ test('a draft round-trips the server shape and keeps defaults', () => {
     text: '',
     photo: null,
     post: 't.me/mychannel/42',
+    repeat: 1,
   });
   expect(sameDraft(draft, draftOf(SETTINGS_READ))).toBe(true);
   expect(emptyMessage(draft.messages).id).toBe(3);
   expect(splitTargets('@a, @b\n t.me/c;')).toEqual(['@a', '@b', 't.me/c']);
 });
 
+test('a repeated message is copies in a row, and they count toward the ceiling', () => {
+  const base = draftOf(SETTINGS_READ);
+  const [first, second] = base.messages;
+  const draft = {
+    ...base,
+    settings: { ...base.settings, stop_mode: 'time' as const, loop: false },
+    messages: [{ ...first!, repeat: 3 }, second!],
+  };
+
+  expect(roundSteps(draft).map((step) => [step.number, step.copy])).toEqual([
+    [1, 0],
+    [1, 1],
+    [1, 2],
+    [2, 0],
+  ]);
+  expect(upToOf(draft)).toBe(draft.settings.targets.length * 4);
+  expect(bodyOf(draft, '').settings.messages?.map((message) => message.repeat)).toEqual([3, 1]);
+  expect(sameDraft(draft, base)).toBe(false);
+  const labels = buildBlocks(t, draft, [])
+    .flatMap((block) => (block.kind === 'chat' ? block.steps : []))
+    .map((step) => step.label);
+  expect(labels).toContain('Сообщение 1 · 3-й раз');
+});
+
 test('which messages are filled', () => {
   const draft = draftOf(SETTINGS_READ);
-  const empty = { id: 9, kind: 'text' as const, text: ' ', photo: null, post: '' };
+  const empty = { id: 9, kind: 'text' as const, text: ' ', photo: null, post: '', repeat: 1 };
   const badPost = { ...empty, kind: 'post' as const, post: 't.me/channel' };
 
   expect(isFilled(draft.messages[0]!, draft, 0)).toBe(true);
@@ -75,6 +108,19 @@ test('row views name the state, the time and the tone', () => {
     board: board({ campaign: { ...ctx.board.campaign, status: 'stopped' } }),
   };
   expect(rowView(t, row({ state: 'waiting' }), stopped).label).toBe('Пауза');
+  const kept = row({
+    state: 'skipped',
+    skip_reason: 'deleted',
+    ignore_deleted: true,
+    active: true,
+  });
+  expect(rowView(t, kept, ctx)).toEqual({
+    label: 'Вернётся в следующем круге',
+    tone: 'info',
+    when: '—',
+  });
+  // In a finished campaign it is skipped for this run, as before.
+  expect(rowView(t, { ...kept, active: false }, ctx).tone).toBe('danger');
   const resting = {
     ...ctx,
     board: board({ campaign: { ...ctx.board.campaign, rest_until: '2026-10-06T16:30:00Z' } }),

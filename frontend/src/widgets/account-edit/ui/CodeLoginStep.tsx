@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { Button, useModalDirty } from '@/shared/ui';
 
 import { requestLoginCodeMutation, submitLoginCodeMutation } from '@/entities/account';
 
@@ -23,6 +23,8 @@ export function CodeLoginStep({
   const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  // A typed code is the one thing this step cannot get back: closing asks first.
+  useModalDirty(code.trim() !== '' || password !== '');
   const requestCode = useMutation(requestLoginCodeMutation());
   const submitCode = useMutation(submitLoginCodeMutation());
 

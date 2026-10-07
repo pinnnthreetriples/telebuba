@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { allAccountsQueryOptions } from '@/entities/account';
 import {
   approveNeuroshillingScenarioMutation,
   createNeuroshillingCampaignMutation,
@@ -191,6 +192,9 @@ export function NeuroshillingPage() {
   const logs = useQuery(
     logsQueryOptions({ query: { event_prefix: LOG_PREFIX, limit: LOG_LIMIT } }),
   );
+  // The fleet, for the journal's account faces (photo / initials). The board's pool
+  // carries only a title, and a row can name an account no longer assigned.
+  const fleet = useQuery(allAccountsQueryOptions());
   // How many rows a clear would actually delete. Asked only while the confirmation
   // is open: the panel shows one page, so its length is no guide to the size of a
   // purge spanning the whole retention window, and an operator who cleared on that
@@ -206,10 +210,10 @@ export function NeuroshillingPage() {
   const roster = pool.filter((account) => account.assigned);
   const run = board.data?.run ?? {};
   const targets = board.data?.targets ?? [];
-  // Имя аккаунта по идентификатору: терминал журнала и остановленные аккаунты называют
-  // одни и те же строки, и оба должны называть их одинаково.
-  const titleOf = (accountId: string) =>
-    pool.find((account) => account.account_id === accountId)?.title ?? accountId;
+  // Аккаунт строки журнала по идентификатору — из всего парка, а не из пула кампании:
+  // терминалу нужно лицо аккаунта (фото или инициалы), а у пула есть только подпись.
+  const accountOf = (accountId: string) =>
+    fleet.data?.items.find((account) => account.account_id === accountId);
   // Причины отказа для сводки замечаний в сайдбаре. Конвейер зовёт `launchBlockers` сам,
   // и это не расхождение: функция чистая, а аргументы у обоих одни и те же, поэтому
   // разойтись два вызова не могут — карточка просто остаётся самодостаточной и её можно
@@ -690,7 +694,7 @@ export function NeuroshillingPage() {
             onClear={() => {
               setConfirmClearLogs(true);
             }}
-            accountName={titleOf}
+            accountOf={accountOf}
           />
         </div>
       </div>

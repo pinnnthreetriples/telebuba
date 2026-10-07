@@ -408,207 +408,231 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     void bulk.run(ids, step).finally(invalidateBatch);
   };
 
+  // Anything set up but not yet applied, on any tab, and a batch grown past the account
+  // it opened on. Once applied there is nothing pending: the rows report the outcome.
+  const dirty =
+    !started &&
+    (ids.length !== 1 ||
+      ids[0] !== account.account_id ||
+      Object.values(on).some(Boolean) ||
+      Object.values(value).some((text) => text.trim() !== '') ||
+      photos.length > 0 ||
+      storyFiles.length > 0 ||
+      caption.trim() !== '' ||
+      track !== null ||
+      Object.keys(levels).length > 0 ||
+      (Object.keys(EMPTY_CHANNEL) as (keyof ChannelDraft)[]).some(
+        (key) => channel[key] !== EMPTY_CHANNEL[key],
+      ) ||
+      post.text.trim() !== '' ||
+      post.file !== null);
+
   return (
     <>
       <Modal
-        onClose={running ? () => undefined : onClose}
+        onClose={onClose}
+        dirty={dirty}
+        // A running batch owns the dialog: closing would orphan the rows still sending.
+        locked={running}
         size="panel"
         label={t('accounts.bulk.title')}
       >
-        <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
-            <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
-              <Icon name="users" size={20} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="type-h2">{t('accounts.bulk.title')}</h2>
-              <div className="truncate type-body text-content-subtle">
-                {t('accounts.bulk.selected', { count: ids.length })}
+        {(close) => (
+          <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
+            <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
+              <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
+                <Icon name="users" size={20} />
               </div>
-            </div>
-            <CloseButton
-              onClick={onClose}
-              disabled={running}
-              aria-label={t('accounts.profile.close')}
-            />
-          </div>
-
-          <div className="flex items-center gap-3 border-b border-canvas px-6 py-3">
-            <IconButton
-              size="sm"
-              disabled={locked}
-              onClick={() => {
-                setPickerOpen(true);
-              }}
-              aria-label={t('accounts.bulk.add')}
-            >
-              <Icon name="plus" size={16} />
-            </IconButton>
-            <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
-              {picked.map((row) => (
-                <span key={row.account_id} className="group relative shrink-0">
-                  <AccountAvatar
-                    account={row}
-                    className="size-tile rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
-                  />
-                  {!locked && ids.length > 1 && (
-                    <IconButton
-                      size="sm"
-                      shape="circle"
-                      aria-label={t('accounts.bulk.remove', { name: label(row.account_id) })}
-                      onClick={() => {
-                        setIds((prev) => prev.filter((id) => id !== row.account_id));
-                      }}
-                      className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <Icon name="close" size={16} />
-                    </IconButton>
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Disabled while the batch's files upload: the batch has already read
-              the tab, the files and the time, so a change here would be ignored. */}
-          <fieldset disabled={preparing} className="contents">
-            {!started && (
-              <TabList
-                options={TABS.map((value) => ({
-                  value,
-                  label: t(`accounts.profile.tab.${value}`),
-                }))}
-                value={tab}
-                onChange={setTab}
-                idPrefix="bulk-tab"
-                panelId="bulk-tabpanel"
-                ariaLabel={t('accounts.bulk.title')}
+              <div className="min-w-0 flex-1">
+                <h2 className="type-h2">{t('accounts.bulk.title')}</h2>
+                <div className="truncate type-body text-content-subtle">
+                  {t('accounts.bulk.selected', { count: ids.length })}
+                </div>
+              </div>
+              <CloseButton
+                onClick={close}
+                disabled={running}
+                aria-label={t('accounts.profile.close')}
               />
-            )}
-
-            <div
-              role={started ? undefined : 'tabpanel'}
-              id={started ? undefined : 'bulk-tabpanel'}
-              aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
-              className="tb-scroll flex flex-1 flex-col gap-4 overflow-y-auto p-6"
-            >
-              {started ? (
-                <BulkProgress
-                  rows={bulk.rows}
-                  label={label}
-                  okLabel={(accountId) => {
-                    const at = scheduledAt.current[accountId];
-                    return at === undefined
-                      ? t('accounts.bulk.rowOk')
-                      : t('accounts.schedule.bulkRowOk', {
-                          when: formatLocalDateTime(at, i18n.language),
-                        });
-                  }}
-                />
-              ) : tab === 'text' ? (
-                <BulkTextTab
-                  on={on}
-                  value={value}
-                  onToggle={(key) => {
-                    setOn((prev) => ({ ...prev, [key]: !prev[key] }));
-                  }}
-                  onValue={(key, next) => {
-                    setValue((prev) => ({ ...prev, [key]: next }));
-                  }}
-                />
-              ) : tab === 'photo' ? (
-                <BulkPhotoTab
-                  files={photos}
-                  spread={perAccount}
-                  onFiles={setPhotos}
-                  onSpread={setPerAccount}
-                />
-              ) : tab === 'stories' ? (
-                <BulkStoriesTab
-                  files={storyFiles}
-                  caption={caption}
-                  audience={audience}
-                  onFiles={setStoryFiles}
-                  onCaption={setCaption}
-                  onAudience={setAudience}
-                />
-              ) : tab === 'music' ? (
-                <BulkMusicTab file={track} onFile={setTrack} />
-              ) : tab === 'channels' ? (
-                <BulkChannelsTab
-                  mode={channelMode}
-                  channel={channel}
-                  post={post}
-                  onMode={setChannelMode}
-                  onChannel={setChannel}
-                  onPost={setPost}
-                />
-              ) : (
-                <BulkPrivacyTab
-                  levels={levels}
-                  onPick={(key, level) => {
-                    setLevels((prev) => {
-                      const next = { ...prev };
-                      if (level === null) delete next[key];
-                      else next[key] = level;
-                      return next;
-                    });
-                  }}
-                />
-              )}
-              {!started && SCHEDULABLE.has(tab) && (
-                <BulkSchedulePanel
-                  mode={scheduleMode}
-                  onMode={setScheduleMode}
-                  base={baseRunAt}
-                  onBase={setBaseRunAt}
-                  spread={spreadMinutes}
-                  onSpread={setSpreadMinutes}
-                  now={now}
-                  tailTooFar={tailTooFar}
-                />
-              )}
-              {!started && <div className="type-small sm:hidden">{NOTE[tab]}</div>}
             </div>
-          </fieldset>
 
-          <ModalFooter>
-            {!started && (
-              <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
-                {NOTE[tab]}
+            <div className="flex items-center gap-3 border-b border-canvas px-6 py-3">
+              <IconButton
+                size="sm"
+                disabled={locked}
+                onClick={() => {
+                  setPickerOpen(true);
+                }}
+                aria-label={t('accounts.bulk.add')}
+              >
+                <Icon name="plus" size={16} />
+              </IconButton>
+              <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
+                {picked.map((row) => (
+                  <span key={row.account_id} className="group relative shrink-0">
+                    <AccountAvatar
+                      account={row}
+                      className="size-tile rounded-full"
+                      fallbackClassName="bg-canvas text-content-muted type-body-medium"
+                    />
+                    {!locked && ids.length > 1 && (
+                      <IconButton
+                        size="sm"
+                        shape="circle"
+                        aria-label={t('accounts.bulk.remove', { name: label(row.account_id) })}
+                        onClick={() => {
+                          setIds((prev) => prev.filter((id) => id !== row.account_id));
+                        }}
+                        className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      >
+                        <Icon name="close" size={16} />
+                      </IconButton>
+                    )}
+                  </span>
+                ))}
               </div>
-            )}
-            {started ? (
-              running ? (
-                <Button variant="danger" onClick={bulk.stop}>
-                  {t('accounts.bulk.stop')}
-                </Button>
+            </div>
+
+            {/* Disabled while the batch's files upload: the batch has already read
+              the tab, the files and the time, so a change here would be ignored. */}
+            <fieldset disabled={preparing} className="contents">
+              {!started && (
+                <TabList
+                  options={TABS.map((value) => ({
+                    value,
+                    label: t(`accounts.profile.tab.${value}`),
+                  }))}
+                  value={tab}
+                  onChange={setTab}
+                  idPrefix="bulk-tab"
+                  panelId="bulk-tabpanel"
+                  ariaLabel={t('accounts.bulk.title')}
+                />
+              )}
+
+              <div
+                role={started ? undefined : 'tabpanel'}
+                id={started ? undefined : 'bulk-tabpanel'}
+                aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
+                className="tb-scroll flex flex-1 flex-col gap-4 overflow-y-auto p-6"
+              >
+                {started ? (
+                  <BulkProgress
+                    rows={bulk.rows}
+                    label={label}
+                    okLabel={(accountId) => {
+                      const at = scheduledAt.current[accountId];
+                      return at === undefined
+                        ? t('accounts.bulk.rowOk')
+                        : t('accounts.schedule.bulkRowOk', {
+                            when: formatLocalDateTime(at, i18n.language),
+                          });
+                    }}
+                  />
+                ) : tab === 'text' ? (
+                  <BulkTextTab
+                    on={on}
+                    value={value}
+                    onToggle={(key) => {
+                      setOn((prev) => ({ ...prev, [key]: !prev[key] }));
+                    }}
+                    onValue={(key, next) => {
+                      setValue((prev) => ({ ...prev, [key]: next }));
+                    }}
+                  />
+                ) : tab === 'photo' ? (
+                  <BulkPhotoTab
+                    files={photos}
+                    spread={perAccount}
+                    onFiles={setPhotos}
+                    onSpread={setPerAccount}
+                  />
+                ) : tab === 'stories' ? (
+                  <BulkStoriesTab
+                    files={storyFiles}
+                    caption={caption}
+                    audience={audience}
+                    onFiles={setStoryFiles}
+                    onCaption={setCaption}
+                    onAudience={setAudience}
+                  />
+                ) : tab === 'music' ? (
+                  <BulkMusicTab file={track} onFile={setTrack} />
+                ) : tab === 'channels' ? (
+                  <BulkChannelsTab
+                    mode={channelMode}
+                    channel={channel}
+                    post={post}
+                    onMode={setChannelMode}
+                    onChannel={setChannel}
+                    onPost={setPost}
+                  />
+                ) : (
+                  <BulkPrivacyTab
+                    levels={levels}
+                    onPick={(key, level) => {
+                      setLevels((prev) => {
+                        const next = { ...prev };
+                        if (level === null) delete next[key];
+                        else next[key] = level;
+                        return next;
+                      });
+                    }}
+                  />
+                )}
+                {!started && SCHEDULABLE.has(tab) && (
+                  <BulkSchedulePanel
+                    mode={scheduleMode}
+                    onMode={setScheduleMode}
+                    base={baseRunAt}
+                    onBase={setBaseRunAt}
+                    spread={spreadMinutes}
+                    onSpread={setSpreadMinutes}
+                    now={now}
+                    tailTooFar={tailTooFar}
+                  />
+                )}
+                {!started && <div className="type-small sm:hidden">{NOTE[tab]}</div>}
+              </div>
+            </fieldset>
+
+            <ModalFooter>
+              {!started && (
+                <div className="mr-auto hidden type-body-medium text-content-secondary sm:block">
+                  {NOTE[tab]}
+                </div>
+              )}
+              {started ? (
+                running ? (
+                  <Button variant="danger" onClick={bulk.stop}>
+                    {t('accounts.bulk.stop')}
+                  </Button>
+                ) : (
+                  <Button variant="primary" onClick={onClose}>
+                    {t('accounts.bulk.done')}
+                  </Button>
+                )
               ) : (
-                <Button variant="primary" onClick={onClose}>
-                  {t('accounts.bulk.done')}
-                </Button>
-              )
-            ) : (
-              <>
-                <Button onClick={onClose} disabled={preparing} className="px-3 sm:px-6">
-                  {t('accounts.profile.cancel')}
-                </Button>
-                <Button
-                  variant="primary"
-                  className="px-3 sm:px-6"
-                  disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
-                  loading={preparing}
-                  onClick={apply}
-                >
-                  {later
-                    ? t('accounts.schedule.bulkApply', { count: ids.length })
-                    : t('accounts.bulk.apply', { count: ids.length })}
-                </Button>
-              </>
-            )}
-          </ModalFooter>
-        </div>
+                <>
+                  <Button onClick={close} disabled={preparing} className="px-3 sm:px-6">
+                    {t('accounts.profile.cancel')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="px-3 sm:px-6"
+                    disabled={ids.length === 0 || !READY[tab] || !timeReady || preparing}
+                    loading={preparing}
+                    onClick={apply}
+                  >
+                    {later
+                      ? t('accounts.schedule.bulkApply', { count: ids.length })
+                      : t('accounts.bulk.apply', { count: ids.length })}
+                  </Button>
+                </>
+              )}
+            </ModalFooter>
+          </div>
+        )}
       </Modal>
       {pickerOpen && (
         <BulkAccountPicker

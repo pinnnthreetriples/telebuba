@@ -84,9 +84,16 @@ export function ListenerEditModal({
     setTimeout(onClose, 650);
   };
 
-  const close = () => {
-    if (!saving) onClose();
-  };
+  // The same "differs from what is stored" rule `save` builds its patch by, so the guard
+  // asks exactly when Save would have something to send. Before the read lands nothing
+  // can be compared, and any touched field counts.
+  const settingsDirty =
+    stored === undefined
+      ? mode !== null || wait !== null || Object.keys(limits).length > 0
+      : (mode !== null && mode !== stored.comment_mode) ||
+        (wait !== null && wait !== stored.reply_wait_minutes) ||
+        Object.keys(neuroLimitsPatch(limits, stored)).length > 0;
+  const dirty = !saved && (settingsDirty || (pick !== null && pick !== selected));
 
   const save = async () => {
     // `saved` too: the "Сохранено" swap outlives `saving`, and a click there would save again.
@@ -153,107 +160,124 @@ export function ListenerEditModal({
   };
 
   return (
-    <Modal onClose={close} size="panel" label={t('neurocomment.listener.title')}>
-      <ModalHeader
-        divided={false}
-        title={t('neurocomment.listener.title')}
-        subtitle={t('neurocomment.modal.listenerEdit.sub')}
-        icon={<Icon name="chart" size={18} />}
-      >
-        <div className="flex-1" />
-        <CloseButton aria-label={t('neurocomment.modal.close')} onClick={close} disabled={saving} />
-      </ModalHeader>
-
-      <TabList
-        options={TABS.map((value) => ({
-          value,
-          label: t(`neurocomment.modal.listenerEdit.tab.${value}`),
-        }))}
-        value={tab}
-        onChange={setTab}
-        idPrefix="listener-tab"
-        panelId="listener-tabpanel"
-        ariaLabel={t('neurocomment.listener.title')}
-      />
-
-      <div
-        role="tabpanel"
-        id="listener-tabpanel"
-        aria-labelledby={`listener-tab-${tab}`}
-        className="p-6"
-      >
-        {tab === 'commenting' ? (
-          <>
-            <div className="mb-2 type-body-medium text-content-secondary">
-              {t('neurocomment.modal.listenerEdit.account')}
-            </div>
-            <Select
-              value={pick ?? ''}
-              onChange={setPick}
+    <Modal
+      onClose={onClose}
+      dirty={dirty}
+      // A save in flight owns the dialog: closing would drop its result.
+      locked={saving}
+      size="panel"
+      label={t('neurocomment.listener.title')}
+    >
+      {(close) => (
+        <>
+          <ModalHeader
+            divided={false}
+            title={t('neurocomment.listener.title')}
+            subtitle={t('neurocomment.modal.listenerEdit.sub')}
+            icon={<Icon name="chart" size={18} />}
+          >
+            <div className="flex-1" />
+            <CloseButton
+              aria-label={t('neurocomment.modal.close')}
+              onClick={close}
               disabled={saving}
-              options={options.map((o) => ({ value: o.id, label: o.name }))}
-              placeholder={t('neurocomment.listener.choose')}
-              ariaLabel={t('neurocomment.modal.listenerEdit.account')}
             />
+          </ModalHeader>
 
-            {/* Until the read lands, the backend's own fallbacks, so the control never renders
+          <TabList
+            options={TABS.map((value) => ({
+              value,
+              label: t(`neurocomment.modal.listenerEdit.tab.${value}`),
+            }))}
+            value={tab}
+            onChange={setTab}
+            idPrefix="listener-tab"
+            panelId="listener-tabpanel"
+            ariaLabel={t('neurocomment.listener.title')}
+          />
+
+          <div
+            role="tabpanel"
+            id="listener-tabpanel"
+            aria-labelledby={`listener-tab-${tab}`}
+            className="p-6"
+          >
+            {tab === 'commenting' ? (
+              <>
+                <div className="mb-2 type-body-medium text-content-secondary">
+                  {t('neurocomment.modal.listenerEdit.account')}
+                </div>
+                <Select
+                  value={pick ?? ''}
+                  onChange={setPick}
+                  disabled={saving}
+                  options={options.map((o) => ({ value: o.id, label: o.name }))}
+                  placeholder={t('neurocomment.listener.choose')}
+                  ariaLabel={t('neurocomment.modal.listenerEdit.account')}
+                />
+
+                {/* Until the read lands, the backend's own fallbacks, so the control never renders
                 with nothing pressed — which would read as a third state. */}
-            <CommentModeFields
-              mode={mode ?? stored?.comment_mode ?? 'first'}
-              waitMinutes={wait ?? stored?.reply_wait_minutes ?? 10}
-              disabled={stored === undefined || saving}
-              onModeChange={setMode}
-              onWaitChange={setWait}
-            />
-          </>
-        ) : (
-          <>
-            <p className="mb-4 mt-0 type-body text-content-subtle">
-              {t('neurocomment.limits.note')}
-            </p>
-            {/* Touched fields over the read, so a read landing after the modal opened shows. */}
-            <NeuroLimitsFields
-              value={limitsValue}
-              errors={limitErrors}
-              disabled={stored === undefined || saving}
-              onChange={(field, raw) => {
-                if (stored === undefined) return;
-                setLimits((current) => ({ ...current, [field]: raw }));
-              }}
-            />
-          </>
-        )}
+                <CommentModeFields
+                  mode={mode ?? stored?.comment_mode ?? 'first'}
+                  waitMinutes={wait ?? stored?.reply_wait_minutes ?? 10}
+                  disabled={stored === undefined || saving}
+                  onModeChange={setMode}
+                  onWaitChange={setWait}
+                />
+              </>
+            ) : (
+              <>
+                <p className="mb-4 mt-0 type-body text-content-subtle">
+                  {t('neurocomment.limits.note')}
+                </p>
+                {/* Touched fields over the read, so a read landing after the modal opened shows. */}
+                <NeuroLimitsFields
+                  value={limitsValue}
+                  errors={limitErrors}
+                  disabled={stored === undefined || saving}
+                  onChange={(field, raw) => {
+                    if (stored === undefined) return;
+                    setLimits((current) => ({ ...current, [field]: raw }));
+                  }}
+                />
+              </>
+            )}
 
-        {partialSave ? (
-          <p role="alert" className="mt-2 type-small text-danger">
-            {t('neurocomment.modal.listenerEdit.partialSave')}
-          </p>
-        ) : null}
-      </div>
+            {partialSave ? (
+              <p role="alert" className="mt-2 type-small text-danger">
+                {t('neurocomment.modal.listenerEdit.partialSave')}
+              </p>
+            ) : null}
+          </div>
 
-      <div className="flex justify-end gap-2 px-6 pb-6">
-        <Button onClick={close} disabled={saving}>
-          {t('neurocomment.modal.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={save}
-          // A second click while the PUT is open would send the same body again.
-          loading={saving}
-          className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
-        >
-          {saved ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="inline-flex tb-swapin">
-                <Icon name="check" size={16} />
-              </span>
-              <span className="inline-block tb-swapin-late">{t('neurocomment.modal.saved')}</span>
-            </span>
-          ) : (
-            t('neurocomment.modal.save')
-          )}
-        </Button>
-      </div>
+          <div className="flex justify-end gap-2 px-6 pb-6">
+            <Button onClick={close} disabled={saving}>
+              {t('neurocomment.modal.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={save}
+              // A second click while the PUT is open would send the same body again.
+              loading={saving}
+              className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
+            >
+              {saved ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex tb-swapin">
+                    <Icon name="check" size={16} />
+                  </span>
+                  <span className="inline-block tb-swapin-late">
+                    {t('neurocomment.modal.saved')}
+                  </span>
+                </span>
+              ) : (
+                t('neurocomment.modal.save')
+              )}
+            </Button>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

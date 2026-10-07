@@ -592,9 +592,6 @@
       "unpinStory": "Unpin — expires in 24h",
       "updatedJustNow": "Updated just now",
       "updatedMinAgo": "Updated {{n}} min ago",
-      "discardTitle": "Discard changes?",
-      "discardBody": "You have unsaved profile edits. Close without saving?",
-      "discardConfirm": "Discard",
       "saveError": "Couldn't save the profile",
       "code": {
         "username_occupied": "That username is already taken",
@@ -713,9 +710,6 @@
       "photoRejected": "“{{name}}” was skipped — only JPG, PNG or WebP up to {{mb}} MB",
       "save": "Save",
       "saving": "Saving…",
-      "discardTitle": "Discard changes?",
-      "discardBody": "You have unsaved channel edits. Close without saving?",
-      "discardConfirm": "Discard",
       "postsTitle": "Posts",
       "composerPlaceholder": "Post text…",
       "attach": "Attach media",
@@ -985,6 +979,14 @@
     "sessionRetry": "Try again",
     "sessionLogin": "Go to sign-in",
     "pageError": "Something went wrong on this page. Use the menu to go elsewhere."
+  },
+  "dialog": {
+    "discard": {
+      "title": "Close without saving?",
+      "body": "You have unsaved changes — they will be lost.",
+      "stay": "Keep editing",
+      "confirm": "Close without saving"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -1349,11 +1351,13 @@
     "chat_broadcast_run_stalled": "Broadcast stalled: no working accounts",
     "chat_broadcast_round_started": "Round started",
     "chat_broadcast_rest_started": "Rest between rounds",
+    "chat_broadcast_pace_changed": "Broadcast pauses changed",
     "chat_broadcast_chat_joined": "Account is in the chat",
     "chat_broadcast_join_requested": "Join request sent",
     "chat_broadcast_join_approved": "Join request approved",
     "chat_broadcast_join_daily_cap": "Daily join limit — waiting",
     "chat_broadcast_chat_skipped": "Chat skipped",
+    "chat_broadcast_chat_kept": "Chat returned: keep writing despite deletions",
     "chat_broadcast_message_sent": "Message sent",
     "chat_broadcast_message_failed": "Message failed",
     "chat_broadcast_account_halted": "Account left the broadcast",
@@ -3072,6 +3076,11 @@
       },
       "deleted": "deleted",
       "deletedHint": "An admin deleted our message",
+      "kept": "writing despite deletions",
+      "keptNextRun": "writes on the next run",
+      "keep": "Keep writing",
+      "keepHint": "The chat returns to the broadcast: messages an admin deletes no longer stop it. Only a ban or a write restriction does.",
+      "keepExample": "An admin deleted the message in round 1 — press it, and in round 2 the account writes again.",
       "left": "{{left}} of {{total}} msgs · round {{round}} of {{rounds}}",
       "leftEndless": "{{sent}} msgs · round {{round}}",
       "now": "Write now",
@@ -3085,7 +3094,10 @@
       "skipHint": "Never write to this chat again.",
       "skipExample": "An admin asked us not to write → skip.",
       "history": "Chat history",
-      "round": "round {{round}}"
+      "historyAll": "Show full history · {{count}}",
+      "historyLess": "Collapse",
+      "round": "round {{round}}",
+      "pace": "Broadcast pauses"
     },
     "when": {
       "sentAt": "sent {{time}}",
@@ -3113,6 +3125,7 @@
       "roundDone": "Round done",
       "done": "Done",
       "paused": "Paused",
+      "kept": "Back next round",
       "skipped": "Skipped: {{reason}}"
     },
     "skip": {
@@ -3231,7 +3244,17 @@
         "caption": "The text goes out as the photo's caption",
         "uploading": "Uploading the photo…",
         "none": "The chain is empty — add at least one message",
-        "add": "+ Add message"
+        "add": "+ Add message",
+        "repeat": "Times a round",
+        "repeatHint": "How many times this message goes into the chat in one round. The copies go back to back, with the pause between messages, and only then the next message.",
+        "repeatExample": "×3 on the first and ×1 on the second: 1 → 1 → 1 → 2.",
+        "repeatLess": "Send fewer times",
+        "repeatMore": "Send more times",
+        "times": "×{{count}}",
+        "round": "One round in a chat:",
+        "roundCopy": "{{number}} · time {{copy}}",
+        "roundTotal": "{{count}} msgs a round",
+        "repeatSame": "Copies of one message go into the chat identical and back to back — that shows, and it gets banned more often. Turn on “Randomize the text” or add variants: {Hi|Hello}."
       },
       "pace": {
         "pauses": "Pauses",
@@ -3356,13 +3379,22 @@
       "minutes": "{{count}} min",
       "hoursShort": "{{count}} h",
       "rangeSec": "{{min}}–{{max}} s",
-      "rangeMin": "{{min}}–{{max}} min"
+      "rangeMin": "{{min}}–{{max}} min",
+      "copy": "{{label}} · time {{copy}}"
     },
     "clearLogs": {
       "title": "Clear the broadcast log?",
       "body": "Entries to delete: {{count}} — the whole broadcast log, not just the visible page.",
       "confirm": "Clear",
       "cancel": "Cancel"
+    },
+    "paceDialog": {
+      "title": "Broadcast pauses",
+      "subtitle": "These can change while the broadcast runs: new pauses apply from the next one.",
+      "restHint": "If a rest is already under way, its end is redrawn from when it began: shorten it and the next round may start at once.",
+      "conflict": "The broadcast changed while this window was open. Close it and open it again.",
+      "cancel": "Cancel",
+      "save": "Save"
     }
   }
 }

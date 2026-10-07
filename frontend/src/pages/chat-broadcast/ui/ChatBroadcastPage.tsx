@@ -25,6 +25,7 @@ import { pipelineView } from '../model/pipeline';
 import { BoardCard } from './BoardCard';
 import { BroadcastHowItWorks, CampaignList } from './CampaignList';
 import { BroadcastPipeline } from './BroadcastPipeline';
+import { PaceDialog } from './PaceDialog';
 import { SettingsDialog } from './settings/SettingsDialog';
 
 // The query ids this page owns: the SSE stream fires on every log row of the whole app,
@@ -65,6 +66,7 @@ export function ChatBroadcastPage() {
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState('');
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  const [paceFor, setPaceFor] = useState<string | null>(null);
   const [deleteFor, setDeleteFor] = useState<ChatBroadcastCampaign | null>(null);
   const [confirmClearLogs, setConfirmClearLogs] = useState(false);
 
@@ -242,6 +244,9 @@ export function ChatBroadcastPage() {
                 now={now}
                 approvalHours={settings.data?.settings.approval_wait_hours ?? 24}
                 busy={busy}
+                onPace={() => {
+                  setPaceFor(current.campaign_id);
+                }}
                 onAction={(row, action) => {
                   run(
                     act.mutateAsync({
@@ -263,7 +268,7 @@ export function ChatBroadcastPage() {
             onClear={() => {
               setConfirmClearLogs(true);
             }}
-            accountName={nameOf}
+            accountOf={(id) => fleet.get(id)}
           />
         </div>
       </div>
@@ -274,6 +279,19 @@ export function ChatBroadcastPage() {
           fleet={fleetList}
           onClose={() => {
             setSettingsFor(null);
+          }}
+          onSaved={() => {
+            void refresh();
+            void refreshSettings();
+          }}
+        />
+      ) : null}
+
+      {paceFor !== null && settings.data?.campaign_id === paceFor ? (
+        <PaceDialog
+          read={settings.data}
+          onClose={() => {
+            setPaceFor(null);
           }}
           onSaved={() => {
             void refresh();

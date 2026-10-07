@@ -7,6 +7,7 @@ export {
   createChatBroadcastCampaignMutation,
   deleteChatBroadcastCampaignMutation,
   resolveChatBroadcastTargetsMutation,
+  saveChatBroadcastPaceMutation,
   saveChatBroadcastSettingsMutation,
   startChatBroadcastCampaignMutation,
   stopChatBroadcastCampaignMutation,

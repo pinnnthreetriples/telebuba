@@ -63,7 +63,8 @@ def _pause(bounds: tuple[int, int]) -> float:
 
 
 def between_chats(ctx: RunContext) -> float:
-    return _pause((ctx.settings.between_chats.min, ctx.settings.between_chats.max))
+    bounds = ctx.pace.between_chats
+    return _pause((bounds.min, bounds.max))
 
 
 def _typing_seconds(ctx: RunContext, text: str) -> float:
@@ -126,9 +127,8 @@ async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> 
         if outcome is not None:
             return outcome
         if step < len(ctx.chain) - 1:
-            await _seams.sleep(
-                _pause((ctx.settings.between_messages.min, ctx.settings.between_messages.max))
-            )
+            bounds = ctx.pace.between_messages
+            await _seams.sleep(_pause((bounds.min, bounds.max)))
     await repository.update_target(
         ctx.campaign_id,
         target.chat_key,

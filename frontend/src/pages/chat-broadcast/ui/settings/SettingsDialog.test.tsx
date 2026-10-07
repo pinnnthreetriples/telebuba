@@ -174,3 +174,182 @@ test('pace: ranges, volume and safety write the draft', async () => {
   await user.click(screen.getByRole('switch', { name: 'Пропускать ошибки' }));
   expect(screen.getByText('Не сохранено')).toBeInTheDocument();
 });
+
+test('messages: a repeat count lays the round out and is saved', async () => {
+  routeApi();
+  open();
+  const user = userEvent.setup();
+
+  expect(screen.queryByText('Один круг в чате:')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Отправлять чаще' }));
+  await user.click(screen.getByRole('button', { name: 'Отправлять чаще' }));
+  expect(screen.getByText('Один круг в чате:')).toBeInTheDocument();
+  expect(screen.getByText('1 · 3-й раз')).toBeInTheDocument();
+  expect(screen.getByText('4 сообщ. за круг')).toBeInTheDocument();
+  // The text is rewritten per send, so its copies differ: no warning yet.
+  expect(screen.queryByText(/уйдут в чат одинаковыми/)).toBeNull();
+
+  // A forwarded post is the same post every time.
+  await user.click(screen.getByRole('button', { name: /mychannel/ }));
+  await user.click(screen.getByRole('button', { name: 'Отправлять чаще' }));
+  expect(screen.getByText(/уйдут в чат одинаковыми/)).toBeInTheDocument();
+  expect(screen.getByText('5 сообщ. за круг')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+  const preview = await screen.findByRole('dialog', { name: 'Проверьте, как пойдёт рассылка' });
+  await user.click(within(preview).getByRole('button', { name: 'Подтвердить' }));
+  await waitFor(() => {
+    expect(callsTo(PUT, 'PUT')).toHaveLength(1);
+  });
+  const body = (await callsTo(PUT, 'PUT')[0]!.clone().json()) as {
+    settings: { messages: { repeat: number }[] };
+  };
+  expect(body.settings.messages.map((message) => message.repeat)).toEqual([3, 2]);
+});
+
+// The operator's report: a click on the grey veil around the edited dialog closed it and
+// silently threw the edits away.
+test('an edited dialog asks before a backdrop click closes it', async () => {
+  routeApi();
+  const { onClose } = open();
+  const user = userEvent.setup();
+  const dialog = screen.getByRole('dialog', { name: 'Настройки рассылки' });
+
+  // Untouched: the veil closes it at once.
+  await user.click(dialog.parentElement!);
+  expect(onClose).toHaveBeenCalledTimes(1);
+
+  await user.click(screen.getByRole('switch', { name: 'Имитация набора' }));
+  await user.click(dialog.parentElement!);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  const question = screen.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+
+  await user.click(within(question).getByRole('button', { name: 'Остаться' }));
+  expect(screen.getByText('Не сохранено')).toBeInTheDocument();
+
+  // Cancel in the footer goes through the same question.
+  await user.click(screen.getByRole('button', { name: 'Отмена' }));
+  await user.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
+  expect(onClose).toHaveBeenCalledTimes(2);
+  expect(callsTo(PUT, 'PUT')).toHaveLength(0);
+});
+
+test('links typed in the chat editor but not added count as unsaved input', async () => {
+  routeApi();
+  const { onClose } = open();
+  const user = userEvent.setup();
+  const dialog = screen.getByRole('dialog', { name: 'Настройки рассылки' });
+
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Добавить чаты'), '@beta');
+  await user.click(dialog.parentElement!);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: 'Закрыть без сохранения?' })).toBeInTheDocument();
+});
+
+test('Escape in the chat editor cancels the editor only', async () => {
+  routeApi();
+  const { onClose } = open();
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Добавить чаты'), '@beta{Escape}');
+  expect(screen.queryByLabelText('Добавить чаты')).toBeNull();
+  expect(screen.getByRole('dialog', { name: 'Настройки рассылки' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: 'Закрыть без сохранения?' })).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test('while the save is in flight every exit is shut, Escape and Cancel included', async () => {
+  routeApi();
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const request = input as Request;
+    if (request.method === 'PUT') await gate;
+    return base(input, init);
+  });
+  const { onClose } = open();
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('switch', { name: 'Имитация набора' }));
+  await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+  const preview = await screen.findByRole('dialog', { name: 'Проверьте, как пойдёт рассылка' });
+  await user.click(within(preview).getByRole('button', { name: 'Подтвердить' }));
+  await waitFor(() => {
+    expect(callsTo(PUT, 'PUT')).toHaveLength(1);
+  });
+
+  await user.keyboard('{Escape}');
+  expect(
+    screen.getByRole('dialog', { name: 'Проверьте, как пойдёт рассылка' }),
+  ).toBeInTheDocument();
+  expect(within(preview).getByRole('button', { name: 'Изменить' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Отмена' }));
+  expect(screen.queryByRole('dialog', { name: 'Закрыть без сохранения?' })).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+
+  release();
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+const SAME = /уйдут в чат одинаковыми/;
+
+function withMessages(
+  messages: ChatBroadcastSettingsRead['settings']['messages'],
+  extra: Partial<ChatBroadcastSettingsRead['settings']> = {},
+): ChatBroadcastSettingsRead {
+  return { ...SETTINGS_READ, settings: { ...SETTINGS_READ.settings, ...extra, messages } };
+}
+
+const EMPTY = { kind: 'text', text: '', photo: null, post: '' } as const;
+
+test('messages: an empty message that repeats is dropped by the engine, so it warns of nothing', () => {
+  routeApi();
+  open(
+    withMessages([
+      { ...EMPTY, repeat: 3 },
+      { kind: 'text', text: 'Привет', photo: null, post: '', repeat: 1 },
+    ]),
+  );
+
+  expect(screen.queryByText('Один круг в чате:')).toBeNull();
+  expect(screen.queryByText(SAME)).toBeNull();
+});
+
+test('messages: a photo with no text is not rewritten, so its copies are identical', () => {
+  routeApi();
+  open(
+    withMessages(
+      [{ ...EMPTY, photo: { media_id: `${'a'.repeat(64)}.png`, name: 'bot.png' }, repeat: 2 }],
+      { first_message: 'template', randomize: true },
+    ),
+  );
+
+  expect(screen.getByText('Один круг в чате:')).toBeInTheDocument();
+  expect(screen.getByText(SAME)).toBeInTheDocument();
+});
+
+test('messages: the AI varies the first message only when there is a brief to write from', () => {
+  routeApi();
+  const text = { kind: 'text', text: 'Привет', photo: null, post: '', repeat: 2 } as const;
+  const { unmount } = renderPage(
+    <SettingsDialog
+      read={withMessages([text], { first_message: 'ai', ai_brief: '' })}
+      fleet={FLEET as AccountRead[]}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(SAME)).toBeInTheDocument();
+  unmount();
+
+  open(withMessages([text], { first_message: 'ai', ai_brief: 'Делаем ботов' }));
+  expect(screen.getByText('Один круг в чате:')).toBeInTheDocument();
+  expect(screen.queryByText(SAME)).toBeNull();
+});

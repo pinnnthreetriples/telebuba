@@ -84,9 +84,9 @@ test('locks page scroll while any dialog is open and restores it when the last o
 // A second dialog captures body.overflow *after* the first already set it to 'hidden'.
 // Cleanup order follows document order, so the later sibling restores LAST — and if
 // each instance restored its own snapshot, that snapshot is 'hidden' and the page could
-// never be scrolled again without a reload. This is the real shape of ProfileModal's
-// "discard changes" confirm: a sibling of the dialog in the same fragment, whose
-// onConfirm closes the parent, so both unmount together.
+// never be scrolled again without a reload. This is the real shape of Modal's own
+// "close without saving?" question: a sibling of the dialog in the same fragment, whose
+// discard closes the parent, so both unmount together (Modal.guard.test.tsx).
 test('a second dialog closing with the first still unlocks page scroll', () => {
   function Pair({ open }: { open: boolean }) {
     if (!open) return null;
@@ -173,4 +173,24 @@ test('the Tab trap wraps past an inert element instead of freezing on it', async
   screen.getByText('один').focus();
   await userEvent.tab({ shift: true });
   expect(screen.getByText('два')).toHaveFocus();
+});
+
+test('an Escape a widget inside already handled (defaultPrevented) leaves the dialog open', async () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose} label="Диалог">
+      <input
+        aria-label="Поле"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') event.preventDefault();
+        }}
+      />
+    </Modal>,
+  );
+  await userEvent.type(screen.getByLabelText('Поле'), '{Escape}');
+  expect(onClose).not.toHaveBeenCalled();
+  // Focus off the widget: the same key now reaches the dialog's own handler.
+  await userEvent.click(screen.getByRole('dialog', { name: 'Диалог' }));
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

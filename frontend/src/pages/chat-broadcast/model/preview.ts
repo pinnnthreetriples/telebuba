@@ -50,6 +50,20 @@ export function filledMessages(draft: Draft): MessageDraft[] {
   return draft.messages.filter((message, index) => isFilled(message, draft, index));
 }
 
+// One round in one chat as the engine plays it: every filled message, each copy in turn.
+// `number` is the message's place in the chain, `copy` counts its repeats from 0.
+export type RoundStep = { message: MessageDraft; number: number; copy: number };
+
+export function roundSteps(draft: Draft): RoundStep[] {
+  return filledMessages(draft).flatMap((message, index) =>
+    Array.from({ length: message.repeat }, (_unused, copy) => ({
+      message,
+      number: index + 1,
+      copy,
+    })),
+  );
+}
+
 type Scene = { t: TFunction; draft: Draft; ownTitles: string[] };
 
 function range(t: TFunction, bounds: { min: number; max: number }, unit: 'Sec' | 'Min'): string {
@@ -59,7 +73,7 @@ function range(t: TFunction, bounds: { min: number; max: number }, unit: 'Sec' |
 function messageSteps(scene: Scene, pick: number, chat: string, at: number): Step[] {
   const { t, draft } = scene;
   const steps: Step[] = [];
-  filledMessages(draft).forEach((message, index) => {
+  roundSteps(draft).forEach(({ message, number, copy }, index) => {
     if (index > 0) {
       steps.push({
         label: t('chatBroadcast.preview.pause', {
@@ -70,9 +84,11 @@ function messageSteps(scene: Scene, pick: number, chat: string, at: number): Ste
         time: clock(at),
       });
     }
+    const again = (label: string) =>
+      copy === 0 ? label : t('chatBroadcast.preview.copy', { label, copy: copy + 1 });
     if (message.kind === 'post') {
       steps.push({
-        label: t('chatBroadcast.preview.forward'),
+        label: again(t('chatBroadcast.preview.forward')),
         tone: 'msg',
         icon: 'send',
         time: clock(at),
@@ -80,19 +96,20 @@ function messageSteps(scene: Scene, pick: number, chat: string, at: number): Ste
       });
       return;
     }
-    const aiWrites = index === 0 && draft.settings.first_message === 'ai';
+    const aiWrites = number === 1 && draft.settings.first_message === 'ai';
     steps.push({
-      label:
+      label: again(
         message.photo === null
-          ? t('chatBroadcast.preview.message', { index: index + 1 })
-          : t('chatBroadcast.preview.messagePhoto', { index: index + 1 }),
+          ? t('chatBroadcast.preview.message', { index: number })
+          : t('chatBroadcast.preview.messagePhoto', { index: number }),
+      ),
       tone: 'msg',
       icon: 'send',
       time: clock(at),
       bubble: {
         text: aiWrites
           ? t('chatBroadcast.preview.aiWrites')
-          : resolveText(message.text, pick, chat),
+          : resolveText(message.text, pick + copy, chat),
         photo: message.photo !== null,
         post: false,
       },
@@ -341,7 +358,7 @@ export function upToOf(draft: Draft): number | null {
   const rounds = roundsOf(draft);
   if (draft.settings.target_mode === 'own' || rounds === null) return null;
   const total =
-    splitTargets(draft.settings.targets.join(' ')).length * filledMessages(draft).length * rounds;
+    splitTargets(draft.settings.targets.join(' ')).length * roundSteps(draft).length * rounds;
   return draft.settings.stop_mode === 'count'
     ? Math.min(total, draft.settings.stop_messages)
     : total;

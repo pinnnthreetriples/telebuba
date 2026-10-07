@@ -76,3 +76,62 @@ test('with `toggle` the heading is the disclosure button', async () => {
   await userEvent.click(button);
   expect(onToggle).toHaveBeenCalledTimes(1);
 });
+
+test('`aside` sits right after the title, outside the toggle, and the right slot stays right', async () => {
+  const { container } = render(
+    <>
+      <CardHeader
+        title="Доска работ"
+        toggle={{ expanded: true, controls: 'body', onToggle: vi.fn() }}
+        aside={<button type="button">В работе</button>}
+      >
+        <button type="button">Настроить</button>
+      </CardHeader>
+      <div id="body" />
+    </>,
+  );
+  const toggle = screen.getByRole('button', { name: 'Доска работ' });
+  const aside = screen.getByRole('button', { name: 'В работе' });
+  expect(toggle.className).not.toContain('flex-1');
+  expect(toggle.nextElementSibling).toBe(aside);
+  const left = toggle.parentElement as HTMLElement;
+  expect(left.className).toContain('flex-1');
+  expect(left.nextElementSibling).toHaveTextContent('Настроить');
+  await expectNoAxeViolations(container);
+});
+
+test('with `aside` the empty run of the header still folds the card, without a second control', async () => {
+  const onToggle = vi.fn();
+  const { container } = render(
+    <>
+      <CardHeader
+        title="Доска работ"
+        toggle={{ expanded: true, controls: 'body', onToggle }}
+        aside={<button type="button">В работе</button>}
+      />
+      <div id="body" />
+    </>,
+  );
+  const aside = screen.getByRole('button', { name: 'В работе' });
+  const spacer = aside.nextElementSibling as HTMLElement;
+  expect(spacer.className).toContain('flex-1');
+  expect(spacer).toHaveAttribute('aria-hidden', 'true');
+  expect(spacer).toHaveAttribute('tabindex', '-1');
+  // The title button stays the one named control that toggles.
+  expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Доска работ',
+    'В работе',
+  ]);
+  await userEvent.click(spacer);
+  expect(onToggle).toHaveBeenCalledTimes(1);
+  await expectNoAxeViolations(container);
+});
+
+test('without `aside` or without `toggle` there is no spacer', () => {
+  const { container, rerender } = render(
+    <CardHeader title="Каналы" toggle={{ expanded: false, controls: 'b', onToggle: vi.fn() }} />,
+  );
+  expect(container.querySelectorAll('button')).toHaveLength(1);
+  rerender(<CardHeader title="Каналы" aside={<span>x</span>} />);
+  expect(container.querySelectorAll('button')).toHaveLength(0);
+});

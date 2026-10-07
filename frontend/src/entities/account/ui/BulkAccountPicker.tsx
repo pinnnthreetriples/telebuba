@@ -79,151 +79,157 @@ export function BulkAccountPicker({
     );
   };
 
+  // A pending tick is an edit: closing would drop it. Set equality — the order of the
+  // ticks is not part of the selection.
+  const dirty = draft.length !== selected.length || draft.some((id) => !selected.includes(id));
+
   return (
-    <Modal onClose={onClose} size="panel" label={t('accounts.bulk.pickTitle')}>
-      <div className="flex max-h-dialog flex-col overflow-hidden">
-        <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate type-h2">{t('accounts.bulk.pickTitle')}</h2>
-            <div className="truncate type-body text-content-subtle">
-              {t('accounts.bulk.pickCount', { done: draft.length, total: candidates.length })}
+    <Modal onClose={onClose} dirty={dirty} size="panel" label={t('accounts.bulk.pickTitle')}>
+      {(close) => (
+        <div className="flex max-h-dialog flex-col overflow-hidden">
+          <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate type-h2">{t('accounts.bulk.pickTitle')}</h2>
+              <div className="truncate type-body text-content-subtle">
+                {t('accounts.bulk.pickCount', { done: draft.length, total: candidates.length })}
+              </div>
+            </div>
+            <CloseButton onClick={close} aria-label={t('accounts.profile.close')} />
+          </div>
+
+          <div className="flex flex-col gap-3 border-b border-canvas px-6 py-4">
+            <Input
+              value={search}
+              placeholder={t('accounts.bulk.pickSearch')}
+              aria-label={t('accounts.bulk.pickSearch')}
+              onChange={(event) => {
+                setSearch(event.target.value);
+              }}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={allOn ? true : someOn ? 'mixed' : false}
+                disabled={shownIds.length === 0}
+                onClick={toggleAll}
+                className="flex items-center gap-3 text-left disabled:opacity-50"
+              >
+                <span
+                  className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${someOn ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
+                >
+                  {allOn ? (
+                    <Icon name="check" size={14} className="stroke-on-fill" />
+                  ) : someOn ? (
+                    // Indeterminate is a bar, not a check: a check would claim the
+                    // whole visible list is picked when only part of it is.
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      className="stroke-on-fill"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 12h12" />
+                    </svg>
+                  ) : null}
+                </span>
+                <span className="type-body-medium text-content-secondary">
+                  {t('accounts.bulk.pickAll', { n: shownIds.length })}
+                </span>
+              </button>
+              {draft.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setDraft([]);
+                  }}
+                >
+                  {t('accounts.bulk.pickClear')}
+                </Button>
+              )}
             </div>
           </div>
-          <CloseButton onClick={onClose} aria-label={t('accounts.profile.close')} />
-        </div>
 
-        <div className="flex flex-col gap-3 border-b border-canvas px-6 py-4">
-          <Input
-            value={search}
-            placeholder={t('accounts.bulk.pickSearch')}
-            aria-label={t('accounts.bulk.pickSearch')}
-            onChange={(event) => {
-              setSearch(event.target.value);
-            }}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={allOn ? true : someOn ? 'mixed' : false}
-              disabled={shownIds.length === 0}
-              onClick={toggleAll}
-              className="flex items-center gap-3 text-left disabled:opacity-50"
-            >
-              <span
-                className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${someOn ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
-              >
-                {allOn ? (
-                  <Icon name="check" size={14} className="stroke-on-fill" />
-                ) : someOn ? (
-                  // Indeterminate is a bar, not a check: a check would claim the
-                  // whole visible list is picked when only part of it is.
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    className="stroke-on-fill"
-                    aria-hidden="true"
+          <div className="tb-scroll flex-1 overflow-y-auto">
+            {fleet.isPending ? (
+              <div className="flex justify-center py-16">
+                <Spinner size="lg" />
+              </div>
+            ) : fleet.isError ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                <p role="alert" className="type-body text-danger">
+                  {t('accounts.error')}
+                </p>
+                <Button
+                  onClick={() => {
+                    void fleet.refetch();
+                  }}
+                >
+                  {t('accounts.bulk.pickRetry')}
+                </Button>
+              </div>
+            ) : shown.length === 0 ? (
+              <EmptyState size="xl" className="px-6">
+                {t('accounts.bulk.pickEmpty')}
+              </EmptyState>
+            ) : (
+              shown.map(({ account, label }) => {
+                const on = draft.includes(account.account_id);
+                return (
+                  <button
+                    key={account.account_id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    onClick={() => {
+                      toggle(account.account_id);
+                    }}
+                    className={`flex w-full items-center gap-3 border-b border-canvas px-6 py-2 text-left last:border-b-0 ${on ? 'bg-info-tint' : ''}`}
                   >
-                    <path d="M6 12h12" />
-                  </svg>
-                ) : null}
-              </span>
-              <span className="type-body-medium text-content-secondary">
-                {t('accounts.bulk.pickAll', { n: shownIds.length })}
-              </span>
-            </button>
-            {draft.length > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setDraft([]);
-                }}
-              >
-                {t('accounts.bulk.pickClear')}
-              </Button>
+                    <span
+                      className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
+                    >
+                      {on && <Icon name="check" size={14} className="stroke-on-fill" />}
+                    </span>
+                    <AccountAvatar
+                      account={account}
+                      className="size-tile shrink-0 rounded-full"
+                      fallbackClassName="bg-canvas text-content-muted type-body-medium"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate type-body-medium">{label}</span>
+                      <span className="block truncate type-small">
+                        {account.phone ?? account.account_id}
+                      </span>
+                    </span>
+                    {account.username != null && account.username !== '' && (
+                      <span className="shrink-0 type-small">@{account.username}</span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
-        </div>
 
-        <div className="tb-scroll flex-1 overflow-y-auto">
-          {fleet.isPending ? (
-            <div className="flex justify-center py-16">
-              <Spinner size="lg" />
-            </div>
-          ) : fleet.isError ? (
-            <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-              <p role="alert" className="type-body text-danger">
-                {t('accounts.error')}
-              </p>
-              <Button
-                onClick={() => {
-                  void fleet.refetch();
-                }}
-              >
-                {t('accounts.bulk.pickRetry')}
-              </Button>
-            </div>
-          ) : shown.length === 0 ? (
-            <EmptyState size="xl" className="px-6">
-              {t('accounts.bulk.pickEmpty')}
-            </EmptyState>
-          ) : (
-            shown.map(({ account, label }) => {
-              const on = draft.includes(account.account_id);
-              return (
-                <button
-                  key={account.account_id}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={on}
-                  onClick={() => {
-                    toggle(account.account_id);
-                  }}
-                  className={`flex w-full items-center gap-3 border-b border-canvas px-6 py-2 text-left last:border-b-0 ${on ? 'bg-info-tint' : ''}`}
-                >
-                  <span
-                    className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
-                  >
-                    {on && <Icon name="check" size={14} className="stroke-on-fill" />}
-                  </span>
-                  <AccountAvatar
-                    account={account}
-                    className="size-tile shrink-0 rounded-full"
-                    fallbackClassName="bg-canvas text-content-muted type-body-medium"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate type-body-medium">{label}</span>
-                    <span className="block truncate type-small">
-                      {account.phone ?? account.account_id}
-                    </span>
-                  </span>
-                  {account.username != null && account.username !== '' && (
-                    <span className="shrink-0 type-small">@{account.username}</span>
-                  )}
-                </button>
-              );
-            })
-          )}
+          <ModalFooter>
+            <Button onClick={close}>{t('accounts.profile.cancel')}</Button>
+            <Button
+              variant="primary"
+              disabled={draft.length === 0 || fleet.isError}
+              onClick={() => {
+                onApply(draft);
+              }}
+            >
+              {t('accounts.bulk.pickApply', { n: draft.length })}
+            </Button>
+          </ModalFooter>
         </div>
-
-        <ModalFooter>
-          <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
-          <Button
-            variant="primary"
-            disabled={draft.length === 0 || fleet.isError}
-            onClick={() => {
-              onApply(draft);
-            }}
-          >
-            {t('accounts.bulk.pickApply', { n: draft.length })}
-          </Button>
-        </ModalFooter>
-      </div>
+      )}
     </Modal>
   );
 }

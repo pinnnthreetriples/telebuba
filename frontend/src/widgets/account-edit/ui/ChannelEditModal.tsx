@@ -8,16 +8,7 @@ import {
   setAccountChannelPhotoMutation,
   updateAccountChannelMutation,
 } from '@/entities/account';
-import {
-  Button,
-  ConfirmModal,
-  CloseButton,
-  Input,
-  Modal,
-  Notice,
-  Textarea,
-  toastError,
-} from '@/shared/ui';
+import { Button, CloseButton, Input, Modal, Notice, Textarea, toastError } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -58,7 +49,6 @@ export function ChannelEditModal({
   const [about, setAbout] = useState<string | null>(null);
   const [reactionsOff, setReactionsOff] = useState<boolean | null>(null);
   const [pinned, setPinned] = useState<boolean | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const shownTitle = title ?? detail.data?.title ?? '';
   const shownAbout = about ?? detail.data?.about ?? '';
@@ -157,26 +147,22 @@ export function ChannelEditModal({
     );
   };
 
-  // Escape / backdrop / × ask before discarding unsaved edits; all exits are
-  // locked while a write is in flight (unmounting drops the invalidation).
-  const requestClose = () => {
-    if (busy) return;
-    if (dirty) setConfirmDiscard(true);
-    else onClose();
-  };
-
   return (
-    <>
-      <Modal
-        onClose={requestClose}
-        size="panel"
-        // A fixed name, unlike the visible heading below it: this dialog opens
-        // while the detail is still loading, and an ARIA name that changes after
-        // the announcement is never re-announced — so the operator would only ever
-        // hear "Загрузка…". `??` did not guard '' either, and a blank channel title
-        // is a real (if rare) read result, which left the dialog nameless.
-        label={t('accounts.channel.dialog')}
-      >
+    <Modal
+      onClose={onClose}
+      // Escape / backdrop / × ask before discarding unsaved edits; all exits are
+      // locked while a write is in flight (unmounting drops the invalidation).
+      dirty={dirty}
+      locked={busy}
+      size="panel"
+      // A fixed name, unlike the visible heading below it: this dialog opens
+      // while the detail is still loading, and an ARIA name that changes after
+      // the announcement is never re-announced — so the operator would only ever
+      // hear "Загрузка…". `??` did not guard '' either, and a blank channel title
+      // is a real (if rare) read result, which left the dialog nameless.
+      label={t('accounts.channel.dialog')}
+    >
+      {(close) => (
         <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -196,11 +182,7 @@ export function ChannelEditModal({
                 </div>
               )}
             </div>
-            <CloseButton
-              onClick={requestClose}
-              disabled={busy}
-              aria-label={t('accounts.channel.close')}
-            />
+            <CloseButton onClick={close} disabled={busy} aria-label={t('accounts.channel.close')} />
           </div>
 
           {detail.isError && (
@@ -306,19 +288,7 @@ export function ChannelEditModal({
             </>
           )}
         </div>
-      </Modal>
-      {confirmDiscard ? (
-        <ConfirmModal
-          title={t('accounts.channel.discardTitle')}
-          body={t('accounts.channel.discardBody')}
-          confirmLabel={t('accounts.channel.discardConfirm')}
-          cancelLabel={t('accounts.channel.cancel')}
-          onClose={() => {
-            setConfirmDiscard(false);
-          }}
-          onConfirm={onClose}
-        />
-      ) : null}
-    </>
+      )}
+    </Modal>
   );
 }

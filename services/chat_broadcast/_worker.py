@@ -87,6 +87,8 @@ async def handle(ctx: RunContext, account_id: str, target: TargetRecord) -> _sen
         and target.step_index == 0
         and ctx.settings.skip_deleted
         and await _was_deleted(ctx, account_id, target)
+        # A chat the operator kept still has its deletions recorded, but goes on.
+        and not target.ignore_deleted
     ):
         await _moves.skip(ctx, target, "deleted", account_id)
         return "acted"

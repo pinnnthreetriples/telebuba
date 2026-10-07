@@ -44,6 +44,9 @@ class ChatBroadcastSettings(BaseSettings):
     # Longest a worker sleeps without re-reading its queue, so a manual "write now" or
     # "hand over" from the board is picked up without a restart.
     idle_poll_seconds: float = Field(default=30.0, gt=0.0)
+    # Longest a rest between rounds sleeps without re-reading its end, so a rest the
+    # board's gear shortened is over within this much of its new end.
+    rest_poll_seconds: float = Field(default=30.0, gt=0.0)
     # Back-off after the account's connection dropped mid-chat.
     reconnect_delay_seconds: float = Field(default=60.0, gt=0.0)
     # Back-off after the account hit its own join cap or hourly/daily message limit.

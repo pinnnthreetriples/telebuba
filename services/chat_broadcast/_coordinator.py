@@ -15,13 +15,15 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Literal
 
+from core.config import settings
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
 from services import _account_owner
-from services.chat_broadcast import _moves, _seams, _send, _worker, targets
+from services.chat_broadcast import _moves, _seams, _send, _state, _worker, targets
 from services.chat_broadcast._context import load_context
 
 if TYPE_CHECKING:
+    from schemas.chat_broadcast import MinutesRange
     from services.chat_broadcast._context import RunContext
 
 RunOutcome = Literal["done", "stalled"]
@@ -83,7 +85,12 @@ def _last_round(ctx: RunContext, round_number: int) -> bool:
 
 
 async def _anything_left(campaign_id: str) -> bool:
-    return any(t.state == "round_done" for t in await repository.list_targets(campaign_id))
+    """Is any chat waiting for the next round — through, or kept despite deletions?"""
+    return any(
+        t.state == "round_done"
+        or (t.state == "skipped" and t.skip_reason == "deleted" and t.ignore_deleted)
+        for t in await repository.list_targets(campaign_id)
+    )
 
 
 async def play_round(ctx: RunContext, round_number: int) -> RoundOutcome:
@@ -134,10 +141,15 @@ async def _stall(ctx: RunContext) -> RoundOutcome:
     return "stalled"
 
 
+def rest_end(started_unix: int, bounds: MinutesRange) -> int:
+    """When a rest begun at ``started_unix`` ends, drawn from the operator's range."""
+    return started_unix + int(_seams.rng.uniform(bounds.min, bounds.max) * 60)
+
+
 async def _start_rest(ctx: RunContext, round_number: int) -> None:
-    bounds = ctx.settings.rest_minutes
-    minutes = _seams.rng.uniform(bounds.min, bounds.max)
-    until = _seams.now() + int(minutes * 60)
+    started = _seams.now()
+    until = rest_end(started, ctx.pace.rest_minutes)
+    _state.note_rest_started(ctx.campaign_id, started)
     await repository.set_runtime(ctx.campaign_id, rest_until_unix=until)
     await log_event(
         "INFO",
@@ -147,16 +159,22 @@ async def _start_rest(ctx: RunContext, round_number: int) -> None:
 
 
 async def _rest(ctx: RunContext, round_number: int, until: int) -> bool:
-    """Sit the rest out, then open the next round. ``False`` = the time budget ran out."""
-    remaining = until - _seams.now()
-    if remaining > 0:
-        await _seams.sleep(remaining)
+    """Sit the rest out, then open the next round. ``False`` = the time budget ran out.
+
+    Slept in slices, re-reading the end each time: the gear may move it mid-rest.
+    """
+    tick = settings.chat_broadcast.rest_poll_seconds
+    while (remaining := until - _seams.now()) > 0:
+        await _seams.sleep(min(remaining, tick))
+        record = await repository.fetch_campaign(ctx.campaign_id)
+        if record is not None and record.rest_until_unix is not None:
+            until = record.rest_until_unix
     _seams.assert_live_run()
     if await _send.volume_reached(ctx):
         return False
     next_round = round_number + 1
+    # Ends the rest and opens the round in the same write.
     await repository.start_round(ctx.campaign_id, next_round)
-    await repository.set_runtime(ctx.campaign_id, round=next_round, rest_until_unix=None)
     await _round_started(ctx, next_round)
     return True
 

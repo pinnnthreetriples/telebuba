@@ -123,3 +123,21 @@ test('spam-check button runs the real @SpamBot probe and shows the verdict', asy
     expect(screen.getByText('Чисто')).toBeInTheDocument();
   });
 });
+
+test('a picked length asks before Escape closes; an untouched dialog closes at once', async () => {
+  const onClose = vi.fn();
+  const { unmount } = renderWithClient(
+    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={onClose} onConfirm={vi.fn()} />,
+  );
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).toHaveBeenCalledTimes(1);
+  unmount();
+
+  renderWithClient(
+    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={onClose} onConfirm={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByText('3 дня'));
+  await userEvent.click(screen.getByText('Отмена'));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+});

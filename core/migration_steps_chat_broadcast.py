@@ -1,4 +1,4 @@
-"""Migration 68 — the chat-broadcast tables.
+"""Migrations 68 and 69 — the chat-broadcast tables, and a kept chat's flag.
 
 ``CREATE ... IF NOT EXISTS`` throughout: ``create_all`` runs BEFORE ``apply_migrations``,
 so on a fresh database the schema comes from ``core.repositories.chat_broadcast._tables``
@@ -157,3 +157,21 @@ def _events(connection: Connection) -> None:
         "CREATE INDEX IF NOT EXISTS ix_cb_events_chat"
         " ON chat_broadcast_events (campaign_id, chat_key, at_unix)",
     )
+
+
+def _add_chat_broadcast_ignore_deleted(connection: Connection) -> None:
+    # #69: the operator may keep a chat in the broadcast although an admin deletes our
+    # messages there; only a ban then stops it. 0 on existing rows = nobody chose that
+    # yet. #68 always ran first, so the table is there; the column guard keeps it
+    # idempotent (``create_all`` already built it on a fresh database).
+    columns = {
+        str(row["name"])
+        for row in connection.exec_driver_sql("PRAGMA table_info(chat_broadcast_targets)")
+        .mappings()
+        .all()
+    }
+    if "ignore_deleted" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_targets "
+            "ADD COLUMN ignore_deleted INTEGER DEFAULT 0 NOT NULL",
+        )

@@ -43,6 +43,11 @@ def _at(unix: int | None) -> datetime | None:
     return None if unix is None else datetime.fromtimestamp(unix, UTC)
 
 
+def _kept(target: TargetRecord) -> bool:
+    """Skipped for a deleted message but kept by the operator: back next round."""
+    return target.state == "skipped" and target.skip_reason == "deleted" and target.ignore_deleted
+
+
 async def load_board(campaign_id: str) -> ChatBroadcastBoard | None:
     record = await repository.fetch_campaign(campaign_id)
     if record is None:
@@ -182,7 +187,8 @@ def _rows(
                 last_text=None if last is None else last.text,
                 last_sent_at=None if last is None else _at(last.sent_unix or last.created_unix),
                 message_deleted=target.message_deleted,
-                active=not finished and target.state not in {"done", "skipped"},
+                ignore_deleted=target.ignore_deleted,
+                active=not finished and (target.state not in {"done", "skipped"} or _kept(target)),
                 history=history[:limit],
             )
         )

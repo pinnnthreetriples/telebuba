@@ -11,6 +11,7 @@ export {
   listChatBroadcastCampaignsOptions as chatBroadcastCampaignsQueryOptions,
   listChatBroadcastOwnChatsOptions as chatBroadcastOwnChatsQueryOptions,
   resolveChatBroadcastTargetsMutation,
+  saveChatBroadcastPaceMutation,
   saveChatBroadcastSettingsMutation,
   startChatBroadcastCampaignMutation,
   stopChatBroadcastCampaignMutation,

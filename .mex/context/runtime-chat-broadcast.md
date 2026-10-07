@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-06
+last_updated: 2026-10-07
 edges:
   - target: context/runtime-neuroshilling.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -24,9 +24,10 @@ restart resume).
 - Stop, a stall and a failure are continued with the SAME run id; only a finished campaign
   mints a new one and lays its chats out again. The journal row is written `pending`
   before every send: an occupied key is a step already played, a dead process's `pending`
-  becomes `unconfirmed` and is never resent. A refusal that never reached the chat (spam
-  block, slow mode, dropped connection, not a member) gives the step back, so the account
-  that takes the chat over sends it.
+  becomes `unconfirmed` and is never resent. Continue plays the chain as saved now: a chat
+  whose step lies past a chain shortened since Stop is through for that round. A refusal
+  that never reached the chat (spam block, slow mode, dropped connection, not a member)
+  gives the step back, so the account that takes the chat over sends it.
 - Joins spend the fleet's one join budget under the shared join lock, because Telegram
   counts joins per account whatever feature spends them. A rejected join request cannot
   be told from a pending one, so a request ends by the operator's timeout.
@@ -38,7 +39,16 @@ restart resume).
   is not applied to them; only its forbidden words are.
 - An account at its hourly/daily limit is checked before it joins anything, and hands only
   chats it has not entered to accounts that still have room — never back and forth.
-- Settings cannot be saved while a run is attached: the run reads them once.
+- Settings cannot be saved while a run is attached: the run reads them once. The pauses
+  are the exception (the board's gear): the run reads them live, and a rest under way is
+  redrawn from its start, which only this process knows — after a restart it keeps its end.
+- A message's repeat count expands into steps of the chain, so a copy is just another
+  step: its own journal key, its own pause, its share of the board's planned total.
+- A deletion is an admin's signal the operator may overrule: a chat kept from the board
+  still has its deletions recorded but is no longer skipped for them — only a ban stops
+  it — and the choice outlives the run, because a fresh run lays its chats out anew. A keep
+  holds only on the campaign moment it was decided on; past its round's end it just flags
+  the chat, and opening the next round (one write with the round itself) re-queues it.
 - The board orders rows by importance once per load and keys expansion by chat, so a row
   the operator acts on does not slide away or hand its details to a neighbour.
 

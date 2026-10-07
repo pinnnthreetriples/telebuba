@@ -18,6 +18,8 @@ export type MessageDraft = {
   text: string;
   photo: { mediaId: string; name: string; url: string | null } | null;
   post: string;
+  // Copies of this message in one round, sent back to back before the next one.
+  repeat: number;
 };
 
 export type Draft = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const MAX_MESSAGES = 10;
+export const MAX_REPEAT = 10;
 
 function messageDraft(message: ChatBroadcastMessage, id: number): MessageDraft {
   return {
@@ -68,6 +71,7 @@ function messageDraft(message: ChatBroadcastMessage, id: number): MessageDraft {
         ? null
         : { mediaId: message.photo.media_id, name: message.photo.name, url: null },
     post: message.post ?? '',
+    repeat: message.repeat ?? 1,
   };
 }
 
@@ -83,7 +87,7 @@ export function draftOf(read: ChatBroadcastSettingsRead): Draft {
 
 export function emptyMessage(messages: MessageDraft[]): MessageDraft {
   const id = Math.max(0, ...messages.map((message) => message.id)) + 1;
-  return { id, kind: 'text', text: '', photo: null, post: '' };
+  return { id, kind: 'text', text: '', photo: null, post: '', repeat: 1 };
 }
 
 export function bodyOf(draft: Draft, expectedUpdatedAt: string): ChatBroadcastSettingsUpdate {
@@ -101,6 +105,7 @@ export function bodyOf(draft: Draft, expectedUpdatedAt: string): ChatBroadcastSe
             ? null
             : { media_id: message.photo.mediaId, name: message.photo.name },
         post: message.post,
+        repeat: message.repeat,
       })),
     },
   };

@@ -10,7 +10,7 @@ import { Badge, Button, Icon, IconButton, Modal, Notice, ProgressBar } from '@/s
 
 import type { Draft } from '../../model/draft';
 import type { Block, Step, StepTone } from '../../model/preview';
-import { buildBlocks, filledMessages, roundsOf, upToOf, warningsOf } from '../../model/preview';
+import { buildBlocks, roundSteps, roundsOf, upToOf, warningsOf } from '../../model/preview';
 
 const STEP_MS = 900;
 
@@ -207,7 +207,7 @@ export function Preview({
   else if (playing) playIcon = 'pause';
 
   return (
-    <Modal onClose={onEdit} size="panel" label={t('chatBroadcast.preview.title')}>
+    <Modal onClose={onEdit} locked={saving} size="panel" label={t('chatBroadcast.preview.title')}>
       <div className="flex max-h-dialog flex-col overflow-hidden">
         <div className="border-b border-canvas px-6 py-6">
           <h2 className="type-h2">{t('chatBroadcast.preview.title')}</h2>
@@ -244,7 +244,7 @@ export function Preview({
                 <Icon name="arrow-right" size={12} className="text-content-subtle" />
                 <span className="font-medium">
                   {t('chatBroadcast.preview.messagesRounds', {
-                    messages: filledMessages(draft).length,
+                    messages: roundSteps(draft).length,
                     rounds:
                       rounds === null
                         ? t('chatBroadcast.preview.endless')
@@ -335,7 +335,9 @@ export function Preview({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button onClick={onEdit}>{t('chatBroadcast.preview.edit')}</Button>
+            <Button disabled={saving} onClick={onEdit}>
+              {t('chatBroadcast.preview.edit')}
+            </Button>
             <Button variant="primary" disabled={blocking.length > 0 || saving} onClick={onConfirm}>
               {saving ? t('chatBroadcast.preview.saving') : t('chatBroadcast.preview.confirm')}
             </Button>

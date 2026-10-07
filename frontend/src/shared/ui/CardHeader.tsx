@@ -70,6 +70,7 @@ function Heading({ title, icon, tone = 'info', dot, badge, subtitle }: CardHeadi
 export function CardHeader({
   toggle,
   wrap = false,
+  aside,
   className,
   children,
   ...heading
@@ -80,30 +81,59 @@ export function CardHeader({
   // заголовок в столбик (шапка конвейера на телефоне). Шеврону складной карточки
   // переноситься некуда, поэтому по умолчанию строка не переносится.
   wrap?: boolean;
+  // То, что стоит сразу за заголовком, а не у правого края: вкладки доски. Это кнопки,
+  // поэтому им нельзя в `badge` — тот лежит внутри кнопки раскрытия.
+  aside?: ReactNode;
   className?: string;
   // Правая часть строки.
   children?: ReactNode;
 }) {
+  // С `aside` растягивается не заголовок, а строка «заголовок + aside», иначе aside
+  // уехал бы к правому краю. Пустое место в ней займёт распорка, тоже раскрывающая
+  // карточку, чтобы щелчок мимо заголовка складывал её, как и без `aside`.
+  const grow = aside === undefined ? 'flex-1' : '';
+  const title =
+    toggle === undefined ? (
+      <div className={cn('flex items-center gap-3', wrap ? 'flex-auto' : cn('min-w-0', grow))}>
+        <Heading {...heading} />
+      </div>
+    ) : (
+      <button
+        type="button"
+        onClick={toggle.onToggle}
+        aria-expanded={toggle.expanded}
+        aria-controls={toggle.controls}
+        className={cn(
+          'flex min-w-0 items-center gap-3 text-left transition duration-state',
+          grow,
+          FOCUS_RING,
+          PRESS_FEEDBACK,
+        )}
+      >
+        <Heading {...heading} />
+      </button>
+    );
   return (
     <div className={cn('flex items-center gap-3', wrap && 'flex-wrap', className)}>
-      {toggle === undefined ? (
-        <div className={cn('flex items-center gap-3', wrap ? 'flex-auto' : 'min-w-0 flex-1')}>
-          <Heading {...heading} />
-        </div>
+      {aside === undefined ? (
+        title
       ) : (
-        <button
-          type="button"
-          onClick={toggle.onToggle}
-          aria-expanded={toggle.expanded}
-          aria-controls={toggle.controls}
-          className={cn(
-            'flex min-w-0 flex-1 items-center gap-3 text-left transition duration-state',
-            FOCUS_RING,
-            PRESS_FEEDBACK,
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+          {title}
+          {aside}
+          {toggle === undefined ? null : (
+            // The title no longer stretches, so the empty run of the row is this
+            // stand-in for it: a click there folds the card, as it did before `aside`.
+            // Out of the tab order and the tree — the title button is the real control.
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              onClick={toggle.onToggle}
+              className="min-w-0 flex-1 self-stretch"
+            />
           )}
-        >
-          <Heading {...heading} />
-        </button>
+        </div>
       )}
       {children}
     </div>

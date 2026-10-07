@@ -214,6 +214,56 @@ async def save_settings(
     )
 
 
+def _save_pace(campaign_id: str, settings_json: str, expected_updated_at: str) -> bool:
+    table = _chat_broadcast_campaigns
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        current = connection.execute(
+            select(table.c.updated_at).where(table.c.campaign_id == campaign_id)
+        ).scalar_one_or_none()
+        if current is None or current != expected_updated_at:
+            return False
+        connection.execute(
+            update(table)
+            .where(table.c.campaign_id == campaign_id)
+            .values(settings_json=settings_json, updated_at=_newer_stamp(str(current))),
+        )
+    return True
+
+
+async def save_pace(campaign_id: str, *, settings_json: str, expected_updated_at: str) -> bool:
+    """Write settings whose only change is the pauses — allowed while a run is attached.
+
+    Bumps the edit token, so a dialog opened before it cannot save over the new pauses.
+    ``False`` when the row is gone or its stamp moved since the caller read it.
+    """
+    return await asyncio.to_thread(_save_pace, campaign_id, settings_json, expected_updated_at)
+
+
+def _move_rest(campaign_id: str, round_number: int, until: int) -> bool:
+    table = _chat_broadcast_campaigns
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(table)
+            .where(
+                table.c.campaign_id == campaign_id,
+                table.c.round == round_number,
+                table.c.rest_until_unix.is_not(None),
+            )
+            .values(rest_until_unix=until),
+        )
+    return result.rowcount > 0
+
+
+async def move_rest(campaign_id: str, *, round_number: int, until: int) -> bool:
+    """Move the end of the rest after ``round_number`` — only while that rest still runs.
+
+    The engine clears the rest as it opens the next round; a move that lands after that
+    must not put a rest into the middle of the new round.
+    """
+    return await asyncio.to_thread(_move_rest, campaign_id, round_number, until)
+
+
 def _set_status(
     campaign_id: str,
     status: ChatBroadcastStatus,

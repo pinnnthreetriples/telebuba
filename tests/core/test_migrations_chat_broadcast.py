@@ -1,4 +1,4 @@
-"""Migration 68 — the chat-broadcast schema, and its parity with ``create_all``.
+"""Migrations 68/69 — the chat-broadcast schema, and its parity with ``create_all``.
 
 A fresh database is built by ``core.repositories.chat_broadcast._tables`` and an existing
 one by the migration; neither path exercises the other, so the two spellings are compared
@@ -13,7 +13,10 @@ import pytest
 
 import core.repositories.chat_broadcast._tables  # noqa: F401 - registers the tables
 from core.db import _metadata
-from core.migration_steps_chat_broadcast import _add_chat_broadcast_tables
+from core.migration_steps_chat_broadcast import (
+    _add_chat_broadcast_ignore_deleted,
+    _add_chat_broadcast_tables,
+)
 from core.migrations import MIGRATIONS
 from tests.core.test_migrations_scheduled_posts import _checks, _shape
 
@@ -46,12 +49,15 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     _metadata.tables["accounts"].create(engine)
     with engine.begin() as connection:
         _add_chat_broadcast_tables(connection)
+        _add_chat_broadcast_ignore_deleted(connection)
     return engine
 
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_tables]
     assert entries == [(68, "add_chat_broadcast_tables", _add_chat_broadcast_tables)]
+    kept = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_ignore_deleted]
+    assert kept == [(69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted)]
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -67,6 +73,7 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
     before = {table: _shape(migrated_engine, table) for table in _TABLES}
     with migrated_engine.begin() as connection:
         _add_chat_broadcast_tables(connection)
+        _add_chat_broadcast_ignore_deleted(connection)
     assert {table: _shape(migrated_engine, table) for table in _TABLES} == before
 
 

@@ -201,130 +201,146 @@ export function ChannelCreateModal({
         ? 'text-danger'
         : 'text-content-subtle';
 
+  // A channel described but not created. After a create (or the one attempt a
+  // POST_CREATE_CODES refusal allows) the input has been spent and nothing is lost.
+  const dirty =
+    !done &&
+    !blocked &&
+    createdId === null &&
+    (title.trim() !== '' ||
+      about.trim() !== '' ||
+      username.trim() !== '' ||
+      isPrivate ||
+      pinToProfile ||
+      reactionsOff);
+
   return (
-    // Escape / backdrop-click route through Modal's onClose — locked while the
-    // create is in flight (unmounting mid-flight drops the onSuccess and loses
-    // both the list refresh and the editor hand-off).
+    // Every exit is locked while the create is in flight (unmounting mid-flight
+    // drops the onSuccess and loses both the list refresh and the editor hand-off).
     <Modal
-      onClose={busy ? () => undefined : onClose}
+      onClose={onClose}
+      dirty={dirty}
+      locked={busy}
       size="form"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <span className="type-h2">{t('accounts.channel.createTitle')}</span>
-          <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
-        </div>
+      {(close) => (
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="type-h2">{t('accounts.channel.createTitle')}</span>
+            <CloseButton onClick={close} disabled={busy} aria-label={t('accounts.channel.close')} />
+          </div>
 
-        <label className="mb-4 block">
-          <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
-          <Input
-            value={title}
-            maxLength={CHANNEL_TITLE_MAX}
-            onChange={(event) => {
-              setTitle(event.target.value);
-            }}
-          />
-          {title !== '' && title.trim() === '' && (
-            <span className="mt-1 block type-small text-danger-deep">
-              {t('accounts.channel.errTitle')}
-            </span>
-          )}
-        </label>
-
-        <label className="mb-4 block">
-          <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
-          <Textarea
-            className="[font-family:inherit]"
-            value={about}
-            maxLength={CHANNEL_ABOUT_MAX}
-            onChange={(event) => {
-              setAbout(event.target.value);
-            }}
-          />
-        </label>
-
-        <CheckRow
-          label={t('accounts.channel.privateToggle')}
-          on={isPrivate}
-          onToggle={() => {
-            setIsPrivate((value) => !value);
-            setPinToProfile(false);
-          }}
-        />
-
-        <CheckRow
-          label={t('accounts.channel.pinToggle')}
-          on={pinToProfile}
-          disabled={isPrivate}
-          hint={isPrivate ? t('accounts.channel.pinNeedsPublic') : undefined}
-          onToggle={() => {
-            setPinToProfile((value) => !value);
-          }}
-        />
-
-        <CheckRow
-          label={t('accounts.channel.reactionsToggle')}
-          on={reactionsOff}
-          onToggle={() => {
-            setReactionsOff((value) => !value);
-          }}
-        />
-
-        {isPublic && (
           <label className="mb-4 block">
-            <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
-            <div className="relative flex items-center">
-              <span className="absolute left-4 text-body text-content-subtle">@</span>
-              <Input
-                className="pl-8"
-                value={username}
-                onChange={(event) => {
-                  setUsername(event.target.value);
-                }}
-              />
-            </div>
-            {usernameHint && (
-              <span className={`mt-1 block text-small ${hintColor}`}>{usernameHint.text}</span>
+            <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
+            <Input
+              value={title}
+              maxLength={CHANNEL_TITLE_MAX}
+              onChange={(event) => {
+                setTitle(event.target.value);
+              }}
+            />
+            {title !== '' && title.trim() === '' && (
+              <span className="mt-1 block type-small text-danger-deep">
+                {t('accounts.channel.errTitle')}
+              </span>
             )}
           </label>
-        )}
 
-        {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
+          <label className="mb-4 block">
+            <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
+            <Textarea
+              className="[font-family:inherit]"
+              value={about}
+              maxLength={CHANNEL_ABOUT_MAX}
+              onChange={(event) => {
+                setAbout(event.target.value);
+              }}
+            />
+          </label>
+
+          <CheckRow
+            label={t('accounts.channel.privateToggle')}
+            on={isPrivate}
+            onToggle={() => {
+              setIsPrivate((value) => !value);
+              setPinToProfile(false);
+            }}
+          />
+
+          <CheckRow
+            label={t('accounts.channel.pinToggle')}
+            on={pinToProfile}
+            disabled={isPrivate}
+            hint={isPrivate ? t('accounts.channel.pinNeedsPublic') : undefined}
+            onToggle={() => {
+              setPinToProfile((value) => !value);
+            }}
+          />
+
+          <CheckRow
+            label={t('accounts.channel.reactionsToggle')}
+            on={reactionsOff}
+            onToggle={() => {
+              setReactionsOff((value) => !value);
+            }}
+          />
+
+          {isPublic && (
+            <label className="mb-4 block">
+              <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
+              <div className="relative flex items-center">
+                <span className="absolute left-4 text-body text-content-subtle">@</span>
+                <Input
+                  className="pl-8"
+                  value={username}
+                  onChange={(event) => {
+                    setUsername(event.target.value);
+                  }}
+                />
+              </div>
+              {usernameHint && (
+                <span className={`mt-1 block text-small ${hintColor}`}>{usernameHint.text}</span>
+              )}
+            </label>
+          )}
+
+          {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
             `mt-xl`, соседние вертикальные отступы в блочном потоке СЛИПАЮТСЯ, и
             расстояние было max(16, 20) = 20px и до правки. Отступ ничего не ставил. */}
-        {create.isError && (
-          <Notice tone="danger">
-            {channelErrorText(create.error, t, t('accounts.channel.error'))}
-          </Notice>
-        )}
+          {create.isError && (
+            <Notice tone="danger">
+              {channelErrorText(create.error, t, t('accounts.channel.error'))}
+            </Notice>
+          )}
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button onClick={onClose} disabled={busy}>
-            {t('accounts.channel.cancel')}
-          </Button>
-          {/* Once the channel exists (id-bearing refusal) the primary action is
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={close} disabled={busy}>
+              {t('accounts.channel.cancel')}
+            </Button>
+            {/* Once the channel exists (id-bearing refusal) the primary action is
               the hand-off into its editor, not another create. */}
-          <Button
-            variant="primary"
-            onClick={
-              createdId === null
-                ? submit
-                : () => {
-                    onCreated(createdId);
-                  }
-            }
-            disabled={createdId === null && !canSubmit}
-            loading={createdId === null && busy}
-          >
-            {createdId !== null
-              ? t('accounts.channel.edit')
-              : busy
-                ? t('accounts.channel.creating')
-                : t('accounts.channel.createBtn')}
-          </Button>
+            <Button
+              variant="primary"
+              onClick={
+                createdId === null
+                  ? submit
+                  : () => {
+                      onCreated(createdId);
+                    }
+              }
+              disabled={createdId === null && !canSubmit}
+              loading={createdId === null && busy}
+            >
+              {createdId !== null
+                ? t('accounts.channel.edit')
+                : busy
+                  ? t('accounts.channel.creating')
+                  : t('accounts.channel.createBtn')}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </Modal>
   );
 }

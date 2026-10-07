@@ -203,6 +203,7 @@ async def settle(
     """Write the terminal row once; a pending send left behind becomes unconfirmed."""
     if run_id is not None and not _state.claim_settlement(campaign_id, run_id):
         return
+    _state.forget_campaign(campaign_id)
     if release:
         release_campaign(campaign_id)
     if run_id is not None:

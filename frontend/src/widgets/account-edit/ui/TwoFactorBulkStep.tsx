@@ -15,6 +15,7 @@ import {
   ProgressBar,
   SegmentedControl,
   Spinner,
+  useModalDirty,
 } from '@/shared/ui';
 
 import { TwoFactorBulkResults } from './TwoFactorBulkResults';
@@ -101,6 +102,9 @@ export function TwoFactorBulkStep({
   });
   const mode = useStore(form.store, (state) => state.values.mode);
   const canSubmit = useStore(form.store, (state) => state.canSubmit);
+  const typed = useStore(form.store, (state) => state.isDirty);
+  // Inside the add wizard a typed password must not vanish with a stray click on the veil.
+  useModalDirty(phase === 'select' && typed);
 
   if (phase === 'result') {
     return <TwoFactorBulkResults rows={bulk.rows} label={label} onDone={onDone} />;
