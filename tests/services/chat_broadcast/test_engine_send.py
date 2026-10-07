@@ -69,7 +69,9 @@ async def test_the_board_knows_when_the_next_message_goes_out(
     await run_to_end(campaign_id)
 
     assert len(seen) == 1
-    assert (await repository.fetch_target(campaign_id, "alpha")).next_action_unix is None  # type: ignore[union-attr]
+    final = await repository.fetch_target(campaign_id, "alpha")
+    assert final is not None
+    assert final.next_action_unix is None
 
 
 @pytest.mark.asyncio
