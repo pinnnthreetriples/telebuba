@@ -383,6 +383,43 @@ if (rule) {
         code: 'const x = "text-small uppercase tracking-wide";',
         errors: [{ message: /letter-spacing scale is replaced/ }],
       },
+      // What Tailwind 4 paints without asking the theme. Each emitted nothing under
+      // Tailwind 3, so each is a class that has never done what it says.
+      ...[
+        'h-auto',
+        'w-fit',
+        'size-full',
+        'max-h-full',
+        'w-1/2',
+        'sm:min-h-0',
+        'min-h-control',
+        '!w-screen',
+        'max-w-col',
+      ].map((cls) => ({
+        code: `const dim = "flex ${cls}";`,
+        errors: [{ message: /Dimensions are closed scales of their own/ }],
+      })),
+      ...['z-50', 'duration-300', 'scale-95', 'hover:scale-105', 'z-5'].map((cls) => ({
+        code: `const bare = "relative ${cls}";`,
+        errors: [{ message: /accepts any bare number/ }],
+      })),
+      {
+        code: 'const sq = "rounded-none md:rounded-t-none";',
+        errors: [{ message: /no zero radius on the scale/ }],
+      },
     ],
+  });
+
+  // The other half of the same patterns: every rung the dimension and motion scales DO
+  // declare stays legal, so the closure cannot drift into flagging the system itself.
+  ruleTester.run('no-raw-values: declared rungs', rule, {
+    valid: [
+      'const w1 = "w-0 w-auto w-max w-full w-col w-logAccount w-table";',
+      'const h1 = "h-full h-rail h-profileDialog min-h-touch min-h-screen max-h-feedInline";',
+      'const m1 = "min-w-0 min-w-table max-w-full max-w-shell size-face size-tick";',
+      'const z1 = "z-0 z-pop z-toast duration-state duration-pulse scale-press active:scale-rest";',
+      'const a1 = "max-w-[84%] h-[1.1em] w-[min(84vw,300px)]";',
+    ],
+    invalid: [],
   });
 }

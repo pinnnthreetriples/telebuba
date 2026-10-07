@@ -77,7 +77,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-none focus:border-action-primary"
+              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-hidden focus:border-action-primary"
             />
           </label>
           <label className="block type-small-medium">
@@ -92,7 +92,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-none focus:border-action-primary"
+              className="mt-2 w-full rounded-md border border-line bg-surface-card px-3 py-3 text-body font-normal text-content-primary outline-hidden focus:border-action-primary"
             />
           </label>
           {submitCode.isError && (

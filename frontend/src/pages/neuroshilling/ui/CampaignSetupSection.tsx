@@ -160,7 +160,7 @@ export function CampaignSetupSection({
 
       {/* Две колонки, разделённые волосяной линией, как в макете. Ниже `sm` они
           складываются в стопку, и разделитель тогда лежит НАД правой колонкой. */}
-      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
+      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6">
         <div className="min-w-0 sm:pr-6">
           <SectionLabel
             title={t('neuroshilling.setup.launch.eyebrow')}
@@ -269,7 +269,7 @@ export function CampaignSetupSection({
           </SettingRow>
         </div>
 
-        <div className="min-w-0 sm:pl-6">
+        <div className="min-w-0 sm:border-l sm:border-line sm:pl-6">
           <SectionLabel
             title={t('neuroshilling.setup.listening.title')}
             caption={t('neuroshilling.setup.listening.caption')}

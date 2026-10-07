@@ -100,7 +100,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
   return (
     <section>
       <SectionLabel title={t(`${P}.sections.filters`)} />
-      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6 sm:divide-x sm:divide-line">
+      <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6">
         <div className="min-w-0 sm:pr-6">
           <SettingRow first label={t(`${P}.kind.label`)}>
             <SegmentedControl
@@ -132,7 +132,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
           </SettingRow>
         </div>
 
-        <div className="min-w-0 sm:pl-6">
+        <div className="min-w-0 sm:border-l sm:border-line sm:pl-6">
           <SettingRow first label={t(`${P}.access.label`)}>
             <SegmentedControl
               variant="pill"

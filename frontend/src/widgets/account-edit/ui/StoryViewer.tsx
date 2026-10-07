@@ -131,7 +131,7 @@ export function StoryViewer({
               onError={() => {
                 setFailed(true);
               }}
-              className="size-full object-contain"
+              className="object-contain"
             />
           ) : (
             src && (
@@ -143,7 +143,7 @@ export function StoryViewer({
                 onError={() => {
                   setFailed(true);
                 }}
-                className="size-full object-contain"
+                className="object-contain"
               />
             )
           )}

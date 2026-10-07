@@ -226,7 +226,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
       />
 
       <div className="flex flex-col gap-6 px-6 py-6">
-        <div ref={contentRef} tabIndex={-1} className="outline-none">
+        <div ref={contentRef} tabIndex={-1} className="outline-hidden">
           {submitted ? (
             <DiscoveryResults
               board={board.data}

@@ -34,8 +34,8 @@ export const typeScale = {
 } as const;
 
 // Размер ступени отдельно — для потребителей, которым нужно только число (гейты,
-// документация). Tailwind получает ступень целиком, парой с интерлиньяжем и трекингом:
-// см. `tailwind.config.ts`.
+// документация). Tailwind получает ступень целиком, вместе с интерлиньяжем и трекингом:
+// см. `scripts/tailwind-theme.mjs`.
 export const fontSize = Object.fromEntries(
   Object.entries(typeScale).map(([name, step]) => [name, step.size]),
 ) as { [K in keyof typeof typeScale]: (typeof typeScale)[K]['size'] };

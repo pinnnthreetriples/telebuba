@@ -317,7 +317,7 @@ test('icon actions have names, shared keyboard focus, and native disabled state'
   expect(profile).toBeEnabled();
   expect(remove).toBeDisabled();
   expect(check).toBeDisabled();
-  expect(web).toHaveClass('focus-visible:outline', 'focus-visible:outline-action-primary');
+  expect(web).toHaveClass('focus-visible:outline-solid', 'focus-visible:outline-action-primary');
 
   await user.tab(); // Focus the keyboard-operable row.
   await user.tab(); // The row's first action is the web button.

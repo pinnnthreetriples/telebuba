@@ -650,7 +650,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           {/* header */}
           <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
             <div
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-info-line to-line text-h1 font-medium text-content-primary"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br/srgb from-info-line to-line text-h1 font-medium text-content-primary"
               style={
                 avatarUri
                   ? {
@@ -734,7 +734,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6"
+            className="tb-scroll relative flex flex-1 flex-col gap-4 overflow-y-auto p-6"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a

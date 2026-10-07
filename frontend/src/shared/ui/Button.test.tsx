@@ -177,14 +177,15 @@ test('the default type is button and a caller can still submit', () => {
 });
 
 // The indicator a keyboard operator navigates by. It was `shadow-focus` — 1.18:1 once
-// composited, beside `outline-none` that removed the browser's own — so this asserts the
-// two halves that were wrong: that the ring is an outline, and that nothing suppresses it.
+// composited, beside `outline-none` (in Tailwind 4, `outline-hidden`) that removed the
+// browser's own — so this asserts the two halves that were wrong: that the ring is an
+// outline, and that nothing suppresses it.
 test('focus is an outline, and the browser ring is not thrown away', () => {
   render(<Button>Сохранить</Button>);
   const cls = screen.getByRole('button').className;
   expect(cls).toContain('focus-visible:outline-2');
   expect(cls).toContain('focus-visible:outline-action-primary');
-  expect(cls).not.toContain('outline-none');
+  expect(cls).not.toContain('outline-hidden');
   expect(cls).not.toContain('shadow-focus');
 });
 

@@ -342,7 +342,7 @@ export function AccountsPage() {
                   }
                 }}
                 placeholder={t('accounts.searchPlaceholder')}
-                className="h-full w-full border-none bg-surface-card px-3 py-0 text-body outline-none"
+                className="h-full w-full border-none bg-surface-card px-3 py-0 text-body outline-hidden"
               />
             </div>
             <IconButton

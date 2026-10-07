@@ -133,5 +133,5 @@ test('every field wears the shared focus treatment', () => {
 
   const classes = screen.getByLabelText('Ключ').className;
   expect(classes).toContain('tb-time');
-  expect(classes).toContain('outline-none');
+  expect(classes).toContain('outline-hidden');
 });

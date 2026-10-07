@@ -91,12 +91,12 @@ const SHAPE = {
 // являются контролами этой формы (у них своя высота и свой контракт доступности) и брали
 // те же четыре класса СПИСКОМ. Решение о фокусе одно, и место у него теперь тоже одно.
 export const FOCUS_RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary';
+  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary';
 
 // Поле анимирует рамку и свечение через `.tb-time` (index.css) — общий рецепт, а не класс
 // на каждом поле, и `:focus-within`, а не `:focus`, потому что поле бывает обёрткой
 // вокруг настоящего `<input>`.
-const FIELD_FOCUS = 'tb-time outline-none';
+const FIELD_FOCUS = 'tb-time outline-hidden';
 
 const DISABLED = 'disabled:pointer-events-none disabled:opacity-50';
 

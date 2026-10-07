@@ -299,7 +299,7 @@ function WarmingCard({
                 <span
                   id={actionsTipId}
                   role="tooltip"
-                  className="tb-tip-pop tb-tip-pop--wide max-sm:!right-0 max-sm:!left-auto max-sm:!translate-x-0"
+                  className="tb-tip-pop tb-tip-pop--wide max-sm:!right-0 max-sm:!left-auto max-sm:!transform-none"
                 >
                   {t('warming.card.actionsTip')}
                 </span>

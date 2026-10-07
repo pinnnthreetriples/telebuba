@@ -19,21 +19,13 @@ const FRONTEND_DIR = fileURLToPath(new URL('..', import.meta.url));
 const IGNORED = new Map([
   [
     // braces <= 3.0.3: стек переполняется на глубоко вложенных шаблонах. Патча нет
-    // (последний релиз — 3.0.3, май 2024; micromatch/braces#70). Тянут его только
-    // инструменты сборки — tailwindcss 3 (chokidar, fast-glob, micromatch) и
-    // steiger (micromatch) — и кормят его НАШИМИ шаблонами из конфигов; в бандл
-    // он не попадает. Убрать, как только выйдет исправленный braces.
+    // (последний релиз — 3.0.3, май 2024; micromatch/braces#70). С переходом на
+    // Tailwind 4 его тянет только steiger (micromatch, и через globby → fast-glob тот
+    // же micromatch) — линтер архитектуры, который кормит его НАШИМИ шаблонами из
+    // `steiger.config.ts` и путями `src/`; в бандл он не попадает. Убрать, как только
+    // выйдет исправленный braces или steiger от micromatch откажется.
     'GHSA-vfj7-8cjw-p6xm',
-    'braces: build-time only, fed our own glob patterns; no patched release',
-  ],
-  [
-    // postcss-selector-parser < 7.1.6: квадратичный разбор плоского селектора. Патч
-    // только в 7.x, а tailwindcss 3 (и его postcss-nested) требует ^6 — исправление
-    // приходит лишь с переходом на Tailwind 4, то есть с отдельной миграцией конфига.
-    // Работает только при сборке и разбирает НАШ CSS из `src/`; в бандл не попадает.
-    // Убрать вместе с переходом на Tailwind 4.
-    'GHSA-rj75-hqrm-r3gf',
-    'postcss-selector-parser: build-time only via tailwindcss 3, parses our own CSS',
+    'braces: build-time only via steiger, fed our own glob patterns; no patched release',
   ],
 ]);
 

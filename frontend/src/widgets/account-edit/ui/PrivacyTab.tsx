@@ -239,7 +239,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             <Button
               variant="primary"
               size="sm"
-              className="h-auto min-h-touch sm:h-field sm:min-h-0"
+              className="min-h-touch sm:h-field"
               disabled={locked}
               onClick={() => {
                 write(OPEN_TO_ALL);
@@ -249,7 +249,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </Button>
             <Button
               size="sm"
-              className="h-auto min-h-touch min-w-0 flex-1 shrink whitespace-normal px-3 py-2 text-center sm:h-field sm:min-h-0 sm:flex-none sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:py-0"
+              className="min-h-touch min-w-0 flex-1 shrink whitespace-normal px-3 py-2 text-center sm:h-field sm:flex-none sm:shrink-0 sm:whitespace-nowrap sm:px-4 sm:py-0"
               disabled={locked || !canFleet}
               onClick={() => {
                 setConfirmFleet(true);

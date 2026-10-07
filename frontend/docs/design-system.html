@@ -4,7 +4,7 @@
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    Telebuba Design System
-   Канон системы. Значения — из frontend/tailwind.config.ts и
+   Канон системы. Значения — из frontend/src/shared/design-system/tokens и
    app/styles/index.css; расхождения между кодом и этим документом решаются
    в пользу канона, отклонения перечислены в разделе «Унификация».
    Документ намеренно светлый: у продукта одна основа, инвертировать её —
@@ -23,6 +23,7 @@
   --content-secondary:#3a3a3a;
   --content-muted:#63615d;
   --content-subtle:#6e6b66;
+  --content-placeholder:#9ca3af;
   --on-fill:#ffffff;
   --on-action-track:#5ba3ff;
   --line:#e6e5e3;
@@ -535,6 +536,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="sw"><i style="background:#3a3a3a"></i><b>content-secondary</b><em>#3a3a3a</em><span>Плотные строки, значения в чипах</span></div>
         <div class="sw"><i style="background:#63615d"></i><b>content-muted</b><em>#63615d</em><span>Второстепенный текст, контурные кнопки</span></div>
         <div class="sw"><i style="background:#6e6b66"></i><b>content-subtle</b><em>#6e6b66</em><span>Подписи, плейсхолдеры, иконки в покое</span></div>
+        <div class="sw"><i style="background:#9ca3af"></i><b>content-placeholder</b><em>#9ca3af</em><span></span></div>
         <div class="sw"><i style="background:#ffffff"></i><b>on-fill</b><em>#ffffff</em><span>Надпись и иконка на любой заливке: действие, тон, серый счётчик, тост, подсказка</span></div>
         <div class="sw"><i style="background:#5ba3ff"></i><b>on-action-track</b><em>#5ba3ff</em><span>Дорожка кольца ожидания внутри залитой кнопки</span></div>
       </div>
@@ -1023,7 +1025,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Свод</div>
       <h2>Источник правды</h2>
       <div class="scroll"><table class="spec">
-        <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пятнадцать шкал <em>заменены</em>, а не расширены: всё, что объявлено вне <code>extend</code>, отменяет одноимённую шкалу Tailwind, и имя мимо канона не рисует ничего. В <code>extend</code> остались только цвета и семейства шрифтов. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
+        <tr><td>Токены</td><td><code>frontend/src/shared/design-system/tokens/</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Tailwind 4 получает их темой <code>src/app/styles/tailwind-theme.css</code>, которую генерирует <code>npm run ds:doc</code>: она начинается с <code>--*: initial</code>, поэтому ни одной шкалы Tailwind в ней нет, и имя мимо канона не рисует ничего. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
         <tr><td>Кейфреймы, подсказки, раскрытие, полосы прокрутки</td><td><code>frontend/src/app/styles/index.css</code></td></tr>
         <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — двадцать три компонента, и <code>Button</code> среди них: 49 файлов зовут его вместо собственной разметки. Вид и размер приходят пропсами, класс рядом с ними — только то, чего база не назначает</td></tr>
         <tr><td>Иконочная кнопка</td><td><code>shared/ui/IconButton</code> — размеры <code>sm 22</code> / <code>md 28</code> / <code>lg 34</code> / <code>touch 44</code>, тона <code>neutral | primary | danger</code></td></tr>
@@ -1034,7 +1036,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       </table></div>
       <footer>
         <span>Значения проверены на живом приложении: аккаунты, прогрев, нейрокомментинг, логи, настройки. НейроШиллинг не эталон — страница не закончена.</span>
-        <span>Если значение здесь расходится с <code>tailwind.config.ts</code> — правится код, а расхождение перечислено в «Унификации».</span>
+        <span>Если значение здесь расходится с токенами — правится код, а расхождение перечислено в «Унификации».</span>
       </footer>
     </section>
   </main>

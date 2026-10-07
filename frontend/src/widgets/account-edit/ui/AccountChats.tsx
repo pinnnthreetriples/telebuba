@@ -124,14 +124,14 @@ function MediaAttachment({ media, index }: { media: ChatMedia; index: number }) 
           <img
             src={media.download_url}
             alt={name}
-            className="max-h-72 max-w-full rounded-sm object-contain"
+            className="max-w-full rounded-sm object-contain"
           />
         ) : media.kind === 'video' || media.kind === 'video_note' || media.kind === 'animation' ? (
           <video
             src={media.download_url}
             preload="none"
             controls
-            className="max-h-72 max-w-full rounded-sm"
+            className="max-w-full rounded-sm"
           />
         ) : (
           <audio src={media.download_url} preload="none" controls className="max-w-full" />
@@ -145,7 +145,7 @@ function ChatMessageView({ message, you }: { message: ChatMessage; you: string }
   return (
     <article className={`flex flex-col ${message.outgoing ? 'items-end' : 'items-start'}`}>
       <div
-        className={`max-w-col break-words rounded-md px-4 py-3 type-body ${message.outgoing ? 'bg-info-tint text-content-primary' : 'border border-line bg-surface-card text-content-secondary'}`}
+        className={`break-words rounded-md px-4 py-3 type-body ${message.outgoing ? 'bg-info-tint text-content-primary' : 'border border-line bg-surface-card text-content-secondary'}`}
       >
         {message.text ? <p className="m-0 whitespace-pre-wrap">{message.text}</p> : null}
         {message.media?.map((media, index) => (
@@ -233,10 +233,10 @@ function ChatComposer({
           }}
           placeholder={t('accounts.edit.chats.messagePlaceholder')}
           aria-label={t('accounts.edit.chats.messagePlaceholder')}
-          className={`min-h-control min-w-0 w-full resize-none overflow-y-hidden rounded-md border border-line bg-surface-card px-3 py-2 type-body text-content-primary outline-none ${FOCUS_RING} sm:w-auto sm:flex-1`}
+          className={`min-w-0 w-full resize-none overflow-y-hidden rounded-md border border-line bg-surface-card px-3 py-2 type-body text-content-primary outline-hidden ${FOCUS_RING} sm:w-auto sm:flex-1`}
         />
         <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
-          <label className="inline-flex min-h-control cursor-pointer items-center rounded-md border border-line px-3 type-body-medium text-content-secondary hover:bg-canvas">
+          <label className="inline-flex cursor-pointer items-center rounded-md border border-line px-3 type-body-medium text-content-secondary hover:bg-canvas">
             <Icon name="paperclip" size={16} />
             <span className="sr-only">{t('accounts.edit.chats.attachFiles')}</span>
             <input
@@ -421,7 +421,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
       <div
         role="tablist"
         aria-label={t('accounts.edit.chats.tabs')}
-        className="flex w-fit items-center gap-1 rounded-full border border-line bg-surface-card p-1"
+        className="flex items-center gap-1 rounded-full border border-line bg-surface-card p-1"
       >
         {(['overview', 'chats'] as const).map((value) => (
           <button
@@ -486,7 +486,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
                     : undefined
                 }
                 onClick={() => open(dialog)}
-                className={`flex min-h-control w-full items-center gap-1 rounded-md border px-3 py-1 text-left transition-colors ${selected?.peer_id === dialog.peer_id && selected.peer_type === dialog.peer_type ? 'border-info-line bg-info-tint' : 'border-line bg-surface-card hover:border-line-strong hover:bg-canvas'}`}
+                className={`flex w-full items-center gap-1 rounded-md border px-3 py-1 text-left transition-colors ${selected?.peer_id === dialog.peer_id && selected.peer_type === dialog.peer_type ? 'border-info-line bg-info-tint' : 'border-line bg-surface-card hover:border-line-strong hover:bg-canvas'}`}
               >
                 <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-canvas text-content-primary type-body-medium">
                   {dialog.title.slice(0, 1).toUpperCase()}
@@ -525,7 +525,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
             ) : null}
           </section>
           {selected ? (
-            <Card className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
+            <Card className="flex flex-col overflow-hidden lg:col-span-2">
               <header className="flex flex-wrap items-center gap-3 border-b border-canvas px-4 py-3">
                 <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong type-body-medium">
                   {selected.title.slice(0, 1).toUpperCase()}
@@ -609,7 +609,7 @@ export function AccountChats({ accountId, overview }: AccountChatsProps) {
               />
             </Card>
           ) : (
-            <Card className="flex min-h-0 items-center justify-center p-6 type-body text-content-muted lg:col-span-2">
+            <Card className="flex items-center justify-center p-6 type-body text-content-muted lg:col-span-2">
               {t('accounts.edit.chats.chooseConversation')}
             </Card>
           )}

@@ -3,7 +3,7 @@
 //
 // Разметки руками здесь нет. Образцы описаны в `catalog/blocks/Blocks.tsx` настоящими
 // компонентами, Vite загружает их в Node (`ssrLoadModule` с алиасами проекта), а
-// `react-dom/server` превращает в HTML. CSS — тот же Tailwind с тем же конфигом и тем же
+// `react-dom/server` превращает в HTML. CSS — тот же Tailwind с той же темой и тем же
 // `src/app/styles/index.css`, собранный только по этой разметке. Поменяли компонент,
 // токен или рецепт — страница разошлась, и `ds:doc:check` падает, пока её не соберут.
 //
@@ -13,10 +13,9 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { compile } from '@tailwindcss/node';
+import { Scanner } from '@tailwindcss/oxide';
 import { transform } from 'esbuild';
-import postcss from 'postcss';
-import tailwind from 'tailwindcss';
-import loadConfig from 'tailwindcss/loadConfig.js';
 import { createServer } from 'vite';
 
 import { tokens } from './configScales.mjs';
@@ -51,18 +50,19 @@ async function renderBlocks() {
   }
 }
 
-// Только классы, которые носит разметка страницы, — и весь `index.css` проекта, кроме
-// шрифтов: их страница берёт сама, как и `design-md.html`.
+// Только классы, которые носит разметка страницы, — и весь `index.css` проекта (тема,
+// слои, варианты), кроме шрифтов и флагов: шрифты страница берёт сама, как и
+// `design-md.html`, а флагов на ней нет. Классы ищет тот же сканер, что и у сборки, но по
+// одной этой разметке, а не по `@source` из `index.css`.
 async function compileCss(html) {
-  const config = loadConfig(join(ROOT, 'tailwind.config.ts'));
-  const source = readFileSync(join(SRC, 'app', 'styles', 'index.css'), 'utf8').replace(
-    /^@import .*$/gm,
+  const styles = join(SRC, 'app', 'styles');
+  const source = readFileSync(join(styles, 'index.css'), 'utf8').replace(
+    /^@import '(?:@fontsource|flag-icons)\/.*$/gm,
     '',
   );
-  const out = await postcss([
-    tailwind({ ...config, content: [{ raw: html, extension: 'html' }] }),
-  ]).process(source, { from: undefined });
-  const min = await transform(out.css, { loader: 'css', minify: true });
+  const compiler = await compile(source, { base: styles, onDependency: () => undefined });
+  const candidates = new Scanner({}).scanFiles([{ content: html, extension: 'html' }]);
+  const min = await transform(compiler.build(candidates), { loader: 'css', minify: true });
   return min.code.trim();
 }
 

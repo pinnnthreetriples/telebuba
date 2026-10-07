@@ -203,7 +203,7 @@ export function Modal({
           event.stopPropagation();
         }}
         className={cn(
-          'max-w-full outline-none',
+          'max-w-full outline-hidden',
           SHELL[variant].card,
           variant === 'center' && SIZE[size],
         )}
