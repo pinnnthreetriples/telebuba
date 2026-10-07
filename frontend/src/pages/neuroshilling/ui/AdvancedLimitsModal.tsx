@@ -12,7 +12,7 @@ import {
 } from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
-import { useNumberField } from './useNumberField';
+import { useNumberField } from '@/shared/lib';
 import {
   clampInt,
   MAX_MESSAGES_PER_CHAT_PER_DAY,

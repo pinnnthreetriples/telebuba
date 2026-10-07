@@ -19,7 +19,7 @@ import { AdvancedLimitsModal } from './AdvancedLimitsModal';
 import type { ScenarioDraft } from './scenarioDraft';
 import type { SetupDraft } from './setupDraft';
 import { clampInt, MAX_LISTEN_MINUTES, MAX_PAUSE_SECONDS, splitTargets } from './setupDraft';
-import { useNumberField } from './useNumberField';
+import { useNumberField } from '@/shared/lib';
 
 // Числовое поле дизайн-системы с тем же поведением пустого значения, что у пауз шага.
 function NumberInput({
