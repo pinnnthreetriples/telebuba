@@ -163,7 +163,7 @@ test('the pipeline view for a draft, a run and a stall', () => {
     time,
     nameOf: (id) => id,
   });
-  expect(running.action).toMatchObject({ kind: 'stop', variant: 'danger' });
+  expect(running.action).toMatchObject({ kind: 'stop', disabled: false });
   expect(running.badge.label).toBe('Идёт');
   expect(running.nodes.map((node) => node.id)).toEqual([
     'accounts',

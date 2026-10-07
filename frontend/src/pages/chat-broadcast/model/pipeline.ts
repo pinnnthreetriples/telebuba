@@ -15,7 +15,7 @@ export type PipelineAction = 'start' | 'stop' | 'resume' | 'restart';
 
 export type PipelineView = {
   badge: { label: string; tone: BadgeTone };
-  action: { kind: PipelineAction; label: string; variant: 'primary' | 'danger'; disabled: boolean };
+  action: { kind: PipelineAction; label: string; disabled: boolean };
   nodes: { id: string; label: string; sub: string; done: boolean }[];
   notice: { tone: NoticeTone; text: string };
   extras: { tone: NoticeTone; text: string }[];
@@ -56,7 +56,6 @@ function actionOf(t: TFunction, phase: ChatBroadcastPhase, inputs: Inputs): Pipe
     return {
       kind: 'stop',
       label: t('chatBroadcast.pipeline.stop'),
-      variant: 'danger',
       disabled: phase === 'stopping',
     };
   }
@@ -64,7 +63,6 @@ function actionOf(t: TFunction, phase: ChatBroadcastPhase, inputs: Inputs): Pipe
     return {
       kind: 'restart',
       label: t('chatBroadcast.pipeline.restart'),
-      variant: 'primary',
       disabled: inputs.missing.length > 0,
     };
   }
@@ -72,7 +70,6 @@ function actionOf(t: TFunction, phase: ChatBroadcastPhase, inputs: Inputs): Pipe
     return {
       kind: 'start',
       label: t('chatBroadcast.pipeline.start'),
-      variant: 'primary',
       disabled: inputs.missing.length > 0,
     };
   }
@@ -80,7 +77,6 @@ function actionOf(t: TFunction, phase: ChatBroadcastPhase, inputs: Inputs): Pipe
   return {
     kind: 'resume',
     label: t('chatBroadcast.pipeline.resume'),
-    variant: 'primary',
     disabled: !anyFree || inputs.missing.length > 0,
   };
 }

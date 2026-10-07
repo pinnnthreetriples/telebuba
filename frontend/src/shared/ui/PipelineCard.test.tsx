@@ -72,6 +72,11 @@ test('the status line breathes only while the pipeline runs', () => {
   expect(live.querySelector('.pl-pulse')).not.toBeNull();
 });
 
+test('a failed run says so in the danger tone', () => {
+  renderCard({ notice: { tone: 'danger', text: 'Встала' } });
+  expect(screen.getByText('Встала').closest('[class*="bg-danger-tint"]')).not.toBeNull();
+});
+
 test('what only one pipeline has goes under the tiles', () => {
   renderCard({ children: <p>Замен: 0</p> });
   const extra = screen.getByText('Замен: 0');
