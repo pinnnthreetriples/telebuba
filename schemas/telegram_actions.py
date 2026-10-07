@@ -25,6 +25,15 @@ from schemas.accounts import (
 # unions below reference them, so importing here keeps the original import paths working.
 from schemas.telegram_actions_activity import GetLastPostAt
 
+# The chat-broadcast family (``broadcast_*`` writes plus two reads) is a sibling too.
+from schemas.telegram_actions_broadcast import (
+    BroadcastForwardPost,
+    BroadcastJoinChatlist,
+    BroadcastSendMessage,
+    CheckChatlist,
+    ListWritableGroups,
+)
+
 # The channel-management action cluster lives in a sibling module (file-size
 # cap); importing the names here keeps
 # ``from schemas.telegram_actions import CreateChannel`` working unchanged.
@@ -378,7 +387,10 @@ TelegramAction = Annotated[
     | WarmToggleArchive
     | WarmMutePeer
     | WarmConsumeMedia
-    | WarmEmojiStatus,
+    | WarmEmojiStatus
+    | BroadcastSendMessage
+    | BroadcastForwardPost
+    | BroadcastJoinChatlist,
     Field(discriminator="action_type"),
 ]
 
@@ -407,6 +419,8 @@ TelegramReadAction = Annotated[
     | GetSimilarChannels
     | SearchGlobalPosts
     | GetLastPostAt
-    | LookupContactsByPhone,
+    | LookupContactsByPhone
+    | ListWritableGroups
+    | CheckChatlist,
     Field(discriminator="action_type"),
 ]

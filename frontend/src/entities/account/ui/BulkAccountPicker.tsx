@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountDisplayName, AccountAvatar, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import {
   Button,
@@ -15,13 +14,18 @@ import {
   Spinner,
 } from '@/shared/ui';
 
+import { allAccountsQueryOptions } from '../api/accounts.queries';
+import { accountDisplayName } from '../model/displayName';
+
+import { AccountAvatar } from './AccountAvatar';
+
 // Everything the search box matches on, lowercased once per row rather than per
 // keystroke × row. `label` doubles as the row's rendered name.
 type Candidate = { account: AccountRead; label: string; haystack: string };
 
-// The bulk editor's "Добавить аккаунты" list: the WHOLE fleet (not the accounts
-// page's current cursor page), searchable, with a header checkbox that takes
-// every row the search currently shows.
+// The fleet picker — the bulk editor's and the chat broadcast's "add accounts" list:
+// the WHOLE fleet (not the accounts page's current cursor page), searchable, with a
+// header checkbox that takes every row the search currently shows.
 //
 // Draft selection, applied on «Добавить»: the strip behind this dialog is the
 // batch about to be written, so a mis-tick must be cancellable without having

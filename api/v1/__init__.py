@@ -10,6 +10,7 @@ from api.v1 import (
     accounts,
     accounts_media,
     auth,
+    chat_broadcast,
     events,
     health,
     logs,
@@ -39,5 +40,6 @@ router.include_router(events.router, dependencies=_protected, responses=PROTECTE
 # in the generated OpenAPI document, so appending keeps the generated client's
 # diff an append too, whatever the reader's diff algorithm makes of the rest.
 router.include_router(neuroshilling.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(chat_broadcast.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 
 __all__ = ["router"]

@@ -38,6 +38,10 @@ interface DataTableProps<TData> {
   // When set, a row whose TanStack expanded-state is on renders this full-width
   // beneath it (drive the toggle from a column cell via row.toggleExpanded()).
   renderSubRow?: (row: Row<TData>) => ReactNode;
+  // A stable identity per record. Without it rows are identified by index, so the
+  // expanded state follows the POSITION: re-sorting, filtering or a refetch that changes
+  // the order opens the neighbouring row instead of the one the operator opened.
+  getRowId?: (original: TData, index: number) => string;
 }
 
 // text-left so headers sit directly above their left-aligned cells; a column that wants a
@@ -107,10 +111,12 @@ export function DataTable<TData>({
   columns,
   getRowProps,
   renderSubRow,
+  getRowId,
 }: DataTableProps<TData>) {
   const table = useReactTable({
     data,
     columns,
+    ...(getRowId === undefined ? {} : { getRowId }),
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => renderSubRow !== undefined,

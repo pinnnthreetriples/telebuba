@@ -45,6 +45,10 @@ class ListenerBusyNeuroshillingError(Exception):
     """
 
 
+class ListenerBusyChatBroadcastError(Exception):
+    """The same refusal for an account a running chat-broadcast campaign holds."""
+
+
 async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     """Fence the owner, stop producers, then boundedly drain owned workers."""
     from services.neurocomment import _runtime  # noqa: PLC0415
@@ -76,6 +80,8 @@ async def _refuse_if_busy(listener_account_id: str) -> None:
         raise ListenerBusyDiscoveryError(listener_account_id)
     if _account_owner.owner_of(listener_account_id) == "neuroshilling":
         raise ListenerBusyNeuroshillingError(listener_account_id)
+    if _account_owner.owner_of(listener_account_id) == "chat_broadcast":
+        raise ListenerBusyChatBroadcastError(listener_account_id)
 
 
 async def start_neurocomment(

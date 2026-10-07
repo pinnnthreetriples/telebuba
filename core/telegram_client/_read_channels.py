@@ -26,6 +26,10 @@ from telethon.tl.types import (
 )
 
 from core.config import settings
+from core.telegram_client._broadcast import (
+    dispatch_check_chatlist,
+    dispatch_list_writable_groups,
+)
 from core.telegram_client._channels import _input_channel
 from core.telegram_client._read_discovery import (
     dispatch_get_similar_channels,
@@ -46,6 +50,7 @@ from schemas.telegram_actions import (
     SearchGlobalPosts,
 )
 from schemas.telegram_actions_activity import LastPostResult
+from schemas.telegram_actions_broadcast import CheckChatlist, ListWritableGroups
 from schemas.telegram_actions_channels import (
     ChannelUsernameCheck,
     TelegramChannelPost,
@@ -257,7 +262,7 @@ async def dispatch_check_channel_username(
     return ChannelUsernameCheck(available=True)
 
 
-async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-action case
+async def _dispatch_channel_read_action(  # noqa: C901, PLR0911 - one return per read-action case
     client: TelegramClient,
     action: TelegramReadAction,
 ) -> BaseModel:
@@ -291,6 +296,10 @@ async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-
             return await dispatch_search_global_posts(client, action)
         case GetLastPostAt():
             return await dispatch_get_last_post_at(client, action)
+        case ListWritableGroups():
+            return await dispatch_list_writable_groups(client, action)
+        case CheckChatlist():
+            return await dispatch_check_chatlist(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
