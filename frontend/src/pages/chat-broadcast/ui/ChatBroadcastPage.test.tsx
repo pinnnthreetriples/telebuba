@@ -111,6 +111,18 @@ test('the opened chat stays open when a refetch moves the rows around it', async
   );
 });
 
+test('a writing chat shows a countdown to its next message', async () => {
+  const next = new Date(Date.now() + 90_000).toISOString();
+  routeApi({
+    board: board({
+      rows: [row({ chat_key: 'alpha', raw: '@alpha', state: 'writing', next_action_at: next })],
+    }),
+  });
+  renderPage();
+
+  expect(await screen.findByText(/^через 1:\d\d$/)).toBeInTheDocument();
+});
+
 test('resting chats collapse into one sentence', async () => {
   routeApi({
     board: board({

@@ -101,6 +101,22 @@ test('row views name the state, the time and the tone', () => {
   );
 });
 
+test('a writing chat counts down to its next message', () => {
+  const soon = '2026-10-06T12:00:45Z';
+  const writing = row({
+    state: 'writing',
+    last_sent_at: '2026-10-06T11:59:00Z',
+    next_action_at: soon,
+  });
+
+  expect(rowView(t, writing, ctx).countdownTo).toBe(Date.parse(soon));
+  expect(rowView(t, { ...writing, next_action_at: '2026-10-06T11:59:50Z' }, ctx)).toMatchObject({
+    when: 'отправлено 11:59',
+    countdownTo: undefined,
+  });
+  expect(rowView(t, { ...writing, next_action_at: null }, ctx).countdownTo).toBeUndefined();
+});
+
 test('rows are ordered by importance once, and groups split them', () => {
   const rows = [
     row({ chat_key: 'q' }),

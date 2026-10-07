@@ -42,6 +42,37 @@ async def test_messages_go_in_order_with_the_pause_between_them(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("telegram")
+async def test_the_board_knows_when_the_next_message_goes_out(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock
+) -> None:
+    seen: list[tuple[float, int | None]] = []
+    original = _seams.sleep
+    ids: list[str] = []
+
+    async def _record(seconds: float) -> None:
+        target = await repository.fetch_target(ids[0], "alpha")
+        if target is not None and target.state == "writing":
+            seen.append((seconds, target.next_action_unix))
+            assert target.next_action_unix == clock.now() + int(seconds)
+        await original(seconds)
+
+    monkeypatch.setattr(_seams, "sleep", _record)
+    campaign_id = await seed(
+        accounts=("a1",),
+        targets=("@alpha",),
+        messages=("one", "two"),
+        between_messages={"min": 3, "max": 8},
+    )
+    ids.append(campaign_id)
+
+    await run_to_end(campaign_id)
+
+    assert len(seen) == 1
+    assert (await repository.fetch_target(campaign_id, "alpha")).next_action_unix is None  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
 async def test_typing_scales_with_the_text(telegram: FakeTelegram) -> None:
     campaign_id = await seed(
         accounts=("a1",), targets=("@alpha",), messages=("x" * 60,), typing=True
