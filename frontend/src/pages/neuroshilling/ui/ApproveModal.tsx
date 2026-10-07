@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
 import { Badge, Button, EmptyState, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
-import { useNumberField } from './useNumberField';
+import { useNumberField } from '@/shared/lib';
 
 import {
   clampDelay,

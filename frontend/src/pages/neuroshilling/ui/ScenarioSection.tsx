@@ -16,7 +16,7 @@ import {
 } from '@/shared/ui';
 
 import { MediaModal } from './MediaModal';
-import { useNumberField } from './useNumberField';
+import { useNumberField } from '@/shared/lib';
 import type { DraftRole, DraftStep, ScenarioDraft } from './scenarioDraft';
 import {
   clampDelay,

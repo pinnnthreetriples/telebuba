@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useNumberField } from '@/shared/lib';
 import { HelpHint, Input } from '@/shared/ui';
 
 export function Eyebrow({
@@ -66,6 +67,12 @@ export function NumberField({
   max: number;
   onChange: (value: number) => void;
 }) {
+  // An erased field stays empty until a number is typed; the draft keeps the old one.
+  const field = useNumberField(
+    value,
+    (raw) => Math.min(max, Math.max(min, Math.round(raw))),
+    onChange,
+  );
   return (
     <Input
       size="sm"
@@ -73,12 +80,12 @@ export function NumberField({
       type="number"
       min={min}
       max={max}
-      value={value}
+      value={field.value}
       aria-label={label}
       onChange={(event) => {
-        const parsed = Math.round(Number(event.target.value));
-        onChange(Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : min);
+        field.onChange(event.target.value);
       }}
+      onBlur={field.onBlur}
     />
   );
 }
