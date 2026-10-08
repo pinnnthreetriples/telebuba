@@ -34,4 +34,3 @@ writeFileSync(join(here, 'preview.html'), `<!doctype html>
 <p>${names.length} glyphs · 16 / 20 / 24 px, stroke 1.3px · 48px on a 2-unit grid</p>
 <main>${cells}</main>
 `);
-console.log(`preview.html: ${names.length} glyphs`);
