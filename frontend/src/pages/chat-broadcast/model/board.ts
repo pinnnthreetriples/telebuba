@@ -9,7 +9,8 @@ import type {
 } from '@/shared/api';
 import type { BadgeTone } from '@/shared/ui';
 
-export type RowView = { label: string; tone: BadgeTone; when: string };
+// `countdownTo` (epoch ms) makes the cell tick down to the next message instead of `when`.
+export type RowView = { label: string; tone: BadgeTone; when: string; countdownTo?: number };
 
 type Context = {
   board: ChatBroadcastBoard;
@@ -63,6 +64,7 @@ export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context):
       return {
         label: t('chatBroadcast.status.writing'),
         tone: 'success',
+        countdownTo: next !== null && Date.parse(next) > now ? Date.parse(next) : undefined,
         when:
           row.last_sent_at === null || row.last_sent_at === undefined
             ? t('chatBroadcast.when.joiningNow')

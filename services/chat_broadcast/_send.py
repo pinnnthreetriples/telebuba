@@ -108,6 +108,24 @@ async def _action(
     return action, text, rewritten
 
 
+async def _pause_before_next(ctx: RunContext, target: TargetRecord) -> None:
+    """Wait out the pause between two messages, with the next send time on the board."""
+    pause = _pause((ctx.settings.between_messages.min, ctx.settings.between_messages.max))
+    await repository.update_target(
+        ctx.campaign_id,
+        target.chat_key,
+        expect_states=("writing",),
+        next_action_unix=_seams.now() + int(pause),
+    )
+    try:
+        await _seams.sleep(pause)
+    finally:
+        # Also when the run is cancelled mid-pause: a stale future time would hold the chat.
+        await repository.update_target(
+            ctx.campaign_id, target.chat_key, expect_states=("writing",), next_action_unix=None
+        )
+
+
 async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
     """Send the rest of the chain into ``target`` from its current step."""
     if not await repository.update_target(
@@ -126,9 +144,7 @@ async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> 
         if outcome is not None:
             return outcome
         if step < len(ctx.chain) - 1:
-            await _seams.sleep(
-                _pause((ctx.settings.between_messages.min, ctx.settings.between_messages.max))
-            )
+            await _pause_before_next(ctx, target)
     await repository.update_target(
         ctx.campaign_id,
         target.chat_key,
