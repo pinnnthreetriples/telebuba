@@ -114,6 +114,9 @@ _chat_broadcast_targets = Table(
     Column("joined_unix", Integer, nullable=True),
     Column("next_action_unix", Integer, nullable=True),
     Column("message_deleted", Integer, nullable=False, server_default=text("0")),
+    # The operator chose to keep writing here despite deleted messages; only a ban stops
+    # it. Added by migration 69, so it follows ``updated_unix`` in a migrated table.
+    Column("ignore_deleted", Integer, nullable=False, server_default=text("0")),
     Column("updated_unix", Integer, nullable=False),
     CheckConstraint("kind IN ('public','invite','folder','own')"),
     CheckConstraint(_in("state", TARGET_STATES)),

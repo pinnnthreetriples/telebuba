@@ -86,6 +86,8 @@ class TargetRecord(TargetSeed):
     joined_unix: int | None = None
     next_action_unix: int | None = None
     message_deleted: bool = False
+    # The operator kept this chat despite deleted messages: only a ban skips it now.
+    ignore_deleted: bool = False
     updated_unix: int
 
 

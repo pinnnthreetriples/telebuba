@@ -33,6 +33,10 @@ function lastSkipAt(row: ChatBroadcastBoardRow): string | null {
 export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context): RowView {
   const { board, now, time } = ctx;
   const status = board.campaign.status;
+  // Kept by the operator after a deletion: the next round re-queues it.
+  if (row.active && row.state === 'skipped' && row.ignore_deleted) {
+    return { label: t('chatBroadcast.status.kept'), tone: 'info', when: '—' };
+  }
   if (row.state === 'skipped') {
     const at = lastSkipAt(row);
     return {
@@ -187,6 +191,9 @@ export function applyOrder(
 export function allResting(rows: ChatBroadcastBoardRow[]): boolean {
   return rows.length > 0 && rows.every((row) => row.state === 'round_done');
 }
+
+// An opened chat shows only its newest history entries until the operator asks for all.
+export const HISTORY_PREVIEW = 6;
 
 export type HistoryLine = {
   text: string;

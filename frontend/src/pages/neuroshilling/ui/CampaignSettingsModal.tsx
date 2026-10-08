@@ -35,47 +35,55 @@ export function CampaignSettingsModal({
   const { t } = useTranslation();
   return (
     <Modal
-      onClose={() => {
-        if (!saving) onClose();
-      }}
+      onClose={onClose}
+      // The same `dirty` the pill shows: any exit that would drop the drafts asks first.
+      dirty={dirty}
+      locked={saving}
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <ModalHeader title={name} subtitle={t('neuroshilling.settings.subtitle')}>
-        <div className="flex-1" />
-        {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
-            {t('neuroshilling.setup.unsaved')}
-          </span>
-        ) : null}
-      </ModalHeader>
+      {(close) => (
+        <>
+          <ModalHeader title={name} subtitle={t('neuroshilling.settings.subtitle')}>
+            <div className="flex-1" />
+            {dirty ? (
+              <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
+                {t('neuroshilling.setup.unsaved')}
+              </span>
+            ) : null}
+          </ModalHeader>
 
-      {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
+          {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
           дал бы вложенную цепочку прокрутки — ровно то, от чего оверлей и уводит. */}
-      {conflict ? (
-        <p role="alert" className="mx-6 mt-4 type-body text-danger">
-          {t('neuroshilling.settings.conflict')}
-        </p>
-      ) : null}
-      <fieldset disabled={saving} className="m-0 flex min-w-0 flex-col gap-6 border-0 px-6 py-6">
-        {children}
-      </fieldset>
+          {conflict ? (
+            <p role="alert" className="mx-6 mt-4 type-body text-danger">
+              {t('neuroshilling.settings.conflict')}
+            </p>
+          ) : null}
+          <fieldset
+            disabled={saving}
+            className="m-0 flex min-w-0 flex-col gap-6 border-0 px-6 py-6"
+          >
+            {children}
+          </fieldset>
 
-      <ModalFooter>
-        <Button size="sm" onClick={onClose} disabled={saving}>
-          {t('neuroshilling.settings.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={busy || !dirty || conflict}
-          loading={saving}
-          onClick={onSave}
-        >
-          {t('neuroshilling.settings.save')}
-        </Button>
-      </ModalFooter>
+          <ModalFooter>
+            <Button size="sm" onClick={close} disabled={saving}>
+              {t('neuroshilling.settings.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy || !dirty || conflict}
+              loading={saving}
+              onClick={onSave}
+            >
+              {t('neuroshilling.settings.save')}
+            </Button>
+          </ModalFooter>
+        </>
+      )}
     </Modal>
   );
 }

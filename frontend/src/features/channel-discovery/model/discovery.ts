@@ -57,6 +57,14 @@ export const EMPTY_FORM: DiscoveryFormState = {
   accountIds: null,
 };
 
+/** Whether the operator filled in anything — closing the dialog would lose it. Per field,
+ * so it does not depend on the key order a spread happened to leave behind. */
+export function isFormTouched(form: DiscoveryFormState): boolean {
+  return (Object.keys(EMPTY_FORM) as (keyof DiscoveryFormState)[]).some(
+    (key) => JSON.stringify(form[key]) !== JSON.stringify(EMPTY_FORM[key]),
+  );
+}
+
 /** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
  *
  * Exported so the form gets the kept and the dropped tokens from ONE pass: asking for

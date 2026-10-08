@@ -14405,6 +14405,115 @@
         }
       }
     },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/pace": {
+      "put": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Save Pace",
+        "description": "Save the pauses only \u2014 accepted while the campaign runs; the run reads them live.\n\n409 ``campaign_changed`` when the campaign moved between the read and the write.",
+        "operationId": "saveChatBroadcastPace",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastPace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/chat-broadcast/campaigns/{campaign_id}/board": {
       "get": {
         "tags": [
@@ -14698,7 +14807,7 @@
           "chat_broadcast"
         ],
         "summary": "Act On Target",
-        "description": "Write now, hand to another account, or skip one chat of the board.\n\n409 ``target_state_changed`` when the chat moved on before the click landed.",
+        "description": "Write now, hand to another account, skip, or keep one chat of the board.\n\n``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.\n409 ``target_state_changed`` when the chat moved on before the click landed, or\n``keep`` was asked of a chat not skipped for deletions.",
         "operationId": "actOnChatBroadcastTarget",
         "parameters": [
           {
@@ -17657,6 +17766,11 @@
             "title": "Message Deleted",
             "default": false
           },
+          "ignore_deleted": {
+            "type": "boolean",
+            "title": "Ignore Deleted",
+            "default": false
+          },
           "active": {
             "type": "boolean",
             "title": "Active"
@@ -18001,6 +18115,13 @@
             "maxLength": 200,
             "title": "Post",
             "default": ""
+          },
+          "repeat": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Repeat",
+            "default": 1
           }
         },
         "additionalProperties": false,
@@ -18079,6 +18200,28 @@
         ],
         "title": "ChatBroadcastOwnGroup",
         "description": "A group selected accounts are in; ``peer_id`` is a decimal string (int64)."
+      },
+      "ChatBroadcastPace": {
+        "properties": {
+          "between_messages": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "between_chats": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "rest_minutes": {
+            "$ref": "#/components/schemas/MinutesRange"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "between_messages",
+          "between_chats",
+          "rest_minutes"
+        ],
+        "title": "ChatBroadcastPace",
+        "description": "The pauses the board's gear edits \u2014 the only settings a running campaign takes.\n\nThe run reads them live: a new value applies from the next pause, and a rest already\nunder way is drawn again from the moment it began."
       },
       "ChatBroadcastPhoto": {
         "properties": {
@@ -18497,7 +18640,8 @@
             "enum": [
               "now",
               "hand",
-              "skip"
+              "skip",
+              "keep"
             ],
             "title": "Action"
           },

@@ -414,7 +414,7 @@ if (rule) {
   // declare stays legal, so the closure cannot drift into flagging the system itself.
   ruleTester.run('no-raw-values: declared rungs', rule, {
     valid: [
-      'const w1 = "w-0 w-auto w-max w-full w-col w-logAccount w-table";',
+      'const w1 = "w-0 w-auto w-max w-full w-col w-stamp w-table";',
       'const h1 = "h-full h-rail h-profileDialog min-h-touch min-h-screen max-h-feedInline";',
       'const m1 = "min-w-0 min-w-table max-w-full max-w-shell size-face size-tick";',
       'const z1 = "z-0 z-pop z-toast duration-state duration-pulse scale-press active:scale-rest";',

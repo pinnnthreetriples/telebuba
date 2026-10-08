@@ -22,6 +22,7 @@ import {
   Notice,
   SegmentedControl,
   Spinner,
+  useModalDirty,
 } from '@/shared/ui';
 
 import type { Settings } from '../../model/draft';
@@ -93,6 +94,8 @@ function ListTargets({
   const [entry, setEntry] = useState('');
   const [invalid, setInvalid] = useState<string[]>([]);
   const reader = accountIds[0];
+  // Links typed but not yet added are input the dialog around cannot see.
+  useModalDirty(entry.trim() !== '');
 
   // Folders are opened once per dialog (and again when the first account changes):
   // the count is the one thing a chip cannot tell from its own link.

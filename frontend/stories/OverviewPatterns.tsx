@@ -468,7 +468,11 @@ export function OverviewPatterns() {
         <LogTerminal
           title="Лог кампании"
           logLines={entries}
-          accountName={(id) => (id === 'acc-1' ? 'Иван Петров' : 'Мария Смирнова')}
+          accountOf={(id) =>
+            id === 'acc-1'
+              ? { account_id: id, first_name: 'Иван', last_name: 'Петров', username: 'ivan' }
+              : { account_id: id, first_name: 'Мария', last_name: 'Смирнова' }
+          }
           onClear={() => setConfirmClearLogs(true)}
         />
         {confirmClearLogs && (

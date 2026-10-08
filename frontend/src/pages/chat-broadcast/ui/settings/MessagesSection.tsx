@@ -1,12 +1,14 @@
 // The chain: cards open one at a time; a text (optionally with a photo, the text becoming
-// its caption) or a post of the operator's channel forwarded whole. Above it, who writes
-// the first message — the template or the AI for each chat — and the rewrite switch.
+// its caption) or a post of the operator's channel forwarded whole, each sent one or more
+// times a round. Above it, who writes the first message — the template or the AI for each
+// chat — and the rewrite switch; below it, one round as a chat will see it.
 import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { uploadChatBroadcastPhotoMutation } from '@/entities/chat-broadcast';
 import {
+  Badge,
   Button,
   HelpHint,
   Icon,
@@ -19,7 +21,8 @@ import {
 } from '@/shared/ui';
 
 import type { Draft, MessageDraft, Settings } from '../../model/draft';
-import { emptyMessage, MAX_MESSAGES, VARIANTS } from '../../model/draft';
+import { emptyMessage, MAX_MESSAGES, MAX_REPEAT, VARIANTS } from '../../model/draft';
+import { filledMessages, roundSteps } from '../../model/preview';
 
 import { Eyebrow, Row } from './fields';
 
@@ -45,6 +48,106 @@ function TextFate({ text, randomize }: { text: string; randomize: boolean }) {
     <div className="flex items-start gap-2 rounded-lg bg-warning-tint px-3 py-2 text-small text-warning-deep">
       <Icon name="alert-triangle" size={14} className="mt-1 shrink-0" />
       <span>{t('chatBroadcast.settings.messages.fateSame')}</span>
+    </div>
+  );
+}
+
+// Will every copy of this message read differently? The AI writes or rewrites its text,
+// or the text has variants to pick from; a forwarded post is the same post each time.
+// `index` is the message's place among the FILLED ones, as in the engine's chain, and the
+// engine's own conditions apply: the AI writes the first message only from a brief, and
+// the rewrite only touches a text that is there (a photo alone goes out as it is).
+function variesPerCopy(message: MessageDraft, settings: Settings, index: number): boolean {
+  if (message.kind === 'post') return false;
+  if (index === 0 && settings.first_message === 'ai' && settings.ai_brief.trim() !== '') {
+    return true;
+  }
+  if (settings.first_message === 'template' && settings.randomize && message.text.trim() !== '') {
+    return true;
+  }
+  return VARIANTS.test(message.text);
+}
+
+function RepeatStepper({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center gap-2">
+      <span className="type-small">{t('chatBroadcast.settings.messages.repeat')}</span>
+      <HelpHint
+        text={t('chatBroadcast.settings.messages.repeatHint')}
+        example={t('chatBroadcast.settings.messages.repeatExample')}
+      />
+      <span className="inline-flex items-center gap-1">
+        <IconButton
+          size="sm"
+          aria-label={t('chatBroadcast.settings.messages.repeatLess')}
+          disabled={value <= 1}
+          onClick={() => {
+            onChange(value - 1);
+          }}
+        >
+          <span aria-hidden="true">−</span>
+        </IconButton>
+        <span aria-live="polite" className="px-1 text-center type-body-medium tabular-nums">
+          {t('chatBroadcast.settings.messages.times', { count: value })}
+        </span>
+        <IconButton
+          size="sm"
+          aria-label={t('chatBroadcast.settings.messages.repeatMore')}
+          disabled={value >= MAX_REPEAT}
+          onClick={() => {
+            onChange(value + 1);
+          }}
+        >
+          <Icon name="plus" size={12} />
+        </IconButton>
+      </span>
+    </div>
+  );
+}
+
+// One round in one chat, step by step — shown once a message repeats, when the order is
+// no longer simply the list above.
+function RoundLine({ draft }: { draft: Draft }) {
+  const { t } = useTranslation();
+  const steps = roundSteps(draft);
+  // Only what the engine will send: an empty message is dropped, repeats and all.
+  const filled = filledMessages(draft);
+  if (!filled.some((message) => message.repeat > 1)) return null;
+  const same = filled.some(
+    (message, index) => message.repeat > 1 && !variesPerCopy(message, draft.settings, index),
+  );
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-canvas px-3 py-2">
+        <span className="mr-1 type-small-medium">{t('chatBroadcast.settings.messages.round')}</span>
+        {steps.map((step, index) => (
+          <span key={`${String(step.number)}-${String(step.copy)}`} className="contents">
+            {index === 0 ? null : (
+              <Icon name="arrow-right" size={10} className="text-content-subtle" />
+            )}
+            <span
+              className={`rounded-full border bg-surface-card px-2 text-small tabular-nums ${step.copy === 0 ? 'border-line' : 'border-dashed border-line-strong text-content-muted'}`}
+            >
+              {step.copy === 0
+                ? step.number
+                : t('chatBroadcast.settings.messages.roundCopy', {
+                    number: step.number,
+                    copy: step.copy + 1,
+                  })}
+            </span>
+          </span>
+        ))}
+        <span className="ml-auto type-small">
+          {t('chatBroadcast.settings.messages.roundTotal', { count: steps.length })}
+        </span>
+      </div>
+      {same ? (
+        <div className="flex items-start gap-2 rounded-lg bg-warning-tint px-3 py-2 text-small text-warning-deep">
+          <Icon name="alert-triangle" size={14} className="mt-1 shrink-0" />
+          <span>{t('chatBroadcast.settings.messages.repeatSame')}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -189,6 +292,11 @@ function MessageCard({
           <span className="min-w-0 flex-1 truncate type-small">
             {preview === '' ? t('chatBroadcast.settings.messages.empty') : preview}
           </span>
+          {message.repeat > 1 ? (
+            <Badge tone="info" size="xs">
+              {t('chatBroadcast.settings.messages.times', { count: message.repeat })}
+            </Badge>
+          ) : null}
           {index === 0 ? null : (
             <span className="hidden shrink-0 type-small sm:inline">
               {t('chatBroadcast.settings.messages.after', settings.between_messages)}
@@ -251,6 +359,12 @@ function MessageCard({
               <PhotoPicker message={message} onChange={onChange} />
             </>
           )}
+          <RepeatStepper
+            value={message.repeat}
+            onChange={(repeat) => {
+              onChange({ ...message, repeat });
+            }}
+          />
         </div>
       ) : null}
     </div>
@@ -351,6 +465,7 @@ export function MessagesSection({
             {t('chatBroadcast.settings.messages.none')}
           </div>
         ) : null}
+        <RoundLine draft={draft} />
         <Button
           variant="dashed"
           fullWidth

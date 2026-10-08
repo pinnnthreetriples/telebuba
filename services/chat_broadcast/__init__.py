@@ -26,6 +26,7 @@ from services.chat_broadcast.campaigns import (
     save_settings,
 )
 from services.chat_broadcast.media import upload_photo
+from services.chat_broadcast.pace import save_pace
 from services.chat_broadcast.targets import own_chats, resolve
 
 __all__ = [
@@ -41,6 +42,7 @@ __all__ = [
     "own_chats",
     "reconcile_chat_broadcast_on_startup",
     "resolve",
+    "save_pace",
     "save_settings",
     "shutdown_chat_broadcast_on_shutdown",
     "start_campaign",

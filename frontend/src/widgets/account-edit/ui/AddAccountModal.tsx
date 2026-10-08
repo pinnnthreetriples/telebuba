@@ -10,7 +10,7 @@ import { Button, CloseButton, Icon, Modal, Stepper } from '@/shared/ui';
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
 import { ProxyForm } from './ProxyForm';
-import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
+import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
 import { TwoFactorBulkStep } from './TwoFactorBulkStep';
 import { useBulkImport } from './useBulkImport';
@@ -218,290 +218,300 @@ export function AddAccountModal({
     }
   };
 
+  // Input not yet handed to the server: a number typed but not started, a proxy typed
+  // but not created. Imported files and a started login are already accounts on the
+  // server, so closing loses nothing of theirs. The code and cloud-password steps hold
+  // their own fields and report them through `useModalDirty`.
+  const dirty =
+    (step === 1 && method === 'phone' && phone.trim() !== '' && createdAccountId === null) ||
+    (step === 2 && proxyStep === 'form' && isProxyFormTouched(proxyValue));
+
   return (
-    <Modal onClose={onClose} size="form" label={t('accounts.addWizard.title')}>
-      <div className="px-6 pb-6 pt-6">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
-            <div className="type-h2">
-              {twofaResult
-                ? t('accounts.addWizard.twofaResultTitle')
-                : t('accounts.addWizard.title')}
+    <Modal onClose={onClose} dirty={dirty} size="form" label={t('accounts.addWizard.title')}>
+      {(close) => (
+        <div className="px-6 pb-6 pt-6">
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <div className="type-h2">
+                {twofaResult
+                  ? t('accounts.addWizard.twofaResultTitle')
+                  : t('accounts.addWizard.title')}
+              </div>
+              <div className="mt-1 type-body text-content-subtle">
+                {step === 1
+                  ? t('accounts.addWizard.step1Label')
+                  : step === 2
+                    ? t('accounts.addWizard.step2Label')
+                    : step === 3 && method === 'phone'
+                      ? t('accounts.addWizard.step3Label')
+                      : // The cloud password is always the LAST step, and which
+                        // number that is depends on the method.
+                        t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
+              </div>
             </div>
-            <div className="mt-1 type-body text-content-subtle">
-              {step === 1
-                ? t('accounts.addWizard.step1Label')
-                : step === 2
-                  ? t('accounts.addWizard.step2Label')
-                  : step === 3 && method === 'phone'
-                    ? t('accounts.addWizard.step3Label')
-                    : // The cloud password is always the LAST step, and which
-                      // number that is depends on the method.
-                      t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
-            </div>
+            <CloseButton onClick={close} aria-label={t('accounts.addWizard.close')} />
           </div>
-          <CloseButton onClick={onClose} aria-label={t('accounts.addWizard.close')} />
-        </div>
 
-        {/* stepper */}
-        <Stepper
-          className="mb-6"
-          numbered
-          steps={Array.from({ length: totalSteps }, (_, i) => ({
-            id: String(i + 1),
-            state: i + 1 < step ? 'done' : i + 1 === step ? 'current' : 'upcoming',
-          }))}
-        />
+          {/* stepper */}
+          <Stepper
+            className="mb-6"
+            numbered
+            steps={Array.from({ length: totalSteps }, (_, i) => ({
+              id: String(i + 1),
+              state: i + 1 < step ? 'done' : i + 1 === step ? 'current' : 'upcoming',
+            }))}
+          />
 
-        {step === 1 ? (
-          <>
-            <div className="flex flex-col gap-3">
-              <ChoiceCard
-                icon={<Icon name="file" size={18} className="stroke-action-primary" />}
-                title={t('accounts.addWizard.sessionTitle')}
-                desc={t('accounts.addWizard.sessionDesc')}
-                selected={method === 'session'}
-                onClick={() => {
-                  selectMethod('session');
-                }}
-              />
-              <ChoiceCard
-                icon={
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="1.8"
-                    className="stroke-action-primary"
-                  >
-                    <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
-                  </svg>
-                }
-                title={t('accounts.addWizard.tdataTitle')}
-                desc={t('accounts.addWizard.tdataDesc')}
-                selected={method === 'tdata'}
-                onClick={() => {
-                  selectMethod('tdata');
-                }}
-              />
-              <ChoiceCard
-                icon={
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="1.8"
-                    className="stroke-action-primary"
-                  >
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
-                }
-                title={t('accounts.addWizard.phoneTitle')}
-                desc={t('accounts.addWizard.phoneDesc')}
-                selected={method === 'phone'}
-                onClick={() => {
-                  selectMethod('phone');
-                }}
-              />
+          {step === 1 ? (
+            <>
+              <div className="flex flex-col gap-3">
+                <ChoiceCard
+                  icon={<Icon name="file" size={18} className="stroke-action-primary" />}
+                  title={t('accounts.addWizard.sessionTitle')}
+                  desc={t('accounts.addWizard.sessionDesc')}
+                  selected={method === 'session'}
+                  onClick={() => {
+                    selectMethod('session');
+                  }}
+                />
+                <ChoiceCard
+                  icon={
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      strokeWidth="1.8"
+                      className="stroke-action-primary"
+                    >
+                      <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
+                    </svg>
+                  }
+                  title={t('accounts.addWizard.tdataTitle')}
+                  desc={t('accounts.addWizard.tdataDesc')}
+                  selected={method === 'tdata'}
+                  onClick={() => {
+                    selectMethod('tdata');
+                  }}
+                />
+                <ChoiceCard
+                  icon={
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      strokeWidth="1.8"
+                      className="stroke-action-primary"
+                    >
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                  }
+                  title={t('accounts.addWizard.phoneTitle')}
+                  desc={t('accounts.addWizard.phoneDesc')}
+                  selected={method === 'phone'}
+                  onClick={() => {
+                    selectMethod('phone');
+                  }}
+                />
 
-              {method === 'phone' && (
-                <div className="tb-fadeup flex flex-col gap-3 rounded-md border border-line bg-surface-card px-3 py-4">
-                  <label className="block type-small-medium">
-                    {t('accounts.addWizard.phoneLabel')}
-                  </label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => {
-                      setPhone(event.target.value);
-                      setCreatedAccountId(null);
-                      clearFinishedStartLogin();
-                    }}
-                    placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-md border border-line bg-surface-card px-3 py-3 text-body outline-hidden focus:border-action-primary"
-                  />
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="self-start"
-                    onClick={onStartPhone}
-                    disabled={!phone.trim() || startLogin.isPending || Boolean(createdAccountId)}
-                  >
-                    {startLogin.isPending
-                      ? t('accounts.addWizard.phoneCreating')
-                      : createdAccountId
-                        ? t('accounts.addWizard.phoneCreated')
-                        : t('accounts.addWizard.phoneContinue')}
-                  </Button>
-                  {startLogin.isError && (
-                    <div className="type-small text-danger-deep">
-                      {t('accounts.addWizard.phoneError')}
-                    </div>
-                  )}
-                </div>
-              )}
+                {method === 'phone' && (
+                  <div className="tb-fadeup flex flex-col gap-3 rounded-md border border-line bg-surface-card px-3 py-4">
+                    <label className="block type-small-medium">
+                      {t('accounts.addWizard.phoneLabel')}
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => {
+                        setPhone(event.target.value);
+                        setCreatedAccountId(null);
+                        clearFinishedStartLogin();
+                      }}
+                      placeholder={t('accounts.addWizard.phonePlaceholder')}
+                      className="rounded-md border border-line bg-surface-card px-3 py-3 text-body outline-hidden focus:border-action-primary"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="self-start"
+                      onClick={onStartPhone}
+                      disabled={!phone.trim() || startLogin.isPending || Boolean(createdAccountId)}
+                    >
+                      {startLogin.isPending
+                        ? t('accounts.addWizard.phoneCreating')
+                        : createdAccountId
+                          ? t('accounts.addWizard.phoneCreated')
+                          : t('accounts.addWizard.phoneContinue')}
+                    </Button>
+                    {startLogin.isError && (
+                      <div className="type-small text-danger-deep">
+                        {t('accounts.addWizard.phoneError')}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {method && method !== 'phone' && (
-                <>
-                  <input
-                    ref={fileInput}
-                    type="file"
-                    accept={method === 'tdata' ? '.zip' : '.session'}
-                    multiple
-                    className="hidden"
-                    onChange={onFile}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInput.current?.click()}
-                    className="flex items-center gap-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-4 text-left"
-                  >
-                    <span className="flex size-touch shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
-                      <Icon name="upload-cloud" size={20} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block type-h3">{t('accounts.addWizard.dropTitle')}</span>
-                      <span className="block type-small">
-                        {method === 'tdata'
-                          ? t('accounts.addWizard.dropDescTdata')
-                          : t('accounts.addWizard.dropDescSession')}
+                {method && method !== 'phone' && (
+                  <>
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      accept={method === 'tdata' ? '.zip' : '.session'}
+                      multiple
+                      className="hidden"
+                      onChange={onFile}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className="flex items-center gap-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-4 text-left"
+                    >
+                      <span className="flex size-touch shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
+                        <Icon name="upload-cloud" size={20} />
                       </span>
-                    </span>
-                    <span className="shrink-0 rounded-full border border-line px-4 py-1 text-body font-medium text-content-primary">
-                      {t('accounts.addWizard.browse')}
-                    </span>
-                  </button>
-                  <ImportFileList files={bulk.files} onRetry={bulk.retry} />
-                </>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button onClick={onClose}>{t('accounts.addWizard.cancel')}</Button>
-              {/* Locked until at least one account exists and no import is still
+                      <span className="min-w-0 flex-1">
+                        <span className="block type-h3">{t('accounts.addWizard.dropTitle')}</span>
+                        <span className="block type-small">
+                          {method === 'tdata'
+                            ? t('accounts.addWizard.dropDescTdata')
+                            : t('accounts.addWizard.dropDescSession')}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-full border border-line px-4 py-1 text-body font-medium text-content-primary">
+                        {t('accounts.addWizard.browse')}
+                      </span>
+                    </button>
+                    <ImportFileList files={bulk.files} onRetry={bulk.retry} />
+                  </>
+                )}
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <Button onClick={close}>{t('accounts.addWizard.cancel')}</Button>
+                {/* Locked until at least one account exists and no import is still
                   in flight: step 2 must see the whole batch, not its first half. */}
-              <Button
-                variant="primary"
-                disabled={accountIds.length === 0}
-                loading={bulk.importing}
-                onClick={() => {
-                  setStep(2);
-                  setProxyStep('choice');
-                }}
-              >
-                {t('accounts.addWizard.next')}
-              </Button>
-            </div>
-          </>
-        ) : step === 4 || (step === 3 && method !== 'phone') ? (
-          <TwoFactorBulkStep
-            accountIds={accountIds}
-            sources={sources}
-            onDone={onClose}
-            onImported={onImported}
-            onPhaseChange={setTwofaResult}
-          />
-        ) : step === 3 ? (
-          <CodeLoginStep
-            accountId={createdAccountId}
-            phone={phone}
-            onDone={() => {
-              onImported();
-              setStep(4);
-            }}
-          />
-        ) : proxyStep === 'choice' ? (
-          <>
-            <div className="mb-4 flex items-center gap-2 rounded-md bg-success-tint px-3 py-3">
-              <Icon name="check" size={16} className="stroke-success-deep" />
-              <span className="type-body-medium text-success-deep">
-                {accountIds.length > 1
-                  ? t('accounts.addWizard.addedMany', { count: accountIds.length })
-                  : t('accounts.addWizard.added')}
-              </span>
-            </div>
-            <div className="flex flex-col gap-3">
-              <ChoiceCard
-                icon={<Icon name="plus" size={18} className="stroke-action-primary" />}
-                title={t('accounts.addWizard.proxyManual')}
-                desc={t('accounts.addWizard.proxyManualDesc')}
-                chevron
-                onClick={() => {
-                  setProxyStep('form');
-                }}
-              />
-              <ChoiceCard
-                icon={
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="1.8"
-                    className="stroke-action-primary"
-                  >
-                    <path d="M3 6h18M3 12h18M3 18h18" />
-                  </svg>
-                }
-                title={t('accounts.addWizard.proxyPool')}
-                desc={t('accounts.addWizard.proxyPoolDesc')}
-                chevron
-                onClick={() => {
-                  setProxyStep('pool');
-                }}
-              />
-            </div>
-            <div className="mt-6 flex justify-between gap-2">
-              <Button
-                onClick={() => {
-                  setStep(1);
-                }}
-              >
-                {t('accounts.addWizard.back')}
-              </Button>
-              <Button className="text-content-muted" onClick={afterProxy}>
-                {t('accounts.addWizard.skip')}
-              </Button>
-            </div>
-          </>
-        ) : proxyStep === 'form' ? (
-          <>
-            <ProxyForm
-              value={proxyValue}
-              onChange={setProxyValue}
-              onValidityChange={setProxyValid}
+                <Button
+                  variant="primary"
+                  disabled={accountIds.length === 0}
+                  loading={bulk.importing}
+                  onClick={() => {
+                    setStep(2);
+                    setProxyStep('choice');
+                  }}
+                >
+                  {t('accounts.addWizard.next')}
+                </Button>
+              </div>
+            </>
+          ) : step === 4 || (step === 3 && method !== 'phone') ? (
+            <TwoFactorBulkStep
+              accountIds={accountIds}
+              sources={sources}
+              onDone={onClose}
+              onImported={onImported}
+              onPhaseChange={setTwofaResult}
             />
-            <div className="mt-6 flex justify-between gap-2">
-              <Button
-                onClick={() => {
-                  setProxyStep('choice');
-                }}
-              >
-                {t('accounts.addWizard.back')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  void createAndAssign();
-                }}
-                disabled={!proxyValid || createProxy.isPending || assignProxy.isPending}
-              >
-                {t('accounts.addWizard.done')}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <ProxyPoolStep
-            accountIds={accountIds}
-            onBack={() => {
-              setProxyStep('choice');
-            }}
-            onDone={afterProxy}
-            onImported={onImported}
-          />
-        )}
-      </div>
+          ) : step === 3 ? (
+            <CodeLoginStep
+              accountId={createdAccountId}
+              phone={phone}
+              onDone={() => {
+                onImported();
+                setStep(4);
+              }}
+            />
+          ) : proxyStep === 'choice' ? (
+            <>
+              <div className="mb-4 flex items-center gap-2 rounded-md bg-success-tint px-3 py-3">
+                <Icon name="check" size={16} className="stroke-success-deep" />
+                <span className="type-body-medium text-success-deep">
+                  {accountIds.length > 1
+                    ? t('accounts.addWizard.addedMany', { count: accountIds.length })
+                    : t('accounts.addWizard.added')}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <ChoiceCard
+                  icon={<Icon name="plus" size={18} className="stroke-action-primary" />}
+                  title={t('accounts.addWizard.proxyManual')}
+                  desc={t('accounts.addWizard.proxyManualDesc')}
+                  chevron
+                  onClick={() => {
+                    setProxyStep('form');
+                  }}
+                />
+                <ChoiceCard
+                  icon={
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      strokeWidth="1.8"
+                      className="stroke-action-primary"
+                    >
+                      <path d="M3 6h18M3 12h18M3 18h18" />
+                    </svg>
+                  }
+                  title={t('accounts.addWizard.proxyPool')}
+                  desc={t('accounts.addWizard.proxyPoolDesc')}
+                  chevron
+                  onClick={() => {
+                    setProxyStep('pool');
+                  }}
+                />
+              </div>
+              <div className="mt-6 flex justify-between gap-2">
+                <Button
+                  onClick={() => {
+                    setStep(1);
+                  }}
+                >
+                  {t('accounts.addWizard.back')}
+                </Button>
+                <Button className="text-content-muted" onClick={afterProxy}>
+                  {t('accounts.addWizard.skip')}
+                </Button>
+              </div>
+            </>
+          ) : proxyStep === 'form' ? (
+            <>
+              <ProxyForm
+                value={proxyValue}
+                onChange={setProxyValue}
+                onValidityChange={setProxyValid}
+              />
+              <div className="mt-6 flex justify-between gap-2">
+                <Button
+                  onClick={() => {
+                    setProxyStep('choice');
+                  }}
+                >
+                  {t('accounts.addWizard.back')}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    void createAndAssign();
+                  }}
+                  disabled={!proxyValid || createProxy.isPending || assignProxy.isPending}
+                >
+                  {t('accounts.addWizard.done')}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <ProxyPoolStep
+              accountIds={accountIds}
+              onBack={() => {
+                setProxyStep('choice');
+              }}
+              onDone={afterProxy}
+              onImported={onImported}
+            />
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

@@ -109,6 +109,8 @@ class ChatBroadcastBoardRow(BaseModel):
     last_text: str | None = None
     last_sent_at: datetime | None = None
     message_deleted: bool = False
+    # The operator kept the chat despite deleted messages; only a ban skips it now.
+    ignore_deleted: bool = False
     # Still being worked; finished and skipped chats belong to the "done" tab.
     active: bool
     history: list[ChatBroadcastHistoryEntry]

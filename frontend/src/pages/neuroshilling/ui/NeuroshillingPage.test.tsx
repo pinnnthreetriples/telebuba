@@ -351,6 +351,7 @@ test('discarding a conflict reloads the remote settings before reopening', async
   await userEvent.click(screen.getByText('Сохранить настройки'));
   expect(await screen.findByRole('alert')).toHaveTextContent('обновите страницу');
   await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   await openSettings();
 
   await waitFor(() => {
@@ -427,7 +428,10 @@ test('«Отмена» in the settings really cancels: the edits do not survive 
   await userEvent.type(await screen.findByLabelText('Тема'), '!');
   expect(screen.getByText('Есть несохранённые правки')).toBeInTheDocument();
 
+  // The edits are dirty, so Cancel asks first; discarding is what this test is about.
   await userEvent.click(screen.getByText('Отмена'));
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   await openSettings();
 
   expect(screen.queryByText('Есть несохранённые правки')).toBeNull();

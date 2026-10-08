@@ -1517,6 +1517,10 @@ export type ChatBroadcastBoardRow = {
    */
   message_deleted?: boolean;
   /**
+   * Ignore Deleted
+   */
+  ignore_deleted?: boolean;
+  /**
    * Active
    */
   active: boolean;
@@ -1723,6 +1727,10 @@ export type ChatBroadcastMessage = {
    * Post
    */
   post?: string;
+  /**
+   * Repeat
+   */
+  repeat?: number;
 };
 
 /**
@@ -1769,6 +1777,20 @@ export type ChatBroadcastOwnGroup = {
    * Account Ids
    */
   account_ids: Array<string>;
+};
+
+/**
+ * ChatBroadcastPace
+ *
+ * The pauses the board's gear edits — the only settings a running campaign takes.
+ *
+ * The run reads them live: a new value applies from the next pause, and a rest already
+ * under way is drawn again from the moment it began.
+ */
+export type ChatBroadcastPace = {
+  between_messages: SecondsRange;
+  between_chats: SecondsRange;
+  rest_minutes: MinutesRange;
 };
 
 /**
@@ -2008,7 +2030,7 @@ export type ChatBroadcastTargetAction = {
   /**
    * Action
    */
-  action: 'now' | 'hand' | 'skip';
+  action: 'now' | 'hand' | 'skip' | 'keep';
   /**
    * Account Id
    */
@@ -12253,6 +12275,54 @@ export type SaveChatBroadcastSettingsResponses = {
 
 export type SaveChatBroadcastSettingsResponse =
   SaveChatBroadcastSettingsResponses[keyof SaveChatBroadcastSettingsResponses];
+
+export type SaveChatBroadcastPaceData = {
+  body: ChatBroadcastPace;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/pace';
+};
+
+export type SaveChatBroadcastPaceErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatBroadcastPaceError =
+  SaveChatBroadcastPaceErrors[keyof SaveChatBroadcastPaceErrors];
+
+export type SaveChatBroadcastPaceResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type SaveChatBroadcastPaceResponse =
+  SaveChatBroadcastPaceResponses[keyof SaveChatBroadcastPaceResponses];
 
 export type GetChatBroadcastBoardData = {
   body?: never;

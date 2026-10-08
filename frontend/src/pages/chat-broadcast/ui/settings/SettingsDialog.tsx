@@ -1,6 +1,7 @@
 // The settings dialog: the neuroshilling campaign shell (header with the name and the
 // "not saved" pill, sections, a footer with Save). Save does not close it — it opens the
-// check window, whose Confirm writes the draft on the version the dialog read.
+// check window, whose Confirm writes the draft on the version the dialog read. Any other
+// exit with an edited draft — the veil, Escape, «Отмена» — asks first (Modal's `dirty`).
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,72 +82,84 @@ export function SettingsDialog({
   };
 
   return (
-    <Modal onClose={onClose} size="table" label={t('chatBroadcast.settings.subtitle')}>
-      <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
-        <div className="min-w-0">
-          <div className="truncate type-h2">{draft.name}</div>
-          <div className="mt-1 type-small">{t('chatBroadcast.settings.subtitle')}</div>
-        </div>
-        <div className="flex-1" />
-        {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
-            {t('chatBroadcast.settings.unsaved')}
-          </span>
-        ) : null}
-      </div>
-      {running || conflict ? (
-        <div className="px-6 pt-4" role="alert">
-          <Notice tone={conflict ? 'danger' : 'info'}>
-            {conflict ? t('chatBroadcast.settings.conflict') : t('chatBroadcast.settings.running')}
-          </Notice>
-        </div>
-      ) : null}
-      <fieldset disabled={running || save.isPending} className="m-0 min-w-0 border-0 p-0">
-        <div className="flex min-w-0 flex-col gap-6 px-6 py-6">
-          <AccountsSection
-            ids={draft.accountIds}
-            fleet={fleet}
-            onChange={(accountIds) => {
-              setDraft((current) => ({ ...current, accountIds }));
-            }}
-          />
-          <ChatsSection
-            settings={draft.settings}
-            accountIds={draft.accountIds}
-            fleet={fleet}
-            onPatch={patch}
-          />
-          <MessagesSection draft={draft} onPatch={patch} onMessages={setMessages} />
-          <PaceSection settings={draft.settings} onPatch={patch} />
-        </div>
-      </fieldset>
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
-        <Button size="sm" onClick={onClose}>
-          {t('chatBroadcast.settings.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={running || conflict}
-          onClick={() => {
-            setPreviewOpen(true);
-          }}
-        >
-          {t('chatBroadcast.settings.save')}
-        </Button>
-      </div>
-      {previewOpen ? (
-        <Preview
-          draft={draft}
-          accounts={chosen}
-          ownTitles={ownTitles}
-          saving={save.isPending}
-          onEdit={() => {
-            setPreviewOpen(false);
-          }}
-          onConfirm={confirm}
-        />
-      ) : null}
+    <Modal
+      onClose={onClose}
+      dirty={dirty}
+      locked={save.isPending}
+      size="table"
+      label={t('chatBroadcast.settings.subtitle')}
+    >
+      {(close) => (
+        <>
+          <div className="flex items-center gap-3 border-b border-canvas px-6 pb-4 pt-6">
+            <div className="min-w-0">
+              <div className="truncate type-h2">{draft.name}</div>
+              <div className="mt-1 type-small">{t('chatBroadcast.settings.subtitle')}</div>
+            </div>
+            <div className="flex-1" />
+            {dirty ? (
+              <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
+                {t('chatBroadcast.settings.unsaved')}
+              </span>
+            ) : null}
+          </div>
+          {running || conflict ? (
+            <div className="px-6 pt-4" role="alert">
+              <Notice tone={conflict ? 'danger' : 'info'}>
+                {conflict
+                  ? t('chatBroadcast.settings.conflict')
+                  : t('chatBroadcast.settings.running')}
+              </Notice>
+            </div>
+          ) : null}
+          <fieldset disabled={running || save.isPending} className="m-0 min-w-0 border-0 p-0">
+            <div className="flex min-w-0 flex-col gap-6 px-6 py-6">
+              <AccountsSection
+                ids={draft.accountIds}
+                fleet={fleet}
+                onChange={(accountIds) => {
+                  setDraft((current) => ({ ...current, accountIds }));
+                }}
+              />
+              <ChatsSection
+                settings={draft.settings}
+                accountIds={draft.accountIds}
+                fleet={fleet}
+                onPatch={patch}
+              />
+              <MessagesSection draft={draft} onPatch={patch} onMessages={setMessages} />
+              <PaceSection settings={draft.settings} onPatch={patch} />
+            </div>
+          </fieldset>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-canvas px-6 py-4">
+            <Button size="sm" onClick={close}>
+              {t('chatBroadcast.settings.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={running || conflict}
+              onClick={() => {
+                setPreviewOpen(true);
+              }}
+            >
+              {t('chatBroadcast.settings.save')}
+            </Button>
+          </div>
+          {previewOpen ? (
+            <Preview
+              draft={draft}
+              accounts={chosen}
+              ownTitles={ownTitles}
+              saving={save.isPending}
+              onEdit={() => {
+                setPreviewOpen(false);
+              }}
+              onConfirm={confirm}
+            />
+          ) : null}
+        </>
+      )}
     </Modal>
   );
 }

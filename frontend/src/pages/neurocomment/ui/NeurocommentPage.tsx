@@ -543,7 +543,7 @@ export function NeurocommentPage() {
 
           <ActivityLogCard
             logLines={logLines}
-            accountName={accountLabel}
+            accountOf={(id) => accountOptions.find((a) => a.account_id === id)}
             onClear={() => {
               setConfirmClearLogs(true);
             }}

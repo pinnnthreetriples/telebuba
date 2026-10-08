@@ -207,3 +207,61 @@ async def test_an_oversized_photo_is_refused_before_it_is_read(
         )
 
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_the_pauses_save_while_running_and_refuse_a_bad_range(app: FastAPI) -> None:
+    cid = await seed(accounts=("a1",), targets=("@alpha",), messages=("Hi",))
+    await repository.set_status(cid, "running", run_id="run-1")
+    pace = {
+        "between_messages": {"min": 5, "max": 10},
+        "between_chats": {"min": 60, "max": 120},
+        "rest_minutes": {"min": 30, "max": 45},
+    }
+    async with _client(app) as client:
+        saved = await client.put(f"{_BASE}/campaigns/{cid}/pace", json=pace)
+        backwards = await client.put(
+            f"{_BASE}/campaigns/{cid}/pace",
+            json=pace | {"between_chats": {"min": 120, "max": 60}},
+        )
+        missing = await client.put(f"{_BASE}/campaigns/missing/pace", json=pace)
+
+    assert saved.status_code == 200
+    assert saved.json()["settings"]["rest_minutes"] == {"min": 30, "max": 45}
+    assert backwards.status_code == 422
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_keep_returns_a_chat_skipped_for_deletions_and_refuses_the_rest(
+    app: FastAPI,
+) -> None:
+    from schemas.chat_broadcast_records import TargetSeed  # noqa: PLC0415
+
+    cid = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
+    await repository.replace_targets(
+        cid,
+        [
+            TargetSeed(chat_key=key, raw=f"@{key}", kind="public", assigned_account_id="a1")
+            for key in ("alpha", "beta")
+        ],
+    )
+    await repository.set_status(cid, "stopped", run_id="run-1", round=2)
+    await repository.update_target(cid, "alpha", state="skipped", skip_reason="deleted")
+    await repository.update_target(cid, "beta", state="skipped", skip_reason="manual")
+    url = f"{_BASE}/campaigns/{cid}/targets/action"
+    async with _client(app) as client:
+        kept = await client.post(url, json={"chat_key": "alpha", "action": "keep"})
+        again = await client.post(url, json={"chat_key": "alpha", "action": "keep"})
+        other = await client.post(url, json={"chat_key": "beta", "action": "keep"})
+        missing = await client.post(
+            f"{_BASE}/campaigns/nope/targets/action", json={"chat_key": "alpha", "action": "keep"}
+        )
+
+    assert kept.status_code == 200
+    rows = {row["chat_key"]: row for row in kept.json()["rows"]}
+    assert (rows["alpha"]["state"], rows["alpha"]["ignore_deleted"]) == ("queued", True)
+    assert rows["alpha"]["active"]
+    assert (again.status_code, again.json()["error"]["message"]) == (409, "target_state_changed")
+    assert (other.status_code, other.json()["error"]["message"]) == (409, "target_state_changed")
+    assert missing.status_code == 404

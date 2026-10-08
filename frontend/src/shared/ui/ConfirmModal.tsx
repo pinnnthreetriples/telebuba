@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button } from './Button';
+import { ConfirmCard } from './ConfirmCard';
 import { Modal } from './Modal';
 
 // Generic delete/remove confirm dialog (rule: any destructive action asks
@@ -42,16 +42,15 @@ export function ConfirmModal({
 
   return (
     <Modal onClose={onClose} size="confirm" label={title}>
-      <div className="p-6">
-        <div className="mb-2 text-h3 font-medium">{title}</div>
-        <div className="mb-6 text-body text-content-muted">{body}</div>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>{cancelLabel}</Button>
-          <Button variant="danger" onClick={confirm} loading={pending}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
+      <ConfirmCard
+        title={title}
+        body={body}
+        confirmLabel={confirmLabel}
+        cancelLabel={cancelLabel}
+        onCancel={onClose}
+        onConfirm={confirm}
+        pending={pending}
+      />
     </Modal>
   );
 }

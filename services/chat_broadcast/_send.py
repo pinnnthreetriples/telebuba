@@ -63,7 +63,8 @@ def _pause(bounds: tuple[int, int]) -> float:
 
 
 def between_chats(ctx: RunContext) -> float:
-    return _pause((ctx.settings.between_chats.min, ctx.settings.between_chats.max))
+    bounds = ctx.pace.between_chats
+    return _pause((bounds.min, bounds.max))
 
 
 def _typing_seconds(ctx: RunContext, text: str) -> float:
@@ -110,7 +111,8 @@ async def _action(
 
 async def _pause_before_next(ctx: RunContext, target: TargetRecord) -> None:
     """Wait out the pause between two messages, with the next send time on the board."""
-    pause = _pause((ctx.settings.between_messages.min, ctx.settings.between_messages.max))
+    bounds = ctx.pace.between_messages
+    pause = _pause((bounds.min, bounds.max))
     await repository.update_target(
         ctx.campaign_id,
         target.chat_key,

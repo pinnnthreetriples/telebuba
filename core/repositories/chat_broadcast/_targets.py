@@ -16,6 +16,7 @@ from sqlalchemy import delete, insert, select, update
 from core.db import _get_engine
 from core.repositories.chat_broadcast._tables import (
     _chat_broadcast_accounts,
+    _chat_broadcast_campaigns,
     _chat_broadcast_targets,
 )
 from schemas.chat_broadcast_records import RosterAccount, TargetRecord
@@ -23,10 +24,11 @@ from schemas.chat_broadcast_records import RosterAccount, TargetRecord
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from schemas.chat_broadcast_records import TargetSeed
+    from schemas.chat_broadcast_records import CampaignRecord, TargetSeed
 
 _ROSTER = _chat_broadcast_accounts
 _TARGETS = _chat_broadcast_targets
+_CAMPAIGNS = _chat_broadcast_campaigns
 
 
 def _list_roster(campaign_id: str) -> list[RosterAccount]:
@@ -91,6 +93,14 @@ async def fetch_target(campaign_id: str, chat_key: str) -> TargetRecord | None:
 def _replace_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
     now = int(time.time())
     with _get_engine().begin() as connection:
+        kept = {
+            str(key)
+            for (key,) in connection.execute(
+                select(_TARGETS.c.chat_key).where(
+                    _TARGETS.c.campaign_id == campaign_id, _TARGETS.c.ignore_deleted == 1
+                )
+            ).all()
+        }
         connection.execute(delete(_TARGETS).where(_TARGETS.c.campaign_id == campaign_id))
         for position, seed in enumerate(seeds):
             connection.execute(
@@ -98,13 +108,18 @@ def _replace_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
                     campaign_id=campaign_id,
                     position=position,
                     updated_unix=now,
+                    ignore_deleted=int(seed.chat_key in kept),
                     **seed.model_dump(),
                 ),
             )
 
 
 async def replace_targets(campaign_id: str, seeds: list[TargetSeed]) -> None:
-    """A fresh run's chats, in order; whatever the previous run left is dropped."""
+    """A fresh run's chats, in order; whatever the previous run left is dropped.
+
+    Except the operator's choice to keep writing into a chat despite deleted messages:
+    it outlives the run, by chat key.
+    """
     await asyncio.to_thread(_replace_targets, campaign_id, seeds)
 
 
@@ -186,14 +201,19 @@ async def update_target(
 
 
 def _start_round(campaign_id: str, round_number: int) -> int:
-    """Re-queue every chat that finished the round (and every chat an error skipped)."""
+    skipped = _TARGETS.c.state == "skipped"
     with _get_engine().begin() as connection:
         finished = connection.execute(
             update(_TARGETS)
             .where(
                 _TARGETS.c.campaign_id == campaign_id,
                 (_TARGETS.c.state == "round_done")
-                | ((_TARGETS.c.state == "skipped") & (_TARGETS.c.skip_reason == "error")),
+                | (skipped & (_TARGETS.c.skip_reason == "error"))
+                | (
+                    skipped
+                    & (_TARGETS.c.skip_reason == "deleted")
+                    & (_TARGETS.c.ignore_deleted == 1)
+                ),
             )
             .values(
                 state="queued",
@@ -204,11 +224,82 @@ def _start_round(campaign_id: str, round_number: int) -> int:
                 updated_unix=int(time.time()),
             ),
         )
+        connection.execute(
+            update(_CAMPAIGNS)
+            .where(_CAMPAIGNS.c.campaign_id == campaign_id)
+            .values(round=round_number, rest_until_unix=None),
+        )
     return int(finished.rowcount)
 
 
 async def start_round(campaign_id: str, round_number: int) -> int:
+    """Open ``round_number``: the campaign enters it and its chats are re-queued.
+
+    Re-queued: every chat that finished the round, every chat an error skipped, and every
+    chat skipped for deletions that the operator kept since. One transaction with the
+    campaign's round, so a keep never reads the old round over the new round's chats.
+    """
     return await asyncio.to_thread(_start_round, campaign_id, round_number)
+
+
+def _keep_target(
+    campaign_id: str,
+    chat_key: str,
+    moment: tuple[str, int, bool],
+    open_states: tuple[str, ...] | None,
+    fields: dict[str, object],
+) -> bool:
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        current = connection.execute(
+            select(_CAMPAIGNS.c.status, _CAMPAIGNS.c.round, _CAMPAIGNS.c.rest_until_unix).where(
+                _CAMPAIGNS.c.campaign_id == campaign_id
+            )
+        ).first()
+        if current is None or (str(current[0]), int(current[1]), current[2] is not None) != moment:
+            return False
+        if open_states is not None:
+            other = connection.execute(
+                select(_TARGETS.c.chat_key)
+                .where(
+                    _TARGETS.c.campaign_id == campaign_id,
+                    _TARGETS.c.chat_key != chat_key,
+                    _TARGETS.c.round == moment[1],
+                    _TARGETS.c.state.in_(open_states),
+                )
+                .limit(1)
+            ).first()
+            if other is None:
+                return False
+        result = connection.execute(
+            update(_TARGETS)
+            .where(
+                _TARGETS.c.campaign_id == campaign_id,
+                _TARGETS.c.chat_key == chat_key,
+                _TARGETS.c.state == "skipped",
+                _TARGETS.c.skip_reason == "deleted",
+            )
+            .values(ignore_deleted=1, updated_unix=int(time.time()), **fields),
+        )
+    return result.rowcount > 0
+
+
+async def keep_target(
+    seen: CampaignRecord,
+    chat_key: str,
+    *,
+    open_states: Iterable[str] | None = None,
+    **fields: object,
+) -> bool:
+    """Keep a chat skipped for deletions: set the flag and ``fields`` in one transaction.
+
+    Only while the campaign is still where ``seen`` caught it (status, round, resting or
+    not) and, with ``open_states``, while another chat of that round is still in one of
+    them — so the round cannot have closed between the caller's read and this write.
+    """
+    states = None if open_states is None else tuple(open_states)
+    moment = (seen.status, seen.round, seen.rest_until_unix is not None)
+    return await asyncio.to_thread(_keep_target, seen.campaign_id, chat_key, moment, states, fields)
 
 
 def _finish_rounds(campaign_id: str) -> None:

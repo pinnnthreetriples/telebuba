@@ -20,6 +20,7 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function CollapsibleCard({
+  aside,
   trailing,
   label,
   defaultOpen = false,
@@ -30,6 +31,8 @@ export function CollapsibleCard({
   children,
   ...heading
 }: CardHeadingProps & {
+  // Сразу за заголовком (вкладки), см. `CardHeader`.
+  aside?: ReactNode;
   trailing?: ReactNode;
   label: string;
   defaultOpen?: boolean;
@@ -89,6 +92,7 @@ export function CollapsibleCard({
       <CardHeader
         {...heading}
         toggle={{ expanded: open, controls: bodyId, onToggle: toggle }}
+        aside={aside}
         className={cn('transition-colors duration-state hover:bg-info-tint', headerClassName)}
       >
         {trailing}

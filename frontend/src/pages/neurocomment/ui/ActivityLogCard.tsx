@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import type { ComponentProps } from 'react';
 import type { LogEntry } from '@/shared/api';
 import { LogTerminal } from '@/widgets/log-terminal';
 
@@ -11,11 +12,11 @@ import { LogTerminal } from '@/widgets/log-terminal';
 export function ActivityLogCard({
   logLines,
   onClear,
-  accountName,
+  accountOf,
 }: {
   logLines: LogEntry[];
   onClear?: () => void;
-  accountName?: (accountId: string) => string;
+  accountOf?: ComponentProps<typeof LogTerminal>['accountOf'];
 }) {
   const { t } = useTranslation();
   return (
@@ -23,7 +24,7 @@ export function ActivityLogCard({
       title={t('neurocomment.log.title')}
       logLines={logLines}
       onClear={onClear}
-      accountName={accountName}
+      accountOf={accountOf}
     />
   );
 }

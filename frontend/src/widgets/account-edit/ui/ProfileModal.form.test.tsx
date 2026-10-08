@@ -186,15 +186,15 @@ test('closing with unsaved edits asks for confirmation; a clean close does not',
 
   // Clean close → no discard dialog.
   await userEvent.click(screen.getByLabelText('Закрыть'));
-  expect(screen.queryByText('Отменить изменения?')).not.toBeInTheDocument();
+  expect(screen.queryByText('Закрыть без сохранения?')).not.toBeInTheDocument();
   expect(onClose).toHaveBeenCalledTimes(1);
 
   // Dirty close → the discard dialog gates the close.
   await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
   await userEvent.click(screen.getByLabelText('Закрыть'));
-  expect(screen.getByText('Отменить изменения?')).toBeInTheDocument();
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
   expect(onClose).toHaveBeenCalledTimes(1);
-  await userEvent.click(screen.getByText('Не сохранять'));
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   expect(onClose).toHaveBeenCalledTimes(2);
 });
 
@@ -505,7 +505,7 @@ test('a successful save clears the dirty state so closing does not prompt', asyn
     expect(fired('/accounts/profile')).toBe(true);
   });
   await userEvent.click(screen.getByLabelText('Закрыть'));
-  expect(screen.queryByText('Отменить изменения?')).not.toBeInTheDocument();
+  expect(screen.queryByText('Закрыть без сохранения?')).not.toBeInTheDocument();
   expect(onClose).toHaveBeenCalled();
 });
 

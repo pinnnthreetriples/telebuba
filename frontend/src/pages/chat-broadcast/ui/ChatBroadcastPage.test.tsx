@@ -82,6 +82,37 @@ test('the board filters by tab and group and acts on an opened chat', async () =
   expect(screen.getByText('Пропущен: только админы')).toBeInTheDocument();
 });
 
+test('a chat skipped for a deleted message is kept with no account in the request', async () => {
+  routeApi({
+    board: board({
+      rows: [
+        row({
+          chat_key: 'delta',
+          raw: '@delta',
+          state: 'skipped',
+          skip_reason: 'deleted',
+          message_deleted: true,
+          active: false,
+        }),
+      ],
+    }),
+  });
+  renderPage();
+  const user = userEvent.setup();
+
+  await screen.findByText('@delta');
+  await user.click(screen.getByRole('button', { name: 'История и действия' }));
+  await user.click(await screen.findByRole('button', { name: 'Писать всё равно' }));
+  await waitFor(() => {
+    expect(callsTo(`${BASE}/targets/action`, 'POST')).toHaveLength(1);
+  });
+  const keep = (await callsTo(`${BASE}/targets/action`, 'POST')[0]!.clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(keep).toEqual({ chat_key: 'delta', action: 'keep', account_id: null });
+});
+
 test('the opened chat stays open when a refetch moves the rows around it', async () => {
   const rows = [
     row({ chat_key: 'alpha', raw: '@alpha', state: 'writing' }),
@@ -191,4 +222,73 @@ test('clearing the log asks with the count first', async () => {
   await waitFor(() => {
     expect(callsTo('/api/v1/logs', 'DELETE')).toHaveLength(1);
   });
+});
+
+test('the board tabs sit beside its title and the gear saves the pauses', async () => {
+  routeApi();
+  renderPage();
+  const user = userEvent.setup();
+
+  const tabs = await screen.findByRole('radiogroup', { name: 'Какие чаты показать' });
+  // Beside the title, not inside the toggle that folds the card.
+  expect(tabs.closest('button')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Паузы рассылки' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Паузы рассылки' });
+  const rest = within(dialog).getByLabelText('Отдых между кругами: от');
+  await user.clear(rest);
+  await user.type(rest, '30');
+  await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+
+  await waitFor(() => {
+    expect(callsTo(`${BASE}/pace`, 'PUT')).toHaveLength(1);
+  });
+  const body = (await callsTo(`${BASE}/pace`, 'PUT')[0]!.clone().json()) as Record<
+    string,
+    { min: number; max: number }
+  >;
+  expect(body.rest_minutes?.min).toBe(30);
+  expect(Object.keys(body).sort()).toEqual(['between_chats', 'between_messages', 'rest_minutes']);
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: 'Паузы рассылки' })).toBeNull();
+  });
+});
+
+test('a pause save that lost the race says so, and a retry goes through', async () => {
+  const api = routeApi({ refuse: { path: '/pace', status: 409, code: 'campaign_changed' } });
+  renderPage();
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'Паузы рассылки' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Паузы рассылки' });
+  await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Рассылку изменили');
+  expect(within(dialog).getByRole('button', { name: 'Сохранить' })).toBeEnabled();
+
+  // The server re-reads on every call, so the same save now succeeds and the dialog closes.
+  api.refuse = null;
+  await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: 'Паузы рассылки' })).toBeNull();
+  });
+  expect(callsTo(`${BASE}/pace`, 'PUT')).toHaveLength(2);
+});
+
+test('the pause dialog asks before a changed range is thrown away', async () => {
+  routeApi();
+  renderPage();
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'Паузы рассылки' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Паузы рассылки' });
+  const rest = within(dialog).getByLabelText('Отдых между кругами: от');
+  await user.clear(rest);
+  await user.type(rest, '30');
+
+  await user.keyboard('{Escape}');
+  const question = screen.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+  await user.click(within(question).getByRole('button', { name: 'Закрыть без сохранения' }));
+
+  expect(screen.queryByRole('dialog', { name: 'Паузы рассылки' })).toBeNull();
+  expect(callsTo(`${BASE}/pace`, 'PUT')).toHaveLength(0);
 });

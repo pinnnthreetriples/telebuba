@@ -57,6 +57,8 @@ _MAX_TARGET_CHARS = 300
 _MAX_EXCLUDED = 5000
 _MAX_MESSAGES = 10
 _MAX_ACCOUNTS = 500
+# How many times one message of the chain goes out in a round, back to back.
+MAX_REPEAT = 10
 # A media id is ``<sha256>.<ext>`` from the upload endpoint, nothing else.
 MEDIA_ID_PATTERN = r"^[0-9a-f]{64}\.(jpg|jpeg|png|webp)$"
 
@@ -106,6 +108,22 @@ class ChatBroadcastMessage(BaseModel):
     photo: ChatBroadcastPhoto | None = None
     # ``t.me/<channel>/<id>`` (or ``t.me/c/<id>/<post>``) of a post to forward whole.
     post: str = Field(default="", max_length=_MAX_POST_LINK)
+    # Copies of this message in one round, sent one after another before the next message.
+    repeat: int = Field(default=1, ge=1, le=MAX_REPEAT)
+
+
+class ChatBroadcastPace(BaseModel):
+    """The pauses the board's gear edits — the only settings a running campaign takes.
+
+    The run reads them live: a new value applies from the next pause, and a rest already
+    under way is drawn again from the moment it began.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    between_messages: SecondsRange
+    between_chats: SecondsRange
+    rest_minutes: MinutesRange
 
 
 class ChatBroadcastSettings(BaseModel):
@@ -237,7 +255,9 @@ class ChatBroadcastTargetAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     chat_key: str = Field(min_length=1, max_length=_MAX_TARGET_CHARS)
-    action: Literal["now", "hand", "skip"]
+    # ``keep``: a chat skipped for deleted messages goes back to work and is no longer
+    # skipped for them — only a ban stops it.
+    action: Literal["now", "hand", "skip", "keep"]
     # Required for ``hand``: the account the chat goes to.
     account_id: str | None = Field(default=None, min_length=1, max_length=64)
 

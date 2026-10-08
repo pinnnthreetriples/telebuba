@@ -99,7 +99,9 @@ async def delete_campaign(campaign_id: str) -> bool | None:
         return None
     if record.status in _LIVE_STATUSES:
         raise ChatBroadcastConflictError(CAMPAIGN_RUNNING)
-    return await repository.delete_campaign(campaign_id)
+    deleted = await repository.delete_campaign(campaign_id)
+    _state.forget_campaign(campaign_id)
+    return deleted
 
 
 async def load_settings(campaign_id: str) -> ChatBroadcastSettingsRead | None:

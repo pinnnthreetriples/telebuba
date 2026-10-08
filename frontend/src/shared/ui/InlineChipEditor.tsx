@@ -40,7 +40,13 @@ export function InlineChipEditor({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && value.trim() && !disabled) onConfirm();
-          if (event.key === 'Escape') onCancel();
+          if (event.key === 'Escape') {
+            // The editor's own Escape: inside a dialog, the Modal's `document` listener
+            // must not also take it and close the whole dialog.
+            event.preventDefault();
+            event.stopPropagation();
+            onCancel();
+          }
         }}
         placeholder={placeholder}
         aria-label={inputLabel}

@@ -120,6 +120,7 @@ import {
   resetAccountSession,
   resolveChatBroadcastTargets,
   resyncAccountAvatar,
+  saveChatBroadcastPace,
   saveChatBroadcastSettings,
   saveNeuroshillingSettings,
   scheduleAccountPhoto,
@@ -495,6 +496,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SaveChatBroadcastPaceData,
+  SaveChatBroadcastPaceError,
+  SaveChatBroadcastPaceResponse,
   SaveChatBroadcastSettingsData,
   SaveChatBroadcastSettingsError,
   SaveChatBroadcastSettingsResponse,
@@ -4968,6 +4972,37 @@ export const saveChatBroadcastSettingsMutation = (
   return mutationOptions;
 };
 
+/**
+ * Save Pace
+ *
+ * Save the pauses only — accepted while the campaign runs; the run reads them live.
+ *
+ * 409 ``campaign_changed`` when the campaign moved between the read and the write.
+ */
+export const saveChatBroadcastPaceMutation = (
+  options?: Partial<Options<SaveChatBroadcastPaceData>>,
+): UseMutationOptions<
+  SaveChatBroadcastPaceResponse,
+  SaveChatBroadcastPaceError,
+  Options<SaveChatBroadcastPaceData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatBroadcastPaceResponse,
+    SaveChatBroadcastPaceError,
+    Options<SaveChatBroadcastPaceData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatBroadcastPace({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
 export const getChatBroadcastBoardQueryKey = (options: Options<GetChatBroadcastBoardData>) =>
   createQueryKey('getChatBroadcastBoard', options);
 
@@ -5059,9 +5094,11 @@ export const stopChatBroadcastCampaignMutation = (
 /**
  * Act On Target
  *
- * Write now, hand to another account, or skip one chat of the board.
+ * Write now, hand to another account, skip, or keep one chat of the board.
  *
- * 409 ``target_state_changed`` when the chat moved on before the click landed.
+ * ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+ * 409 ``target_state_changed`` when the chat moved on before the click landed, or
+ * ``keep`` was asked of a chat not skipped for deletions.
  */
 export const actOnChatBroadcastTargetMutation = (
   options?: Partial<Options<ActOnChatBroadcastTargetData>>,
