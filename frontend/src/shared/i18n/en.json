@@ -3110,7 +3110,9 @@
       "needAccount": "needs an account",
       "done": "done",
       "skippedAt": "skipped {{time}}",
-      "paused": "paused"
+      "paused": "paused",
+      "nextIn": "in {{time}}",
+      "sending": "sending…"
     },
     "status": {
       "queued": "Queued",

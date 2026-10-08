@@ -23,6 +23,7 @@ import {
   Select,
 } from '@/shared/ui';
 
+import { Countdown } from './Countdown';
 import type { GroupId, RowView } from '../model/board';
 import {
   ACTIVE_GROUPS,
@@ -290,7 +291,10 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
     {
       id: 'when',
       header: t('chatBroadcast.board.columns.when'),
-      cell: ({ row }) => row.original.view.when,
+      cell: ({ row }) => {
+        const { when, countdownTo } = row.original.view;
+        return countdownTo === undefined ? when : <Countdown to={countdownTo} />;
+      },
       meta: { cellClassName: 'whitespace-nowrap type-body text-content-subtle tabular-nums' },
     },
     {

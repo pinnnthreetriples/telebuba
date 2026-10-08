@@ -3157,7 +3157,9 @@
       "needAccount": "нужен аккаунт",
       "done": "готово",
       "skippedAt": "пропущен {{time}}",
-      "paused": "на паузе"
+      "paused": "на паузе",
+      "nextIn": "через {{time}}",
+      "sending": "отправляет…"
     },
     "status": {
       "queued": "В очереди",
