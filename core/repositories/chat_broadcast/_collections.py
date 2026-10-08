@@ -11,7 +11,7 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from core.db import _get_engine, _now_iso
-from core.repositories.chat_broadcast._tables import _chat_broadcast_collections as _TABLE
+from core.repositories.chat_broadcast._tables import _chat_broadcast_collections as _table
 from schemas.chat_broadcast_collections import ChatCollection
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ def _record(row: RowMapping) -> ChatCollection:
 
 
 def _list_collections() -> list[ChatCollection]:
-    statement = select(_TABLE).order_by(_TABLE.c.name.asc())
+    statement = select(_table).order_by(_table.c.name.asc())
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
     return [_record(row) for row in rows]
@@ -42,7 +42,7 @@ async def list_collections() -> list[ChatCollection]:
 
 
 def _fetch(collection_id: str) -> ChatCollection | None:
-    statement = select(_TABLE).where(_TABLE.c.collection_id == collection_id)
+    statement = select(_table).where(_table.c.collection_id == collection_id)
     with _get_engine().connect() as connection:
         row = connection.execute(statement).mappings().first()
     return None if row is None else _record(row)
@@ -54,7 +54,7 @@ def _create_collection(name: str, targets: list[str]) -> ChatCollection | Collec
     try:
         with _get_engine().begin() as connection:
             connection.execute(
-                insert(_TABLE).values(
+                insert(_table).values(
                     collection_id=collection_id,
                     name=name,
                     targets_json=json.dumps(targets, ensure_ascii=False),
@@ -77,8 +77,8 @@ def _replace_collection(
     try:
         with _get_engine().begin() as connection:
             changed = connection.execute(
-                update(_TABLE)
-                .where(_TABLE.c.collection_id == collection_id)
+                update(_table)
+                .where(_table.c.collection_id == collection_id)
                 .values(
                     name=name,
                     targets_json=json.dumps(targets, ensure_ascii=False),
@@ -101,7 +101,7 @@ async def replace_collection(
 def _delete_collection(collection_id: str) -> bool:
     with _get_engine().begin() as connection:
         deleted = connection.execute(
-            delete(_TABLE).where(_TABLE.c.collection_id == collection_id)
+            delete(_table).where(_table.c.collection_id == collection_id)
         ).rowcount
     return bool(deleted)
 

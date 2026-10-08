@@ -30,7 +30,9 @@ async def create_collection(body: ChatCollectionWrite) -> ChatCollection:
     return await _landed(saved, "chat_broadcast_collection_created")
 
 
-async def replace_collection(collection_id: str, body: ChatCollectionWrite) -> ChatCollection | None:
+async def replace_collection(
+    collection_id: str, body: ChatCollectionWrite
+) -> ChatCollection | None:
     """Rename and re-fill a list at once; ``None`` when it does not exist."""
     saved = await repository.replace_collection(
         collection_id, body.name.strip(), valid_targets(body.targets)
