@@ -1,4 +1,4 @@
-"""Migrations 68/69 — the chat-broadcast schema, and its parity with ``create_all``.
+"""Migrations 68–70 — the chat-broadcast schema, and its parity with ``create_all``.
 
 A fresh database is built by ``core.repositories.chat_broadcast._tables`` and an existing
 one by the migration; neither path exercises the other, so the two spellings are compared
@@ -14,6 +14,7 @@ import pytest
 import core.repositories.chat_broadcast._tables  # noqa: F401 - registers the tables
 from core.db import _metadata
 from core.migration_steps_chat_broadcast import (
+    _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
     _add_chat_broadcast_tables,
 )
@@ -33,6 +34,7 @@ _TABLES = (
     "chat_broadcast_targets",
     "chat_broadcast_messages",
     "chat_broadcast_events",
+    "chat_broadcast_collections",
 )
 
 
@@ -50,6 +52,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     with engine.begin() as connection:
         _add_chat_broadcast_tables(connection)
         _add_chat_broadcast_ignore_deleted(connection)
+        _add_chat_broadcast_collections(connection)
     return engine
 
 
@@ -58,6 +61,8 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
     assert entries == [(68, "add_chat_broadcast_tables", _add_chat_broadcast_tables)]
     kept = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_ignore_deleted]
     assert kept == [(69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted)]
+    lists = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_collections]
+    assert lists == [(70, "add_chat_broadcast_collections", _add_chat_broadcast_collections)]
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -74,6 +79,7 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
     with migrated_engine.begin() as connection:
         _add_chat_broadcast_tables(connection)
         _add_chat_broadcast_ignore_deleted(connection)
+        _add_chat_broadcast_collections(connection)
     assert {table: _shape(migrated_engine, table) for table in _TABLES} == before
 
 

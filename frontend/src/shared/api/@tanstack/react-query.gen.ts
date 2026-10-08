@@ -35,6 +35,7 @@ import {
   createAccountChannel,
   createCampaign,
   createChatBroadcastCampaign,
+  createChatCollection,
   createNeuroshillingCampaign,
   createProxy,
   deleteAccount,
@@ -42,6 +43,7 @@ import {
   deleteAccountChannelPost,
   deleteCampaign,
   deleteChatBroadcastCampaign,
+  deleteChatCollection,
   deleteNeuroshillingCampaign,
   deleteProxy,
   editAccountChannelPost,
@@ -89,6 +91,7 @@ import {
   listChannelChallenges,
   listChatBroadcastCampaigns,
   listChatBroadcastOwnChats,
+  listChatCollections,
   listDiscoveryAccounts,
   listLogs,
   listNeurocommentComments,
@@ -122,6 +125,7 @@ import {
   resyncAccountAvatar,
   saveChatBroadcastPace,
   saveChatBroadcastSettings,
+  saveChatCollection,
   saveNeuroshillingSettings,
   scheduleAccountPhoto,
   scheduleAccountStory,
@@ -245,6 +249,9 @@ import type {
   CreateChatBroadcastCampaignData,
   CreateChatBroadcastCampaignError,
   CreateChatBroadcastCampaignResponse,
+  CreateChatCollectionData,
+  CreateChatCollectionError,
+  CreateChatCollectionResponse,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignError,
   CreateNeuroshillingCampaignResponse,
@@ -266,6 +273,9 @@ import type {
   DeleteChatBroadcastCampaignData,
   DeleteChatBroadcastCampaignError,
   DeleteChatBroadcastCampaignResponse,
+  DeleteChatCollectionData,
+  DeleteChatCollectionError,
+  DeleteChatCollectionResponse,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignError,
   DeleteNeuroshillingCampaignResponse,
@@ -406,6 +416,9 @@ import type {
   ListChatBroadcastOwnChatsData,
   ListChatBroadcastOwnChatsError,
   ListChatBroadcastOwnChatsResponse,
+  ListChatCollectionsData,
+  ListChatCollectionsError,
+  ListChatCollectionsResponse,
   ListDiscoveryAccountsData,
   ListDiscoveryAccountsError,
   ListDiscoveryAccountsResponse,
@@ -502,6 +515,9 @@ import type {
   SaveChatBroadcastSettingsData,
   SaveChatBroadcastSettingsError,
   SaveChatBroadcastSettingsResponse,
+  SaveChatCollectionData,
+  SaveChatCollectionError,
+  SaveChatCollectionResponse,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsError,
   SaveNeuroshillingSettingsResponse,
@@ -5200,6 +5216,118 @@ export const uploadChatBroadcastPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await uploadChatBroadcastPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatCollectionsQueryKey = (options?: Options<ListChatCollectionsData>) =>
+  createQueryKey('listChatCollections', options);
+
+/**
+ * List Collections
+ */
+export const listChatCollectionsOptions = (options?: Options<ListChatCollectionsData>) =>
+  queryOptions<
+    ListChatCollectionsResponse,
+    ListChatCollectionsError,
+    ListChatCollectionsResponse,
+    ReturnType<typeof listChatCollectionsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatCollections({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatCollectionsQueryKey(options),
+  });
+
+/**
+ * Create Collection
+ *
+ * Save a named list of chats; 409 ``collection_name_taken`` for a name in use.
+ */
+export const createChatCollectionMutation = (
+  options?: Partial<Options<CreateChatCollectionData>>,
+): UseMutationOptions<
+  CreateChatCollectionResponse,
+  CreateChatCollectionError,
+  Options<CreateChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateChatCollectionResponse,
+    CreateChatCollectionError,
+    Options<CreateChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Collection
+ *
+ * Delete a list; campaigns that took chats from it keep them.
+ */
+export const deleteChatCollectionMutation = (
+  options?: Partial<Options<DeleteChatCollectionData>>,
+): UseMutationOptions<
+  DeleteChatCollectionResponse,
+  DeleteChatCollectionError,
+  Options<DeleteChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteChatCollectionResponse,
+    DeleteChatCollectionError,
+    Options<DeleteChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Collection
+ *
+ * Replace a list's name and chats at once.
+ */
+export const saveChatCollectionMutation = (
+  options?: Partial<Options<SaveChatCollectionData>>,
+): UseMutationOptions<
+  SaveChatCollectionResponse,
+  SaveChatCollectionError,
+  Options<SaveChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatCollectionResponse,
+    SaveChatCollectionError,
+    Options<SaveChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatCollection({
         ...options,
         ...fnOptions,
         throwOnError: true,

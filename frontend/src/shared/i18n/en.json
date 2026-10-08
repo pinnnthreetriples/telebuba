@@ -973,7 +973,8 @@
       "account_not_in_campaign": "This account is not in the broadcast or has dropped out of it.",
       "media_invalid": "That is not a photo: JPG, PNG and WEBP work.",
       "media_too_large": "The photo is too large.",
-      "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo."
+      "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo.",
+      "collection_name_taken": "A category with this name already exists. Pick another name."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1353,6 +1354,9 @@
     "chat_broadcast_rest_started": "Rest between rounds",
     "chat_broadcast_pace_changed": "Broadcast pauses changed",
     "chat_broadcast_chat_joined": "Account is in the chat",
+    "chat_broadcast_collection_created": "Chat category created",
+    "chat_broadcast_collection_deleted": "Chat category deleted",
+    "chat_broadcast_collection_saved": "Chat category saved",
     "chat_broadcast_join_requested": "Join request sent",
     "chat_broadcast_join_approved": "Join request approved",
     "chat_broadcast_join_daily_cap": "Daily join limit — waiting",
@@ -3160,6 +3164,27 @@
       "deleted": "An admin deleted our message — no more writing here"
     },
     "log": "Broadcast log",
+    "collections": {
+      "title": "Categories",
+      "empty": "No categories yet. Save a list of chats and add it to any broadcast.",
+      "add": "Add to broadcast: {{name}}",
+      "addHint": "Add this category's chats to the broadcast",
+      "addedHint": "All of this category's chats are already in the list",
+      "saveAs": "Save as category",
+      "name": "Category name",
+      "namePlaceholder": "Category name",
+      "saveConfirm": "Save category",
+      "manage": "Manage",
+      "manageTitle": "Manage categories",
+      "manageHint": "A category's chats are copied into a broadcast: editing a category does not change broadcasts it was already added to.",
+      "saveOne": "Save category {{name}}",
+      "noChats": "No chats in this category yet.",
+      "remove": "Delete category {{name}}",
+      "removeTitle": "Delete category “{{name}}”?",
+      "removeBody": "Broadcasts that already have its chats will keep them.",
+      "removeConfirm": "Delete",
+      "close": "Close"
+    },
     "settings": {
       "subtitle": "Broadcast settings",
       "unsaved": "Not saved",

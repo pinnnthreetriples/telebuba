@@ -75,6 +75,9 @@ async def join(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
     if action is None:
         await _moves.skip(ctx, target, "unreachable", account_id)
         return "acted"
+    inside = await _already_inside(account_id, target)
+    if inside is not None:
+        return await _enter_as_member(ctx, account_id, target, inside)
     if await _at_join_cap(account_id):
         return await _cap_reached(ctx, account_id, target)
     if not await repository.update_target(
@@ -93,6 +96,35 @@ async def join(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
         if verdict in {"joined", "requested"}:
             await record_join(account_id)
     return await _on_verdict(ctx, account_id, target, verdict, result)
+
+
+async def _already_inside(account_id: str, target: TargetRecord) -> ResolveChatResult | None:
+    """The chat as this account sees it, when the account is already a member.
+
+    Asked before joining because Telegram answers a re-join of a public chat with a
+    plain success, not "already a participant": the join would be charged to the daily
+    budget and followed by the operator's whole "write in a new chat after" pause. A
+    folder join asks its own invite instead (``already_peers``).
+    """
+    if target.kind == "folder":
+        return None
+    token = join_token(target)
+    resolved = None if token is None else await _resolve(account_id, token)
+    return resolved if resolved is not None and resolved.member else None
+
+
+async def _enter_as_member(
+    ctx: RunContext, account_id: str, target: TargetRecord, inside: ResolveChatResult
+) -> Step:
+    """No join, no budget, no captcha and no pause: it can write right away."""
+    if not await repository.update_target(
+        ctx.campaign_id,
+        target.chat_key,
+        expect_states=("queued", "reconnecting", "waiting"),
+        state="joining",
+    ):
+        return "idle"
+    return await after_join(ctx, account_id, target, already=True, resolved=inside)
 
 
 async def _on_verdict(
@@ -200,17 +232,22 @@ async def _resolve(account_id: str, token: str) -> ResolveChatResult | None:
 
 
 async def after_join(
-    ctx: RunContext, account_id: str, target: TargetRecord, *, already: bool
+    ctx: RunContext,
+    account_id: str,
+    target: TargetRecord,
+    *,
+    already: bool,
+    resolved: ResolveChatResult | None = None,
 ) -> Step:
     """Inside: learn this account's id for the chat, pass a captcha, start the pause.
 
     Where the account already was it writes at once; a fresh join waits the operator's
-    "write in a new chat after" first.
+    "write in a new chat after" first. ``resolved`` is a resolve already made for it.
     """
     peer_id = target.peer_id if target.kind in {"folder", "own"} else None
     token = join_token(target)
     if peer_id is None and token is not None:
-        resolved = await _resolve(account_id, token)
+        resolved = resolved or await _resolve(account_id, token)
         if resolved is not None and resolved.kind == "channel":
             await _moves.skip(ctx, target, "admin_only", account_id)
             return "acted"

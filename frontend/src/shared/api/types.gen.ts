@@ -2050,6 +2050,54 @@ export type ChatBroadcastVersionRequest = {
 };
 
 /**
+ * ChatCollection
+ */
+export type ChatCollection = {
+  /**
+   * Collection Id
+   */
+  collection_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Targets
+   */
+  targets: Array<string>;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * ChatCollectionWrite
+ *
+ * Create, or replace whole: the name and every link at once.
+ */
+export type ChatCollectionWrite = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+};
+
+/**
+ * ChatCollections
+ */
+export type ChatCollections = {
+  /**
+   * Items
+   */
+  items: Array<ChatCollection>;
+};
+
+/**
  * ChatDialog
  */
 export type ChatDialog = {
@@ -12625,3 +12673,175 @@ export type UploadChatBroadcastPhotoResponses = {
 
 export type UploadChatBroadcastPhotoResponse =
   UploadChatBroadcastPhotoResponses[keyof UploadChatBroadcastPhotoResponses];
+
+export type ListChatCollectionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections';
+};
+
+export type ListChatCollectionsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatCollectionsError = ListChatCollectionsErrors[keyof ListChatCollectionsErrors];
+
+export type ListChatCollectionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollections;
+};
+
+export type ListChatCollectionsResponse =
+  ListChatCollectionsResponses[keyof ListChatCollectionsResponses];
+
+export type CreateChatCollectionData = {
+  body: ChatCollectionWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections';
+};
+
+export type CreateChatCollectionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateChatCollectionError =
+  CreateChatCollectionErrors[keyof CreateChatCollectionErrors];
+
+export type CreateChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollection;
+};
+
+export type CreateChatCollectionResponse =
+  CreateChatCollectionResponses[keyof CreateChatCollectionResponses];
+
+export type DeleteChatCollectionData = {
+  body?: never;
+  path: {
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections/{collection_id}';
+};
+
+export type DeleteChatCollectionErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteChatCollectionError =
+  DeleteChatCollectionErrors[keyof DeleteChatCollectionErrors];
+
+export type DeleteChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteChatCollectionResponse =
+  DeleteChatCollectionResponses[keyof DeleteChatCollectionResponses];
+
+export type SaveChatCollectionData = {
+  body: ChatCollectionWrite;
+  path: {
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections/{collection_id}';
+};
+
+export type SaveChatCollectionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatCollectionError = SaveChatCollectionErrors[keyof SaveChatCollectionErrors];
+
+export type SaveChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollection;
+};
+
+export type SaveChatCollectionResponse =
+  SaveChatCollectionResponses[keyof SaveChatCollectionResponses];

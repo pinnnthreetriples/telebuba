@@ -1,4 +1,4 @@
-"""Migrations 68 and 69 — the chat-broadcast tables, and a kept chat's flag.
+"""Migrations 68, 69 and 70 — the chat-broadcast tables, a kept chat's flag, saved chat lists.
 
 ``CREATE ... IF NOT EXISTS`` throughout: ``create_all`` runs BEFORE ``apply_migrations``,
 so on a fresh database the schema comes from ``core.repositories.chat_broadcast._tables``
@@ -175,3 +175,20 @@ def _add_chat_broadcast_ignore_deleted(connection: Connection) -> None:
             "ALTER TABLE chat_broadcast_targets "
             "ADD COLUMN ignore_deleted INTEGER DEFAULT 0 NOT NULL",
         )
+
+
+def _add_chat_broadcast_collections(connection: Connection) -> None:
+    # #70: the operator's saved chat lists, copied into a campaign when picked.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS chat_broadcast_collections ("
+        " collection_id VARCHAR NOT NULL,"
+        " name VARCHAR NOT NULL,"
+        " targets_json VARCHAR DEFAULT '[]' NOT NULL,"
+        " created_at VARCHAR NOT NULL,"
+        " updated_at VARCHAR NOT NULL,"
+        " PRIMARY KEY (collection_id))",
+    )
+    connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_cb_collections_name"
+        " ON chat_broadcast_collections (name)",
+    )

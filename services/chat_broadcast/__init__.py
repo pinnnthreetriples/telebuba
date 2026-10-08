@@ -25,6 +25,12 @@ from services.chat_broadcast.campaigns import (
     load_settings,
     save_settings,
 )
+from services.chat_broadcast.collections import (
+    create_collection,
+    delete_collection,
+    list_collections,
+    replace_collection,
+)
 from services.chat_broadcast.media import upload_photo
 from services.chat_broadcast.pace import save_pace
 from services.chat_broadcast.targets import own_chats, resolve
@@ -35,12 +41,16 @@ __all__ = [
     "ChatBroadcastRefusedError",
     "act_on_target",
     "create_campaign",
+    "create_collection",
     "delete_campaign",
+    "delete_collection",
     "list_campaigns",
+    "list_collections",
     "load_board",
     "load_settings",
     "own_chats",
     "reconcile_chat_broadcast_on_startup",
+    "replace_collection",
     "resolve",
     "save_pace",
     "save_settings",

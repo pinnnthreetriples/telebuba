@@ -20,6 +20,13 @@ from core.repositories.chat_broadcast._campaigns import (
     set_runtime,
     set_status,
 )
+from core.repositories.chat_broadcast._collections import (
+    CollectionMiss,
+    create_collection,
+    delete_collection,
+    list_collections,
+    replace_collection,
+)
 from core.repositories.chat_broadcast._journal import (
     add_event,
     claim_message,
@@ -49,18 +56,22 @@ from core.repositories.chat_broadcast._targets import (
 )
 
 __all__ = [
+    "CollectionMiss",
     "add_event",
     "claim_message",
     "count_account_sends_since",
     "count_run_sent",
     "create_campaign",
+    "create_collection",
     "delete_campaign",
+    "delete_collection",
     "fetch_campaign",
     "fetch_target",
     "finish_rounds",
     "halt_account",
     "keep_target",
     "list_campaigns",
+    "list_collections",
     "list_events",
     "list_journal",
     "list_live_campaigns",
@@ -71,6 +82,7 @@ __all__ = [
     "merge_targets",
     "move_rest",
     "release_message",
+    "replace_collection",
     "replace_targets",
     "save_pace",
     "save_settings",

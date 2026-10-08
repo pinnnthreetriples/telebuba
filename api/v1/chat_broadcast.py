@@ -2,7 +2,8 @@
 
 Campaigns, the whole-dialog settings save, the board's pauses, and the board are here;
 running a campaign, the board's per-chat actions, link resolution and photo upload are
-in ``_chat_broadcast_run`` and mounted onto this router. Refusals answer 400 or 409 with
+in ``_chat_broadcast_run``, the saved chat lists in ``_chat_broadcast_collections``; both
+are mounted onto this router. Refusals answer 400 or 409 with
 the domain's stable code as the envelope ``message``.
 """
 
@@ -12,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
 from api.errors import error_responses
+from api.v1._chat_broadcast_collections import collections_router
 from api.v1._chat_broadcast_run import run_router
 from schemas.chat_broadcast import (
     ChatBroadcastCampaign,
@@ -132,3 +134,4 @@ async def get_board(campaign_id: str) -> ChatBroadcastBoard:
 
 
 router.include_router(run_router)
+router.include_router(collections_router)
