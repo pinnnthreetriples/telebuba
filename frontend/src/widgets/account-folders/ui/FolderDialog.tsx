@@ -71,7 +71,7 @@ function FolderNameForm({
   };
 
   return (
-    <Modal size="form" label={title} onClose={onClose} dirty={name !== initial}>
+    <Modal size="confirm" label={title} onClose={onClose} dirty={name !== initial}>
       {(close) => (
         <>
           <ModalHeader title={title}>
@@ -183,7 +183,7 @@ export function FolderDialog({
   }
 
   return (
-    <Modal size="form" label={folder.name} onClose={close}>
+    <Modal size="confirm" label={folder.name} onClose={close}>
       <ModalHeader title={folder.name}>
         <IconButton
           size="md"

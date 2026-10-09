@@ -157,23 +157,28 @@ export function FolderTabStrip({
         >
           <Icon name="folder-plus" size={16} />
         </IconButton>
-        {activeFolder ? (
+        {/* The gear slides in on a folder tab and out on «Все» / «Без папки»: its slot
+            opens from nothing, so the toolbar on the left glides aside instead of jumping.
+            -ml-2 cancels the row gap while the slot is closed. */}
+        <span
+          inert={!activeFolder}
+          className={cn(
+            'flex shrink-0 overflow-hidden transition-[width,margin,opacity] duration-enter ease-out',
+            activeFolder ? 'size-icon opacity-100' : '-ml-2 w-0 opacity-0',
+          )}
+        >
           <IconButton
             size="md"
             tone="neutral"
-            aria-label={t('accounts.folders.settings', { name: activeFolder.name })}
+            aria-label={t('accounts.folders.settings', { name: activeFolder?.name ?? '' })}
             title={t('accounts.folders.settingsHint')}
             onClick={() => {
-              onSettings(activeFolder.id);
+              if (activeFolder) onSettings(activeFolder.id);
             }}
           >
             <Icon name="gear" size={16} />
           </IconButton>
-        ) : (
-          // Holds the gear's place on «Все» and «Без папки», so the toolbar to its
-          // left does not jump sideways when a folder tab is opened.
-          <span aria-hidden className="size-icon" />
-        )}
+        </span>
       </div>
     </div>
   );

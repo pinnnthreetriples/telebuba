@@ -80,7 +80,10 @@ test('folder settings open from the gear and from a right-click, only for a real
 
 test('the virtual views have no gear and take no drops', () => {
   renderStrip({ view: 'unfiled' });
-  expect(screen.queryByRole('button', { name: /Настройки папки/ })).not.toBeInTheDocument();
+  // The gear stays mounted so its slot can animate closed, but it is inert there:
+  // out of the tab order and the accessibility tree.
+  const gear = screen.getByTitle('Переименовать или удалить папку');
+  expect(gear.closest('[inert]')).not.toBeNull();
   expect(screen.getByRole('tab', { name: /Без папки/ })).not.toHaveAttribute('data-folder-drop');
   expect(screen.getByRole('tab', { name: 'Основные' })).toHaveAttribute(
     'data-folder-drop',
