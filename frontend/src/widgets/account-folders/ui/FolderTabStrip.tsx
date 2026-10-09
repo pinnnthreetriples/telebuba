@@ -87,7 +87,7 @@ export function FolderTabStrip({
 
   return (
     // `relative`: the filter card in `actions` hangs from this strip's right edge.
-    <div className="relative flex flex-wrap items-end gap-1 rounded-t-lg border border-b-0 border-line bg-canvas px-1 pr-2 pt-1">
+    <div className="relative flex flex-wrap items-end gap-1 rounded-t-lg border border-b-0 border-line bg-canvas px-1 pr-4 pt-1">
       <div className="order-last flex w-full min-w-0 items-end sm:order-none sm:w-auto sm:flex-1">
         <label className="mb-1 flex shrink-0 items-center self-center pl-4 pr-2">
           <input
@@ -147,7 +147,10 @@ export function FolderTabStrip({
         </div>
       </div>
       <div className="mb-1 ml-auto flex min-w-0 items-center gap-2 self-center">{actions}</div>
-      <div className="mb-1 flex shrink-0 items-center gap-2 self-center border-l border-line pl-2">
+      {/* On the table's action grid: pr-4 is the action cell's padding and every
+          button sits one 28 + 8 step from the next (ml-1 tops the strip's gap-1 up to
+          gap-2), so the strip's buttons stand over the rows' action buttons. */}
+      <div className="mb-1 ml-1 flex shrink-0 items-center gap-2 self-center">
         <IconButton
           size="md"
           tone="neutral"
