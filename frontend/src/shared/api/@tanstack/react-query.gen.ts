@@ -41,6 +41,7 @@ import {
   createChatCollection,
   createNeuroshillingCampaign,
   createProxy,
+  createUserParserPreset,
   deleteAccount,
   deleteAccountChannel,
   deleteAccountChannelPost,
@@ -50,8 +51,11 @@ import {
   deleteChatCollection,
   deleteNeuroshillingCampaign,
   deleteProxy,
+  deleteUserParserBase,
+  deleteUserParserPreset,
   editAccountChannelPost,
   expandDiscoveryKeywords,
+  exportUserParserRun,
   generateBulkMessage,
   generateNeuroshillingScenario,
   getAccountChannel,
@@ -78,6 +82,7 @@ import {
   getNeuroshillingScenario,
   getNeuroshillingSettings,
   getReadiness,
+  getUserParserRun,
   getWarmingBoard,
   getWarmingSettings,
   handoffToNeurocomment,
@@ -102,6 +107,11 @@ import {
   listNeurocommentComments,
   listNeuroshillingCampaigns,
   listProxies,
+  listUserParserAccounts,
+  listUserParserBases,
+  listUserParserBaseUsers,
+  listUserParserPresets,
+  listUserParserRunUsers,
   listWarmedAccounts,
   listWarmingChannels,
   listWarmingDialogues,
@@ -124,6 +134,7 @@ import {
   removeCampaignChannel,
   removeWarmingChannel,
   renameAccountFolder,
+  renameUserParserBase,
   requestLoginCode,
   rescheduleScheduledPost,
   resendAccountTwofaEmail,
@@ -159,10 +170,12 @@ import {
   startNeurocomment,
   startNeuroshillingCampaign,
   startPhoneLogin,
+  startUserParserRun,
   startWarming,
   stopChatBroadcastCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
+  stopUserParserRun,
   stopWarming,
   submitLoginCode,
   unassignProxy,
@@ -274,6 +287,9 @@ import type {
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
+  CreateUserParserPresetData,
+  CreateUserParserPresetError,
+  CreateUserParserPresetResponse,
   DeleteAccountChannelData,
   DeleteAccountChannelError,
   DeleteAccountChannelPostData,
@@ -301,12 +317,20 @@ import type {
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  DeleteUserParserBaseData,
+  DeleteUserParserBaseError,
+  DeleteUserParserBaseResponse,
+  DeleteUserParserPresetData,
+  DeleteUserParserPresetError,
+  DeleteUserParserPresetResponse,
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostResponse,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsError,
   ExpandDiscoveryKeywordsResponse,
+  ExportUserParserRunData,
+  ExportUserParserRunError,
   GenerateBulkMessageData,
   GenerateBulkMessageError,
   GenerateBulkMessageResponse,
@@ -384,6 +408,9 @@ import type {
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
+  GetUserParserRunData,
+  GetUserParserRunError,
+  GetUserParserRunResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -456,6 +483,21 @@ import type {
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
+  ListUserParserAccountsData,
+  ListUserParserAccountsError,
+  ListUserParserAccountsResponse,
+  ListUserParserBasesData,
+  ListUserParserBasesError,
+  ListUserParserBasesResponse,
+  ListUserParserBaseUsersData,
+  ListUserParserBaseUsersError,
+  ListUserParserBaseUsersResponse,
+  ListUserParserPresetsData,
+  ListUserParserPresetsError,
+  ListUserParserPresetsResponse,
+  ListUserParserRunUsersData,
+  ListUserParserRunUsersError,
+  ListUserParserRunUsersResponse,
   ListWarmedAccountsData,
   ListWarmedAccountsError,
   ListWarmedAccountsResponse,
@@ -519,6 +561,9 @@ import type {
   RenameAccountFolderData,
   RenameAccountFolderError,
   RenameAccountFolderResponse,
+  RenameUserParserBaseData,
+  RenameUserParserBaseError,
+  RenameUserParserBaseResponse,
   RequestLoginCodeData,
   RequestLoginCodeError,
   RequestLoginCodeResponse,
@@ -624,6 +669,9 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginError,
   StartPhoneLoginResponse,
+  StartUserParserRunData,
+  StartUserParserRunError,
+  StartUserParserRunResponse,
   StartWarmingData,
   StartWarmingError,
   StartWarmingResponse,
@@ -636,6 +684,9 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignError,
   StopNeuroshillingCampaignResponse,
+  StopUserParserRunData,
+  StopUserParserRunError,
+  StopUserParserRunResponse,
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
@@ -5571,4 +5622,449 @@ export const removeAccountsFromFolderMutation = (
     },
   };
   return mutationOptions;
+};
+
+export const listUserParserAccountsQueryKey = (options?: Options<ListUserParserAccountsData>) =>
+  createQueryKey('listUserParserAccounts', options);
+
+/**
+ * List User Parser Accounts
+ *
+ * Every account the parser may read with, busy ones marked with why.
+ */
+export const listUserParserAccountsOptions = (options?: Options<ListUserParserAccountsData>) =>
+  queryOptions<
+    ListUserParserAccountsResponse,
+    ListUserParserAccountsError,
+    ListUserParserAccountsResponse,
+    ReturnType<typeof listUserParserAccountsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserAccounts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserAccountsQueryKey(options),
+  });
+
+/**
+ * Start User Parser Run
+ */
+export const startUserParserRunMutation = (
+  options?: Partial<Options<StartUserParserRunData>>,
+): UseMutationOptions<
+  StartUserParserRunResponse,
+  StartUserParserRunError,
+  Options<StartUserParserRunData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartUserParserRunResponse,
+    StartUserParserRunError,
+    Options<StartUserParserRunData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startUserParserRun({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getUserParserRunQueryKey = (options: Options<GetUserParserRunData>) =>
+  createQueryKey('getUserParserRun', options);
+
+/**
+ * Get User Parser Run
+ */
+export const getUserParserRunOptions = (options: Options<GetUserParserRunData>) =>
+  queryOptions<
+    GetUserParserRunResponse,
+    GetUserParserRunError,
+    GetUserParserRunResponse,
+    ReturnType<typeof getUserParserRunQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getUserParserRun({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getUserParserRunQueryKey(options),
+  });
+
+/**
+ * Stop User Parser Run
+ *
+ * Stop a run; whatever it collected is saved as its base.
+ */
+export const stopUserParserRunMutation = (
+  options?: Partial<Options<StopUserParserRunData>>,
+): UseMutationOptions<
+  StopUserParserRunResponse,
+  StopUserParserRunError,
+  Options<StopUserParserRunData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopUserParserRunResponse,
+    StopUserParserRunError,
+    Options<StopUserParserRunData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopUserParserRun({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserRunUsersQueryKey = (options: Options<ListUserParserRunUsersData>) =>
+  createQueryKey('listUserParserRunUsers', options);
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsersOptions = (options: Options<ListUserParserRunUsersData>) =>
+  queryOptions<
+    ListUserParserRunUsersResponse,
+    ListUserParserRunUsersError,
+    ListUserParserRunUsersResponse,
+    ReturnType<typeof listUserParserRunUsersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserRunUsers({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserRunUsersQueryKey(options),
+  });
+
+export const listUserParserRunUsersInfiniteQueryKey = (
+  options: Options<ListUserParserRunUsersData>,
+): QueryKey<Options<ListUserParserRunUsersData>> =>
+  createQueryKey('listUserParserRunUsers', options, true);
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsersInfiniteOptions = (
+  options: Options<ListUserParserRunUsersData>,
+) => {
+  const opts = infiniteQueryOptions<
+    ListUserParserRunUsersResponse,
+    ListUserParserRunUsersError,
+    InfiniteData<ListUserParserRunUsersResponse>,
+    QueryKey<Options<ListUserParserRunUsersData>>,
+    | number
+    | Pick<QueryKey<Options<ListUserParserRunUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListUserParserRunUsersData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  offset: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listUserParserRunUsers({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listUserParserRunUsersInfiniteQueryKey(options),
+    },
+  );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
+
+export const exportUserParserRunQueryKey = (options: Options<ExportUserParserRunData>) =>
+  createQueryKey('exportUserParserRun', options);
+
+/**
+ * Export User Parser Run
+ *
+ * The base as a file: CSV (UTF-8 with BOM, opens in Excel) or JSON.
+ */
+export const exportUserParserRunOptions = (options: Options<ExportUserParserRunData>) =>
+  queryOptions<
+    unknown,
+    ExportUserParserRunError,
+    unknown,
+    ReturnType<typeof exportUserParserRunQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await exportUserParserRun({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: exportUserParserRunQueryKey(options),
+  });
+
+export const listUserParserPresetsQueryKey = (options?: Options<ListUserParserPresetsData>) =>
+  createQueryKey('listUserParserPresets', options);
+
+/**
+ * List User Parser Presets
+ */
+export const listUserParserPresetsOptions = (options?: Options<ListUserParserPresetsData>) =>
+  queryOptions<
+    ListUserParserPresetsResponse,
+    ListUserParserPresetsError,
+    ListUserParserPresetsResponse,
+    ReturnType<typeof listUserParserPresetsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserPresets({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserPresetsQueryKey(options),
+  });
+
+/**
+ * Create User Parser Preset
+ */
+export const createUserParserPresetMutation = (
+  options?: Partial<Options<CreateUserParserPresetData>>,
+): UseMutationOptions<
+  CreateUserParserPresetResponse,
+  CreateUserParserPresetError,
+  Options<CreateUserParserPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateUserParserPresetResponse,
+    CreateUserParserPresetError,
+    Options<CreateUserParserPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createUserParserPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete User Parser Preset
+ */
+export const deleteUserParserPresetMutation = (
+  options?: Partial<Options<DeleteUserParserPresetData>>,
+): UseMutationOptions<
+  DeleteUserParserPresetResponse,
+  DeleteUserParserPresetError,
+  Options<DeleteUserParserPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteUserParserPresetResponse,
+    DeleteUserParserPresetError,
+    Options<DeleteUserParserPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteUserParserPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserBasesQueryKey = (options?: Options<ListUserParserBasesData>) =>
+  createQueryKey('listUserParserBases', options);
+
+/**
+ * List User Parser Bases
+ *
+ * Every settled run as a folder, newest first. Nothing deletes one but the operator.
+ */
+export const listUserParserBasesOptions = (options?: Options<ListUserParserBasesData>) =>
+  queryOptions<
+    ListUserParserBasesResponse,
+    ListUserParserBasesError,
+    ListUserParserBasesResponse,
+    ReturnType<typeof listUserParserBasesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserBases({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserBasesQueryKey(options),
+  });
+
+/**
+ * Delete User Parser Base
+ *
+ * Delete a base and every person in it, for good.
+ */
+export const deleteUserParserBaseMutation = (
+  options?: Partial<Options<DeleteUserParserBaseData>>,
+): UseMutationOptions<
+  DeleteUserParserBaseResponse,
+  DeleteUserParserBaseError,
+  Options<DeleteUserParserBaseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteUserParserBaseResponse,
+    DeleteUserParserBaseError,
+    Options<DeleteUserParserBaseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteUserParserBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Rename User Parser Base
+ */
+export const renameUserParserBaseMutation = (
+  options?: Partial<Options<RenameUserParserBaseData>>,
+): UseMutationOptions<
+  RenameUserParserBaseResponse,
+  RenameUserParserBaseError,
+  Options<RenameUserParserBaseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RenameUserParserBaseResponse,
+    RenameUserParserBaseError,
+    Options<RenameUserParserBaseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await renameUserParserBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserBaseUsersQueryKey = (options: Options<ListUserParserBaseUsersData>) =>
+  createQueryKey('listUserParserBaseUsers', options);
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsersOptions = (options: Options<ListUserParserBaseUsersData>) =>
+  queryOptions<
+    ListUserParserBaseUsersResponse,
+    ListUserParserBaseUsersError,
+    ListUserParserBaseUsersResponse,
+    ReturnType<typeof listUserParserBaseUsersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserBaseUsers({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserBaseUsersQueryKey(options),
+  });
+
+export const listUserParserBaseUsersInfiniteQueryKey = (
+  options: Options<ListUserParserBaseUsersData>,
+): QueryKey<Options<ListUserParserBaseUsersData>> =>
+  createQueryKey('listUserParserBaseUsers', options, true);
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsersInfiniteOptions = (
+  options: Options<ListUserParserBaseUsersData>,
+) => {
+  const opts = infiniteQueryOptions<
+    ListUserParserBaseUsersResponse,
+    ListUserParserBaseUsersError,
+    InfiniteData<ListUserParserBaseUsersResponse>,
+    QueryKey<Options<ListUserParserBaseUsersData>>,
+    | number
+    | Pick<QueryKey<Options<ListUserParserBaseUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListUserParserBaseUsersData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  offset: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listUserParserBaseUsers({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listUserParserBaseUsersInfiniteQueryKey(options),
+    },
+  );
+  return opts as Omit<typeof opts, 'initialData'>;
 };

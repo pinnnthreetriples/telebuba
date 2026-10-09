@@ -89,6 +89,8 @@ type Props = {
   fleet: readonly AccountRead[];
   // Выбранные аккаунты: свои, если оператор их трогал, иначе — выбор по умолчанию.
   accountIds: string[];
+  // Занятые аккаунты: id -> чем занят. Они остаются в ряду, но приглушены и подписаны.
+  busy: ReadonlyMap<string, string>;
   // Каналы кампании, из которой открыт парсер: их можно подставить в источники одной кнопкой.
   campaignChannels: readonly string[];
   onChange: (form: ParserForm) => void;
@@ -102,6 +104,7 @@ export function UserParserForm({
   formId,
   fleet,
   accountIds,
+  busy,
   campaignChannels,
   onChange,
   onSubmit,
@@ -186,6 +189,7 @@ export function UserParserForm({
         <AccountStrip
           ids={accountIds}
           fleet={fleet}
+          busy={busy}
           help={help('accounts')}
           onChange={(ids) => {
             onChange({ ...form, accountIds: ids });

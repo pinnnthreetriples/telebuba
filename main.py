@@ -54,6 +54,10 @@ from services.neuroshilling import (
     shutdown_neuroshilling_on_shutdown,
 )
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
+from services.user_parser import (
+    reconcile_user_parser_on_startup,
+    shutdown_user_parser_on_shutdown,
+)
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 # Stdlib sink for full text — see ``core.proxy_check._failed_result``.
@@ -151,6 +155,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
     await reconcile_chat_broadcast_on_startup()
+    await reconcile_user_parser_on_startup()
     await reconcile_inboxes_on_startup()
     await start_scheduled_posts()
     try:
@@ -163,6 +168,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("chat_broadcast", shutdown_chat_broadcast_on_shutdown)
+        # Before the pool: a run saves what it collected as it is cancelled.
+        await _shutdown_step("user_parser", shutdown_user_parser_on_shutdown)
         await _shutdown_step("inbox", shutdown_inbox_runtime)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         await _shutdown_step("web_login", shutdown_web_login)

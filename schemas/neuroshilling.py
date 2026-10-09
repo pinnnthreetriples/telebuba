@@ -47,7 +47,9 @@ NeuroshillingPresenceState = Literal[
     "retired",
 ]
 # Who is holding an account right now, as the accounts modal reports it.
-NeuroshillingBusyOwner = Literal["warming", "neuroshilling", "neurocomment", "chat_broadcast"]
+NeuroshillingBusyOwner = Literal[
+    "warming", "neuroshilling", "neurocomment", "chat_broadcast", "user_parser"
+]
 # One row of the send journal. ``pending`` is written BEFORE the dispatch and is the
 # only state that consumes a quota slot without anything having been published yet —
 # which is exactly why the quota predicate counts it. A row left ``pending`` after the

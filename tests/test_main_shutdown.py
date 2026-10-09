@@ -33,6 +33,8 @@ _RECONCILE = (
     "reconcile_neuroshilling_on_startup",
     # The chat broadcast takes accounts too, after neuroshilling restored its own.
     "reconcile_chat_broadcast_on_startup",
+    # A parser run never resumes: its reconcile only marks orphaned runs interrupted.
+    "reconcile_user_parser_on_startup",
     "reconcile_inboxes_on_startup",
     # The scheduled publisher starts last: it only reads what the others restored.
     "start_scheduled_posts",
@@ -47,6 +49,8 @@ _STEPS = (
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
     "shutdown_chat_broadcast_on_shutdown",
+    # A parser run saves what it collected as it is cancelled — before the pool goes.
+    "shutdown_user_parser_on_shutdown",
     "shutdown_inbox_runtime",
     "shutdown_telegram_pool",
     "close_gemini_client",

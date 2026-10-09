@@ -91,6 +91,7 @@ from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
+from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
     _add_warming_settings_extra_toggles,
@@ -206,6 +207,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted),
     (70, "add_chat_broadcast_collections", _add_chat_broadcast_collections),
     (71, "add_account_folders", _add_account_folders),
+    (72, "add_user_parser_tables", _add_user_parser_tables),
 )
 
 

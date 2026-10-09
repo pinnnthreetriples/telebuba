@@ -1,9 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { allAccountsQueryOptions } from '@/entities/account';
-import { discoveryAccountsQueryOptions } from '@/entities/campaign';
+import {
+  createUserParserPresetMutation,
+  startUserParserRunMutation,
+  stopUserParserRunMutation,
+  userParserAccountsQueryOptions,
+  userParserBasesQueryOptions,
+  userParserPresetsQueryOptions,
+  userParserRunQueryOptions,
+} from '@/entities/user-parser';
+import { useLogEventStream } from '@/shared/lib';
 import {
   Button,
   HelpHint,
@@ -16,55 +25,25 @@ import {
 } from '@/shared/ui';
 
 import { effectiveAccountIds } from '../model/filters';
+import { useUserPages } from '../model/useUserPages';
 import {
-  applyFilters,
   EMPTY_PARSER_FORM,
-  mockUsers,
+  formToRequest,
+  formToSettings,
   parseSources,
-  topicOf,
-  usersToCsv,
-  type ParsedBase,
-  type ParsedUser,
+  settingsToForm,
   type ParserForm,
-  type ParserMode,
 } from '../model/userParser';
+import { downloadExport } from '../model/userParserExport';
+import { runLog } from '../model/userParserLog';
 import { UserParserBases } from './UserParserBases';
 import { UserParserForm } from './UserParserForm';
-import { UserParserResults, type ParserLogLine } from './UserParserResults';
+import { UserParserResults } from './UserParserResults';
 
-const STEP_MS = 900;
-const DAY_MS = 86_400_000;
-
-// Две демо-папки, чтобы вкладка «Базы» в прототипе не была пустой.
-function demoBases(name: (key: string) => string): ParsedBase[] {
-  const seed = (
-    id: string,
-    key: string,
-    mode: ParserMode,
-    sources: string[],
-    daysAgo: number,
-  ): ParsedBase => ({
-    id,
-    name: name(key),
-    mode,
-    createdAt: new Date(Date.now() - daysAgo * DAY_MS).toISOString(),
-    sources,
-    users: applyFilters(mockUsers(sources, 90), { ...EMPTY_PARSER_FORM, mode }),
-  });
-  return [
-    seed('demo-1', 'demoCrypto', 'comments', ['@cryptochat_ru', '@bitnews', '@defi_talk'], 2),
-    seed('demo-2', 'demoSmm', 'messages', ['@smm_community', 't.me/marketing_talks'], 6),
-  ];
-}
-
-function download(name: string, body: string, type: string) {
-  const url = URL.createObjectURL(new Blob([body], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+const ACCOUNTS_POLL_MS = 15_000;
+// Страховка на случай пропущенного SSE: пока прогон идёт, окно спрашивает его и само.
+const RUN_POLL_MS = 3_000;
+const REFUSED = 'userParser.refused';
 
 type Props = {
   campaignName: string;
@@ -73,126 +52,103 @@ type Props = {
 };
 
 // Та же оболочка, что у автопоиска каналов: шапка, форма, подвал с «Сбросить» / «Найти»,
-// после запуска — прогон и результаты с «← Изменить параметры». Прогон — сценарий на
-// таймере: бэкенда у парсера пока нет. Заготовки живут, пока открыто окно.
+// после запуска — прогон и результаты с «← Изменить параметры». Прогон идёт на сервере:
+// окно запускает его, следит за ним (опрос + SSE) и показывает собранных постранично.
 export function UserParserModal({ campaignName, campaignChannels, onClose }: Props) {
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const formId = useId();
   const [form, setForm] = useState<ParserForm>(EMPTY_PARSER_FORM);
-  const [presets, setPresets] = useState<{ name: string; form: ParserForm }[]>([]);
   const [tab, setTab] = useState<'new' | 'bases'>('new');
-  const [bases, setBases] = useState<ParsedBase[]>(() =>
-    demoBases((key) => t(`userParser.bases.${key}`)),
-  );
+  const [runId, setRunId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(0);
-  const [log, setLog] = useState<ParserLogLine[]>([]);
-  const [raw, setRaw] = useState(0);
-  const [users, setUsers] = useState<ParsedUser[]>([]);
-  const plan = useRef<string[]>([]);
-  const step = useRef(0);
-  const ran = useRef<ParserForm>(EMPTY_PARSER_FORM);
-  // Сколько собрано по ходу прогона — счётчик «собрано» растёт с каждым источником.
-  const collected = useRef(0);
 
-  const accounts = useQuery(discoveryAccountsQueryOptions());
+  const accounts = useQuery({
+    ...userParserAccountsQueryOptions(),
+    refetchInterval: submitted ? false : ACCOUNTS_POLL_MS,
+  });
   const accountList = accounts.data?.items ?? [];
   // Пока оператор не трогал выбор — свободные аккаунты, Premium первыми (как в автопоиске).
   const accountIds = form.accountIds ?? effectiveAccountIds(null, accountList);
+  const busy = new Map(
+    accountList.flatMap((account) =>
+      account.busy_reason == null
+        ? []
+        : [
+            [
+              account.account_id,
+              t(`neurocomment.modal.discovery.form.accounts.busy.${account.busy_reason}`),
+            ],
+          ],
+    ),
+  );
   const fleet = useQuery(allAccountsQueryOptions());
   const sources = parseSources(form.sources);
   const canRun = accountIds.length > 0 && sources.length > 0;
 
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => {
-      const index = step.current;
-      const chat = plan.current[index];
-      const at = new Date().toLocaleTimeString(i18n.language);
-      const line = (tone: ParserLogLine['tone'], key: string, values = {}) => ({
-        at,
-        tone,
-        text: t(`userParser.log.${key}`, values),
-      });
-      if (chat === undefined) {
-        const caught = mockUsers(plan.current, collected.current);
-        const kept = applyFilters(caught, ran.current);
-        setRunning(false);
-        setRaw(caught.length);
-        setUsers(kept);
-        // Каждый сбор сохраняется папкой во вкладке «Базы».
-        const createdAt = new Date().toISOString();
-        setBases((prev) => [
-          {
-            id: createdAt,
-            name: t('userParser.bases.name', {
-              mode: t(`userParser.bases.modeName.${ran.current.mode}`),
-              date: new Date(createdAt).toLocaleDateString(i18n.language),
-            }),
-            mode: ran.current.mode,
-            createdAt,
-            sources: plan.current,
-            users: kept,
-          },
-          ...prev,
-        ]);
-        setLog((lines) => [
-          ...lines,
-          line('success', 'filtered', { raw: caught.length, kept: kept.length }),
-          line('success', 'done'),
-        ]);
-        return;
-      }
-      step.current = index + 1;
-      setDone(index + 1);
-      const topic = topicOf(chat);
-      const found = 40 + ((index * 37) % 120);
-      const status =
-        ran.current.mode === 'members' && index === 0
-          ? 'partial'
-          : ran.current.mode === 'members' && index === 1
-            ? 'hidden'
-            : index === 1
-              ? 'flood'
-              : 'found';
-      // Скрытый список не даёт никого; урезанный и «пауза» всё равно что-то собрали.
-      const got = status === 'hidden' ? 0 : found;
-      collected.current += got;
-      setRaw(collected.current);
-      const lines = [
-        line('text', topic === null ? 'chat' : 'topic', { chat, topic }),
-        // Честные статусы: что Telegram отдал не всё или не отдал вовсе — видно сразу.
-        status === 'found'
-          ? line('success', 'found', { count: found })
-          : line('warning', status, { count: status === 'partial' ? 10000 : found }),
-      ];
-      setLog((prev) => [...prev, ...lines]);
-    }, STEP_MS);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [running, t, i18n.language]);
+  const basesOptions = userParserBasesQueryOptions();
+  const bases = useQuery(basesOptions);
+  const presetsOptions = userParserPresetsQueryOptions();
+  const presets = useQuery(presetsOptions).data?.items ?? [];
+  const savePreset = useMutation({
+    ...createUserParserPresetMutation(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: presetsOptions.queryKey }),
+  });
 
-  const run = () => {
+  const runOptions = userParserRunQueryOptions({ path: { run_id: runId ?? '' } });
+  const run = useQuery({
+    ...runOptions,
+    enabled: runId !== null,
+    refetchInterval: (query) => (query.state.data?.status === 'running' ? RUN_POLL_MS : false),
+  });
+  const settled = run.data !== undefined && run.data.status !== 'running';
+  const people = useUserPages(runId, '', settled);
+  const start = useMutation(startUserParserRunMutation());
+  const stop = useMutation(stopUserParserRunMutation());
+  const running = submitted && !settled;
+
+  // Общий поток SSE приходит на всё приложение; наши — только события парсера.
+  useLogEventStream((entry) => {
+    if (!entry.event.startsWith('user_parser')) return;
+    void queryClient.invalidateQueries({ queryKey: runOptions.queryKey });
+    void queryClient.invalidateQueries({ queryKey: basesOptions.queryKey });
+  });
+
+  const refusal = start.data?.status !== undefined && start.data.status !== 'started';
+  const refusedId = start.data?.refused_account_id;
+  const refusedName =
+    refusedId == null
+      ? null
+      : (accountList.find((account) => account.account_id === refusedId)?.name ?? refusedId);
+
+  const launch = () => {
     if (!canRun) return;
-    plan.current = sources;
-    step.current = 0;
-    ran.current = form;
-    collected.current = 0;
-    setDone(0);
-    setRaw(0);
-    setUsers([]);
-    setLog([
+    const name = t('userParser.bases.name', {
+      mode: t(`userParser.bases.modeName.${form.mode}`),
+      date: new Date().toLocaleDateString(i18n.language),
+    });
+    start.mutate(
+      { body: formToRequest(form, accountIds, name) },
       {
-        at: new Date().toLocaleTimeString(i18n.language),
-        tone: 'text',
-        text: t('userParser.log.start', { accounts: accountIds.length, sources: sources.length }),
+        onSuccess: (outcome) => {
+          if (outcome.status !== 'started' || outcome.run_id == null) return;
+          setRunId(outcome.run_id);
+          setSubmitted(true);
+        },
       },
-    ]);
-    setSubmitted(true);
-    setRunning(true);
+    );
   };
+
+  const presetName = () => {
+    const taken = new Set(presets.map((preset) => preset.name.toLowerCase()));
+    const mode = t(`userParser.form.mode.${form.mode}`);
+    let n = presets.length + 1;
+    while (taken.has(t('userParser.presetName', { mode, n }).toLowerCase())) n += 1;
+    return t('userParser.presetName', { mode, n });
+  };
+
+  const current = run.data;
+  const log = current === undefined ? [] : runLog(current, t, i18n.language);
 
   return (
     <Modal onClose={onClose} size="table" label={t('userParser.title')}>
@@ -207,7 +163,10 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
             ariaLabel={t('userParser.tabs.label')}
             options={[
               { value: 'new', label: t('userParser.tabs.new') },
-              { value: 'bases', label: t('userParser.tabs.bases', { count: bases.length }) },
+              {
+                value: 'bases',
+                label: t('userParser.tabs.bases', { count: bases.data?.items.length ?? 0 }),
+              },
             ]}
             onChange={setTab}
           />
@@ -216,36 +175,41 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
 
       <div className="px-6 py-6">
         {tab === 'bases' ? (
-          <UserParserBases
-            bases={bases}
-            onRename={(id, name) => {
-              setBases((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
-            }}
-            onDelete={(id) => {
-              setBases((prev) => prev.filter((b) => b.id !== id));
-            }}
-          />
+          <UserParserBases />
         ) : submitted ? (
           <UserParserResults
-            mode={ran.current.mode}
+            mode={current?.mode ?? form.mode}
             running={running}
-            done={done}
-            total={plan.current.length}
-            raw={raw}
-            accountCount={accountIds.length}
+            done={current?.sources_done ?? 0}
+            total={current?.sources_total ?? sources.length}
+            raw={current?.collected_raw ?? 0}
+            kept={settled ? (current?.kept ?? 0) : 0}
+            accountCount={current?.accounts?.length ?? accountIds.length}
             log={log}
-            users={users}
+            users={people.users}
+            hasMore={people.hasMore}
+            loadingMore={people.loadingMore}
+            onMore={people.more}
           />
         ) : (
-          <UserParserForm
-            form={form}
-            formId={formId}
-            fleet={fleet.data?.items ?? []}
-            accountIds={accountIds}
-            campaignChannels={campaignChannels}
-            onChange={setForm}
-            onSubmit={run}
-          />
+          <div className="flex flex-col gap-4">
+            {refusal ? (
+              <p role="status" className="type-body text-danger">
+                {t(`${REFUSED}.${start.data?.status ?? 'account_busy'}`)}
+                {refusedName === null ? '' : ` — ${t(`${REFUSED}.account`, { name: refusedName })}`}
+              </p>
+            ) : null}
+            <UserParserForm
+              form={form}
+              formId={formId}
+              fleet={fleet.data?.items ?? []}
+              accountIds={accountIds}
+              busy={busy}
+              campaignChannels={campaignChannels}
+              onChange={setForm}
+              onSubmit={launch}
+            />
+          </div>
         )}
       </div>
 
@@ -261,7 +225,6 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
               size="sm"
               className="mr-auto"
               onClick={() => {
-                setRunning(false);
                 setSubmitted(false);
               }}
             >
@@ -270,36 +233,37 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
             {running ? (
               <Button
                 size="sm"
+                disabled={stop.isPending || runId === null}
                 onClick={() => {
-                  setRunning(false);
+                  if (runId === null) return;
+                  stop.mutate(
+                    { path: { run_id: runId } },
+                    {
+                      onSuccess: (stopped) => {
+                        queryClient.setQueryData(runOptions.queryKey, stopped);
+                      },
+                    },
+                  );
                 }}
               >
                 {t('userParser.stop')}
               </Button>
             ) : (
               <>
-                <Button
-                  size="sm"
-                  className="gap-1"
-                  disabled={users.length === 0}
-                  onClick={() => {
-                    download('users.csv', usersToCsv(users), 'text/csv');
-                  }}
-                >
-                  <Icon name="download" size={14} />
-                  CSV
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1"
-                  disabled={users.length === 0}
-                  onClick={() => {
-                    download('users.json', JSON.stringify(users, null, 2), 'application/json');
-                  }}
-                >
-                  <Icon name="download" size={14} />
-                  JSON
-                </Button>
+                {(['csv', 'json'] as const).map((format) => (
+                  <Button
+                    key={format}
+                    size="sm"
+                    className="gap-1"
+                    disabled={runId === null || (current?.kept ?? 0) === 0}
+                    onClick={() => {
+                      if (runId !== null) downloadExport(runId, format);
+                    }}
+                  >
+                    <Icon name="download" size={14} />
+                    {format.toUpperCase()}
+                  </Button>
+                ))}
                 <Button size="sm" className="gap-1" disabled title={t('userParser.excelLater')}>
                   <Icon name="download" size={14} />
                   Excel
@@ -320,21 +284,23 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
                   placeholder={t('userParser.form.presets.label')}
                   emptyLabel={t('userParser.form.presets.empty')}
                   ariaLabel={t('userParser.form.presets.label')}
-                  options={presets.map((preset) => ({ value: preset.name, label: preset.name }))}
-                  onChange={(name) => {
-                    const preset = presets.find((p) => p.name === name);
-                    if (preset !== undefined) setForm(preset.form);
+                  options={presets.map((preset) => ({
+                    value: preset.preset_id,
+                    label: preset.name,
+                  }))}
+                  onChange={(presetId) => {
+                    const preset = presets.find((p) => p.preset_id === presetId);
+                    if (preset !== undefined) setForm(settingsToForm(preset.settings));
                   }}
                 />
               </div>
               <Button
                 size="sm"
+                disabled={savePreset.isPending}
                 onClick={() => {
-                  const name = t('userParser.presetName', {
-                    mode: t(`userParser.form.mode.${form.mode}`),
-                    n: presets.length + 1,
+                  savePreset.mutate({
+                    body: { name: presetName(), settings: formToSettings(form) },
                   });
-                  setPresets([...presets, { name, form }]);
                 }}
               >
                 {t('userParser.form.presets.save')}
@@ -353,7 +319,13 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
             >
               {t('userParser.reset')}
             </Button>
-            <Button type="submit" form={formId} variant="primary" size="sm" disabled={!canRun}>
+            <Button
+              type="submit"
+              form={formId}
+              variant="primary"
+              size="sm"
+              disabled={!canRun || start.isPending}
+            >
               {t('userParser.submit')}
             </Button>
           </>

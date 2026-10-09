@@ -1019,6 +1019,12 @@
       "web_login_reload_loop": "The API server is running with --reload, whose Windows event loop cannot start a browser process. Restart it without --reload to open web sessions.",
       "web_login_shutting_down": "The server is shutting down, so no new web session can be opened.",
       "account_busy_chat_broadcast": "A chat broadcast is running with this account. Stop it, then start warming.",
+      "account_busy_user_parser": "The user parser is reading with this account. Stop the parser run, then start warming.",
+      "listener_busy_user_parser": "The user parser is reading with this account. Stop the parser run, or pick a different account for the listener.",
+      "user_parser_too_many_sources": "Too many sources for one run — split the list.",
+      "user_parser_too_many_accounts": "Too many accounts for one run — pick fewer.",
+      "user_parser_preset_name_taken": "A preset with this name already exists.",
+      "user_parser_run_running": "This base is still being collected — stop the run first.",
       "listener_busy_chat_broadcast": "A chat broadcast is running with this account. Stop the broadcast, or pick a different account for the listener.",
       "no_accounts": "The broadcast has no accounts. Add accounts in its settings.",
       "no_free_accounts": "Every account of the broadcast is busy with another module (warming, neurocomment, neuroshilling, another broadcast).",
@@ -1424,6 +1430,15 @@
     "chat_broadcast_join_requested": "Join request sent",
     "chat_broadcast_join_approved": "Join request approved",
     "chat_broadcast_join_daily_cap": "Daily join limit — waiting",
+    "user_parser_run_started": "User parser: run started",
+    "user_parser_run_finished": "User parser: run finished",
+    "user_parser_run_stopped": "User parser: run stopped",
+    "user_parser_run_failed": "User parser: run ended — no account left to read with",
+    "user_parser_runs_interrupted": "User parser: runs interrupted by a restart",
+    "user_parser_source_hidden": "User parser: the group hides its member list",
+    "user_parser_source_partial": "User parser: Telegram returned only part of the member list",
+    "user_parser_source_join_failed": "User parser: could not join the chat",
+    "user_parser_account_flood": "User parser: Telegram limit on the account — pausing it",
     "chat_broadcast_chat_skipped": "Chat skipped",
     "chat_broadcast_chat_kept": "Chat returned: keep writing despite deletions",
     "chat_broadcast_message_sent": "Message sent",
@@ -1526,6 +1541,8 @@
     "generation_in_progress": "a generation is already running",
     "llm_daily_limit_reached": "daily model budget spent",
     "busy_chat_broadcast": "the account is held by a running chat broadcast",
+    "busy_user_parser": "the account is held by a running user parser",
+    "join_cap": "daily join limit reached",
     "no_key": "no AI key in settings",
     "daily_limit": "the daily AI budget is spent",
     "provider_error": "the AI did not answer",
@@ -2545,7 +2562,8 @@
           "warming": "held by warming",
           "neuroshilling": "held by another neuroshilling campaign",
           "neurocomment": "held by neurocomment",
-          "chat_broadcast": "busy with a chat broadcast"
+          "chat_broadcast": "busy with a chat broadcast",
+          "user_parser": "busy with the user parser"
         },
         "busyNamed": "{{owner}} — {{name}}"
       },
@@ -3114,7 +3132,8 @@
       "neurocomment": "neurocomment",
       "neuroshilling": "neuroshilling",
       "chat_broadcast": "another broadcast",
-      "discovery": "channel search"
+      "discovery": "channel search",
+      "user_parser": "user parser"
     },
     "board": {
       "title": "Work board",
@@ -3735,9 +3754,16 @@
       "found": "Users collected: {{count}}",
       "partial": "Telegram returned {{count}} members — the list may be incomplete",
       "hidden": "The member list is hidden — pick “Message authors”",
-      "flood": "FloodWait 12 s — account paused, the next one continues",
+      "flood": "{{name}}: Telegram limit — the account is paused, the next one continues",
       "filtered": "Collected {{raw}}, {{kept}} left after filters",
-      "done": "Done"
+      "done": "Done",
+      "joinFailed": "Could not join the chat (limit, join request or ban) — skipped",
+      "sourceFlood": "Telegram limits on every account — the source was not finished",
+      "sourceFailed": "The source could not be read",
+      "accountDropped": "{{name}} left the run (errors or a long limit)",
+      "stopped": "Stopped — everything collected is saved",
+      "interrupted": "Interrupted by a restart — everything collected is saved",
+      "failed": "No account left to read with — everything collected is saved"
     },
     "results": {
       "title_one": "{{count}} user",
@@ -3762,7 +3788,8 @@
         "month": "this month",
         "long": "long ago",
         "hidden": "hidden"
-      }
+      },
+      "more": "Show more"
     },
     "tabs": {
       "label": "Parser section",
@@ -3771,8 +3798,6 @@
     },
     "bases": {
       "name": "{{mode}} · {{date}}",
-      "demoCrypto": "Crypto channel commenters",
-      "demoSmm": "SMM chat authors",
       "folderMeta_one": "{{mode}} · {{count}} person",
       "folderMeta_other": "{{mode}} · {{count}} people",
       "summary_one": "{{count}} person · sources: {{sources}} · {{date}}",
@@ -3794,6 +3819,13 @@
         "messages": "Message authors",
         "comments": "Commenters"
       }
+    },
+    "refused": {
+      "already_running": "This account is already collecting in another run",
+      "account_busy": "The account is busy with another task",
+      "account_cooling": "The account is under a Telegram limit right now",
+      "no_account": "The account cannot read: no session or not found",
+      "account": "account {{name}}"
     }
   }
 }
