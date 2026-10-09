@@ -318,3 +318,9 @@ test('getRowId keeps the expanded record open when the order changes', async () 
   expect(screen.getByText('подробности first-row')).toBeInTheDocument();
   expect(screen.queryByText('подробности second-row')).toBeNull();
 });
+
+test('hideHeader keeps the column headers for screen readers only', () => {
+  const { container } = render(<DataTable data={DATA} columns={COLUMNS} hideHeader />);
+  expect(container.querySelector('thead')).toHaveClass('sr-only');
+  expect(screen.getByRole('columnheader', { name: 'ИМЯ' })).toBeInTheDocument();
+});

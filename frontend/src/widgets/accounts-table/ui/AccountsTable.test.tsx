@@ -399,3 +399,42 @@ test('opens the clicked row and does not bubble action clicks to the row', async
   await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
   expect(onOpen).not.toHaveBeenCalled();
 });
+
+test('the header row is for screen readers only, so trust and proxy cells name themselves', () => {
+  const { container } = render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  expect(container.querySelector('thead')).toHaveClass('sr-only');
+  expect(screen.getByRole('columnheader', { name: 'Статус' })).toBeInTheDocument();
+  const row = screen.getByText('@mainuser').closest('tr')!;
+  // The trust cell carries its own label; the proxy cell says the type, the flag the country.
+  expect(row).toHaveTextContent('Trust82');
+  expect(row).toHaveTextContent('SOCKS5');
+  expect(row).not.toHaveTextContent('RU');
+});
+
+test('the page slots render around the identity, and selected rows are tinted', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+      selectedIds={new Set(['acc-2'])}
+      renderPick={(account) => <span>pick {account.account_id}</span>}
+      renderTags={(account) => <span>tags {account.account_id}</span>}
+      joined
+    />,
+  );
+  expect(screen.getByText('pick acc-1')).toBeInTheDocument();
+  expect(screen.getByText('tags acc-2')).toBeInTheDocument();
+  expect(screen.getByText('pick acc-2').closest('tr')).toHaveClass('bg-info-tint');
+  expect(screen.getByText('pick acc-1').closest('tr')).not.toHaveClass('bg-info-tint');
+});
