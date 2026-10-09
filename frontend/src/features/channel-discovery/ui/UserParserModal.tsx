@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { discoveryAccountsQueryOptions } from '@/entities/campaign';
-import { Button, Icon, Modal } from '@/shared/ui';
+import { Button, Icon, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
 import { effectiveAccountIds } from '../model/filters';
 import {
@@ -138,12 +138,12 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
 
   return (
     <Modal onClose={onClose} size="table" label={t('userParser.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <h2 className="type-dialog-title">{t('userParser.title')}</h2>
-        <p className="mt-hair type-caption">{t('userParser.sub', { name: campaignName })}</p>
-      </div>
+      <ModalHeader
+        title={t('userParser.title')}
+        subtitle={t('userParser.sub', { name: campaignName })}
+      />
 
-      <div className="px-2xl py-xl">
+      <div className="px-6 py-6">
         {submitted ? (
           <UserParserResults
             mode={ran.current.mode}
@@ -182,7 +182,7 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter>
         {submitted ? (
           <>
             <Button
@@ -209,7 +209,7 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
               <>
                 <Button
                   size="sm"
-                  className="gap-xs"
+                  className="gap-1"
                   disabled={users.length === 0}
                   onClick={() => {
                     download('users.csv', usersToCsv(users), 'text/csv');
@@ -220,7 +220,7 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
                 </Button>
                 <Button
                   size="sm"
-                  className="gap-xs"
+                  className="gap-1"
                   disabled={users.length === 0}
                   onClick={() => {
                     download('users.json', JSON.stringify(users, null, 2), 'application/json');
@@ -229,7 +229,7 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
                   <Icon name="download" size={14} />
                   JSON
                 </Button>
-                <Button size="sm" className="gap-xs" disabled title={t('userParser.excelLater')}>
+                <Button size="sm" className="gap-1" disabled title={t('userParser.excelLater')}>
                   <Icon name="download" size={14} />
                   Excel
                 </Button>
@@ -255,7 +255,7 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
             </Button>
           </>
         )}
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

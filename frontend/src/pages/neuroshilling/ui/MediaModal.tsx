@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Modal, Select } from '@/shared/ui';
+import { Button, Input, Modal, ModalFooter, ModalHeader, Select } from '@/shared/ui';
 
 import type { ScenarioDraft } from './scenarioDraft';
 
@@ -24,71 +24,84 @@ export function MediaModal({
   const [link, setLink] = useState(draft.mediaMessageLink);
   const [position, setPosition] = useState(draft.mediaStepPosition);
 
+  const dirty = link !== draft.mediaMessageLink || position !== draft.mediaStepPosition;
+
   return (
-    <Modal onClose={onClose} size="form" label={t('neuroshilling.scenario.media.toggle')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="type-dialog-title">{t('neuroshilling.scenario.media.toggle')}</div>
-        <div className="mt-hair type-caption">{t('neuroshilling.scenario.media.hint')}</div>
-      </div>
+    <Modal
+      onClose={onClose}
+      dirty={dirty}
+      size="form"
+      label={t('neuroshilling.scenario.media.toggle')}
+    >
+      {(close) => (
+        <>
+          <ModalHeader
+            title={t('neuroshilling.scenario.media.toggle')}
+            subtitle={t('neuroshilling.scenario.media.hint')}
+          />
 
-      <div className="flex flex-col gap-md px-2xl py-lg">
-        <Input
-          autoFocus
-          size="sm"
-          value={link}
-          maxLength={500}
-          placeholder={t('neuroshilling.scenario.media.placeholder')}
-          aria-label={t('neuroshilling.scenario.media.label')}
-          onChange={(event) => {
-            setLink(event.target.value);
-          }}
-        />
-        <Select
-          value={position === null ? '' : String(position)}
-          onChange={(value) => {
-            setPosition(value === '' ? null : Number(value));
-          }}
-          options={[
-            { value: '', label: t('neuroshilling.scenario.media.stepNone') },
-            // Только сообщения: медиа едет отправкой самого шага, а реакция не отправляет
-            // ничего, что могло бы его нести.
-            ...draft.steps.flatMap((step, index) =>
-              step.kind === 'message'
-                ? [
-                    {
-                      value: String(index + 1),
-                      label: t('neuroshilling.scenario.steps.position', { position: index + 1 }),
-                    },
-                  ]
-                : [],
-            ),
-          ]}
-          ariaLabel={t('neuroshilling.scenario.media.step')}
-        />
-      </div>
+          <div className="flex flex-col gap-3 px-6 py-4">
+            <Input
+              autoFocus
+              size="sm"
+              value={link}
+              maxLength={500}
+              placeholder={t('neuroshilling.scenario.media.placeholder')}
+              aria-label={t('neuroshilling.scenario.media.label')}
+              onChange={(event) => {
+                setLink(event.target.value);
+              }}
+            />
+            <Select
+              value={position === null ? '' : String(position)}
+              onChange={(value) => {
+                setPosition(value === '' ? null : Number(value));
+              }}
+              options={[
+                { value: '', label: t('neuroshilling.scenario.media.stepNone') },
+                // Только сообщения: медиа едет отправкой самого шага, а реакция не отправляет
+                // ничего, что могло бы его нести.
+                ...draft.steps.flatMap((step, index) =>
+                  step.kind === 'message'
+                    ? [
+                        {
+                          value: String(index + 1),
+                          label: t('neuroshilling.scenario.steps.position', {
+                            position: index + 1,
+                          }),
+                        },
+                      ]
+                    : [],
+                ),
+              ]}
+              ariaLabel={t('neuroshilling.scenario.media.step')}
+            />
+          </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
-        <Button size="sm" onClick={onClose}>
-          {t('neuroshilling.settings.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            // Пустая ссылка снимает и шаг: позиция без ссылки — слот, который ничего не
-            // несёт, и утверждение отказывает по нему же.
-            const trimmed = link.trim();
-            onDraft({
-              ...draft,
-              mediaMessageLink: trimmed,
-              mediaStepPosition: trimmed ? position : null,
-            });
-            onClose();
-          }}
-        >
-          {t('neuroshilling.scenario.media.attach')}
-        </Button>
-      </div>
+          <ModalFooter>
+            <Button size="sm" onClick={close}>
+              {t('neuroshilling.settings.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                // Пустая ссылка снимает и шаг: позиция без ссылки — слот, который ничего не
+                // несёт, и утверждение отказывает по нему же.
+                const trimmed = link.trim();
+                onDraft({
+                  ...draft,
+                  mediaMessageLink: trimmed,
+                  mediaStepPosition: trimmed ? position : null,
+                });
+                onClose();
+              }}
+            >
+              {t('neuroshilling.scenario.media.attach')}
+            </Button>
+          </ModalFooter>
+        </>
+      )}
     </Modal>
   );
 }

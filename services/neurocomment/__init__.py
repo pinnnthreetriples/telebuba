@@ -27,6 +27,7 @@ from services.neurocomment._runtime import (
     stop_neurocomment,
 )
 from services.neurocomment._runtime_operations import (
+    ListenerBusyChatBroadcastError,
     ListenerBusyDiscoveryError,
     ListenerBusyNeuroshillingError,
 )
@@ -53,6 +54,9 @@ from services.neurocomment.campaigns import (
 from services.neurocomment.campaigns import (
     set_status as set_campaign_status,
 )
+
+# The guardian-bot solver, public for the chat broadcast's joins (its one other caller).
+from services.neurocomment.challenge import solve_if_present as solve_join_challenge
 from services.neurocomment.comments_page import list_comments_page
 from services.neurocomment.discovery import (
     adopt_candidates,
@@ -72,6 +76,7 @@ from services.neurocomment.settings_store import (
 __all__ = [
     "ChannelNotInCampaignError",
     "InvalidCursorError",
+    "ListenerBusyChatBroadcastError",
     "ListenerBusyDiscoveryError",
     "ListenerBusyNeuroshillingError",
     "ListenerBusyWarmingError",
@@ -113,6 +118,7 @@ __all__ = [
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",
     "skip_pair",
+    "solve_join_challenge",
     "start_discovery",
     "start_neurocomment",
     "stop_neurocomment",

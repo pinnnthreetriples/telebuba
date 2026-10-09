@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     ChatReactionsAll,
     ChatReactionsNone,
@@ -259,6 +260,39 @@ async def test_get_own_channel_reports_reactions_availability(
 
     assert isinstance(result, TelegramOwnChannelDetail)
     assert result.reactions_enabled is enabled
+
+
+@pytest.mark.parametrize(("personal_id", "pinned"), [(100, True), (555, False), (None, False)])
+@pytest.mark.asyncio
+async def test_get_own_channel_reports_profile_pin(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    personal_id: int | None,
+    pinned: bool,
+) -> None:
+    """Pinned means the ACCOUNT's personal channel is this one, not just any."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, GetFullUserRequest):
+                return SimpleNamespace(full_user=SimpleNamespace(personal_channel_id=personal_id))
+            return SimpleNamespace(
+                full_chat=SimpleNamespace(about="", available_reactions=ChatReactionsAll()),
+                chats=[SimpleNamespace(id=100, title="Mine", username="mine")],
+            )
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-detail-pin", GetOwnChannel(channel_id=100))
+
+    assert isinstance(result, TelegramOwnChannelDetail)
+    assert result.pinned_to_profile is pinned
 
 
 @pytest.mark.asyncio

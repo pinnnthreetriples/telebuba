@@ -6,17 +6,17 @@ import { Card } from './Card';
 
 test('the surface is the card and the padding is the caller`s', () => {
   render(
-    <Card data-testid="plain" className="p-lg">
+    <Card data-testid="plain" className="p-4">
       тело
     </Card>,
   );
 
   const card = screen.getByTestId('plain');
-  expect(card.className).toContain('rounded-card');
+  expect(card.className).toContain('rounded-lg');
   expect(card.className).toContain('border-line');
   expect(card.className).toContain('bg-surface-card');
-  expect(card.className).toContain('p-lg');
-  expect(card.className).not.toContain('px-xl');
+  expect(card.className).toContain('p-4');
+  expect(card.className).not.toContain('px-6');
 });
 
 test('the title and subtitle slots render only when given', async () => {

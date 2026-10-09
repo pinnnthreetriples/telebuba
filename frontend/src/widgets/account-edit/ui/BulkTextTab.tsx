@@ -28,15 +28,15 @@ export function BulkTextTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="rounded-lg bg-info-tint px-md py-md type-prose">
+    <div className="flex flex-col gap-4">
+      <div className="rounded-md bg-info-tint px-3 py-3 type-body text-content-subtle">
         {t('accounts.bulk.hint')}
       </div>
       {TEXT_FIELDS.map((key) => {
         const label = t(`accounts.bulk.field.${key}`);
         const empty = value[key].trim() === '';
         return (
-          <div key={key} className="flex flex-col gap-tight">
+          <div key={key} className="flex flex-col gap-2">
             <button
               type="button"
               role="checkbox"
@@ -44,14 +44,14 @@ export function BulkTextTab({
               onClick={() => {
                 onToggle(key);
               }}
-              className="flex items-center gap-md text-left"
+              className="flex items-center gap-3 text-left"
             >
               <span
                 className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on[key] ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
               >
-                {on[key] && <Icon name="check" size={14} className="stroke-on-action" />}
+                {on[key] && <Icon name="check" size={14} className="stroke-on-fill" />}
               </span>
-              <span className="type-label">{label}</span>
+              <span className="type-body-medium text-content-secondary">{label}</span>
             </button>
             {key === 'bio' ? (
               <Textarea
@@ -74,17 +74,17 @@ export function BulkTextTab({
               />
             )}
             {on[key] && value[key].trim().length > TEXT_MAX[key] && (
-              <span role="alert" className="type-caption font-medium text-danger-deep">
+              <span role="alert" className="type-small-medium text-danger-deep">
                 {t('accounts.bulk.tooLong', { max: TEXT_MAX[key] })}
               </span>
             )}
             {on[key] && empty && key === 'first_name' && (
-              <span role="alert" className="type-caption font-medium text-danger-deep">
+              <span role="alert" className="type-small-medium text-danger-deep">
                 {t('accounts.profile.errFirstName')}
               </span>
             )}
             {on[key] && empty && key !== 'first_name' && (
-              <span className="type-caption">{t('accounts.bulk.clears')}</span>
+              <span className="type-small">{t('accounts.bulk.clears')}</span>
             )}
           </div>
         );

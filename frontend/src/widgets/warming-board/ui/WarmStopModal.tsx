@@ -18,10 +18,12 @@ export function WarmStopModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('warming.stopModal.title')}>
-      <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
-        <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
-        <div className="flex flex-col gap-sm sm:flex-row">
+      <div className="p-6">
+        <div className="mb-2 type-h2">{t('warming.stopModal.title')}</div>
+        <div className="mb-6 type-body text-content-muted">
+          {t('warming.stopModal.body', { phone })}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Button
             variant="primary"
             className="w-full sm:flex-1"

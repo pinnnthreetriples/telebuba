@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-30
+last_updated: 2026-10-07
 edges:
   - target: context/conventions.md
     condition: shared repository conventions
@@ -26,18 +26,18 @@ FSD order is `app → routes → pages → widgets → features → entities →
 
 ## The design system is a closed set
 
-`frontend/tailwind.config.ts` holds every design value the UI is allowed to paint with — colour, type rung, radius, elevation, motion rung, line-height, letter-spacing and unit of rhythm. Write a value past that scale and it is not a shortcut but a second source of truth, which is how one field's styling ended up copied across files under different names and drifting. A closed set only stays closed if reopening it is an error rather than a habit, so four gates hold it:
+`frontend/src/shared/design-system/tokens` holds every value the UI may paint — colour, type rung, radius, elevation, motion rung, line-height, letter-spacing, rhythm. Tailwind 4 sees them only through the generated `src/app/styles/tailwind-theme.css` (`--*: initial`; no `--spacing`, so `w-3` stays silent). A value past a scale is a second source of truth, not a shortcut. A closed set stays closed only if reopening it is an error, so four gates hold it:
 
-- `design-tokens/no-raw-values` (local rule, `frontend/eslint-rules/`) is an ESLint **error**: a raw hex or an arbitrary `[7px]` fails `npm run lint`. It reads string literals anywhere, not only in `className`, because a style constant hoisted to the top of a module is the same decision written somewhere the reviewer will not look. It flagged zero sites on the tree it landed on — that is the bar. Its carve-outs are deliberate and reasoned in the rule's own header; read that before reaching for a suppression, and prefer an inline one over widening the pattern.
+- `design-tokens/no-raw-values` (local rule, `frontend/eslint-rules/`) is an ESLint **error**: a raw hex, an arbitrary `[7px]` or a value Tailwind 4 paints with no theme step (`h-auto`, `z-50`) fails `npm run lint`. It reads string literals anywhere, not only in `className`, because a style constant hoisted to the top of a module is the same decision written somewhere the reviewer will not look. It flags zero sites — that is the bar. Its carve-outs are deliberate and reasoned in the rule's own header; read that before reaching for a suppression, and prefer an inline one over widening the pattern.
 - `npm run ds:css` checks `src/**/*.css` for raw lengths, colours and numeric typography. One-off geometry or motion needs a `design-token-exception:` comment immediately before its declaration with a reason.
-- `npm run ds:dead` closes the other end, the one the lint rule cannot see: a rung the config declares that nothing in `src` wears fails the gates. An unworn rung is not spare capacity, it is one more choice to make — so take it out of the config or put it on. A dimension only one component ever needs is the reverse mistake: giving it a rung puts a name with a single wearer in the canon, which is how a closed set reopens.
-- `frontend/docs/design-system.html` is GENERATED from the config and from the primitives' own variant/size/tone sets. Regenerate with `npm run ds:doc`; `npm run ds:doc:check` fails on drift. Never hand-edit it — the hand-written half is precisely the half that went stale while the gate could not see it.
+- `npm run ds:dead` closes the other end, which lint cannot see: a declared rung that nothing in `src` wears fails the gates. Remove an unworn rung or wear it; a one-wearer dimension gets no rung.
+- The Tailwind theme, `frontend/docs/design-system.html` (canon) and `docs/DESIGN.md` + `design-md.html` (ui-skills-style spec) are GENERATED from the tokens and the primitives' own variant/size/tone sets. Regenerate with `npm run ds:doc`; `npm run ds:doc:check` fails on drift. Never hand-edit them; `docs/blocks.html` is generated the same way from real components.
 
 Dependency versions, overrides, advisories and generated-client quirks are intentionally not duplicated here; `package.json`, lockfile, CI and focused regression tests are their source of truth.
 
 Storybook documents `shared/ui` and product patterns. CI builds it and runs a desktop/mobile Patterns smoke; its screenshot is a review artifact. Vite catalog Playwright snapshots remain the pixel gate. Page-specific compositions are not exhaustive.
 
-Account-editor empty actions share a visual shell; profile tabs signal hover lightly and selection strongly, while fixed dialog height prevents jumps. Keep page behavior in its owning slice. Shared bars share geometry while progress, capacity, and scores retain distinct meanings.
+Account-editor empty actions share a visual shell; profile tabs signal hover lightly and selection strongly, while fixed dialog height prevents jumps. Keep page behavior in its owning slice. Repeated blocks are one shared/ui component (docs/blocks.html); bars are progressbars only if labelled.
 
 Route loaders recheck stale first-screen data on return and wait up to 1.5s before swapping pages; the active rail tracks the displayed route. Pages still own errors and live refresh.
 

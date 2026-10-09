@@ -10,6 +10,7 @@ import {
 import { client } from '../client.gen';
 import {
   accountStats,
+  actOnChatBroadcastTarget,
   addAccountMusic,
   addWarmingChannels,
   adoptCampaignDiscovery,
@@ -33,12 +34,16 @@ import {
   countLogs,
   createAccountChannel,
   createCampaign,
+  createChatBroadcastCampaign,
+  createChatCollection,
   createNeuroshillingCampaign,
   createProxy,
   deleteAccount,
   deleteAccountChannel,
   deleteAccountChannelPost,
   deleteCampaign,
+  deleteChatBroadcastCampaign,
+  deleteChatCollection,
   deleteNeuroshillingCampaign,
   deleteProxy,
   editAccountChannelPost,
@@ -55,6 +60,8 @@ import {
   getActiveContactLookupJob,
   getBulkMessageJob,
   getCampaignDiscovery,
+  getChatBroadcastBoard,
+  getChatBroadcastSettings,
   getContactLookupJob,
   getHealth,
   getLatestBulkMessageJob,
@@ -82,6 +89,9 @@ import {
   listCampaignChallenges,
   listCampaigns,
   listChannelChallenges,
+  listChatBroadcastCampaigns,
+  listChatBroadcastOwnChats,
+  listChatCollections,
   listDiscoveryAccounts,
   listLogs,
   listNeurocommentComments,
@@ -111,7 +121,11 @@ import {
   rescheduleScheduledPost,
   resendAccountTwofaEmail,
   resetAccountSession,
+  resolveChatBroadcastTargets,
   resyncAccountAvatar,
+  saveChatBroadcastPace,
+  saveChatBroadcastSettings,
+  saveChatCollection,
   saveNeuroshillingSettings,
   scheduleAccountPhoto,
   scheduleAccountStory,
@@ -133,11 +147,13 @@ import {
   skipNeurocommentPair,
   spamCheckAccount,
   startCampaignDiscovery,
+  startChatBroadcastCampaign,
   startContactLookup,
   startNeurocomment,
   startNeuroshillingCampaign,
   startPhoneLogin,
   startWarming,
+  stopChatBroadcastCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
   stopWarming,
@@ -151,12 +167,16 @@ import {
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
   updateWarmingSettings,
+  uploadChatBroadcastPhoto,
   uploadScheduledMedia,
 } from '../sdk.gen';
 import type {
   AccountStatsData,
   AccountStatsError,
   AccountStatsResponse,
+  ActOnChatBroadcastTargetData,
+  ActOnChatBroadcastTargetError,
+  ActOnChatBroadcastTargetResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
@@ -226,6 +246,12 @@ import type {
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
+  CreateChatBroadcastCampaignData,
+  CreateChatBroadcastCampaignError,
+  CreateChatBroadcastCampaignResponse,
+  CreateChatCollectionData,
+  CreateChatCollectionError,
+  CreateChatCollectionResponse,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignError,
   CreateNeuroshillingCampaignResponse,
@@ -244,6 +270,12 @@ import type {
   DeleteCampaignData,
   DeleteCampaignError,
   DeleteCampaignResponse,
+  DeleteChatBroadcastCampaignData,
+  DeleteChatBroadcastCampaignError,
+  DeleteChatBroadcastCampaignResponse,
+  DeleteChatCollectionData,
+  DeleteChatCollectionError,
+  DeleteChatCollectionResponse,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignError,
   DeleteNeuroshillingCampaignResponse,
@@ -291,6 +323,12 @@ import type {
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryError,
   GetCampaignDiscoveryResponse,
+  GetChatBroadcastBoardData,
+  GetChatBroadcastBoardError,
+  GetChatBroadcastBoardResponse,
+  GetChatBroadcastSettingsData,
+  GetChatBroadcastSettingsError,
+  GetChatBroadcastSettingsResponse,
   GetContactLookupJobData,
   GetContactLookupJobError,
   GetContactLookupJobResponse,
@@ -372,6 +410,15 @@ import type {
   ListChannelChallengesData,
   ListChannelChallengesError,
   ListChannelChallengesResponse,
+  ListChatBroadcastCampaignsData,
+  ListChatBroadcastCampaignsError,
+  ListChatBroadcastCampaignsResponse,
+  ListChatBroadcastOwnChatsData,
+  ListChatBroadcastOwnChatsError,
+  ListChatBroadcastOwnChatsResponse,
+  ListChatCollectionsData,
+  ListChatCollectionsError,
+  ListChatCollectionsResponse,
   ListDiscoveryAccountsData,
   ListDiscoveryAccountsError,
   ListDiscoveryAccountsResponse,
@@ -456,9 +503,21 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
+  ResolveChatBroadcastTargetsData,
+  ResolveChatBroadcastTargetsError,
+  ResolveChatBroadcastTargetsResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SaveChatBroadcastPaceData,
+  SaveChatBroadcastPaceError,
+  SaveChatBroadcastPaceResponse,
+  SaveChatBroadcastSettingsData,
+  SaveChatBroadcastSettingsError,
+  SaveChatBroadcastSettingsResponse,
+  SaveChatCollectionData,
+  SaveChatCollectionError,
+  SaveChatCollectionResponse,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsError,
   SaveNeuroshillingSettingsResponse,
@@ -522,6 +581,9 @@ import type {
   StartCampaignDiscoveryData,
   StartCampaignDiscoveryError,
   StartCampaignDiscoveryResponse,
+  StartChatBroadcastCampaignData,
+  StartChatBroadcastCampaignError,
+  StartChatBroadcastCampaignResponse,
   StartContactLookupData,
   StartContactLookupError,
   StartContactLookupResponse,
@@ -537,6 +599,9 @@ import type {
   StartWarmingData,
   StartWarmingError,
   StartWarmingResponse,
+  StopChatBroadcastCampaignData,
+  StopChatBroadcastCampaignError,
+  StopChatBroadcastCampaignResponse,
   StopNeurocommentData,
   StopNeurocommentError,
   StopNeurocommentResponse,
@@ -576,6 +641,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
+  UploadChatBroadcastPhotoData,
+  UploadChatBroadcastPhotoError,
+  UploadChatBroadcastPhotoResponse,
   UploadScheduledMediaData,
   UploadScheduledMediaError,
   UploadScheduledMediaResponse,
@@ -4772,6 +4840,494 @@ export const stopNeuroshillingCampaignMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeuroshillingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatBroadcastCampaignsQueryKey = (
+  options?: Options<ListChatBroadcastCampaignsData>,
+) => createQueryKey('listChatBroadcastCampaigns', options);
+
+/**
+ * List Campaigns
+ */
+export const listChatBroadcastCampaignsOptions = (
+  options?: Options<ListChatBroadcastCampaignsData>,
+) =>
+  queryOptions<
+    ListChatBroadcastCampaignsResponse,
+    ListChatBroadcastCampaignsError,
+    ListChatBroadcastCampaignsResponse,
+    ReturnType<typeof listChatBroadcastCampaignsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatBroadcastCampaigns({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatBroadcastCampaignsQueryKey(options),
+  });
+
+/**
+ * Create Campaign
+ */
+export const createChatBroadcastCampaignMutation = (
+  options?: Partial<Options<CreateChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  CreateChatBroadcastCampaignResponse,
+  CreateChatBroadcastCampaignError,
+  Options<CreateChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateChatBroadcastCampaignResponse,
+    CreateChatBroadcastCampaignError,
+    Options<CreateChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign with its chats and history; refused while it runs.
+ */
+export const deleteChatBroadcastCampaignMutation = (
+  options?: Partial<Options<DeleteChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  DeleteChatBroadcastCampaignResponse,
+  DeleteChatBroadcastCampaignError,
+  Options<DeleteChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteChatBroadcastCampaignResponse,
+    DeleteChatBroadcastCampaignError,
+    Options<DeleteChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getChatBroadcastSettingsQueryKey = (options: Options<GetChatBroadcastSettingsData>) =>
+  createQueryKey('getChatBroadcastSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getChatBroadcastSettingsOptions = (options: Options<GetChatBroadcastSettingsData>) =>
+  queryOptions<
+    GetChatBroadcastSettingsResponse,
+    GetChatBroadcastSettingsError,
+    GetChatBroadcastSettingsResponse,
+    ReturnType<typeof getChatBroadcastSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getChatBroadcastSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getChatBroadcastSettingsQueryKey(options),
+  });
+
+/**
+ * Save Settings
+ *
+ * Save name, accounts and settings at once, only on the version the dialog read.
+ */
+export const saveChatBroadcastSettingsMutation = (
+  options?: Partial<Options<SaveChatBroadcastSettingsData>>,
+): UseMutationOptions<
+  SaveChatBroadcastSettingsResponse,
+  SaveChatBroadcastSettingsError,
+  Options<SaveChatBroadcastSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatBroadcastSettingsResponse,
+    SaveChatBroadcastSettingsError,
+    Options<SaveChatBroadcastSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatBroadcastSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Pace
+ *
+ * Save the pauses only — accepted while the campaign runs; the run reads them live.
+ *
+ * 409 ``campaign_changed`` when the campaign moved between the read and the write.
+ */
+export const saveChatBroadcastPaceMutation = (
+  options?: Partial<Options<SaveChatBroadcastPaceData>>,
+): UseMutationOptions<
+  SaveChatBroadcastPaceResponse,
+  SaveChatBroadcastPaceError,
+  Options<SaveChatBroadcastPaceData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatBroadcastPaceResponse,
+    SaveChatBroadcastPaceError,
+    Options<SaveChatBroadcastPaceData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatBroadcastPace({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getChatBroadcastBoardQueryKey = (options: Options<GetChatBroadcastBoardData>) =>
+  createQueryKey('getChatBroadcastBoard', options);
+
+/**
+ * Get Board
+ *
+ * The pipeline, the board by chat with its history, and the accounts.
+ */
+export const getChatBroadcastBoardOptions = (options: Options<GetChatBroadcastBoardData>) =>
+  queryOptions<
+    GetChatBroadcastBoardResponse,
+    GetChatBroadcastBoardError,
+    GetChatBroadcastBoardResponse,
+    ReturnType<typeof getChatBroadcastBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getChatBroadcastBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getChatBroadcastBoardQueryKey(options),
+  });
+
+/**
+ * Start Campaign
+ *
+ * Start the campaign, or continue a stopped one from where it was.
+ *
+ * 409 covers every reason it cannot: already running, changed since it was read, no
+ * message, no chat, no account, or every account busy with another feature.
+ */
+export const startChatBroadcastCampaignMutation = (
+  options?: Partial<Options<StartChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  StartChatBroadcastCampaignResponse,
+  StartChatBroadcastCampaignError,
+  Options<StartChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartChatBroadcastCampaignResponse,
+    StartChatBroadcastCampaignError,
+    Options<StartChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Campaign
+ *
+ * Stop for real and answer with the board; stopping a stopped one is a no-op.
+ */
+export const stopChatBroadcastCampaignMutation = (
+  options?: Partial<Options<StopChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  StopChatBroadcastCampaignResponse,
+  StopChatBroadcastCampaignError,
+  Options<StopChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopChatBroadcastCampaignResponse,
+    StopChatBroadcastCampaignError,
+    Options<StopChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Act On Target
+ *
+ * Write now, hand to another account, skip, or keep one chat of the board.
+ *
+ * ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+ * 409 ``target_state_changed`` when the chat moved on before the click landed, or
+ * ``keep`` was asked of a chat not skipped for deletions.
+ */
+export const actOnChatBroadcastTargetMutation = (
+  options?: Partial<Options<ActOnChatBroadcastTargetData>>,
+): UseMutationOptions<
+  ActOnChatBroadcastTargetResponse,
+  ActOnChatBroadcastTargetError,
+  Options<ActOnChatBroadcastTargetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ActOnChatBroadcastTargetResponse,
+    ActOnChatBroadcastTargetError,
+    Options<ActOnChatBroadcastTargetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await actOnChatBroadcastTarget({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Resolve Targets
+ *
+ * Classify pasted links; a folder link is opened with the first account.
+ */
+export const resolveChatBroadcastTargetsMutation = (
+  options?: Partial<Options<ResolveChatBroadcastTargetsData>>,
+): UseMutationOptions<
+  ResolveChatBroadcastTargetsResponse,
+  ResolveChatBroadcastTargetsError,
+  Options<ResolveChatBroadcastTargetsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResolveChatBroadcastTargetsResponse,
+    ResolveChatBroadcastTargetsError,
+    Options<ResolveChatBroadcastTargetsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resolveChatBroadcastTargets({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatBroadcastOwnChatsQueryKey = (
+  options: Options<ListChatBroadcastOwnChatsData>,
+) => createQueryKey('listChatBroadcastOwnChats', options);
+
+/**
+ * Own Chats
+ *
+ * The groups these accounts are in and may write to.
+ */
+export const listChatBroadcastOwnChatsOptions = (options: Options<ListChatBroadcastOwnChatsData>) =>
+  queryOptions<
+    ListChatBroadcastOwnChatsResponse,
+    ListChatBroadcastOwnChatsError,
+    ListChatBroadcastOwnChatsResponse,
+    ReturnType<typeof listChatBroadcastOwnChatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatBroadcastOwnChats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatBroadcastOwnChatsQueryKey(options),
+  });
+
+/**
+ * Upload Photo
+ *
+ * Store a photo for a text message; the text goes out as its caption.
+ */
+export const uploadChatBroadcastPhotoMutation = (
+  options?: Partial<Options<UploadChatBroadcastPhotoData>>,
+): UseMutationOptions<
+  UploadChatBroadcastPhotoResponse,
+  UploadChatBroadcastPhotoError,
+  Options<UploadChatBroadcastPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UploadChatBroadcastPhotoResponse,
+    UploadChatBroadcastPhotoError,
+    Options<UploadChatBroadcastPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await uploadChatBroadcastPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatCollectionsQueryKey = (options?: Options<ListChatCollectionsData>) =>
+  createQueryKey('listChatCollections', options);
+
+/**
+ * List Collections
+ */
+export const listChatCollectionsOptions = (options?: Options<ListChatCollectionsData>) =>
+  queryOptions<
+    ListChatCollectionsResponse,
+    ListChatCollectionsError,
+    ListChatCollectionsResponse,
+    ReturnType<typeof listChatCollectionsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatCollections({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatCollectionsQueryKey(options),
+  });
+
+/**
+ * Create Collection
+ *
+ * Save a named list of chats; 409 ``collection_name_taken`` for a name in use.
+ */
+export const createChatCollectionMutation = (
+  options?: Partial<Options<CreateChatCollectionData>>,
+): UseMutationOptions<
+  CreateChatCollectionResponse,
+  CreateChatCollectionError,
+  Options<CreateChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateChatCollectionResponse,
+    CreateChatCollectionError,
+    Options<CreateChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Collection
+ *
+ * Delete a list; campaigns that took chats from it keep them.
+ */
+export const deleteChatCollectionMutation = (
+  options?: Partial<Options<DeleteChatCollectionData>>,
+): UseMutationOptions<
+  DeleteChatCollectionResponse,
+  DeleteChatCollectionError,
+  Options<DeleteChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteChatCollectionResponse,
+    DeleteChatCollectionError,
+    Options<DeleteChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Collection
+ *
+ * Replace a list's name and chats at once.
+ */
+export const saveChatCollectionMutation = (
+  options?: Partial<Options<SaveChatCollectionData>>,
+): UseMutationOptions<
+  SaveChatCollectionResponse,
+  SaveChatCollectionError,
+  Options<SaveChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatCollectionResponse,
+    SaveChatCollectionError,
+    Options<SaveChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatCollection({
         ...options,
         ...fnOptions,
         throwOnError: true,

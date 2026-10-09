@@ -1,9 +1,18 @@
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button, HelpHint, Input, Modal, Switch } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  HelpHint,
+  Input,
+  Modal,
+  ModalFooter,
+  ModalHeader,
+  Switch,
+} from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
-import { useNumberField } from './useNumberField';
+import { useNumberField } from '@/shared/lib';
 import {
   clampInt,
   MAX_MESSAGES_PER_CHAT_PER_DAY,
@@ -43,13 +52,13 @@ function NumberRow({
   // него собственный текст: подставлять туда число нельзя.
   const nullable = placeholder !== undefined;
   return (
-    <div className="flex items-center gap-md border-b border-line-row py-md">
+    <div className="flex items-center gap-3 border-b border-canvas py-3">
       {/* `span`, а не `label`: имя полю даёт его собственный `aria-label`, и второй
           элемент-подпись сделал бы это имя неоднозначным. */}
       <span className="min-w-0 flex-1 text-body">{label}</span>
       <HelpHint text={hint} />
       <Input
-        size="xs"
+        size="sm"
         className="w-number tabular-nums"
         type="number"
         min={min}
@@ -92,11 +101,9 @@ export function AdvancedLimitsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="form" label={t('neuroshilling.setup.advanced.title')}>
-      <div className="border-b border-line-row px-2xl pb-lg pt-xl type-dialog-title">
-        {t('neuroshilling.setup.advanced.title')}
-      </div>
+      <ModalHeader title={t('neuroshilling.setup.advanced.title')} />
 
-      <div className="px-2xl py-sm">
+      <div className="px-6 py-2">
         <NumberRow
           label={t('neuroshilling.setup.perHour.label')}
           hint={t('neuroshilling.setup.perHour.hint')}
@@ -144,7 +151,7 @@ export function AdvancedLimitsModal({
           }}
         />
 
-        <div className="flex items-center gap-md py-md">
+        <div className="flex items-center gap-3 py-3">
           <span className="min-w-0 flex-1 text-body">{t('neuroshilling.setup.reserve.label')}</span>
           <HelpHint text={t('neuroshilling.setup.reserve.hint')} />
           {/* Пул КАК ОН ЕСТЬ сейчас, а не как был собран ростер: у повышенного аккаунта
@@ -164,11 +171,11 @@ export function AdvancedLimitsModal({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter>
         <Button variant="primary" size="sm" onClick={onClose}>
           {t('neuroshilling.setup.advanced.done')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

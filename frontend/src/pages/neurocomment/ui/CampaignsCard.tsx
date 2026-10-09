@@ -7,6 +7,7 @@ import {
   Button,
   ChipAddButton,
   CollapsibleCard,
+  EmptyState,
   FeedbackMark,
   Icon,
   IconButton,
@@ -91,11 +92,11 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.campaigns.title')}
-      headerClassName="px-lg py-lg"
-      bodyClassName="px-lg pb-lg"
-      header={<span className="type-card-title">{t('neurocomment.campaigns.title')}</span>}
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
+      title={t('neurocomment.campaigns.title')}
     >
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-2">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           // Per-campaign run state comes from the campaign's own status,
@@ -112,9 +113,7 @@ export function CampaignsCard({
                 accounts: campaign.account_count ?? 0,
               })}
               status={
-                <span
-                  className={`inline-flex items-center gap-tight type-caption font-medium ${tone}`}
-                >
+                <span className={`inline-flex items-center gap-1 type-small-medium ${tone}`}>
                   <span className="size-dot rounded-full bg-current" />
                   {t(`neurocomment.campaign.status.${campaign.status}`)}
                 </span>
@@ -180,40 +179,40 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-xl text-center type-prose">{t('neurocomment.campaigns.none')}</div>
+          <EmptyState size="md">{t('neurocomment.campaigns.none')}</EmptyState>
         ) : null}
       </div>
 
-      <Button variant="dashed" fullWidth className="mt-md font-medium" onClick={onCreate}>
+      <Button variant="dashed" fullWidth className="mt-3 font-medium" onClick={onCreate}>
         {t('neurocomment.campaigns.create')}
       </Button>
 
       {/* campaign channels */}
-      <div className="mt-lg border-t border-line-row pt-md">
+      <div className="mt-4 border-t border-canvas pt-3">
         <CollapsibleCard
           defaultOpen
           wrapperClassName=""
           headerClassName="px-0 py-0"
-          bodyClassName="px-0 pb-0 pt-md"
+          bodyClassName="px-0 pb-0 pt-3"
           label={t('neurocomment.channels.title')}
-          header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
+          title={t('neurocomment.channels.title')}
         >
           {/* Имя кампании — своей строкой: три кнопки рядом с ним в узкой колонке не
               оставляли от имени ничего. */}
-          <div className="mb-md flex flex-col gap-sm">
-            <span className="min-w-0 truncate type-caption font-medium text-action-primary">
+          <div className="mb-3 flex flex-col gap-2">
+            <span className="min-w-0 truncate type-small-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
-            <div className="flex flex-wrap items-center gap-sm">
+            <div className="flex flex-wrap items-center gap-2">
               {discoverySlot}
               <Button
-                size="xs"
+                size="sm"
                 disabled={campaignId === null}
                 loading={checkingChannels}
                 onClick={onCheckChannels}
-                // `text-tiny` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
+                // `text-small` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
                 // рядом с именем кампании, и на рунге контрола имя не остаётся.
-                className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                className="text-small text-content-muted hover:border-action-primary hover:text-action-primary"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -222,11 +221,11 @@ export function CampaignsCard({
               {parserSlot}
             </div>
           </div>
-          <div className="flex flex-wrap items-start gap-sm">
+          <div className="flex flex-wrap items-start gap-2">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className={`inline-flex items-center gap-sm rounded-full border px-md py-tight text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
+                className={`inline-flex items-center gap-2 rounded-full border h-control px-3 text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
@@ -238,7 +237,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-tight py-px text-tiny font-medium text-danger-deep"
+                    className="rounded-full bg-danger-tint px-1 text-small font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>

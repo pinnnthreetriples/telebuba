@@ -3,8 +3,14 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRunStatus } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Badge, Card, DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Badge,
+  Card,
+  CardHeader,
+  DataTable,
+  type DataTableColumnMeta,
+  ProgressBar,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 import { countTargets } from './setupDraft';
@@ -83,9 +89,9 @@ export function WorkBoardCard({
         meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <>
-            <div className="truncate type-item-title">{row.original.name}</div>
+            <div className="truncate type-body-medium">{row.original.name}</div>
             {row.original.topic ? (
-              <div className="truncate type-caption">{row.original.topic}</div>
+              <div className="truncate type-small">{row.original.topic}</div>
             ) : null}
           </>
         ),
@@ -103,17 +109,11 @@ export function WorkBoardCard({
         header: t('neuroshilling.board.column.progress'),
         cell: ({ row }) => {
           const { sent, total } = row.original;
-          if (sent === null || total === null) return <span className="type-caption">—</span>;
-          const percent = total === 0 ? 0 : Math.min(100, Math.round((sent / total) * 100));
+          if (sent === null || total === null) return <span className="type-small">—</span>;
           return (
             <>
-              <div className={`${BAR_TRACK} w-full`}>
-                <div
-                  className={`${BAR_FILL} bg-action-primary`}
-                  style={{ width: `${String(percent)}%` }}
-                />
-              </div>
-              <div className="mt-xs type-caption tabular-nums">
+              <ProgressBar value={sent} max={total} className="w-full" />
+              <div className="mt-1 type-small tabular-nums">
                 {sent}/{total}
               </div>
             </>
@@ -130,15 +130,17 @@ export function WorkBoardCard({
   );
 
   return (
-    <Card className="py-xl">
-      <div className="mb-md flex flex-wrap items-center gap-md px-xl">
-        <span className="type-card-title">{t('neuroshilling.board.title')}</span>
-        <Badge className="tabular-nums">{campaignList.length}</Badge>
-        <div className="flex-1" />
-        <span className="type-caption tabular-nums">
+    <Card className="py-6">
+      <CardHeader
+        wrap
+        className="mb-3 px-6"
+        title={t('neuroshilling.board.title')}
+        badge={<Badge className="tabular-nums">{campaignList.length}</Badge>}
+      >
+        <span className="shrink-0 type-small tabular-nums">
           {t('neuroshilling.board.running', { count: running })}
         </span>
-      </div>
+      </CardHeader>
       {/* Пустого состояния здесь нет умышленно: страница не рисует доску, пока кампаний
           нет, а «Пока нет кампаний» уже сказано списком в сайдбаре — том самом, где эту
           пустоту и устраняют кнопкой «Создать кампанию». Второй раз та же фраза только

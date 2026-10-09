@@ -1,7 +1,7 @@
 """Run lifecycle: start, stop, boot reconciliation, shutdown — and account ownership.
 
 **Start is where neuroshilling becomes a WRITER of the ownership registry.** Warming
-already claims and releases, and both warming's ``assert_not_neuroshilling`` and
+already claims and releases, and both warming's ``assert_not_campaign_held`` and
 neurocomment's ``busy_neuroshilling`` selection branch read it; until something claimed
 on this side those two were guards over an always-empty map. :func:`start_campaign`
 claims every account of the roster under the campaign's id, and the identity check in

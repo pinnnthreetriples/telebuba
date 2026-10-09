@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +15,9 @@ from services import _account_owner
 from services.neurocomment import _gates, _pair_status, _state, engine
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from tests.services.neurocomment.engine_support import _make_campaign
+
+if TYPE_CHECKING:
+    from services._account_owner import Owner
 
 pytestmark = pytest.mark.usefixtures("isolate_engine")
 
@@ -185,8 +189,9 @@ def test_selection_miss_reports_highest_priority_blocker(
 # --------------------------------------------------------------------------- #
 
 
-def test_a_neuroshilling_hold_blocks_before_every_other_gate(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("owner", ["neuroshilling", "chat_broadcast"])
+def test_a_campaign_hold_blocks_before_every_other_gate(
+    monkeypatch: pytest.MonkeyPatch, owner: Owner
 ) -> None:
     """First in the ladder, on a pool that would otherwise say the account is perfect.
 
@@ -194,11 +199,11 @@ def test_a_neuroshilling_hold_blocks_before_every_other_gate(
     registry read can produce this verdict.
     """
     monkeypatch.setattr(_state, "in_cooldown", lambda *_a: False)
-    _account_owner.try_claim("account", "neuroshilling", "ns-1")
+    _account_owner.try_claim("account", owner, "holder-1")
 
     assert (
         _gates._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
-        == "busy_neuroshilling"
+        == f"busy_{owner}"
     )
 
 

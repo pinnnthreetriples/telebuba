@@ -272,9 +272,9 @@ test('closing with unsaved edits asks for confirmation first', async () => {
   await userEvent.type(title, ' 2');
   await userEvent.click(screen.getByLabelText('Закрыть'));
   expect(onClose).not.toHaveBeenCalled();
-  expect(await screen.findByText('Отменить изменения?')).toBeInTheDocument();
+  expect(await screen.findByText('Закрыть без сохранения?')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByText('Не сохранять'));
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   expect(onClose).toHaveBeenCalled();
 });
 
@@ -315,4 +315,53 @@ test('the dialog keeps one accessible name across the detail read', async () => 
   expect(await screen.findByDisplayValue('Мой канал')).toBeInTheDocument();
   expect(screen.getByRole('heading', { level: 2, name: 'Мой канал' })).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Редактор канала' })).toBeInTheDocument();
+});
+
+test('the pin checkbox pins a public channel and sends only that field', async () => {
+  routeApi();
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const pin = screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ });
+  expect(pin).toHaveAttribute('aria-checked', 'false');
+
+  await userEvent.click(pin);
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ pinned_to_profile: true });
+});
+
+test('a pinned channel starts checked and unticking it unpins', async () => {
+  routeApi({ ...DETAIL, pinned_to_profile: true });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const pin = screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ });
+  expect(pin).toHaveAttribute('aria-checked', 'true');
+
+  await userEvent.click(pin);
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ pinned_to_profile: false });
+});
+
+test('a private channel (no username) cannot be pinned', async () => {
+  routeApi({ ...DETAIL, username: null });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+
+  expect(screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ })).toBeDisabled();
+  expect(screen.getByText('Закрепить в профиле можно только публичный канал')).toBeInTheDocument();
 });

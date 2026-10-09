@@ -37,7 +37,7 @@ const SIZE = {
 // под ней всегда `blue600` и композит существует. Теперь и дуга, и дорожка — роли.
 const TONE = {
   default: 'border-line-strong border-t-action-primary',
-  onAction: 'border-on-action-track border-t-on-action',
+  onAction: 'border-on-action-track border-t-on-fill',
   danger: 'border-danger-line border-t-danger',
 } as const;
 

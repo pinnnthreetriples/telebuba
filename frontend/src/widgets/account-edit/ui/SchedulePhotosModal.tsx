@@ -210,137 +210,149 @@ export function SchedulePhotosModal({
     setRows((prev) => prev.filter((row) => !done.has(row.key)));
   };
 
+  // Photos picked and not yet scheduled (after a partial run, the ones that failed), or
+  // a changed step. The first time is not counted: its default follows the clock.
+  const dirty = !finished && (rows.length > 0 || stepText !== String(DEFAULT_STEP_MINUTES));
+
   return (
     // The exits are locked while a row is being sent, for the same reason the story
     // composer locks them: unmounting mid-request loses which rows made it.
     <Modal
-      onClose={running ? () => undefined : onClose}
+      onClose={onClose}
+      dirty={dirty}
+      locked={running}
       size="form"
       label={t('accounts.schedule.photosTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.schedule.photosTitle')}</span>
-          <CloseButton
-            onClick={onClose}
-            disabled={locked}
-            aria-label={t('accounts.addStory.close')}
-          />
-        </div>
-        <div className="mb-lg type-prose">{t('accounts.schedule.photosHint')}</div>
-
-        <div className="mb-lg flex flex-wrap items-end gap-md">
-          <ScheduleTimeField
-            value={start}
-            onChange={setStart}
-            now={now}
-            label={t('accounts.schedule.firstAt')}
-            disabled={locked}
-          />
-          <label className="flex flex-col gap-tight">
-            <span className="type-label">{t('accounts.schedule.everyMinutes')}</span>
-            <Input
-              type="number"
-              size="xs"
-              min={1}
-              max={MAX_STEP_MINUTES}
-              value={stepText}
+      {(close) => (
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="type-h2">{t('accounts.schedule.photosTitle')}</span>
+            <CloseButton
+              onClick={close}
               disabled={locked}
-              onChange={(event) => {
-                setStepText(event.target.value);
-              }}
-              onBlur={() => {
-                setStepText(String(step));
-              }}
+              aria-label={t('accounts.addStory.close')}
             />
-          </label>
-          <Button
-            size="sm"
-            disabled={locked || rows.length === 0 || start === null}
-            onClick={distribute}
-          >
-            {t('accounts.schedule.distribute')}
-          </Button>
-        </div>
-
-        <ul className="flex flex-col gap-sm">
-          {rows.map((row) => (
-            <li
-              key={row.key}
-              className="flex items-center gap-md rounded-lg border border-line px-md py-sm"
-            >
-              <img
-                src={row.url}
-                alt=""
-                className="size-tile shrink-0 rounded-md border border-black/5 object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <ScheduleTimeField
-                  value={row.runAt}
-                  onChange={(runAt) => {
-                    patch(row.key, { runAt, state: row.state === 'error' ? 'idle' : row.state });
-                  }}
-                  now={now}
-                  size="sm"
-                  label={t('accounts.schedule.timeFor', { name: row.file.name })}
-                  disabled={locked || row.state === 'done'}
-                />
-              </div>
-              <span className="flex shrink-0 items-center justify-center gap-xs">
-                {row.state !== 'idle' && (
-                  <span className="sr-only">{t(`accounts.schedule.rowStatus.${row.state}`)}</span>
-                )}
-                {row.state === 'busy' && <Spinner />}
-                {row.state === 'done' && (
-                  <Icon name="check" size={16} className="stroke-success-deep" />
-                )}
-                {row.state === 'error' && (
-                  <Icon name="x-circle" size={16} className="stroke-danger" />
-                )}
-                {/* A refused file can be dropped, or the dialog could never finish. */}
-                {(row.state === 'idle' || row.state === 'error') && (
-                  <IconButton
-                    size="sm"
-                    shape="circle"
-                    aria-label={t('accounts.schedule.removeFile', { name: row.file.name })}
-                    disabled={locked}
-                    onClick={() => {
-                      remove(row.key);
-                    }}
-                  >
-                    <Icon name="close" size={16} />
-                  </IconButton>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-        {!locked && (
-          <div className="mt-md grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
-            <FilePicker accept={PHOTO_SUFFIXES.join(',')} multiple onPick={add}>
-              {(open) => (
-                <DashedAdd ratio="1" label={t('accounts.schedule.addPhotos')} onClick={open} />
-              )}
-            </FilePicker>
           </div>
-        )}
+          <div className="mb-4 type-body text-content-subtle">
+            {t('accounts.schedule.photosHint')}
+          </div>
 
-        <div className="mt-xl flex justify-end gap-sm">
-          <Button onClick={onClose} disabled={locked}>
-            {t('accounts.addStory.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            loading={running}
-            disabled={!ready || locked}
-            onClick={() => {
-              void submit();
-            }}
-          >
-            {t('accounts.schedule.submitPhotos', { count: pending.length })}
-          </Button>
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <ScheduleTimeField
+              value={start}
+              onChange={setStart}
+              now={now}
+              label={t('accounts.schedule.firstAt')}
+              disabled={locked}
+            />
+            <label className="flex flex-col gap-2">
+              <span className="type-body-medium text-content-secondary">
+                {t('accounts.schedule.everyMinutes')}
+              </span>
+              <Input
+                type="number"
+                size="sm"
+                min={1}
+                max={MAX_STEP_MINUTES}
+                value={stepText}
+                disabled={locked}
+                onChange={(event) => {
+                  setStepText(event.target.value);
+                }}
+                onBlur={() => {
+                  setStepText(String(step));
+                }}
+              />
+            </label>
+            <Button
+              size="sm"
+              disabled={locked || rows.length === 0 || start === null}
+              onClick={distribute}
+            >
+              {t('accounts.schedule.distribute')}
+            </Button>
+          </div>
+
+          <ul className="flex flex-col gap-2">
+            {rows.map((row) => (
+              <li
+                key={row.key}
+                className="flex items-center gap-3 rounded-md border border-line px-3 py-2"
+              >
+                <img
+                  src={row.url}
+                  alt=""
+                  className="size-tile shrink-0 rounded-sm border border-black/5 object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <ScheduleTimeField
+                    value={row.runAt}
+                    onChange={(runAt) => {
+                      patch(row.key, { runAt, state: row.state === 'error' ? 'idle' : row.state });
+                    }}
+                    now={now}
+                    size="sm"
+                    label={t('accounts.schedule.timeFor', { name: row.file.name })}
+                    disabled={locked || row.state === 'done'}
+                  />
+                </div>
+                <span className="flex shrink-0 items-center justify-center gap-1">
+                  {row.state !== 'idle' && (
+                    <span className="sr-only">{t(`accounts.schedule.rowStatus.${row.state}`)}</span>
+                  )}
+                  {row.state === 'busy' && <Spinner />}
+                  {row.state === 'done' && (
+                    <Icon name="check" size={16} className="stroke-success-deep" />
+                  )}
+                  {row.state === 'error' && (
+                    <Icon name="x-circle" size={16} className="stroke-danger" />
+                  )}
+                  {/* A refused file can be dropped, or the dialog could never finish. */}
+                  {(row.state === 'idle' || row.state === 'error') && (
+                    <IconButton
+                      size="sm"
+                      shape="circle"
+                      aria-label={t('accounts.schedule.removeFile', { name: row.file.name })}
+                      disabled={locked}
+                      onClick={() => {
+                        remove(row.key);
+                      }}
+                    >
+                      <Icon name="close" size={16} />
+                    </IconButton>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {!locked && (
+            <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
+              <FilePicker accept={PHOTO_SUFFIXES.join(',')} multiple onPick={add}>
+                {(open) => (
+                  <DashedAdd ratio="1" label={t('accounts.schedule.addPhotos')} onClick={open} />
+                )}
+              </FilePicker>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={close} disabled={locked}>
+              {t('accounts.addStory.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={running}
+              disabled={!ready || locked}
+              onClick={() => {
+                void submit();
+              }}
+            >
+              {t('accounts.schedule.submitPhotos', { count: pending.length })}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </Modal>
   );
 }

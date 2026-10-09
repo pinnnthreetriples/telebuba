@@ -8,16 +8,7 @@ import {
   setAccountChannelPhotoMutation,
   updateAccountChannelMutation,
 } from '@/entities/account';
-import {
-  Button,
-  ConfirmModal,
-  CloseButton,
-  Input,
-  Modal,
-  Notice,
-  Textarea,
-  toastError,
-} from '@/shared/ui';
+import { Button, CloseButton, Input, Modal, Notice, Textarea, toastError } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -57,7 +48,7 @@ export function ChannelEditModal({
   const [title, setTitle] = useState<string | null>(null);
   const [about, setAbout] = useState<string | null>(null);
   const [reactionsOff, setReactionsOff] = useState<boolean | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [pinned, setPinned] = useState<boolean | null>(null);
 
   const shownTitle = title ?? detail.data?.title ?? '';
   const shownAbout = about ?? detail.data?.about ?? '';
@@ -70,12 +61,18 @@ export function ChannelEditModal({
   // Same "null until touched" rule as the text fields: the live detail shows
   // through, phrased as the create dialog phrases it (checked = reactions off).
   const shownReactionsOff = reactionsOff ?? liveReactionsOff;
+  // Same single-predicate rule as reactions (the field is optional in the client).
+  const livePinned = detail.data?.pinned_to_profile === true;
+  const shownPinned = pinned ?? livePinned;
+  // Telegram pins only a public channel; an already-pinned one may still unpin.
+  const pinBlocked = detail.data?.username == null && !livePinned;
   const titleChanged = detail.data != null && title !== null && title.trim() !== detail.data.title;
   const aboutChanged =
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const reactionsChanged =
     detail.data != null && reactionsOff !== null && reactionsOff !== liveReactionsOff;
-  const dirty = titleChanged || aboutChanged || reactionsChanged;
+  const pinChanged = detail.data != null && pinned !== null && pinned !== livePinned;
+  const dirty = titleChanged || aboutChanged || reactionsChanged || pinChanged;
   const busy = update.isPending || setPhoto.isPending;
   // The blank-title guard belongs to the title alone: the title is only sent
   // when it changed, so an about-only edit must stay saveable whatever the title
@@ -112,6 +109,7 @@ export function ChannelEditModal({
           ...(titleChanged ? { title: shownTitle.trim() } : {}),
           ...(aboutChanged ? { about: shownAbout.trim() } : {}),
           ...(reactionsChanged ? { reactions_enabled: !shownReactionsOff } : {}),
+          ...(pinChanged ? { pinned_to_profile: shownPinned } : {}),
         },
       },
       {
@@ -121,6 +119,7 @@ export function ChannelEditModal({
           setTitle(null);
           setAbout(null);
           setReactionsOff(null);
+          setPinned(null);
         },
         onSettled: invalidate,
       },
@@ -148,37 +147,33 @@ export function ChannelEditModal({
     );
   };
 
-  // Escape / backdrop / × ask before discarding unsaved edits; all exits are
-  // locked while a write is in flight (unmounting drops the invalidation).
-  const requestClose = () => {
-    if (busy) return;
-    if (dirty) setConfirmDiscard(true);
-    else onClose();
-  };
-
   return (
-    <>
-      <Modal
-        onClose={requestClose}
-        size="panel"
-        // A fixed name, unlike the visible heading below it: this dialog opens
-        // while the detail is still loading, and an ARIA name that changes after
-        // the announcement is never re-announced — so the operator would only ever
-        // hear "Загрузка…". `??` did not guard '' either, and a blank channel title
-        // is a real (if rare) read result, which left the dialog nameless.
-        label={t('accounts.channel.dialog')}
-      >
-        <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-          <div className="mb-lg flex items-center justify-between gap-md">
+    <Modal
+      onClose={onClose}
+      // Escape / backdrop / × ask before discarding unsaved edits; all exits are
+      // locked while a write is in flight (unmounting drops the invalidation).
+      dirty={dirty}
+      locked={busy}
+      size="panel"
+      // A fixed name, unlike the visible heading below it: this dialog opens
+      // while the detail is still loading, and an ARIA name that changes after
+      // the announcement is never re-announced — so the operator would only ever
+      // hear "Загрузка…". `??` did not guard '' either, and a blank channel title
+      // is a real (if rare) read result, which left the dialog nameless.
+      label={t('accounts.channel.dialog')}
+    >
+      {(close) => (
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate type-dialog-title">
+              <h2 className="truncate type-h2">
                 {detail.data?.title ?? t('accounts.channel.loading')}
               </h2>
               {!detailBlank && (
-                <div className="truncate type-prose">
+                <div className="truncate type-body text-content-subtle">
                   {detail.data?.username != null
                     ? `@${detail.data.username}`
                     : t('accounts.channel.privateBadge')}
@@ -187,11 +182,7 @@ export function ChannelEditModal({
                 </div>
               )}
             </div>
-            <CloseButton
-              onClick={requestClose}
-              disabled={busy}
-              aria-label={t('accounts.channel.close')}
-            />
+            <CloseButton onClick={close} disabled={busy} aria-label={t('accounts.channel.close')} />
           </div>
 
           {detail.isError && (
@@ -208,7 +199,7 @@ export function ChannelEditModal({
 
           {detail.isSuccess && (
             <>
-              <label className="mb-lg block">
+              <label className="mb-4 block">
                 <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
                 <Input
                   value={shownTitle}
@@ -218,12 +209,12 @@ export function ChannelEditModal({
                   }}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-xs block type-caption text-danger-deep">
+                  <span className="mt-1 block type-small text-danger-deep">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
               </label>
-              <label className="mb-lg block">
+              <label className="mb-4 block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
                 <Textarea
                   className="[font-family:inherit]"
@@ -244,6 +235,16 @@ export function ChannelEditModal({
                 }}
               />
 
+              <CheckRow
+                label={t('accounts.channel.pinToggle')}
+                on={shownPinned}
+                disabled={busy || pinBlocked}
+                hint={pinBlocked ? t('accounts.channel.pinNeedsPublic') : undefined}
+                onToggle={() => {
+                  setPinned(!shownPinned);
+                }}
+              />
+
               {update.isError && (
                 <Notice tone="danger">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
@@ -256,7 +257,7 @@ export function ChannelEditModal({
                   не `gap` у тела; перевод тела на `gap` — отдельная правка (он снял бы
                   `mb-lg` у двух `label` и у общего `CheckRow`, который носит и диалог
                   создания), и картинку она сдвинет. */}
-              <div className="mt-lg flex items-center gap-sm">
+              <div className="mt-4 flex items-center gap-2">
                 <Button
                   size="sm"
                   onClick={() => photoInput.current?.click()}
@@ -287,19 +288,7 @@ export function ChannelEditModal({
             </>
           )}
         </div>
-      </Modal>
-      {confirmDiscard ? (
-        <ConfirmModal
-          title={t('accounts.channel.discardTitle')}
-          body={t('accounts.channel.discardBody')}
-          confirmLabel={t('accounts.channel.discardConfirm')}
-          cancelLabel={t('accounts.channel.cancel')}
-          onClose={() => {
-            setConfirmDiscard(false);
-          }}
-          onConfirm={onClose}
-        />
-      ) : null}
-    </>
+      )}
+    </Modal>
   );
 }

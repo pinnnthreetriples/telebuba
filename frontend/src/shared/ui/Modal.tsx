@@ -1,8 +1,12 @@
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 
 import { surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
+
+import { ConfirmCard } from './ConfirmCard';
+import { ModalDirtyContext } from './useModalDirty';
 
 // Everything a keyboard can land on inside the dialog (for the Tab trap).
 const FOCUSABLE =
@@ -17,7 +21,7 @@ const modalStack: object[] = [];
 // per-instance: a second dialog opening over the first captures 'hidden', because the
 // first already wrote it. Whichever instance restores LAST then decides the final
 // value, and cleanup order follows document order, so a confirm rendered as the later
-// sibling of its parent dialog (ProfileModal's discard-changes confirm) restores
+// sibling of its parent dialog (Modal's own discard-changes confirm, below) restores
 // 'hidden' and leaves the page permanently unscrollable.
 // Note it is the SIBLING case that bites. A dialog genuinely nested in another's
 // `children` would be fine on its own — mount effects run child-first, so it captures
@@ -28,7 +32,7 @@ let overflowBeforeLock = '';
 
 // Presets rather than two free `className` props: both halves set the same
 // properties (radius, animation, height), and a caller's `rounded-none` beside the
-// base `rounded-card` would depend on Tailwind's emit order, which is no guarantee.
+// base `rounded-lg` would depend on Tailwind's emit order, which is no guarantee.
 //
 // A card taller than the viewport scrolls via the OVERLAY, never via the card. Both
 // alternatives are wrong: `overflow-y-auto` on the card computes `overflow-x` to
@@ -45,7 +49,7 @@ let overflowBeforeLock = '';
 // ни радиуса, ни тени, и «поверхность диалога» описывала бы её неверно.
 const SHELL = {
   center: {
-    overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
+    overlay: 'justify-center overflow-y-auto overscroll-contain p-4 sm:p-6',
     card: `m-auto tb-arrive ${surface('dialog')}`,
   },
   'drawer-left': {
@@ -103,24 +107,21 @@ const SIZE = {
 // mounts later and is appended to document.body after it, which at equal z-index
 // paints it on top. Toasts are the one thing that must clear an open dialog, and
 // they say so with their own rung above this one rather than by mount order.
-export function Modal({
+function ModalShell({
   onClose,
   children,
-  size = 'confirm',
-  variant = 'center',
+  size,
+  variant,
   label,
+  dialogRef,
 }: {
   onClose: () => void;
   children: ReactNode;
-  // Ширина диалога. Шторка её игнорирует: её ширина принадлежит варианту.
-  size?: keyof typeof SIZE;
-  variant?: keyof typeof SHELL;
-  // Accessible name for the dialog — REQUIRED, not optional: while it was
-  // optional 20 of the 21 call sites left it out and a screen reader announced a
-  // nameless "dialog". Every one of them already renders a title; pass that.
+  size: keyof typeof SIZE;
+  variant: keyof typeof SHELL;
   label: string;
+  dialogRef: RefObject<HTMLDivElement | null>;
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<object>({});
 
   // Register in the modal stack for the lifetime of this dialog (mount/unmount
@@ -143,6 +144,9 @@ export function Modal({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // A widget inside that already used the key (an inline editor cancelling itself)
+      // marks it `defaultPrevented`; the dialog stays.
+      if (event.defaultPrevented) return;
       if (event.key === 'Escape' && modalStack[modalStack.length - 1] === idRef.current) {
         onClose();
       }
@@ -153,14 +157,15 @@ export function Modal({
     };
   }, [onClose]);
 
-  // Focus the dialog on open; hand focus back to the opener on close.
+  // Focus the dialog on open; hand focus back to the opener on close. `dialogRef` is a
+  // stable ref object owned by Modal, so this still runs on mount/unmount only.
   useEffect(() => {
     const previous = document.activeElement;
     dialogRef.current?.focus();
     return () => {
       if (previous instanceof HTMLElement) previous.focus();
     };
-  }, []);
+  }, [dialogRef]);
 
   // Minimal Tab trap: wrap from the last focusable to the first and back.
   const onTrapTab = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -203,7 +208,7 @@ export function Modal({
           event.stopPropagation();
         }}
         className={cn(
-          'max-w-full outline-none',
+          'max-w-full outline-hidden',
           SHELL[variant].card,
           variant === 'center' && SIZE[size],
         )}
@@ -212,5 +217,118 @@ export function Modal({
       </div>
     </div>,
     document.body,
+  );
+}
+
+// The guard against losing edits. A dialog that holds unsaved input passes `dirty`, and
+// then NO dismissal throws the input away silently: backdrop, Escape and every in-body
+// Cancel/× (which get the guarded close as the render-prop argument of `children`) open
+// a stacked "close without saving?" question instead. A clean dialog closes at once, as
+// before; a save that closes the dialog calls the caller's own `onClose`, not the guarded
+// one, so it never asks.
+//
+// One mechanism here rather than a confirm per dialog: ProfileModal and ChannelEditModal
+// each carried their own copy, and the twenty other dialogs that hold a form had none,
+// so a stray click on the veil lost a half-filled campaign without a word.
+//
+// The question is a second shell rendered as a SIBLING of this one, so it sits on top of
+// the modal stack (only it handles Escape — Escape on it means "stay") and the scroll
+// lock unwinds through the stack-gated `overflowBeforeLock` above. Staying hands focus
+// back into the dialog: after a backdrop click the confirm would otherwise return it to
+// the body it was taken from.
+//
+// A component deep in the body that holds its own input (a wizard step) adds to `dirty`
+// through `useModalDirty`, without lifting its state into the dialog.
+//
+// `locked` closes every exit — a write in flight whose result the dialog must still
+// receive (an upload loop, a publish) — and outranks `dirty`: a locked dialog neither
+// closes nor asks, and a question already open when the lock lands is withdrawn.
+export function Modal({
+  onClose,
+  children,
+  size = 'confirm',
+  variant = 'center',
+  label,
+  dirty = false,
+  locked = false,
+}: {
+  onClose: () => void;
+  // Either the body, or a function of the guarded close for the body's own Cancel/×
+  // buttons — those must ask exactly as the backdrop does.
+  children: ReactNode | ((close: () => void) => ReactNode);
+  // Ширина диалога. Шторка её игнорирует: её ширина принадлежит варианту.
+  size?: keyof typeof SIZE;
+  variant?: keyof typeof SHELL;
+  // Accessible name for the dialog — REQUIRED, not optional: while it was
+  // optional 20 of the 21 call sites left it out and a screen reader announced a
+  // nameless "dialog". Every one of them already renders a title; pass that.
+  label: string;
+  // The dialog holds input that closing would lose: compare the draft to what it opened
+  // with, never "the operator touched something".
+  dirty?: boolean;
+  locked?: boolean;
+}) {
+  const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const [asking, setAsking] = useState(false);
+  const refocus = useRef(false);
+  const [dirtyParts] = useState(() => new Set<object>());
+
+  const close = () => {
+    if (locked) return;
+    if (dirty || dirtyParts.size > 0) setAsking(true);
+    else onClose();
+  };
+  const stay = () => {
+    refocus.current = true;
+    setAsking(false);
+  };
+
+  // Runs after the confirm's own cleanup has handed focus back to whatever held it when
+  // the question opened — passive unmount effects precede mount effects in one commit.
+  useEffect(() => {
+    if (asking || !refocus.current) return;
+    refocus.current = false;
+    const node = dialogRef.current;
+    if (node && !node.contains(document.activeElement)) node.focus();
+  }, [asking]);
+
+  // A write that starts while the question is open locks every exit: the question goes
+  // with them, and its «Закрыть без сохранения» must not throw the dialog away mid-write.
+  useEffect(() => {
+    if (locked) setAsking(false);
+  }, [locked]);
+
+  const title = t('dialog.discard.title');
+  return (
+    <>
+      <ModalShell onClose={close} size={size} variant={variant} label={label} dialogRef={dialogRef}>
+        <ModalDirtyContext value={dirtyParts}>
+          {typeof children === 'function' ? children(close) : children}
+        </ModalDirtyContext>
+      </ModalShell>
+      {asking && !locked ? (
+        <ModalShell
+          onClose={stay}
+          size="confirm"
+          variant="center"
+          label={title}
+          dialogRef={confirmRef}
+        >
+          <ConfirmCard
+            title={title}
+            body={t('dialog.discard.body')}
+            cancelLabel={t('dialog.discard.stay')}
+            confirmLabel={t('dialog.discard.confirm')}
+            onCancel={stay}
+            onConfirm={() => {
+              setAsking(false);
+              if (!locked) onClose();
+            }}
+          />
+        </ModalShell>
+      ) : null}
+    </>
   );
 }

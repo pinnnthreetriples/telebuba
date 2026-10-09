@@ -21,7 +21,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const StatTones: Story = {
   render: () => (
-    <div className="flex flex-wrap gap-lg">
+    <div className="flex flex-wrap gap-4">
       <Odometer value={2} />
       <Odometer value={4} className="text-action-primary" />
       <Odometer value={14} className="text-success-deep" />

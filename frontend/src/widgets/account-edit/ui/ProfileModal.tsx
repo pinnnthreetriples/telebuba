@@ -23,13 +23,14 @@ import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shar
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import {
   Button,
+  CloseButton,
   ConfirmModal,
   FormField,
   Icon,
-  CloseButton,
   IconButton,
   Input,
   Modal,
+  ModalFooter,
   Spinner,
   TabList,
   Textarea,
@@ -113,7 +114,7 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
   if (!updatedAt) return null;
   const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
-    <span className="type-caption">
+    <span className="type-small">
       {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
@@ -542,20 +543,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     }
   };
 
-  // Escape / backdrop / × ask before discarding unsaved text edits.
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const requestClose = () => {
-    // A photo batch outlives the modal: `uploadPhotos` is a sequential loop with
-    // no abort path and react-query keeps the mutation in its cache, so closing
-    // after file #2 hides the progress overlay while #3..#5 keep uploading — each
-    // one becoming the account's avatar — and the post-batch refresh() is gone
-    // with the tree that owned it. Same reason AddStoryModal locks its exits
-    // mid-publish; the buttons below are disabled so this is not a dead click.
-    if (photoProgress) return;
-    if (form.state.isDirty) setConfirmDiscard(true);
-    else onClose();
-  };
-
   // Header reflects the live snapshot (falls back to the stored account row).
   const liveFirst = snapshot.data?.first_name ?? account.first_name;
   const liveLast = snapshot.data?.last_name ?? account.last_name;
@@ -628,14 +615,22 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const refreshLook = REFRESH_LOOK[refreshState === 'loading' ? 'idle' : refreshState];
-  // An in-flight photo batch owns the modal: the exits are locked (see
-  // requestClose) and must look it rather than silently ignoring the click.
+  // A photo batch outlives the modal: `uploadPhotos` is a sequential loop with
+  // no abort path and react-query keeps the mutation in its cache, so closing
+  // after file #2 hides the progress overlay while #3..#5 keep uploading — each
+  // one becoming the account's avatar — and the post-batch refresh() is gone
+  // with the tree that owned it. Same reason AddStoryModal locks its exits
+  // mid-publish. The batch therefore locks every exit (Modal's `locked`), and the
+  // Cancel/× buttons are disabled so the lock looks it rather than eating clicks.
   const uploading = Boolean(photoProgress);
 
   return (
     <>
       <Modal
-        onClose={requestClose}
+        onClose={onClose}
+        // Unsaved text edits ask before any exit throws them away (Modal's guard).
+        dirty={isDirty}
+        locked={uploading}
         size="panel"
         // A fixed name, unlike the visible heading below it — the same choice as
         // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
@@ -645,387 +640,393 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         // different name, and it went stale on a renamed row's new `account` prop.
         label={t('accounts.profile.dialog')}
       >
-        <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
-          {/* header */}
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
-            <div
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-stat font-semibold text-content-primary"
-              style={
-                avatarUri
-                  ? {
-                      backgroundImage: `url(${avatarUri})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }
-                  : undefined
-              }
-            >
-              {avatarUri ? '' : initial}
-            </div>
-            <div className="min-w-0 flex-1">
-              {/* A heading, not a div: the dialog's own name is fixed (see above), so
+        {(close) => (
+          <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
+            {/* header */}
+            <div className="flex items-center gap-4 border-b border-canvas px-6 py-6">
+              <div
+                className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-linear-to-br/srgb from-info-line to-line text-h1 font-medium text-content-primary"
+                style={
+                  avatarUri
+                    ? {
+                        backgroundImage: `url(${avatarUri})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                      }
+                    : undefined
+                }
+              >
+                {avatarUri ? '' : initial}
+              </div>
+              <div className="min-w-0 flex-1">
+                {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate type-dialog-title">{fullName}</h2>
-              <div className="truncate type-prose">
-                {liveUser ? `@${liveUser} · ` : ''}
-                {account.phone ?? account.account_id}
+                <h2 className="truncate type-h2">{fullName}</h2>
+                <div className="truncate type-body text-content-subtle">
+                  {liveUser ? `@${liveUser} · ` : ''}
+                  {account.phone ?? account.account_id}
+                </div>
               </div>
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-tight">
-              <div className="flex items-center gap-sm">
-                <button
-                  type="button"
-                  disabled={refreshState === 'loading' || syncing}
-                  onClick={() => {
-                    void onRefresh();
-                  }}
-                  className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium transition duration-state hover:bg-canvas disabled:pointer-events-none disabled:opacity-70 ${PRESS_FEEDBACK} ${FOCUS_RING} ${refreshLook.border}`}
-                >
-                  <span
-                    className={`inline-flex ${
-                      refreshState === 'loading'
-                        ? 'tb-spin'
-                        : refreshState === 'idle'
-                          ? ''
-                          : 'tb-swapin'
-                    }`}
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={refreshState === 'loading' || syncing}
+                    onClick={() => {
+                      void onRefresh();
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-full border bg-surface-card px-3 py-1 text-body font-medium transition duration-state hover:bg-canvas disabled:pointer-events-none disabled:opacity-70 ${PRESS_FEEDBACK} ${FOCUS_RING} ${refreshLook.border}`}
                   >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={refreshLook.stroke}
+                    <span
+                      className={`inline-flex ${
+                        refreshState === 'loading'
+                          ? 'tb-spin'
+                          : refreshState === 'idle'
+                            ? ''
+                            : 'tb-swapin'
+                      }`}
                     >
-                      <path d={refreshLook.path} />
-                    </svg>
-                  </span>
-                  {t(refreshLook.labelKey)}
-                </button>
-                <CloseButton
-                  onClick={requestClose}
-                  disabled={uploading}
-                  aria-label={t('accounts.profile.close')}
-                />
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={refreshLook.stroke}
+                      >
+                        <path d={refreshLook.path} />
+                      </svg>
+                    </span>
+                    {t(refreshLook.labelKey)}
+                  </button>
+                  <CloseButton
+                    onClick={close}
+                    disabled={uploading}
+                    aria-label={t('accounts.profile.close')}
+                  />
+                </div>
+                <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
               </div>
-              <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
-          </div>
 
-          <TabList
-            options={TABS.map((value) => ({ value, label: t(`accounts.profile.tab.${value}`) }))}
-            value={tab}
-            onChange={setTab}
-            idPrefix="profile-tab"
-            panelId="profile-tabpanel"
-            ariaLabel={t('accounts.profile.dialog')}
-          />
+            <TabList
+              options={TABS.map((value) => ({ value, label: t(`accounts.profile.tab.${value}`) }))}
+              value={tab}
+              onChange={setTab}
+              idPrefix="profile-tab"
+              panelId="profile-tabpanel"
+              ariaLabel={t('accounts.profile.dialog')}
+            />
 
-          {/* content */}
-          {/* `gap-lg` вместо `mb-lg` на уведомлении об ошибке загрузки: расстояние до
+            {/* content */}
+            {/* `gap-lg` вместо `mb-lg` на уведомлении об ошибке загрузки: расстояние до
               панели вкладки ставит панель, а не уведомление. В потоке тут не больше двух
               детей — уведомление и одна вкладка (оверлей `absolute`, во flex он вне
               потока и зазора не занимает), — поэтому зазор виден ровно там, где раньше
               стоял отступ, и той же ступенью. */}
-          <div
-            role="tabpanel"
-            id="profile-tabpanel"
-            aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex min-h-0 flex-1 flex-col gap-lg overflow-y-auto p-xl"
-          >
-            {/* Applying overlay: every media edit calls refresh(), which re-pulls
+            <div
+              role="tabpanel"
+              id="profile-tabpanel"
+              aria-labelledby={`profile-tab-${tab}`}
+              className="tb-scroll relative flex flex-1 flex-col gap-4 overflow-y-auto p-6"
+            >
+              {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
                 spinner signals "still working" and blocks input to stop double-
                 submits. It sits inside the overflow container, so `inset-0` pins it
                 to the visible viewport rather than scrolling away. The text tab is
                 excluded — its Save keeps the footer's own spinner/✓ — and so is
                 the channels and privacy tabs, which run on their own queries. */}
-            {busy && tab !== 'text' && tab !== 'channels' && tab !== 'privacy' && (
-              <div
-                role="status"
-                aria-live="polite"
-                aria-label={t('accounts.profile.syncing')}
-                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 tb-ovfade"
-              >
-                {/* `line-strong`, not the default line: this ring sits on the modal's own
+              {busy && tab !== 'text' && tab !== 'channels' && tab !== 'privacy' && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-label={t('accounts.profile.syncing')}
+                  className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-3 bg-black/10 tb-ovfade"
+                >
+                  {/* `line-strong`, not the default line: this ring sits on the modal's own
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
-                <Spinner size="lg" />
-                <span className="type-label">
-                  {photoProgress
-                    ? t('accounts.profile.uploadingCount', photoProgress)
-                    : t('accounts.profile.syncing')}
-                </span>
-              </div>
-            )}
-            {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <RetryNotice
-                message={t('accounts.profile.loadError', { reason: loadErrorReason })}
-                label={t('accounts.profile.refresh')}
-                disabled={refreshState === 'loading' || syncing}
-                onRetry={() => {
-                  void onRefresh();
-                }}
-              />
-            )}
-            {tab === 'text' && (
-              <div className="flex flex-col gap-lg">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-                  <form.Field name="first_name">
-                    {(field) => <FormField field={field} label={t('accounts.profile.firstName')} />}
-                  </form.Field>
-                  <form.Field name="last_name">
-                    {(field) => <FormField field={field} label={t('accounts.profile.lastName')} />}
-                  </form.Field>
+                  <Spinner size="lg" />
+                  <span className="type-body-medium text-content-secondary">
+                    {photoProgress
+                      ? t('accounts.profile.uploadingCount', photoProgress)
+                      : t('accounts.profile.syncing')}
+                  </span>
                 </div>
-                <form.Field name="username">
-                  {(field) => (
-                    <FormField field={field} label={t('accounts.profile.username')}>
-                      <div className="relative flex items-center">
-                        <span className="absolute left-lg text-body text-content-subtle">@</span>
-                        <Input
-                          className="pl-page"
+              )}
+              {loadError && tab !== 'channels' && tab !== 'privacy' && (
+                <RetryNotice
+                  message={t('accounts.profile.loadError', { reason: loadErrorReason })}
+                  label={t('accounts.profile.refresh')}
+                  disabled={refreshState === 'loading' || syncing}
+                  onRetry={() => {
+                    void onRefresh();
+                  }}
+                />
+              )}
+              {tab === 'text' && (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <form.Field name="first_name">
+                      {(field) => (
+                        <FormField field={field} label={t('accounts.profile.firstName')} />
+                      )}
+                    </form.Field>
+                    <form.Field name="last_name">
+                      {(field) => (
+                        <FormField field={field} label={t('accounts.profile.lastName')} />
+                      )}
+                    </form.Field>
+                  </div>
+                  <form.Field name="username">
+                    {(field) => (
+                      <FormField field={field} label={t('accounts.profile.username')}>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-4 text-body text-content-subtle">@</span>
+                          <Input
+                            className="pl-8"
+                            value={field.state.value}
+                            onChange={(event) => {
+                              field.handleChange(event.target.value);
+                            }}
+                            onBlur={field.handleBlur}
+                          />
+                        </div>
+                        {saveErrorField === 'username' && saveErrorText != null && (
+                          <span
+                            role="alert"
+                            className="mt-2 block type-small-medium text-danger-deep"
+                          >
+                            {saveErrorText}
+                          </span>
+                        )}
+                      </FormField>
+                    )}
+                  </form.Field>
+                  <form.Field name="bio">
+                    {(field) => (
+                      <FormField field={field} label={t('accounts.profile.bio')}>
+                        <Textarea
+                          className="[font-family:inherit]"
+                          data-testid="profile-bio"
                           value={field.state.value}
                           onChange={(event) => {
+                            // A new edit supersedes the verdict on the last save.
+                            // Guarded: `rememberSavedBio` setStates, and this is the
+                            // one field not isolated behind its own `form.Field`
+                            // subscription, so unguarded it re-rendered the whole
+                            // modal on every keystroke — which the save-error
+                            // subscription and `canSubmit`'s useStore exist to avoid.
+                            if (savedBioRef.current !== null) rememberSavedBio(null);
                             field.handleChange(event.target.value);
                           }}
                           onBlur={field.handleBlur}
                         />
-                      </div>
-                      {saveErrorField === 'username' && saveErrorText != null && (
-                        <span
-                          role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
-                        >
-                          {saveErrorText}
-                        </span>
-                      )}
-                    </FormField>
-                  )}
-                </form.Field>
-                <form.Field name="bio">
-                  {(field) => (
-                    <FormField field={field} label={t('accounts.profile.bio')}>
-                      <Textarea
-                        className="[font-family:inherit]"
-                        data-testid="profile-bio"
-                        value={field.state.value}
-                        onChange={(event) => {
-                          // A new edit supersedes the verdict on the last save.
-                          // Guarded: `rememberSavedBio` setStates, and this is the
-                          // one field not isolated behind its own `form.Field`
-                          // subscription, so unguarded it re-rendered the whole
-                          // modal on every keystroke — which the save-error
-                          // subscription and `canSubmit`'s useStore exist to avoid.
-                          if (savedBioRef.current !== null) rememberSavedBio(null);
-                          field.handleChange(event.target.value);
-                        }}
-                        onBlur={field.handleBlur}
-                      />
-                      {saveErrorField === 'bio' && saveErrorText != null && (
-                        <span
-                          role="alert"
-                          className="mt-tight block type-caption font-medium text-danger-deep"
-                        >
-                          {saveErrorText}
-                        </span>
-                      )}
-                      {bioDropped && (
-                        <span
-                          role="alert"
-                          data-testid="bio-not-applied"
-                          className="mt-tight block type-caption font-medium text-warning-deep"
-                        >
-                          {t('accounts.profile.bioNotApplied')}
-                        </span>
-                      )}
-                    </FormField>
-                  )}
-                </form.Field>
-              </div>
-            )}
-
-            {tab === 'photo' && (
-              <PhotoTab
-                photos={photos}
-                busy={busy}
-                uploading={uploading}
-                onUpload={(files) => {
-                  void uploadPhotos(files);
-                }}
-                onRemove={(photo) => {
-                  setConfirm({
-                    kind: 'Photo',
-                    run: () =>
-                      removePhoto
-                        .mutateAsync({
-                          path: { account_id: account.account_id },
-                          body: {
-                            photo_id: photo.photo_id,
-                            access_hash: photo.access_hash,
-                            file_reference: photo.file_reference,
-                          },
-                        })
-                        .finally(refresh),
-                  });
-                }}
-                onMakeMain={(photo) => {
-                  setMainPhoto.mutate(
-                    {
-                      path: { account_id: account.account_id },
-                      body: {
-                        photo_id: photo.photo_id,
-                        access_hash: photo.access_hash,
-                        file_reference: photo.file_reference,
-                      },
-                    },
-                    // Settled: make-main RE-UPLOADS the photo as a new one
-                    // (fresh id at the front, the original stays as a visible
-                    // duplicate the operator may delete), so the grid must
-                    // re-pull either way.
-                    { onSettled: refresh },
-                  );
-                }}
-                onSchedule={() => {
-                  setSchedulePhotosOpen(true);
-                }}
-                scheduled={<ScheduledPostsList accountId={account.account_id} kind="photo" />}
-              />
-            )}
-
-            {tab === 'stories' && (
-              <StoriesTab
-                stories={stories}
-                pinPending={setStoryPinned.isPending}
-                onAdd={() => {
-                  setStoryOpen(true);
-                }}
-                onRemove={(story) => {
-                  setConfirm({
-                    kind: 'Story',
-                    run: () =>
-                      removeStory
-                        .mutateAsync({
-                          path: { account_id: account.account_id },
-                          body: { story_id: story.story_id },
-                        })
-                        .finally(refresh),
-                  });
-                }}
-                onPinToggle={(story) => {
-                  setStoryPinned.mutate(
-                    {
-                      path: { account_id: account.account_id },
-                      body: { story_id: story.story_id, pinned: !story.is_pinned },
-                    },
-                    { onSettled: refresh },
-                  );
-                }}
-                scheduled={<ScheduledPostsList accountId={account.account_id} kind="story" />}
-              />
-            )}
-
-            {tab === 'music' && (
-              <MusicTab
-                music={music}
-                supported={musicSupported}
-                busy={busy}
-                onPick={(file) => {
-                  addMusic.mutate(
-                    { path: { account_id: account.account_id }, body: { file } },
-                    // Settled, not success: a failure has already invalidated
-                    // the server-side snapshot cache, so the grid must re-pull
-                    // either way or it keeps serving ids Telegram has since
-                    // replaced.
-                    { onSettled: refresh },
-                  );
-                }}
-                onRemove={(track) => {
-                  // The remove button is disabled without a file_reference;
-                  // the guard keeps the narrowing honest (no '' fallback ever
-                  // reaches the wire).
-                  if (!track.file_reference) return;
-                  const body: MusicRemoveRequest = {
-                    file_id: track.file_id,
-                    access_hash: track.access_hash ?? '0',
-                    file_reference: track.file_reference,
-                  };
-                  setConfirm({
-                    kind: 'Music',
-                    run: () =>
-                      removeMusic
-                        .mutateAsync({ path: { account_id: account.account_id }, body })
-                        .finally(refresh),
-                  });
-                }}
-              />
-            )}
-
-            {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
-
-            {tab === 'privacy' && <PrivacyTab accountId={account.account_id} />}
-          </div>
-
-          {/* footer */}
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
-            {/* Non-field save errors (account_frozen, flood_wait, unknown)
-                live beside the global Save button, visible from any tab. */}
-            {saveErrorField === null && saveErrorText != null ? (
-              <div
-                role="alert"
-                title={saveErrorText}
-                className="mr-auto min-w-0 truncate type-label text-danger"
-              >
-                {saveErrorText}
-              </div>
-            ) : (
-              // The way into the bulk twin, from the single-account editor it
-              // mirrors: the operator is already looking at the form they want
-              // applied to a fleet. Yields the footer's left slot to a save
-              // error — a refusal on screen outranks a way to open another dialog.
-              <IconButton
-                size="md"
-                className="mr-auto"
-                aria-label={t('accounts.bulk.open')}
-                disabled={uploading}
-                onClick={() => {
-                  setBulkOpen(true);
-                }}
-              >
-                <Icon name="users" size={16} />
-              </IconButton>
-            )}
-            <Button onClick={requestClose} disabled={uploading}>
-              {t('accounts.profile.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                void form.handleSubmit();
-              }}
-              disabled={!canSave || !isDirty}
-              loading={updateProfile.isPending}
-              className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
-            >
-              {updateProfile.isPending ? (
-                t('accounts.profile.saving')
-              ) : saved ? (
-                <span className="inline-flex items-center gap-sm">
-                  <span className="tb-swapin inline-flex">
-                    <Icon name="check" size={16} />
-                  </span>
-                  <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
-                    {t('accounts.profile.saved')}
-                  </span>
-                </span>
-              ) : (
-                t('accounts.profile.save')
+                        {saveErrorField === 'bio' && saveErrorText != null && (
+                          <span
+                            role="alert"
+                            className="mt-2 block type-small-medium text-danger-deep"
+                          >
+                            {saveErrorText}
+                          </span>
+                        )}
+                        {bioDropped && (
+                          <span
+                            role="alert"
+                            data-testid="bio-not-applied"
+                            className="mt-2 block type-small-medium text-warning-deep"
+                          >
+                            {t('accounts.profile.bioNotApplied')}
+                          </span>
+                        )}
+                      </FormField>
+                    )}
+                  </form.Field>
+                </div>
               )}
-            </Button>
+
+              {tab === 'photo' && (
+                <PhotoTab
+                  photos={photos}
+                  busy={busy}
+                  uploading={uploading}
+                  onUpload={(files) => {
+                    void uploadPhotos(files);
+                  }}
+                  onRemove={(photo) => {
+                    setConfirm({
+                      kind: 'Photo',
+                      run: () =>
+                        removePhoto
+                          .mutateAsync({
+                            path: { account_id: account.account_id },
+                            body: {
+                              photo_id: photo.photo_id,
+                              access_hash: photo.access_hash,
+                              file_reference: photo.file_reference,
+                            },
+                          })
+                          .finally(refresh),
+                    });
+                  }}
+                  onMakeMain={(photo) => {
+                    setMainPhoto.mutate(
+                      {
+                        path: { account_id: account.account_id },
+                        body: {
+                          photo_id: photo.photo_id,
+                          access_hash: photo.access_hash,
+                          file_reference: photo.file_reference,
+                        },
+                      },
+                      // Settled: make-main RE-UPLOADS the photo as a new one
+                      // (fresh id at the front, the original stays as a visible
+                      // duplicate the operator may delete), so the grid must
+                      // re-pull either way.
+                      { onSettled: refresh },
+                    );
+                  }}
+                  onSchedule={() => {
+                    setSchedulePhotosOpen(true);
+                  }}
+                  scheduled={<ScheduledPostsList accountId={account.account_id} kind="photo" />}
+                />
+              )}
+
+              {tab === 'stories' && (
+                <StoriesTab
+                  stories={stories}
+                  pinPending={setStoryPinned.isPending}
+                  onAdd={() => {
+                    setStoryOpen(true);
+                  }}
+                  onRemove={(story) => {
+                    setConfirm({
+                      kind: 'Story',
+                      run: () =>
+                        removeStory
+                          .mutateAsync({
+                            path: { account_id: account.account_id },
+                            body: { story_id: story.story_id },
+                          })
+                          .finally(refresh),
+                    });
+                  }}
+                  onPinToggle={(story) => {
+                    setStoryPinned.mutate(
+                      {
+                        path: { account_id: account.account_id },
+                        body: { story_id: story.story_id, pinned: !story.is_pinned },
+                      },
+                      { onSettled: refresh },
+                    );
+                  }}
+                  scheduled={<ScheduledPostsList accountId={account.account_id} kind="story" />}
+                />
+              )}
+
+              {tab === 'music' && (
+                <MusicTab
+                  music={music}
+                  supported={musicSupported}
+                  busy={busy}
+                  onPick={(file) => {
+                    addMusic.mutate(
+                      { path: { account_id: account.account_id }, body: { file } },
+                      // Settled, not success: a failure has already invalidated
+                      // the server-side snapshot cache, so the grid must re-pull
+                      // either way or it keeps serving ids Telegram has since
+                      // replaced.
+                      { onSettled: refresh },
+                    );
+                  }}
+                  onRemove={(track) => {
+                    // The remove button is disabled without a file_reference;
+                    // the guard keeps the narrowing honest (no '' fallback ever
+                    // reaches the wire).
+                    if (!track.file_reference) return;
+                    const body: MusicRemoveRequest = {
+                      file_id: track.file_id,
+                      access_hash: track.access_hash ?? '0',
+                      file_reference: track.file_reference,
+                    };
+                    setConfirm({
+                      kind: 'Music',
+                      run: () =>
+                        removeMusic
+                          .mutateAsync({ path: { account_id: account.account_id }, body })
+                          .finally(refresh),
+                    });
+                  }}
+                />
+              )}
+
+              {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
+
+              {tab === 'privacy' && <PrivacyTab accountId={account.account_id} />}
+            </div>
+
+            {/* footer */}
+            <ModalFooter>
+              {/* Non-field save errors (account_frozen, flood_wait, unknown)
+                live beside the global Save button, visible from any tab. */}
+              {saveErrorField === null && saveErrorText != null ? (
+                <div
+                  role="alert"
+                  title={saveErrorText}
+                  className="mr-auto min-w-0 truncate type-body-medium text-danger"
+                >
+                  {saveErrorText}
+                </div>
+              ) : (
+                // The way into the bulk twin, from the single-account editor it
+                // mirrors: the operator is already looking at the form they want
+                // applied to a fleet. Yields the footer's left slot to a save
+                // error — a refusal on screen outranks a way to open another dialog.
+                <IconButton
+                  size="md"
+                  className="mr-auto"
+                  aria-label={t('accounts.bulk.open')}
+                  disabled={uploading}
+                  onClick={() => {
+                    setBulkOpen(true);
+                  }}
+                >
+                  <Icon name="users" size={16} />
+                </IconButton>
+              )}
+              <Button onClick={close} disabled={uploading}>
+                {t('accounts.profile.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  void form.handleSubmit();
+                }}
+                disabled={!canSave || !isDirty}
+                loading={updateProfile.isPending}
+                className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
+              >
+                {updateProfile.isPending ? (
+                  t('accounts.profile.saving')
+                ) : saved ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="tb-swapin inline-flex">
+                      <Icon name="check" size={16} />
+                    </span>
+                    <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
+                      {t('accounts.profile.saved')}
+                    </span>
+                  </span>
+                ) : (
+                  t('accounts.profile.save')
+                )}
+              </Button>
+            </ModalFooter>
           </div>
-        </div>
+        )}
       </Modal>
       {bulkOpen && (
         <BulkEditModal
@@ -1062,18 +1063,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             setConfirm(null);
           }}
           onConfirm={confirm.run}
-        />
-      ) : null}
-      {confirmDiscard ? (
-        <ConfirmModal
-          title={t('accounts.profile.discardTitle')}
-          body={t('accounts.profile.discardBody')}
-          confirmLabel={t('accounts.profile.discardConfirm')}
-          cancelLabel={t('accounts.profile.cancel')}
-          onClose={() => {
-            setConfirmDiscard(false);
-          }}
-          onConfirm={onClose}
         />
       ) : null}
     </>

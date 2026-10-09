@@ -90,6 +90,15 @@ const neuroshillingRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/neuroshilling'), 'NeuroshillingPage'),
 });
 
+const broadcastRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/broadcast',
+  errorComponent: PageErrorPanel,
+  loader: () =>
+    import('./preload').then(({ preloadChatBroadcast }) => preloadChatBroadcast(queryClient)),
+  component: lazyRouteComponent(() => import('@/pages/chat-broadcast'), 'ChatBroadcastPage'),
+});
+
 const logsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/logs',
@@ -113,6 +122,7 @@ const routeTree = rootRoute.addChildren([
     warmingRoute,
     neurocommentRoute,
     neuroshillingRoute,
+    broadcastRoute,
     logsRoute,
     settingsRoute,
   ]),

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Modal } from '@/shared/ui';
+import { Button, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
 
 // Оболочка диалога настроек кампании: шапка с именем, прокручиваемое тело и подвал с
 // сохранением. Всё, что внутри, кладёт страница.
@@ -35,54 +35,55 @@ export function CampaignSettingsModal({
   const { t } = useTranslation();
   return (
     <Modal
-      onClose={() => {
-        if (!saving) onClose();
-      }}
+      onClose={onClose}
+      // The same `dirty` the pill shows: any exit that would drop the drafts asks first.
+      dirty={dirty}
+      locked={saving}
       size="table"
       label={t('neuroshilling.settings.title', { name })}
     >
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="min-w-0">
-          <div className="truncate type-dialog-title">{name}</div>
-          <div className="mt-hair type-caption">{t('neuroshilling.settings.subtitle')}</div>
-        </div>
-        <div className="flex-1" />
-        {dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-tiny font-semibold text-warning-deep">
-            {t('neuroshilling.setup.unsaved')}
-          </span>
-        ) : null}
-      </div>
+      {(close) => (
+        <>
+          <ModalHeader title={name} subtitle={t('neuroshilling.settings.subtitle')}>
+            <div className="flex-1" />
+            {dirty ? (
+              <span className="shrink-0 rounded-full bg-warning-tint px-3 py-1 text-small font-medium text-warning-deep">
+                {t('neuroshilling.setup.unsaved')}
+              </span>
+            ) : null}
+          </ModalHeader>
 
-      {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
+          {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
           дал бы вложенную цепочку прокрутки — ровно то, от чего оверлей и уводит. */}
-      {conflict ? (
-        <p role="alert" className="mx-2xl mt-lg type-prose text-danger">
-          {t('neuroshilling.settings.conflict')}
-        </p>
-      ) : null}
-      <fieldset
-        disabled={saving}
-        className="m-0 flex min-w-0 flex-col gap-2xl border-0 px-2xl py-xl"
-      >
-        {children}
-      </fieldset>
+          {conflict ? (
+            <p role="alert" className="mx-6 mt-4 type-body text-danger">
+              {t('neuroshilling.settings.conflict')}
+            </p>
+          ) : null}
+          <fieldset
+            disabled={saving}
+            className="m-0 flex min-w-0 flex-col gap-6 border-0 px-6 py-6"
+          >
+            {children}
+          </fieldset>
 
-      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
-        <Button size="sm" onClick={onClose} disabled={saving}>
-          {t('neuroshilling.settings.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={busy || !dirty || conflict}
-          loading={saving}
-          onClick={onSave}
-        >
-          {t('neuroshilling.settings.save')}
-        </Button>
-      </div>
+          <ModalFooter>
+            <Button size="sm" onClick={close} disabled={saving}>
+              {t('neuroshilling.settings.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy || !dirty || conflict}
+              loading={saving}
+              onClick={onSave}
+            >
+              {t('neuroshilling.settings.save')}
+            </Button>
+          </ModalFooter>
+        </>
+      )}
     </Modal>
   );
 }

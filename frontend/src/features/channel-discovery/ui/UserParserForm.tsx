@@ -2,7 +2,17 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
-import { Button, HelpHint, Input, SegmentedControl, Select, Switch, Textarea } from '@/shared/ui';
+import {
+  Button,
+  HelpHint,
+  Input,
+  SectionLabel,
+  SegmentedControl,
+  Select,
+  SettingRow,
+  Switch,
+  Textarea,
+} from '@/shared/ui';
 
 import {
   EXCLUDE_TOGGLES,
@@ -17,7 +27,6 @@ import {
   type ParserToggle,
 } from '../model/userParser';
 import { AccountPicker } from './AccountPicker';
-import { Eyebrow, Row } from './FormRow';
 
 const P = 'userParser.form';
 const H = 'userParser.help';
@@ -41,7 +50,7 @@ function NumberInput({
   const [text, setText] = useState<string | null>(null);
   return (
     <Input
-      size="xs"
+      size="sm"
       type="number"
       className="w-number tabular-nums"
       min={min}
@@ -77,12 +86,12 @@ function FieldLabel({
   help: { text: string; example?: string };
 }) {
   return (
-    <div className="mb-tight flex flex-wrap items-center gap-sm">
-      <label htmlFor={htmlFor} className="type-label">
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      <label htmlFor={htmlFor} className="type-body-medium text-content-secondary">
         {label}
       </label>
       <HelpHint text={help.text} example={help.example} />
-      {caption === undefined ? null : <span className="type-caption">{caption}</span>}
+      {caption === undefined ? null : <span className="type-small">{caption}</span>}
     </div>
   );
 }
@@ -131,7 +140,7 @@ export function UserParserForm({
   };
 
   const toggle = (key: ParserToggle) => (
-    <Row key={key} label={t(`${P}.toggles.${key}`)} help={help(key)}>
+    <SettingRow key={key} label={t(`${P}.toggles.${key}`)} help={help(key)}>
       <Switch
         checked={form.toggles[key]}
         label={t(`${P}.toggles.${key}`)}
@@ -139,22 +148,22 @@ export function UserParserForm({
           onChange({ ...form, toggles: { ...form.toggles, [key]: on } });
         }}
       />
-    </Row>
+    </SettingRow>
   );
 
   return (
     <form
       id={formId}
-      className="flex flex-col gap-2xl"
+      className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
       }}
     >
       <section>
-        <Eyebrow title={t(`${P}.sections.query`)} />
-        <Row first label={t(`${P}.presets.label`)} help={help('presets')}>
-          <div className="flex items-center gap-sm">
+        <SectionLabel title={t(`${P}.sections.query`)} />
+        <SettingRow first label={t(`${P}.presets.label`)} help={help('presets')}>
+          <div className="flex items-center gap-2">
             <div className="w-menu">
               <Select
                 value=""
@@ -169,8 +178,8 @@ export function UserParserForm({
               {t(`${P}.presets.save`)}
             </Button>
           </div>
-        </Row>
-        <Row label={t(`${P}.mode.label`)} help={help(`mode.${form.mode}`)}>
+        </SettingRow>
+        <SettingRow label={t(`${P}.mode.label`)} help={help(`mode.${form.mode}`)}>
           <SegmentedControl
             variant="pill"
             value={form.mode}
@@ -180,9 +189,9 @@ export function UserParserForm({
               onChange({ ...form, mode });
             }}
           />
-        </Row>
+        </SettingRow>
 
-        <div className="mt-lg grid gap-xl sm:grid-cols-2 sm:gap-2xl">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:gap-6">
           <section className="min-w-0">
             <FieldLabel
               htmlFor={sourcesId}
@@ -200,9 +209,9 @@ export function UserParserForm({
             />
             <Button
               type="button"
-              size="xs"
+              size="sm"
               variant="secondary"
-              className="mt-sm"
+              className="mt-2"
               disabled={campaignChannels.length === 0}
               onClick={() => {
                 onChange({
@@ -215,7 +224,7 @@ export function UserParserForm({
             </Button>
           </section>
 
-          <div className="flex min-w-0 flex-col gap-xl">
+          <div className="flex min-w-0 flex-col gap-4">
             <AccountPicker
               accounts={accounts}
               selected={accountIds}
@@ -249,11 +258,11 @@ export function UserParserForm({
       </section>
 
       <section>
-        <Eyebrow title={t(`${P}.sections.filters`)} />
-        <div className="grid gap-xl border-t border-line pt-lg sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
-          <div className="min-w-0 sm:pr-2xl">
+        <SectionLabel title={t(`${P}.sections.filters`)} />
+        <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6">
+          <div className="min-w-0 sm:pr-6">
             {MODE_LIMITS[form.mode].map((limit, index) => (
-              <Row
+              <SettingRow
                 key={limit.key}
                 first={index === 0}
                 label={t(`${P}.limits.${limit.key}`)}
@@ -268,10 +277,10 @@ export function UserParserForm({
                     onChange({ ...form, limits: { ...form.limits, [limit.key]: next } });
                   }}
                 />
-              </Row>
+              </SettingRow>
             ))}
             {counted ? (
-              <Row label={t(`${P}.minMessages.${form.mode}`)} help={help('minMessages')}>
+              <SettingRow label={t(`${P}.minMessages.${form.mode}`)} help={help('minMessages')}>
                 <NumberInput
                   value={form.minMessages}
                   min={1}
@@ -281,9 +290,9 @@ export function UserParserForm({
                     onChange({ ...form, minMessages });
                   }}
                 />
-              </Row>
+              </SettingRow>
             ) : null}
-            <Row label={t(`${P}.minSources`)} help={help('minSources')}>
+            <SettingRow label={t(`${P}.minSources`)} help={help('minSources')}>
               <NumberInput
                 value={form.minSources}
                 min={1}
@@ -293,13 +302,13 @@ export function UserParserForm({
                   onChange({ ...form, minSources });
                 }}
               />
-            </Row>
+            </SettingRow>
             {SKIP_TOGGLES.map(toggle)}
             {form.mode === 'messages' ? MESSAGE_TOGGLES.map(toggle) : null}
           </div>
 
-          <div className="min-w-0 sm:pl-2xl">
-            <Row first label={t(`${P}.lastSeen.label`)} help={help('lastSeen')}>
+          <div className="min-w-0 sm:border-l sm:border-line sm:pl-6">
+            <SettingRow first label={t(`${P}.lastSeen.label`)} help={help('lastSeen')}>
               <div className="w-col">
                 <Select
                   value={form.lastSeen}
@@ -314,9 +323,9 @@ export function UserParserForm({
                   }}
                 />
               </div>
-            </Row>
+            </SettingRow>
             {PROFILE_TOGGLES.map(toggle)}
-            <Row label={t(`${P}.stopWords`)} htmlFor={stopId} help={help('stopWords')}>
+            <SettingRow label={t(`${P}.stopWords`)} htmlFor={stopId} help={help('stopWords')}>
               <div className="w-menu">
                 <Input
                   id={stopId}
@@ -328,17 +337,22 @@ export function UserParserForm({
                   }}
                 />
               </div>
-            </Row>
+            </SettingRow>
           </div>
         </div>
       </section>
 
       <section>
-        <Eyebrow title={t(`${P}.sections.exclude`)} />
-        <div className="grid gap-xl border-t border-line pt-lg sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
-          <div className="min-w-0 sm:pr-2xl">
+        <SectionLabel title={t(`${P}.sections.exclude`)} />
+        <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6">
+          <div className="min-w-0 sm:pr-6">
             {EXCLUDE_TOGGLES.map((key, index) => (
-              <Row key={key} first={index === 0} label={t(`${P}.toggles.${key}`)} help={help(key)}>
+              <SettingRow
+                key={key}
+                first={index === 0}
+                label={t(`${P}.toggles.${key}`)}
+                help={help(key)}
+              >
                 <Switch
                   checked={form.toggles[key]}
                   label={t(`${P}.toggles.${key}`)}
@@ -346,10 +360,10 @@ export function UserParserForm({
                     onChange({ ...form, toggles: { ...form.toggles, [key]: on } });
                   }}
                 />
-              </Row>
+              </SettingRow>
             ))}
           </div>
-          <section className="min-w-0 sm:pl-2xl">
+          <section className="min-w-0 sm:border-l sm:border-line sm:pl-6">
             <FieldLabel
               htmlFor={blacklistId}
               label={t(`${P}.blacklist`)}
@@ -368,10 +382,10 @@ export function UserParserForm({
       </section>
 
       <section>
-        <Eyebrow title={t(`${P}.sections.run`)} />
-        <div className="grid gap-xl border-t border-line pt-lg sm:grid-cols-2 sm:gap-2xl sm:divide-x sm:divide-line">
-          <div className="min-w-0 sm:pr-2xl">
-            <Row first label={t(`${P}.protect`)} help={help('protect')}>
+        <SectionLabel title={t(`${P}.sections.run`)} />
+        <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2 sm:gap-6">
+          <div className="min-w-0 sm:pr-6">
+            <SettingRow first label={t(`${P}.protect`)} help={help('protect')}>
               <Switch
                 checked={form.protect}
                 label={t(`${P}.protect`)}
@@ -379,8 +393,8 @@ export function UserParserForm({
                   onChange({ ...form, protect });
                 }}
               />
-            </Row>
-            <Row label={t(`${P}.fast`)} help={help('fast')}>
+            </SettingRow>
+            <SettingRow label={t(`${P}.fast`)} help={help('fast')}>
               <Switch
                 checked={form.fast}
                 label={t(`${P}.fast`)}
@@ -388,10 +402,10 @@ export function UserParserForm({
                   onChange({ ...form, fast });
                 }}
               />
-            </Row>
+            </SettingRow>
           </div>
-          <div className="min-w-0 sm:pl-2xl">
-            <Row first label={t(`${P}.chatDelay`)} help={help('chatDelay')}>
+          <div className="min-w-0 sm:border-l sm:border-line sm:pl-6">
+            <SettingRow first label={t(`${P}.chatDelay`)} help={help('chatDelay')}>
               <NumberInput
                 value={form.chatDelay}
                 min={1}
@@ -401,8 +415,8 @@ export function UserParserForm({
                   onChange({ ...form, chatDelay });
                 }}
               />
-            </Row>
-            <Row label={t(`${P}.requestDelay`)} help={help('requestDelay')}>
+            </SettingRow>
+            <SettingRow label={t(`${P}.requestDelay`)} help={help('requestDelay')}>
               <NumberInput
                 value={form.requestDelay}
                 min={0.5}
@@ -413,7 +427,7 @@ export function UserParserForm({
                   onChange({ ...form, requestDelay });
                 }}
               />
-            </Row>
+            </SettingRow>
           </div>
         </div>
       </section>

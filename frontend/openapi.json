@@ -13961,6 +13961,1583 @@
           }
         }
       }
+    },
+    "/api/v1/chat-broadcast/campaigns": {
+      "get": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "List Campaigns",
+        "operationId": "listChatBroadcastCampaigns",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastCampaigns"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Create Campaign",
+        "operationId": "createChatBroadcastCampaign",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastCampaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}": {
+      "delete": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign with its chats and history; refused while it runs.",
+        "operationId": "deleteChatBroadcastCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/settings": {
+      "get": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Get Settings",
+        "operationId": "getChatBroadcastSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Save Settings",
+        "description": "Save name, accounts and settings at once, only on the version the dialog read.",
+        "operationId": "saveChatBroadcastSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/pace": {
+      "put": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Save Pace",
+        "description": "Save the pauses only \u2014 accepted while the campaign runs; the run reads them live.\n\n409 ``campaign_changed`` when the campaign moved between the read and the write.",
+        "operationId": "saveChatBroadcastPace",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastPace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/board": {
+      "get": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Get Board",
+        "description": "The pipeline, the board by chat with its history, and the accounts.",
+        "operationId": "getChatBroadcastBoard",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/start": {
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Start Campaign",
+        "description": "Start the campaign, or continue a stopped one from where it was.\n\n409 covers every reason it cannot: already running, changed since it was read, no\nmessage, no chat, no account, or every account busy with another feature.",
+        "operationId": "startChatBroadcastCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/stop": {
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Stop Campaign",
+        "description": "Stop for real and answer with the board; stopping a stopped one is a no-op.",
+        "operationId": "stopChatBroadcastCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/campaigns/{campaign_id}/targets/action": {
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Act On Target",
+        "description": "Write now, hand to another account, skip, or keep one chat of the board.\n\n``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.\n409 ``target_state_changed`` when the chat moved on before the click landed, or\n``keep`` was asked of a chat not skipped for deletions.",
+        "operationId": "actOnChatBroadcastTarget",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastTargetAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/targets/resolve": {
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Resolve Targets",
+        "description": "Classify pasted links; a folder link is opened with the first account.",
+        "operationId": "resolveChatBroadcastTargets",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatBroadcastResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastResolved"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/own-chats": {
+      "get": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Own Chats",
+        "description": "The groups these accounts are in and may write to.",
+        "operationId": "listChatBroadcastOwnChats",
+        "parameters": [
+          {
+            "name": "account_ids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200,
+              "title": "Account Ids"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastOwnChats"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/media": {
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Upload Photo",
+        "description": "Store a photo for a text message; the text goes out as its caption.",
+        "operationId": "uploadChatBroadcastPhoto",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_uploadChatBroadcastPhoto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatBroadcastMediaRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/collections": {
+      "get": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "List Collections",
+        "operationId": "listChatCollections",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCollections"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Create Collection",
+        "description": "Save a named list of chats; 409 ``collection_name_taken`` for a name in use.",
+        "operationId": "createChatCollection",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCollectionWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat-broadcast/collections/{collection_id}": {
+      "put": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Save Collection",
+        "description": "Replace a list's name and chats at once.",
+        "operationId": "saveChatCollection",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCollectionWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "chat_broadcast"
+        ],
+        "summary": "Delete Collection",
+        "description": "Delete a list; campaigns that took chats from it keep them.",
+        "operationId": "deleteChatCollection",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -15500,6 +17077,20 @@
         ],
         "title": "Body_setAccountPhoto"
       },
+      "Body_uploadChatBroadcastPhoto": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_uploadChatBroadcastPhoto"
+      },
       "Body_uploadScheduledMedia": {
         "properties": {
           "file": {
@@ -15959,6 +17550,11 @@
             "type": "boolean",
             "title": "Reactions Enabled",
             "default": true
+          },
+          "pinned_to_profile": {
+            "type": "boolean",
+            "title": "Pinned To Profile",
+            "default": false
           }
         },
         "type": "object",
@@ -16009,6 +17605,11 @@
             "type": "boolean",
             "title": "Reactions Enabled",
             "default": true
+          },
+          "pinned_to_profile": {
+            "type": "boolean",
+            "title": "Pinned To Profile",
+            "default": false
           }
         },
         "type": "object",
@@ -16140,6 +17741,17 @@
               }
             ],
             "title": "Reactions Enabled"
+          },
+          "pinned_to_profile": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned To Profile"
           }
         },
         "type": "object",
@@ -16212,6 +17824,1304 @@
         ],
         "title": "ChannelView",
         "description": "One owned channel in the list view (id as int64-string, see module doc)."
+      },
+      "ChatBroadcastBoard": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/ChatBroadcastCampaign"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "joining",
+              "running",
+              "resting",
+              "stopping",
+              "stopped",
+              "done",
+              "failed",
+              "stalled"
+            ],
+            "title": "Phase"
+          },
+          "chain_length": {
+            "type": "integer",
+            "title": "Chain Length"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "resumed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resumed At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastBoardAccount"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "counters": {
+            "$ref": "#/components/schemas/ChatBroadcastCounters"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastBoardRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign",
+          "phase",
+          "chain_length",
+          "accounts",
+          "counters",
+          "rows"
+        ],
+        "title": "ChatBroadcastBoard"
+      },
+      "ChatBroadcastBoardAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "halted",
+              "busy"
+            ],
+            "title": "State"
+          },
+          "halted_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Halted Reason"
+          },
+          "busy_owner": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "warming",
+                  "neurocomment",
+                  "neuroshilling",
+                  "chat_broadcast",
+                  "discovery"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "state"
+        ],
+        "title": "ChatBroadcastBoardAccount"
+      },
+      "ChatBroadcastBoardRow": {
+        "properties": {
+          "chat_key": {
+            "type": "string",
+            "title": "Chat Key"
+          },
+          "raw": {
+            "type": "string",
+            "title": "Raw"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "public",
+              "invite",
+              "folder",
+              "own"
+            ],
+            "title": "Kind"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "handed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handed From"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "joining",
+              "captcha",
+              "pending_approval",
+              "waiting",
+              "writing",
+              "reconnecting",
+              "waiting_account",
+              "round_done",
+              "done",
+              "skipped"
+            ],
+            "title": "State"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "rejected",
+                  "not_approved",
+                  "admin_only",
+                  "deleted",
+                  "banned",
+                  "captcha",
+                  "manual",
+                  "error",
+                  "invalid_link",
+                  "unreachable",
+                  "already_written",
+                  "removed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "sent_total": {
+            "type": "integer",
+            "title": "Sent Total"
+          },
+          "planned_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Total"
+          },
+          "next_action_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action At"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "last_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Text"
+          },
+          "last_sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sent At"
+          },
+          "message_deleted": {
+            "type": "boolean",
+            "title": "Message Deleted",
+            "default": false
+          },
+          "ignore_deleted": {
+            "type": "boolean",
+            "title": "Ignore Deleted",
+            "default": false
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastHistoryEntry"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chat_key",
+          "raw",
+          "kind",
+          "state",
+          "round",
+          "sent_total",
+          "active",
+          "history"
+        ],
+        "title": "ChatBroadcastBoardRow"
+      },
+      "ChatBroadcastCampaign": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "running",
+              "stopping",
+              "stopped",
+              "done",
+              "failed",
+              "stalled"
+            ],
+            "title": "Status"
+          },
+          "target_mode": {
+            "type": "string",
+            "enum": [
+              "list",
+              "own"
+            ],
+            "title": "Target Mode"
+          },
+          "account_count": {
+            "type": "integer",
+            "title": "Account Count"
+          },
+          "target_count": {
+            "type": "integer",
+            "title": "Target Count"
+          },
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "rest_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rest Until"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "status",
+          "target_mode",
+          "account_count",
+          "target_count",
+          "round",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ChatBroadcastCampaign",
+        "description": "One campaign as the sidebar lists it."
+      },
+      "ChatBroadcastCampaigns": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastCampaign"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChatBroadcastCampaigns"
+      },
+      "ChatBroadcastCounters": {
+        "properties": {
+          "accounts": {
+            "type": "integer",
+            "title": "Accounts"
+          },
+          "accounts_working": {
+            "type": "integer",
+            "title": "Accounts Working"
+          },
+          "chats": {
+            "type": "integer",
+            "title": "Chats"
+          },
+          "joined": {
+            "type": "integer",
+            "title": "Joined"
+          },
+          "pending_approval": {
+            "type": "integer",
+            "title": "Pending Approval"
+          },
+          "waiting": {
+            "type": "integer",
+            "title": "Waiting"
+          },
+          "sent": {
+            "type": "integer",
+            "title": "Sent"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "handed": {
+            "type": "integer",
+            "title": "Handed"
+          },
+          "planned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned"
+          },
+          "rounds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rounds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "accounts_working",
+          "chats",
+          "joined",
+          "pending_approval",
+          "waiting",
+          "sent",
+          "skipped",
+          "handed"
+        ],
+        "title": "ChatBroadcastCounters"
+      },
+      "ChatBroadcastCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ChatBroadcastCreate"
+      },
+      "ChatBroadcastHistoryEntry": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "unconfirmed",
+              "failed",
+              "deleted",
+              "joined",
+              "already_member",
+              "requested",
+              "approved",
+              "captcha",
+              "handed",
+              "skipped",
+              "reconnecting"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "round",
+          "kind"
+        ],
+        "title": "ChatBroadcastHistoryEntry"
+      },
+      "ChatBroadcastMediaRead": {
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "title": "Media Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "media_id",
+          "name"
+        ],
+        "title": "ChatBroadcastMediaRead"
+      },
+      "ChatBroadcastMessage": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "post"
+            ],
+            "title": "Kind",
+            "default": "text"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4096,
+            "title": "Text",
+            "default": ""
+          },
+          "photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatBroadcastPhoto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "post": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Post",
+            "default": ""
+          },
+          "repeat": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Repeat",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ChatBroadcastMessage",
+        "description": "One message of the chain: text (optionally with a photo) or a forwarded post."
+      },
+      "ChatBroadcastOwnChats": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastOwnGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "channels_skipped": {
+            "type": "integer",
+            "title": "Channels Skipped"
+          },
+          "admin_only_skipped": {
+            "type": "integer",
+            "title": "Admin Only Skipped"
+          },
+          "unavailable_account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unavailable Account Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "groups",
+          "channels_skipped",
+          "admin_only_skipped",
+          "unavailable_account_ids"
+        ],
+        "title": "ChatBroadcastOwnChats"
+      },
+      "ChatBroadcastOwnGroup": {
+        "properties": {
+          "peer_id": {
+            "type": "string",
+            "title": "Peer Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Account Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "peer_id",
+          "title",
+          "account_ids"
+        ],
+        "title": "ChatBroadcastOwnGroup",
+        "description": "A group selected accounts are in; ``peer_id`` is a decimal string (int64)."
+      },
+      "ChatBroadcastPace": {
+        "properties": {
+          "between_messages": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "between_chats": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "rest_minutes": {
+            "$ref": "#/components/schemas/MinutesRange"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "between_messages",
+          "between_chats",
+          "rest_minutes"
+        ],
+        "title": "ChatBroadcastPace",
+        "description": "The pauses the board's gear edits \u2014 the only settings a running campaign takes.\n\nThe run reads them live: a new value applies from the next pause, and a rest already\nunder way is drawn again from the moment it began."
+      },
+      "ChatBroadcastPhoto": {
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}\\.(jpg|jpeg|png|webp)$",
+            "title": "Media Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "media_id",
+          "name"
+        ],
+        "title": "ChatBroadcastPhoto",
+        "description": "An uploaded photo attached to a text message; the text becomes its caption."
+      },
+      "ChatBroadcastResolveRequest": {
+        "properties": {
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Targets"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Account Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "targets"
+        ],
+        "title": "ChatBroadcastResolveRequest",
+        "description": "Classify pasted chat links; a folder link is opened with one of the accounts."
+      },
+      "ChatBroadcastResolved": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastResolvedTarget"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChatBroadcastResolved"
+      },
+      "ChatBroadcastResolvedTarget": {
+        "properties": {
+          "raw": {
+            "type": "string",
+            "title": "Raw"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "invite",
+                  "folder",
+                  "own"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "invalid_target",
+                  "folder_unavailable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "folder_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Title"
+          },
+          "folder_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "raw"
+        ],
+        "title": "ChatBroadcastResolvedTarget"
+      },
+      "ChatBroadcastSettings": {
+        "properties": {
+          "target_mode": {
+            "type": "string",
+            "enum": [
+              "list",
+              "own"
+            ],
+            "title": "Target Mode",
+            "default": "list"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Targets"
+          },
+          "own_excluded": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Own Excluded"
+          },
+          "first_message": {
+            "type": "string",
+            "enum": [
+              "template",
+              "ai"
+            ],
+            "title": "First Message",
+            "default": "template"
+          },
+          "ai_brief": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Ai Brief",
+            "default": ""
+          },
+          "randomize": {
+            "type": "boolean",
+            "title": "Randomize",
+            "default": true
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBroadcastMessage"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Messages"
+          },
+          "approval_wait_hours": {
+            "type": "integer",
+            "enum": [
+              1,
+              3,
+              6,
+              12,
+              24
+            ],
+            "title": "Approval Wait Hours",
+            "default": 24
+          },
+          "join_delay_minutes": {
+            "type": "integer",
+            "enum": [
+              0,
+              30,
+              60,
+              120
+            ],
+            "title": "Join Delay Minutes",
+            "default": 60
+          },
+          "between_chats": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "between_messages": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "typing": {
+            "type": "boolean",
+            "title": "Typing",
+            "default": true
+          },
+          "stop_mode": {
+            "type": "string",
+            "enum": [
+              "count",
+              "time"
+            ],
+            "title": "Stop Mode",
+            "default": "count"
+          },
+          "stop_messages": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Stop Messages",
+            "default": 100
+          },
+          "stop_hours": {
+            "type": "integer",
+            "maximum": 8760.0,
+            "minimum": 1.0,
+            "title": "Stop Hours",
+            "default": 6
+          },
+          "loop": {
+            "type": "boolean",
+            "title": "Loop",
+            "default": true
+          },
+          "rest_minutes": {
+            "$ref": "#/components/schemas/MinutesRange"
+          },
+          "rounds": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Rounds",
+            "default": 3
+          },
+          "skip_already_written": {
+            "type": "boolean",
+            "title": "Skip Already Written",
+            "default": false
+          },
+          "account_limit": {
+            "type": "boolean",
+            "title": "Account Limit",
+            "default": true
+          },
+          "per_hour": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Per Hour",
+            "default": 20
+          },
+          "per_day": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Per Day",
+            "default": 120
+          },
+          "skip_errors": {
+            "type": "boolean",
+            "title": "Skip Errors",
+            "default": true
+          },
+          "skip_deleted": {
+            "type": "boolean",
+            "title": "Skip Deleted",
+            "default": true
+          },
+          "max_consecutive_errors": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Max Consecutive Errors",
+            "default": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ChatBroadcastSettings",
+        "description": "Everything the settings dialog edits, persisted as one JSON document.\n\nDefaults are the ones agreed on the mockup; the accounts roster travels beside it\n(``ChatBroadcastSettingsUpdate.account_ids``) because it is a table, not a field."
+      },
+      "ChatBroadcastSettingsRead": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "running",
+              "stopping",
+              "stopped",
+              "done",
+              "failed",
+              "stalled"
+            ],
+            "title": "Status"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Account Ids"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ChatBroadcastSettings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "status",
+          "updated_at",
+          "account_ids",
+          "settings"
+        ],
+        "title": "ChatBroadcastSettingsRead",
+        "description": "What the settings dialog opens with; ``updated_at`` is the lock token."
+      },
+      "ChatBroadcastSettingsUpdate": {
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Account Ids"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ChatBroadcastSettings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_updated_at",
+          "name",
+          "settings"
+        ],
+        "title": "ChatBroadcastSettingsUpdate",
+        "description": "Whole-dialog save: name, roster and settings in one write."
+      },
+      "ChatBroadcastTargetAction": {
+        "properties": {
+          "chat_key": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Chat Key"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "now",
+              "hand",
+              "skip",
+              "keep"
+            ],
+            "title": "Action"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chat_key",
+          "action"
+        ],
+        "title": "ChatBroadcastTargetAction",
+        "description": "A manual action on one chat of the board."
+      },
+      "ChatBroadcastVersionRequest": {
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_updated_at"
+        ],
+        "title": "ChatBroadcastVersionRequest",
+        "description": "The campaign version the operator actually viewed (optimistic lock)."
+      },
+      "ChatCollection": {
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "title": "Collection Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Targets"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "collection_id",
+          "name",
+          "targets",
+          "updated_at"
+        ],
+        "title": "ChatCollection"
+      },
+      "ChatCollectionWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Targets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ChatCollectionWrite",
+        "description": "Create, or replace whole: the name and every link at once."
+      },
+      "ChatCollections": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCollection"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChatCollections"
       },
       "ChatDialog": {
         "properties": {
@@ -17996,6 +20906,29 @@
         ],
         "title": "LoginRequest"
       },
+      "MinutesRange": {
+        "properties": {
+          "min": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Min"
+          },
+          "max": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Max"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "MinutesRange"
+      },
       "MusicRemoveRequest": {
         "properties": {
           "file_id": {
@@ -18618,7 +21551,8 @@
                 "enum": [
                   "warming",
                   "neuroshilling",
-                  "neurocomment"
+                  "neurocomment",
+                  "chat_broadcast"
                 ]
               },
               {
@@ -20906,6 +23840,29 @@
           "run_at"
         ],
         "title": "ScheduledPostReschedule"
+      },
+      "SecondsRange": {
+        "properties": {
+          "min": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Min"
+          },
+          "max": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Max"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "SecondsRange"
       },
       "SetAccountChannelRequest": {
         "properties": {

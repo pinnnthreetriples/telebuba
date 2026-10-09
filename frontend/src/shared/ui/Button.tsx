@@ -26,12 +26,11 @@ import { Spinner, type SpinnerTone } from './Spinner';
 // надписи. Чем кнопка залита — её собственное решение; какого она размера — общее.
 //
 // `lg` — цель касания; `md` — подвал диалога и действие уровня страницы; `sm` — действие
-// внутри карточки, где `md` задал бы высоту шапки; `xs` — то, что стоит в строке таблицы
-// рядом со значением. Ширину формы задаёт отдельный `fullWidth`.
+// внутри карточки, где `md` задал бы высоту шапки, и в строке таблицы рядом со
+// значением. Ширину формы задаёт отдельный `fullWidth`.
 //
-// Промежуточной ступени между `sm` и `xs` нет, хотя семь кнопок её просили, и пятой для
-// шести кнопок пагинации тоже нет: и те и другие стоят внутри карточки, а это предложение,
-// на которое уже отвечает `sm`. Ступеней ровно столько, сколько высот, а высот четыре.
+// Ступени `xs` (28px) больше нет: 28 кнопок в строках таблиц и карточек встали на `sm`.
+// Ступеней ровно столько, сколько высот, а высот три.
 //
 // ── Ступень НЕ решает форму ────────────────────────────────────────────────────────
 //
@@ -44,11 +43,10 @@ import { Spinner, type SpinnerTone } from './Spinner';
 // Форма теперь одна и живёт в `buttonBase`. Ступень отвечает за высоту и поля; ширина
 // задаётся отдельно. `fullWidth` переводит кнопку во flex: `w-full` на inline-flex
 // оставляет под ней интерлиньяж строки.
-const SIZE: Record<'lg' | 'md' | 'sm' | 'xs', { size: ControlSize; weight: string }> = {
-  lg: { size: 'lg', weight: 'font-semibold' },
-  md: { size: 'md', weight: 'font-semibold' },
-  sm: { size: 'sm', weight: 'font-semibold' },
-  xs: { size: 'xs', weight: 'font-medium' },
+const SIZE: Record<'lg' | 'md' | 'sm', { size: ControlSize; weight: string }> = {
+  lg: { size: 'lg', weight: 'font-medium' },
+  md: { size: 'md', weight: 'font-medium' },
+  sm: { size: 'sm', weight: 'font-medium' },
 };
 
 // `primary` is the one committing action on a screen and `secondary` everything
@@ -86,13 +84,13 @@ const SIZE: Record<'lg' | 'md' | 'sm' | 'xs', { size: ControlSize; weight: strin
 // места вызова просили именно этого. Без строки наведение унаследовалось бы от
 // перекрытой заливки.
 const VARIANT = {
-  primary: 'bg-action-primary text-on-action hover:bg-action-pressed',
-  neutral: 'bg-content-primary text-on-neutral hover:bg-content-primary',
+  primary: 'bg-action-primary text-on-fill hover:bg-action-pressed',
+  neutral: 'bg-content-primary text-on-fill hover:bg-content-primary',
   secondary: 'border border-line bg-surface-card text-content-primary hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
   ghost: 'text-content-muted hover:bg-canvas hover:text-content-primary',
   dashed:
-    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
+    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-info-tint',
   dashedMuted:
     'border border-dashed border-line-strong bg-surface-card text-content-muted hover:border-action-primary hover:text-action-primary',
 } as const;
@@ -149,7 +147,7 @@ export function Button({
         // и все тринадцать рукописных обёрток вокруг кольца ставили `gap-sm` (8px). Это
         // решение, а не подгонка под прежнюю картинку, и оно живёт только на время
         // ожидания — обычный зазор кнопки не меняется.
-        loading && 'gap-sm',
+        loading && 'gap-2',
         SIZE[size].weight,
         fullWidth && 'flex w-full',
         VARIANT[variant],

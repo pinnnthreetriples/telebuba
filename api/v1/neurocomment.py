@@ -13,6 +13,7 @@ from api.v1._neurocomment_discovery import discovery_router
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
+    LISTENER_BUSY_CHAT_BROADCAST_CODE,
     LISTENER_BUSY_NEUROSHILLING_CODE,
     LISTENER_BUSY_WARMING_CODE,
     AssignAccountRequest,
@@ -297,6 +298,11 @@ def _listener_conflicts_translated() -> Iterator[None]:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail=LISTENER_BUSY_NEUROSHILLING_CODE,
+        ) from exc
+    except nc_service.ListenerBusyChatBroadcastError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=LISTENER_BUSY_CHAT_BROADCAST_CODE,
         ) from exc
 
 

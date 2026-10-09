@@ -20,14 +20,17 @@ import {
   Badge,
   Button,
   Card,
+  CardHeader,
   ChipAddButton,
   CollapsibleCard,
   ConfirmModal,
+  EmptyState,
   FeedbackMark,
+  HowItWorksCard,
   Icon,
   IconButton,
   InlineChipEditor,
-  NumberedStep,
+  StatGrid,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -63,15 +66,6 @@ function reasonKey(reason: string): string {
   return reason.startsWith('session ')
     ? 'warming.notReady.session'
     : (READINESS_REASON_KEY[reason] ?? '');
-}
-
-function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
-  return (
-    <div className="text-right">
-      <div className={`type-stat ${cls}`}>{value}</div>
-      <div className="type-caption">{label}</div>
-    </div>
-  );
 }
 
 export function WarmingPage() {
@@ -229,22 +223,17 @@ export function WarmingPage() {
 
   return (
     <div className="tb-fadeup">
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 type-page-title">{t('warming.titleFull')}</h1>
-        <div className="flex w-full flex-wrap items-center justify-between gap-md sm:w-auto sm:flex-nowrap sm:gap-lg">
-          <div className="flex gap-md sm:gap-lg">
-            <Counter
-              value={warming.length}
-              label={t('warming.counter.warming')}
-              cls="text-action-primary"
-            />
-            <Counter
-              value={idle.length}
-              label={t('warming.counter.ready')}
-              cls="text-content-primary"
-            />
-            <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
-          </div>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 type-h1">{t('warming.titleFull')}</h1>
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:gap-4">
+          <StatGrid
+            className="w-full sm:w-auto"
+            stats={[
+              { value: warming.length, label: t('warming.counter.warming'), tone: 'primary' },
+              { value: idle.length, label: t('warming.counter.ready') },
+              { value: errors, label: t('warming.counter.errors'), tone: 'danger' },
+            ]}
+          />
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
@@ -258,7 +247,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className="gap-sm"
+            className="gap-2"
           >
             {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
@@ -273,18 +262,17 @@ export function WarmingPage() {
           clientWidth 1024, a scroll the viewport-wide sticky header can't follow. The
           feed that proved it has since moved to the left column; the floor stays,
           because the board's own log prints the same kind of line. */}
-      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-lg">
-          <Card className="p-lg">
-            <div className="mb-md flex items-center justify-between">
-              <span className="type-card-title">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-surface-card px-sm py-hair type-caption">
-                {idle.length}
-              </span>
-            </div>
-            <div className="flex flex-col gap-sm">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Card className="p-4">
+            <CardHeader
+              className="mb-3"
+              title={t('warming.ready.title')}
+              badge={<Badge>{idle.length}</Badge>}
+            />
+            <div className="flex flex-col gap-2">
               {idle.length === 0 ? (
-                <div className="py-page text-center type-prose">{t('warming.ready.empty')}</div>
+                <EmptyState>{t('warming.ready.empty')}</EmptyState>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;
@@ -313,36 +301,36 @@ export function WarmingPage() {
                   return (
                     <div
                       key={account.account_id}
-                      className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-md py-md"
+                      className="flex items-center gap-3 rounded-md border border-line bg-surface-card px-3 py-3"
                     >
                       <AccountAvatar
                         account={account}
                         className="size-icon shrink-0 rounded-full"
-                        fallbackClassName="text-body font-semibold bg-info-tint text-info-strong"
+                        fallbackClassName="text-body font-medium bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-tight">
-                          <span className="truncate type-card-title">{name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="truncate type-h3">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-px flex items-center gap-tight">
-                            <span className="truncate type-caption">{account.phone}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="truncate type-small">{account.phone}</span>
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-hair flex items-center gap-sm">
+                        <div className="mt-1 flex items-center gap-2">
                           <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
-                          <span className={`text-tiny font-semibold ${tTone}`}>{trust ?? '—'}</span>
+                          <span className={`text-small font-medium ${tTone}`}>{trust ?? '—'}</span>
                           {ptype ? (
                             <>
-                              <span className="type-caption">·</span>
+                              <span className="type-small">·</span>
                               {pc ? (
                                 <span
                                   className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
                                 />
                               ) : null}
-                              <span className="type-caption">{proxyTypeLabel(ptype)}</span>
+                              <span className="type-small">{proxyTypeLabel(ptype)}</span>
                             </>
                           ) : null}
                         </div>
@@ -376,16 +364,16 @@ export function WarmingPage() {
           <DialogueFeed />
 
           <CollapsibleCard
-            wrapperClassName="rounded-lg border border-line bg-surface-card"
-            header={<span className="type-card-title">{t('warming.channels.title')}</span>}
+            wrapperClassName="rounded-md border border-line bg-surface-card"
+            title={t('warming.channels.title')}
             label={t('warming.channels.title')}
           >
-            <div className="mb-md type-caption">{t('warming.channels.hint')}</div>
-            <div className="flex flex-wrap gap-sm">
+            <div className="mb-3 type-small">{t('warming.channels.hint')}</div>
+            <div className="flex flex-wrap gap-2">
               {channels.map((channel) => (
                 <Badge
                   size="md"
-                  className="gap-sm border border-line text-content-secondary"
+                  className="gap-2 border border-line text-content-secondary"
                   key={channel.channel}
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
@@ -432,22 +420,15 @@ export function WarmingPage() {
             key={warmed.length > 0 ? 'warmed-has' : 'warmed-none'}
             defaultOpen={warmed.length > 0}
             label={t('warming.warmed.title')}
-            header={
-              <>
-                <span className="flex size-icon items-center justify-center rounded-lg bg-success-tint">
-                  {/* `deep`, а не базовый: базовый зелёный на своём тоне мерит 2.97:1, а
-                      1.4.11 просит 3:1 у графики, которая несёт смысл. `success-deep` даёт
-                      5.85:1. Гейт видит это сам — см. `contrast.test.ts`. */}
-                  <Icon name="check" size={16} className="stroke-success-deep" />
-                </span>
-                <span className="type-card-title">{t('warming.warmed.title')}</span>
-                <Badge tone="success" className="font-bold">
-                  {warmed.length}
-                </Badge>
-              </>
-            }
+            // Плитка `success` красит галочку `success-deep`, а не базовым зелёным: базовый
+            // на своём тоне мерит 2.97:1, а 1.4.11 просит 3:1 у графики, которая несёт
+            // смысл. `success-deep` даёт 5.85:1 — см. `contrast.test.ts`.
+            icon={<Icon name="check" size={16} />}
+            tone="success"
+            title={t('warming.warmed.title')}
+            badge={<Badge tone="success">{warmed.length}</Badge>}
           >
-            <div className="flex flex-col gap-md">
+            <div className="flex flex-col gap-3">
               {warmed.map((acc) => {
                 // Telegram name on top; the phone (with its country flag) drops
                 // to a subtitle — same pattern as the ready card. When there is
@@ -461,31 +442,31 @@ export function WarmingPage() {
                   />
                 ) : null;
                 return (
-                  <div key={acc.account_id} className="rounded-lg border border-line p-lg">
-                    <div className="flex items-start gap-md">
+                  <div key={acc.account_id} className="rounded-md border border-line p-4">
+                    <div className="flex items-start gap-3">
                       <AccountAvatar
                         account={acc}
                         className="size-tile shrink-0 rounded-full ring-2 ring-success"
-                        fallbackClassName="text-tiny font-bold bg-info-tint text-info-strong"
+                        fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-tight">
-                          <span className="truncate type-card-title leading-stack">{name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="truncate type-h3">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-px flex items-center gap-tight">
-                            <span className="truncate type-caption">{acc.phone}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="truncate type-small">{acc.phone}</span>
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-tight flex items-center gap-sm">
+                        <div className="mt-2 flex items-center gap-2">
                           {acc.proxy_country ? (
                             <span
                               className={`fi fi-${acc.proxy_country.toLowerCase()} h-flag w-flag rounded-[2px]`}
                             />
                           ) : null}
-                          <span className="type-caption">
+                          <span className="type-small">
                             {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
                           </span>
                         </div>
@@ -493,37 +474,37 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-3 py-1 text-small font-medium text-success-deep">
                         <Icon name="check" size={10} className="stroke-success-deep" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
-                    <div className="mt-lg flex items-center rounded-lg bg-surface px-lg py-md">
+                    <div className="mt-4 flex items-center rounded-md bg-surface px-4 py-3">
                       <div className="flex-1">
-                        <div className="type-caption">{t('warming.warmed.days')}</div>
-                        <div className="text-body font-bold">
+                        <div className="type-small">{t('warming.warmed.days')}</div>
+                        <div className="text-body font-medium">
                           {t('warming.warmed.daysValue', {
                             days: acc.warming_days,
                             target: acc.target_days,
                           })}
                         </div>
                       </div>
-                      <span className="h-compact w-px bg-line" />
-                      <div className="flex-1 pl-lg">
-                        <div className="type-caption">{t('warming.warmed.trust')}</div>
-                        <div className="text-body font-bold text-success-deep">
+                      <span className="h-compact border-l border-line" />
+                      <div className="flex-1 pl-4">
+                        <div className="type-small">{t('warming.warmed.trust')}</div>
+                        <div className="text-body font-medium text-success-deep">
                           {acc.trust_score ?? '—'}
                         </div>
                       </div>
                     </div>
-                    <div className="mt-lg flex items-center gap-md">
+                    <div className="mt-4 flex items-center gap-3">
                       <Button
                         variant="neutral"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex-1 shrink gap-sm"
+                        className="flex-1 shrink gap-2"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
@@ -558,23 +539,15 @@ export function WarmingPage() {
             </div>
           </CollapsibleCard>
 
-          <CollapsibleCard
-            label={t('warming.howto.title')}
-            wrapperClassName="rounded-card border border-line bg-canvas"
-            header={<span className="type-card-title">{t('warming.howto.title')}</span>}
-          >
-            <div className="mb-lg type-caption">{t('warming.howto.hint')}</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
-              {[0, 1, 2, 3, 4, 5].map((index) => (
-                <NumberedStep key={index} number={index + 1}>
-                  {t(`warming.howto.steps.${String(index)}`)}
-                </NumberedStep>
-              ))}
-            </div>
-          </CollapsibleCard>
+          <HowItWorksCard
+            title={t('warming.howto.title')}
+            hint={t('warming.howto.hint')}
+            columns={2}
+            steps={[0, 1, 2, 3, 4, 5].map((index) => t(`warming.howto.steps.${String(index)}`))}
+          />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-lg">
+        <div className="flex min-w-0 flex-col gap-4">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {

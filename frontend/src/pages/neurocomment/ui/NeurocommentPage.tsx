@@ -34,17 +34,16 @@ import { ChannelDiscoveryButton, UserParserButton } from '@/features/channel-dis
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { ConfirmModal, toastError } from '@/shared/ui';
+import { ConfirmModal, HowItWorksCard, type Stat, toastError } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
 import { CommentHistoryModal } from './CommentHistoryModal';
 import { CampaignsCard } from './CampaignsCard';
 import { CaptchaSolverCard } from './CaptchaSolverCard';
-import { HowItWorksCard } from './HowItWorksCard';
 import { IdleBanner } from './IdleBanner';
 import { ListenerCard } from './ListenerCard';
-import { PipelineCard } from './PipelineCard';
+import { RuntimePipeline } from './RuntimePipeline';
 import { isWarmingConflict } from './listenerConflict';
 
 // SSE drives live runtime/board updates (onboarding now emits a transient bus
@@ -76,6 +75,7 @@ const NEURO_QUERY_IDS = new Set([
   'listLogs',
 ]);
 
+const HOW_STEPS = [0, 1, 2, 3] as const;
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -313,26 +313,26 @@ export function NeurocommentPage() {
   // account is not "idle neurocomment work".
   const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
-  const stats: { label: string; value: number; color: string }[] = [
+  const stats: Stat[] = [
     {
       label: t('neurocomment.stat.campaigns'),
       value: campaignList.length,
-      color: 'text-content-primary',
+      tone: 'default',
     },
     {
       label: t('neurocomment.stat.channels'),
       value: runtime.data?.active_channels ?? boardChannels.length,
-      color: 'text-action-primary',
+      tone: 'primary',
     },
     {
       label: t('neurocomment.stat.accounts'),
       value: boardAccounts.length,
-      color: 'text-content-primary',
+      tone: 'default',
     },
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
-      color: 'text-success-deep',
+      tone: 'success',
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
@@ -350,10 +350,10 @@ export function NeurocommentPage() {
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
-      color: 'text-danger',
+      tone: 'danger',
     },
     // The design's red "ошибок" odometer (#E5372A): today's error-level events.
-    { label: t('neurocomment.stat.errors'), value: errorCount, color: 'text-danger' },
+    { label: t('neurocomment.stat.errors'), value: errorCount, tone: 'danger' },
   ];
 
   const activeCampaignCount = campaignList.filter((c) => c.status === 'active').length;
@@ -504,7 +504,7 @@ export function NeurocommentPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl type-page-title">{t('neurocomment.title')}</h1>
+      <h1 className="m-0 mb-6 type-h1">{t('neurocomment.title')}</h1>
 
       {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
           one-column grid sprout an implicit second column and sit both children side
@@ -515,10 +515,10 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-2 lg:row-start-1">
-          <PipelineCard
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1">
+          <RuntimePipeline
             running={running}
             canStart={canStartListener}
             stats={stats}
@@ -543,7 +543,7 @@ export function NeurocommentPage() {
 
           <ActivityLogCard
             logLines={logLines}
-            accountName={accountLabel}
+            accountOf={(id) => accountOptions.find((a) => a.account_id === id)}
             onClear={() => {
               setConfirmClearLogs(true);
             }}
@@ -551,7 +551,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="flex min-w-0 flex-col gap-lg lg:col-start-1 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}
@@ -587,7 +587,7 @@ export function NeurocommentPage() {
             onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-sm type-caption font-medium text-danger-deep">
+            <p className="mt-2 type-small-medium text-danger-deep">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}
@@ -656,7 +656,10 @@ export function NeurocommentPage() {
             }
           />
 
-          <HowItWorksCard />
+          <HowItWorksCard
+            title={t('neurocomment.howto.title')}
+            steps={HOW_STEPS.map((index) => t(`neurocomment.howto.steps.${String(index)}`))}
+          />
         </div>
       </div>
 

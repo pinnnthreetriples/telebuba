@@ -96,7 +96,7 @@ test.describe('экраны приложения', () => {
       const card = [...document.querySelectorAll<HTMLElement>('[role="listitem"]')].find((item) =>
         item.textContent?.includes('@user_0'),
       );
-      const title = card?.querySelector<HTMLElement>('.type-card-title');
+      const title = card?.querySelector<HTMLElement>('.type-h3');
       const action = card?.querySelector<HTMLElement>(
         'button[aria-label="Открыть в Telegram Web"]',
       );

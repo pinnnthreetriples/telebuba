@@ -10,13 +10,14 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK, verdictFill } from '@/shared/design-system';
+import { verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
 import {
   Card,
   DataTable,
   Icon,
   IconButton,
+  ProgressBar,
   Spinner,
   StatusIcon,
   type DataTableColumnMeta,
@@ -55,7 +56,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
     <AccountAvatar
       account={account}
       className="size-tile shrink-0 rounded-full"
-      fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
+      fallbackClassName={`text-body font-medium ${AVATAR_CLASS[ds]}`}
     />
   );
 }
@@ -122,11 +123,11 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return (
-          <div className="flex items-center gap-md">
+          <div className="flex items-center gap-3">
             <RowAvatar account={account} />
             <div>
-              <div className="type-card-title">{accountDisplayName(account)}</div>
-              <div className="type-caption">{account.username ? `@${account.username}` : '—'}</div>
+              <div className="type-h3">{accountDisplayName(account)}</div>
+              <div className="type-small">{account.username ? `@${account.username}` : '—'}</div>
             </div>
           </div>
         );
@@ -145,7 +146,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return account.proxy_id ? (
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <span
               className={`size-dot shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
@@ -154,10 +155,10 @@ export function AccountsTable({
                 className={`fi fi-${account.proxy_country_code.toLowerCase()} h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
-            <span className="type-value">{proxyMeta(account)}</span>
+            <span className="type-body">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         );
       },
     },
@@ -165,7 +166,9 @@ export function AccountsTable({
       id: 'device',
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
-      cell: ({ row }) => <span className="type-prose">{deviceLabel(row.original)}</span>,
+      cell: ({ row }) => (
+        <span className="type-body text-content-subtle">{deviceLabel(row.original)}</span>
+      ),
     },
     {
       id: 'trust',
@@ -174,21 +177,16 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         ) : (
-          <div className="flex items-center gap-sm">
-            <div
+          <div className="flex items-center gap-2">
+            <ProgressBar
+              tone="current"
+              value={trust}
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
-              className={`${BAR_TRACK} w-[46px]`}
-            >
-              <div
-                className={`${BAR_FILL} bg-current ${trustTone(trust)}`}
-                style={{ width: `${String(trust)}%` }}
-              />
-            </div>
-            <span className={`min-w-badge text-body font-semibold ${trustTone(trust)}`}>
-              {trust}
-            </span>
+              className={`w-[46px] ${trustTone(trust)}`}
+            />
+            <span className={`min-w-badge text-body font-medium ${trustTone(trust)}`}>{trust}</span>
           </div>
         );
       },
@@ -209,7 +207,7 @@ export function AccountsTable({
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         return (
-          <div className="flex items-center justify-end gap-sm">
+          <div className="flex items-center justify-end gap-2">
             <IconButton
               size="touch"
               shape="circle"

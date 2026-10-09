@@ -38,21 +38,21 @@ export function SelectableCard({
       actions={actions}
       surface={
         <div
-          className={`relative rounded-lg border p-lg ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+          className={`relative rounded-md border p-4 ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
         >
           <button
             type="button"
             aria-pressed={selected}
             aria-label={name}
             onClick={onSelect}
-            className={cn('absolute inset-0 cursor-pointer rounded-lg', FOCUS_RING)}
+            className={cn('absolute inset-0 cursor-pointer rounded-md', FOCUS_RING)}
           />
-          <div className="pointer-events-none flex justify-between gap-md">
+          <div className="pointer-events-none flex justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="mb-tight truncate type-card-title">{name}</div>
-              <div className="truncate type-caption">{meta}</div>
+              <div className="mb-2 truncate type-h3">{name}</div>
+              <div className="truncate type-small">{meta}</div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-sm">
+            <div className="flex shrink-0 flex-col items-end gap-2">
               {status}
               <span className="pointer-events-auto relative">
                 <IconButton

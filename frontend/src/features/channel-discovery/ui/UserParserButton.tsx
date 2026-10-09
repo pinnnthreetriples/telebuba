@@ -7,7 +7,7 @@ import { UserParserModal } from './UserParserModal';
 
 // Третья кнопка той же группы, что «Найти каналы» и «Проверить каналы», и того же вида.
 const COMPACT =
-  'text-tiny text-content-muted hover:border-action-primary hover:text-action-primary';
+  'text-small text-content-muted hover:border-action-primary hover:text-action-primary';
 
 type Props = {
   campaignId: string | null;
@@ -22,7 +22,7 @@ export function UserParserButton({ campaignId, campaignName, campaignChannels }:
   return (
     <>
       <Button
-        size="xs"
+        size="sm"
         disabled={campaignId === null}
         onClick={() => {
           setOpen(true);

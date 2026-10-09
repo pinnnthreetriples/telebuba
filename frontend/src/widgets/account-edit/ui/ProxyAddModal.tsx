@@ -6,7 +6,7 @@ import { createProxyMutation, proxyPoolQueryOptions } from '@/entities/proxy';
 import { Button, CloseButton, Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
-import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
+import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 
 // The design's add-proxy modal: the shared proxy form + Add/Cancel. Add creates
 // a real pool proxy (POST /proxies) and refreshes the pool.
@@ -42,20 +42,27 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal onClose={onClose} size="form" label={t('accounts.proxyAdd.title')}>
-      <div className="p-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.proxyAdd.title')}</span>
-          <CloseButton onClick={onClose} aria-label={t('accounts.proxyAdd.close')} />
+    <Modal
+      onClose={onClose}
+      dirty={isProxyFormTouched(value)}
+      size="form"
+      label={t('accounts.proxyAdd.title')}
+    >
+      {(close) => (
+        <div className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="type-h2">{t('accounts.proxyAdd.title')}</span>
+            <CloseButton onClick={close} aria-label={t('accounts.proxyAdd.close')} />
+          </div>
+          <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={close}>{t('accounts.proxyAdd.cancel')}</Button>
+            <Button variant="primary" onClick={onAdd} disabled={!canAdd}>
+              {t('accounts.proxyAdd.add')}
+            </Button>
+          </div>
         </div>
-        <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
-        <div className="mt-xl flex justify-end gap-sm">
-          <Button onClick={onClose}>{t('accounts.proxyAdd.cancel')}</Button>
-          <Button variant="primary" onClick={onAdd} disabled={!canAdd}>
-            {t('accounts.proxyAdd.add')}
-          </Button>
-        </div>
-      </div>
+      )}
     </Modal>
   );
 }

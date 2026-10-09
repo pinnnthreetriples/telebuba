@@ -1,0 +1,373 @@
+/* Сгенерировано scripts/tailwind-theme.mjs из src/shared/design-system/tokens —
+   руками не править: `npm run ds:doc` пересобирает, `npm run ds:doc:check` падает на
+   расхождении. Решения — в docs/design-system.md, «Tailwind 4». */
+
+@theme inline {
+  /* Ни одного умолчания Tailwind: закрытый набор — только то, что ниже. */
+  --*: initial;
+
+  /* Брейкпоинты */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+
+  /* Краски */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-black: #000000;
+  --color-canvas: #f1efed;
+  --color-surface: #faf9f7;
+  --color-surface-card: #ffffff;
+  --color-scrim: rgb(11 11 12 / 0.55);
+  --color-veil: rgb(11 11 12 / 0.40);
+  --color-content-primary: #0b0b0c;
+  --color-content-secondary: #3a3a3a;
+  --color-content-muted: #63615d;
+  --color-content-subtle: #6e6b66;
+  --color-content-placeholder: #9ca3af;
+  --color-on-fill: #ffffff;
+  --color-on-action-track: #5ba3ff;
+  --color-line: #e6e5e3;
+  --color-line-strong: #d8d6d2;
+  --color-action-primary: #0066ff;
+  --color-action-pressed: #0057db;
+  --color-info-strong: #0052cc;
+  --color-info-tint: #eef4ff;
+  --color-info-line: #cbd7ec;
+  --color-info-hairline: #e4ecfa;
+  --color-success: #12a150;
+  --color-success-deep: #0b6b37;
+  --color-success-press: #0a5c2f;
+  --color-success-tint: #ddf7e9;
+  --color-success-line: #b8ecce;
+  --color-warning: #9a7b22;
+  --color-warning-deep: #7a5e12;
+  --color-warning-press: #c47d12;
+  --color-warning-tint: #fff0d2;
+  --color-warning-line: #efd79a;
+  --color-danger: #c0473f;
+  --color-danger-deep: #a83a33;
+  --color-danger-tint: #fbecec;
+  --color-danger-line: #f0c9c5;
+  --color-term: #16161a;
+  --color-term-thumb: #2b2b2e;
+  --color-term-dim: #80808c;
+  --color-term-text: #c9c9d3;
+  --color-term-link: #6ea8fe;
+  --color-term-error: #e5736b;
+  --color-term-success: #7be0a6;
+  --color-term-warning: #ffd27f;
+
+  /* Каналы — не краски: только для `rgb(--theme(--channel-*) / α)` в кейфреймах */
+  --channel-action: 0 102 255;
+  --channel-glow: 91 163 255;
+  --channel-ink: 11 11 12;
+  --channel-black: 0 0 0;
+
+  /* Шрифты */
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --default-font-family: Inter, system-ui, sans-serif;
+  --default-mono-font-family: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Ступени текста: размер вместе со своим интерлиньяжем и трекингом */
+  --text-small: 12px;
+  --text-small--line-height: 16px;
+  --text-small--letter-spacing: 0em;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-body--letter-spacing: -0.006em;
+  --text-h3: 16px;
+  --text-h3--line-height: 24px;
+  --text-h3--letter-spacing: -0.011em;
+  --text-h2: 20px;
+  --text-h2--line-height: 28px;
+  --text-h2--letter-spacing: -0.017em;
+  --text-h1: 24px;
+  --text-h1--line-height: 32px;
+  --text-h1--letter-spacing: -0.019em;
+
+  /* Веса, интерлиньяж глифа, трекинг кода */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --leading-none: 1;
+  --tracking-code: 0.18em;
+
+  /* Радиусы, тени, слои */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  --shadow-none: none;
+  --shadow-pop: 0 10px 30px rgb(11 11 12 / 0.12);
+  --shadow-ring: 0 0 0 1px rgb(11 11 12 / 0.07);
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-focus: 0 0 0 3px rgb(0 102 255 / 0.12);
+  --shadow-seg: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-pill: 0 1px 2px rgb(0 102 255 / 0.3);
+  --z-index-0: 0;
+  --z-index-raised: 1;
+  --z-index-sticky: 10;
+  --z-index-pop: 20;
+  --z-index-dialog: 30;
+  --z-index-toast: 40;
+
+  /* Движение */
+  --transition-duration-state: 150ms;
+  --transition-duration-enter: 250ms;
+  --transition-duration-swap: 340ms;
+  --transition-duration-reveal: 420ms;
+  --transition-duration-spin: 800ms;
+  --transition-duration-roll: 900ms;
+  --transition-duration-pulse: 1200ms;
+  --transition-duration-stagger: 90ms;
+  --default-transition-duration: 150ms;
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-spring: cubic-bezier(.34,1.45,.6,1);
+  --ease-linear: linear;
+  --ease-breathe: cubic-bezier(.4,0,.6,1);
+  --default-transition-timing-function: cubic-bezier(.16,1,.3,1);
+  --scale-rest: 1;
+  --scale-press: 0.96;
+
+  /* Ритм — в каждом пространстве, которое он питал в Tailwind 3, и ни в одном другом */
+  --padding-0: 0px;
+  --padding-1: 4px;
+  --padding-2: 8px;
+  --padding-3: 12px;
+  --padding-4: 16px;
+  --padding-6: 24px;
+  --padding-8: 32px;
+  --padding-16: 64px;
+  --margin-0: 0px;
+  --margin-1: 4px;
+  --margin-2: 8px;
+  --margin-3: 12px;
+  --margin-4: 16px;
+  --margin-6: 24px;
+  --margin-8: 32px;
+  --margin-16: 64px;
+  --gap-0: 0px;
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-6: 24px;
+  --gap-8: 32px;
+  --gap-16: 64px;
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-16: 64px;
+  --inset-0: 0px;
+  --inset-1: 4px;
+  --inset-2: 8px;
+  --inset-3: 12px;
+  --inset-4: 16px;
+  --inset-6: 24px;
+  --inset-8: 32px;
+  --inset-16: 64px;
+  --translate-0: 0px;
+  --translate-1: 4px;
+  --translate-2: 8px;
+  --translate-3: 12px;
+  --translate-4: 16px;
+  --translate-6: 24px;
+  --translate-8: 32px;
+  --translate-16: 64px;
+  --scroll-margin-0: 0px;
+  --scroll-margin-1: 4px;
+  --scroll-margin-2: 8px;
+  --scroll-margin-3: 12px;
+  --scroll-margin-4: 16px;
+  --scroll-margin-6: 24px;
+  --scroll-margin-8: 32px;
+  --scroll-margin-16: 64px;
+  --scroll-padding-0: 0px;
+  --scroll-padding-1: 4px;
+  --scroll-padding-2: 8px;
+  --scroll-padding-3: 12px;
+  --scroll-padding-4: 16px;
+  --scroll-padding-6: 24px;
+  --scroll-padding-8: 32px;
+  --scroll-padding-16: 64px;
+  --text-indent-0: 0px;
+  --text-indent-1: 4px;
+  --text-indent-2: 8px;
+  --text-indent-3: 12px;
+  --text-indent-4: 16px;
+  --text-indent-6: 24px;
+  --text-indent-8: 32px;
+  --text-indent-16: 64px;
+  --flex-basis-0: 0px;
+  --flex-basis-1: 4px;
+  --flex-basis-2: 8px;
+  --flex-basis-3: 12px;
+  --flex-basis-4: 16px;
+  --flex-basis-6: 24px;
+  --flex-basis-8: 32px;
+  --flex-basis-16: 64px;
+  --border-spacing-0: 0px;
+  --border-spacing-1: 4px;
+  --border-spacing-2: 8px;
+  --border-spacing-3: 12px;
+  --border-spacing-4: 16px;
+  --border-spacing-6: 24px;
+  --border-spacing-8: 32px;
+  --border-spacing-16: 64px;
+  --rhythm-0: 0px;
+  --rhythm-1: 4px;
+  --rhythm-2: 8px;
+  --rhythm-3: 12px;
+  --rhythm-4: 16px;
+  --rhythm-6: 24px;
+  --rhythm-8: 32px;
+  --rhythm-16: 64px;
+
+  /* Размеры — свои шкалы, не ритм */
+  --size-tick: 4px;
+  --size-dot: 7px;
+  --size-node: 9px;
+  --size-spinner: 14px;
+  --size-glyph: 18px;
+  --size-chip: 22px;
+  --size-icon: 28px;
+  --size-tile: 34px;
+  --size-thumbnail: 38px;
+  --size-touch: 44px;
+  --size-face: 52px;
+  --height-full: 100%;
+  --height-rail: 2px;
+  --height-meter: 6px;
+  --height-flag: 13px;
+  --height-badge: 18px;
+  --height-tile: 34px;
+  --height-bar: 22px;
+  --height-compact: 28px;
+  --height-field: 32px;
+  --height-control: 36px;
+  --height-touch: 44px;
+  --height-header: 56px;
+  --height-profileDialog: min(76dvh, 44rem);
+  --width-0: 0px;
+  --width-auto: auto;
+  --width-max: max-content;
+  --width-full: 100%;
+  --width-flag: 18px;
+  --width-action: 46px;
+  --width-number: 72px;
+  --width-readout: 74px;
+  --width-stamp: 120px;
+  --width-col: 150px;
+  --width-menu: 190px;
+  --width-tip: 230px;
+  --width-sidebar: 328px;
+  --width-confirm: 420px;
+  --width-form: 480px;
+  --width-panel: 560px;
+  --width-table: 926px;
+  --min-width-0: 0px;
+  --min-width-badge: 18px;
+  --min-width-col: 150px;
+  --min-width-table: 880px;
+  --max-width-full: 100%;
+  --max-width-name: 240px;
+  --max-width-page: 1000px;
+  --max-width-shell: 1340px;
+  --min-height-touch: 44px;
+  --min-height-screen: 100vh;
+  --max-height-feed: 220px;
+  --max-height-feedInline: 120px;
+  --max-height-dialog: 88dvh;
+}
+
+@layer components {
+  .type-h1 {
+    font-size: --theme(--text-h1);
+    line-height: --theme(--text-h1--line-height);
+    letter-spacing: --theme(--text-h1--letter-spacing);
+    font-weight: --theme(--font-weight-medium);
+    color: --theme(--color-content-primary);
+  }
+  .type-h2 {
+    font-size: --theme(--text-h2);
+    line-height: --theme(--text-h2--line-height);
+    letter-spacing: --theme(--text-h2--letter-spacing);
+    font-weight: --theme(--font-weight-medium);
+    color: --theme(--color-content-primary);
+  }
+  .type-h3 {
+    font-size: --theme(--text-h3);
+    line-height: --theme(--text-h3--line-height);
+    letter-spacing: --theme(--text-h3--letter-spacing);
+    font-weight: --theme(--font-weight-medium);
+    color: --theme(--color-content-primary);
+  }
+  .type-body {
+    font-size: --theme(--text-body);
+    line-height: --theme(--text-body--line-height);
+    letter-spacing: --theme(--text-body--letter-spacing);
+    font-weight: --theme(--font-weight-normal);
+    color: --theme(--color-content-secondary);
+  }
+  .type-body-medium {
+    font-size: --theme(--text-body);
+    line-height: --theme(--text-body--line-height);
+    letter-spacing: --theme(--text-body--letter-spacing);
+    font-weight: --theme(--font-weight-medium);
+    color: --theme(--color-content-primary);
+  }
+  .type-small {
+    font-size: --theme(--text-small);
+    line-height: --theme(--text-small--line-height);
+    letter-spacing: --theme(--text-small--letter-spacing);
+    font-weight: --theme(--font-weight-normal);
+    color: --theme(--color-content-subtle);
+  }
+  .type-small-medium {
+    font-size: --theme(--text-small);
+    line-height: --theme(--text-small--line-height);
+    letter-spacing: --theme(--text-small--letter-spacing);
+    font-weight: --theme(--font-weight-medium);
+    color: --theme(--color-content-subtle);
+  }
+}
+
+@layer utilities {
+  :where(.space-y-0 > *) { margin-block-end: 0; }
+  .space-y-0 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-0); margin-bottom: 0; }
+  :where(.space-x-0 > *) { margin-inline-end: 0; }
+  .space-x-0 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-0); margin-right: 0; }
+  :where(.space-y-1 > *) { margin-block-end: 0; }
+  .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-1); margin-bottom: 0; }
+  :where(.space-x-1 > *) { margin-inline-end: 0; }
+  .space-x-1 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-1); margin-right: 0; }
+  :where(.space-y-2 > *) { margin-block-end: 0; }
+  .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-2); margin-bottom: 0; }
+  :where(.space-x-2 > *) { margin-inline-end: 0; }
+  .space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-2); margin-right: 0; }
+  :where(.space-y-3 > *) { margin-block-end: 0; }
+  .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-3); margin-bottom: 0; }
+  :where(.space-x-3 > *) { margin-inline-end: 0; }
+  .space-x-3 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-3); margin-right: 0; }
+  :where(.space-y-4 > *) { margin-block-end: 0; }
+  .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-4); margin-bottom: 0; }
+  :where(.space-x-4 > *) { margin-inline-end: 0; }
+  .space-x-4 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-4); margin-right: 0; }
+  :where(.space-y-6 > *) { margin-block-end: 0; }
+  .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-6); margin-bottom: 0; }
+  :where(.space-x-6 > *) { margin-inline-end: 0; }
+  .space-x-6 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-6); margin-right: 0; }
+  :where(.space-y-8 > *) { margin-block-end: 0; }
+  .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-8); margin-bottom: 0; }
+  :where(.space-x-8 > *) { margin-inline-end: 0; }
+  .space-x-8 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-8); margin-right: 0; }
+  :where(.space-y-16 > *) { margin-block-end: 0; }
+  .space-y-16 > :not([hidden]) ~ :not([hidden]) { margin-top: --theme(--space-16); margin-bottom: 0; }
+  :where(.space-x-16 > *) { margin-inline-end: 0; }
+  .space-x-16 > :not([hidden]) ~ :not([hidden]) { margin-left: --theme(--space-16); margin-right: 0; }
+}

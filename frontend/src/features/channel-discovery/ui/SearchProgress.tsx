@@ -2,8 +2,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryStream, DiscoveryWork } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
-import { Badge } from '@/shared/ui';
+import { Badge, ProgressBar } from '@/shared/ui';
 import { cn } from '@/shared/lib/cn';
 
 import { allOut, dotTone, formatEta, stateLabelKey, streamsOut } from '../model/progress';
@@ -17,9 +16,9 @@ function StreamChip({ stream, t }: { stream: DiscoveryStream; t: TFunction }) {
   const label = t(stateLabelKey(stream.state));
   const title = stream.error == null ? label : `${label} · ${stream.error}`;
   return (
-    <span className="inline-flex items-center gap-xs" title={title}>
+    <span className="inline-flex items-center gap-1" title={title}>
       <span className={cn('size-dot shrink-0 rounded-full', dotTone(stream.state))} />
-      <span className="type-caption">{stream.name}</span>
+      <span className="type-small">{stream.name}</span>
       {stream.premium === true ? (
         <Badge size="xs" tone="info">
           {t(`${P}.premium`)}
@@ -49,7 +48,6 @@ export function SearchProgress({ work, phase }: Props) {
   // rather than let the bar overshoot or hand the progressbar a valuenow above its
   // own valuemax.
   const clampedDone = indeterminate ? 0 : Math.min(done, planned);
-  const percent = indeterminate ? 0 : (clampedDone / planned) * 100;
 
   const stageKey = phase === 'searching' ? `${P}.stageSearching` : `${P}.stageQualifying`;
   const stageLabel = t(stageKey);
@@ -62,40 +60,32 @@ export function SearchProgress({ work, phase }: Props) {
   const out = streamsOut(streams);
 
   return (
-    <div className="flex flex-col gap-sm">
-      <div className="flex items-center justify-between gap-sm">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
         {/* role=status on the STAGE only, not the whole line: the count/ETA change on
             every ~2s poll tick, and a live region around them would have a screen
             reader re-announce the strip every tick for the run's whole duration. The
             stage label changes twice per run (searching → qualifying), which is worth
             announcing. */}
-        <span role="status" aria-live="polite" className="type-label">
+        <span role="status" aria-live="polite" className="type-body-medium text-content-secondary">
           {stageLabel}
         </span>
-        <span className="type-caption tabular-nums">{headerRight}</span>
+        <span className="type-small tabular-nums">{headerRight}</span>
       </div>
-      <div
-        role="progressbar"
-        aria-label={stageLabel}
-        aria-valuemin={0}
-        aria-valuemax={planned}
-        aria-valuenow={indeterminate ? undefined : clampedDone}
-        className={cn(BAR_TRACK, 'w-full', indeterminate && 'tb-pulse')}
-      >
-        {indeterminate ? null : (
-          <div
-            className={`${BAR_FILL} bg-action-primary transition-[width] duration-reveal`}
-            style={{ width: `${String(percent)}%` }}
-          />
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-md">
+      <ProgressBar
+        label={stageLabel}
+        value={clampedDone}
+        max={planned}
+        indeterminate={indeterminate}
+        className="w-full"
+      />
+      <div className="flex flex-wrap items-center gap-3">
         {streams.map((stream) => (
           <StreamChip key={stream.account_id} stream={stream} t={t} />
         ))}
       </div>
       {out.length > 0 ? (
-        <p className="type-caption text-warning-deep">
+        <p className="type-small text-warning-deep">
           {allOut(streams)
             ? t(`${P}.allOut`)
             : t(`${P}.someOut`, {

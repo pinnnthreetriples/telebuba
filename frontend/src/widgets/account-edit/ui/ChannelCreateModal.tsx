@@ -28,8 +28,8 @@ const CHECK_DEBOUNCE_MS = 500;
 
 // The ONLY create refusals that can arrive with the channel already made and no
 // id to hand off, read off `_create_channel` (core/telegram_client/_channels.py):
-// FloodWaitError/PeerFloodError are re-raised bare from the post-create username
-// assignment and surface as the ActionStatus itself, and `channel_create_failed`
+// FloodWaitError/PeerFloodError are re-raised bare from the post-create steps
+// (username, reactions, profile pin) and surface as the ActionStatus itself, and `channel_create_failed`
 // means CreateChannelRequest returned but its chat id was unreadable. Retrying
 // either would make a SECOND real channel — there is no idempotency key (no
 // random_id, nothing keys on the title) and the username pre-check still reports
@@ -54,7 +54,13 @@ export function ChannelCreateModal({
   const create = useMutation(createAccountChannelMutation());
   const [title, setTitle] = useState('');
   const [about, setAbout] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
+  // Phrased as the operator asked for it ("make the channel private"): the
+  // unchecked default is a public channel with a username.
+  const [isPrivate, setIsPrivate] = useState(false);
+  const isPublic = !isPrivate;
+  // Telegram pins only a public channel to the profile, so a private one keeps
+  // the box disabled (and cleared — see the private toggle).
+  const [pinToProfile, setPinToProfile] = useState(false);
   // Phrased as the operator asked for it ("disable reactions"), so the default —
   // Telegram's own, reactions on — is the unchecked box.
   const [reactionsOff, setReactionsOff] = useState(false);
@@ -89,7 +95,7 @@ export function ChannelCreateModal({
   // that dialog gets one attempt only.
   const [blocked, setBlocked] = useState(false);
   // Set when a refusal carried the created channel's id: the create SUCCEEDED
-  // and only the public-username step failed, so the channel exists as private.
+  // and only a post-create step (username, reactions, profile pin) failed.
   const [createdId, setCreatedId] = useState<string | null>(null);
   // The up-front gate `_channelsShared.ts` says the probe exists to provide: a
   // DEFINITE "taken" verdict for exactly the handle that is typed now. Nothing
@@ -130,6 +136,7 @@ export function ChannelCreateModal({
           about: about.trim(),
           username: isPublic ? username : null,
           reactions_enabled: !reactionsOff,
+          pinned_to_profile: isPublic && pinToProfile,
         },
       },
       {
@@ -144,15 +151,15 @@ export function ChannelCreateModal({
           void invalidateList();
           const channelId = errorChannelId(err);
           // An id in the envelope's fields means the create itself SUCCEEDED and
-          // one of the post-create steps failed — the public-username assignment
-          // or turning reactions off. Create must not re-arm (a second click
+          // one of the post-create steps failed — the public-username assignment,
+          // turning reactions off, or the profile pin. Create must not re-arm (a second click
           // makes a second real channel), but the hand-off is NOT automatic:
           // unmounting here would take the reason with it, and for the username
           // the editor cannot even fix it — EditChannel carries no username and
           // UpdateUsernameRequest exists nowhere outside _create_channel, so an
           // operator dropped straight into it reads "private" with no idea why.
-          // (Reactions ARE fixable there, hence the button below offers the
-          // editor rather than doing nothing.) The reason stays on screen.
+          // (Reactions and the pin ARE fixable there, hence the button below
+          // offers the editor rather than doing nothing.) The reason stays on screen.
           if (channelId !== null) {
             setCreatedId(channelId);
             return;
@@ -194,119 +201,146 @@ export function ChannelCreateModal({
         ? 'text-danger'
         : 'text-content-subtle';
 
+  // A channel described but not created. After a create (or the one attempt a
+  // POST_CREATE_CODES refusal allows) the input has been spent and nothing is lost.
+  const dirty =
+    !done &&
+    !blocked &&
+    createdId === null &&
+    (title.trim() !== '' ||
+      about.trim() !== '' ||
+      username.trim() !== '' ||
+      isPrivate ||
+      pinToProfile ||
+      reactionsOff);
+
   return (
-    // Escape / backdrop-click route through Modal's onClose — locked while the
-    // create is in flight (unmounting mid-flight drops the onSuccess and loses
-    // both the list refresh and the editor hand-off).
+    // Every exit is locked while the create is in flight (unmounting mid-flight
+    // drops the onSuccess and loses both the list refresh and the editor hand-off).
     <Modal
-      onClose={busy ? () => undefined : onClose}
+      onClose={onClose}
+      dirty={dirty}
+      locked={busy}
       size="form"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
-        <div className="mb-lg flex items-center justify-between">
-          <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
-          <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
-        </div>
+      {(close) => (
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-6 py-6">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="type-h2">{t('accounts.channel.createTitle')}</span>
+            <CloseButton onClick={close} disabled={busy} aria-label={t('accounts.channel.close')} />
+          </div>
 
-        <label className="mb-lg block">
-          <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
-          <Input
-            value={title}
-            maxLength={CHANNEL_TITLE_MAX}
-            onChange={(event) => {
-              setTitle(event.target.value);
-            }}
-          />
-          {title !== '' && title.trim() === '' && (
-            <span className="mt-xs block type-caption text-danger-deep">
-              {t('accounts.channel.errTitle')}
-            </span>
-          )}
-        </label>
-
-        <label className="mb-lg block">
-          <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
-          <Textarea
-            className="[font-family:inherit]"
-            value={about}
-            maxLength={CHANNEL_ABOUT_MAX}
-            onChange={(event) => {
-              setAbout(event.target.value);
-            }}
-          />
-        </label>
-
-        <CheckRow
-          label={t('accounts.channel.publicToggle')}
-          on={isPublic}
-          onToggle={() => {
-            setIsPublic((value) => !value);
-          }}
-        />
-
-        <CheckRow
-          label={t('accounts.channel.reactionsToggle')}
-          on={reactionsOff}
-          onToggle={() => {
-            setReactionsOff((value) => !value);
-          }}
-        />
-
-        {isPublic && (
-          <label className="mb-lg block">
-            <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
-            <div className="relative flex items-center">
-              <span className="absolute left-lg text-body text-content-subtle">@</span>
-              <Input
-                className="pl-page"
-                value={username}
-                onChange={(event) => {
-                  setUsername(event.target.value);
-                }}
-              />
-            </div>
-            {usernameHint && (
-              <span className={`mt-xs block text-tiny ${hintColor}`}>{usernameHint.text}</span>
+          <label className="mb-4 block">
+            <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
+            <Input
+              value={title}
+              maxLength={CHANNEL_TITLE_MAX}
+              onChange={(event) => {
+                setTitle(event.target.value);
+              }}
+            />
+            {title !== '' && title.trim() === '' && (
+              <span className="mt-1 block type-small text-danger-deep">
+                {t('accounts.channel.errTitle')}
+              </span>
             )}
           </label>
-        )}
 
-        {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
+          <label className="mb-4 block">
+            <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
+            <Textarea
+              className="[font-family:inherit]"
+              value={about}
+              maxLength={CHANNEL_ABOUT_MAX}
+              onChange={(event) => {
+                setAbout(event.target.value);
+              }}
+            />
+          </label>
+
+          <CheckRow
+            label={t('accounts.channel.privateToggle')}
+            on={isPrivate}
+            onToggle={() => {
+              setIsPrivate((value) => !value);
+              setPinToProfile(false);
+            }}
+          />
+
+          <CheckRow
+            label={t('accounts.channel.pinToggle')}
+            on={pinToProfile}
+            disabled={isPrivate}
+            hint={isPrivate ? t('accounts.channel.pinNeedsPublic') : undefined}
+            onToggle={() => {
+              setPinToProfile((value) => !value);
+            }}
+          />
+
+          <CheckRow
+            label={t('accounts.channel.reactionsToggle')}
+            on={reactionsOff}
+            onToggle={() => {
+              setReactionsOff((value) => !value);
+            }}
+          />
+
+          {isPublic && (
+            <label className="mb-4 block">
+              <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
+              <div className="relative flex items-center">
+                <span className="absolute left-4 text-body text-content-subtle">@</span>
+                <Input
+                  className="pl-8"
+                  value={username}
+                  onChange={(event) => {
+                    setUsername(event.target.value);
+                  }}
+                />
+              </div>
+              {usernameHint && (
+                <span className={`mt-1 block text-small ${hintColor}`}>{usernameHint.text}</span>
+              )}
+            </label>
+          )}
+
+          {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
             `mt-xl`, соседние вертикальные отступы в блочном потоке СЛИПАЮТСЯ, и
             расстояние было max(16, 20) = 20px и до правки. Отступ ничего не ставил. */}
-        {create.isError && (
-          <Notice tone="danger">
-            {channelErrorText(create.error, t, t('accounts.channel.error'))}
-          </Notice>
-        )}
+          {create.isError && (
+            <Notice tone="danger">
+              {channelErrorText(create.error, t, t('accounts.channel.error'))}
+            </Notice>
+          )}
 
-        <div className="mt-xl flex justify-end gap-sm">
-          <Button onClick={onClose} disabled={busy}>
-            {t('accounts.channel.cancel')}
-          </Button>
-          {/* Once the channel exists (id-bearing refusal) the primary action is
+          <div className="mt-6 flex justify-end gap-2">
+            <Button onClick={close} disabled={busy}>
+              {t('accounts.channel.cancel')}
+            </Button>
+            {/* Once the channel exists (id-bearing refusal) the primary action is
               the hand-off into its editor, not another create. */}
-          <Button
-            variant="primary"
-            onClick={
-              createdId === null
-                ? submit
-                : () => {
-                    onCreated(createdId);
-                  }
-            }
-            disabled={createdId === null && !canSubmit}
-            loading={createdId === null && busy}
-          >
-            {createdId !== null
-              ? t('accounts.channel.edit')
-              : busy
-                ? t('accounts.channel.creating')
-                : t('accounts.channel.createBtn')}
-          </Button>
+            <Button
+              variant="primary"
+              onClick={
+                createdId === null
+                  ? submit
+                  : () => {
+                      onCreated(createdId);
+                    }
+              }
+              disabled={createdId === null && !canSubmit}
+              loading={createdId === null && busy}
+            >
+              {createdId !== null
+                ? t('accounts.channel.edit')
+                : busy
+                  ? t('accounts.channel.creating')
+                  : t('accounts.channel.createBtn')}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </Modal>
   );
 }
