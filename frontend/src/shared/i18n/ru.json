@@ -3496,14 +3496,13 @@
     "presetName": "{{mode}} · {{n}}",
     "form": {
       "sections": {
-        "query": "Запрос",
-        "filters": "Фильтры",
-        "exclude": "Исключения",
-        "run": "Режим работы"
+        "exclude": "Исключить",
+        "scope": "Что смотреть",
+        "quality": "Кто попадёт в базу",
+        "speed": "Скорость и защита"
       },
       "presets": {
-        "label": "Заготовка",
-        "placeholder": "Выбрать",
+        "label": "Заготовки",
         "empty": "Пока нет",
         "save": "Сохранить"
       },
@@ -3521,12 +3520,7 @@
       "sourcesCount_one": "распознан {{count}}",
       "sourcesCount_few": "распознано {{count}}",
       "sourcesCount_many": "распознано {{count}}",
-      "sourcesPlaceholder": {
-        "members": "@group\nhttps://t.me/group",
-        "messages": "@chat\nhttps://t.me/chat/123",
-        "comments": "@channel\nhttps://t.me/channel"
-      },
-      "fromCampaign": "Каналы кампании ({{count}})",
+      "fromCampaign": "+ Каналы кампании ({{count}})",
       "keywords": "Ключевые слова",
       "optional": "необязательно",
       "keywordsPlaceholder": "купить, цена, доставка",
@@ -3551,27 +3545,52 @@
         "month": "За месяц"
       },
       "stopWords": "Стоп-слова в имени",
-      "stopWordsPlaceholder": "shop, bot, реклама",
+      "stopWordsPlaceholder": "shop, bot",
       "blacklist": "Чёрный список",
-      "blacklistPlaceholder": "@username\n5100000000",
+      "blacklistPlaceholder": "@username, 5100000000",
       "toggles": {
-        "skipBots": "Пропускать ботов",
-        "skipDeleted": "Пропускать удалённых",
-        "skipScam": "Пропускать scam / fake",
+        "skipBots": "Ботов",
+        "skipDeleted": "Удалённых",
+        "skipScam": "Scam / fake",
         "includeReplies": "Учитывать ответы",
         "includeForwards": "Учитывать пересланные",
         "withUsername": "Только с username",
         "withPhoto": "Только с фото",
         "premiumOnly": "Только Premium",
         "withStories": "Только с историями",
-        "excludeOwn": "Без наших аккаунтов",
-        "excludeAdmins": "Без админов источника",
-        "excludeCollected": "Без собранных ранее"
+        "excludeOwn": "Наши аккаунты",
+        "excludeAdmins": "Админов источника",
+        "excludeCollected": "Собранных ранее"
       },
       "protect": "Защита аккаунтов",
       "fast": "Быстрый режим",
       "chatDelay": "Пауза между чатами, сек",
-      "requestDelay": "Пауза между запросами, сек"
+      "requestDelay": "Пауза между запросами, сек",
+      "addSource": {
+        "members": "+ Группа",
+        "messages": "+ Чат",
+        "comments": "+ Канал"
+      },
+      "sourcePlaceholder": {
+        "members": "t.me/группа или @группа",
+        "messages": "t.me/чат или @чат",
+        "comments": "t.me/канал или @канал"
+      },
+      "addConfirm": "Добавить",
+      "addCancel": "Отмена",
+      "removeSource": "Убрать {{source}}",
+      "accounts": {
+        "title": "Аккаунты",
+        "selected_one": "{{count}} выбран",
+        "selected_few": "{{count}} выбрано",
+        "selected_many": "{{count}} выбрано",
+        "add": "Добавить аккаунты",
+        "remove": "Убрать {{name}}"
+      },
+      "speedSummary": {
+        "on": "Защита вкл. · пауза {{chat}} с",
+        "off": "Защита выкл. · пауза {{chat}} с"
+      }
     },
     "help": {
       "presets": {
@@ -3593,8 +3612,8 @@
         }
       },
       "sources": {
-        "text": "Откуда собирать. Одна ссылка — одна строка.",
-        "ex": "@chat или t.me/chat. Только одна тема форума: t.me/chat/123"
+        "text": "Откуда собирать. Нажмите «+» и вставьте ссылку — можно несколько сразу.",
+        "ex": "@chat или t.me/chat. Одна тема форума: t.me/chat/123"
       },
       "keywords": {
         "text": "Возьмём только тех, кто писал эти слова.",
@@ -3697,6 +3716,10 @@
       "requestDelay": {
         "text": "Пауза между запросами к Telegram. Больше — безопаснее.",
         "ex": "1 → запрос раз в секунду"
+      },
+      "accounts": {
+        "text": "Кто будет собирать. Нажмите «+», чтобы выбрать.",
+        "ex": "4 аккаунта → источники делятся между ними, работа идёт быстрее"
       }
     },
     "log": {

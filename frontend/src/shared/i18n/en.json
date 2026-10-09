@@ -3437,14 +3437,13 @@
     "presetName": "{{mode}} · {{n}}",
     "form": {
       "sections": {
-        "query": "Query",
-        "filters": "Filters",
-        "exclude": "Exclusions",
-        "run": "Run mode"
+        "exclude": "Exclude",
+        "scope": "What to read",
+        "quality": "Who gets in",
+        "speed": "Speed and protection"
       },
       "presets": {
-        "label": "Preset",
-        "placeholder": "Choose",
+        "label": "Presets",
         "empty": "None yet",
         "save": "Save"
       },
@@ -3461,12 +3460,7 @@
       },
       "sourcesCount_one": "{{count}} recognised",
       "sourcesCount_other": "{{count}} recognised",
-      "sourcesPlaceholder": {
-        "members": "@group\nhttps://t.me/group",
-        "messages": "@chat\nhttps://t.me/chat/123",
-        "comments": "@channel\nhttps://t.me/channel"
-      },
-      "fromCampaign": "Campaign channels ({{count}})",
+      "fromCampaign": "+ Campaign channels ({{count}})",
       "keywords": "Keywords",
       "optional": "optional",
       "keywordsPlaceholder": "buy, price, delivery",
@@ -3491,27 +3485,51 @@
         "month": "Within a month"
       },
       "stopWords": "Stop words in name",
-      "stopWordsPlaceholder": "shop, bot, promo",
+      "stopWordsPlaceholder": "shop, bot",
       "blacklist": "Blacklist",
-      "blacklistPlaceholder": "@username\n5100000000",
+      "blacklistPlaceholder": "@username, 5100000000",
       "toggles": {
-        "skipBots": "Skip bots",
-        "skipDeleted": "Skip deleted",
-        "skipScam": "Skip scam / fake",
+        "skipBots": "Bots",
+        "skipDeleted": "Deleted",
+        "skipScam": "Scam / fake",
         "includeReplies": "Count replies",
         "includeForwards": "Count forwarded",
         "withUsername": "With username only",
         "withPhoto": "With photo only",
         "premiumOnly": "Premium only",
         "withStories": "With stories only",
-        "excludeOwn": "Without our accounts",
-        "excludeAdmins": "Without source admins",
-        "excludeCollected": "Without previously collected"
+        "excludeOwn": "Our accounts",
+        "excludeAdmins": "Source admins",
+        "excludeCollected": "Previously collected"
       },
       "protect": "Account protection",
       "fast": "Fast mode",
       "chatDelay": "Pause between chats, s",
-      "requestDelay": "Pause between requests, s"
+      "requestDelay": "Pause between requests, s",
+      "addSource": {
+        "members": "+ Group",
+        "messages": "+ Chat",
+        "comments": "+ Channel"
+      },
+      "sourcePlaceholder": {
+        "members": "t.me/group or @group",
+        "messages": "t.me/chat or @chat",
+        "comments": "t.me/channel or @channel"
+      },
+      "addConfirm": "Add",
+      "addCancel": "Cancel",
+      "removeSource": "Remove {{source}}",
+      "accounts": {
+        "title": "Accounts",
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "add": "Add accounts",
+        "remove": "Remove {{name}}"
+      },
+      "speedSummary": {
+        "on": "Protection on · {{chat}} s pause",
+        "off": "Protection off · {{chat}} s pause"
+      }
     },
     "help": {
       "presets": {
@@ -3533,8 +3551,8 @@
         }
       },
       "sources": {
-        "text": "Where to collect from. One link per line.",
-        "ex": "@chat or t.me/chat. One forum topic only: t.me/chat/123"
+        "text": "Where to collect from. Press “+” and paste a link — several at once work too.",
+        "ex": "@chat or t.me/chat. One forum topic: t.me/chat/123"
       },
       "keywords": {
         "text": "Only people who wrote these words.",
@@ -3637,6 +3655,10 @@
       "requestDelay": {
         "text": "Pause between requests to Telegram. Longer is safer.",
         "ex": "1 → one request per second"
+      },
+      "accounts": {
+        "text": "Who does the collecting. Press “+” to choose.",
+        "ex": "4 accounts → sources are split between them, so it's faster"
       }
     },
     "log": {

@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { allAccountsQueryOptions } from '@/entities/account';
 import { discoveryAccountsQueryOptions } from '@/entities/campaign';
-import { Button, Icon, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
+import { Button, HelpHint, Icon, Modal, ModalFooter, ModalHeader, Select } from '@/shared/ui';
 
 import { effectiveAccountIds } from '../model/filters';
 import {
@@ -58,7 +59,9 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
 
   const accounts = useQuery(discoveryAccountsQueryOptions());
   const accountList = accounts.data?.items ?? [];
-  const accountIds = effectiveAccountIds(form.accountIds, accountList);
+  // Пока оператор не трогал выбор — свободные аккаунты, Premium первыми (как в автопоиске).
+  const accountIds = form.accountIds ?? effectiveAccountIds(null, accountList);
+  const fleet = useQuery(allAccountsQueryOptions());
   const sources = parseSources(form.sources);
   const canRun = accountIds.length > 0 && sources.length > 0;
 
@@ -159,23 +162,9 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
           <UserParserForm
             form={form}
             formId={formId}
-            accounts={accountList}
-            accountsLoading={accounts.isPending}
-            accountsErrored={accounts.isError}
+            fleet={fleet.data?.items ?? []}
             accountIds={accountIds}
             campaignChannels={campaignChannels}
-            presets={presets.map((preset) => preset.name)}
-            onApplyPreset={(name) => {
-              const preset = presets.find((p) => p.name === name);
-              if (preset !== undefined) setForm(preset.form);
-            }}
-            onSavePreset={() => {
-              const name = t('userParser.presetName', {
-                mode: t(`userParser.form.mode.${form.mode}`),
-                n: presets.length + 1,
-              });
-              setPresets([...presets, { name, form }]);
-            }}
             onChange={setForm}
             onSubmit={run}
           />
@@ -241,6 +230,38 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
           </>
         ) : (
           <>
+            {/* Заготовки — в подвале слева: это не настройка парсинга, а действие над ней. */}
+            <div className="mr-auto flex items-center gap-2">
+              <div className="w-menu">
+                <Select
+                  value=""
+                  placeholder={t('userParser.form.presets.label')}
+                  emptyLabel={t('userParser.form.presets.empty')}
+                  ariaLabel={t('userParser.form.presets.label')}
+                  options={presets.map((preset) => ({ value: preset.name, label: preset.name }))}
+                  onChange={(name) => {
+                    const preset = presets.find((p) => p.name === name);
+                    if (preset !== undefined) setForm(preset.form);
+                  }}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const name = t('userParser.presetName', {
+                    mode: t(`userParser.form.mode.${form.mode}`),
+                    n: presets.length + 1,
+                  });
+                  setPresets([...presets, { name, form }]);
+                }}
+              >
+                {t('userParser.form.presets.save')}
+              </Button>
+              <HelpHint
+                text={t('userParser.help.presets.text')}
+                example={t('userParser.help.presets.ex')}
+              />
+            </div>
             <Button
               variant="ghost"
               size="sm"
