@@ -30,6 +30,8 @@ const ROUTES: [RegExp, unknown][] = [
   [/\/health$/, fx.health],
   [/\/accounts\/bulk-messages\/(active|latest)$/, null],
   [/\/accounts\/stats$/, fx.accountStats],
+  [/\/accounts\/filter-options$/, fx.accountFilterOptions],
+  [/\/account-folders$/, fx.accountFolders],
   [/\/accounts(\?|$)/, fx.accounts],
   [/\/proxies(\?|$)/, fx.proxies],
   [/\/warming\/board/, fx.warmingBoard],

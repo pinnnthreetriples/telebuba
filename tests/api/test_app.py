@@ -34,9 +34,11 @@ async def test_accounts_returns_page_envelope(app: FastAPI) -> None:
         resp = await client.get("/api/v1/accounts")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"items", "next_cursor"}
+    # The Page envelope plus the filtered total the Accounts page shows.
+    assert set(body) == {"items", "next_cursor", "total"}
     assert [a["account_id"] for a in body["items"]] == ["acc-1"]
     assert body["next_cursor"] is None
+    assert body["total"] == 1
 
 
 @pytest.mark.asyncio

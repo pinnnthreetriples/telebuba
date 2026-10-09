@@ -9,9 +9,11 @@ import {
 
 import { client } from '../client.gen';
 import {
+  accountFilterOptions,
   accountStats,
   actOnChatBroadcastTarget,
   addAccountMusic,
+  addAccountsToFolder,
   addWarmingChannels,
   adoptCampaignDiscovery,
   approveNeuroshillingScenario,
@@ -33,6 +35,7 @@ import {
   countCampaignChallengeOutcomes,
   countLogs,
   createAccountChannel,
+  createAccountFolder,
   createCampaign,
   createChatBroadcastCampaign,
   createChatCollection,
@@ -41,6 +44,7 @@ import {
   deleteAccount,
   deleteAccountChannel,
   deleteAccountChannelPost,
+  deleteAccountFolder,
   deleteCampaign,
   deleteChatBroadcastCampaign,
   deleteChatCollection,
@@ -84,6 +88,7 @@ import {
   listAccountChannels,
   listAccountChatMessages,
   listAccountChats,
+  listAccountFolders,
   listAccounts,
   listAccountScheduledPosts,
   listCampaignChallenges,
@@ -112,11 +117,13 @@ import {
   publishAccountChannelPost,
   removeAccountMusic,
   removeAccountPhoto,
+  removeAccountsFromFolder,
   removeAccountStory,
   removeAccountTwofa,
   removeCampaignAccount,
   removeCampaignChannel,
   removeWarmingChannel,
+  renameAccountFolder,
   requestLoginCode,
   rescheduleScheduledPost,
   resendAccountTwofaEmail,
@@ -171,6 +178,9 @@ import {
   uploadScheduledMedia,
 } from '../sdk.gen';
 import type {
+  AccountFilterOptionsData,
+  AccountFilterOptionsError,
+  AccountFilterOptionsResponse,
   AccountStatsData,
   AccountStatsError,
   AccountStatsResponse,
@@ -180,6 +190,9 @@ import type {
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
+  AddAccountsToFolderData,
+  AddAccountsToFolderError,
+  AddAccountsToFolderResponse,
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
@@ -243,6 +256,9 @@ import type {
   CreateAccountChannelData,
   CreateAccountChannelError,
   CreateAccountChannelResponse,
+  CreateAccountFolderData,
+  CreateAccountFolderError,
+  CreateAccountFolderResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
@@ -266,6 +282,9 @@ import type {
   DeleteAccountChannelResponse,
   DeleteAccountData,
   DeleteAccountError,
+  DeleteAccountFolderData,
+  DeleteAccountFolderError,
+  DeleteAccountFolderResponse,
   DeleteAccountResponse,
   DeleteCampaignData,
   DeleteCampaignError,
@@ -395,6 +414,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsError,
   ListAccountChatsResponse,
+  ListAccountFoldersData,
+  ListAccountFoldersError,
+  ListAccountFoldersResponse,
   ListAccountScheduledPostsData,
   ListAccountScheduledPostsError,
   ListAccountScheduledPostsResponse,
@@ -476,6 +498,9 @@ import type {
   RemoveAccountPhotoData,
   RemoveAccountPhotoError,
   RemoveAccountPhotoResponse,
+  RemoveAccountsFromFolderData,
+  RemoveAccountsFromFolderError,
+  RemoveAccountsFromFolderResponse,
   RemoveAccountStoryData,
   RemoveAccountStoryError,
   RemoveAccountStoryResponse,
@@ -491,6 +516,9 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
+  RenameAccountFolderData,
+  RenameAccountFolderError,
+  RenameAccountFolderResponse,
   RequestLoginCodeData,
   RequestLoginCodeError,
   RequestLoginCodeResponse,
@@ -808,6 +836,12 @@ export const listAccountsQueryKey = (options?: Options<ListAccountsData>) =>
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccountsOptions = (options?: Options<ListAccountsData>) =>
   queryOptions<
@@ -868,6 +902,12 @@ export const listAccountsInfiniteQueryKey = (
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) => {
   const opts = infiniteQueryOptions<
@@ -934,6 +974,33 @@ export const accountStatsOptions = (options?: Options<AccountStatsData>) =>
       return data;
     },
     queryKey: accountStatsQueryKey(options),
+  });
+
+export const accountFilterOptionsQueryKey = (options?: Options<AccountFilterOptionsData>) =>
+  createQueryKey('accountFilterOptions', options);
+
+/**
+ * Account Filter Options
+ *
+ * The phone calling codes and proxy countries the fleet has, for the filter pills.
+ */
+export const accountFilterOptionsOptions = (options?: Options<AccountFilterOptionsData>) =>
+  queryOptions<
+    AccountFilterOptionsResponse,
+    AccountFilterOptionsError,
+    AccountFilterOptionsResponse,
+    ReturnType<typeof accountFilterOptionsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await accountFilterOptions({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: accountFilterOptionsQueryKey(options),
   });
 
 /**
@@ -5328,6 +5395,174 @@ export const saveChatCollectionMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await saveChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listAccountFoldersQueryKey = (options?: Options<ListAccountFoldersData>) =>
+  createQueryKey('listAccountFolders', options);
+
+/**
+ * List Account Folders
+ *
+ * Folders in creation order with their account counts, plus the views' counts.
+ */
+export const listAccountFoldersOptions = (options?: Options<ListAccountFoldersData>) =>
+  queryOptions<
+    ListAccountFoldersResponse,
+    ListAccountFoldersError,
+    ListAccountFoldersResponse,
+    ReturnType<typeof listAccountFoldersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountFolders({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountFoldersQueryKey(options),
+  });
+
+/**
+ * Create Account Folder
+ */
+export const createAccountFolderMutation = (
+  options?: Partial<Options<CreateAccountFolderData>>,
+): UseMutationOptions<
+  CreateAccountFolderResponse,
+  CreateAccountFolderError,
+  Options<CreateAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateAccountFolderResponse,
+    CreateAccountFolderError,
+    Options<CreateAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Account Folder
+ *
+ * Delete a folder; its accounts stay in the list and in their other folders.
+ */
+export const deleteAccountFolderMutation = (
+  options?: Partial<Options<DeleteAccountFolderData>>,
+): UseMutationOptions<
+  DeleteAccountFolderResponse,
+  DeleteAccountFolderError,
+  Options<DeleteAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteAccountFolderResponse,
+    DeleteAccountFolderError,
+    Options<DeleteAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Rename Account Folder
+ */
+export const renameAccountFolderMutation = (
+  options?: Partial<Options<RenameAccountFolderData>>,
+): UseMutationOptions<
+  RenameAccountFolderResponse,
+  RenameAccountFolderError,
+  Options<RenameAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RenameAccountFolderResponse,
+    RenameAccountFolderError,
+    Options<RenameAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await renameAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Add Accounts To Folder
+ *
+ * Add accounts; ``account_ids`` in the answer are only the newly added ones.
+ */
+export const addAccountsToFolderMutation = (
+  options?: Partial<Options<AddAccountsToFolderData>>,
+): UseMutationOptions<
+  AddAccountsToFolderResponse,
+  AddAccountsToFolderError,
+  Options<AddAccountsToFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddAccountsToFolderResponse,
+    AddAccountsToFolderError,
+    Options<AddAccountsToFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addAccountsToFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Accounts From Folder
+ *
+ * Take accounts out; ``account_ids`` in the answer are only those that were in it.
+ */
+export const removeAccountsFromFolderMutation = (
+  options?: Partial<Options<RemoveAccountsFromFolderData>>,
+): UseMutationOptions<
+  RemoveAccountsFromFolderResponse,
+  RemoveAccountsFromFolderError,
+  Options<RemoveAccountsFromFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountsFromFolderResponse,
+    RemoveAccountsFromFolderError,
+    Options<RemoveAccountsFromFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountsFromFolder({
         ...options,
         ...fnOptions,
         throwOnError: true,

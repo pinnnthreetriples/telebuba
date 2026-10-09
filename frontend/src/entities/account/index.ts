@@ -30,6 +30,17 @@ export {
   invalidateAccountViews,
 } from './api/accounts.queries';
 export {
+  accountFilterOptionsQueryOptions,
+  accountFoldersQueryOptions,
+  addAccountsToFolderMutation,
+  createAccountFolderMutation,
+  deleteAccountFolderMutation,
+  fetchFolderMemberIds,
+  invalidateAccountFolderViews,
+  removeAccountsFromFolderMutation,
+  renameAccountFolderMutation,
+} from './api/account-folders';
+export {
   accountChatHistoryInfiniteQueryOptions,
   accountChatHistoryQueryKey,
   accountChatsInfiniteQueryOptions,
@@ -96,6 +107,7 @@ export { BulkAccountPicker } from './ui/BulkAccountPicker';
 export { StatusBadge } from './ui/StatusBadge';
 export {
   accountHealth,
+  accountAvatarTint,
   accountDesignStatus,
   type AccountHealth,
   type AccountStatus,

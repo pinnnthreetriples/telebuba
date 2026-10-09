@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
+from schemas.api import Page
 from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
@@ -109,10 +110,19 @@ class AccountRead(BaseModel):
     trust_band: TrustBand | None = None
     spam_status: SpamStatusKind | None = None
     spam_detail: str | None = None
+    # The account's folders (``schemas.account_folders``) in tab order; enriched by
+    # the list page only, empty elsewhere and for an account in no folder.
+    folder_ids: list[str] = Field(default_factory=list)
 
 
 class AccountList(BaseModel):
     accounts: list[AccountRead]
+
+
+class AccountPage(Page[AccountRead]):
+    """One page of the Accounts table, plus how many accounts match its filters."""
+
+    total: int = Field(ge=0)
 
 
 class OpenWebResult(BaseModel):

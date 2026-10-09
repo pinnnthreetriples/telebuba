@@ -120,6 +120,9 @@ def _delete_account(account_id: str) -> None:
     # a shared pool row (accounts.proxy_id → proxies.id) — it is NOT a child and
     # must outlive the account, so it is left untouched here.
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
+    from core.repositories.account_folders._tables import (  # noqa: PLC0415
+        _account_folder_members,
+    )
     from core.repositories.chat_broadcast._tables import (  # noqa: PLC0415
         _chat_broadcast_accounts,
     )
@@ -140,6 +143,12 @@ def _delete_account(account_id: str) -> None:
             ),
         )
         _purge_neurocomment(connection, account_id)
+        # Folder memberships FK accounts; the folders themselves stay.
+        connection.execute(
+            delete(_account_folder_members).where(
+                _account_folder_members.c.account_id == account_id,
+            ),
+        )
         # The broadcast roster FKs accounts too; a RUNNING campaign never gets here.
         connection.execute(
             delete(_chat_broadcast_accounts).where(
@@ -187,7 +196,8 @@ async def delete_account(account_id: str) -> None:
     SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
     helper manually purges ``warming_account_state`` /
     ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
-    joined channels / neurocomment and neuroshilling roster rows / scheduled posts
+    joined channels / neurocomment and neuroshilling roster rows / scheduled posts /
+    folder memberships
     before deleting the ``accounts`` row. The shared pool
     proxy is left intact. New per-account tables MUST be added to
     ``_delete_account`` — relying on FK cascade is a bug.

@@ -43,6 +43,7 @@ from core.migration_steps import (
     _rename_proxy_type_http_to_https,
 )
 from core.migration_steps_access_reason import _add_readiness_access_lost_reason
+from core.migration_steps_account_folders import _add_account_folders
 from core.migration_steps_account_limits import _add_neurocomment_account_limits
 from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
@@ -204,6 +205,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (68, "add_chat_broadcast_tables", _add_chat_broadcast_tables),
     (69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted),
     (70, "add_chat_broadcast_collections", _add_chat_broadcast_collections),
+    (71, "add_account_folders", _add_account_folders),
 )
 
 
