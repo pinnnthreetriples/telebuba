@@ -210,7 +210,7 @@ async def handle(ctx: RunContext, account_id: str, job: Job) -> JobResult:
     source = ctx.sources[job.source]
     if source.closed:
         return JobResult()
-    peer = await reach(ctx, account_id, job.source)
+    peer = await reach(ctx, account_id, job.source, job.attempt)
     if isinstance(peer, JobResult):
         if peer.flood_seconds is not None:
             source.flooded = True

@@ -44,6 +44,8 @@ const ACCOUNTS_POLL_MS = 15_000;
 // Страховка на случай пропущенного SSE: пока прогон идёт, окно спрашивает его и само.
 const RUN_POLL_MS = 3_000;
 const REFUSED = 'userParser.refused';
+// The per-page nudge the server sends while a run reads (see services/user_parser/_run.py).
+const PROGRESS_EVENT = 'user_parser_progress';
 
 type Props = {
   campaignName: string;
@@ -111,6 +113,8 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
   useLogEventStream((entry) => {
     if (!entry.event.startsWith('user_parser')) return;
     void queryClient.invalidateQueries({ queryKey: runOptions.queryKey });
+    // A page read changes the run, never the list of bases — only an ending does.
+    if (entry.event === PROGRESS_EVENT) return;
     void queryClient.invalidateQueries({ queryKey: basesOptions.queryKey });
   });
 
@@ -225,6 +229,10 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
               size="sm"
               className="mr-auto"
               onClick={() => {
+                // As in the prototype, leaving a run stops it: from the form there is no
+                // way back to it, and it would keep its accounts held for nothing.
+                // Whatever it collected is saved as a base.
+                if (running && runId !== null) stop.mutate({ path: { run_id: runId } });
                 setSubmitted(false);
               }}
             >

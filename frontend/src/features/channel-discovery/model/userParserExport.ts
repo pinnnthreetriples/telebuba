@@ -1,7 +1,11 @@
 import { userParserExportUrl, type UserParserExportFormat } from '@/entities/user-parser';
 
-// Скачивание — обычный переход по ссылке: сервер отдаёт файл с `attachment`, страница
-// остаётся на месте, а большая база не собирается в памяти окна.
+// Скачивание — ссылка с `download`: сервер отдаёт файл, большая база не собирается в
+// памяти окна, а ответ-ошибка (база уже удалена, сессия истекла) сохраняется файлом,
+// а не уводит приложение со страницы, как сделал бы переход по ссылке.
 export function downloadExport(runId: string, format: UserParserExportFormat) {
-  window.location.assign(userParserExportUrl(runId, format));
+  const link = document.createElement('a');
+  link.href = userParserExportUrl(runId, format);
+  link.download = '';
+  link.click();
 }

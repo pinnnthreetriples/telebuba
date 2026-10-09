@@ -135,3 +135,22 @@ async def test_a_flood_while_asking_membership_is_retried(telegram: FakeTelegram
 
     assert (run.status, run.kept) == ("done", 1)
     assert _joins(telegram) == []
+
+
+@pytest.mark.asyncio
+async def test_a_capped_account_hands_the_chat_to_one_with_room(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The day's cap belongs to the account, not to the chat."""
+    from core.config import settings  # noqa: PLC0415
+
+    monkeypatch.setattr(settings.user_parser, "max_joins_per_account_per_day", 1)
+    await seed_accounts("a1", "a2")
+    await record_join("a1")
+    telegram.invites[_TOKEN] = 555
+    telegram.members["555"] = [person(1)]
+
+    run = await run_to_end(parser_request(sources=[_INVITE], account_ids=["a1", "a2"]))
+
+    assert _joins(telegram) == ["a2"]
+    assert (run.sources[0].status, run.kept) == ("ok", 1)

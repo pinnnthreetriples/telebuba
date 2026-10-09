@@ -232,3 +232,14 @@ async def test_presets_are_unique_ignoring_case_and_deletable() -> None:
     assert await repository.delete_preset(created.preset_id) is True
     assert await repository.delete_preset(created.preset_id) is False
     assert (await repository.list_presets()).items == []
+
+
+@pytest.mark.asyncio
+async def test_settling_twice_replaces_the_people_instead_of_failing() -> None:
+    run = await _open("r1")
+    await _settle(run, [_user(1), _user(2)])
+
+    await _settle(run, [_user(2)], status="stopped")
+
+    page = await repository.page_users("r1", search="", offset=0, limit=10)
+    assert [u.user_id for u in page.items] == [2]

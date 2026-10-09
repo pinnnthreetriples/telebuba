@@ -213,6 +213,20 @@ describe('UserParserModal', () => {
     expect(await screen.findByText('Остановлено — собранное сохранено')).toBeInTheDocument();
   });
 
+  it('going back to the form stops the run it leaves', async () => {
+    const calls = route();
+    renderModal();
+    await fillAndRun();
+    await screen.findByRole('button', { name: 'Остановить' });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    await waitFor(() => {
+      expect(calls.some((call) => call.path.endsWith('/runs/r1/stop'))).toBe(true);
+    });
+    expect(screen.getByRole('button', { name: 'Запустить' })).toBeInTheDocument();
+  });
+
   it('saves the form as a preset and loads one back', async () => {
     const preset: UserParserPreset = {
       preset_id: 'p1',

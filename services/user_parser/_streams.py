@@ -55,6 +55,8 @@ class Job:
     post_id: int | None = None
     # 1 once this exact page was already retried on another account; never retried twice.
     attempt: int = 0
+    # The account whose try earned the retry: another one takes it while any is left.
+    retried_from: str | None = None
 
 
 class JobResult(NamedTuple):
@@ -99,6 +101,9 @@ class Streams:
         self._pending: dict[int, int] = {}
         self._inflight = 0
         self._active = len(accounts)
+        # Streams still taking pages — not dropped, not finished. A retry skips the account
+        # that earned it only while another stream is here to take it.
+        self._alive = len(accounts)
         self._faults: dict[str, int] = {}
         self.stop: StopReason | None = None
 
@@ -122,7 +127,7 @@ class Streams:
     async def _worker(self, progress: UserParserAccountProgress) -> None:
         account_id = progress.account_id
         last_source: int | None = None
-        while (job := await self._next_job()) is not None:
+        while (job := await self._next_job(account_id)) is not None:
             if last_source is not None:
                 progress.state = "waiting"
                 await _seams.sleep(self._pacer(job.source != last_source))
@@ -146,6 +151,9 @@ class Streams:
             if sit_out:
                 await self._sit_out(progress, sit_out)
         progress.state = "done"
+        async with self._cond:
+            self._alive -= 1
+            self._cond.notify_all()
 
     async def _sit_out(self, progress: UserParserAccountProgress, seconds: int) -> None:
         progress.state = "flooded"
@@ -174,7 +182,7 @@ class Streams:
             for followup in result.followups:
                 self._enqueue(followup)
             if result.retry and job.attempt == 0:
-                self._enqueue(dataclasses.replace(job, attempt=1))
+                self._enqueue(dataclasses.replace(job, attempt=1, retried_from=account_id))
             finished = self._source_job_done(job.source)
             if result.unreachable:
                 self._drop(progress, "aborted")
@@ -199,24 +207,29 @@ class Streams:
     def _drop(self, progress: UserParserAccountProgress, reason: StopReason) -> None:
         progress.state = "dropped"
         self._active -= 1
+        self._alive -= 1
         if self._active <= 0 and self.stop is None:
             self.stop = reason
 
     # -- shared queue, guarded by ``self._cond`` -----------------------------------
 
-    async def _next_job(self) -> Job | None:
+    async def _next_job(self, account_id: str) -> Job | None:
         async with self._cond:
             while True:
                 if self.stop is not None:
                     return None
-                if self._queue:
-                    job = min(self._queue, key=lambda j: (j.source, _KIND_ORDER[j.kind]))
+                eligible = [job for job in self._queue if self._may_take(job, account_id)]
+                if eligible:
+                    job = min(eligible, key=lambda j: (j.source, _KIND_ORDER[j.kind]))
                     self._queue.remove(job)
                     self._inflight += 1
                     return job
-                if self._inflight == 0:
+                if not self._queue and self._inflight == 0:
                     return None
                 await self._cond.wait()
+
+    def _may_take(self, job: Job, account_id: str) -> bool:
+        return job.retried_from != account_id or self._alive <= 1
 
     def _enqueue(self, job: Job) -> None:
         self._queue.append(job)

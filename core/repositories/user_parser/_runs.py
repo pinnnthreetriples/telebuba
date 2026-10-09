@@ -116,6 +116,8 @@ def _settle_run(run: UserParserRun, users: list[UserParserUser]) -> None:
                 filtered_json=json.dumps(run.filtered),
             )
         )
+        # Idempotent: a settle repeated after a cancelled one replaces, never duplicates.
+        connection.execute(delete(_users).where(_users.c.run_id == run.run_id))
         if users:
             connection.execute(insert(_users), [_user_row(run.run_id, user) for user in users])
 

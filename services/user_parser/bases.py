@@ -52,6 +52,14 @@ _MEDIA_TYPES: dict[ExportFormat, str] = {
 # Excel opens a UTF-8 CSV as UTF-8 only when the file starts with the byte-order mark.
 _BOM = chr(0xFEFF)
 _UNSAFE_NAME = re.compile(r"[^\w]+", re.UNICODE)
+# A cell a spreadsheet would run as a formula. Names and nicks are whatever the people
+# collected typed, so they are defused with a leading quote (OWASP CSV injection); the
+# sources are the operator's own and stay as typed.
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _cell(text: str) -> str:
+    return f"'{text}" if text.startswith(_FORMULA_START) else text
 
 
 class PresetNameTakenError(ValueError):
@@ -90,9 +98,9 @@ async def list_base_users(
 def _csv_row(user: UserParserUser) -> list[object]:
     return [
         user.user_id,
-        user.username or "",
-        user.first_name,
-        user.last_name,
+        _cell(user.username or ""),
+        _cell(user.first_name),
+        _cell(user.last_name),
         int(user.is_premium),
         int(user.has_photo),
         int(user.has_stories),

@@ -131,3 +131,33 @@ async def test_a_crash_inside_the_run_settles_it_failed(
 @pytest.mark.asyncio
 async def test_an_unknown_run_reads_as_none(telegram: FakeTelegram) -> None:  # noqa: ARG001
     assert await get_run("missing") is None
+
+
+@pytest.mark.asyncio
+async def test_a_stop_that_lands_while_settling_still_settles(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.user_parser import _run  # noqa: PLC0415
+
+    await seed_accounts("a1")
+    telegram.members["group"] = [person(1)]
+    settling = asyncio.Event()
+    original = _run._filter_context
+    calls = {"n": 0}
+
+    async def _slow_first(ctx: object) -> object:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            settling.set()
+            await asyncio.Event().wait()
+        return await original(ctx)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(_run, "_filter_context", _slow_first)
+    outcome = await start_run(parser_request())
+    await settling.wait()
+
+    stopped = await stop_run(outcome.run_id or "")
+
+    assert stopped is not None
+    assert (stopped.status, stopped.kept) == ("done", 1)
+    assert _account_owner.owners() == {}

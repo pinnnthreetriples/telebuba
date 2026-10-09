@@ -102,13 +102,26 @@ def _join_refusal(result: ActionResult) -> JobResult | None:
     return None
 
 
-async def _join(ctx: RunContext, index: int, account_id: str, token: str) -> str | JobResult:
+async def _capped(ctx: RunContext, index: int, account_id: str, attempt: int) -> JobResult:
+    """This account's day of joins is spent: another account may still have room.
+
+    The cap is the account's, not the chat's, so the first time it only hands the page
+    on; the chat is written off once the retry hits a cap as well.
+    """
+    if attempt == 0:
+        return JobResult(retry=True)
+    return await _join_failed(ctx, index, account_id, "join_cap")
+
+
+async def _join(
+    ctx: RunContext, index: int, account_id: str, token: str, attempt: int
+) -> str | JobResult:
     if await _at_join_cap(account_id):
-        return await _join_failed(ctx, index, account_id, "join_cap")
+        return await _capped(ctx, index, account_id, attempt)
     await _seams.await_send_slot(f"join:{account_id}", _join_pause())
     async with join_lock(account_id):
         if await _at_join_cap(account_id):
-            return await _join_failed(ctx, index, account_id, "join_cap")
+            return await _capped(ctx, index, account_id, attempt)
         result = await _seams.execute(account_id, JoinChannel(channel=token))
         if result.status == "ok":
             await record_join(account_id)
@@ -124,7 +137,7 @@ async def _join(ctx: RunContext, index: int, account_id: str, token: str) -> str
 
 
 async def _reach_invite(
-    ctx: RunContext, index: int, account_id: str, token: str
+    ctx: RunContext, index: int, account_id: str, token: str, attempt: int
 ) -> str | JobResult:
     resolved = await _resolve(account_id, token)
     if isinstance(resolved, TelegramReadError):
@@ -132,11 +145,11 @@ async def _reach_invite(
         if retry is not None:
             return retry
         # ``chat_not_found``: the invite resolves only from inside, so this account is not.
-        return await _join(ctx, index, account_id, token)
+        return await _join(ctx, index, account_id, token, attempt)
     return str(resolved.chat_id)
 
 
-async def reach(ctx: RunContext, account_id: str, index: int) -> str | JobResult:
+async def reach(ctx: RunContext, account_id: str, index: int, attempt: int = 0) -> str | JobResult:
     """The peer ``account_id`` reads source ``index`` by, or the result that ends the page."""
     known = ctx.access.get((account_id, index))
     if known is not None:
@@ -149,7 +162,7 @@ async def reach(ctx: RunContext, account_id: str, index: int) -> str | JobResult
     if not source.invite:
         peer = token
     else:
-        reached = await _reach_invite(ctx, index, account_id, token)
+        reached = await _reach_invite(ctx, index, account_id, token, attempt)
         if isinstance(reached, JobResult):
             return reached
         peer = reached

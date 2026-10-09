@@ -156,3 +156,22 @@ async def test_preset_names_are_unique() -> None:
         await create_preset("комменты 1", UserParserSettings())
 
     assert [p.name for p in (await list_presets()).items] == ["Комменты 1"]
+
+
+@pytest.mark.asyncio
+async def test_names_a_spreadsheet_would_run_are_defused() -> None:
+    await _base(
+        "r1",
+        [
+            UserParserUser(user_id=1, first_name='=HYPERLINK("http://x")', username="@x"),
+            UserParserUser(user_id=2, first_name="-1+2", last_name="+7", sources=["@a"]),
+        ],
+    )
+
+    export = await export_base("r1", "csv")
+    assert export is not None
+    rows = list(csv.reader(io.StringIO((await _body(export[2])).decode("utf-8-sig"))))
+
+    assert rows[1][1:3] == ["'@x", '\'=HYPERLINK("http://x")']
+    assert rows[2][2:4] == ["'-1+2", "'+7"]
+    assert rows[2][-1] == "@a"

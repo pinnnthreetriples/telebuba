@@ -186,19 +186,32 @@ async def _settle(ctx: RunContext, status: UserParserRunStatus, reason: str | No
 
 
 async def run(ctx: RunContext, account_ids: list[str]) -> None:
-    """The run's task. Always settles, always gives its accounts back."""
+    """The run's task. Always settles, always gives its accounts back.
+
+    A cancel (Stop, shutdown) that lands while the finished run is already settling is
+    caught too: the settle is repeated — it is idempotent — so the row never stays
+    ``running``.
+    """
     try:
         try:
             stop = await _collect(ctx)
         except asyncio.CancelledError:
-            entry = _state.live(ctx.run_id)
-            stopped = entry is not None and entry.stop_requested
-            await _settle(ctx, "stopped" if stopped else "interrupted", None)
+            await _settle(ctx, _cancelled_status(ctx), None)
             raise
         except Exception as exc:
             logger.exception("user parser run %s failed", ctx.run_id)
             await _settle(ctx, "failed", type(exc).__name__)
             return
-        await _settle(ctx, "failed" if stop is not None else "done", stop)
+        status: UserParserRunStatus = "failed" if stop is not None else "done"
+        try:
+            await _settle(ctx, status, stop)
+        except asyncio.CancelledError:
+            await _settle(ctx, status, stop)
+            raise
     finally:
         release_accounts(ctx.run_id, account_ids)
+
+
+def _cancelled_status(ctx: RunContext) -> UserParserRunStatus:
+    entry = _state.live(ctx.run_id)
+    return "stopped" if entry is not None and entry.stop_requested else "interrupted"
