@@ -14,6 +14,50 @@ const LINE_TONE = {
 
 const P = 'userParser.results';
 
+// Один пользователь — одна строка. Общая для итогов прогона и вкладки «Базы».
+// Строки, а не DataTable: в окне уже 880px таблица уходит в карточки, и 60 карточек по
+// шесть полей растягивают окно на десятки экранов.
+export function UserRows({ mode, users }: { mode: ParserMode; users: ParsedUser[] }) {
+  const { t, i18n } = useTranslation();
+  const date = (iso: string) => new Date(iso).toLocaleDateString(i18n.language);
+  return (
+    <ul className="tb-scroll max-h-dialog overflow-y-auto rounded-lg border border-line">
+      {users.map((user) => (
+        <li
+          key={user.id}
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-canvas px-4 py-2 first:border-t-0"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1 type-body-medium">
+              <span className="truncate">{user.name}</span>
+              {user.premium ? (
+                <Badge tone="warning" size="sm">
+                  Premium
+                </Badge>
+              ) : null}
+            </div>
+            <div className="truncate type-small">
+              {user.username ? `@${user.username}` : t(`${P}.noUsername`)} · {user.id}
+            </div>
+          </div>
+          {mode === 'members' ? null : (
+            <span className="type-small">
+              {t(`${P}.count.${mode}`, { count: user.count })} · {date(user.firstAt)} —{' '}
+              {date(user.lastAt)}
+            </span>
+          )}
+          <span className="type-small">{t(`${P}.lastSeen.${user.lastSeen}`)}</span>
+          <span className="max-w-name truncate type-small" title={user.sources.join(', ')}>
+            {user.sources.length > 1
+              ? t(`${P}.inSources`, { count: user.sources.length })
+              : user.sources[0]}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 type Props = {
   mode: ParserMode;
   running: boolean;
@@ -36,8 +80,7 @@ export function UserParserResults({
   log,
   users,
 }: Props) {
-  const { t, i18n } = useTranslation();
-  const date = (iso: string) => new Date(iso).toLocaleDateString(i18n.language);
+  const { t } = useTranslation();
 
   return (
     <div className="flex flex-col gap-4">
@@ -69,42 +112,7 @@ export function UserParserResults({
       {users.length === 0 ? null : (
         <div className="flex flex-col gap-2">
           <span className="type-body-medium">{t(`${P}.title`, { count: users.length })}</span>
-          {/* Строки, а не DataTable: в окне уже 880px таблица уходит в карточки, и 60
-              карточек по шесть полей растягивают окно на десятки экранов. */}
-          <ul className="tb-scroll max-h-dialog overflow-y-auto rounded-lg border border-line">
-            {users.map((user) => (
-              <li
-                key={user.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-canvas px-4 py-2 first:border-t-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1 type-body-medium">
-                    <span className="truncate">{user.name}</span>
-                    {user.premium ? (
-                      <Badge tone="warning" size="sm">
-                        Premium
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="truncate type-small">
-                    {user.username ? `@${user.username}` : t(`${P}.noUsername`)} · {user.id}
-                  </div>
-                </div>
-                {mode === 'members' ? null : (
-                  <span className="type-small">
-                    {t(`${P}.count.${mode}`, { count: user.count })} · {date(user.firstAt)} —{' '}
-                    {date(user.lastAt)}
-                  </span>
-                )}
-                <span className="type-small">{t(`${P}.lastSeen.${user.lastSeen}`)}</span>
-                <span className="max-w-name truncate type-small" title={user.sources.join(', ')}>
-                  {user.sources.length > 1
-                    ? t(`${P}.inSources`, { count: user.sources.length })
-                    : user.sources[0]}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <UserRows mode={mode} users={users} />
         </div>
       )}
     </div>

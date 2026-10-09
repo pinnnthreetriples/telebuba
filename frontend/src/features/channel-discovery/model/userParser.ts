@@ -254,6 +254,16 @@ export function applyFilters(users: ParsedUser[], form: ParserForm): ParsedUser[
   });
 }
 
+// Сохранённый сбор — «папка» во вкладке «Базы». Без автоудаления: удаляет только оператор.
+export type ParsedBase = {
+  id: string;
+  name: string;
+  mode: ParserMode;
+  createdAt: string;
+  sources: string[];
+  users: ParsedUser[];
+};
+
 export function usersToCsv(users: ParsedUser[]): string {
   const head = 'id,name,username,premium,last_seen,count,first_at,last_at,sources';
   const rows = users.map((u) =>

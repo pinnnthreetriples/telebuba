@@ -4,7 +4,16 @@ import { useTranslation } from 'react-i18next';
 
 import { allAccountsQueryOptions } from '@/entities/account';
 import { discoveryAccountsQueryOptions } from '@/entities/campaign';
-import { Button, HelpHint, Icon, Modal, ModalFooter, ModalHeader, Select } from '@/shared/ui';
+import {
+  Button,
+  HelpHint,
+  Icon,
+  Modal,
+  ModalFooter,
+  ModalHeader,
+  SegmentedControl,
+  Select,
+} from '@/shared/ui';
 
 import { effectiveAccountIds } from '../model/filters';
 import {
@@ -14,13 +23,39 @@ import {
   parseSources,
   topicOf,
   usersToCsv,
+  type ParsedBase,
   type ParsedUser,
   type ParserForm,
+  type ParserMode,
 } from '../model/userParser';
+import { UserParserBases } from './UserParserBases';
 import { UserParserForm } from './UserParserForm';
 import { UserParserResults, type ParserLogLine } from './UserParserResults';
 
 const STEP_MS = 900;
+const DAY_MS = 86_400_000;
+
+// Две демо-папки, чтобы вкладка «Базы» в прототипе не была пустой.
+function demoBases(name: (key: string) => string): ParsedBase[] {
+  const seed = (
+    id: string,
+    key: string,
+    mode: ParserMode,
+    sources: string[],
+    daysAgo: number,
+  ): ParsedBase => ({
+    id,
+    name: name(key),
+    mode,
+    createdAt: new Date(Date.now() - daysAgo * DAY_MS).toISOString(),
+    sources,
+    users: applyFilters(mockUsers(sources, 90), { ...EMPTY_PARSER_FORM, mode }),
+  });
+  return [
+    seed('demo-1', 'demoCrypto', 'comments', ['@cryptochat_ru', '@bitnews', '@defi_talk'], 2),
+    seed('demo-2', 'demoSmm', 'messages', ['@smm_community', 't.me/marketing_talks'], 6),
+  ];
+}
 
 function download(name: string, body: string, type: string) {
   const url = URL.createObjectURL(new Blob([body], { type }));
@@ -45,6 +80,10 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
   const formId = useId();
   const [form, setForm] = useState<ParserForm>(EMPTY_PARSER_FORM);
   const [presets, setPresets] = useState<{ name: string; form: ParserForm }[]>([]);
+  const [tab, setTab] = useState<'new' | 'bases'>('new');
+  const [bases, setBases] = useState<ParsedBase[]>(() =>
+    demoBases((key) => t(`userParser.bases.${key}`)),
+  );
   const [submitted, setSubmitted] = useState(false);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
@@ -82,6 +121,22 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
         setRunning(false);
         setRaw(caught.length);
         setUsers(kept);
+        // Каждый сбор сохраняется папкой во вкладке «Базы».
+        const createdAt = new Date().toISOString();
+        setBases((prev) => [
+          {
+            id: createdAt,
+            name: t('userParser.bases.name', {
+              mode: t(`userParser.bases.modeName.${ran.current.mode}`),
+              date: new Date(createdAt).toLocaleDateString(i18n.language),
+            }),
+            mode: ran.current.mode,
+            createdAt,
+            sources: plan.current,
+            users: kept,
+          },
+          ...prev,
+        ]);
         setLog((lines) => [
           ...lines,
           line('success', 'filtered', { raw: caught.length, kept: kept.length }),
@@ -144,10 +199,33 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
       <ModalHeader
         title={t('userParser.title')}
         subtitle={t('userParser.sub', { name: campaignName })}
-      />
+      >
+        <div className="ml-auto">
+          <SegmentedControl
+            variant="pill"
+            value={tab}
+            ariaLabel={t('userParser.tabs.label')}
+            options={[
+              { value: 'new', label: t('userParser.tabs.new') },
+              { value: 'bases', label: t('userParser.tabs.bases', { count: bases.length }) },
+            ]}
+            onChange={setTab}
+          />
+        </div>
+      </ModalHeader>
 
       <div className="px-6 py-6">
-        {submitted ? (
+        {tab === 'bases' ? (
+          <UserParserBases
+            bases={bases}
+            onRename={(id, name) => {
+              setBases((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
+            }}
+            onDelete={(id) => {
+              setBases((prev) => prev.filter((b) => b.id !== id));
+            }}
+          />
+        ) : submitted ? (
           <UserParserResults
             mode={ran.current.mode}
             running={running}
@@ -172,7 +250,11 @@ export function UserParserModal({ campaignName, campaignChannels, onClose }: Pro
       </div>
 
       <ModalFooter>
-        {submitted ? (
+        {tab === 'bases' ? (
+          <Button variant="primary" size="sm" onClick={onClose}>
+            {t('userParser.close')}
+          </Button>
+        ) : submitted ? (
           <>
             <Button
               variant="ghost"

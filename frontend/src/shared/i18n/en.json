@@ -3760,6 +3760,37 @@
         "long": "long ago",
         "hidden": "hidden"
       }
+    },
+    "tabs": {
+      "label": "Parser section",
+      "new": "New run",
+      "bases": "Bases · {{count}}"
+    },
+    "bases": {
+      "name": "{{mode}} · {{date}}",
+      "demoCrypto": "Crypto channel commenters",
+      "demoSmm": "SMM chat authors",
+      "folderMeta_one": "{{mode}} · {{count}} person",
+      "folderMeta_other": "{{mode}} · {{count}} people",
+      "summary_one": "{{count}} person · sources: {{sources}} · {{date}}",
+      "summary_other": "{{count}} people · sources: {{sources}} · {{date}}",
+      "search": "Name, @username or ID",
+      "nothingFound": "Nobody found",
+      "rename": "Rename",
+      "save": "Save",
+      "delete": "Delete base",
+      "deleteTitle": "Delete “{{name}}”?",
+      "deleteBody_one": "{{count}} person will be deleted for good.",
+      "deleteBody_other": "{{count}} people will be deleted for good.",
+      "deleteConfirm": "Delete",
+      "cancel": "Cancel",
+      "emptyTitle": "No bases yet",
+      "emptyHint": "Start a run — the result is saved here as a folder.",
+      "modeName": {
+        "members": "Members",
+        "messages": "Message authors",
+        "comments": "Commenters"
+      }
     }
   }
 }

@@ -3827,6 +3827,40 @@
         "long": "давно",
         "hidden": "время скрыто"
       }
+    },
+    "tabs": {
+      "label": "Раздел парсера",
+      "new": "Новый сбор",
+      "bases": "Базы · {{count}}"
+    },
+    "bases": {
+      "name": "{{mode}} · {{date}}",
+      "demoCrypto": "Комментаторы крипто-каналов",
+      "demoSmm": "Авторы чатов SMM",
+      "folderMeta_one": "{{mode}} · {{count}} человек",
+      "folderMeta_few": "{{mode}} · {{count}} человека",
+      "folderMeta_many": "{{mode}} · {{count}} человек",
+      "summary_one": "{{count}} человек · источников: {{sources}} · {{date}}",
+      "summary_few": "{{count}} человека · источников: {{sources}} · {{date}}",
+      "summary_many": "{{count}} человек · источников: {{sources}} · {{date}}",
+      "search": "Имя, @username или ID",
+      "nothingFound": "Никого не нашлось",
+      "rename": "Переименовать",
+      "save": "Сохранить",
+      "delete": "Удалить базу",
+      "deleteTitle": "Удалить «{{name}}»?",
+      "deleteBody_one": "{{count}} человек будет удалён без возможности вернуть.",
+      "deleteBody_few": "{{count}} человека будут удалены без возможности вернуть.",
+      "deleteBody_many": "{{count}} человек будут удалены без возможности вернуть.",
+      "deleteConfirm": "Удалить",
+      "cancel": "Отмена",
+      "emptyTitle": "Баз пока нет",
+      "emptyHint": "Запустите сбор — результат сохранится здесь папкой.",
+      "modeName": {
+        "members": "Участники",
+        "messages": "Авторы сообщений",
+        "comments": "Комментаторы"
+      }
     }
   }
 }
