@@ -136,7 +136,21 @@ async def dispatch_resolve_chat(
     chat_id = int(getattr(entity, "id", 0))
     if chat_id <= 0:
         raise ChannelGatewayError(_NOT_FOUND)
-    return ResolveChatResult(chat_id=chat_id, kind=_entity_kind(entity))
+    return ResolveChatResult(chat_id=chat_id, kind=_entity_kind(entity), member=_is_member(entity))
+
+
+def _is_member(entity: object) -> bool | None:
+    """Whether this account is inside, from the flags Telegram sets per account.
+
+    An invite resolves only through ``ChatInviteAlready`` (see ``_resolve_invite``), so a
+    chat reached that way is always joined; a username's ``Channel`` or ``Chat`` carries
+    ``left`` (and a basic group ``deactivated``) for the asking account.
+    """
+    if isinstance(entity, Channel):
+        return not getattr(entity, "left", False)
+    if isinstance(entity, Chat):
+        return not (getattr(entity, "left", False) or getattr(entity, "deactivated", False))
+    return None
 
 
 def _preview(message: object, message_id: int) -> ChatMessagePreview:

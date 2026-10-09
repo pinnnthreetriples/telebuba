@@ -159,17 +159,23 @@ async def _valid_accounts(account_ids: list[str]) -> list[str]:
     return unique
 
 
-def _valid_settings(value: ChatBroadcastSettings) -> ChatBroadcastSettings:
-    """Normalise the chat list and refuse what no run could use."""
+def valid_targets(raw_targets: list[str]) -> list[str]:
+    """One link per chat, in the order given; refuses a link no run could use."""
     limits = settings.chat_broadcast
     targets: dict[str, str] = {}
-    for raw in split_targets(value.targets):
+    for raw in split_targets(raw_targets):
         parsed = parse_target(raw, max_length=limits.max_target_length)
         if parsed is None:
             raise ChatBroadcastInvalidError(INVALID_TARGET)
         targets.setdefault(parsed.key, raw)
     if len(targets) > limits.max_targets_per_campaign:
         raise ChatBroadcastInvalidError(TOO_MANY_TARGETS)
+    return list(targets.values())
+
+
+def _valid_settings(value: ChatBroadcastSettings) -> ChatBroadcastSettings:
+    """Normalise the chat list and refuse what no run could use."""
+    targets = valid_targets(value.targets)
     for message in value.messages:
         if message.kind == "post" and message.post.strip() and parse_post(message.post) is None:
             raise ChatBroadcastInvalidError(INVALID_POST_LINK)
@@ -177,7 +183,7 @@ def _valid_settings(value: ChatBroadcastSettings) -> ChatBroadcastSettings:
             raise ChatBroadcastInvalidError(CAPTION_TOO_LONG)
     if any(not peer.isdigit() for peer in value.own_excluded):
         raise ChatBroadcastInvalidError(INVALID_TARGET)
-    return value.model_copy(update={"targets": list(targets.values())})
+    return value.model_copy(update={"targets": targets})
 
 
 async def busy_owners(

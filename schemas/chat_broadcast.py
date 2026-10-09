@@ -44,6 +44,7 @@ ChatBroadcastRefusalCode = Literal[
     "media_invalid",
     "media_too_large",
     "caption_too_long",
+    "collection_name_taken",
 ]
 
 _MAX_NAME = 120

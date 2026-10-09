@@ -9,6 +9,7 @@ import type {
   ChatBroadcastBoard,
   ChatBroadcastCampaign,
   ChatBroadcastSettingsRead,
+  ChatCollection,
 } from '@/shared/api';
 
 import { board, CAMPAIGN, SETTINGS_READ } from '../model/fixtures.test-helpers';
@@ -42,6 +43,8 @@ export type Api = {
   campaigns: ChatBroadcastCampaign[];
   board: ChatBroadcastBoard;
   settings: ChatBroadcastSettingsRead;
+  // The saved chat categories; POST, PUT and DELETE on them change this list.
+  collections: ChatCollection[];
   // A refusal the next PUT, POST /start or POST /targets/action answers with.
   refuse: { path: string; status: number; code: string } | null;
 };
@@ -51,6 +54,7 @@ export function routeApi(over: Partial<Api> = {}): Api {
     campaigns: [CAMPAIGN],
     board: board(),
     settings: SETTINGS_READ,
+    collections: [],
     refuse: null,
     ...over,
   };
@@ -75,6 +79,24 @@ export function routeApi(over: Partial<Api> = {}): Api {
         return jsonResponse(created);
       }
       return jsonResponse({ items: api.campaigns });
+    }
+    if (path.startsWith('/api/v1/chat-broadcast/collections')) {
+      const id = path.split('/')[5];
+      if (request.method === 'GET') return jsonResponse({ items: api.collections });
+      if (request.method === 'DELETE') {
+        api.collections = api.collections.filter((item) => item.collection_id !== id);
+        return new Response(null, { status: 204 });
+      }
+      const body = (await request.clone().json()) as { name: string; targets: string[] };
+      const saved = {
+        collection_id: id ?? 'k9',
+        ...body,
+        updated_at: '2026-10-07T10:00:00+00:00',
+      };
+      api.collections = id
+        ? api.collections.map((item) => (item.collection_id === id ? saved : item))
+        : [...api.collections, saved];
+      return jsonResponse(saved);
     }
     if (path === '/api/v1/chat-broadcast/own-chats') {
       return jsonResponse({

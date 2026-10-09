@@ -83,11 +83,15 @@ class ResolveChatResult(BaseModel):
     pinned convention) and is only meaningful to the account that produced it.
     ``kind`` is what decides whether the target is usable at all: a ``basic_group``
     or a ``user`` numbers its messages per-user, so a scripted reply chain played by
-    several accounts cannot work there.
+    several accounts cannot work there. ``member`` lets a caller skip a join it does
+    not need: Telegram answers a re-join of a public chat with a plain success, not
+    "already a participant", so the join itself cannot tell.
     """
 
     chat_id: int = Field(gt=0)
     kind: ChatKind
+    # Is this account inside? ``None`` where the answer does not say (a user, a preview).
+    member: bool | None = None
 
 
 class ChatMessagePreview(BaseModel):

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-07
+last_updated: 2026-10-08
 edges:
   - target: context/runtime-neuroshilling.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -31,6 +31,12 @@ restart resume).
 - Joins spend the fleet's one join budget under the shared join lock, because Telegram
   counts joins per account whatever feature spends them. A rejected join request cannot
   be told from a pending one, so a request ends by the operator's timeout.
+- An account already inside a chat never joins it again nor waits the post-join pause:
+  Telegram answers a re-join of a public chat with plain success, so membership is asked
+  before joining, and a new run keeps each chat with the account its last run left inside
+  (a stale one surfaces as "not a member" on the first send and joins normally).
+- Saved chat lists («категории») are copied into a campaign's settings when picked, never
+  linked: a campaign stays what was saved for it.
 - The guardian-bot solver is neurocomment's, reused through a public export; its audit rows
   and feed lines stay neurocomment's.
 - The AI rewrite is an embellishment, never a gate: no key, the day's budget spent, an

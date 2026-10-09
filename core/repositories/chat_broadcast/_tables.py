@@ -177,3 +177,16 @@ _chat_broadcast_events = Table(
     CheckConstraint(_in("kind", EVENT_KINDS)),
     Index("ix_cb_events_chat", "campaign_id", "chat_key", "at_unix"),
 )
+
+# The operator's saved chat lists («категории»). A list is COPIED into a campaign's
+# settings when picked, never linked: editing it later changes no campaign.
+_chat_broadcast_collections = Table(
+    "chat_broadcast_collections",
+    _metadata,
+    Column("collection_id", String, primary_key=True),
+    Column("name", String, nullable=False),
+    Column("targets_json", String, nullable=False, server_default=text("'[]'")),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+    Index("ux_cb_collections_name", "name", unique=True),
+)

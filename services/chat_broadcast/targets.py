@@ -194,6 +194,32 @@ async def _own_seeds(value: ChatBroadcastSettings, accounts: list[str]) -> list[
     return seeds
 
 
+def carry_membership(
+    seeds: list[TargetSeed], previous: list[TargetRecord], accounts: list[str]
+) -> list[TargetSeed]:
+    """A new run keeps each chat with the account the last run left inside it.
+
+    A repeated campaign lays its chats out from scratch; without this every chat would
+    be joined again — and a re-join of a public chat answers plain success, so the
+    account would sit through the whole post-join pause in a chat it never left. A
+    membership that went stale (kicked, left) shows up as ``not_member`` on the first
+    send, which queues the chat for an ordinary join.
+    """
+    inside = {
+        record.chat_key: record
+        for record in previous
+        if record.member_account_id in accounts and record.peer_id is not None
+    }
+    for seed in seeds:
+        last = inside.get(seed.chat_key)
+        if seed.member_account_id is not None or last is None:
+            continue
+        seed.assigned_account_id = last.member_account_id
+        seed.member_account_id = last.member_account_id
+        seed.peer_id = last.peer_id
+    return seeds
+
+
 def removed_keys(existing: list[TargetRecord], value: ChatBroadcastSettings) -> set[str]:
     """Chats the operator took out of the settings since the run laid them out.
 

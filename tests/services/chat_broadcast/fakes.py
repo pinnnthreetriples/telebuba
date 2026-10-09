@@ -86,6 +86,8 @@ class FakeTelegram:
     # Join tokens a resolve does not find yet (a pending request), and their kinds.
     hidden: set[str] = field(default_factory=set)
     kinds: dict[str, ChatKind] = field(default_factory=dict)
+    # (account, join token) a resolve reports the account to be inside already.
+    members: set[tuple[str, str]] = field(default_factory=set)
     groups: dict[str, WritableGroupsResult] = field(default_factory=dict)
     folders: dict[str, ChatlistResult] = field(default_factory=dict)
     deleted: set[int] = field(default_factory=set)
@@ -156,7 +158,11 @@ class FakeTelegram:
                 if action.target in self.hidden:
                     raise TelegramReadError(_NOT_FOUND)
                 kind: ChatKind = self.kinds.get(action.target, "megagroup")
-                return ResolveChatResult(chat_id=abs(hash(action.target)) % 10**9 + 1, kind=kind)
+                return ResolveChatResult(
+                    chat_id=abs(hash(action.target)) % 10**9 + 1,
+                    kind=kind,
+                    member=True if (account_id, action.target) in self.members else None,
+                )
             case ListWritableGroups():
                 return self.groups.get(account_id, WritableGroupsResult(groups=[]))
             case CheckChatlist():

@@ -12,7 +12,6 @@ import {
 } from '@/entities/chat-broadcast';
 import type { AccountRead, ChatBroadcastResolvedTarget } from '@/shared/api';
 import {
-  Badge,
   Button,
   ChipAddButton,
   HelpHint,
@@ -25,58 +24,15 @@ import {
   useModalDirty,
 } from '@/shared/ui';
 
+import { guessKind } from '../../model/collections';
 import type { Settings } from '../../model/draft';
 import { splitTargets } from '../../model/draft';
 
+import { ChatCollections } from './ChatCollections';
 import { Eyebrow, Row } from './fields';
+import { TargetChip } from './TargetChip';
 
 type Resolved = Record<string, ChatBroadcastResolvedTarget>;
-
-function guessKind(raw: string): ChatBroadcastResolvedTarget['kind'] {
-  if (/addlist\//i.test(raw)) return 'folder';
-  if (raw.includes('+') || /joinchat\//i.test(raw)) return 'invite';
-  return 'public';
-}
-
-function TargetChip({
-  raw,
-  resolved,
-  onRemove,
-}: {
-  raw: string;
-  resolved: ChatBroadcastResolvedTarget | undefined;
-  onRemove: () => void;
-}) {
-  const { t } = useTranslation();
-  const kind = resolved?.kind ?? guessKind(raw);
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-body text-content-secondary">
-      {raw}
-      {kind === 'invite' ? (
-        <span title={t('chatBroadcast.settings.chats.inviteHint')}>
-          <Badge tone="info">{t('chatBroadcast.settings.chats.invite')}</Badge>
-        </span>
-      ) : null}
-      {kind === 'folder' ? (
-        <span title={t('chatBroadcast.settings.chats.folderHint')}>
-          <Badge tone="info">
-            {resolved?.folder_count === null || resolved?.folder_count === undefined
-              ? t('chatBroadcast.settings.chats.folderUnknown')
-              : t('chatBroadcast.settings.chats.folder', { count: resolved.folder_count })}
-          </Badge>
-        </span>
-      ) : null}
-      <IconButton
-        size="sm"
-        shape="circle"
-        aria-label={t('chatBroadcast.settings.chats.remove', { target: raw })}
-        onClick={onRemove}
-      >
-        <Icon name="close" size={16} />
-      </IconButton>
-    </span>
-  );
-}
 
 function ListTargets({
   settings,
@@ -177,6 +133,12 @@ function ListTargets({
           {t('chatBroadcast.settings.chats.invalid', { targets: invalid.join(', ') })}
         </Notice>
       ) : null}
+      <ChatCollections
+        targets={settings.targets}
+        onChange={(targets) => {
+          onPatch({ targets });
+        }}
+      />
     </div>
   );
 }

@@ -49,6 +49,7 @@ from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_chat_broadcast import (
+    _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
     _add_chat_broadcast_tables,
 )
@@ -202,6 +203,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (67, "add_scheduled_posts_tables", _add_scheduled_posts_tables),
     (68, "add_chat_broadcast_tables", _add_chat_broadcast_tables),
     (69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted),
+    (70, "add_chat_broadcast_collections", _add_chat_broadcast_collections),
 )
 
 

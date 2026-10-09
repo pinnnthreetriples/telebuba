@@ -88,6 +88,9 @@ import type {
   CreateChatBroadcastCampaignData,
   CreateChatBroadcastCampaignErrors,
   CreateChatBroadcastCampaignResponses,
+  CreateChatCollectionData,
+  CreateChatCollectionErrors,
+  CreateChatCollectionResponses,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignErrors,
   CreateNeuroshillingCampaignResponses,
@@ -109,6 +112,9 @@ import type {
   DeleteChatBroadcastCampaignData,
   DeleteChatBroadcastCampaignErrors,
   DeleteChatBroadcastCampaignResponses,
+  DeleteChatCollectionData,
+  DeleteChatCollectionErrors,
+  DeleteChatCollectionResponses,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignErrors,
   DeleteNeuroshillingCampaignResponses,
@@ -250,6 +256,9 @@ import type {
   ListChatBroadcastOwnChatsData,
   ListChatBroadcastOwnChatsErrors,
   ListChatBroadcastOwnChatsResponses,
+  ListChatCollectionsData,
+  ListChatCollectionsErrors,
+  ListChatCollectionsResponses,
   ListDiscoveryAccountsData,
   ListDiscoveryAccountsErrors,
   ListDiscoveryAccountsResponses,
@@ -346,6 +355,9 @@ import type {
   SaveChatBroadcastSettingsData,
   SaveChatBroadcastSettingsErrors,
   SaveChatBroadcastSettingsResponses,
+  SaveChatCollectionData,
+  SaveChatCollectionErrors,
+  SaveChatCollectionResponses,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsErrors,
   SaveNeuroshillingSettingsResponses,
@@ -3155,6 +3167,74 @@ export const uploadChatBroadcastPhoto = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Collections
+ */
+export const listChatCollections = <ThrowOnError extends boolean = false>(
+  options?: Options<ListChatCollectionsData, ThrowOnError>,
+): RequestResult<ListChatCollectionsResponses, ListChatCollectionsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListChatCollectionsResponses,
+    ListChatCollectionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/collections', ...options });
+
+/**
+ * Create Collection
+ *
+ * Save a named list of chats; 409 ``collection_name_taken`` for a name in use.
+ */
+export const createChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<CreateChatCollectionData, ThrowOnError>,
+): RequestResult<CreateChatCollectionResponses, CreateChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateChatCollectionResponses,
+    CreateChatCollectionErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/collections',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Collection
+ *
+ * Delete a list; campaigns that took chats from it keep them.
+ */
+export const deleteChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteChatCollectionData, ThrowOnError>,
+): RequestResult<DeleteChatCollectionResponses, DeleteChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteChatCollectionResponses,
+    DeleteChatCollectionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/collections/{collection_id}', ...options });
+
+/**
+ * Save Collection
+ *
+ * Replace a list's name and chats at once.
+ */
+export const saveChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<SaveChatCollectionData, ThrowOnError>,
+): RequestResult<SaveChatCollectionResponses, SaveChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SaveChatCollectionResponses,
+    SaveChatCollectionErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/collections/{collection_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   });

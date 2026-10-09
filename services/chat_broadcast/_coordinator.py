@@ -38,8 +38,10 @@ async def run_campaign(campaign_id: str, run_id: str, *, refresh: bool) -> RunOu
         return "done"
     live = await live_accounts(campaign_id)
     if record.round == 0:
+        previous = await repository.list_targets(campaign_id)
+        seeds = await targets.materialize(campaign_id, ctx.settings, live)
         await repository.replace_targets(
-            campaign_id, await targets.materialize(campaign_id, ctx.settings, live)
+            campaign_id, targets.carry_membership(seeds, previous, live)
         )
         await repository.set_runtime(campaign_id, round=1)
         await _round_started(ctx, 1)
