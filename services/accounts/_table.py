@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from core.db import (
     account_summary_counts,
@@ -12,12 +12,20 @@ from core.db import (
     list_spam_statuses,
     list_warming_states,
 )
+from core.phone_geo import calling_code_for_phone
+from core.repositories.account_folders import (
+    count_filtered_accounts,
+    folder_ids_by_account,
+    list_filtered_accounts,
+)
+from schemas.account_folders import NO_PROXY, AccountListFilters
 from schemas.accounts import (
     AccountList,
+    AccountPage,
     AccountStats,
+    AccountStatus,
     health_for_status,
 )
-from schemas.api import Page
 from services.trust import account_trust_score_from
 
 if TYPE_CHECKING:
@@ -26,6 +34,13 @@ if TYPE_CHECKING:
 # Design stat-tile buckets (mirror the SPA's accountDesignStatus). Everything not
 # listed here falls into "problem" — the banned/frozen/errored catch-all.
 _STATS_NEEDS_CODE = {"unauthorized", "new"}
+# The same buckets as the list's ``status`` filter values.
+_STATUS_GROUPS: dict[str, frozenset[str]] = {
+    "active": frozenset({"alive"}),
+    "idle": frozenset({"flood_wait"}),
+    "needs_code": frozenset(_STATS_NEEDS_CODE),
+    "problem": frozenset(get_args(AccountStatus)) - {"alive", "flood_wait"} - _STATS_NEEDS_CODE,
+}
 
 
 class InvalidCursorError(ValueError):
@@ -48,25 +63,66 @@ def _decode_cursor(cursor: str | None) -> int:
     return offset
 
 
-async def list_accounts_page(
+async def list_accounts_page(  # noqa: PLR0913 - one keyword per filter of the page
     *,
     query: str = "",
     status: str = "all",
+    folder: str | None = None,
+    phone_code: int | None = None,
+    proxy_country: str | None = None,
+    min_trust: int | None = None,
     cursor: str | None = None,
     limit: int = 50,
-) -> Page[AccountRead]:
-    """One cursor-paginated page of accounts as the API ``Page[AccountRead]`` envelope.
+) -> AccountPage:
+    """One cursor-paginated page of accounts, with how many match the filters in all.
 
-    Fetches ``limit + 1`` rows to detect whether a further page exists without a
-    second count query; the extra row is dropped and only signals ``next_cursor``.
+    ``status`` is ``all``, a stat-tile bucket (``active``/``idle``/``needs_code``/
+    ``problem``) or one raw status. Folder, status and proxy country filter in SQL and
+    page there; the phone calling code and Trust exist only in Python (``phonenumbers``,
+    the Trust Score), so either one reads every SQL match and pages the survivors.
     """
     offset = _decode_cursor(cursor)
-    result = await list_accounts(query=query, status=status, limit=limit + 1, offset=offset)
-    has_more = len(result.accounts) > limit
-    items = result.accounts[:limit]
-    await _attach_signals(items)
-    next_cursor = str(offset + limit) if has_more else None
-    return Page(items=items, next_cursor=next_cursor)
+    filters = AccountListFilters(
+        query=query,
+        statuses=_statuses_for(status),
+        folder=folder,
+        proxy_country=None if proxy_country is None else _proxy_country(proxy_country),
+    )
+    if phone_code is None and min_trust is None:
+        result = await list_filtered_accounts(filters, limit=limit, offset=offset)
+        items = result.accounts
+        total = await count_filtered_accounts(filters)
+        await _attach_signals(items)
+    else:
+        matches = (await list_filtered_accounts(filters)).accounts
+        if phone_code is not None:
+            matches = [a for a in matches if calling_code_for_phone(a.phone) == phone_code]
+        await _attach_signals(matches)
+        if min_trust is not None:
+            matches = [a for a in matches if (a.trust_score or 0) >= min_trust]
+        total = len(matches)
+        items = matches[offset : offset + limit]
+    await _attach_folders(items)
+    next_cursor = str(offset + limit) if offset + limit < total else None
+    return AccountPage(items=items, next_cursor=next_cursor, total=total)
+
+
+def _proxy_country(value: str) -> str:
+    return value if value == NO_PROXY else value.upper()
+
+
+def _statuses_for(status: str) -> frozenset[str] | None:
+    if status == "all":
+        return None
+    return _STATUS_GROUPS.get(status, frozenset({status}))
+
+
+async def _attach_folders(accounts: list[AccountRead]) -> None:
+    if not accounts:
+        return
+    folders = await folder_ids_by_account()
+    for account in accounts:
+        account.folder_ids = folders.get(account.account_id, [])
 
 
 async def _attach_signals(accounts: list[AccountRead]) -> None:

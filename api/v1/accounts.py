@@ -26,16 +26,17 @@ from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload, staged_upload
 from core.config import settings
+from schemas.account_folders import AccountFilterOptions
 from schemas.accounts import (
     _ACCOUNT_ID_PATTERN,
     AccountCheckRequest,
+    AccountPage,
     AccountProfileUpdateRequest,
     AccountRead,
     AccountSessionFileImport,
     AccountStats,
     OpenWebResult,
 )
-from schemas.api import Page
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
@@ -54,24 +55,39 @@ router = APIRouter(tags=["accounts"])
 # bodies already enforce, from the same constant (``schemas.profile_media``
 # imports it the same way), so the two entry shapes cannot drift apart.
 AccountIdPath = Annotated[str, Path(min_length=1, pattern=_ACCOUNT_ID_PATTERN)]
+_PROXY_COUNTRY_PATTERN = r"^([A-Za-z]{2}|none)$"
 
 
 @router.get(
     "/accounts",
-    response_model=Page[AccountRead],
+    response_model=AccountPage,
     operation_id="listAccounts",
     responses=error_responses(400),
 )
-async def list_accounts(
+async def list_accounts(  # noqa: PLR0913 - one query parameter per filter of the page
     query: str = "",
     status: str = "all",
+    folder: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    phone_code: Annotated[int | None, Query(ge=1, le=999)] = None,
+    proxy_country: Annotated[str | None, Query(pattern=_PROXY_COUNTRY_PATTERN)] = None,
+    min_trust: Annotated[int | None, Query(ge=0, le=100)] = None,
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
-) -> Page[AccountRead]:
+) -> AccountPage:
+    """One page of accounts; ``total`` counts every account the filters match.
+
+    ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+    ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+    ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
+    """
     try:
         return await accounts.list_accounts_page(
             query=query,
             status=status,
+            folder=folder,
+            phone_code=phone_code,
+            proxy_country=proxy_country,
+            min_trust=min_trust,
             cursor=cursor,
             limit=limit,
         )
@@ -86,6 +102,16 @@ async def list_accounts(
 async def account_stats() -> AccountStats:
     """Fleet-wide status counts for the Accounts page tiles (all pages, not one)."""
     return await accounts.account_stats()
+
+
+@router.get(
+    "/accounts/filter-options",
+    response_model=AccountFilterOptions,
+    operation_id="accountFilterOptions",
+)
+async def account_filter_options() -> AccountFilterOptions:
+    """The phone calling codes and proxy countries the fleet has, for the filter pills."""
+    return await accounts.account_filter_options()
 
 
 @router.post(
