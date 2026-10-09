@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
+import { HelpHint } from '@/shared/ui';
 
 // Второй носитель `Row`/`Eyebrow` — первый живёт в pages/neuroshilling/ui/CampaignSetupSection.
 // Скопировано, а не импортировано: фича не тянет страницу. Третий носитель поднимает обе
@@ -10,12 +11,15 @@ import { cn } from '@/shared/lib/cn';
 export function Row({
   label,
   hint,
+  help,
   first = false,
   htmlFor,
   children,
 }: {
   label: string;
   hint?: string;
+  // Значок «?» рядом с подписью: одна фраза и пример, видны при наведении.
+  help?: { text: string; example?: string };
   // Первая строка блока не рисует разделитель: он отделял бы её от заголовка.
   first?: boolean;
   // Текстовые поля получают настоящий <label>; группам радио хватает своего aria-label.
@@ -30,13 +34,17 @@ export function Row({
       )}
     >
       <div className="min-w-0 flex-1">
-        {htmlFor === undefined ? (
-          <span className="type-label">{label}</span>
-        ) : (
-          <label htmlFor={htmlFor} className="type-label">
-            {label}
-          </label>
-        )}
+        <div className="flex items-center gap-xs">
+          {htmlFor === undefined ? (
+            <span className="type-label">{label}</span>
+          ) : (
+            <label htmlFor={htmlFor} className="type-label">
+              {label}
+            </label>
+          )}
+          {/* Вне <label>: внутри него текст подсказки вошёл бы в имя поля. */}
+          {help === undefined ? null : <HelpHint text={help.text} example={help.example} />}
+        </div>
         {hint === undefined ? null : <div className="mt-hair type-caption">{hint}</div>}
       </div>
       {children}

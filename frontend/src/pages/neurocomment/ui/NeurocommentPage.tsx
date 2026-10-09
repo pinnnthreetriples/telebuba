@@ -30,7 +30,7 @@ import {
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { clearLogsMutation, logCountQueryOptions, logsQueryOptions } from '@/entities/log';
-import { ChannelDiscoveryButton } from '@/features/channel-discovery';
+import { ChannelDiscoveryButton, UserParserButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
@@ -645,6 +645,13 @@ export function NeurocommentPage() {
               <ChannelDiscoveryButton
                 campaignId={campaignId}
                 campaignName={activeCampaign?.name ?? ''}
+              />
+            }
+            parserSlot={
+              <UserParserButton
+                campaignId={campaignId}
+                campaignName={activeCampaign?.name ?? ''}
+                campaignChannels={boardChannelNames}
               />
             }
           />
