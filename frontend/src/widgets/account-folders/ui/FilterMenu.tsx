@@ -101,7 +101,7 @@ export function FilterMenu({
           aria-label={t('accounts.filters.title')}
           className={surface(
             'panel',
-            'absolute right-0 top-full z-dialog mt-2 w-panel max-w-[90vw] px-4 py-4',
+            'absolute right-0 top-full z-dialog mt-2 w-max max-w-[90vw] px-4 py-4',
           )}
         >
           <div className="mb-4 flex items-center justify-between gap-3">

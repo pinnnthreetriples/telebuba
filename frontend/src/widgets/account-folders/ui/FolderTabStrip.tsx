@@ -169,7 +169,11 @@ export function FolderTabStrip({
           >
             <Icon name="gear" size={16} />
           </IconButton>
-        ) : null}
+        ) : (
+          // Holds the gear's place on «Все» and «Без папки», so the toolbar to its
+          // left does not jump sideways when a folder tab is opened.
+          <span aria-hidden className="size-icon" />
+        )}
       </div>
     </div>
   );
