@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { layer } from '@/shared/design-system/tokens';
@@ -6,7 +6,9 @@ import { layer } from '@/shared/design-system/tokens';
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Modal } from './Modal';
 import { Toaster } from './Toaster';
-import { toastError } from './toast';
+import { toastError, toastSuccess } from './toast';
+
+import '@/shared/i18n';
 
 const zIndex: Record<string, string> = layer;
 
@@ -58,4 +60,37 @@ test('a toast raised before a dialog opens still sits above it', async () => {
   // portals to document.body, so the stack's own element is the root.
   vi.useRealTimers();
   await expectNoAxeViolations(toastLayer as Element);
+});
+
+test('a success toast carries an undo that runs once and dismisses the toast', () => {
+  render(<Toaster />);
+  const undo = vi.fn();
+  act(() => {
+    toastSuccess('2 аккаунта → «Основные»', { label: 'Отменить', onClick: undo });
+  });
+  const toast = screen.getByText('2 аккаунта → «Основные»').closest('[role="status"]')!;
+  expect(toast).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+  expect(undo).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('2 аккаунта → «Основные»')).not.toBeInTheDocument();
+});
+
+test('a success toast closes by hand and on its own after 5 s', () => {
+  render(<Toaster />);
+  act(() => {
+    toastSuccess('Папка создана');
+  });
+  expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Скрыть' }));
+  expect(screen.queryByText('Папка создана')).not.toBeInTheDocument();
+
+  act(() => {
+    toastSuccess('Папка удалена');
+  });
+  expect(screen.getByText('Папка удалена')).toBeInTheDocument();
+  act(() => {
+    vi.advanceTimersByTime(5000);
+  });
+  expect(screen.queryByText('Папка удалена')).not.toBeInTheDocument();
 });

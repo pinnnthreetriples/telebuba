@@ -296,6 +296,7 @@
           "accounts"
         ],
         "summary": "List Accounts",
+        "description": "One page of accounts; ``total`` counts every account the filters match.\n\n``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /\n``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.\n``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.",
         "operationId": "listAccounts",
         "parameters": [
           {
@@ -316,6 +317,77 @@
               "type": "string",
               "default": "all",
               "title": "Status"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "phone_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 999,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phone Code"
+            }
+          },
+          {
+            "name": "proxy_country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^([A-Za-z]{2}|none)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Proxy Country"
+            }
+          },
+          {
+            "name": "min_trust",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 100,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Trust"
             }
           },
           {
@@ -369,7 +441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_AccountRead_"
+                  "$ref": "#/components/schemas/AccountPage"
                 }
               }
             }
@@ -450,6 +522,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccountStats"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/filter-options": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Account Filter Options",
+        "description": "The phone calling codes and proxy countries the fleet has, for the filter pills.",
+        "operationId": "accountFilterOptions",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFilterOptions"
                 }
               }
             }
@@ -15538,6 +15680,557 @@
           }
         }
       }
+    },
+    "/api/v1/account-folders": {
+      "get": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "List Account Folders",
+        "description": "Folders in creation order with their account counts, plus the views' counts.",
+        "operationId": "listAccountFolders",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFolders"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "Create Account Folder",
+        "operationId": "createAccountFolder",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountFolderWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFolder"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account-folders/{folder_id}": {
+      "patch": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "Rename Account Folder",
+        "operationId": "renameAccountFolder",
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountFolderWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFolder"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "Delete Account Folder",
+        "description": "Delete a folder; its accounts stay in the list and in their other folders.",
+        "operationId": "deleteAccountFolder",
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account-folders/{folder_id}/accounts": {
+      "post": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "Add Accounts To Folder",
+        "description": "Add accounts; ``account_ids`` in the answer are only the newly added ones.",
+        "operationId": "addAccountsToFolder",
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountFolderAccounts"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFolderChange"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account-folders/{folder_id}/accounts/remove": {
+      "post": {
+        "tags": [
+          "account-folders"
+        ],
+        "summary": "Remove Accounts From Folder",
+        "description": "Take accounts out; ``account_ids`` in the answer are only those that were in it.",
+        "operationId": "removeAccountsFromFolder",
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountFolderAccounts"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountFolderChange"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -15606,6 +16299,155 @@
           "account_id"
         ],
         "title": "AccountCheckRequest"
+      },
+      "AccountFilterOptions": {
+        "properties": {
+          "phone_codes": {
+            "items": {
+              "$ref": "#/components/schemas/PhoneCodeOption"
+            },
+            "type": "array",
+            "title": "Phone Codes"
+          },
+          "proxy_countries": {
+            "items": {
+              "$ref": "#/components/schemas/ProxyCountryOption"
+            },
+            "type": "array",
+            "title": "Proxy Countries"
+          },
+          "no_proxy_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "No Proxy Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_codes",
+          "proxy_countries",
+          "no_proxy_count"
+        ],
+        "title": "AccountFilterOptions",
+        "description": "What the Accounts page's filter pills can offer: only values present in data."
+      },
+      "AccountFolder": {
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "title": "Folder Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "account_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Account Count"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder_id",
+          "name",
+          "account_count",
+          "created_at"
+        ],
+        "title": "AccountFolder"
+      },
+      "AccountFolderAccounts": {
+        "properties": {
+          "account_ids": {
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Account Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_ids"
+        ],
+        "title": "AccountFolderAccounts"
+      },
+      "AccountFolderChange": {
+        "properties": {
+          "folder_id": {
+            "type": "string",
+            "title": "Folder Id"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Account Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder_id",
+          "account_ids"
+        ],
+        "title": "AccountFolderChange",
+        "description": "The accounts a membership write actually changed \u2014 what an undo must revert.\n\nAdding an account already in the folder, or removing one not in it, changes\nnothing and is left out; so is an id with no account behind it."
+      },
+      "AccountFolderWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AccountFolderWrite",
+        "description": "Create or rename: the name is trimmed; uniqueness ignores case (Cyrillic too)."
+      },
+      "AccountFolders": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFolder"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Count"
+          },
+          "unfiled_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unfiled Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total_count",
+          "unfiled_count"
+        ],
+        "title": "AccountFolders",
+        "description": "Folders in creation order, plus the counts of the two virtual views."
       },
       "AccountLimitGauge": {
         "properties": {
@@ -15734,6 +16576,40 @@
         ],
         "title": "AccountLimitsView",
         "description": "Every cap of one account, for the \"\u041b\u0438\u043c\u0438\u0442\u044b\" modal."
+      },
+      "AccountPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccountRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AccountPage",
+        "description": "One page of the Accounts table, plus how many accounts match its filters."
       },
       "AccountPrivacyOutcome": {
         "properties": {
@@ -16400,6 +17276,13 @@
               }
             ],
             "title": "Spam Detail"
+          },
+          "folder_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Folder Ids"
           }
         },
         "type": "object",
@@ -22491,33 +23374,6 @@
         "title": "OpenWebResult",
         "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand."
       },
-      "Page_AccountRead_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AccountRead"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Cursor"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "Page[AccountRead]"
-      },
       "Page_ChannelPostView_": {
         "properties": {
           "items": {
@@ -22652,6 +23508,37 @@
           "items"
         ],
         "title": "Page[LogEntry]"
+      },
+      "PhoneCodeOption": {
+        "properties": {
+          "calling_code": {
+            "type": "integer",
+            "title": "Calling Code"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calling_code",
+          "count"
+        ],
+        "title": "PhoneCodeOption",
+        "description": "A calling code present in the fleet's phone numbers."
       },
       "PhoneCodeRequestResult": {
         "properties": {
@@ -23075,6 +23962,36 @@
           "status"
         ],
         "title": "ProxyCheckResult"
+      },
+      "ProxyCountryOption": {
+        "properties": {
+          "country_code": {
+            "type": "string",
+            "title": "Country Code"
+          },
+          "country_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Name"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "country_code",
+          "count"
+        ],
+        "title": "ProxyCountryOption"
       },
       "ProxyCreate": {
         "properties": {

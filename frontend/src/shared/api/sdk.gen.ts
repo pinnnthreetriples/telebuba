@@ -10,6 +10,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AccountFilterOptionsData,
+  AccountFilterOptionsErrors,
+  AccountFilterOptionsResponses,
   AccountStatsData,
   AccountStatsErrors,
   AccountStatsResponses,
@@ -19,6 +22,9 @@ import type {
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
+  AddAccountsToFolderData,
+  AddAccountsToFolderErrors,
+  AddAccountsToFolderResponses,
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
@@ -82,6 +88,9 @@ import type {
   CreateAccountChannelData,
   CreateAccountChannelErrors,
   CreateAccountChannelResponses,
+  CreateAccountFolderData,
+  CreateAccountFolderErrors,
+  CreateAccountFolderResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
@@ -105,6 +114,9 @@ import type {
   DeleteAccountChannelResponses,
   DeleteAccountData,
   DeleteAccountErrors,
+  DeleteAccountFolderData,
+  DeleteAccountFolderErrors,
+  DeleteAccountFolderResponses,
   DeleteAccountResponses,
   DeleteCampaignData,
   DeleteCampaignErrors,
@@ -235,6 +247,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsErrors,
   ListAccountChatsResponses,
+  ListAccountFoldersData,
+  ListAccountFoldersErrors,
+  ListAccountFoldersResponses,
   ListAccountScheduledPostsData,
   ListAccountScheduledPostsErrors,
   ListAccountScheduledPostsResponses,
@@ -316,6 +331,9 @@ import type {
   RemoveAccountPhotoData,
   RemoveAccountPhotoErrors,
   RemoveAccountPhotoResponses,
+  RemoveAccountsFromFolderData,
+  RemoveAccountsFromFolderErrors,
+  RemoveAccountsFromFolderResponses,
   RemoveAccountStoryData,
   RemoveAccountStoryErrors,
   RemoveAccountStoryResponses,
@@ -331,6 +349,9 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
+  RenameAccountFolderData,
+  RenameAccountFolderErrors,
+  RenameAccountFolderResponses,
   RequestLoginCodeData,
   RequestLoginCodeErrors,
   RequestLoginCodeResponses,
@@ -576,6 +597,12 @@ export const getReadiness = <ThrowOnError extends boolean = false>(
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccounts = <ThrowOnError extends boolean = false>(
   options?: Options<ListAccountsData, ThrowOnError>,
@@ -597,6 +624,20 @@ export const accountStats = <ThrowOnError extends boolean = false>(
     url: '/api/v1/accounts/stats',
     ...options,
   });
+
+/**
+ * Account Filter Options
+ *
+ * The phone calling codes and proxy countries the fleet has, for the filter pills.
+ */
+export const accountFilterOptions = <ThrowOnError extends boolean = false>(
+  options?: Options<AccountFilterOptionsData, ThrowOnError>,
+): RequestResult<AccountFilterOptionsResponses, AccountFilterOptionsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    AccountFilterOptionsResponses,
+    AccountFilterOptionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/filter-options', ...options });
 
 /**
  * Check Account
@@ -3232,6 +3273,114 @@ export const saveChatCollection = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/chat-broadcast/collections/{collection_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Account Folders
+ *
+ * Folders in creation order with their account counts, plus the views' counts.
+ */
+export const listAccountFolders = <ThrowOnError extends boolean = false>(
+  options?: Options<ListAccountFoldersData, ThrowOnError>,
+): RequestResult<ListAccountFoldersResponses, ListAccountFoldersErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListAccountFoldersResponses,
+    ListAccountFoldersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/account-folders', ...options });
+
+/**
+ * Create Account Folder
+ */
+export const createAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<CreateAccountFolderData, ThrowOnError>,
+): RequestResult<CreateAccountFolderResponses, CreateAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateAccountFolderResponses,
+    CreateAccountFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Account Folder
+ *
+ * Delete a folder; its accounts stay in the list and in their other folders.
+ */
+export const deleteAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteAccountFolderData, ThrowOnError>,
+): RequestResult<DeleteAccountFolderResponses, DeleteAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteAccountFolderResponses,
+    DeleteAccountFolderErrors,
+    ThrowOnError
+  >({ url: '/api/v1/account-folders/{folder_id}', ...options });
+
+/**
+ * Rename Account Folder
+ */
+export const renameAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<RenameAccountFolderData, ThrowOnError>,
+): RequestResult<RenameAccountFolderResponses, RenameAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    RenameAccountFolderResponses,
+    RenameAccountFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Accounts To Folder
+ *
+ * Add accounts; ``account_ids`` in the answer are only the newly added ones.
+ */
+export const addAccountsToFolder = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountsToFolderData, ThrowOnError>,
+): RequestResult<AddAccountsToFolderResponses, AddAccountsToFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AddAccountsToFolderResponses,
+    AddAccountsToFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Accounts From Folder
+ *
+ * Take accounts out; ``account_ids`` in the answer are only those that were in it.
+ */
+export const removeAccountsFromFolder = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountsFromFolderData, ThrowOnError>,
+): RequestResult<RemoveAccountsFromFolderResponses, RemoveAccountsFromFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RemoveAccountsFromFolderResponses,
+    RemoveAccountsFromFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}/accounts/remove',
     ...options,
     headers: {
       'Content-Type': 'application/json',

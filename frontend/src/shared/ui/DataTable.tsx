@@ -42,6 +42,9 @@ interface DataTableProps<TData> {
   // expanded state follows the POSITION: re-sorting, filtering or a refetch that changes
   // the order opens the neighbouring row instead of the one the operator opened.
   getRowId?: (original: TData, index: number) => string;
+  // Keeps the column header row for screen readers only, for a table whose cells say
+  // what they are on their own.
+  hideHeader?: boolean;
 }
 
 // text-left so headers sit directly above their left-aligned cells; a column that wants a
@@ -112,6 +115,7 @@ export function DataTable<TData>({
   getRowProps,
   renderSubRow,
   getRowId,
+  hideHeader = false,
 }: DataTableProps<TData>) {
   const table = useReactTable({
     data,
@@ -213,7 +217,7 @@ export function DataTable<TData>({
   return (
     <div ref={box}>
       <table className="w-full min-w-table border-collapse">
-        <thead>
+        <thead className={hideHeader ? 'sr-only' : undefined}>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="bg-surface">
               {headerGroup.headers.map((header) => (

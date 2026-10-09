@@ -55,6 +55,109 @@ export type AccountCheckRequest = {
 };
 
 /**
+ * AccountFilterOptions
+ *
+ * What the Accounts page's filter pills can offer: only values present in data.
+ */
+export type AccountFilterOptions = {
+  /**
+   * Phone Codes
+   */
+  phone_codes: Array<PhoneCodeOption>;
+  /**
+   * Proxy Countries
+   */
+  proxy_countries: Array<ProxyCountryOption>;
+  /**
+   * No Proxy Count
+   */
+  no_proxy_count: number;
+};
+
+/**
+ * AccountFolder
+ */
+export type AccountFolder = {
+  /**
+   * Folder Id
+   */
+  folder_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Account Count
+   */
+  account_count: number;
+  /**
+   * Created At
+   */
+  created_at: string;
+};
+
+/**
+ * AccountFolderAccounts
+ */
+export type AccountFolderAccounts = {
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * AccountFolderChange
+ *
+ * The accounts a membership write actually changed — what an undo must revert.
+ *
+ * Adding an account already in the folder, or removing one not in it, changes
+ * nothing and is left out; so is an id with no account behind it.
+ */
+export type AccountFolderChange = {
+  /**
+   * Folder Id
+   */
+  folder_id: string;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * AccountFolderWrite
+ *
+ * Create or rename: the name is trimmed; uniqueness ignores case (Cyrillic too).
+ */
+export type AccountFolderWrite = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * AccountFolders
+ *
+ * Folders in creation order, plus the counts of the two virtual views.
+ */
+export type AccountFolders = {
+  /**
+   * Items
+   */
+  items: Array<AccountFolder>;
+  /**
+   * Total Count
+   */
+  total_count: number;
+  /**
+   * Unfiled Count
+   */
+  unfiled_count: number;
+};
+
+/**
  * AccountLimitGauge
  *
  * One cap as the operator reads it: the number, what is spent, when a slot returns.
@@ -127,6 +230,26 @@ export type AccountLimitsView = {
    * Busiest Channel
    */
   busiest_channel?: string | null;
+};
+
+/**
+ * AccountPage
+ *
+ * One page of the Accounts table, plus how many accounts match its filters.
+ */
+export type AccountPage = {
+  /**
+   * Items
+   */
+  items: Array<AccountRead>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+  /**
+   * Total
+   */
+  total: number;
 };
 
 /**
@@ -450,6 +573,10 @@ export type AccountRead = {
    * Spam Detail
    */
   spam_detail?: string | null;
+  /**
+   * Folder Ids
+   */
+  folder_ids?: Array<string>;
 };
 
 /**
@@ -4214,20 +4341,6 @@ export type OpenWebResult = {
 };
 
 /**
- * Page[AccountRead]
- */
-export type PageAccountRead = {
-  /**
-   * Items
-   */
-  items: Array<AccountRead>;
-  /**
-   * Next Cursor
-   */
-  next_cursor?: string | null;
-};
-
-/**
  * Page[ChannelPostView]
  */
 export type PageChannelPostView = {
@@ -4295,6 +4408,26 @@ export type PageLogEntry = {
    * Next Cursor
    */
   next_cursor?: string | null;
+};
+
+/**
+ * PhoneCodeOption
+ *
+ * A calling code present in the fleet's phone numbers.
+ */
+export type PhoneCodeOption = {
+  /**
+   * Calling Code
+   */
+  calling_code: number;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Count
+   */
+  count: number;
 };
 
 /**
@@ -4534,6 +4667,24 @@ export type ProxyCheckResult = {
    * Is Datacenter
    */
   is_datacenter?: boolean;
+};
+
+/**
+ * ProxyCountryOption
+ */
+export type ProxyCountryOption = {
+  /**
+   * Country Code
+   */
+  country_code: string;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Count
+   */
+  count: number;
 };
 
 /**
@@ -5898,6 +6049,22 @@ export type ListAccountsData = {
      */
     status?: string;
     /**
+     * Folder
+     */
+    folder?: string | null;
+    /**
+     * Phone Code
+     */
+    phone_code?: number | null;
+    /**
+     * Proxy Country
+     */
+    proxy_country?: string | null;
+    /**
+     * Min Trust
+     */
+    min_trust?: number | null;
+    /**
      * Cursor
      */
     cursor?: string | null;
@@ -5934,7 +6101,7 @@ export type ListAccountsResponses = {
   /**
    * Successful Response
    */
-  200: PageAccountRead;
+  200: AccountPage;
 };
 
 export type ListAccountsResponse = ListAccountsResponses[keyof ListAccountsResponses];
@@ -5971,6 +6138,41 @@ export type AccountStatsResponses = {
 };
 
 export type AccountStatsResponse = AccountStatsResponses[keyof AccountStatsResponses];
+
+export type AccountFilterOptionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/filter-options';
+};
+
+export type AccountFilterOptionsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AccountFilterOptionsError =
+  AccountFilterOptionsErrors[keyof AccountFilterOptionsErrors];
+
+export type AccountFilterOptionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFilterOptions;
+};
+
+export type AccountFilterOptionsResponse =
+  AccountFilterOptionsResponses[keyof AccountFilterOptionsResponses];
 
 export type CheckAccountData = {
   body: AccountCheckRequest;
@@ -12845,3 +13047,252 @@ export type SaveChatCollectionResponses = {
 
 export type SaveChatCollectionResponse =
   SaveChatCollectionResponses[keyof SaveChatCollectionResponses];
+
+export type ListAccountFoldersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/account-folders';
+};
+
+export type ListAccountFoldersErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListAccountFoldersError = ListAccountFoldersErrors[keyof ListAccountFoldersErrors];
+
+export type ListAccountFoldersResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolders;
+};
+
+export type ListAccountFoldersResponse =
+  ListAccountFoldersResponses[keyof ListAccountFoldersResponses];
+
+export type CreateAccountFolderData = {
+  body: AccountFolderWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/account-folders';
+};
+
+export type CreateAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateAccountFolderError = CreateAccountFolderErrors[keyof CreateAccountFolderErrors];
+
+export type CreateAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolder;
+};
+
+export type CreateAccountFolderResponse =
+  CreateAccountFolderResponses[keyof CreateAccountFolderResponses];
+
+export type DeleteAccountFolderData = {
+  body?: never;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}';
+};
+
+export type DeleteAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteAccountFolderError = DeleteAccountFolderErrors[keyof DeleteAccountFolderErrors];
+
+export type DeleteAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteAccountFolderResponse =
+  DeleteAccountFolderResponses[keyof DeleteAccountFolderResponses];
+
+export type RenameAccountFolderData = {
+  body: AccountFolderWrite;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}';
+};
+
+export type RenameAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RenameAccountFolderError = RenameAccountFolderErrors[keyof RenameAccountFolderErrors];
+
+export type RenameAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolder;
+};
+
+export type RenameAccountFolderResponse =
+  RenameAccountFolderResponses[keyof RenameAccountFolderResponses];
+
+export type AddAccountsToFolderData = {
+  body: AccountFolderAccounts;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}/accounts';
+};
+
+export type AddAccountsToFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AddAccountsToFolderError = AddAccountsToFolderErrors[keyof AddAccountsToFolderErrors];
+
+export type AddAccountsToFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolderChange;
+};
+
+export type AddAccountsToFolderResponse =
+  AddAccountsToFolderResponses[keyof AddAccountsToFolderResponses];
+
+export type RemoveAccountsFromFolderData = {
+  body: AccountFolderAccounts;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}/accounts/remove';
+};
+
+export type RemoveAccountsFromFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RemoveAccountsFromFolderError =
+  RemoveAccountsFromFolderErrors[keyof RemoveAccountsFromFolderErrors];
+
+export type RemoveAccountsFromFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolderChange;
+};
+
+export type RemoveAccountsFromFolderResponse =
+  RemoveAccountsFromFolderResponses[keyof RemoveAccountsFromFolderResponses];
