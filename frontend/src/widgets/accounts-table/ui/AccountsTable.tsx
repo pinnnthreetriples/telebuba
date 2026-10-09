@@ -195,8 +195,9 @@ export function AccountsTable({
           <span className="type-body text-content-subtle">—</span>
         ) : (
           <div className="flex items-center gap-2">
-            {/* The header row is screen-reader only, so the cell names itself. */}
-            <span aria-hidden className="type-small">
+            {/* The header row is screen-reader only, so the cell names itself. A card
+                (narrow layout, role=listitem) already labels the row, so it hides there. */}
+            <span aria-hidden className="type-small in-[[role=listitem]]:hidden">
               {t('accounts.table.trust')}
             </span>
             <ProgressBar
