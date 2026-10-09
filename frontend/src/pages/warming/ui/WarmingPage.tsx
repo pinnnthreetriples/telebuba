@@ -302,65 +302,70 @@ export function WarmingPage() {
                   return (
                     <div
                       key={account.account_id}
-                      className="flex items-center gap-3 rounded-md border border-line bg-surface-card px-3 py-3"
+                      className="rounded-md border border-line bg-surface-card px-3 py-3"
                     >
-                      <AccountAvatar
-                        account={account}
-                        className="size-icon shrink-0 rounded-full"
-                        fallbackClassName="text-body font-medium bg-info-tint text-info-strong"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1">
-                          <span className="truncate type-h3">{name}</span>
-                          {showPhone ? null : flag}
-                        </div>
-                        {showPhone ? (
+                      <div className="flex items-center gap-3">
+                        <AccountAvatar
+                          account={account}
+                          className="size-icon shrink-0 rounded-full"
+                          fallbackClassName="text-body font-medium bg-info-tint text-info-strong"
+                        />
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1">
-                            <span className="truncate type-small">{account.phone}</span>
-                            {flag}
+                            <span className="truncate type-h3">{name}</span>
+                            {showPhone ? null : flag}
                           </div>
-                        ) : null}
-                        <div className="mt-1 flex items-center gap-2">
-                          <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
-                          <span className={`text-small font-medium ${tTone}`}>{trust ?? '—'}</span>
-                          {ptype ? (
-                            <>
-                              <span className="type-small">·</span>
-                              {pc ? (
-                                <span
-                                  className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
-                                />
-                              ) : null}
-                              <span className="type-small">{proxyTypeLabel(ptype)}</span>
-                            </>
+                          {showPhone ? (
+                            <div className="flex items-center gap-1">
+                              <span className="truncate type-small">{account.phone}</span>
+                              {flag}
+                            </div>
                           ) : null}
-                        </div>
-                        {/* Spelled out, not only in the button's `title`: a disabled
-                            button never shows its tooltip to keyboard or touch. */}
-                        {!ready && blockers ? (
-                          <div id={blockersId} className="mt-1 type-small text-warning-deep">
-                            {blockers}
+                          <div className="mt-1 flex items-center gap-2">
+                            <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
+                            <span className={`text-small font-medium ${tTone}`}>
+                              {trust ?? '—'}
+                            </span>
+                            {ptype ? (
+                              <>
+                                <span className="type-small">·</span>
+                                {pc ? (
+                                  <span
+                                    className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
+                                  />
+                                ) : null}
+                                <span className="type-small">{proxyTypeLabel(ptype)}</span>
+                              </>
+                            ) : null}
                           </div>
-                        ) : null}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="lg"
+                          disabled={!ready || busyIds.has(account.account_id)}
+                          title={ready ? undefined : blockers}
+                          aria-describedby={!ready && blockers ? blockersId : undefined}
+                          onClick={() => {
+                            setWarmDaysFor(account);
+                          }}
+                          className={
+                            ready
+                              ? undefined
+                              : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
+                          }
+                        >
+                          {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="lg"
-                        disabled={!ready || busyIds.has(account.account_id)}
-                        title={ready ? undefined : blockers}
-                        aria-describedby={!ready && blockers ? blockersId : undefined}
-                        onClick={() => {
-                          setWarmDaysFor(account);
-                        }}
-                        className={
-                          ready
-                            ? undefined
-                            : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
-                        }
-                      >
-                        {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
-                      </Button>
+                      {/* Spelled out, not only in the button's `title`: a disabled button
+                          never shows its tooltip to keyboard or touch. Full width under the
+                          row, so a long list does not squeeze the name beside it. */}
+                      {!ready && blockers ? (
+                        <div id={blockersId} className="mt-2 type-small text-warning-deep">
+                          {blockers}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })
@@ -530,6 +535,7 @@ export function WarmingPage() {
                         className="flex size-touch shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
                         <svg
+                          aria-hidden
                           width="15"
                           height="15"
                           viewBox="0 0 24 24"
