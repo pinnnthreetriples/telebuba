@@ -36,6 +36,9 @@ test('disables warming for a not-ready account and shows the reason', async () =
   const blocked = screen.getByText('Недоступен');
   expect(blocked).toBeDisabled();
   expect(blocked.getAttribute('title')).toBe('нет прокси');
+  // A disabled button never shows its tooltip, so the reason is also on the card
+  // and announced as the button's description.
+  expect(blocked).toHaveAccessibleDescription('нет прокси');
 });
 
 test('warming row actions meet the touch target size', async () => {

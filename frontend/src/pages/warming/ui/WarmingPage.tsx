@@ -287,6 +287,7 @@ export function WarmingPage() {
                       return key ? t(key) : reason;
                     })
                     .join(', ');
+                  const blockersId = `warm-blockers-${account.account_id}`;
                   // Telegram name on top; the phone (with its country flag)
                   // drops to a subtitle. When the account has no name,
                   // accountDisplayName falls back to the phone, so skip the
@@ -334,6 +335,13 @@ export function WarmingPage() {
                             </>
                           ) : null}
                         </div>
+                        {/* Spelled out, not only in the button's `title`: a disabled
+                            button never shows its tooltip to keyboard or touch. */}
+                        {!ready && blockers ? (
+                          <div id={blockersId} className="mt-1 type-small text-warning-deep">
+                            {blockers}
+                          </div>
+                        ) : null}
                       </div>
                       <Button
                         type="button"
@@ -341,6 +349,7 @@ export function WarmingPage() {
                         size="lg"
                         disabled={!ready || busyIds.has(account.account_id)}
                         title={ready ? undefined : blockers}
+                        aria-describedby={!ready && blockers ? blockersId : undefined}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}

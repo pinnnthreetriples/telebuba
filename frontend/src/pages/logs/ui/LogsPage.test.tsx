@@ -309,3 +309,24 @@ test('applies the status and account filters', async () => {
     expect(filtered).toBe(true);
   });
 });
+
+test('a failed load offers a retry that refetches the logs', async () => {
+  // The filters re-run the same request, so the error needs its own way out.
+  let fail = true;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts') return Promise.resolve(jsonResponse(ACCOUNTS));
+    if (fail) return Promise.resolve(new Response('{}', { status: 500 }));
+    return Promise.resolve(
+      jsonResponse({ items: [logRow(1, 'warming_started')], next_cursor: null }),
+    );
+  });
+  renderWithClient(<LogsPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить логи');
+  fail = false;
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => {
+    expect(screen.getByText('Прогрев запущен')).toBeInTheDocument();
+  });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
