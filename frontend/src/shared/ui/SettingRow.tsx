@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
+import { HelpHint } from './HelpHint';
+
 // Строка настройки: подпись (и подсказка под ней) слева, контрол справа, волосяной
 // разделитель сверху. Жила двумя копиями — в настройках кампании нейрошиллинга и в поиске
 // каналов, — и копии успели разойтись подписью: одна набирала её `text-body`, другая
@@ -9,12 +11,15 @@ import { cn } from '@/shared/lib/cn';
 export function SettingRow({
   label,
   hint,
+  help,
   first = false,
   htmlFor,
   children,
 }: {
   label: string;
   hint?: string;
+  // Значок «?» рядом с подписью: одна фраза и пример, видны при наведении.
+  help?: { text: string; example?: string };
   // Первая строка блока не рисует разделитель: он отделял бы её от заголовка.
   first?: boolean;
   // Текстовые поля получают настоящий <label>; группам радио хватает своего aria-label.
@@ -29,13 +34,17 @@ export function SettingRow({
       )}
     >
       <div className="min-w-0 flex-1">
-        {htmlFor === undefined ? (
-          <div className="text-body">{label}</div>
-        ) : (
-          <label htmlFor={htmlFor} className="block text-body">
-            {label}
-          </label>
-        )}
+        <div className="flex items-center gap-1">
+          {htmlFor === undefined ? (
+            <div className="text-body">{label}</div>
+          ) : (
+            <label htmlFor={htmlFor} className="block text-body">
+              {label}
+            </label>
+          )}
+          {/* Вне <label>: внутри него текст подсказки вошёл бы в имя поля. */}
+          {help === undefined ? null : <HelpHint text={help.text} example={help.example} />}
+        </div>
         {hint === undefined ? null : <div className="mt-1 type-small">{hint}</div>}
       </div>
       {children}

@@ -3491,5 +3491,310 @@
       "cancel": "Cancel",
       "save": "Save"
     }
+  },
+  "userParser": {
+    "open": "Parser",
+    "title": "User parser",
+    "sub": "{{name}} · audience from chats and channels",
+    "reset": "Reset",
+    "submit": "Start",
+    "back": "← Edit parameters",
+    "stop": "Stop",
+    "close": "Done",
+    "excelLater": "Excel comes with the backend",
+    "presetName": "{{mode}} · {{n}}",
+    "form": {
+      "sections": {
+        "exclude": "Exclude",
+        "scope": "What to read",
+        "quality": "Who gets in",
+        "speed": "Speed and protection"
+      },
+      "presets": {
+        "label": "Presets",
+        "empty": "None yet",
+        "save": "Save"
+      },
+      "mode": {
+        "label": "Collect",
+        "members": "Members",
+        "messages": "Message authors",
+        "comments": "Commenters"
+      },
+      "sources": {
+        "members": "Groups",
+        "messages": "Chats",
+        "comments": "Channels"
+      },
+      "sourcesCount_one": "{{count}} recognised",
+      "sourcesCount_other": "{{count}} recognised",
+      "fromCampaign": "+ Campaign channels ({{count}})",
+      "keywords": "Keywords",
+      "optional": "optional",
+      "keywordsPlaceholder": "buy, price, delivery",
+      "limits": {
+        "members": "Members per chat",
+        "messages": "Messages per chat",
+        "days": "Last N days",
+        "posts": "Posts per channel",
+        "perPost": "Comments per post",
+        "minLength": "Min. comment length"
+      },
+      "minMessages": {
+        "messages": "Min. messages per person",
+        "comments": "Min. comments per person"
+      },
+      "minSources": "Min. sources per person",
+      "lastSeen": {
+        "label": "Last seen",
+        "any": "Any",
+        "recently": "Recently",
+        "week": "Within a week",
+        "month": "Within a month"
+      },
+      "stopWords": "Stop words in name",
+      "stopWordsPlaceholder": "shop, bot",
+      "blacklist": "Blacklist",
+      "blacklistPlaceholder": "@username, 5100000000",
+      "toggles": {
+        "skipBots": "Bots",
+        "skipDeleted": "Deleted",
+        "skipScam": "Scam / fake",
+        "includeReplies": "Count replies",
+        "includeForwards": "Count forwarded",
+        "withUsername": "With username only",
+        "withPhoto": "With photo only",
+        "premiumOnly": "Premium only",
+        "withStories": "With stories only",
+        "excludeOwn": "Our accounts",
+        "excludeAdmins": "Source admins",
+        "excludeCollected": "Previously collected"
+      },
+      "protect": "Account protection",
+      "fast": "Fast mode",
+      "chatDelay": "Pause between chats, s",
+      "requestDelay": "Pause between requests, s",
+      "addSource": {
+        "members": "+ Group",
+        "messages": "+ Chat",
+        "comments": "+ Channel"
+      },
+      "sourcePlaceholder": {
+        "members": "t.me/group or @group",
+        "messages": "t.me/chat or @chat",
+        "comments": "t.me/channel or @channel"
+      },
+      "addConfirm": "Add",
+      "addCancel": "Cancel",
+      "removeSource": "Remove {{source}}",
+      "accounts": {
+        "title": "Accounts",
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "add": "Add accounts",
+        "remove": "Remove {{name}}"
+      },
+      "speedSummary": {
+        "on": "Protection on · {{chat}} s pause",
+        "off": "Protection off · {{chat}} s pause"
+      }
+    },
+    "help": {
+      "presets": {
+        "text": "Save the settings and start them later in one click.",
+        "ex": "E.g. “Crypto channel commenters”"
+      },
+      "mode": {
+        "members": {
+          "text": "Everyone who is in the group.",
+          "ex": "If the list is hidden, pick “Message authors”"
+        },
+        "messages": {
+          "text": "People who wrote in the chat.",
+          "ex": "Lurkers are skipped — only active people"
+        },
+        "comments": {
+          "text": "People who comment under channel posts.",
+          "ex": "Channel @news → people from its discussion"
+        }
+      },
+      "sources": {
+        "text": "Where to collect from. Press “+” and paste a link — several at once work too.",
+        "ex": "@chat or t.me/chat. One forum topic: t.me/chat/123"
+      },
+      "keywords": {
+        "text": "Only people who wrote these words.",
+        "ex": "“buy, price” → people who asked about buying"
+      },
+      "members": {
+        "text": "How many people to take from each chat.",
+        "ex": "5000 → at most 5000 per chat"
+      },
+      "messages": {
+        "text": "How many recent messages to read in each chat.",
+        "ex": "1000 → the last 1000"
+      },
+      "days": {
+        "text": "Only fresh messages count.",
+        "ex": "30 → last month only"
+      },
+      "posts": {
+        "text": "How many recent posts to check.",
+        "ex": "50 → comments under the last 50 posts"
+      },
+      "perPost": {
+        "text": "How many comments to read under each post.",
+        "ex": "200 → the first 200 per post"
+      },
+      "minLength": {
+        "text": "Short comments don't count.",
+        "ex": "10 → “+” and “ok” are ignored"
+      },
+      "minMessages": {
+        "text": "How many times a person must write to get in.",
+        "ex": "3 → people who wrote once or twice are skipped"
+      },
+      "minSources": {
+        "text": "In how many of the listed sources the person must appear.",
+        "ex": "2 → only people found in at least two chats"
+      },
+      "lastSeen": {
+        "text": "When the person was last on Telegram.",
+        "ex": "“Week” → seen within 7 days. Hidden status is skipped"
+      },
+      "skipBots": {
+        "text": "Bots aren't people — you can't sell to them."
+      },
+      "skipDeleted": {
+        "text": "Deleted accounts are empty records."
+      },
+      "skipScam": {
+        "text": "Telegram itself flagged them as scammers."
+      },
+      "includeReplies": {
+        "text": "Replies to others count too.",
+        "ex": "Replied “agree” → counted"
+      },
+      "includeForwards": {
+        "text": "Forwarded messages count as their own.",
+        "ex": "Usually better off — forwarding isn't talking"
+      },
+      "withUsername": {
+        "text": "Without an @username it's hard to reach them."
+      },
+      "withPhoto": {
+        "text": "No photo often means an empty or fake account."
+      },
+      "premiumOnly": {
+        "text": "Paid accounts are almost always real people."
+      },
+      "withStories": {
+        "text": "Posts stories — so actively uses Telegram."
+      },
+      "stopWords": {
+        "text": "Skip people with these words in their name or handle.",
+        "ex": "shop, bot → shops and bots are skipped"
+      },
+      "excludeOwn": {
+        "text": "Don't collect our own accounts."
+      },
+      "excludeAdmins": {
+        "text": "Chat admins are usually not customers."
+      },
+      "excludeCollected": {
+        "text": "Skip people already in earlier bases.",
+        "ex": "Collected yesterday → only new people today"
+      },
+      "blacklist": {
+        "text": "These people never get into the base.",
+        "ex": "@username or ID, one per line"
+      },
+      "protect": {
+        "text": "When Telegram asks to wait, the account rests and another one takes over."
+      },
+      "fast": {
+        "text": "Fewer pauses — faster, but a higher risk of limits.",
+        "ex": "Good for chats up to 1000 people"
+      },
+      "chatDelay": {
+        "text": "Pause before the next chat.",
+        "ex": "5 → wait 5 seconds"
+      },
+      "requestDelay": {
+        "text": "Pause between requests to Telegram. Longer is safer.",
+        "ex": "1 → one request per second"
+      },
+      "accounts": {
+        "text": "Who does the collecting. Press “+” to choose.",
+        "ex": "4 accounts → sources are split between them, so it's faster"
+      }
+    },
+    "log": {
+      "start": "Start: {{accounts}} accounts, {{sources}} sources",
+      "chat": "Reading {{chat}}",
+      "topic": "Reading {{chat}} — topic #{{topic}} only",
+      "found": "Users collected: {{count}}",
+      "partial": "Telegram returned {{count}} members — the list may be incomplete",
+      "hidden": "The member list is hidden — pick “Message authors”",
+      "flood": "FloodWait 12 s — account paused, the next one continues",
+      "filtered": "Collected {{raw}}, {{kept}} left after filters",
+      "done": "Done"
+    },
+    "results": {
+      "title_one": "{{count}} user",
+      "title_other": "{{count}} users",
+      "sources": "sources",
+      "raw": "collected",
+      "users": "in the base",
+      "accounts": "accounts",
+      "noUsername": "no username",
+      "inSources_one": "in {{count}} source",
+      "inSources_other": "in {{count}} sources",
+      "count": {
+        "messages_one": "{{count}} message",
+        "messages_other": "{{count}} messages",
+        "comments_one": "{{count}} comment",
+        "comments_other": "{{count}} comments"
+      },
+      "lastSeen": {
+        "online": "online",
+        "recently": "recently",
+        "week": "this week",
+        "month": "this month",
+        "long": "long ago",
+        "hidden": "hidden"
+      }
+    },
+    "tabs": {
+      "label": "Parser section",
+      "new": "New run",
+      "bases": "Bases · {{count}}"
+    },
+    "bases": {
+      "name": "{{mode}} · {{date}}",
+      "demoCrypto": "Crypto channel commenters",
+      "demoSmm": "SMM chat authors",
+      "folderMeta_one": "{{mode}} · {{count}} person",
+      "folderMeta_other": "{{mode}} · {{count}} people",
+      "summary_one": "{{count}} person · sources: {{sources}} · {{date}}",
+      "summary_other": "{{count}} people · sources: {{sources}} · {{date}}",
+      "search": "Name, @username or ID",
+      "nothingFound": "Nobody found",
+      "rename": "Rename",
+      "save": "Save",
+      "delete": "Delete base",
+      "deleteTitle": "Delete “{{name}}”?",
+      "deleteBody_one": "{{count}} person will be deleted for good.",
+      "deleteBody_other": "{{count}} people will be deleted for good.",
+      "deleteConfirm": "Delete",
+      "cancel": "Cancel",
+      "emptyTitle": "No bases yet",
+      "emptyHint": "Start a run — the result is saved here as a folder.",
+      "modeName": {
+        "members": "Members",
+        "messages": "Message authors",
+        "comments": "Commenters"
+      }
+    }
   }
 }

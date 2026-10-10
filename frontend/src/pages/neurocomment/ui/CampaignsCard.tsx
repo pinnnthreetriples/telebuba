@@ -57,6 +57,7 @@ export function CampaignsCard({
   checkingChannels,
   channelCheckStatus,
   discoverySlot,
+  parserSlot,
 }: {
   campaignList: NeurocommentCampaign[];
   campaignId: string | null;
@@ -83,6 +84,8 @@ export function CampaignsCard({
   // Rendered beside "Проверить каналы". A slot, not new state: this component stays
   // purely presentational (zero hooks) while the feature owns its own server I/O.
   discoverySlot?: ReactNode;
+  // Rendered after "Проверить каналы" — the user parser, same slot contract.
+  parserSlot?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -194,11 +197,13 @@ export function CampaignsCard({
           label={t('neurocomment.channels.title')}
           title={t('neurocomment.channels.title')}
         >
-          <div className="mb-3 flex items-center justify-between gap-2">
+          {/* Имя кампании — своей строкой: три кнопки рядом с ним в узкой колонке не
+              оставляли от имени ничего. */}
+          <div className="mb-3 flex flex-col gap-2">
             <span className="min-w-0 truncate type-small-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {discoverySlot}
               <Button
                 size="sm"
@@ -213,6 +218,7 @@ export function CampaignsCard({
                   ? t('neurocomment.channels.checking')
                   : t('neurocomment.channels.check')}
               </Button>
+              {parserSlot}
             </div>
           </div>
           <div className="flex flex-wrap items-start gap-2">
