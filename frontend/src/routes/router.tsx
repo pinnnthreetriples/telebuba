@@ -106,8 +106,28 @@ const settingsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage'),
 });
 
+// PROTOTYPE — throwaway: the Масстегинг layout variants on mock data. No session
+// gate so it renders without a backend; delete with pages/masstagging-prototype.
+const prototypeLayout = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'prototype',
+  component: AppShell,
+});
+
+const masstaggingPrototypeRoute = createRoute({
+  getParentRoute: () => prototypeLayout,
+  path: '/prototype/masstagging',
+  validateSearch: (search: Record<string, unknown>): { variant?: string } =>
+    typeof search.variant === 'string' ? { variant: search.variant } : {},
+  component: lazyRouteComponent(
+    () => import('@/pages/masstagging-prototype'),
+    'MasstaggingPrototypePage',
+  ),
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  prototypeLayout.addChildren([masstaggingPrototypeRoute]),
   protectedRoute.addChildren([
     indexRoute,
     warmingRoute,
