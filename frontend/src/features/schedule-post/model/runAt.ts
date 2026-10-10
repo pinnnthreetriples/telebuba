@@ -9,7 +9,7 @@ const MINUTE_MS = 60_000;
 // Mirrored so the field says "too soon" before an upload is spent on a refusal;
 // the server stays the authority and answers `scheduled_run_at_out_of_range`.
 export const MIN_LEAD_MS = MINUTE_MS;
-export const MAX_LEAD_MS = 30 * 24 * 60 * MINUTE_MS;
+export const MAX_LEAD_MS = 365 * 24 * 60 * MINUTE_MS;
 // A bulk run takes a while to walk its accounts; its base starts further out so
 // the last row still lands inside the window when it is finally sent.
 export const BULK_MIN_LEAD_MS = 5 * MINUTE_MS;

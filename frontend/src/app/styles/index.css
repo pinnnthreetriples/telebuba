@@ -526,6 +526,11 @@
     opacity: 1;
     overflow-y: auto;
   }
+  /* A date field whose calendar is the app's own popover: the browser's picker
+     indicator would open a second, OS-painted calendar beside it. */
+  .tb-nopicker::-webkit-calendar-picker-indicator {
+    display: none;
+  }
   .tb-ddchev {
     transition: transform --theme(--transition-duration-reveal) --theme(--ease-spring);
   }
