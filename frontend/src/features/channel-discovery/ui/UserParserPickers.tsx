@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName, BulkAccountPicker } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
+import { cn } from '@/shared/lib/cn';
 import { Button, ChipAddButton, HelpHint, Icon, IconButton, InlineChipEditor } from '@/shared/ui';
 
 import type { ParserMode } from '../model/userParser';
@@ -135,11 +136,13 @@ export function SourceChips({
 export function AccountStrip({
   ids,
   fleet,
+  busy,
   help,
   onChange,
 }: {
   ids: string[];
   fleet: readonly AccountRead[];
+  busy: ReadonlyMap<string, string>;
   help: Help;
   onChange: (ids: string[]) => void;
 }) {
@@ -168,8 +171,16 @@ export function AccountStrip({
           {ids.map((id) => {
             const account = byId.get(id);
             const name = account === undefined ? id : accountDisplayName(account);
+            const busyText = busy.get(id);
             return (
-              <span key={id} className="group relative shrink-0" title={name}>
+              <span
+                key={id}
+                className={cn(
+                  'group relative shrink-0',
+                  busyText === undefined ? '' : 'opacity-50',
+                )}
+                title={busyText === undefined ? name : `${name} — ${busyText}`}
+              >
                 {account === undefined ? (
                   <span className="flex size-tile items-center justify-center rounded-full bg-canvas text-content-muted type-body-medium">
                     ?

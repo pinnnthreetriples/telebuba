@@ -137,6 +137,7 @@ async def _account_quota_block_reason(
 _BLOCK_PRIORITY = (
     "busy_neuroshilling",
     "busy_chat_broadcast",
+    "busy_user_parser",
     "quota_hour",
     "quota_day",
     "cooldown",
@@ -163,7 +164,7 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
     # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
     # per-account I/O in this pass holds — there is nothing here to bulk-load.
     owner = _account_owner.owner_of(account_id)
-    if owner in {"neuroshilling", "chat_broadcast"}:
+    if owner in {"neuroshilling", "chat_broadcast", "user_parser"}:
         return f"busy_{owner}"
     if _state.in_cooldown(account_id, now, channel):
         return "cooldown"

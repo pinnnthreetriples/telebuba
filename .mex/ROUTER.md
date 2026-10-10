@@ -20,6 +20,8 @@ edges:
     condition: neuroshilling campaigns, scenarios, dialogue runs, or chat revival
   - target: context/runtime-chat-broadcast.md
     condition: chat broadcast campaigns, joins into lists, chains, rounds, or the board by chat
+  - target: context/runtime-user-parser.md
+    condition: user parser runs, bases, presets, or exports
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md

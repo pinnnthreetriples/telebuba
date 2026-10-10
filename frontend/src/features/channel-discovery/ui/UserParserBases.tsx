@@ -1,42 +1,53 @@
-import { useId, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  deleteUserParserBaseMutation,
+  renameUserParserBaseMutation,
+  userParserBasesQueryOptions,
+} from '@/entities/user-parser';
 import { cn } from '@/shared/lib/cn';
 import { Button, ConfirmModal, Icon, IconButton, Input } from '@/shared/ui';
 
-import { usersToCsv, type ParsedBase } from '../model/userParser';
+import { useUserPages } from '../model/useUserPages';
+import { downloadExport } from '../model/userParserExport';
 import { UserRows } from './UserParserResults';
 
 const P = 'userParser.bases';
-
-function download(name: string, body: string, type: string) {
-  const url = URL.createObjectURL(new Blob([body], { type }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Вкладка «Базы»: каждый сбор — папка. Слева папки, справа люди выбранной папки.
-export function UserParserBases({
-  bases,
-  onRename,
-  onDelete,
-}: {
-  bases: ParsedBase[];
-  onRename: (id: string, name: string) => void;
-  onDelete: (id: string) => void;
-}) {
+// Папки, люди, поиск, переименование и удаление — на сервере; удаляет только оператор.
+export function UserParserBases() {
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const searchId = useId();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [needle, setNeedle] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const date = (iso: string) => new Date(iso).toLocaleDateString(i18n.language);
 
-  if (bases.length === 0) {
+  const basesOptions = userParserBasesQueryOptions();
+  const bases = useQuery(basesOptions).data?.items ?? [];
+  const base = bases.find((b) => b.run_id === selectedId) ?? bases[0];
+  const people = useUserPages(base?.run_id ?? null, needle);
+  const refreshBases = () => queryClient.invalidateQueries({ queryKey: basesOptions.queryKey });
+  const rename = useMutation({ ...renameUserParserBaseMutation(), onSuccess: refreshBases });
+  const remove = useMutation({ ...deleteUserParserBaseMutation(), onSuccess: refreshBases });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setNeedle(search.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [search]);
+
+  if (base === undefined) {
     return (
       <div className="flex flex-col items-center gap-2 py-16 text-center">
         <Icon name="file" size={20} />
@@ -46,33 +57,24 @@ export function UserParserBases({
     );
   }
 
-  const base = bases.find((b) => b.id === selectedId) ?? bases[0];
-  if (base === undefined) return null;
-  const needle = search.trim().toLowerCase();
-  const shown = needle
-    ? base.users.filter((user) =>
-        `${user.name} ${user.username ?? ''} ${String(user.id)}`.toLowerCase().includes(needle),
-      )
-    : base.users;
-  const file = base.name.replace(/[^\p{L}\p{N}]+/gu, '_');
-
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
       {/* Папки: название, режим, сколько людей, когда. */}
       <ul className="flex flex-col gap-1 sm:w-tip sm:shrink-0">
         {bases.map((item) => (
-          <li key={item.id}>
+          <li key={item.run_id}>
             <button
               type="button"
-              aria-current={item.id === base.id}
+              aria-current={item.run_id === base.run_id}
               onClick={() => {
-                setSelectedId(item.id);
+                setSelectedId(item.run_id);
                 setSearch('');
+                setNeedle('');
                 setRenaming(null);
               }}
               className={cn(
                 'flex w-full items-start gap-2 rounded-md px-3 py-2 text-left transition-colors',
-                item.id === base.id ? 'bg-canvas' : 'hover:bg-canvas',
+                item.run_id === base.run_id ? 'bg-canvas' : 'hover:bg-canvas',
               )}
             >
               <Icon name="file" size={16} />
@@ -81,7 +83,7 @@ export function UserParserBases({
                 <span className="block truncate type-small">
                   {t(`${P}.folderMeta`, {
                     mode: t(`userParser.bases.modeName.${item.mode}`),
-                    count: item.users.length,
+                    count: item.kept,
                   })}
                 </span>
               </span>
@@ -93,13 +95,15 @@ export function UserParserBases({
       {/* Содержимое папки. */}
       <section className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {renaming === base.id ? (
+          {renaming === base.run_id ? (
             <form
               className="flex min-w-0 flex-1 items-center gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 const name = new FormData(event.currentTarget).get('name');
-                if (typeof name === 'string' && name.trim() !== '') onRename(base.id, name.trim());
+                if (typeof name === 'string' && name.trim() !== '') {
+                  rename.mutate({ path: { run_id: base.run_id }, body: { name: name.trim() } });
+                }
                 setRenaming(null);
               }}
             >
@@ -122,7 +126,7 @@ export function UserParserBases({
                 shape="circle"
                 aria-label={t(`${P}.rename`)}
                 onClick={() => {
-                  setRenaming(base.id);
+                  setRenaming(base.run_id);
                 }}
               >
                 <Icon name="pencil" size={14} />
@@ -133,7 +137,7 @@ export function UserParserBases({
             size="sm"
             className="gap-1"
             onClick={() => {
-              download(`${file}.csv`, usersToCsv(base.users), 'text/csv');
+              downloadExport(base.run_id, 'csv');
             }}
           >
             <Icon name="download" size={14} />
@@ -143,7 +147,7 @@ export function UserParserBases({
             size="sm"
             className="gap-1"
             onClick={() => {
-              download(`${file}.json`, JSON.stringify(base.users, null, 2), 'application/json');
+              downloadExport(base.run_id, 'json');
             }}
           >
             <Icon name="download" size={14} />
@@ -163,9 +167,9 @@ export function UserParserBases({
 
         <p className="type-small">
           {t(`${P}.summary`, {
-            count: base.users.length,
+            count: base.kept,
             sources: base.sources.length,
-            date: date(base.createdAt),
+            date: date(base.created_at),
           })}
         </p>
 
@@ -180,24 +184,32 @@ export function UserParserBases({
           }}
         />
 
-        {shown.length === 0 ? (
-          <p className="py-8 text-center type-small">{t(`${P}.nothingFound`)}</p>
+        {people.users.length === 0 ? (
+          people.loading ? null : (
+            <p className="py-8 text-center type-small">{t(`${P}.nothingFound`)}</p>
+          )
         ) : (
-          <UserRows mode={base.mode} users={shown} />
+          <UserRows
+            mode={base.mode}
+            users={people.users}
+            hasMore={people.hasMore}
+            loadingMore={people.loadingMore}
+            onMore={people.more}
+          />
         )}
       </section>
 
       {deleting ? (
         <ConfirmModal
           title={t(`${P}.deleteTitle`, { name: base.name })}
-          body={t(`${P}.deleteBody`, { count: base.users.length })}
+          body={t(`${P}.deleteBody`, { count: base.kept })}
           confirmLabel={t(`${P}.deleteConfirm`)}
           cancelLabel={t(`${P}.cancel`)}
           onClose={() => {
             setDeleting(false);
           }}
           onConfirm={() => {
-            onDelete(base.id);
+            remove.mutate({ path: { run_id: base.run_id } });
             setSelectedId(null);
           }}
         />

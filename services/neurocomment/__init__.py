@@ -30,6 +30,7 @@ from services.neurocomment._runtime_operations import (
     ListenerBusyChatBroadcastError,
     ListenerBusyDiscoveryError,
     ListenerBusyNeuroshillingError,
+    ListenerBusyUserParserError,
 )
 from services.neurocomment.bans import check_campaign_channel_bans
 from services.neurocomment.board import load_neurocomment_board
@@ -79,6 +80,7 @@ __all__ = [
     "ListenerBusyChatBroadcastError",
     "ListenerBusyDiscoveryError",
     "ListenerBusyNeuroshillingError",
+    "ListenerBusyUserParserError",
     "ListenerBusyWarmingError",
     "adopt_candidates",
     "assign_account_to_campaign",
