@@ -118,6 +118,16 @@ def test_memory_in_working_tree_passes(repo: Path) -> None:
     assert _stop(repo) == ""
 
 
+def test_code_moved_out_of_code_paths_blocks(repo: Path) -> None:
+    _commit(repo, "services/sample.py")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (repo / "docs").mkdir()
+    _git(repo, "mv", "services/sample.py", "docs/sample.py")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "move sample")
+
+    assert _blocks(_stop(repo))
+
+
 def test_docs_only_change_passes(repo: Path) -> None:
     _commit(repo, "docs/guide.md", "guide\n")
     _commit(repo, "frontend/package.json", "{}\n")

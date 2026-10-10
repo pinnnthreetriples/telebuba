@@ -64,7 +64,9 @@ def should_block(cwd: Path, session_id: str) -> bool:
     top = Path(_git(cwd, "rev-parse", "--show-toplevel").strip())
     head = _git(top, "rev-parse", "HEAD").strip()
     base = _git(top, "merge-base", "HEAD", BASE_REF).strip()
-    touched = set(_git(top, "log", "--name-only", "--format=", f"{base}..HEAD").splitlines())
+    touched = set(
+        _git(top, "log", "--no-renames", "--name-only", "--format=", f"{base}..HEAD").splitlines()
+    )
     if not any(_is_code(path) for path in touched):
         return False
     if any(path.startswith(MEMORY_PREFIX) for path in touched):
