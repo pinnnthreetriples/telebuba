@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Small always-loaded Telebuba anchor: hard rules, commands, and memory routing.
-last_updated: 2026-09-28
+last_updated: 2026-10-10
 ---
 
 # Telebuba
@@ -11,7 +11,7 @@ Telegram operations dashboard for accounts, proxies, warming, neurocomment, neur
 ## Hard rules
 - Preserve `api → services → core` and typed Pydantic boundaries; external I/O stays in `core/`.
 - Never expose secrets, sessions, tdata, JWTs, or proxy credentials.
-- Add tests for behavior changes; test sources stay at or below 700 lines.
+- Add tests for behavior changes; coding and file-size rules live in `CODING_STANDARDS.md`.
 - Run one uvicorn worker and report only checks actually executed.
 
 ## Commands
