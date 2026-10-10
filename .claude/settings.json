@@ -17,5 +17,18 @@
       "Read(./build/**)",
       "Read(./dist/**)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/mex_grow_gate.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
