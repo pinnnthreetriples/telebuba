@@ -45,6 +45,7 @@ def _large_upload_patterns() -> tuple[str, ...]:
         rf"{prefix}/accounts/photo",
         rf"{prefix}/scheduled/media",
         rf"{prefix}/chat-broadcast/media",
+        rf"{prefix}/masstagging/campaigns/{segment}/(?:media|targets/import)",
         rf"{prefix}/accounts/{segment}/(?:story|music)",
         rf"{prefix}/accounts/{segment}/channels/{segment}/(?:photo|posts)",
         rf"{prefix}/accounts/{segment}/chats/{segment}/{segment}/messages",

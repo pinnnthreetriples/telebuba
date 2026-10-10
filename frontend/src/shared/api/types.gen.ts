@@ -916,6 +916,16 @@ export type BodyImportAccountTdata = {
 };
 
 /**
+ * Body_importMasstaggingTargets
+ */
+export type BodyImportMasstaggingTargets = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * Body_postAccountStory
  */
 export type BodyPostAccountStory = {
@@ -1005,6 +1015,16 @@ export type BodySetAccountPhoto = {
  * Body_uploadChatBroadcastPhoto
  */
 export type BodyUploadChatBroadcastPhoto = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
+ * Body_uploadMasstaggingMedia
+ */
+export type BodyUploadMasstaggingMedia = {
   /**
    * File
    */
@@ -1555,6 +1575,7 @@ export type ChatBroadcastBoardAccount = {
     | 'chat_broadcast'
     | 'discovery'
     | 'user_parser'
+    | 'masstagging'
     | null;
 };
 
@@ -3346,6 +3367,542 @@ export type LoginRequest = {
 };
 
 /**
+ * MasstaggingBaseRequest
+ *
+ * Copy a saved parser base into the list.
+ */
+export type MasstaggingBaseRequest = {
+  /**
+   * Base Id
+   */
+  base_id: string;
+};
+
+/**
+ * MasstaggingBoard
+ */
+export type MasstaggingBoard = {
+  campaign: MasstaggingCampaign;
+  /**
+   * Next Action At
+   */
+  next_action_at?: string | null;
+  /**
+   * Accounts
+   */
+  accounts: Array<MasstaggingBoardAccount>;
+  counters: MasstaggingCounters;
+  /**
+   * Rows
+   */
+  rows: Array<MasstaggingBoardRow>;
+};
+
+/**
+ * MasstaggingBoardAccount
+ */
+export type MasstaggingBoardAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * State
+   */
+  state: 'working' | 'resting' | 'flood' | 'spamblock' | 'not_alive' | 'busy' | 'volume';
+  /**
+   * Premium
+   */
+  premium: boolean;
+  /**
+   * Busy Owner
+   */
+  busy_owner?:
+    | 'warming'
+    | 'neurocomment'
+    | 'neuroshilling'
+    | 'chat_broadcast'
+    | 'discovery'
+    | 'user_parser'
+    | 'masstagging'
+    | null;
+  /**
+   * Until
+   */
+  until?: string | null;
+};
+
+/**
+ * MasstaggingBoardRow
+ */
+export type MasstaggingBoardRow = {
+  /**
+   * Target Key
+   */
+  target_key: string;
+  /**
+   * Target
+   */
+  target: string;
+  /**
+   * State
+   */
+  state: 'queued' | 'primed' | 'working' | 'tagged' | 'flood' | 'skipped' | 'failed';
+  /**
+   * Reason
+   */
+  reason?:
+    | 'already_tagged'
+    | 'username_not_found'
+    | 'phone_not_found'
+    | 'not_a_user'
+    | 'chat_expanded'
+    | 'chat_hidden'
+    | 'privacy'
+    | 'bot'
+    | 'deleted_account'
+    | 'manual'
+    | 'unconfirmed'
+    | 'error'
+    | null;
+  /**
+   * When
+   */
+  when?: string | null;
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Active
+   */
+  active: boolean;
+  /**
+   * History
+   */
+  history: Array<MasstaggingHistoryEntry>;
+};
+
+/**
+ * MasstaggingCampaign
+ *
+ * One campaign as the sidebar lists it.
+ */
+export type MasstaggingCampaign = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode: 'stories' | 'priming';
+  /**
+   * Status
+   */
+  status: 'draft' | 'ready' | 'running' | 'paused' | 'resting' | 'done' | 'failed';
+  /**
+   * Target Count
+   */
+  target_count: number;
+  /**
+   * Account Count
+   */
+  account_count: number;
+  /**
+   * Missing
+   */
+  missing: Array<'no_accounts' | 'all_spamblocked' | 'no_targets' | 'no_media'>;
+  /**
+   * Rest Until
+   */
+  rest_until?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * MasstaggingCampaigns
+ */
+export type MasstaggingCampaigns = {
+  /**
+   * Items
+   */
+  items: Array<MasstaggingCampaign>;
+};
+
+/**
+ * MasstaggingCounters
+ */
+export type MasstaggingCounters = {
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Tagged
+   */
+  tagged: number;
+  /**
+   * Left
+   */
+  left: number;
+  /**
+   * Failed
+   */
+  failed: number;
+  /**
+   * Skipped
+   */
+  skipped: number;
+  /**
+   * Per Day
+   */
+  per_day: number;
+  /**
+   * Days Left
+   */
+  days_left?: number | null;
+  /**
+   * Working Accounts
+   */
+  working_accounts: number;
+  /**
+   * Excluded Accounts
+   */
+  excluded_accounts: number;
+  /**
+   * Free Accounts
+   */
+  free_accounts: number;
+};
+
+/**
+ * MasstaggingCreate
+ */
+export type MasstaggingCreate = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * MasstaggingHistoryEntry
+ */
+export type MasstaggingHistoryEntry = {
+  /**
+   * At
+   */
+  at: string;
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Event
+   */
+  event:
+    'dialog_created' | 'tagged' | 'flood' | 'skipped' | 'failed' | 'requeued' | 'now' | 'expanded';
+  /**
+   * Detail
+   */
+  detail?: string | null;
+};
+
+/**
+ * MasstaggingMedia
+ *
+ * An uploaded photo or video; stories take them in turn.
+ */
+export type MasstaggingMedia = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * MasstaggingMediaRead
+ */
+export type MasstaggingMediaRead = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * MasstaggingPace
+ *
+ * «Темп» — the only settings a running campaign takes (the board's gear).
+ */
+export type MasstaggingPace = {
+  /**
+   * Mentions Per Story
+   */
+  mentions_per_story?: number;
+  /**
+   * Stories Per Day
+   */
+  stories_per_day?: number;
+  story_gap_minutes?: MinutesRange;
+  /**
+   * Dialogs Per Day
+   */
+  dialogs_per_day?: number;
+  dialog_gap_seconds?: SecondsRange;
+  /**
+   * Ramp Up
+   */
+  ramp_up?: boolean;
+  /**
+   * Skip Tagged
+   */
+  skip_tagged?: boolean;
+  /**
+   * Stop Mode
+   */
+  stop_mode?: 'count' | 'time';
+  /**
+   * Stop Tags
+   */
+  stop_tags?: number;
+  /**
+   * Stop Minutes
+   */
+  stop_minutes?: number;
+  /**
+   * Flood Pause Seconds
+   */
+  flood_pause_seconds?: number;
+  /**
+   * Floods To Rest
+   */
+  floods_to_rest?: number;
+};
+
+/**
+ * MasstaggingSettings
+ *
+ * Everything the settings dialog edits, persisted as one JSON document.
+ *
+ * The accounts roster travels beside it (``MasstaggingSettingsUpdate.account_ids``)
+ * because it is a table, not a field.
+ */
+export type MasstaggingSettings = {
+  /**
+   * Mentions Per Story
+   */
+  mentions_per_story?: number;
+  /**
+   * Stories Per Day
+   */
+  stories_per_day?: number;
+  story_gap_minutes?: MinutesRange;
+  /**
+   * Dialogs Per Day
+   */
+  dialogs_per_day?: number;
+  dialog_gap_seconds?: SecondsRange;
+  /**
+   * Ramp Up
+   */
+  ramp_up?: boolean;
+  /**
+   * Skip Tagged
+   */
+  skip_tagged?: boolean;
+  /**
+   * Stop Mode
+   */
+  stop_mode?: 'count' | 'time';
+  /**
+   * Stop Tags
+   */
+  stop_tags?: number;
+  /**
+   * Stop Minutes
+   */
+  stop_minutes?: number;
+  /**
+   * Flood Pause Seconds
+   */
+  flood_pause_seconds?: number;
+  /**
+   * Floods To Rest
+   */
+  floods_to_rest?: number;
+  /**
+   * Mode
+   */
+  mode?: 'stories' | 'priming';
+  /**
+   * Target Source
+   */
+  target_source?: 'manual' | 'contacts' | 'base';
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+  /**
+   * Base Name
+   */
+  base_name?: string;
+  /**
+   * Media
+   */
+  media?: Array<MasstaggingMedia>;
+  /**
+   * Caption
+   */
+  caption?: string;
+  /**
+   * Link
+   */
+  link?: string;
+  /**
+   * Link Text
+   */
+  link_text?: string;
+  /**
+   * Visibility
+   */
+  visibility?: 'all' | 'contacts';
+  /**
+   * Lifetime Hours
+   */
+  lifetime_hours?: 6 | 12 | 24 | 48;
+  /**
+   * Prime First
+   */
+  prime_first?: boolean;
+};
+
+/**
+ * MasstaggingSettingsRead
+ *
+ * What the settings dialog opens with; ``updated_at`` is the lock token.
+ */
+export type MasstaggingSettingsRead = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Status
+   */
+  status: 'draft' | 'ready' | 'running' | 'paused' | 'resting' | 'done' | 'failed';
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  settings: MasstaggingSettings;
+};
+
+/**
+ * MasstaggingSettingsUpdate
+ *
+ * Whole-dialog save: name, roster and settings in one write.
+ */
+export type MasstaggingSettingsUpdate = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  settings: MasstaggingSettings;
+};
+
+/**
+ * MasstaggingTargetAction
+ *
+ * A manual action on one target of the board.
+ */
+export type MasstaggingTargetAction = {
+  /**
+   * Target Key
+   */
+  target_key: string;
+  /**
+   * Action
+   */
+  action: 'now' | 'skip' | 'requeue';
+};
+
+/**
+ * MasstaggingTargetList
+ *
+ * Targets read from a file or a parser base, for the dialog to add to its list.
+ *
+ * ``skipped`` counts the lines or people that cannot be a target (no username,
+ * a bot, a line that is not a username, phone or link).
+ */
+export type MasstaggingTargetList = {
+  /**
+   * Targets
+   */
+  targets: Array<string>;
+  /**
+   * Skipped
+   */
+  skipped?: number;
+  /**
+   * Name
+   */
+  name?: string;
+};
+
+/**
+ * MasstaggingVersionRequest
+ *
+ * The campaign version the operator actually viewed (optimistic lock).
+ */
+export type MasstaggingVersionRequest = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
+};
+
+/**
  * MinutesRange
  */
 export type MinutesRange = {
@@ -3767,7 +4324,13 @@ export type NeuroshillingBoardAccount = {
    * Busy Owner
    */
   busy_owner?:
-    'warming' | 'neuroshilling' | 'neurocomment' | 'chat_broadcast' | 'user_parser' | null;
+    | 'warming'
+    | 'neuroshilling'
+    | 'neurocomment'
+    | 'chat_broadcast'
+    | 'user_parser'
+    | 'masstagging'
+    | null;
   /**
    * Busy Campaign Name
    */
@@ -14429,3 +14992,590 @@ export type ListUserParserBaseUsersResponses = {
 
 export type ListUserParserBaseUsersResponse =
   ListUserParserBaseUsersResponses[keyof ListUserParserBaseUsersResponses];
+
+export type ListMasstaggingCampaignsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/masstagging/campaigns';
+};
+
+export type ListMasstaggingCampaignsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListMasstaggingCampaignsError =
+  ListMasstaggingCampaignsErrors[keyof ListMasstaggingCampaignsErrors];
+
+export type ListMasstaggingCampaignsResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingCampaigns;
+};
+
+export type ListMasstaggingCampaignsResponse =
+  ListMasstaggingCampaignsResponses[keyof ListMasstaggingCampaignsResponses];
+
+export type CreateMasstaggingCampaignData = {
+  body: MasstaggingCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/masstagging/campaigns';
+};
+
+export type CreateMasstaggingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateMasstaggingCampaignError =
+  CreateMasstaggingCampaignErrors[keyof CreateMasstaggingCampaignErrors];
+
+export type CreateMasstaggingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingCampaign;
+};
+
+export type CreateMasstaggingCampaignResponse =
+  CreateMasstaggingCampaignResponses[keyof CreateMasstaggingCampaignResponses];
+
+export type DeleteMasstaggingCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}';
+};
+
+export type DeleteMasstaggingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteMasstaggingCampaignError =
+  DeleteMasstaggingCampaignErrors[keyof DeleteMasstaggingCampaignErrors];
+
+export type DeleteMasstaggingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteMasstaggingCampaignResponse =
+  DeleteMasstaggingCampaignResponses[keyof DeleteMasstaggingCampaignResponses];
+
+export type GetMasstaggingSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/settings';
+};
+
+export type GetMasstaggingSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetMasstaggingSettingsError =
+  GetMasstaggingSettingsErrors[keyof GetMasstaggingSettingsErrors];
+
+export type GetMasstaggingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingSettingsRead;
+};
+
+export type GetMasstaggingSettingsResponse =
+  GetMasstaggingSettingsResponses[keyof GetMasstaggingSettingsResponses];
+
+export type SaveMasstaggingSettingsData = {
+  body: MasstaggingSettingsUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/settings';
+};
+
+export type SaveMasstaggingSettingsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveMasstaggingSettingsError =
+  SaveMasstaggingSettingsErrors[keyof SaveMasstaggingSettingsErrors];
+
+export type SaveMasstaggingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingSettingsRead;
+};
+
+export type SaveMasstaggingSettingsResponse =
+  SaveMasstaggingSettingsResponses[keyof SaveMasstaggingSettingsResponses];
+
+export type SaveMasstaggingPaceData = {
+  body: MasstaggingPace;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/pace';
+};
+
+export type SaveMasstaggingPaceErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveMasstaggingPaceError = SaveMasstaggingPaceErrors[keyof SaveMasstaggingPaceErrors];
+
+export type SaveMasstaggingPaceResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingSettingsRead;
+};
+
+export type SaveMasstaggingPaceResponse =
+  SaveMasstaggingPaceResponses[keyof SaveMasstaggingPaceResponses];
+
+export type GetMasstaggingBoardData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/board';
+};
+
+export type GetMasstaggingBoardErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetMasstaggingBoardError = GetMasstaggingBoardErrors[keyof GetMasstaggingBoardErrors];
+
+export type GetMasstaggingBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingBoard;
+};
+
+export type GetMasstaggingBoardResponse =
+  GetMasstaggingBoardResponses[keyof GetMasstaggingBoardResponses];
+
+export type StartMasstaggingCampaignData = {
+  body: MasstaggingVersionRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/start';
+};
+
+export type StartMasstaggingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StartMasstaggingCampaignError =
+  StartMasstaggingCampaignErrors[keyof StartMasstaggingCampaignErrors];
+
+export type StartMasstaggingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingBoard;
+};
+
+export type StartMasstaggingCampaignResponse =
+  StartMasstaggingCampaignResponses[keyof StartMasstaggingCampaignResponses];
+
+export type StopMasstaggingCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/stop';
+};
+
+export type StopMasstaggingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StopMasstaggingCampaignError =
+  StopMasstaggingCampaignErrors[keyof StopMasstaggingCampaignErrors];
+
+export type StopMasstaggingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingBoard;
+};
+
+export type StopMasstaggingCampaignResponse =
+  StopMasstaggingCampaignResponses[keyof StopMasstaggingCampaignResponses];
+
+export type ActOnMasstaggingTargetData = {
+  body: MasstaggingTargetAction;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/action';
+};
+
+export type ActOnMasstaggingTargetErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ActOnMasstaggingTargetError =
+  ActOnMasstaggingTargetErrors[keyof ActOnMasstaggingTargetErrors];
+
+export type ActOnMasstaggingTargetResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingBoard;
+};
+
+export type ActOnMasstaggingTargetResponse =
+  ActOnMasstaggingTargetResponses[keyof ActOnMasstaggingTargetResponses];
+
+export type UploadMasstaggingMediaData = {
+  body: BodyUploadMasstaggingMedia;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/media';
+};
+
+export type UploadMasstaggingMediaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UploadMasstaggingMediaError =
+  UploadMasstaggingMediaErrors[keyof UploadMasstaggingMediaErrors];
+
+export type UploadMasstaggingMediaResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingMediaRead;
+};
+
+export type UploadMasstaggingMediaResponse =
+  UploadMasstaggingMediaResponses[keyof UploadMasstaggingMediaResponses];
+
+export type ImportMasstaggingTargetsData = {
+  body: BodyImportMasstaggingTargets;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/import';
+};
+
+export type ImportMasstaggingTargetsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ImportMasstaggingTargetsError =
+  ImportMasstaggingTargetsErrors[keyof ImportMasstaggingTargetsErrors];
+
+export type ImportMasstaggingTargetsResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingTargetList;
+};
+
+export type ImportMasstaggingTargetsResponse =
+  ImportMasstaggingTargetsResponses[keyof ImportMasstaggingTargetsResponses];
+
+export type CopyMasstaggingBaseData = {
+  body: MasstaggingBaseRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/base';
+};
+
+export type CopyMasstaggingBaseErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CopyMasstaggingBaseError = CopyMasstaggingBaseErrors[keyof CopyMasstaggingBaseErrors];
+
+export type CopyMasstaggingBaseResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingTargetList;
+};
+
+export type CopyMasstaggingBaseResponse =
+  CopyMasstaggingBaseResponses[keyof CopyMasstaggingBaseResponses];

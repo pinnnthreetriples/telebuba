@@ -12,6 +12,7 @@ import {
   accountFilterOptions,
   accountStats,
   actOnChatBroadcastTarget,
+  actOnMasstaggingTarget,
   addAccountMusic,
   addAccountsToFolder,
   addWarmingChannels,
@@ -32,6 +33,7 @@ import {
   clearLogs,
   clearNeurocommentListener,
   confirmAccountTwofaEmail,
+  copyMasstaggingBase,
   countCampaignChallengeOutcomes,
   countLogs,
   createAccountChannel,
@@ -39,6 +41,7 @@ import {
   createCampaign,
   createChatBroadcastCampaign,
   createChatCollection,
+  createMasstaggingCampaign,
   createNeuroshillingCampaign,
   createProxy,
   createUserParserPreset,
@@ -49,6 +52,7 @@ import {
   deleteCampaign,
   deleteChatBroadcastCampaign,
   deleteChatCollection,
+  deleteMasstaggingCampaign,
   deleteNeuroshillingCampaign,
   deleteProxy,
   deleteUserParserBase,
@@ -74,6 +78,8 @@ import {
   getHealth,
   getLatestBulkMessageJob,
   getLatestContactLookupJob,
+  getMasstaggingBoard,
+  getMasstaggingSettings,
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
@@ -88,6 +94,7 @@ import {
   handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
+  importMasstaggingTargets,
   linkCampaignChannel,
   listAccountChannelPosts,
   listAccountChannels,
@@ -104,6 +111,7 @@ import {
   listChatCollections,
   listDiscoveryAccounts,
   listLogs,
+  listMasstaggingCampaigns,
   listNeurocommentComments,
   listNeuroshillingCampaigns,
   listProxies,
@@ -144,6 +152,8 @@ import {
   saveChatBroadcastPace,
   saveChatBroadcastSettings,
   saveChatCollection,
+  saveMasstaggingPace,
+  saveMasstaggingSettings,
   saveNeuroshillingSettings,
   scheduleAccountPhoto,
   scheduleAccountStory,
@@ -167,12 +177,14 @@ import {
   startCampaignDiscovery,
   startChatBroadcastCampaign,
   startContactLookup,
+  startMasstaggingCampaign,
   startNeurocomment,
   startNeuroshillingCampaign,
   startPhoneLogin,
   startUserParserRun,
   startWarming,
   stopChatBroadcastCampaign,
+  stopMasstaggingCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
   stopUserParserRun,
@@ -188,6 +200,7 @@ import {
   updateNeuroshillingCampaign,
   updateWarmingSettings,
   uploadChatBroadcastPhoto,
+  uploadMasstaggingMedia,
   uploadScheduledMedia,
 } from '../sdk.gen';
 import type {
@@ -200,6 +213,9 @@ import type {
   ActOnChatBroadcastTargetData,
   ActOnChatBroadcastTargetError,
   ActOnChatBroadcastTargetResponse,
+  ActOnMasstaggingTargetData,
+  ActOnMasstaggingTargetError,
+  ActOnMasstaggingTargetResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
@@ -260,6 +276,9 @@ import type {
   ConfirmAccountTwofaEmailData,
   ConfirmAccountTwofaEmailError,
   ConfirmAccountTwofaEmailResponse,
+  CopyMasstaggingBaseData,
+  CopyMasstaggingBaseError,
+  CopyMasstaggingBaseResponse,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
@@ -281,6 +300,9 @@ import type {
   CreateChatCollectionData,
   CreateChatCollectionError,
   CreateChatCollectionResponse,
+  CreateMasstaggingCampaignData,
+  CreateMasstaggingCampaignError,
+  CreateMasstaggingCampaignResponse,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignError,
   CreateNeuroshillingCampaignResponse,
@@ -311,6 +333,9 @@ import type {
   DeleteChatCollectionData,
   DeleteChatCollectionError,
   DeleteChatCollectionResponse,
+  DeleteMasstaggingCampaignData,
+  DeleteMasstaggingCampaignError,
+  DeleteMasstaggingCampaignResponse,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignError,
   DeleteNeuroshillingCampaignResponse,
@@ -384,6 +409,12 @@ import type {
   GetLatestContactLookupJobData,
   GetLatestContactLookupJobError,
   GetLatestContactLookupJobResponse,
+  GetMasstaggingBoardData,
+  GetMasstaggingBoardError,
+  GetMasstaggingBoardResponse,
+  GetMasstaggingSettingsData,
+  GetMasstaggingSettingsError,
+  GetMasstaggingSettingsResponse,
   GetMeData,
   GetMeError,
   GetMeResponse,
@@ -426,6 +457,9 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
+  ImportMasstaggingTargetsData,
+  ImportMasstaggingTargetsError,
+  ImportMasstaggingTargetsResponse,
   LinkCampaignChannelData,
   LinkCampaignChannelError,
   LinkCampaignChannelResponse,
@@ -474,6 +508,9 @@ import type {
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
+  ListMasstaggingCampaignsData,
+  ListMasstaggingCampaignsError,
+  ListMasstaggingCampaignsResponse,
   ListNeurocommentCommentsData,
   ListNeurocommentCommentsError,
   ListNeurocommentCommentsResponse,
@@ -591,6 +628,12 @@ import type {
   SaveChatCollectionData,
   SaveChatCollectionError,
   SaveChatCollectionResponse,
+  SaveMasstaggingPaceData,
+  SaveMasstaggingPaceError,
+  SaveMasstaggingPaceResponse,
+  SaveMasstaggingSettingsData,
+  SaveMasstaggingSettingsError,
+  SaveMasstaggingSettingsResponse,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsError,
   SaveNeuroshillingSettingsResponse,
@@ -660,6 +703,9 @@ import type {
   StartContactLookupData,
   StartContactLookupError,
   StartContactLookupResponse,
+  StartMasstaggingCampaignData,
+  StartMasstaggingCampaignError,
+  StartMasstaggingCampaignResponse,
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
@@ -678,6 +724,9 @@ import type {
   StopChatBroadcastCampaignData,
   StopChatBroadcastCampaignError,
   StopChatBroadcastCampaignResponse,
+  StopMasstaggingCampaignData,
+  StopMasstaggingCampaignError,
+  StopMasstaggingCampaignResponse,
   StopNeurocommentData,
   StopNeurocommentError,
   StopNeurocommentResponse,
@@ -723,6 +772,9 @@ import type {
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoError,
   UploadChatBroadcastPhotoResponse,
+  UploadMasstaggingMediaData,
+  UploadMasstaggingMediaError,
+  UploadMasstaggingMediaResponse,
   UploadScheduledMediaData,
   UploadScheduledMediaError,
   UploadScheduledMediaResponse,
@@ -6067,4 +6119,378 @@ export const listUserParserBaseUsersInfiniteOptions = (
     },
   );
   return opts as Omit<typeof opts, 'initialData'>;
+};
+
+export const listMasstaggingCampaignsQueryKey = (options?: Options<ListMasstaggingCampaignsData>) =>
+  createQueryKey('listMasstaggingCampaigns', options);
+
+/**
+ * List Campaigns
+ */
+export const listMasstaggingCampaignsOptions = (options?: Options<ListMasstaggingCampaignsData>) =>
+  queryOptions<
+    ListMasstaggingCampaignsResponse,
+    ListMasstaggingCampaignsError,
+    ListMasstaggingCampaignsResponse,
+    ReturnType<typeof listMasstaggingCampaignsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listMasstaggingCampaigns({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listMasstaggingCampaignsQueryKey(options),
+  });
+
+/**
+ * Create Campaign
+ */
+export const createMasstaggingCampaignMutation = (
+  options?: Partial<Options<CreateMasstaggingCampaignData>>,
+): UseMutationOptions<
+  CreateMasstaggingCampaignResponse,
+  CreateMasstaggingCampaignError,
+  Options<CreateMasstaggingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateMasstaggingCampaignResponse,
+    CreateMasstaggingCampaignError,
+    Options<CreateMasstaggingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createMasstaggingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign with its list and history; refused while it runs.
+ */
+export const deleteMasstaggingCampaignMutation = (
+  options?: Partial<Options<DeleteMasstaggingCampaignData>>,
+): UseMutationOptions<
+  DeleteMasstaggingCampaignResponse,
+  DeleteMasstaggingCampaignError,
+  Options<DeleteMasstaggingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteMasstaggingCampaignResponse,
+    DeleteMasstaggingCampaignError,
+    Options<DeleteMasstaggingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteMasstaggingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getMasstaggingSettingsQueryKey = (options: Options<GetMasstaggingSettingsData>) =>
+  createQueryKey('getMasstaggingSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getMasstaggingSettingsOptions = (options: Options<GetMasstaggingSettingsData>) =>
+  queryOptions<
+    GetMasstaggingSettingsResponse,
+    GetMasstaggingSettingsError,
+    GetMasstaggingSettingsResponse,
+    ReturnType<typeof getMasstaggingSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getMasstaggingSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getMasstaggingSettingsQueryKey(options),
+  });
+
+/**
+ * Save Settings
+ *
+ * Save name, accounts and settings at once, only on the version the dialog read.
+ *
+ * 409 ``campaign_running`` while a run is attached, ``campaign_changed`` when the
+ * campaign moved since the dialog read it.
+ */
+export const saveMasstaggingSettingsMutation = (
+  options?: Partial<Options<SaveMasstaggingSettingsData>>,
+): UseMutationOptions<
+  SaveMasstaggingSettingsResponse,
+  SaveMasstaggingSettingsError,
+  Options<SaveMasstaggingSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveMasstaggingSettingsResponse,
+    SaveMasstaggingSettingsError,
+    Options<SaveMasstaggingSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveMasstaggingSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Pace
+ *
+ * Save «Темп» only — accepted while the campaign runs; the run reads it live.
+ */
+export const saveMasstaggingPaceMutation = (
+  options?: Partial<Options<SaveMasstaggingPaceData>>,
+): UseMutationOptions<
+  SaveMasstaggingPaceResponse,
+  SaveMasstaggingPaceError,
+  Options<SaveMasstaggingPaceData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveMasstaggingPaceResponse,
+    SaveMasstaggingPaceError,
+    Options<SaveMasstaggingPaceData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveMasstaggingPace({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getMasstaggingBoardQueryKey = (options: Options<GetMasstaggingBoardData>) =>
+  createQueryKey('getMasstaggingBoard', options);
+
+/**
+ * Get Board
+ *
+ * The pipeline's numbers, the accounts and the board by person with its history.
+ */
+export const getMasstaggingBoardOptions = (options: Options<GetMasstaggingBoardData>) =>
+  queryOptions<
+    GetMasstaggingBoardResponse,
+    GetMasstaggingBoardError,
+    GetMasstaggingBoardResponse,
+    ReturnType<typeof getMasstaggingBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getMasstaggingBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getMasstaggingBoardQueryKey(options),
+  });
+
+/**
+ * Start Campaign
+ *
+ * Start, continue a paused or stopped campaign, or start a finished one again.
+ *
+ * 409 covers every reason it cannot: already running, changed since it was read, no
+ * account, no list, no media, or no account that may work.
+ */
+export const startMasstaggingCampaignMutation = (
+  options?: Partial<Options<StartMasstaggingCampaignData>>,
+): UseMutationOptions<
+  StartMasstaggingCampaignResponse,
+  StartMasstaggingCampaignError,
+  Options<StartMasstaggingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartMasstaggingCampaignResponse,
+    StartMasstaggingCampaignError,
+    Options<StartMasstaggingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startMasstaggingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Campaign
+ *
+ * Pause for real and answer with the board; pausing a paused one is a no-op.
+ */
+export const stopMasstaggingCampaignMutation = (
+  options?: Partial<Options<StopMasstaggingCampaignData>>,
+): UseMutationOptions<
+  StopMasstaggingCampaignResponse,
+  StopMasstaggingCampaignError,
+  Options<StopMasstaggingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopMasstaggingCampaignResponse,
+    StopMasstaggingCampaignError,
+    Options<StopMasstaggingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopMasstaggingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Act On Target
+ *
+ * Tag now, skip, or put back in the queue one person of the board.
+ *
+ * 409 ``masstagging_target_state_changed`` when the person moved on before the click
+ * landed.
+ */
+export const actOnMasstaggingTargetMutation = (
+  options?: Partial<Options<ActOnMasstaggingTargetData>>,
+): UseMutationOptions<
+  ActOnMasstaggingTargetResponse,
+  ActOnMasstaggingTargetError,
+  Options<ActOnMasstaggingTargetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ActOnMasstaggingTargetResponse,
+    ActOnMasstaggingTargetError,
+    Options<ActOnMasstaggingTargetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await actOnMasstaggingTarget({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Upload Media
+ *
+ * Store a photo or a video for the campaign's stories.
+ */
+export const uploadMasstaggingMediaMutation = (
+  options?: Partial<Options<UploadMasstaggingMediaData>>,
+): UseMutationOptions<
+  UploadMasstaggingMediaResponse,
+  UploadMasstaggingMediaError,
+  Options<UploadMasstaggingMediaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UploadMasstaggingMediaResponse,
+    UploadMasstaggingMediaError,
+    Options<UploadMasstaggingMediaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await uploadMasstaggingMedia({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Import Targets
+ *
+ * Read a text or CSV list; the dialog adds what it found to its list.
+ */
+export const importMasstaggingTargetsMutation = (
+  options?: Partial<Options<ImportMasstaggingTargetsData>>,
+): UseMutationOptions<
+  ImportMasstaggingTargetsResponse,
+  ImportMasstaggingTargetsError,
+  Options<ImportMasstaggingTargetsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ImportMasstaggingTargetsResponse,
+    ImportMasstaggingTargetsError,
+    Options<ImportMasstaggingTargetsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await importMasstaggingTargets({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Copy Base
+ *
+ * A saved parser base as usernames, copied — the campaign never follows the base.
+ */
+export const copyMasstaggingBaseMutation = (
+  options?: Partial<Options<CopyMasstaggingBaseData>>,
+): UseMutationOptions<
+  CopyMasstaggingBaseResponse,
+  CopyMasstaggingBaseError,
+  Options<CopyMasstaggingBaseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CopyMasstaggingBaseResponse,
+    CopyMasstaggingBaseError,
+    Options<CopyMasstaggingBaseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await copyMasstaggingBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
 };
