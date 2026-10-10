@@ -125,6 +125,24 @@ test('leaving the control discards the edit, the same as Escape', async () => {
   expect(hours()).toHaveValue('2');
 });
 
+test('with saveOnBlur, leaving the control keeps the edit', async () => {
+  const user = userEvent.setup();
+  const onValueChange = vi.fn();
+  render(
+    <>
+      <InlineTimeEdit onValueChange={onValueChange} saveOnBlur />
+      <button type="button">снаружи</button>
+    </>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Изменить время' }));
+  await user.keyboard('{ArrowUp}');
+  await user.click(screen.getByRole('button', { name: 'снаружи' }));
+
+  expect(onValueChange).toHaveBeenCalledWith(210);
+  expect(screen.getByRole('button', { name: 'Изменить время' })).toBeInTheDocument();
+});
+
 test('saving an unchanged time is not a change', async () => {
   const user = userEvent.setup();
   const onValueChange = vi.fn();

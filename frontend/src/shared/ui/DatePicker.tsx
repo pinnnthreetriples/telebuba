@@ -39,6 +39,8 @@ export interface DatePickerProps {
   nextLabel?: string;
   /** Move focus to the selected (or first pickable) day on mount — for a popover. */
   autoFocus?: boolean;
+  /** A row under the calendar, on the outer card — the range picker's presets row. */
+  footer?: ReactNode;
   className?: string;
 }
 
@@ -87,6 +89,7 @@ export function DatePicker({
   prevLabel = 'Предыдущий месяц',
   nextLabel = 'Следующий месяц',
   autoFocus = false,
+  footer,
   className,
 }: DatePickerProps) {
   const today = useMemo(() => startOfDay(todayProp ?? new Date()), [todayProp]);
@@ -302,6 +305,8 @@ export function DatePicker({
           </div>
         </LayoutGroup>
       </div>
+      {/* The calendar sets the card's width; a footer wraps inside it, never widens it. */}
+      {footer !== undefined && <div className="px-1 pb-1 pt-2 contain-inline-size">{footer}</div>}
     </div>
   );
 }

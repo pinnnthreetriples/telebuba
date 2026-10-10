@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fieldBase } from '@/shared/design-system';
 import { formatLocalDateTime, formatRelativeTo } from '@/shared/lib';
 import { cn } from '@/shared/lib/cn';
-import { DatePicker, Icon, Input } from '@/shared/ui';
+import { Button, DatePicker, Icon, InlineTimeEdit, Input } from '@/shared/ui';
 
 import {
   defaultRunAt,
@@ -18,15 +18,23 @@ import {
 // The publish-time field. The typed field renders in the BROWSER's locale, which
 // need not be the app's language, so the line under it repeats the moment in the
 // app's own words ("пт, 3 окт., 14:30 · через 2 ч") — the unambiguous reading, and
-// the place a too-soon / too-far time is explained. The day is picked on the design
-// system's own calendar (`DatePicker`) in a popover instead of the browser's picker,
-// which is painted by the OS and ignores the app's language and colours; the time of
-// day stays typed in the field.
+// the place a too-soon / too-far time is explained. Instead of the browser's picker —
+// painted by the OS, deaf to the app's language and colours — a popover holds the
+// design system's own calendar (`DatePicker`) and time control (`InlineTimeEdit`).
+// Both edit a draft; «Готово» writes it to the field, so a half-made choice never
+// lands. The field itself still takes a typed time.
 
 // The calendar's trigger wears the field's own shell — height, border, radius, focus —
 // so it reads as the second half of the same control, squared off to fit one glyph.
 const CALENDAR_TRIGGER =
   'grid aspect-square w-auto shrink-0 cursor-pointer place-items-center p-0 border-line text-content-muted hover:border-line-strong hover:text-content-primary disabled:cursor-default disabled:bg-surface disabled:text-content-subtle';
+
+/** `ms` moved to the time of day `minutes` after midnight. */
+function atMinutes(ms: number, minutes: number): number {
+  const date = new Date(ms);
+  date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return date.getTime();
+}
 
 /** `day` at the time of day `ms` carries. */
 function onDay(day: Date, ms: number): number {
@@ -68,9 +76,14 @@ export function ScheduleTimeField({
   const { t, i18n } = useTranslation();
   const echoId = useId();
   const popoverId = useId();
+  const problemId = useId();
   const [open, setOpen] = useState(false);
+  // The popover's own choice until «Готово»: the day and time being put together.
+  const [draft, setDraft] = useState(() => value ?? defaultRunAt(now));
   // Below the field unless the viewport has no room for the calendar there.
   const [above, setAbove] = useState(false);
+  // Hung off the field's right edge, unless that would run it off the screen's left.
+  const [fromLeft, setFromLeft] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const locked = disabled || readOnly;
@@ -95,18 +108,27 @@ export function ScheduleTimeField({
       return;
     }
     const rect = rootRef.current?.getBoundingClientRect();
-    // The calendar is about 360px tall; flip only when it fits above and not below.
-    setAbove(!!rect && window.innerHeight - rect.bottom < 380 && rect.top > 380);
+    // The popover is about 420px tall; flip only when it fits above and not below.
+    setAbove(!!rect && window.innerHeight - rect.bottom < 440 && rect.top > 440);
+    // The calendar is 310px wide.
+    setFromLeft(!!rect && rect.right < 320);
+    setDraft(value ?? defaultRunAt(now));
     setOpen(true);
   };
-  const pick = (day: Date) => {
+  const pickDay = (day: Date) => {
     const earliest = now + minLeadMs;
-    const ms = onDay(day, value ?? defaultRunAt(now));
+    const ms = onDay(day, draft);
     // A day picked today at a time already gone moves to the first tidy slot ahead.
-    onChange(ms < earliest ? Math.max(onDay(day, defaultRunAt(now)), earliest) : ms);
+    setDraft(ms < earliest ? Math.max(onDay(day, defaultRunAt(now)), earliest) : ms);
+  };
+  const draftProblem = runAtProblem(draft, now, minLeadMs);
+  const commit = () => {
+    if (draftProblem !== null) return;
+    onChange(draft);
     setOpen(false);
     buttonRef.current?.focus();
   };
+  const draftTime = new Date(draft);
 
   const problem = runAtProblem(value, now, minLeadMs);
   const echo =
@@ -161,7 +183,7 @@ export function ScheduleTimeField({
         <button
           ref={buttonRef}
           type="button"
-          aria-label={t('accounts.schedule.pickDay')}
+          aria-label={t('accounts.schedule.pickWhen')}
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
@@ -175,12 +197,12 @@ export function ScheduleTimeField({
           <div
             id={popoverId}
             role="dialog"
-            aria-label={t('accounts.schedule.pickDay')}
-            className={`absolute right-0 z-pop ${above ? 'bottom-full mb-2' : 'top-full mt-2'}`}
+            aria-label={t('accounts.schedule.pickWhen')}
+            className={`absolute z-pop w-max ${fromLeft ? 'left-0' : 'right-0'} ${above ? 'bottom-full mb-2' : 'top-full mt-2'}`}
           >
             <DatePicker
-              value={value === null ? null : new Date(value)}
-              onChange={pick}
+              value={draftTime}
+              onChange={pickDay}
               minDate={new Date(now + minLeadMs)}
               maxDate={new Date(now + MAX_LEAD_MS)}
               today={new Date(now)}
@@ -188,6 +210,42 @@ export function ScheduleTimeField({
               prevLabel={t('accounts.schedule.prevMonth')}
               nextLabel={t('accounts.schedule.nextMonth')}
               autoFocus
+              footer={
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <InlineTimeEdit
+                      value={draftTime.getHours() * 60 + draftTime.getMinutes()}
+                      onValueChange={(minutes) => setDraft((ms) => atMinutes(ms, minutes))}
+                      maxHours={23}
+                      saveOnBlur
+                      hourUnit={t('accounts.schedule.hourUnit')}
+                      minuteUnit={t('accounts.schedule.minuteUnit')}
+                      hoursLabel={t('accounts.schedule.hours')}
+                      minutesLabel={t('accounts.schedule.minutes')}
+                      editLabel={t('accounts.schedule.editTime')}
+                      saveLabel={t('accounts.schedule.saveTime')}
+                    />
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      // Not `disabled`: it stays a Tab stop and points at the reason.
+                      aria-disabled={draftProblem !== null || undefined}
+                      aria-describedby={draftProblem !== null ? problemId : undefined}
+                      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                      onClick={commit}
+                    >
+                      {t('accounts.schedule.done')}
+                    </Button>
+                  </div>
+                  {draftProblem !== null && (
+                    <span id={problemId} role="alert" className="type-small text-danger-deep">
+                      {t(`accounts.schedule.problem.${draftProblem}`, {
+                        n: Math.ceil(minLeadMs / 60_000),
+                      })}
+                    </span>
+                  )}
+                </div>
+              }
             />
           </div>
         )}
