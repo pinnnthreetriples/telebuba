@@ -12,6 +12,7 @@ import {
   DataTable,
   type DataTableColumnMeta,
   EmptyState,
+  Notice,
   SegmentedControl,
   Select,
 } from '@/shared/ui';
@@ -40,7 +41,7 @@ export function LogsPage() {
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
-  const { data, isPending, isError } = useQuery(
+  const { data, isPending, isError, isFetching, refetch } = useQuery(
     logsQueryOptions({
       query: { status, account_id: account, cursor, limit: PAGE_SIZE },
     }),
@@ -209,9 +210,22 @@ export function LogsPage() {
       {isPending ? (
         <p className="text-content-muted">{t('logs.loading')}</p>
       ) : isError ? (
-        <p role="alert" className="text-danger">
-          {t('logs.error')}
-        </p>
+        // A retry right here: the filters re-run the same failed request, so without
+        // it the only way out was reloading the page.
+        <Notice tone="danger" role="alert" className="flex items-center justify-between gap-3">
+          <span>{t('logs.error')}</span>
+          <Button
+            size="sm"
+            variant="danger"
+            className="bg-surface-card"
+            disabled={isFetching}
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            {t('logs.retry')}
+          </Button>
+        </Notice>
       ) : items.length === 0 ? (
         <Card className="px-4">
           <EmptyState size="xl">{t('logs.empty')}</EmptyState>

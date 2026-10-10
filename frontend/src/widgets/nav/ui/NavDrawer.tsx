@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 
+import { FOCUS_RING } from '@/shared/design-system';
 import { CloseButton, Modal } from '@/shared/ui';
 
 import { NAV_LINKS } from './links';
@@ -44,8 +45,10 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-touch items-center rounded-md px-3 text-body font-medium transition-colors ${
-              activeIdx === index ? 'bg-info-tint text-info-strong' : 'text-content-muted'
+            className={`flex min-h-touch items-center rounded-md px-3 text-body font-medium transition-colors ${FOCUS_RING} ${
+              activeIdx === index
+                ? 'bg-info-tint text-info-strong'
+                : 'text-content-muted hover:bg-canvas hover:text-content-primary'
             }`}
           >
             {t(`nav.${link.key}`)}

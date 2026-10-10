@@ -1105,6 +1105,7 @@
     "title": "Logs",
     "loading": "Loading…",
     "error": "Failed to load logs",
+    "retry": "Retry",
     "empty": "No entries",
     "filter": {
       "status": "Status",
@@ -1781,6 +1782,9 @@
       "resume": "Resume",
       "edit": "Change account",
       "remove": "Remove listener",
+      "removeTitle": "Remove the listener?",
+      "removeBody": "The engine stops receiving new posts until you assign another listener.",
+      "removeConfirm": "Remove",
       "actions": "Actions",
       "activeCampaigns": "active campaigns",
       "warmingBlocked": "This account is currently warming — it can't be the listener",

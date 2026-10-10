@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import type { AccountRead, ChatBroadcastBoard, ChatBroadcastBoardRow } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import {
   Badge,
   Button,
@@ -343,7 +344,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
           aria-label={t('chatBroadcast.board.columns.details')}
           aria-expanded={row.getIsExpanded()}
           onClick={row.getToggleExpandedHandler()}
-          className={`-m-3 flex p-3 text-content-subtle transition duration-reveal ease-spring hover:text-content-primary ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+          className={`-m-3 flex rounded-md p-3 text-content-subtle transition duration-reveal ease-spring hover:text-content-primary ${FOCUS_RING} ${row.getIsExpanded() ? 'rotate-180' : ''}`}
         >
           <Icon name="chevron-down" size={16} />
         </button>

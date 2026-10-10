@@ -31,6 +31,7 @@ export function AppNav() {
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions());
@@ -38,6 +39,21 @@ export function AppNav() {
   const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || t('shell.avatarFallback');
   const [sseStatus, setSseStatus] = useState<SseStatus>('connecting');
   useLogEventStream(() => undefined, setSseStatus);
+
+  // Escape closes the account menu and hands focus back to the avatar that opened
+  // it — the backdrop is pointer-only, so this is the keyboard's way out.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
   const systemActive = sseStatus === 'open';
 
   const activeIdx = LINKS.findIndex((link) =>
@@ -197,7 +213,10 @@ export function AppNav() {
               size="touch"
               shape="circle"
               tone="action"
+              ref={menuButtonRef}
               aria-label={t('shell.account')}
+              aria-expanded={menuOpen}
+              aria-controls={menuOpen ? 'account-menu' : undefined}
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
@@ -217,6 +236,9 @@ export function AppNav() {
                   className="fixed inset-0 z-raised cursor-default"
                 />
                 <div
+                  id="account-menu"
+                  role="group"
+                  aria-label={t('shell.account')}
                   className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-1 lg:top-[42px] ${SURFACE.panel}`}
                 >
                   {me.data ? (
@@ -238,7 +260,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint focus-visible:bg-danger-tint focus-visible:outline-hidden"
                   >
                     <svg
                       width="15"
