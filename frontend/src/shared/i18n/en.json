@@ -2209,15 +2209,12 @@
       "empty": "No published comments yet",
       "loading": "Loading…",
       "error": "Failed to load history",
-      "col": {
-        "time": "Time",
-        "account": "Account",
-        "channel": "Channel",
-        "text": "Comment"
-      },
       "prev": "Previous",
       "next": "Next",
-      "done": "Close"
+      "done": "Close",
+      "sub": "Every published comment, newest first",
+      "today": "Today",
+      "yesterday": "Yesterday"
     },
     "limits": {
       "note": "Shared by every account. A single account's limits live under “Limits” in the campaign's account list.",
