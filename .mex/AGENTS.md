@@ -14,4 +14,4 @@ last_updated: 2026-10-10
 
 ## Read next
 - Commands, CI and hooks: `.mex/context/setup.md`.
-- Domain work: `.mex/ROUTER.md`, then one matching context and at most one pattern. Finish with `npx --yes mex-agent@0.7.1 check --quiet`.
+- Domain work: `.mex/ROUTER.md`, then one matching context and at most one pattern. Finish with the MEX check from `setup.md`.
