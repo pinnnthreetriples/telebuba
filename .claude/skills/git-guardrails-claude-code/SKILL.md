@@ -1,5 +1,6 @@
 ---
 name: git-guardrails-claude-code
+disable-model-invocation: true
 description: Set up Claude Code hooks to block dangerous git commands before they execute.
 when_to_use: >
   Invoke only when the user explicitly asks to set up git safety hooks, prevent

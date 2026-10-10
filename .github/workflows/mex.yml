@@ -67,7 +67,8 @@ jobs:
               exit 1
             fi
           }
-          check_max .mex/AGENTS.md 1500
+          # Every session pays for AGENTS.md; detail belongs behind its pointers.
+          check_max .mex/AGENTS.md 800
           check_max .mex/ROUTER.md 2500
           # Not routed, but every backend route points at it, so it is a context in all but name.
           check_max CODING_STANDARDS.md 5000

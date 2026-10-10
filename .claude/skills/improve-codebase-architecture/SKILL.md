@@ -1,5 +1,6 @@
 ---
 name: improve-codebase-architecture
+disable-model-invocation: true
 description: Find deepening opportunities using Telebuba code plus the matching routed MEX context and deliberate decision history.
 when_to_use: >
   Invoke when project modules show duplication, shallow interfaces, or routed

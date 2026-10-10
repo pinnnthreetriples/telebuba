@@ -1,5 +1,6 @@
 ---
 name: prototype
+disable-model-invocation: true
 description: Build a throwaway prototype to flesh out a design before committing to it.
 when_to_use: >
   Invoke before committing to a non-obvious data model, state machine, or UI
