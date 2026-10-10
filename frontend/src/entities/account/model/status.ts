@@ -35,3 +35,16 @@ export function accountDesignStatus(status: AccountStatus): DesignStatus {
   if (NEEDS_CODE.has(status)) return 'code';
   return 'banned';
 }
+
+// The design's mono avatar tint per status (monoMap): the initials fallback wears its
+// account's status colour wherever an account avatar stands for the row.
+const AVATAR_TINT: Record<DesignStatus, string> = {
+  active: 'bg-info-tint text-info-strong',
+  spam: 'bg-warning-tint text-warning-deep',
+  code: 'bg-canvas text-content-muted',
+  banned: 'bg-danger-tint text-danger-deep',
+};
+
+export function accountAvatarTint(status: AccountStatus): string {
+  return AVATAR_TINT[accountDesignStatus(status)];
+}

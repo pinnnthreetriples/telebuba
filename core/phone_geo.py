@@ -40,6 +40,19 @@ def country_for_phone(phone: str | None) -> str | None:
 
 
 @lru_cache(maxsize=1024)
+def calling_code_for_phone(phone: str | None) -> int | None:
+    """The ITU calling code of a phone number (``7`` for ``+7 999 …``), or ``None``."""
+    parsed = _parse(phone)
+    return None if parsed is None else parsed.country_code
+
+
+def region_for_calling_code(calling_code: int) -> str | None:
+    """The main ISO-3166 region of a calling code (``RU`` for 7), ``None`` for non-geo."""
+    region = phonenumbers.region_code_for_country_code(calling_code)
+    return None if region in {"ZZ", "001"} else region
+
+
+@lru_cache(maxsize=1024)
 def timezone_for_phone(phone: str | None) -> str | None:
     """A representative IANA timezone for a phone number, or ``None``.
 

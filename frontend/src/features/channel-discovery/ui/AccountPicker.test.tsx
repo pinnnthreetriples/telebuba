@@ -193,10 +193,10 @@ describe('AccountPicker', () => {
     // Real tab stops that focus moves between (arrows, Escape back to the trigger), and
     // none of them drew a ring.
     render(<Harness />);
-    expect(trigger()).toHaveClass('focus-visible:outline');
+    expect(trigger()).toHaveClass('focus-visible:outline-solid');
     await userEvent.click(trigger());
     for (const option of screen.getAllByRole('option')) {
-      expect(option).toHaveClass('focus-visible:outline');
+      expect(option).toHaveClass('focus-visible:outline-solid');
     }
   });
 

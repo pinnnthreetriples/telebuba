@@ -85,7 +85,7 @@ function Picked({
       {files.map((file, index) => (
         <div key={`${file.name}-${String(index)}`} className="relative">
           <div
-            className="rounded-lg border border-line bg-canvas bg-cover bg-center"
+            className="rounded-md border border-line bg-canvas bg-cover bg-center"
             style={{ aspectRatio: ratio, backgroundImage: urls[index] && `url(${urls[index]})` }}
           />
           <IconButton
@@ -95,7 +95,7 @@ function Picked({
             onClick={() => {
               onRemove(index);
             }}
-            className="absolute right-tight top-tight border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
+            className="absolute right-2 top-2 border-transparent bg-scrim text-on-fill hover:border-transparent hover:bg-content-primary hover:text-on-fill"
           >
             <Icon name="close" size={16} />
           </IconButton>
@@ -124,8 +124,8 @@ export function BulkPhotoTab({
   const { t } = useTranslation();
   const urls = usePreviews(files);
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.photoHint')}</div>
+    <div className="flex flex-col gap-4">
+      <div className="type-body text-content-subtle">{t('accounts.bulk.photoHint')}</div>
       <SegmentedControl
         variant="outline"
         value={spread ? 'each' : 'one'}
@@ -138,7 +138,7 @@ export function BulkPhotoTab({
           onSpread(value === 'each');
         }}
       />
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
         <Picked
           files={files}
           urls={urls}
@@ -166,7 +166,7 @@ export function BulkPhotoTab({
           {(open) => <DashedAdd ratio="1" label={t('accounts.profile.upload')} onClick={open} />}
         </FilePicker>
       </div>
-      <div className="type-caption">
+      <div className="type-small">
         {spread ? t('accounts.bulk.photoEachNote') : t('accounts.bulk.photoOneNote')}
       </div>
     </div>
@@ -192,9 +192,9 @@ export function BulkStoriesTab({
   const { t } = useTranslation();
   const urls = usePreviews(files);
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.storyHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
+    <div className="flex flex-col gap-4">
+      <div className="type-body text-content-subtle">{t('accounts.bulk.storyHint')}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
         <Picked
           files={files}
           urls={urls}
@@ -227,8 +227,10 @@ export function BulkStoriesTab({
           </FilePicker>
         )}
       </div>
-      <label className="flex flex-col gap-tight">
-        <span className="type-label">{t('accounts.addStory.caption')}</span>
+      <label className="flex flex-col gap-2">
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.addStory.caption')}
+        </span>
         <Input
           value={caption}
           placeholder={t('accounts.addStory.captionPlaceholder')}
@@ -237,8 +239,10 @@ export function BulkStoriesTab({
           }}
         />
       </label>
-      <div className="flex flex-col gap-tight">
-        <span className="type-label">{t('accounts.addStory.audience')}</span>
+      <div className="flex flex-col gap-2">
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.addStory.audience')}
+        </span>
         <SegmentedControl
           variant="outline"
           value={audience}
@@ -253,7 +257,7 @@ export function BulkStoriesTab({
           }}
         />
       </div>
-      <div className="type-caption">{t('accounts.bulk.storyNote')}</div>
+      <div className="type-small">{t('accounts.bulk.storyNote')}</div>
     </div>
   );
 }
@@ -268,16 +272,16 @@ export function BulkMusicTab({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-lg">
-      <div className="type-prose">{t('accounts.bulk.musicHint')}</div>
+    <div className="flex flex-col gap-4">
+      <div className="type-body text-content-subtle">{t('accounts.bulk.musicHint')}</div>
       {file ? (
-        <div className="flex items-center gap-lg rounded-lg border border-line px-lg py-md">
-          <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action">
+        <div className="flex items-center gap-4 rounded-md border border-line px-4 py-3">
+          <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-fill">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M8 5v14l11-7z" />
             </svg>
           </span>
-          <div className="min-w-0 flex-1 truncate type-card-title">{file.name}</div>
+          <div className="min-w-0 flex-1 truncate type-h3">{file.name}</div>
           <IconButton
             size="sm"
             shape="circle"
@@ -310,7 +314,7 @@ export function BulkMusicTab({
           )}
         </FilePicker>
       )}
-      <div className="type-caption">{t('accounts.bulk.musicNote')}</div>
+      <div className="type-small">{t('accounts.bulk.musicNote')}</div>
     </div>
   );
 }
@@ -341,11 +345,11 @@ export function BulkSchedulePanel({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-md rounded-lg border border-line p-md">
+    <div className="flex flex-col gap-3 rounded-md border border-line p-3">
       <ScheduleModeControl value={mode} onChange={onMode} />
       {mode === 'later' && (
         <>
-          <div className="flex flex-wrap items-end gap-md">
+          <div className="flex flex-wrap items-end gap-3">
             <ScheduleTimeField
               value={base}
               onChange={onBase}
@@ -353,11 +357,13 @@ export function BulkSchedulePanel({
               minLeadMs={BULK_MIN_LEAD_MS}
               label={t('accounts.schedule.bulkBase')}
             />
-            <label className="flex flex-col gap-tight">
-              <span className="type-label">{t('accounts.schedule.bulkSpread')}</span>
+            <label className="flex flex-col gap-2">
+              <span className="type-body-medium text-content-secondary">
+                {t('accounts.schedule.bulkSpread')}
+              </span>
               <Input
                 type="number"
-                size="xs"
+                size="sm"
                 min={0}
                 max={MAX_SPREAD_MINUTES}
                 value={spread}
@@ -370,9 +376,9 @@ export function BulkSchedulePanel({
               />
             </label>
           </div>
-          <div className="type-caption">{t('accounts.schedule.bulkNote', { n: spread })}</div>
+          <div className="type-small">{t('accounts.schedule.bulkNote', { n: spread })}</div>
           {tailTooFar && (
-            <div role="alert" className="type-caption text-danger-deep">
+            <div role="alert" className="type-small text-danger-deep">
               {t('accounts.schedule.bulkTooFar')}
             </div>
           )}

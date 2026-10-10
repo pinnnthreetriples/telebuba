@@ -30,6 +30,8 @@ const ROUTES: [RegExp, unknown][] = [
   [/\/health$/, fx.health],
   [/\/accounts\/bulk-messages\/(active|latest)$/, null],
   [/\/accounts\/stats$/, fx.accountStats],
+  [/\/accounts\/filter-options$/, fx.accountFilterOptions],
+  [/\/account-folders$/, fx.accountFolders],
   [/\/accounts(\?|$)/, fx.accounts],
   [/\/proxies(\?|$)/, fx.proxies],
   [/\/warming\/board/, fx.warmingBoard],
@@ -96,7 +98,7 @@ test.describe('экраны приложения', () => {
       const card = [...document.querySelectorAll<HTMLElement>('[role="listitem"]')].find((item) =>
         item.textContent?.includes('@user_0'),
       );
-      const title = card?.querySelector<HTMLElement>('.type-card-title');
+      const title = card?.querySelector<HTMLElement>('.type-h3');
       const action = card?.querySelector<HTMLElement>(
         'button[aria-label="Открыть в Telegram Web"]',
       );

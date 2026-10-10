@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Icon, IconButton, Spinner } from '@/shared/ui';
+import { Button, Card, CardHeader, Icon, IconButton, ProgressBar, Spinner } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -12,7 +12,6 @@ import {
   proxyTypeLabel,
 } from '@/entities/proxy';
 import type { ProxyRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { formatLocalTime } from '@/shared/lib';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
@@ -81,22 +80,23 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <Card className="px-xl py-lg">
-      <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
-        <div>
-          <span className="type-card-title">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-sm type-prose">{t('accounts.proxyPool.subtitle')}</span>
-        </div>
+    <Card className="px-6 py-4">
+      <CardHeader
+        wrap
+        className="mb-4"
+        title={t('accounts.proxyPool.title')}
+        subtitle={t('accounts.proxyPool.subtitle')}
+      >
         {!empty && (
-          <Button variant="primary" size="md" onClick={onAdd}>
+          <Button variant="primary" size="md" onClick={onAdd} className="shrink-0">
             <Icon name="plus" size={14} />
             {t('accounts.proxyPool.add')}
           </Button>
         )}
-      </div>
+      </CardHeader>
       {empty ? (
-        <div className="flex flex-col items-center justify-center px-lg pb-page pt-page text-center">
-          <div className="mb-lg flex size-touch items-center justify-center rounded-lg bg-canvas text-content-subtle">
+        <div className="flex flex-col items-center justify-center px-4 pb-8 pt-8 text-center">
+          <div className="mb-4 flex size-touch items-center justify-center rounded-md bg-canvas text-content-subtle">
             <svg
               width="22"
               height="22"
@@ -109,20 +109,20 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-xs type-card-title">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-1 type-h3">{t('accounts.proxyPool.emptyTitle')}</div>
           <div
             // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the sentence in this widget's own empty state
-            className="mb-lg max-w-[300px] type-prose"
+            className="mb-4 max-w-[300px] type-body text-content-subtle"
           >
             {t('accounts.proxyPool.emptyBody')}
           </div>
-          <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
+          <Button variant="primary" className="items-center gap-2" onClick={onAdd}>
             <Icon name="plus" size={16} />
             {t('accounts.proxyPool.emptyAdd')}
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-md">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-3">
           {proxies.map((proxy: ProxyRead) => (
             <ProxyCard
               key={proxy.id}
@@ -176,10 +176,9 @@ function ProxyCard({
     maxmind: proxy.maxmind_country_code ?? '—',
   });
   const statusTone = PROXY_STATUS_TONE[proxy.status];
-  const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-md rounded-lg border px-lg py-lg ${
+      className={`flex flex-col gap-3 rounded-md border px-4 py-4 ${
         problem
           ? 'border-danger-line bg-danger-tint'
           : geoConflict
@@ -187,7 +186,7 @@ function ProxyCard({
             : 'border-line bg-surface-card'
       }`}
     >
-      <div className="flex items-center gap-sm">
+      <div className="flex items-center gap-2">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
@@ -209,13 +208,13 @@ function ProxyCard({
           <span title={geoTitle} className="h-flag w-flag shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate type-item-title">
+          <div className="truncate type-body-medium">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex flex-wrap items-center gap-tight type-caption">
+          <div className="flex flex-wrap items-center gap-2 type-small">
             <span className="whitespace-nowrap">{proxyTypeLabel(proxy.proxy_type)}</span>
             <span
-              className={`inline-flex items-center gap-xs whitespace-nowrap font-medium ${statusTone}`}
+              className={`inline-flex items-center gap-1 whitespace-nowrap font-medium ${statusTone}`}
               title={
                 [
                   proxy.last_checked_at &&
@@ -234,7 +233,7 @@ function ProxyCard({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-tight">
+        <div className="flex shrink-0 items-center gap-1">
           <IconButton
             size="touch"
             shape="circle"
@@ -262,21 +261,16 @@ function ProxyCard({
         </div>
       </div>
       <div>
-        <div className="mb-tight flex items-center justify-between">
-          <span className="type-caption">{t('accounts.proxyPool.accounts')}</span>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="type-small">{t('accounts.proxyPool.accounts')}</span>
           <span
-            className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
+            className={`text-small font-medium ${full ? 'text-danger-deep' : 'text-success-deep'}`}
           >
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
-        <div className={BAR_TRACK}>
-          <div
-            className={`${BAR_FILL} ${full ? 'bg-danger' : 'bg-action-primary'}`}
-            style={{ width: `${String(pct)}%` }}
-          />
-        </div>
-        <div className={`mt-tight text-tiny ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
+        <ProgressBar tone={full ? 'danger' : 'primary'} value={proxy.used} max={proxy.capacity} />
+        <div className={`mt-2 text-small ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

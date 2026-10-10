@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountDisplayName,
+  accountFilterOptionsQueryOptions,
+  accountFoldersQueryOptions,
   accountsQueryOptions,
   accountStatsQueryOptions,
   activeBulkMessageJobQueryOptions,
@@ -13,7 +16,38 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
+import {
+  Button,
+  EmptyState,
+  Icon,
+  IconButton,
+  Spinner,
+  type Stat,
+  StatGrid,
+  toastError,
+} from '@/shared/ui';
+import {
+  ALL_VIEW,
+  activeFilterKeys,
+  type AccountFilters,
+  DragGhost,
+  FilterChips,
+  FilterMenu,
+  FOLDER_PANEL_ID,
+  FolderDialog,
+  type FolderDialogState,
+  FolderEmptyState,
+  FolderTabStrip,
+  FolderTag,
+  type FolderView,
+  listQuery,
+  NO_FILTERS,
+  PanelFloor,
+  RowPick,
+  UNFILED_VIEW,
+  useAccountDrag,
+  useFolderActions,
+} from '@/widgets/account-folders';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -28,6 +62,8 @@ import {
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
+import { SearchToggle } from './SearchToggle';
+
 const PAGE_SIZE = 20;
 // The generated query key embeds `query`, so an undebounced search box means a
 // brand-new key per keystroke — no cached data, `isPending` true, and the table
@@ -39,11 +75,17 @@ export function AccountsPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchExpanded = searchOpen || search !== '';
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
+  const [view, setView] = useState<FolderView>(ALL_VIEW);
+  const [filters, setFilters] = useState<AccountFilters>(NO_FILTERS);
+  // Ids, not rows: a refetch replaces the row objects and the selection must survive it.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [dialog, setDialog] = useState<FolderDialogState>(null);
+  // Switching tabs swaps the table for a shorter one; without a floor the document
+  // shrinks under the viewport and the browser clamps the scroll. Measured at the
+  // switch, before anything shrinks.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelFloor, setPanelFloor] = useState<number | undefined>(undefined);
   // A Set, not one id: check and delete are per row and both can be in flight at
   // once. With a single string the second click moved the spinner off the first
   // row and re-enabled its buttons mid-request, and the first response to land
@@ -135,10 +177,44 @@ export function AccountsPage() {
     };
   }, [search]);
 
+  const folders = useQuery(accountFoldersQueryOptions());
+  const filterOptions = useQuery(accountFilterOptionsQueryOptions());
+  const folderItems = folders.data?.items ?? [];
+  const folderActions = useFolderActions(folderItems);
+  // A folder deleted (here or in another tab) falls back to the full list.
+  const activeView =
+    view === ALL_VIEW ||
+    view === UNFILED_VIEW ||
+    !folders.data ||
+    folderItems.some((folder) => folder.folder_id === view)
+      ? view
+      : ALL_VIEW;
+  const filtered = activeFilterKeys(filters).length > 0;
+
+  const restart = () => {
+    setCursorStack([null]);
+    setSelected(new Set());
+  };
+  const openView = (next: FolderView) => {
+    const panel = panelRef.current;
+    if (panel) setPanelFloor(Math.max(0, window.innerHeight - panel.getBoundingClientRect().top));
+    setView(next);
+    restart();
+  };
+  const changeFilters = (next: AccountFilters) => {
+    setFilters(next);
+    restart();
+  };
+
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
   const { data, isPending, isError } = useQuery({
     ...accountsQueryOptions({
-      query: { query: debouncedSearch, status: 'all', cursor, limit: PAGE_SIZE },
+      query: {
+        ...listQuery(activeView, filters),
+        query: debouncedSearch,
+        cursor,
+        limit: PAGE_SIZE,
+      },
     }),
     // Keep the last page on screen while the next key loads, so a search or a
     // page turn doesn't blank the table (and unmount an open edit view).
@@ -233,24 +309,45 @@ export function AccountsPage() {
     runOnRow(deletingId, remove.mutateAsync({ path: { account_id: deletingId } }));
   };
   const items = data?.items ?? [];
+  const { drag, startDrag } = useAccountDrag((folderId, accountIds) => {
+    void folderActions.addAccounts(folderId, accountIds).catch(() => undefined);
+  });
+  const folderName = (folderId: string) =>
+    folderItems.find((folder) => folder.folder_id === folderId)?.name ?? '';
+  const pageIds = items.map((account) => account.account_id);
+  const selectedOnPage = pageIds.filter((id) => selected.has(id)).length;
+  const allSelected = pageIds.length > 0 && selectedOnPage === pageIds.length;
+  const toggleSelected = (accountId: string) => {
+    setSelected((ids) => {
+      const next = new Set(ids);
+      if (next.has(accountId)) next.delete(accountId);
+      else next.add(accountId);
+      return next;
+    });
+  };
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
   // problem, each with its own colour. Values come from the fleet-wide stats
   // query, not the current page, so they hold across pagination and search.
-  const stats: { label: string; value: number; cls: string }[] = [
+  const stats: Stat[] = [
     {
       label: t('accounts.stats.total'),
       value: fleetStats?.total ?? 0,
-      cls: 'text-content-primary',
+      tone: 'default',
     },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, tone: 'success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, tone: 'warning' },
     {
       label: t('accounts.stats.code'),
       value: fleetStats?.needs_code ?? 0,
-      cls: 'text-action-primary',
+      tone: 'primary',
     },
-    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
+    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, tone: 'danger' },
   ];
+
+  const messagesBusy =
+    me.isPending ||
+    (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
+    openingMessages;
 
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
@@ -286,7 +383,7 @@ export function AccountsPage() {
           у этой страницы ритм из двух шагов — `lg` между блоками и `xl` под заголовком,
           что видно и на других страницах, — а `gap` умеет выразить только один. Замена
           обоих на один `lg` подровняла бы страницу, разойдясь с двумя соседними. */}
-      <div className="mb-lg">
+      <div className="mb-4">
         <ProxyPool
           onAdd={() => {
             setProxyAdding(true);
@@ -294,126 +391,114 @@ export function AccountsPage() {
         />
       </div>
 
-      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
-        <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
-          {/* Collapsible search field */}
-          <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
-            <div
-              // Свёрнутое поле — нулевой ширины, невидимое и вне табуляции; анимацию
-              // ширины/прозрачности даёт `.tb-time` (index.css).
-              aria-hidden={!searchExpanded}
-              className={`tb-time h-tile overflow-hidden rounded-full border bg-surface-card ${
-                searchExpanded
-                  ? 'w-full border-line opacity-100 sm:w-tip'
-                  : 'invisible w-0 border-transparent opacity-0'
-              }`}
-            >
-              <input
-                ref={searchInputRef}
-                tabIndex={searchExpanded ? 0 : -1}
+      <div className="mb-6">
+        <h1 className="m-0 type-h1">{t('accounts.title')}</h1>
+      </div>
+
+      <StatGrid stats={stats} className="mb-4" />
+
+      <div
+        ref={panelRef}
+        // A measured floor, not a design value: the height the panel had on screen at
+        // the moment of the tab switch.
+        style={panelFloor === undefined ? undefined : { minHeight: panelFloor }}
+      >
+        <FolderTabStrip
+          view={activeView}
+          onView={openView}
+          folders={folders.data}
+          selectAll={{
+            checked: allSelected,
+            indeterminate: selectedOnPage > 0 && !allSelected,
+            disabled: pageIds.length === 0,
+            onToggle: () => {
+              setSelected(allSelected ? new Set() : new Set(pageIds));
+            },
+          }}
+          dropFolderId={drag?.folderId ?? null}
+          onCreate={() => {
+            setDialog({ kind: 'create' });
+          }}
+          onSettings={(folderId) => {
+            setDialog({ kind: 'settings', folderId });
+          }}
+          actions={
+            <>
+              <SearchToggle
                 value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setCursorStack([null]);
+                onChange={(value) => {
+                  setSearch(value);
+                  restart();
                 }}
-                onBlur={() => {
-                  if (search === '') setSearchOpen(false);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setSearch('');
-                    setCursorStack([null]);
-                    setSearchOpen(false);
-                    // Return focus to the lupa that opened the field, rather than
-                    // dropping it on the body — focusing the button also blurs the
-                    // input, so no separate blur() call is needed.
-                    searchButtonRef.current?.focus();
-                  }
-                }}
-                placeholder={t('accounts.searchPlaceholder')}
-                className="h-full w-full border-none bg-surface-card px-md py-0 text-body outline-none"
               />
-            </div>
-            <IconButton
-              ref={searchButtonRef}
-              size="lg"
-              tone="neutral"
-              aria-label={t('accounts.searchPlaceholder')}
-              title={t('accounts.searchPlaceholder')}
-              onClick={() => {
-                setSearchOpen(true);
-                window.setTimeout(() => searchInputRef.current?.focus(), 0);
-              }}
-            >
-              <Icon name="search" size={18} />
-            </IconButton>
-          </div>
-
-          {/* Bulk messages button */}
-          <IconButton
-            size="lg"
-            tone="neutral"
-            disabled={
-              me.isPending ||
-              (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
-              openingMessages
-            }
-            aria-label={t('accounts.messages.open')}
-            title={t('accounts.messages.open')}
-            onClick={() => {
-              void openMessages();
-            }}
-          >
-            {me.isPending ||
-            (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
-            openingMessages ? (
-              <Spinner tone="default" />
-            ) : (
-              <Icon name="send" size={18} />
-            )}
-          </IconButton>
-
-          {/* Add account button */}
-          <IconButton
-            size="lg"
-            tone="primary"
-            aria-label={t('accounts.actions.add')}
-            title={t('accounts.actions.add')}
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            <Icon name="user-plus" size={18} />
-          </IconButton>
-        </div>
-      </div>
-
-      <div className="mb-lg flex flex-wrap gap-md">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
-          >
-            <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px type-caption">{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {isPending ? (
-        <p className="text-content-muted">{t('accounts.loading')}</p>
-      ) : isError ? (
-        <p role="alert" className="text-danger">
-          {t('accounts.error')}
-        </p>
-      ) : (
-        <>
-          {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center type-prose">{t('accounts.empty')}</Card>
-          ) : (
+              <FilterMenu
+                filters={filters}
+                onChange={changeFilters}
+                options={filterOptions.data}
+                found={data?.total}
+              />
+              <IconButton
+                size="md"
+                tone="neutral"
+                disabled={messagesBusy}
+                aria-label={t('accounts.messages.open')}
+                title={t('accounts.messages.open')}
+                onClick={() => {
+                  void openMessages();
+                }}
+              >
+                {messagesBusy ? <Spinner tone="default" /> : <Icon name="send" size={16} />}
+              </IconButton>
+              <IconButton
+                size="md"
+                tone="primary"
+                aria-label={t('accounts.actions.add')}
+                title={t('accounts.actions.add')}
+                onClick={() => {
+                  setAdding(true);
+                }}
+              >
+                <Icon name="user-plus" size={16} />
+              </IconButton>
+            </>
+          }
+        />
+        <FilterChips filters={filters} onChange={changeFilters} options={filterOptions.data} />
+        <div id={FOLDER_PANEL_ID} role="tabpanel">
+          {isPending ? (
+            <PanelFloor>
+              <p className="text-content-muted">{t('accounts.loading')}</p>
+            </PanelFloor>
+          ) : isError ? (
+            <PanelFloor>
+              <p role="alert" className="text-danger">
+                {t('accounts.error')}
+              </p>
+            </PanelFloor>
+          ) : items.length > 0 ? (
             <AccountsTable
               data={items}
+              joined
+              selectedIds={selected}
+              renderPick={(account) => (
+                <RowPick
+                  name={accountDisplayName(account)}
+                  selected={selected.has(account.account_id)}
+                  onToggle={() => {
+                    toggleSelected(account.account_id);
+                  }}
+                  onGripDown={(event) => {
+                    startDrag(event, account.account_id, selected);
+                  }}
+                />
+              )}
+              renderTags={(account) => (
+                <FolderTag
+                  folderIds={account.folder_ids ?? []}
+                  folders={folderItems}
+                  onOpenFolder={openView}
+                />
+              )}
               onCheck={onCheck}
               onDelete={onDelete}
               onOpen={(account) => {
@@ -427,35 +512,63 @@ export function AccountsPage() {
               openWebBusyIds={openWebBusyIds}
               checkResults={checkResults}
             />
+          ) : activeView === ALL_VIEW && !filtered && debouncedSearch === '' ? (
+            <PanelFloor>
+              <EmptyState size="xl">{t('accounts.empty')}</EmptyState>
+            </PanelFloor>
+          ) : (
+            <FolderEmptyState
+              onResetFilters={
+                filtered
+                  ? () => {
+                      changeFilters(NO_FILTERS);
+                    }
+                  : null
+              }
+            />
           )}
-          {/* The pagination row lives outside the empty branch: deleting the
-              last row of page 2 empties the list, and with Prev buried in the
-              else-branch the only ways back were the search box and a reload.
-              A genuinely empty FIRST page still shows the bare empty state. */}
-          {items.length > 0 || hasPrev ? (
-            <div className="mt-lg flex items-center justify-end gap-sm">
-              <Button
-                size="sm"
-                disabled={!hasPrev}
-                onClick={() => {
-                  setCursorStack((stack) => stack.slice(0, -1));
-                }}
-              >
-                {t('accounts.pagination.prev')}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!hasNext}
-                onClick={() => {
-                  setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
-                }}
-              >
-                {t('accounts.pagination.next')}
-              </Button>
-            </div>
-          ) : null}
-        </>
-      )}
+        </div>
+      </div>
+      {/* The pagination row lives outside the empty branch: deleting the last row of
+          page 2 empties the list, and with Prev buried in the else-branch the only ways
+          back were the search box and a reload. */}
+      {!isPending && !isError && (items.length > 0 || hasPrev) ? (
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            disabled={!hasPrev}
+            onClick={() => {
+              setCursorStack((stack) => stack.slice(0, -1));
+              setSelected(new Set());
+            }}
+          >
+            {t('accounts.pagination.prev')}
+          </Button>
+          <Button
+            size="sm"
+            disabled={!hasNext}
+            onClick={() => {
+              setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
+              setSelected(new Set());
+            }}
+          >
+            {t('accounts.pagination.next')}
+          </Button>
+        </div>
+      ) : null}
+      {drag ? (
+        <DragGhost
+          drag={drag}
+          accounts={items}
+          folderName={drag.folderId ? folderName(drag.folderId) : null}
+        />
+      ) : null}
+      <FolderDialog
+        state={dialog}
+        onChange={setDialog}
+        folders={folderItems}
+        actions={folderActions}
+      />
       {deletingId ? (
         <DeleteAccountModal
           phone={items.find((a) => a.account_id === deletingId)?.phone ?? deletingId}

@@ -367,7 +367,7 @@ describe('DiscoveryResults', () => {
 
       // The wide layout's single row (checkbox + title + subscribers + comments) is
       // gone — subscribers and comments moved to a second line under the title.
-      const firstLine = screen.getByText('@gated').closest('.gap-md');
+      const firstLine = screen.getByText('@gated').closest('.gap-3');
       expect(firstLine?.textContent).not.toContain('пауза между комментариями');
 
       // min-w-0 on the wrapper is what lets that second line's long, joined caveat

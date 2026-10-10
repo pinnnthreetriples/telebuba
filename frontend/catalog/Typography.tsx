@@ -1,4 +1,4 @@
-// Роли типографики — то, чем текст является читателю, а не то, какого он размера.
+// Стили типографики: пять ступеней размера, два веса.
 //
 // Ступени размера сюда не выведены намеренно: их печатает `docs/design-system.html`
 // из конфига, и второй список тех же чисел — это ровно та расходящаяся пара, от которой
@@ -14,18 +14,13 @@ import { Row, Section } from './Frame';
 // `Record<TypeRoleName, string>` делает гейтом компилятор: новая роль без образца не
 // собирается.
 const SAMPLES: Record<TypeRoleName, string> = {
-  'page-title': 'Прогрев',
-  'dialog-title': 'Удалить аккаунт?',
-  'dialog-body': 'Аккаунт и его сессия будут удалены безвозвратно.',
-  'card-title': 'Ограничения аккаунта',
-  'item-title': 'Иван Петров',
-  eyebrow: 'Прокси и сеть',
-  label: 'Действий в сутки',
-  value: '+7 900 111-22-33',
-  prose: 'Аккаунт выйдет из прогрева через пять дней и встанет в рабочую очередь.',
-  caption: 'Обновлено две минуты назад · 12.08.2026, 19:04',
-  'table-header': 'Аккаунт',
-  stat: '1 248',
+  h1: 'Прогрев аккаунтов',
+  h2: 'Удалить аккаунт?',
+  h3: 'Ограничения аккаунта',
+  body: 'Аккаунт выйдет из прогрева через пять дней и встанет в рабочую очередь.',
+  'body-medium': 'Иван Петров',
+  small: 'Обновлено две минуты назад · 12.08.2026, 19:04',
+  'small-medium': 'Прокси и сеть',
 };
 
 export function Typography() {
@@ -33,7 +28,7 @@ export function Typography() {
     <Section
       id="typography"
       title="Типографика"
-      note="Роль несёт размер, вес и краску сразу — страница называет роль, а не пересказывает три решения. Роль плюс перекраска (`type-caption text-danger-deep`) — предусмотренный способ сказать то же другим цветом."
+      note="Пять ступеней, два веса, семь стилей. Стиль несёт размер, интерлиньяж, трекинг, вес и краску сразу; перекраска утилитой поверх (`type-small text-danger-deep`) — предусмотренный способ сказать то же другим цветом."
     >
       {TYPE_ROLE_NAMES.map((name) => (
         <Row key={name} label={`type-${name}`}>
@@ -42,9 +37,9 @@ export function Typography() {
       ))}
 
       <Row label="роль + перекраска" hint="утилита поверх роли выигрывает">
-        <span className="type-caption text-danger-deep">Прокси не отвечает</span>
-        <span className="type-caption text-success-deep">Прокси отвечает</span>
-        <span className="type-caption font-bold">Жирная подпись</span>
+        <span className="type-small text-danger-deep">Прокси не отвечает</span>
+        <span className="type-small text-success-deep">Прокси отвечает</span>
+        <span className="type-small-medium">Подпись-название</span>
       </Row>
     </Section>
   );

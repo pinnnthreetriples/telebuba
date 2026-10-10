@@ -119,7 +119,7 @@ test('campaign mode cards use radio arrow navigation and visible keyboard focus'
 
   expect(revive).toHaveAttribute('aria-checked', 'true');
   expect(revive).toHaveFocus();
-  expect(revive).toHaveClass('focus-visible:outline-focus');
+  expect(revive).toHaveClass('focus-visible:outline-action-primary');
 });
 
 test('targets are chips that can be removed one at a time', async () => {

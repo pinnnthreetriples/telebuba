@@ -5,7 +5,7 @@
 // `shared/ui/SegmentedControl`, which the five sections that wore it share with nine
 // more sites outside this slice.
 
-export const LABEL = 'mb-tight block type-label';
+export const LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
 // A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
 // idle. Backed by real check calls (proxy connectivity / @SpamBot / alive).

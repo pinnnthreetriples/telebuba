@@ -1,10 +1,14 @@
 ---
+name: architecture
+description: Backend flow, stack, services, gateways and system design.
 last_updated: 2026-09-26
 edges:
   - target: context/conventions.md
     condition: backend implementation or review conventions
   - target: patterns/INDEX.md
     condition: the change is a repeatable implementation task
+  - target: patterns/add-auth.md
+    condition: changing authentication
 ---
 
 # Architecture

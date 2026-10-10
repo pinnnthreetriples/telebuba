@@ -31,6 +31,7 @@ export function AppNav() {
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions());
@@ -38,6 +39,21 @@ export function AppNav() {
   const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || t('shell.avatarFallback');
   const [sseStatus, setSseStatus] = useState<SseStatus>('connecting');
   useLogEventStream(() => undefined, setSseStatus);
+
+  // Escape closes the account menu and hands focus back to the avatar that opened
+  // it — the backdrop is pointer-only, so this is the keyboard's way out.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
   const systemActive = sseStatus === 'open';
 
   const activeIdx = LINKS.findIndex((link) =>
@@ -106,8 +122,8 @@ export function AppNav() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-header max-w-shell items-center gap-tight px-md sm:gap-md sm:px-lg lg:gap-page lg:px-2xl">
+    <header className="sticky top-0 z-sticky border-b border-line bg-surface-card/85 backdrop-blur-[10px]">
+      <div className="mx-auto flex h-header max-w-shell items-center gap-1 px-3 sm:gap-3 sm:px-4 lg:gap-8 lg:px-6">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -130,21 +146,21 @@ export function AppNav() {
           </svg>
         </IconButton>
 
-        <div className="flex shrink-0 items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex size-icon items-center justify-center rounded-md bg-content-primary">
             <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
               bar and the drawer), not a kind of text the app has. Naming it would put a
               rung with a single wearer in the canon, and borrowing another role's name
-              would make that name lie — it wore `type-dialog-title` for exactly as long
+              would make that name lie — it wore `type-h2` for exactly as long
               as it took to read it back. Hand-written, and staying that way. */}
-          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-h3 font-medium">Telebuba</span>
         </div>
 
         <nav
           ref={navRef}
-          className="relative hidden flex-1 items-center gap-lg self-stretch lg:flex"
+          className="relative hidden flex-1 items-center gap-4 self-stretch lg:flex"
         >
           {LINKS.map((link, index) => (
             <Link
@@ -173,9 +189,9 @@ export function AppNav() {
 
         {/* ml-auto: the hidden nav no longer contributes the flex-1 that pushed
             this cluster right below `lg`. */}
-        <div className="ml-auto flex shrink-0 items-center gap-sm sm:gap-md">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <div
-            className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-3 lg:px-3 lg:py-1 ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
             <span
               className={`size-dot rounded-full ${systemActive ? 'bg-success' : 'bg-content-subtle'}`}
@@ -187,7 +203,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only type-label lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-content-muted'}`}
+              className={`sr-only type-body-medium lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-content-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -197,11 +213,14 @@ export function AppNav() {
               size="touch"
               shape="circle"
               tone="action"
+              ref={menuButtonRef}
               aria-label={t('shell.account')}
+              aria-expanded={menuOpen}
+              aria-controls={menuOpen ? 'account-menu' : undefined}
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="border-action-primary text-body font-semibold lg:size-tile"
+              className="border-action-primary text-body font-medium lg:size-tile"
             >
               {initials}
             </IconButton>
@@ -217,10 +236,13 @@ export function AppNav() {
                   className="fixed inset-0 z-raised cursor-default"
                 />
                 <div
-                  className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-xs lg:top-[42px] ${SURFACE.panel}`}
+                  id="account-menu"
+                  role="group"
+                  aria-label={t('shell.account')}
+                  className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-1 lg:top-[42px] ${SURFACE.panel}`}
                 >
                   {me.data ? (
-                    <div className="truncate border-b border-line-row px-md py-sm text-body text-content-muted">
+                    <div className="truncate border-b border-canvas px-3 py-2 text-body text-content-muted">
                       {me.data.username}
                     </div>
                   ) : null}
@@ -238,7 +260,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-md py-sm text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint focus-visible:bg-danger-tint focus-visible:outline-hidden"
                   >
                     <svg
                       width="15"

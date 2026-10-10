@@ -69,8 +69,8 @@ test('renders the hero and every section header', () => {
 // matching. Throw on a miss: otherwise the comparisons below hold two nulls
 // against each other and pass while asserting nothing.
 function cardWrapper(title: string): HTMLElement {
-  const el = screen.getByText(title).closest<HTMLElement>('.rounded-card');
-  if (!el) throw new Error(`no .rounded-card card wrapper around "${title}"`);
+  const el = screen.getByText(title).closest<HTMLElement>('.rounded-lg');
+  if (!el) throw new Error(`no .rounded-lg card wrapper around "${title}"`);
   return el;
 }
 
@@ -89,7 +89,7 @@ test('the two security cards are the page\'s last row, 2FA left of "Действ
   // every asserted class still present. The class list also pins the ABSENCE
   // of mb-[14px] — the row is last and owns the page's bottom edge, and a
   // margin re-added here is the gap the row above it already provides.
-  expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-lg');
+  expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-4');
   // The overview is now an explicit tab panel; its last child owns the bottom
   // edge and the cards remain paired in the final grid row.
   const page = container.firstElementChild;

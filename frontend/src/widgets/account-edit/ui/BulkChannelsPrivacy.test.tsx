@@ -93,10 +93,10 @@ test('a public bulk create numbers the handle per account and carries one avatar
   await selectWholeFleet(user);
   await user.click(screen.getByRole('tab', { name: 'Каналы' }));
   await user.type(screen.getByRole('textbox', { name: 'Название' }), 'Скидки');
-  await user.click(screen.getByRole('checkbox', { name: 'Публичный канал' }));
 
   const handle = screen.getByRole('textbox', { name: 'Юзернейм' });
   await user.type(handle, 'skidki_{{n}');
+  await user.click(screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ }));
   const avatar = document.querySelector<HTMLInputElement>('input[type="file"]');
   if (!avatar) throw new Error('no avatar input');
   fireEvent.change(avatar, {
@@ -111,6 +111,7 @@ test('a public bulk create numbers the handle per account and carries one avatar
   const created = calls.filter((call) => /\/channels$/.test(call.url));
   expect(created.map((call) => call.body?.username)).toEqual(['skidki_1', 'skidki_2', 'skidki_3']);
   expect(created.every((call) => call.body?.title === 'Скидки')).toBe(true);
+  expect(created.every((call) => call.body?.pinned_to_profile === true)).toBe(true);
   expect(
     calls.filter((call) => call.url.endsWith('/photo') && call.fileName === 'logo.jpg'),
   ).toHaveLength(3);
@@ -123,7 +124,6 @@ test('a public create without {n} stays blocked for a batch, allowed for one acc
 
   await user.click(screen.getByRole('tab', { name: 'Каналы' }));
   await user.type(screen.getByRole('textbox', { name: 'Название' }), 'Скидки');
-  await user.click(screen.getByRole('checkbox', { name: 'Публичный канал' }));
   await user.type(screen.getByRole('textbox', { name: 'Юзернейм' }), 'skidki');
 
   // One account, one handle: nothing to collide with.
@@ -131,6 +131,29 @@ test('a public create without {n} stays blocked for a batch, allowed for one acc
 
   await selectWholeFleet(user);
   expect(screen.getByRole('button', { name: 'Применить к 3 аккаунтам' })).toBeDisabled();
+});
+
+test('a private bulk create sends no handle and cannot pin', async () => {
+  const calls = routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await selectWholeFleet(user);
+  await user.click(screen.getByRole('tab', { name: 'Каналы' }));
+  await user.type(screen.getByRole('textbox', { name: 'Название' }), 'Скидки');
+  await user.click(screen.getByRole('checkbox', { name: 'Приватный канал' }));
+
+  expect(screen.queryByRole('textbox', { name: 'Юзернейм' })).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: /Закрепить канал в профиле/ })).toBeDisabled();
+
+  await user.click(screen.getByRole('button', { name: 'Применить к 3 аккаунтам' }));
+  await waitFor(() => {
+    expect(screen.getByText('Применено 3 из 3')).toBeInTheDocument();
+  });
+  const created = calls.filter((call) => /\/channels$/.test(call.url));
+  expect(created).toHaveLength(3);
+  expect(created.every((call) => call.body?.username === null)).toBe(true);
+  expect(created.every((call) => call.body?.pinned_to_profile === false)).toBe(true);
 });
 
 test('a post goes to every channel of every selected account', async () => {
@@ -204,7 +227,6 @@ test('a handle that overflows at the tenth account is blocked before the batch r
 
   await user.click(screen.getByRole('tab', { name: 'Каналы' }));
   await user.type(screen.getByRole('textbox', { name: 'Название' }), 'Скидки');
-  await user.click(screen.getByRole('checkbox', { name: 'Публичный канал' }));
   const handle = screen.getByRole('textbox', { name: 'Юзернейм' });
 
   // 29 letters + `{n}`: 30 chars at account 1, 31 at account 12 — both fit.

@@ -18,11 +18,15 @@ edges:
     condition: neurocomment campaign channel discovery
   - target: context/runtime-neuroshilling.md
     condition: neuroshilling campaigns, scenarios, dialogue runs, or chat revival
+  - target: context/runtime-chat-broadcast.md
+    condition: chat broadcast campaigns, joins into lists, chains, rounds, or the board by chat
+  - target: context/runtime-user-parser.md
+    condition: user parser runs, bases, presets, or exports
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-09-28
+last_updated: 2026-10-10
 ---
 
 # Telebuba Router
@@ -35,4 +39,4 @@ Trust code, tests, manifests, migrations and workflows over prose memory.
 1. Load the matching context and, only if useful, one pattern.
 2. Implement through the documented boundaries.
 3. Verify with commands from `context/setup.md`; report only checks actually run.
-4. If durable truth changed, update only its route; use `mex log` for rationale and a pattern only for recurring work.
+4. If durable truth changed, update only its route; use `mex log` for rationale and a pattern only for recurring work. Keep bug/PR history, counts, benchmarks and transient state out, and never copy symbol lists, signatures or paths that the code graph answers live.

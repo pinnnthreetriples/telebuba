@@ -8,6 +8,10 @@ import type { LogEntry } from '@/shared/api';
 
 import { ActivityLogCard } from './ActivityLogCard';
 
+const ALISA = { account_id: 'acc-1', first_name: 'Alisa' };
+const MARIA = { account_id: 'acc-2', first_name: 'Мария' };
+const accountOf = (id: string) => [ALISA, MARIA].find((a) => a.account_id === id);
+
 function entry(over: Partial<LogEntry>): LogEntry {
   return {
     id: 1,
@@ -45,11 +49,12 @@ test('names the account behind each line, and stays quiet when the row has none'
         entry({ id: 1, event: 'neurocomment_onboard_join_by_request', extra: { channel: '@a' } }),
         entry({ id: 2, account_id: null, event: 'neurocomment_listener_started' }),
       ]}
-      accountName={(id) => (id === 'acc-1' ? 'Alisa' : id)}
+      accountOf={accountOf}
     />,
   );
-  // getByText throws on a second match, so this also pins the account-less row to blank.
-  expect(screen.getByText('Alisa')).toBeInTheDocument();
+  // The account is its face, named on hover; getByRole throws on a second match, so
+  // this also pins the account-less row to blank.
+  expect(screen.getByRole('button', { name: 'Alisa' })).toHaveAttribute('title', 'Alisa');
 });
 
 test('clicking an account narrows the feed to it, and the chip restores everything', async () => {
@@ -59,7 +64,7 @@ test('clicking an account narrows the feed to it, and the chip restores everythi
         entry({ id: 1, event: 'neurocomment_posted' }),
         entry({ id: 2, account_id: 'acc-2', event: 'neurocomment_channel_comments_off' }),
       ]}
-      accountName={(id) => (id === 'acc-1' ? 'Alisa' : 'Мария')}
+      accountOf={accountOf}
     />,
   );
   await userEvent.click(screen.getByRole('button', { name: 'Alisa' }));

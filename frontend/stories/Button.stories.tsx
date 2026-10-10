@@ -21,7 +21,7 @@ export const Danger: Story = { args: { variant: 'danger', children: 'Удали�
 export const Ghost: Story = { args: { variant: 'ghost', children: 'Подробнее' } };
 export const Dashed: Story = { args: { variant: 'dashed', children: 'Добавить кампанию' } };
 export const DashedMuted: Story = {
-  args: { variant: 'dashedMuted', size: 'xs', children: 'Добавить канал' },
+  args: { variant: 'dashedMuted', size: 'sm', children: 'Добавить канал' },
 };
 export const Disabled: Story = { args: { variant: 'primary', disabled: true } };
 export const Loading: Story = { args: { variant: 'primary', loading: true } };

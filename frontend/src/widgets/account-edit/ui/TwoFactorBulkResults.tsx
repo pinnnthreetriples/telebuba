@@ -95,14 +95,14 @@ export function TwoFactorBulkResults({
       </Notice>
       {/* The 16px to the Notice above is worn HERE: a caller may not hand
           Card/Notice an outer margin (classMerge.test). */}
-      <div className="mb-md mt-lg flex items-center justify-between gap-md">
-        <span className="type-caption">
+      <div className="mb-3 mt-4 flex items-center justify-between gap-3">
+        <span className="type-small">
           {t('accounts.addWizard.twofaSelected', { done: created.length, total: rows.length })}
         </span>
-        <span className="flex shrink-0 gap-sm">
+        <span className="flex shrink-0 gap-2">
           {clipboard ? (
             <Button
-              size="xs"
+              size="sm"
               onClick={() => {
                 copy('all', allText);
               }}
@@ -112,43 +112,41 @@ export function TwoFactorBulkResults({
                 : t('accounts.addWizard.twofaCopyAll')}
             </Button>
           ) : null}
-          <Button size="xs" onClick={download}>
+          <Button size="sm" onClick={download}>
             {t('accounts.addWizard.twofaDownload')}
           </Button>
         </span>
       </div>
       {clipboard ? null : (
-        <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>
+        <div className="mb-3 type-small">{t('accounts.edit.twofaCopyManual')}</div>
       )}
       {copyState.all === 'failed' ? (
-        <div className="mb-md type-caption text-danger-deep">
-          {t('accounts.edit.twofaCopyFailed')}
-        </div>
+        <div className="mb-3 type-small text-danger-deep">{t('accounts.edit.twofaCopyFailed')}</div>
       ) : null}
-      <div className="overflow-hidden rounded-lg border border-line">
+      <div className="overflow-hidden rounded-md border border-line">
         {rows.map((row) =>
           row.created ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
             >
-              <span className="w-stamp shrink-0 break-words type-item-title">
+              <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block break-all font-mono type-value">{row.created.password}</span>
+                <span className="block break-all font-mono type-body">{row.created.password}</span>
                 {row.created.stored === false ? (
-                  <span className="mt-hair block type-caption text-warning-deep">
+                  <span className="mt-1 block type-small text-warning-deep">
                     {t('accounts.edit.twofaStoreFailed')}
                   </span>
                 ) : null}
                 {row.created.confirmed === false ? (
-                  <span className="mt-hair block type-caption text-warning-deep">
+                  <span className="mt-1 block type-small text-warning-deep">
                     {t('accounts.edit.twofaUnconfirmed')}
                   </span>
                 ) : null}
                 {copyState[row.accountId] === 'failed' ? (
-                  <span className="mt-hair block type-caption text-danger-deep">
+                  <span className="mt-1 block type-small text-danger-deep">
                     {t('accounts.edit.twofaCopyFailed')}
                   </span>
                 ) : null}
@@ -186,15 +184,15 @@ export function TwoFactorBulkResults({
           ) : row.state === 'error' ? (
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row bg-danger-tint px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas bg-danger-tint px-3 py-2 last:border-b-0"
             >
-              <span className="w-stamp shrink-0 break-words type-item-title">
+              <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
               </span>
               {/* The refusal codes already have Russian text — the same resolver
                   the global mutation toast uses. Inventing copy here would be a
                   second, drifting table for one dialog. */}
-              <span className="min-w-0 flex-1 type-caption text-danger-deep">
+              <span className="min-w-0 flex-1 type-small text-danger-deep">
                 {mutationErrorText(row.error)}
               </span>
             </div>
@@ -205,19 +203,19 @@ export function TwoFactorBulkResults({
             // error and accuse Telegram of refusing a request nobody sent.
             <div
               key={row.accountId}
-              className="flex items-start gap-md border-b border-line-row px-md py-sm last:border-b-0"
+              className="flex items-start gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
             >
-              <span className="w-stamp shrink-0 break-words type-item-title">
+              <span className="w-stamp shrink-0 break-words type-body-medium">
                 {label(row.accountId)}
               </span>
-              <span className="min-w-0 flex-1 type-caption">
+              <span className="min-w-0 flex-1 type-small">
                 {t('accounts.addWizard.twofaNotRun')}
               </span>
             </div>
           ),
         )}
       </div>
-      <div className="mt-xl flex justify-end gap-sm">
+      <div className="mt-6 flex justify-end gap-2">
         <Button variant="primary" onClick={onDone}>
           {t('accounts.addWizard.done')}
         </Button>

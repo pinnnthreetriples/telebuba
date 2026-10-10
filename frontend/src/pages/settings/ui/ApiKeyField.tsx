@@ -1,6 +1,6 @@
 import { IconButton, Input } from '@/shared/ui';
 
-const FIELD_LABEL = 'mb-tight block type-label';
+const FIELD_LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
 // Stays inline, both halves. The crossed-out eye is this file's own transcription
 // and is drawn nowhere else, so <Icon> can only take the open one — and the two
@@ -62,7 +62,7 @@ export function ApiKeyField({
   return (
     <label className="block">
       <span className={FIELD_LABEL}>{label}</span>
-      <div className="flex gap-sm">
+      <div className="flex gap-2">
         <Input
           className="flex-1 font-mono"
           type={show ? 'text' : 'password'}
@@ -80,7 +80,7 @@ export function ApiKeyField({
           tone="primary"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="h-control w-action rounded-lg"
+          className="h-control w-action rounded-md"
         >
           <EyeIcon off={show} />
         </IconButton>
@@ -89,7 +89,7 @@ export function ApiKeyField({
         <button
           type="button"
           onClick={onClear}
-          className="mt-md text-body font-medium text-danger transition-colors hover:underline"
+          className="mt-3 text-body font-medium text-danger transition-colors hover:underline"
         >
           {clearLabel}
         </button>

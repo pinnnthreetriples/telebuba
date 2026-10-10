@@ -81,6 +81,21 @@ async def test_a_public_target_resolves_to_this_accounts_own_chat_id(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("left", "member"), [(False, True), (True, False)])
+async def test_a_public_target_says_whether_this_account_is_inside(
+    monkeypatch: pytest.MonkeyPatch, *, left: bool, member: bool
+) -> None:
+    """A re-join of a public chat answers plain success, so membership is read here."""
+    channel = _channel(megagroup=True)
+    channel.left = left
+    _patch_client(monkeypatch, _ResolveClient(channel))
+
+    result: ResolveChatResult = await execute_read("acc-1", ResolveChat(target="target"))  # ty: ignore[invalid-assignment]
+
+    assert result.member is member
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("entity", "kind"),
     [
@@ -183,7 +198,7 @@ async def test_a_private_invite_resolves_only_once_the_account_is_inside(
 
     result: ResolveChatResult = await execute_read("acc-1", ResolveChat(target="+ABCDEFGH"))  # ty: ignore[invalid-assignment]
 
-    assert result.chat_id == 777
+    assert (result.chat_id, result.member) == (777, True)
     assert isinstance(client.requests[0], CheckChatInviteRequest)
     assert client.requests[0].hash == "ABCDEFGH"
 

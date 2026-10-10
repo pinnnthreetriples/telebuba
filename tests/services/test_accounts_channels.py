@@ -154,6 +154,7 @@ async def test_create_account_channel_executes_and_logs(
                 "title": "Mine",
                 "has_username": True,
                 "reactions_enabled": True,
+                "pinned_to_profile": False,
                 "channel_id": "42",
             },
         ),
@@ -330,6 +331,7 @@ async def test_update_account_channel_threads_fields(
             "has_title": True,
             "has_about": True,
             "reactions_enabled": None,
+            "pinned_to_profile": None,
         },
     )
 
@@ -342,6 +344,26 @@ async def test_update_account_channel_rejects_empty_update(
 
     with pytest.raises(ValueError, match="title/about"):
         await update_account_channel("acc-1", 42, ChannelUpdateRequest())
+
+
+@pytest.mark.asyncio
+async def test_pin_flag_reaches_create_and_edit_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = _patch_execute(monkeypatch, "channels", _ok("channel_create", "acc-1"))
+    _patch_log(monkeypatch, "channels", [])
+
+    await create_account_channel(
+        "acc-1",
+        ChannelCreateRequest(title="Mine", username="my_channel", pinned_to_profile=True),
+    )
+    await update_account_channel("acc-1", 42, ChannelUpdateRequest(pinned_to_profile=False))
+
+    create, edit = captured
+    assert isinstance(create, CreateChannel)
+    assert create.pinned_to_profile is True
+    assert isinstance(edit, EditChannel)
+    assert edit.pinned_to_profile is False
 
 
 @pytest.mark.asyncio

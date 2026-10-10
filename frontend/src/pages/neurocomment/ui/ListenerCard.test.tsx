@@ -115,9 +115,9 @@ test('listener icon actions have names, visible keyboard focus, and keep their c
   const edit = screen.getByRole('button', { name: 'Изменить аккаунт' });
   const remove = screen.getByRole('button', { name: 'Снять слушателя' });
   expect(pause).toHaveAttribute('aria-label', 'Поставить на паузу');
-  expect(pause).toHaveClass('focus-visible:outline-focus', 'hover:bg-warning-tint');
-  expect(edit).toHaveClass('focus-visible:outline-focus', 'hover:bg-action-hover');
-  expect(remove).toHaveClass('focus-visible:outline-focus', 'hover:bg-danger-tint');
+  expect(pause).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-warning-tint');
+  expect(edit).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-info-tint');
+  expect(remove).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-danger-tint');
 
   await userEvent.tab();
   expect(pause).toHaveFocus();

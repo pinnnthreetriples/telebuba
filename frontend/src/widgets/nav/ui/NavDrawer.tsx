@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 
+import { FOCUS_RING } from '@/shared/design-system';
 import { CloseButton, Modal } from '@/shared/ui';
 
 import { NAV_LINKS } from './links';
@@ -18,34 +19,36 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
 
   return (
     <Modal onClose={onClose} variant="drawer-left" label={t('shell.menu')}>
-      <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">
-        <div className="flex items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+      <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-icon items-center justify-center rounded-md bg-content-primary">
             <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
               bar and the drawer), not a kind of text the app has. Naming it would put a
               rung with a single wearer in the canon, and borrowing another role's name
-              would make that name lie — it wore `type-dialog-title` for exactly as long
+              would make that name lie — it wore `type-h2` for exactly as long
               as it took to read it back. Hand-written, and staying that way. */}
-          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-h3 font-medium">Telebuba</span>
         </div>
         <CloseButton
           size="touch"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm"
+          className="-mr-2"
         />
       </div>
 
-      <nav className="flex flex-col gap-tight p-sm">
+      <nav className="flex flex-col gap-2 p-2">
         {NAV_LINKS.map((link, index) => (
           <Link
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-touch items-center rounded-lg px-md text-body font-medium transition-colors ${
-              activeIdx === index ? 'bg-info-tint text-info-strong' : 'text-content-muted'
+            className={`flex min-h-touch items-center rounded-md px-3 text-body font-medium transition-colors ${FOCUS_RING} ${
+              activeIdx === index
+                ? 'bg-info-tint text-info-strong'
+                : 'text-content-muted hover:bg-canvas hover:text-content-primary'
             }`}
           >
             {t(`nav.${link.key}`)}

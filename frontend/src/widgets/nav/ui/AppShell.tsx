@@ -8,7 +8,7 @@ export function AppShell() {
   return (
     <>
       <AppNav />
-      <main className="mx-auto max-w-shell px-lg pb-[80px] pt-2xl lg:px-2xl">
+      <main className="mx-auto max-w-shell px-4 pb-[80px] pt-6 lg:px-6">
         <Outlet />
       </main>
     </>

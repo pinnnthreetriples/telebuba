@@ -1,10 +1,14 @@
 import { fileURLToPath, URL } from 'node:url';
 
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [react()],
+  // Плагин, а не PostCSS: Storybook и `scripts/blocks-doc.mjs` поднимают Vite с этим же
+  // конфигом и получают тот же Tailwind без второго места настройки. Тема и источники
+  // классов — в самом CSS (`src/app/styles/index.css`).
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

@@ -9,8 +9,8 @@ import {
   type PromptAccount,
 } from '../src/entities/campaign';
 import { CampaignsCard } from '../src/pages/neurocomment/ui/CampaignsCard';
-import { PipelineCard as RuntimePipeline } from '../src/pages/neurocomment/ui/PipelineCard';
-import { PipelineCard as LaunchPipeline } from '../src/pages/neuroshilling/ui/PipelineCard';
+import { RuntimePipeline } from '../src/pages/neurocomment/ui/RuntimePipeline';
+import { LaunchPipeline } from '../src/pages/neuroshilling/ui/LaunchPipeline';
 import type {
   LogEntry,
   NeurocommentCampaign,
@@ -159,10 +159,10 @@ export function OverviewPatterns() {
       title="Блоки продукта"
       note="Блок кампаний взят с экрана нейрокомментинга. Карточка выбора и журнал используются в двух разделах; конвейеры показывают разные процессы и поэтому остаются отдельными блоками. Поиск каналов здесь показывает модальную оболочку; сам поиск требует сервер."
     >
-      <div className="grid gap-lg lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Блок кампаний</h3>
-          <p className="mb-md type-caption">Нейрокомментинг</p>
+          <h3 className="mb-2 type-h3">Блок кампаний</h3>
+          <p className="mb-3 type-small">Нейрокомментинг</p>
           <div className="grid lg:grid-cols-[340px_minmax(0,1fr)]">
             <CampaignsCard
               campaignList={campaigns}
@@ -234,9 +234,9 @@ export function OverviewPatterns() {
               channelCheckStatus={channelChecks}
               discoverySlot={
                 <Button
-                  size="xs"
+                  size="sm"
                   onClick={() => setDiscoveryOpen(true)}
-                  className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
+                  className="text-small text-content-muted hover:border-action-primary hover:text-action-primary"
                 >
                   Найти каналы
                 </Button>
@@ -244,16 +244,16 @@ export function OverviewPatterns() {
             />
             {discoveryOpen && (
               <Modal onClose={() => setDiscoveryOpen(false)} size="table" label="Поиск каналов">
-                <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-                  <h2 className="type-dialog-title">Поиск каналов</h2>
-                  <p className="mt-hair type-caption">
+                <div className="border-b border-canvas px-6 pb-4 pt-6">
+                  <h2 className="type-h2">Поиск каналов</h2>
+                  <p className="mt-1 type-small">
                     Для кампании {campaigns.find((item) => item.campaign_id === campaignId)?.name}
                   </p>
                 </div>
-                <div className="px-2xl py-xl type-prose">
+                <div className="px-6 py-6 type-body text-content-subtle">
                   Поиск и результаты доступны в подключённом приложении.
                 </div>
-                <div className="flex justify-end border-t border-line-row px-2xl py-lg">
+                <div className="flex justify-end border-t border-canvas px-6 py-4">
                   <Button onClick={() => setDiscoveryOpen(false)}>Закрыть</Button>
                 </div>
               </Modal>
@@ -364,34 +364,34 @@ export function OverviewPatterns() {
           </div>
         </div>
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Аватар аккаунта</h3>
-          <p className="mb-md type-caption">Таблица аккаунтов, прогрев и формы выбора</p>
-          <div className="flex items-center gap-xl rounded-card border border-line bg-surface-card p-lg">
-            <div className="flex items-center gap-sm">
+          <h3 className="mb-2 type-h3">Аватар аккаунта</h3>
+          <p className="mb-3 type-small">Таблица аккаунтов, прогрев и формы выбора</p>
+          <div className="flex items-center gap-4 rounded-lg border border-line bg-surface-card p-4">
+            <div className="flex items-center gap-2">
               <AccountAvatar
                 account={{ account_id: 'a1', first_name: 'Иван', last_name: 'Петров' }}
                 className="size-tile shrink-0 rounded-full"
-                fallbackClassName="bg-info-tint text-info-strong text-body font-semibold"
+                fallbackClassName="bg-info-tint text-info-strong text-body font-medium"
               />
-              <span className="type-caption">В таблице</span>
+              <span className="type-small">В таблице</span>
             </div>
-            <div className="flex items-center gap-sm">
+            <div className="flex items-center gap-2">
               <AccountAvatar
                 account={{ account_id: 'a2', first_name: 'Мария', last_name: 'Смирнова' }}
                 className="size-tile shrink-0 rounded-full ring-2 ring-success"
-                fallbackClassName="bg-info-tint text-info-strong text-tiny font-bold"
+                fallbackClassName="bg-info-tint text-info-strong text-small font-medium"
               />
-              <span className="type-caption">В прогреве</span>
+              <span className="type-small">В прогреве</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-lg lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Вкладки профиля</h3>
-          <p className="mb-md type-caption">Профиль и массовое редактирование аккаунтов</p>
-          <div className="rounded-card border border-line bg-surface-card">
+          <h3 className="mb-2 type-h3">Вкладки профиля</h3>
+          <p className="mb-3 type-small">Профиль и массовое редактирование аккаунтов</p>
+          <div className="rounded-lg border border-line bg-surface-card">
             <TabList
               options={[
                 { value: 'text', label: 'Текст' },
@@ -407,16 +407,16 @@ export function OverviewPatterns() {
               role="tabpanel"
               id="overview-tabpanel"
               aria-labelledby={`overview-tab-${tab}`}
-              className="p-lg type-prose"
+              className="p-4 type-body text-content-subtle"
             >
               {tab === 'text' ? 'Имя, фамилия и описание' : 'Фото аккаунта'}
             </div>
           </div>
         </div>
         <div className="min-w-0">
-          <h3 className="mb-sm type-card-title">Редактор канала</h3>
-          <p className="mb-md type-caption">Прогрев, нейрокомментинг и нейрошиллинг</p>
-          <div className="flex flex-wrap items-center gap-sm rounded-card border border-line bg-surface-card p-lg">
+          <h3 className="mb-2 type-h3">Редактор канала</h3>
+          <p className="mb-3 type-small">Прогрев, нейрокомментинг и нейрошиллинг</p>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-card p-4">
             {channels.map((channel) => (
               <Badge key={channel} tone="neutral">
                 {channel}
@@ -441,17 +441,17 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Нумерованные шаги</h3>
-        <p className="mb-md type-caption">Подсказки прогрева и кампаний</p>
-        <div className="grid gap-md md:grid-cols-2">
+        <h3 className="mb-2 type-h3">Нумерованные шаги</h3>
+        <p className="mb-3 type-small">Подсказки прогрева и кампаний</p>
+        <div className="grid gap-3 md:grid-cols-2">
           <NumberedStep number={1}>Выберите аккаунты.</NumberedStep>
           <NumberedStep number={2}>Проверьте ограничения.</NumberedStep>
         </div>
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Ошибка загрузки с повтором</h3>
-        <p className="mb-md type-caption">Редактирование аккаунта и его каналов</p>
+        <h3 className="mb-2 type-h3">Ошибка загрузки с повтором</h3>
+        <p className="mb-3 type-small">Редактирование аккаунта и его каналов</p>
         {retryNoticeVisible && (
           <RetryNotice
             message="Не удалось загрузить настройки аккаунта."
@@ -463,12 +463,16 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Журнал событий</h3>
-        <p className="mb-md type-caption">Нейрокомментинг и нейрошиллинг</p>
+        <h3 className="mb-2 type-h3">Журнал событий</h3>
+        <p className="mb-3 type-small">Нейрокомментинг и нейрошиллинг</p>
         <LogTerminal
           title="Лог кампании"
           logLines={entries}
-          accountName={(id) => (id === 'acc-1' ? 'Иван Петров' : 'Мария Смирнова')}
+          accountOf={(id) =>
+            id === 'acc-1'
+              ? { account_id: id, first_name: 'Иван', last_name: 'Петров', username: 'ivan' }
+              : { account_id: id, first_name: 'Мария', last_name: 'Смирнова' }
+          }
           onClear={() => setConfirmClearLogs(true)}
         />
         {confirmClearLogs && (
@@ -484,27 +488,27 @@ export function OverviewPatterns() {
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Конвейер обработки</h3>
-        <p className="mb-md type-caption">Текущая стадия нейрокомментинга</p>
+        <h3 className="mb-2 type-h3">Конвейер обработки</h3>
+        <p className="mb-3 type-small">Текущая стадия нейрокомментинга</p>
         <RuntimePipeline
           running={runtimeRunning}
           canStart
           events={[]}
           onToggle={() => setRuntimeRunning((current) => !current)}
           stats={[
-            { label: 'Кампаний', value: 2, color: 'text-content-primary' },
-            { label: 'Каналов', value: 4, color: 'text-action-primary' },
-            { label: 'Аккаунтов', value: 2, color: 'text-content-primary' },
-            { label: 'Комментариев', value: 14, color: 'text-success-deep' },
-            { label: 'Удалено', value: 1, color: 'text-danger' },
-            { label: 'Ошибок', value: 2, color: 'text-danger' },
+            { label: 'Кампаний', value: 2, tone: 'default' },
+            { label: 'Каналов', value: 4, tone: 'primary' },
+            { label: 'Аккаунтов', value: 2, tone: 'default' },
+            { label: 'Комментариев', value: 14, tone: 'success' },
+            { label: 'Удалено', value: 1, tone: 'danger' },
+            { label: 'Ошибок', value: 2, tone: 'danger' },
           ]}
         />
       </div>
 
       <div>
-        <h3 className="mb-sm type-card-title">Готовность к запуску</h3>
-        <p className="mb-md type-caption">Проверки кампании нейрошиллинга</p>
+        <h3 className="mb-2 type-h3">Готовность к запуску</h3>
+        <p className="mb-3 type-small">Проверки кампании нейрошиллинга</p>
         <LaunchPipeline
           campaign={campaign}
           run={{ status: launchRunning ? 'running' : 'idle', sent: 0, total: 120 }}

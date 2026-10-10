@@ -346,8 +346,22 @@ test('listener pause/edit/remove actions fire their handlers', async () => {
   await userEvent.click(screen.getByText('Отмена'));
 
   // Remove is distinct from pause: it clears the listener via the dedicated
-  // clear endpoint (finding #4), not /neurocomment/stop.
+  // clear endpoint (finding #4), not /neurocomment/stop — and only after a
+  // confirm, since it stops the engine. Cancel first: nothing is cleared.
+  const clearCalls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) =>
+        (input as Request).url.endsWith('/neurocomment/listener/clear'),
+      ).length;
   await userEvent.click(screen.getByTitle('Снять слушателя'));
+  expect(screen.getByText('Снять слушателя?')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+  expect(screen.queryByText('Снять слушателя?')).not.toBeInTheDocument();
+  expect(clearCalls()).toBe(0);
+
+  await userEvent.click(screen.getByTitle('Снять слушателя'));
+  await userEvent.click(screen.getByRole('button', { name: 'Снять' }));
   await waitFor(() => {
     const cleared = vi
       .mocked(fetch)

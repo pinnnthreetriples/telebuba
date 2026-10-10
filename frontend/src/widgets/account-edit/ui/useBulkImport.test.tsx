@@ -103,6 +103,48 @@ test('a failing file lands in error; retry re-sends it and turns ok', async () =
   expect(onSettledOne).toHaveBeenCalledTimes(2);
 });
 
+test('a failure is named by its envelope code, and remove drops only that row', async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const name = ((await (input as Request).formData()).get('file') as File).name;
+    return name === 'dup.session'
+      ? jsonResponse({ error: { code: 'conflict', message: 'exists' } }, 409)
+      : jsonResponse(account('ok'));
+  });
+  const { result } = setup('session');
+
+  act(() => {
+    result.current.add([file('dup.session'), file('ok.session')]);
+  });
+  await waitFor(() => {
+    expect(result.current.importing).toBe(false);
+  });
+  expect(result.current.files[0]).toMatchObject({ state: 'error', failure: 'duplicate' });
+
+  act(() => {
+    result.current.remove(0);
+  });
+  expect(result.current.files.map((f) => f.name)).toEqual(['ok.session']);
+  expect(result.current.accountIds).toEqual(['ok']);
+});
+
+test('an empty tdata reads as broken and an unlisted code as a neutral failure', async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const name = ((await (input as Request).formData()).get('file') as File).name;
+    return name === 'empty.zip'
+      ? jsonResponse({ error: { code: 'validation_error', message: 'validation_error' } }, 422)
+      : jsonResponse({ error: { code: 'internal_error', message: 'internal_error' } }, 500);
+  });
+  const { result } = setup('tdata');
+
+  act(() => {
+    result.current.add([file('empty.zip'), file('odd.zip')]);
+  });
+  await waitFor(() => {
+    expect(result.current.importing).toBe(false);
+  });
+  expect(result.current.files.map((f) => f.failure)).toEqual(['broken', 'other']);
+});
+
 test('at most two files are in flight at once', async () => {
   const pending: ((response: Response) => void)[] = [];
   vi.mocked(fetch).mockImplementation(

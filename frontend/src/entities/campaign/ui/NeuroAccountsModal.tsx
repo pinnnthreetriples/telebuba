@@ -3,8 +3,17 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
-import { HEADING_ICON_TILE, SURFACE } from '@/shared/design-system';
-import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Modal } from '@/shared/ui';
+import { SURFACE } from '@/shared/design-system';
+import {
+  Button,
+  ConfirmModal,
+  EmptyState,
+  FeedbackMark,
+  Icon,
+  IconButton,
+  Modal,
+  ModalHeader,
+} from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
 import { AccountLimitsModal } from './AccountLimitsModal';
@@ -77,7 +86,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
       // No aria-label: it would override the button's own text, and the spend IS the
       // label worth hearing. The title carries the word for a pointer user.
       title={t('neurocomment.modal.neuroAccounts.limits')}
-      className={`flex shrink-0 items-center gap-sm rounded-md border px-md py-sm text-body font-medium ${skin}`}
+      className={`flex shrink-0 items-center gap-2 rounded-sm border px-3 py-2 text-body font-medium ${skin}`}
     >
       {/* The gauge is drawn, not sized: its bars are 3px wide and rise to the 13px
           its own script scales them by, which is one component's chart rather than
@@ -85,7 +94,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
           same, and a gauge is not a flag. */}
       <span
         // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: the spend gauge's own chart
-        className="flex h-[13px] items-end gap-hair"
+        className="flex h-[13px] items-end gap-1"
       >
         {GAUGES.map((key) => {
           const spent = data ? share(data[key]) : 0;
@@ -99,7 +108,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
           );
         })}
       </span>
-      <span className="font-mono text-tiny font-semibold tabular-nums">
+      <span className="font-mono text-small font-medium tabular-nums">
         {binding
           ? `${binding.used}/${binding.limit > 0 ? binding.limit : '∞'}`
           : t('neurocomment.modal.neuroAccounts.limits')}
@@ -154,10 +163,10 @@ function AccountRow({
   };
 
   return (
-    <div className="border-b border-line-row py-md">
-      <div className="flex flex-wrap items-center gap-md">
+    <div className="border-b border-canvas py-3">
+      <div className="flex flex-wrap items-center gap-3">
         <FeedbackMark result={result} />
-        <span className="min-w-0 flex-1 truncate type-card-title">{account.name}</span>
+        <span className="min-w-0 flex-1 truncate type-h3">{account.name}</span>
         {account.linked ? (
           <LimitsChip
             accountId={account.account_id}
@@ -184,7 +193,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-body text-content-primary sm:w-menu"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-2 rounded-md border border-line bg-surface-card px-3 py-2 text-body text-content-primary sm:w-menu"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-content-subtle'}`}>
               {triggerLabel}
@@ -199,7 +208,7 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-surface-card px-md py-sm text-body font-medium text-action-primary hover:border-action-primary sm:w-menu"
+            className="w-full shrink-0 rounded-sm border border-dashed border-line-strong bg-surface-card px-3 py-2 text-body font-medium text-action-primary hover:border-action-primary sm:w-menu"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
@@ -223,7 +232,7 @@ function AccountRow({
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-tight type-caption text-danger-deep">
+        <div className="mt-2 type-small text-danger-deep">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -242,7 +251,7 @@ function AccountRow({
           // .tb-dd collapses visually only; without this every channel option of
           // every linked row kept its tab stop while closed. See the note in LogsPage.
           inert={!open}
-          className={`tb-dd ${open ? `open mt-sm p-xs ${SURFACE.panel}` : ''}`}
+          className={`tb-dd ${open ? `open mt-2 p-1 ${SURFACE.panel}` : ''}`}
         >
           <button
             key={ALL_CHANNELS}
@@ -252,7 +261,7 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+            className={`flex w-full items-center justify-between gap-2 rounded-sm px-3 py-2 text-left text-body transition-colors hover:bg-info-tint ${
               selected.length === 0 ? 'font-medium text-info-strong' : 'text-content-primary'
             }`}
           >
@@ -270,7 +279,7 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+                className={`flex w-full items-center justify-between gap-2 rounded-sm px-3 py-2 text-left text-body transition-colors hover:bg-info-tint ${
                   isSelected ? 'font-medium text-info-strong' : 'text-content-primary'
                 }`}
                 title={channel}
@@ -336,8 +345,10 @@ export function NeuroAccountsModal({
   const { t } = useTranslation();
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.neuroAccounts.title')}>
-      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className={HEADING_ICON_TILE}>
+      <ModalHeader
+        title={t('neurocomment.modal.neuroAccounts.title')}
+        subtitle={t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
+        icon={
           <svg
             width="18"
             height="18"
@@ -350,16 +361,10 @@ export function NeuroAccountsModal({
             <circle cx="9" cy="7" r="4" />
             <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-        </span>
-        <div>
-          <div className="type-dialog-title">{t('neurocomment.modal.neuroAccounts.title')}</div>
-          <div className="mt-hair type-prose">
-            {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="px-2xl pb-lg pt-sm">
+      <div className="px-6 pb-4 pt-2">
         {accounts.length > 0 ? (
           accounts.map((account) => (
             <AccountRow
@@ -374,13 +379,11 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center type-prose">
-            {t('neurocomment.modal.neuroAccounts.empty')}
-          </div>
+          <EmptyState className="px-3">{t('neurocomment.modal.neuroAccounts.empty')}</EmptyState>
         )}
       </div>
 
-      <div className="flex justify-end border-t border-line-row px-2xl pb-xl pt-lg">
+      <div className="flex justify-end border-t border-canvas px-6 pb-6 pt-4">
         <Button variant="primary" onClick={onClose}>
           {t('neurocomment.modal.neuroAccounts.done')}
         </Button>

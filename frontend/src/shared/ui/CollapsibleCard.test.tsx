@@ -15,7 +15,7 @@ import { CollapsibleCard } from './CollapsibleCard';
 
 function Card({ defaultOpen = false, extra = false }: { defaultOpen?: boolean; extra?: boolean }) {
   return (
-    <CollapsibleCard label="Действия" defaultOpen={defaultOpen} header={<span>Действия</span>}>
+    <CollapsibleCard label="Действия" defaultOpen={defaultOpen} title="Действия">
       <button type="button">Удалить аккаунт</button>
       {extra ? <button type="button">Показать причину</button> : null}
     </CollapsibleCard>
@@ -107,7 +107,7 @@ test('a control that appears after the open is reachable, not sealed in', async 
 // the a11y regression the tests above exist to prevent.
 test('a descendant’s max-height transition does not seal the card', async () => {
   render(
-    <CollapsibleCard label="Действия" defaultOpen header={<span>Действия</span>}>
+    <CollapsibleCard label="Действия" defaultOpen title="Действия">
       <div data-testid="inner-dropdown">
         <button type="button">Удалить аккаунт</button>
       </div>

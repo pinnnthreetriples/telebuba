@@ -67,7 +67,8 @@ jobs:
 
       - name: Run npm audit
         if: always()
-        run: npm audit --package-lock-only --audit-level=info
+        # Same gate as ci.yml, reviewed ignores included.
+        run: node scripts/npm-audit-gate.mjs
         working-directory: frontend
 
   # ---------------------------------------------------------------------------

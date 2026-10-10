@@ -48,6 +48,7 @@ from core.telegram_client._read_stories import (
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
 )
+from core.telegram_client._read_user_parser import dispatch_user_parser_read
 from core.telegram_client._twofa import dispatch_get_twofa_status
 from schemas.telegram_actions import (
     BanCheckResult,
@@ -71,6 +72,11 @@ from schemas.telegram_actions import (
     WaitForBotChallenge,
 )
 from schemas.telegram_actions_rights import CheckWriteRights
+from schemas.telegram_actions_user_parser import (
+    ReadChannelPostReplies,
+    ReadChatHistoryAuthors,
+    ReadChatParticipants,
+)
 from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 
 if TYPE_CHECKING:
@@ -246,6 +252,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_list_profile_photos(client, action)
         case LookupContactsByPhone():
             return await dispatch_lookup_contacts_by_phone(client, action)
+        case ReadChatParticipants() | ReadChatHistoryAuthors() | ReadChannelPostReplies():
+            return await dispatch_user_parser_read(client, action)
         case _:
             return await _dispatch_channel_read_action(client, action)
 

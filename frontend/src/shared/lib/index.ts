@@ -15,6 +15,8 @@ export {
   useLogEventStream,
 } from './log/useLogEventStream';
 export type { InboxMessageEvent, SseStatus } from './log/useLogEventStream';
-export { isUnauthorized, mutationErrorText, queryClient } from './query-client';
+export { errorCode, isUnauthorized, mutationErrorText, queryClient } from './query-client';
 export { useClearedTimeouts, useTransientFeedback } from './useTransientFeedback';
+export { useControllableState } from './useControllableState';
+export { useNumberField } from './useNumberField';
 export type { FeedbackResult } from './useTransientFeedback';

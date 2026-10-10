@@ -7,11 +7,11 @@ function Example() {
   const [value, setValue] = useState('');
   const [channels, setChannels] = useState<string[]>(['@news']);
   return (
-    <div className="flex flex-wrap items-center gap-sm rounded-card border border-line bg-surface-card p-lg">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-card p-4">
       {channels.map((channel) => (
         <span
           key={channel}
-          className="rounded-full border border-line bg-canvas px-md py-xs type-caption"
+          className="rounded-full border border-line bg-canvas px-3 py-1 type-small"
         >
           {channel}
         </span>

@@ -103,13 +103,15 @@ export function ScheduledPostsList({
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-xl" aria-label={t('accounts.schedule.listTitle')}>
-      <div className="mb-md flex items-center gap-sm">
+    <section className="mt-6" aria-label={t('accounts.schedule.listTitle')}>
+      <div className="mb-3 flex items-center gap-2">
         <Icon name="clock" size={14} className="text-content-muted" />
-        <span className="type-label">{t('accounts.schedule.listTitle')}</span>
+        <span className="type-body-medium text-content-secondary">
+          {t('accounts.schedule.listTitle')}
+        </span>
         <Badge size="xs">{items.length}</Badge>
       </div>
-      <ul className="flex flex-col gap-sm">
+      <ul className="flex flex-col gap-2">
         {items.map((item) => (
           <ScheduledRow
             key={item.post_id}
@@ -210,9 +212,9 @@ function ScheduledRow({
       : t('accounts.schedule.notBefore', { when: formatLocalDateTime(runAt, i18n.language) });
 
   return (
-    <li ref={rowRef} className="flex items-start gap-md rounded-lg border border-line px-md py-sm">
+    <li ref={rowRef} className="flex items-start gap-3 rounded-md border border-line px-3 py-2">
       <div
-        className="size-tile shrink-0 overflow-hidden rounded-md border border-black/5"
+        className="size-tile shrink-0 overflow-hidden rounded-sm border border-black/5"
         style={tileStyle(item.thumb_url, '1')}
       >
         {item.media_kind === 'video' && (
@@ -222,13 +224,13 @@ function ScheduledRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-sm">
-          <span className="type-item-title">{when}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="type-body-medium">{when}</span>
           <Badge tone={TONE[item.state]} size="xs">
             {t(`accounts.schedule.state.${item.state}`)}
           </Badge>
         </div>
-        <div className="mt-px truncate type-caption">
+        <div className="truncate type-small">
           {item.state === 'pending'
             ? formatRelativeTo(nextAt, now, i18n.language)
             : item.error_code
@@ -238,7 +240,7 @@ function ScheduledRow({
         </div>
         {open && (
           <form
-            className="mt-sm flex flex-wrap items-end gap-sm"
+            className="mt-2 flex flex-wrap items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               save();
@@ -276,7 +278,7 @@ function ScheduledRow({
         )}
       </div>
       {editable && !open && (
-        <div className="flex shrink-0 items-center gap-xs">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
             variant="ghost"

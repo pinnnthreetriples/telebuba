@@ -22,9 +22,9 @@ export function SessionErrorPanel() {
   // clicks stacked them.
   const retrying = useRouterState({ select: (state) => state.isLoading });
   return (
-    <div role="alert" className="p-page">
-      <p className="type-dialog-body text-content-primary">{i18n.t('shell.sessionError')}</p>
-      <div className="mt-lg flex items-center gap-sm">
+    <div role="alert" className="p-8">
+      <p className="type-body text-content-primary">{i18n.t('shell.sessionError')}</p>
+      <div className="mt-4 flex items-center gap-2">
         <Button
           variant="primary"
           disabled={retrying}
@@ -36,7 +36,7 @@ export function SessionErrorPanel() {
         </Button>
         <Link
           to="/login"
-          className="rounded-full border border-line bg-surface-card px-2xl py-md text-body font-semibold text-content-primary"
+          className="rounded-full border border-line bg-surface-card px-6 py-3 text-body font-medium text-content-primary"
         >
           {i18n.t('shell.sessionLogin')}
         </Link>

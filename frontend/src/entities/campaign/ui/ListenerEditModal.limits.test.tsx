@@ -160,7 +160,10 @@ test('an edited limit survives a tab switch and is thrown away by cancel', async
   await userEvent.click(screen.getByRole('tab', { name: 'Лимиты' }));
   expect(field('Мин. trust-score для работы')).toHaveValue('70');
 
+  // An edited dialog asks before Cancel throws the edit away.
   await userEvent.click(screen.getByText('Отмена'));
+  expect(onClose).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(puts()).toHaveLength(0);
 });

@@ -33,7 +33,7 @@ export function Notice({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className'>) {
   return (
     <div
-      className={cn('rounded-lg px-md py-md text-body', noticeTone(tone, bordered), className)}
+      className={cn('rounded-md px-3 py-3 text-body', noticeTone(tone, bordered), className)}
       {...rest}
     >
       {children}

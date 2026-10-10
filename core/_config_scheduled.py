@@ -24,7 +24,7 @@ class ScheduledPostsSettings(BaseSettings):
     missed_grace_seconds: int = Field(default=21_600, ge=60)
     # How far ahead of now a publish time must be, and how far it may be.
     min_lead_seconds: int = Field(default=60, ge=0)
-    max_lead_days: int = Field(default=30, ge=1)
+    max_lead_days: int = Field(default=365, ge=1)
     # Gap between ANY two scheduled publishes (fleet-wide), jittered per post, so
     # a backlog after a restart does not leave in one coordinated burst.
     global_gap_min_seconds: float = Field(default=20.0, ge=0.0)

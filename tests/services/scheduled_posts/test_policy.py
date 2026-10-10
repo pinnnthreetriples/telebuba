@@ -106,7 +106,7 @@ async def test_schedule_photo_creates_a_pending_post_and_wakes_the_worker(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("minutes", [-5, 0.5, 60 * 24 * 31])
+@pytest.mark.parametrize("minutes", [-5, 0.5, 60 * 24 * 366])
 async def test_the_publish_time_must_sit_inside_the_window(tmp_path: Path, minutes: float) -> None:
     await seed_account()
     request = SchedulePhotoRequest(
@@ -116,6 +116,18 @@ async def test_the_publish_time_must_sit_inside_the_window(tmp_path: Path, minut
     assert await _refusal(scheduled_posts.schedule_photo("acc", request)) == (
         "scheduled_run_at_out_of_range"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_publish_time_months_ahead_is_inside_the_window(tmp_path: Path) -> None:
+    await seed_account()
+    request = SchedulePhotoRequest(
+        media_id=await stored_image(tmp_path), run_at=in_minutes(60 * 24 * 300)
+    )
+
+    post = await scheduled_posts.schedule_photo("acc", request)
+
+    assert post.state == "pending"
 
 
 @pytest.mark.asyncio

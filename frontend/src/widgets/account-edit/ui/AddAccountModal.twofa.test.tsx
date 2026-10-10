@@ -129,3 +129,30 @@ test('the dialog title flips to «Пароли созданы» once the passwor
   expect(screen.getByText('Пароли созданы')).toBeInTheDocument();
   expect(screen.queryByText('Добавить аккаунт')).not.toBeInTheDocument();
 });
+
+// The wizard's own input (a typed number) and a step's own input (a typed login code,
+// reported through useModalDirty) both stop a stray Escape from closing it.
+test('a typed number and a typed login code ask before the wizard closes', async () => {
+  routeApi();
+  const onClose = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.keyboard('{Escape}');
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Остаться' }));
+
+  await userEvent.click(screen.getByText('Продолжить'));
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Пропустить'));
+  await userEvent.click(screen.getByText('Отправить код'));
+  await userEvent.type(await screen.findByLabelText('Код из SMS'), '111');
+
+  await userEvent.keyboard('{Escape}');
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+  expect(onClose).not.toHaveBeenCalled();
+});

@@ -50,7 +50,7 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
   // arbitrary first-readiness channel (`@news`). Both 'Promo's on the page wear the
   // caption role; the account subtitle is the one that does not recolour it.
   expect(
-    await screen.findByText('Promo', { selector: '.type-caption:not(.text-action-primary)' }),
+    await screen.findByText('Promo', { selector: '.type-small:not(.text-action-primary)' }),
   ).toBeInTheDocument();
   await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {

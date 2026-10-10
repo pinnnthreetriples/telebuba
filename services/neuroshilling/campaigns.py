@@ -14,6 +14,9 @@ from core.channel_tokens import parse_channels
 from core.config import settings
 from core.db import list_accounts, list_warming_account_ids
 from core.repositories import neuroshilling as repository
+from core.repositories.chat_broadcast import (
+    list_running_account_names as list_broadcast_rosters,
+)
 from core.repositories.neurocomment import (
     get_listener_account_id,
     get_listener_running,
@@ -377,5 +380,7 @@ async def _busy_owners(campaign_id: str) -> _BusyMap:
         name = None
         if owner == "neuroshilling" and running is not None and running[0] == holder:
             name = running[1]
+        elif owner == "chat_broadcast":
+            name = (await list_broadcast_rosters()).get(account_id, (None, None))[1]
         busy[account_id] = (owner, name)
     return busy

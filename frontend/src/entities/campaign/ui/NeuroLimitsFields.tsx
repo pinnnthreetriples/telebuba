@@ -5,8 +5,8 @@ import { Input } from '@/shared/ui';
 
 import type { NeuroLimitsField, NeuroLimitsValue } from './neuroLimitsForm';
 
-const FIELD_LABEL = 'mb-tight block type-label';
-const ERROR = 'mt-tight block text-tiny font-medium text-danger-deep';
+const FIELD_LABEL = 'mb-2 block type-body-medium text-content-secondary';
+const ERROR = 'mt-2 block text-small font-medium text-danger-deep';
 
 // The fleet-wide neurocomment limits — moved here from the Settings page, next to the
 // comment mode they pace. Controlled and write-free like `CommentModeFields`: the modal
@@ -54,13 +54,13 @@ export function NeuroLimitsFields({
   );
 
   return (
-    <div className="grid grid-cols-1 gap-md md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {labelled('cpd', 'neurocomment.limits.cpd')}
       <div className="min-w-0">
         <span className={FIELD_LABEL}>{t('neurocomment.limits.delay')}</span>
-        <div className="flex items-center gap-sm">
+        <div className="flex items-center gap-2">
           {field('delayFrom', t('neurocomment.limits.delayFrom'), 'decimal')}
-          <span className="shrink-0 type-caption">—</span>
+          <span className="shrink-0 type-small">—</span>
           {field('delayTo', t('neurocomment.limits.delayTo'), 'decimal')}
         </div>
         {error('delayFrom')}

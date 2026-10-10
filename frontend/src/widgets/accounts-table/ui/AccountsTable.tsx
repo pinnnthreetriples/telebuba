@@ -1,22 +1,23 @@
-import { type ColumnDef } from '@tanstack/react-table';
+import { type CellContext, type ColumnDef } from '@tanstack/react-table';
+import { createContext, type ReactNode, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   AccountAvatar,
-  accountDesignStatus,
+  accountAvatarTint,
   accountDisplayName,
-  type DesignStatus,
   StatusBadge,
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { BAR_FILL, BAR_TRACK, verdictFill } from '@/shared/design-system';
+import { verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
 import {
   Card,
   DataTable,
   Icon,
   IconButton,
+  ProgressBar,
   Spinner,
   StatusIcon,
   type DataTableColumnMeta,
@@ -37,25 +38,24 @@ interface AccountsTableProps {
   // Verdict of the row's last check, while it is being flashed. Absent = the
   // button shows its ordinary refresh glyph.
   checkResults: Readonly<Record<string, FeedbackResult>>;
+  // Rows the page has selected: tinted, so the selection reads at a glance.
+  selectedIds?: ReadonlySet<string>;
+  // Slots the page fills from the folder widget: the checkbox + drag grip before the
+  // avatar, and the folder tag under the @username.
+  renderPick?: (account: AccountRead) => ReactNode;
+  renderTags?: (account: AccountRead) => ReactNode;
+  // The card is the bottom of a panel whose top edge (the folder tabs) sits on it.
+  joined?: boolean;
 }
-
-// The design's mono avatar tint per status (monoMap).
-const AVATAR_CLASS: Record<DesignStatus, string> = {
-  active: 'bg-info-tint text-info-strong',
-  spam: 'bg-warning-tint text-warning-deep',
-  code: 'bg-canvas text-content-muted',
-  banned: 'bg-danger-tint text-danger-deep',
-};
 
 // Row avatar: the shared account avatar (cached Telegram photo, else initials),
 // with the status-tinted fallback the design specifies for this table.
 function RowAvatar({ account }: { account: AccountRead }) {
-  const ds = accountDesignStatus(account.status);
   return (
     <AccountAvatar
       account={account}
       className="size-tile shrink-0 rounded-full"
-      fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
+      fallbackClassName={`text-body font-medium ${accountAvatarTint(account.status)}`}
     />
   );
 }
@@ -79,13 +79,36 @@ function proxyDotTone(status: string | null | undefined): string {
   if (status === 'failed') return 'bg-danger';
   return 'bg-line-strong';
 }
+// The flag already says the country, so the text is the proxy type alone.
 function proxyMeta(account: AccountRead): string {
-  return [
-    account.proxy_country_code?.toUpperCase(),
-    account.proxy_type ? proxyTypeLabel(account.proxy_type) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  return account.proxy_type ? proxyTypeLabel(account.proxy_type) : '';
+}
+
+interface RowSlots {
+  renderPick?: (account: AccountRead) => ReactNode;
+  renderTags?: (account: AccountRead) => ReactNode;
+}
+const RowSlotsContext = createContext<RowSlots>({});
+
+// Avatar, name, @username and the page's slots around them. A module-level component
+// rather than an inline arrow like the other cells: flexRender mounts a cell function as
+// a component, so a fresh arrow per render remounted the cell on every parent render —
+// which would drop a row checkbox's focus on each toggle and fold an unfolded folder tag.
+// The slots arrive through context so this identity stays stable.
+function IdentityCell({ row }: CellContext<AccountRead, unknown>) {
+  const { renderPick, renderTags } = useContext(RowSlotsContext);
+  const account = row.original;
+  return (
+    <div className="flex items-center gap-3">
+      {renderPick?.(account)}
+      <RowAvatar account={account} />
+      <div>
+        <div className="type-h3">{accountDisplayName(account)}</div>
+        <div className="type-small">{account.username ? `@${account.username}` : '—'}</div>
+        {renderTags?.(account)}
+      </div>
+    </div>
+  );
 }
 
 const RIGHT_META: DataTableColumnMeta = { className: 'text-right', cellClassName: 'text-right' };
@@ -105,6 +128,10 @@ export function AccountsTable({
   busyIds,
   openWebBusyIds,
   checkResults,
+  selectedIds,
+  renderPick,
+  renderTags,
+  joined = false,
 }: AccountsTableProps) {
   const { t } = useTranslation();
 
@@ -119,18 +146,7 @@ export function AccountsTable({
       header: () => t('accounts.table.phone'),
       // Spread rather than editing LEFT_META itself — five columns share it.
       meta: { ...LEFT_META, cardSlot: 'title' } satisfies DataTableColumnMeta,
-      cell: ({ row }) => {
-        const account = row.original;
-        return (
-          <div className="flex items-center gap-md">
-            <RowAvatar account={account} />
-            <div>
-              <div className="type-card-title">{accountDisplayName(account)}</div>
-              <div className="type-caption">{account.username ? `@${account.username}` : '—'}</div>
-            </div>
-          </div>
-        );
-      },
+      cell: IdentityCell,
     },
     {
       id: 'status',
@@ -145,7 +161,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return account.proxy_id ? (
-          <div className="flex items-center gap-sm">
+          <div className="flex items-center gap-2">
             <span
               className={`size-dot shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
@@ -154,10 +170,10 @@ export function AccountsTable({
                 className={`fi fi-${account.proxy_country_code.toLowerCase()} h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
-            <span className="type-value">{proxyMeta(account)}</span>
+            <span className="type-body">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         );
       },
     },
@@ -165,7 +181,9 @@ export function AccountsTable({
       id: 'device',
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
-      cell: ({ row }) => <span className="type-prose">{deviceLabel(row.original)}</span>,
+      cell: ({ row }) => (
+        <span className="type-body text-content-subtle">{deviceLabel(row.original)}</span>
+      ),
     },
     {
       id: 'trust',
@@ -174,21 +192,21 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="type-prose">—</span>
+          <span className="type-body text-content-subtle">—</span>
         ) : (
-          <div className="flex items-center gap-sm">
-            <div
-              // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
-              className={`${BAR_TRACK} w-[46px]`}
-            >
-              <div
-                className={`${BAR_FILL} bg-current ${trustTone(trust)}`}
-                style={{ width: `${String(trust)}%` }}
-              />
-            </div>
-            <span className={`min-w-badge text-body font-semibold ${trustTone(trust)}`}>
-              {trust}
+          <div className="flex items-center gap-2">
+            {/* The header row is screen-reader only, so the cell names itself. A card
+                (narrow layout, role=listitem) already labels the row, so it hides there. */}
+            <span aria-hidden className="type-small in-[[role=listitem]]:hidden">
+              {t('accounts.table.trust')}
             </span>
+            <ProgressBar
+              tone="current"
+              value={trust}
+              // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
+              className={`w-[46px] ${trustTone(trust)}`}
+            />
+            <span className={`min-w-badge text-body font-medium ${trustTone(trust)}`}>{trust}</span>
           </div>
         );
       },
@@ -209,7 +227,7 @@ export function AccountsTable({
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         return (
-          <div className="flex items-center justify-end gap-sm">
+          <div className="flex items-center justify-end gap-2">
             <IconButton
               size="touch"
               shape="circle"
@@ -305,32 +323,50 @@ export function AccountsTable({
   ];
 
   return (
-    <Card className="overflow-hidden">
-      <div className="tb-scroll overflow-x-auto">
-        <DataTable
-          data={data}
-          columns={columns}
-          // The row IS the only way into the account-edit view (the pencil opens
-          // the profile modal instead), so it has to be focusable and operable
-          // from the keyboard — otherwise session, proxy, device, signals and the
-          // actions card are unreachable without a mouse. Kept here rather than in
-          // DataTable so the shared table stays generic; no role="button", which
-          // would strip the row's table semantics.
-          getRowProps={(row) => ({
-            onClick: () => onOpen?.(row.original),
-            onKeyDown: (event) => {
-              // Only the row itself: Enter on an action button inside it must not
-              // also open the row.
-              if (event.target !== event.currentTarget) return;
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              onOpen?.(row.original);
-            },
-            tabIndex: 0,
-            className: 'cursor-pointer',
-          })}
-        />
-      </div>
-    </Card>
+    <RowSlotsContext.Provider value={{ renderPick, renderTags }}>
+      <Frame joined={joined}>
+        <div className="tb-scroll overflow-x-auto">
+          <DataTable
+            data={data}
+            columns={columns}
+            hideHeader
+            // The row IS the only way into the account-edit view (the pencil opens
+            // the profile modal instead), so it has to be focusable and operable
+            // from the keyboard — otherwise session, proxy, device, signals and the
+            // actions card are unreachable without a mouse. Kept here rather than in
+            // DataTable so the shared table stays generic; no role="button", which
+            // would strip the row's table semantics.
+            getRowProps={(row) => ({
+              onClick: () => onOpen?.(row.original),
+              onKeyDown: (event) => {
+                // Only the row itself: Enter on an action button inside it must not
+                // also open the row.
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                onOpen?.(row.original);
+              },
+              tabIndex: 0,
+              className: cn(
+                'cursor-pointer',
+                selectedIds?.has(row.original.account_id) && 'bg-info-tint',
+              ),
+            })}
+          />
+        </div>
+      </Frame>
+    </RowSlotsContext.Provider>
+  );
+}
+
+// The table's card. Joined, it is the bottom of a panel: square on top, where the
+// folder tabs sit on it, and rounded below.
+function Frame({ joined, children }: { joined: boolean; children: ReactNode }) {
+  return joined ? (
+    <div className="overflow-hidden rounded-b-lg border border-line bg-surface-card">
+      {children}
+    </div>
+  ) : (
+    <Card className="overflow-hidden">{children}</Card>
   );
 }

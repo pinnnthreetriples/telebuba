@@ -15,7 +15,7 @@ const options = [
 function Example() {
   const [value, setValue] = useState<(typeof options)[number]['value']>('text');
   return (
-    <div className="w-full max-w-panel rounded-card border border-line bg-surface-card">
+    <div className="w-full rounded-lg border border-line bg-surface-card">
       <TabList
         options={options}
         value={value}
@@ -24,7 +24,7 @@ function Example() {
         panelId="story-panel"
         ariaLabel="Разделы профиля"
       />
-      <div role="tabpanel" id="story-panel" aria-labelledby={`story-tab-${value}`} className="p-xl">
+      <div role="tabpanel" id="story-panel" aria-labelledby={`story-tab-${value}`} className="p-6">
         {options.find((option) => option.value === value)?.label}
       </div>
     </div>

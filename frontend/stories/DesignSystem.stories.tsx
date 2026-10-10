@@ -18,7 +18,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const frame = 'mx-auto max-w-shell px-lg py-page';
+const frame = 'mx-auto max-w-shell px-4 py-8';
 
 export const All: Story = {
   render: () => <Catalog patterns={<OverviewPatterns />} buttonGuide={<ButtonSizingGuide />} />,

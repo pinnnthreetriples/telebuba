@@ -19,6 +19,13 @@ export const EMPTY_PROXY_FORM: ProxyFormValue = {
   password: '',
 };
 
+// Whether anything was typed into a form that opened empty — closing would lose it.
+export function isProxyFormTouched(value: ProxyFormValue): boolean {
+  return (Object.keys(EMPTY_PROXY_FORM) as (keyof ProxyFormValue)[]).some(
+    (key) => value[key] !== EMPTY_PROXY_FORM[key],
+  );
+}
+
 // Client-side validation for the proxy form. Messages are i18n keys resolved by
 // the field renderer via t(); host + port are the only required fields.
 export const proxyFormSchema = z.object({

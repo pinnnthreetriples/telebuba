@@ -22,6 +22,12 @@ export function isUnauthorized(error: unknown): boolean {
   return asEnvelope(error)?.code === 'unauthorized';
 }
 
+// The envelope's category (`conflict`, `validation_error`, …), for a caller that
+// words its own inline reason instead of relying on the toast.
+export function errorCode(error: unknown): string | undefined {
+  return asEnvelope(error)?.code;
+}
+
 // A dead session sends the user to /login — from either cache, guarding against
 // a redirect loop when we're already on the login page.
 function redirectToLogin(): void {
@@ -70,14 +76,17 @@ export const queryClient = new QueryClient({
   }),
   // Mutations don't surface errors on their own — show the API envelope's
   // message (translated when it's a stable code) so failures aren't silently
-  // swallowed.
+  // swallowed. A mutation that shows its failure in place opts out with
+  // `meta: { inlineError: true }`: a batch of them would otherwise pile one toast
+  // per request over the very rows that already say what went wrong.
   mutationCache: new MutationCache({
-    onError: (error) => {
+    onError: (error, _variables, _context, mutation) => {
       // A mutation-only 401 must redirect too — nothing else catches it.
       if (isUnauthorized(error)) {
         redirectToLogin();
         return;
       }
+      if (mutation.meta?.inlineError) return;
       toastError(mutationErrorText(error));
     },
   }),

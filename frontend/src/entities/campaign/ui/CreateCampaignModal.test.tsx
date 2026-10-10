@@ -50,3 +50,19 @@ test('cancel closes', async () => {
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+test('a half-filled campaign asks before the backdrop throws it away', async () => {
+  const onClose = vi.fn();
+  render(<CreateCampaignModal onClose={onClose} onCreate={vi.fn()} />);
+  const overlay = screen.getByRole('dialog', { name: 'Новая кампания' }).parentElement!;
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Крипто');
+  await userEvent.click(overlay);
+  expect(onClose).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Остаться' }));
+  expect(screen.getByLabelText('Название')).toHaveValue('Крипто');
+  await userEvent.click(overlay);
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

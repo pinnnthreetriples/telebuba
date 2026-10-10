@@ -34,8 +34,8 @@ const RULES: axe.RuleObject = {
   // Cannot decide, ever: with no computed background there is nothing to measure the
   // ink against, so every text node in every component lands in `incomplete` — which
   // is neither a pass nor a failure and would never fail this assertion. Contrast is
-  // gated for real by ./contrast.test.ts, which reads the palette out of
-  // tailwind.config.ts and walks the class lists the source actually paints,
+  // gated for real by ./contrast.test.ts, which reads the palette out of the
+  // design tokens and walks the class lists the source actually paints,
   // including the ink a `type-*` role carries and the fill on an ancestor.
   'color-contrast': { enabled: false },
   // The same missing background, but failing the other way: instead of `incomplete`

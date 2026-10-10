@@ -166,6 +166,9 @@ export function routeApi(
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+    }
     if (url.pathname === '/api/v1/logs/count') {
       return Promise.resolve(jsonResponse({ matching: 412 }));
     }

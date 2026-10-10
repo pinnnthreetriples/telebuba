@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -9,7 +9,11 @@ import { queryClient } from '@/shared/lib';
 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({ to, className, children }: { to: string; className?: string; children: ReactNode }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  ),
   useRouterState: () => '/',
   useNavigate: () => navigate,
 }));
@@ -85,7 +89,7 @@ test('logs out from the avatar menu and redirects to login', async () => {
   });
 
   const account = screen.getByLabelText('Аккаунт');
-  expect(account).toHaveClass('focus-visible:outline-focus');
+  expect(account).toHaveClass('focus-visible:outline-action-primary');
   await userEvent.click(account);
   await userEvent.click(screen.getByText('Выйти'));
 
@@ -150,9 +154,13 @@ test('the hamburger opens a drawer with the nav destinations', async () => {
   expect(hamburger).toHaveAttribute('aria-expanded', 'true');
   expect(drawer).toHaveTextContent('Аккаунты');
   expect(drawer).toHaveTextContent('Настройки');
+  // Inactive destinations still show where the keyboard is.
+  for (const link of within(drawer).getAllByRole('link')) {
+    expect(link).toHaveClass('focus-visible:outline-action-primary');
+  }
 
   const close = screen.getByLabelText('Закрыть меню');
-  expect(close).toHaveClass('focus-visible:outline-focus');
+  expect(close).toHaveClass('focus-visible:outline-action-primary');
   close.focus();
   await userEvent.keyboard('{Enter}');
   await waitFor(() => {
@@ -176,4 +184,24 @@ test('clears the query cache on logout so authed data cannot leak on back-nav', 
     expect(clearSpy).toHaveBeenCalled();
   });
   clearSpy.mockRestore();
+});
+
+test('Escape closes the avatar menu and returns focus to the avatar', async () => {
+  routeApi();
+  renderWithClient(<AppNav />);
+  await waitFor(() => {
+    expect(screen.getByText('AD')).toBeInTheDocument();
+  });
+
+  const account = screen.getByLabelText('Аккаунт');
+  expect(account).toHaveAttribute('aria-expanded', 'false');
+  await userEvent.click(account);
+  expect(account).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('Выйти')).toBeInTheDocument();
+
+  screen.getByText('Выйти').focus();
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByText('Выйти')).not.toBeInTheDocument();
+  expect(account).toHaveAttribute('aria-expanded', 'false');
+  expect(account).toHaveFocus();
 });

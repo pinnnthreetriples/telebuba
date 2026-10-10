@@ -1,8 +1,7 @@
 import postcss, { type AtRule, type Rule } from 'postcss';
-import tailwind from 'tailwindcss';
 import { describe, expect, test } from 'vitest';
 
-import config from '../../../tailwind.config';
+import { compileClasses } from '@/shared/ui/tailwind.test-helpers';
 
 import source from './index.css?raw';
 
@@ -16,15 +15,11 @@ import source from './index.css?raw';
 // is there (a focusable trigger, an `aria-describedby` that resolves), and this file asks
 // the stylesheet for the other side.
 //
-// It runs the real PostCSS/Tailwind pipeline over the file rather than reading its text,
-// so a `theme()` call that stopped resolving fails here too. `?raw` rather than a path off
-// `import.meta.url`, which under Vite is not a `file:` URL. The `@import`s at the top are
-// left alone — nothing in this file resolves them, and nothing here asks about fonts.
-const { root } = await postcss([
-  tailwind({ ...config, content: [{ raw: '', extension: 'html' }] }),
-]).process(source, {
-  from: undefined,
-});
+// It runs the real Tailwind compiler over the file rather than reading its text, so a
+// `--theme()` call that stopped resolving fails here too: Tailwind 4 throws on a theme
+// variable it does not have. `?raw` rather than a path off `import.meta.url`, which under
+// Vite is not a `file:` URL.
+const root = postcss.parse(await compileClasses([], source));
 
 function reducedMotionBlocks(): AtRule[] {
   const found: AtRule[] = [];
@@ -100,7 +95,7 @@ describe('prefers-reduced-motion', () => {
   });
 });
 
-// The config says the app has two easing curves and that a third one this file carried
+// The tokens say the app has two easing curves and that a third one this file carried
 // "is gone". That was true of the `transition:` declarations, which were tokenised, and
 // false of the `animation:` shorthands, which the same sweep never touched and which
 // kept two more curves for months: `.tb-blur` at `(.34,1.56,.64,1)` beside `spring`, and
@@ -108,19 +103,19 @@ describe('prefers-reduced-motion', () => {
 // gone while the stylesheet still paints it is worse than one that never claimed it, so
 // the claim gets a gate rather than a comment.
 //
-// Asserted against the SOURCE text and not the compiled `root` above: every `theme()`
+// Asserted against the SOURCE text and not the compiled `root` above: every `--theme()`
 // call resolves to a literal `cubic-bezier(...)` on the way through, so the compiled
 // sheet is full of them by design. The compiled side is still what proves the names
-// resolve — an unknown `transitionTimingFunction` key throws in the PostCSS run at the
-// top of this file, before any test here gets to make an assertion.
-test('the stylesheet spends the config’s curves and never writes one out', () => {
+// resolve — an unknown `--ease-*` variable throws in the Tailwind run at the top of this
+// file, before any test here gets to make an assertion.
+test('the stylesheet spends the token curves and never writes one out', () => {
   const literals = [...source.matchAll(/cubic-bezier\([^)]*\)/g)].map((hit) => hit[0]);
   expect(literals).toEqual([]);
   // The other half of the claim: the two that were strays still ease. A rule with no
   // easing at all would satisfy the assertion above and silently drop both to `ease`.
   for (const selector of ['.tb-blur', '.tb-drawerin']) {
     const rule = source.slice(source.indexOf(`${selector} {`));
-    expect(rule.slice(0, rule.indexOf('}'))).toMatch(/theme\('transitionTimingFunction\.\w+'\)/);
+    expect(rule.slice(0, rule.indexOf('}'))).toMatch(/--theme\(--ease-\w+\)/);
   }
 });
 
@@ -137,7 +132,8 @@ test('the stylesheet spends the config’s curves and never writes one out', () 
 //   2. Вторая перечисляла СВОЙСТВА, способные нести краску, — и её провели насквозь
 //      через `background-image: linear-gradient(red, blue)` и `filter: drop-shadow(red
 //      0 0)`: ни того, ни другого в списке не было. Заодно любой `theme()` считался
-//      краской, поэтому `color: theme('spacing.md')` проходил как токен.
+//      краской, поэтому `color: theme('spacing.3')` проходил как токен (теперь это
+//      `--theme(--rhythm-3)`).
 //
 // Закрытый список тут ровно один, и он на другой стороне: перечислить КРАСКИ можно —
 // имена CSS Color 4 не пополнялись с 2014 года (`rebeccapurple`), — а перечислить
@@ -151,15 +147,15 @@ test('the stylesheet spends the config’s curves and never writes one out', () 
 //       цвета, имя из CSS Color 4, системное имя, `transparent`, `currentColor`.
 //       Свойство не спрашивается — отсюда и закрылись `background-image` и `filter`.
 //   (B) свойство, которое несёт ТОЛЬКО краску (`color`, `*-color`, `fill`, `stroke`),
-//       не содержит ничего, кроме вызовов `theme('colors.…')`. Отсюда закрылся
-//       `color: theme('spacing.md')`: непалитровый токен оставляет остаток.
+//       не содержит ничего, кроме вызовов `--theme(--color-…)`. Отсюда закрылся
+//       `color: --theme(--rhythm-3)`: непалитровый токен оставляет остаток.
 //   (C) hex не встречается в файле вообще, включая комментарии: hex в комментарии — это
 //       вторая запись значения, ровно тот дефект, с которого гейт начался.
 //
 // Разбор — plain PostCSS по ИСХОДНИКУ, а не скомпилированный `root` из шапки файла: там
-// каждый `theme()` уже развёрнут в литерал, и отличить токен от краски нечем. Что путь
-// внутри `theme()` существует, доказывает не гейт, а компиляция в шапке: она падает на
-// неизвестном ключе.
+// каждый `--theme()` уже развёрнут в литерал, и отличить токен от краски нечем. Что
+// переменная внутри `--theme()` существует, доказывает не гейт, а компиляция в шапке: она
+// падает на неизвестной.
 //
 // Чего гейт не делает: на составных свойствах (`background`, `border`, `box-shadow`) он
 // не спрашивает, из какой шкалы токен. Там длина законна по позиции — `box-shadow` берёт
@@ -202,7 +198,7 @@ const COLOUR_FN = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light
 // Атомы значения: разделители CSS — пробел, запятая, скобки и слэш.
 const ATOM = /[^\s,()/]+/g;
 // Вызов из палитры: единственное, что законно на свойстве только-краски.
-const PALETTE_CALL = /theme\((['"])colors\.[\w.-]+\1\)/g;
+const PALETTE_CALL = /--theme\(--color-[\w-]+\)/g;
 
 function isColour(atom: string): boolean {
   const word = atom.toLowerCase();
@@ -214,8 +210,8 @@ function isColour(atom: string): boolean {
 // поймало бы её за имя функции.
 function withoutTokens(text: string): string {
   return text
-    .replace(/rgba?\(\s*theme\((['"])channel\.[\w.-]+\1\)\s*\/\s*[\d.]+\s*\)/g, 'TOKEN')
-    .replace(/theme\((['"])[\w.-]+\1\)/g, 'TOKEN');
+    .replace(/rgba?\(\s*--theme\(--channel-[\w-]+\)\s*\/\s*[\d.]+\s*\)/g, 'TOKEN')
+    .replace(/--theme\(--[\w-]+\)/g, 'TOKEN');
 }
 
 // Свойство, которое не несёт ничего, кроме краски.
@@ -253,14 +249,14 @@ test('всё, чем этот файл красит, приходит жетон
   for (const name of ['plpulse', 'livepulse', 'loadpulse']) {
     const frame = source.slice(source.indexOf(`@keyframes ${name} {`));
     const body = frame.slice(0, frame.search(/^\}/m));
-    expect(body).toMatch(/rgb\(theme\('channel\.\w+'\)/);
+    expect(body).toMatch(/rgb\(--theme\(--channel-\w+\)/);
   }
 });
 
 // Первые три — обходы, которые нашло ревью у предыдущей версии. Остальные держат закрытым
 // то, что она банила перечислением форматов.
 test.each([
-  ['непалитровый токен на краске', ".x { color: theme('spacing.md'); }"],
+  ['непалитровый токен на краске', '.x { color: --theme(--rhythm-3); }'],
   ['ключевое слово в градиенте', '.x { background-image: linear-gradient(red, blue); }'],
   ['ключевое слово в фильтре', '.x { filter: drop-shadow(red 0 0); }'],
   ['ключевое слово в упор', '.x { background: transparent; }'],

@@ -29,7 +29,7 @@ export function InlineChipEditor({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs',
+        'inline-flex items-center gap-1 rounded-full border border-action-primary bg-surface-card py-1 pl-3 pr-1',
         className,
       )}
     >
@@ -40,11 +40,17 @@ export function InlineChipEditor({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && value.trim() && !disabled) onConfirm();
-          if (event.key === 'Escape') onCancel();
+          if (event.key === 'Escape') {
+            // The editor's own Escape: inside a dialog, the Modal's `document` listener
+            // must not also take it and close the whole dialog.
+            event.preventDefault();
+            event.stopPropagation();
+            onCancel();
+          }
         }}
         placeholder={placeholder}
         aria-label={inputLabel}
-        className="w-col border-none bg-transparent text-body outline-none"
+        className="w-col border-none bg-transparent text-body outline-hidden"
       />
       <IconButton
         size="sm"
@@ -65,7 +71,7 @@ export function InlineChipEditor({
           title={cancelLabel}
           aria-label={cancelLabel}
           onClick={onCancel}
-          className="bg-line-row text-content-muted"
+          className="bg-canvas text-content-muted"
         >
           <Icon name="close" size={16} />
         </IconButton>

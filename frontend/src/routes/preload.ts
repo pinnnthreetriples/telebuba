@@ -11,6 +11,10 @@ import {
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
 } from '@/entities/campaign';
+import {
+  chatBroadcastBoardQueryOptions,
+  chatBroadcastCampaignsQueryOptions,
+} from '@/entities/chat-broadcast';
 import { logsQueryOptions } from '@/entities/log';
 import {
   neuroshillingBoardQueryOptions,
@@ -100,6 +104,23 @@ export async function preloadNeuroshilling(client: QueryClient): Promise<void> {
   });
   void Promise.allSettled([
     client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'neuroshilling', limit: 80 } })),
+  ]);
+  await waitForFirstScreen([campaigns, scoped]);
+}
+
+export async function preloadChatBroadcast(client: QueryClient): Promise<void> {
+  const campaigns = client.fetchQuery(chatBroadcastCampaignsQueryOptions());
+  const scoped = campaigns.then(async ({ items }) => {
+    const first = items[0];
+    if (!first) return;
+    await Promise.allSettled([
+      client.fetchQuery(
+        chatBroadcastBoardQueryOptions({ path: { campaign_id: first.campaign_id } }),
+      ),
+    ]);
+  });
+  void Promise.allSettled([
+    client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'chat_broadcast', limit: 80 } })),
   ]);
   await waitForFirstScreen([campaigns, scoped]);
 }

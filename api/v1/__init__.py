@@ -7,15 +7,18 @@ from fastapi import APIRouter, Depends
 from api.deps import get_current_user
 from api.errors import PROTECTED_ERRORS
 from api.v1 import (
+    account_folders,
     accounts,
     accounts_media,
     auth,
+    chat_broadcast,
     events,
     health,
     logs,
     neurocomment,
     neuroshilling,
     proxies,
+    user_parser,
     warming,
 )
 
@@ -39,5 +42,8 @@ router.include_router(events.router, dependencies=_protected, responses=PROTECTE
 # in the generated OpenAPI document, so appending keeps the generated client's
 # diff an append too, whatever the reader's diff algorithm makes of the rest.
 router.include_router(neuroshilling.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(chat_broadcast.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(account_folders.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(user_parser.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 
 __all__ = ["router"]

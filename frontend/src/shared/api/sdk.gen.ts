@@ -10,12 +10,21 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AccountFilterOptionsData,
+  AccountFilterOptionsErrors,
+  AccountFilterOptionsResponses,
   AccountStatsData,
   AccountStatsErrors,
   AccountStatsResponses,
+  ActOnChatBroadcastTargetData,
+  ActOnChatBroadcastTargetErrors,
+  ActOnChatBroadcastTargetResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
+  AddAccountsToFolderData,
+  AddAccountsToFolderErrors,
+  AddAccountsToFolderResponses,
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
@@ -79,15 +88,27 @@ import type {
   CreateAccountChannelData,
   CreateAccountChannelErrors,
   CreateAccountChannelResponses,
+  CreateAccountFolderData,
+  CreateAccountFolderErrors,
+  CreateAccountFolderResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
+  CreateChatBroadcastCampaignData,
+  CreateChatBroadcastCampaignErrors,
+  CreateChatBroadcastCampaignResponses,
+  CreateChatCollectionData,
+  CreateChatCollectionErrors,
+  CreateChatCollectionResponses,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignErrors,
   CreateNeuroshillingCampaignResponses,
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
+  CreateUserParserPresetData,
+  CreateUserParserPresetErrors,
+  CreateUserParserPresetResponses,
   DeleteAccountChannelData,
   DeleteAccountChannelErrors,
   DeleteAccountChannelPostData,
@@ -96,22 +117,40 @@ import type {
   DeleteAccountChannelResponses,
   DeleteAccountData,
   DeleteAccountErrors,
+  DeleteAccountFolderData,
+  DeleteAccountFolderErrors,
+  DeleteAccountFolderResponses,
   DeleteAccountResponses,
   DeleteCampaignData,
   DeleteCampaignErrors,
   DeleteCampaignResponses,
+  DeleteChatBroadcastCampaignData,
+  DeleteChatBroadcastCampaignErrors,
+  DeleteChatBroadcastCampaignResponses,
+  DeleteChatCollectionData,
+  DeleteChatCollectionErrors,
+  DeleteChatCollectionResponses,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignErrors,
   DeleteNeuroshillingCampaignResponses,
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  DeleteUserParserBaseData,
+  DeleteUserParserBaseErrors,
+  DeleteUserParserBaseResponses,
+  DeleteUserParserPresetData,
+  DeleteUserParserPresetErrors,
+  DeleteUserParserPresetResponses,
   EditAccountChannelPostData,
   EditAccountChannelPostErrors,
   EditAccountChannelPostResponses,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponses,
+  ExportUserParserRunData,
+  ExportUserParserRunErrors,
+  ExportUserParserRunResponses,
   GenerateBulkMessageData,
   GenerateBulkMessageErrors,
   GenerateBulkMessageResponses,
@@ -148,6 +187,12 @@ import type {
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryErrors,
   GetCampaignDiscoveryResponses,
+  GetChatBroadcastBoardData,
+  GetChatBroadcastBoardErrors,
+  GetChatBroadcastBoardResponses,
+  GetChatBroadcastSettingsData,
+  GetChatBroadcastSettingsErrors,
+  GetChatBroadcastSettingsResponses,
   GetContactLookupJobData,
   GetContactLookupJobErrors,
   GetContactLookupJobResponses,
@@ -184,6 +229,9 @@ import type {
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
+  GetUserParserRunData,
+  GetUserParserRunErrors,
+  GetUserParserRunResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -214,6 +262,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsErrors,
   ListAccountChatsResponses,
+  ListAccountFoldersData,
+  ListAccountFoldersErrors,
+  ListAccountFoldersResponses,
   ListAccountScheduledPostsData,
   ListAccountScheduledPostsErrors,
   ListAccountScheduledPostsResponses,
@@ -229,6 +280,15 @@ import type {
   ListChannelChallengesData,
   ListChannelChallengesErrors,
   ListChannelChallengesResponses,
+  ListChatBroadcastCampaignsData,
+  ListChatBroadcastCampaignsErrors,
+  ListChatBroadcastCampaignsResponses,
+  ListChatBroadcastOwnChatsData,
+  ListChatBroadcastOwnChatsErrors,
+  ListChatBroadcastOwnChatsResponses,
+  ListChatCollectionsData,
+  ListChatCollectionsErrors,
+  ListChatCollectionsResponses,
   ListDiscoveryAccountsData,
   ListDiscoveryAccountsErrors,
   ListDiscoveryAccountsResponses,
@@ -244,6 +304,21 @@ import type {
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
+  ListUserParserAccountsData,
+  ListUserParserAccountsErrors,
+  ListUserParserAccountsResponses,
+  ListUserParserBasesData,
+  ListUserParserBasesErrors,
+  ListUserParserBasesResponses,
+  ListUserParserBaseUsersData,
+  ListUserParserBaseUsersErrors,
+  ListUserParserBaseUsersResponses,
+  ListUserParserPresetsData,
+  ListUserParserPresetsErrors,
+  ListUserParserPresetsResponses,
+  ListUserParserRunUsersData,
+  ListUserParserRunUsersErrors,
+  ListUserParserRunUsersResponses,
   ListWarmedAccountsData,
   ListWarmedAccountsErrors,
   ListWarmedAccountsResponses,
@@ -286,6 +361,9 @@ import type {
   RemoveAccountPhotoData,
   RemoveAccountPhotoErrors,
   RemoveAccountPhotoResponses,
+  RemoveAccountsFromFolderData,
+  RemoveAccountsFromFolderErrors,
+  RemoveAccountsFromFolderResponses,
   RemoveAccountStoryData,
   RemoveAccountStoryErrors,
   RemoveAccountStoryResponses,
@@ -301,6 +379,12 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
+  RenameAccountFolderData,
+  RenameAccountFolderErrors,
+  RenameAccountFolderResponses,
+  RenameUserParserBaseData,
+  RenameUserParserBaseErrors,
+  RenameUserParserBaseResponses,
   RequestLoginCodeData,
   RequestLoginCodeErrors,
   RequestLoginCodeResponses,
@@ -313,9 +397,21 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionErrors,
   ResetAccountSessionResponses,
+  ResolveChatBroadcastTargetsData,
+  ResolveChatBroadcastTargetsErrors,
+  ResolveChatBroadcastTargetsResponses,
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  SaveChatBroadcastPaceData,
+  SaveChatBroadcastPaceErrors,
+  SaveChatBroadcastPaceResponses,
+  SaveChatBroadcastSettingsData,
+  SaveChatBroadcastSettingsErrors,
+  SaveChatBroadcastSettingsResponses,
+  SaveChatCollectionData,
+  SaveChatCollectionErrors,
+  SaveChatCollectionResponses,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsErrors,
   SaveNeuroshillingSettingsResponses,
@@ -379,6 +475,9 @@ import type {
   StartCampaignDiscoveryData,
   StartCampaignDiscoveryErrors,
   StartCampaignDiscoveryResponses,
+  StartChatBroadcastCampaignData,
+  StartChatBroadcastCampaignErrors,
+  StartChatBroadcastCampaignResponses,
   StartContactLookupData,
   StartContactLookupErrors,
   StartContactLookupResponses,
@@ -391,15 +490,24 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginErrors,
   StartPhoneLoginResponses,
+  StartUserParserRunData,
+  StartUserParserRunErrors,
+  StartUserParserRunResponses,
   StartWarmingData,
   StartWarmingErrors,
   StartWarmingResponses,
+  StopChatBroadcastCampaignData,
+  StopChatBroadcastCampaignErrors,
+  StopChatBroadcastCampaignResponses,
   StopNeurocommentData,
   StopNeurocommentErrors,
   StopNeurocommentResponses,
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignErrors,
   StopNeuroshillingCampaignResponses,
+  StopUserParserRunData,
+  StopUserParserRunErrors,
+  StopUserParserRunResponses,
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
@@ -433,6 +541,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
+  UploadChatBroadcastPhotoData,
+  UploadChatBroadcastPhotoErrors,
+  UploadChatBroadcastPhotoResponses,
   UploadScheduledMediaData,
   UploadScheduledMediaErrors,
   UploadScheduledMediaResponses,
@@ -525,6 +636,12 @@ export const getReadiness = <ThrowOnError extends boolean = false>(
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccounts = <ThrowOnError extends boolean = false>(
   options?: Options<ListAccountsData, ThrowOnError>,
@@ -546,6 +663,20 @@ export const accountStats = <ThrowOnError extends boolean = false>(
     url: '/api/v1/accounts/stats',
     ...options,
   });
+
+/**
+ * Account Filter Options
+ *
+ * The phone calling codes and proxy countries the fleet has, for the filter pills.
+ */
+export const accountFilterOptions = <ThrowOnError extends boolean = false>(
+  options?: Options<AccountFilterOptionsData, ThrowOnError>,
+): RequestResult<AccountFilterOptionsResponses, AccountFilterOptionsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    AccountFilterOptionsResponses,
+    AccountFilterOptionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/filter-options', ...options });
 
 /**
  * Check Account
@@ -2852,3 +2983,632 @@ export const stopNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
     StopNeuroshillingCampaignErrors,
     ThrowOnError
   >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/stop', ...options });
+
+/**
+ * List Campaigns
+ */
+export const listChatBroadcastCampaigns = <ThrowOnError extends boolean = false>(
+  options?: Options<ListChatBroadcastCampaignsData, ThrowOnError>,
+): RequestResult<
+  ListChatBroadcastCampaignsResponses,
+  ListChatBroadcastCampaignsErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListChatBroadcastCampaignsResponses,
+    ListChatBroadcastCampaignsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/campaigns', ...options });
+
+/**
+ * Create Campaign
+ */
+export const createChatBroadcastCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<CreateChatBroadcastCampaignData, ThrowOnError>,
+): RequestResult<
+  CreateChatBroadcastCampaignResponses,
+  CreateChatBroadcastCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateChatBroadcastCampaignResponses,
+    CreateChatBroadcastCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign with its chats and history; refused while it runs.
+ */
+export const deleteChatBroadcastCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteChatBroadcastCampaignData, ThrowOnError>,
+): RequestResult<
+  DeleteChatBroadcastCampaignResponses,
+  DeleteChatBroadcastCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteChatBroadcastCampaignResponses,
+    DeleteChatBroadcastCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/campaigns/{campaign_id}', ...options });
+
+/**
+ * Get Settings
+ */
+export const getChatBroadcastSettings = <ThrowOnError extends boolean = false>(
+  options: Options<GetChatBroadcastSettingsData, ThrowOnError>,
+): RequestResult<GetChatBroadcastSettingsResponses, GetChatBroadcastSettingsErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetChatBroadcastSettingsResponses,
+    GetChatBroadcastSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings', ...options });
+
+/**
+ * Save Settings
+ *
+ * Save name, accounts and settings at once, only on the version the dialog read.
+ */
+export const saveChatBroadcastSettings = <ThrowOnError extends boolean = false>(
+  options: Options<SaveChatBroadcastSettingsData, ThrowOnError>,
+): RequestResult<
+  SaveChatBroadcastSettingsResponses,
+  SaveChatBroadcastSettingsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    SaveChatBroadcastSettingsResponses,
+    SaveChatBroadcastSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Save Pace
+ *
+ * Save the pauses only — accepted while the campaign runs; the run reads them live.
+ *
+ * 409 ``campaign_changed`` when the campaign moved between the read and the write.
+ */
+export const saveChatBroadcastPace = <ThrowOnError extends boolean = false>(
+  options: Options<SaveChatBroadcastPaceData, ThrowOnError>,
+): RequestResult<SaveChatBroadcastPaceResponses, SaveChatBroadcastPaceErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SaveChatBroadcastPaceResponses,
+    SaveChatBroadcastPaceErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/pace',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Board
+ *
+ * The pipeline, the board by chat with its history, and the accounts.
+ */
+export const getChatBroadcastBoard = <ThrowOnError extends boolean = false>(
+  options: Options<GetChatBroadcastBoardData, ThrowOnError>,
+): RequestResult<GetChatBroadcastBoardResponses, GetChatBroadcastBoardErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetChatBroadcastBoardResponses,
+    GetChatBroadcastBoardErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * Start Campaign
+ *
+ * Start the campaign, or continue a stopped one from where it was.
+ *
+ * 409 covers every reason it cannot: already running, changed since it was read, no
+ * message, no chat, no account, or every account busy with another feature.
+ */
+export const startChatBroadcastCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StartChatBroadcastCampaignData, ThrowOnError>,
+): RequestResult<
+  StartChatBroadcastCampaignResponses,
+  StartChatBroadcastCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartChatBroadcastCampaignResponses,
+    StartChatBroadcastCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Stop Campaign
+ *
+ * Stop for real and answer with the board; stopping a stopped one is a no-op.
+ */
+export const stopChatBroadcastCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StopChatBroadcastCampaignData, ThrowOnError>,
+): RequestResult<
+  StopChatBroadcastCampaignResponses,
+  StopChatBroadcastCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StopChatBroadcastCampaignResponses,
+    StopChatBroadcastCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/stop', ...options });
+
+/**
+ * Act On Target
+ *
+ * Write now, hand to another account, skip, or keep one chat of the board.
+ *
+ * ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+ * 409 ``target_state_changed`` when the chat moved on before the click landed, or
+ * ``keep`` was asked of a chat not skipped for deletions.
+ */
+export const actOnChatBroadcastTarget = <ThrowOnError extends boolean = false>(
+  options: Options<ActOnChatBroadcastTargetData, ThrowOnError>,
+): RequestResult<ActOnChatBroadcastTargetResponses, ActOnChatBroadcastTargetErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ActOnChatBroadcastTargetResponses,
+    ActOnChatBroadcastTargetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/targets/action',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Resolve Targets
+ *
+ * Classify pasted links; a folder link is opened with the first account.
+ */
+export const resolveChatBroadcastTargets = <ThrowOnError extends boolean = false>(
+  options: Options<ResolveChatBroadcastTargetsData, ThrowOnError>,
+): RequestResult<
+  ResolveChatBroadcastTargetsResponses,
+  ResolveChatBroadcastTargetsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ResolveChatBroadcastTargetsResponses,
+    ResolveChatBroadcastTargetsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/targets/resolve',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Own Chats
+ *
+ * The groups these accounts are in and may write to.
+ */
+export const listChatBroadcastOwnChats = <ThrowOnError extends boolean = false>(
+  options: Options<ListChatBroadcastOwnChatsData, ThrowOnError>,
+): RequestResult<
+  ListChatBroadcastOwnChatsResponses,
+  ListChatBroadcastOwnChatsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListChatBroadcastOwnChatsResponses,
+    ListChatBroadcastOwnChatsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/own-chats', ...options });
+
+/**
+ * Upload Photo
+ *
+ * Store a photo for a text message; the text goes out as its caption.
+ */
+export const uploadChatBroadcastPhoto = <ThrowOnError extends boolean = false>(
+  options: Options<UploadChatBroadcastPhotoData, ThrowOnError>,
+): RequestResult<UploadChatBroadcastPhotoResponses, UploadChatBroadcastPhotoErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    UploadChatBroadcastPhotoResponses,
+    UploadChatBroadcastPhotoErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/chat-broadcast/media',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Collections
+ */
+export const listChatCollections = <ThrowOnError extends boolean = false>(
+  options?: Options<ListChatCollectionsData, ThrowOnError>,
+): RequestResult<ListChatCollectionsResponses, ListChatCollectionsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListChatCollectionsResponses,
+    ListChatCollectionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/collections', ...options });
+
+/**
+ * Create Collection
+ *
+ * Save a named list of chats; 409 ``collection_name_taken`` for a name in use.
+ */
+export const createChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<CreateChatCollectionData, ThrowOnError>,
+): RequestResult<CreateChatCollectionResponses, CreateChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateChatCollectionResponses,
+    CreateChatCollectionErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/collections',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Collection
+ *
+ * Delete a list; campaigns that took chats from it keep them.
+ */
+export const deleteChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteChatCollectionData, ThrowOnError>,
+): RequestResult<DeleteChatCollectionResponses, DeleteChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteChatCollectionResponses,
+    DeleteChatCollectionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/chat-broadcast/collections/{collection_id}', ...options });
+
+/**
+ * Save Collection
+ *
+ * Replace a list's name and chats at once.
+ */
+export const saveChatCollection = <ThrowOnError extends boolean = false>(
+  options: Options<SaveChatCollectionData, ThrowOnError>,
+): RequestResult<SaveChatCollectionResponses, SaveChatCollectionErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SaveChatCollectionResponses,
+    SaveChatCollectionErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/chat-broadcast/collections/{collection_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Account Folders
+ *
+ * Folders in creation order with their account counts, plus the views' counts.
+ */
+export const listAccountFolders = <ThrowOnError extends boolean = false>(
+  options?: Options<ListAccountFoldersData, ThrowOnError>,
+): RequestResult<ListAccountFoldersResponses, ListAccountFoldersErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListAccountFoldersResponses,
+    ListAccountFoldersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/account-folders', ...options });
+
+/**
+ * Create Account Folder
+ */
+export const createAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<CreateAccountFolderData, ThrowOnError>,
+): RequestResult<CreateAccountFolderResponses, CreateAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateAccountFolderResponses,
+    CreateAccountFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Account Folder
+ *
+ * Delete a folder; its accounts stay in the list and in their other folders.
+ */
+export const deleteAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteAccountFolderData, ThrowOnError>,
+): RequestResult<DeleteAccountFolderResponses, DeleteAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteAccountFolderResponses,
+    DeleteAccountFolderErrors,
+    ThrowOnError
+  >({ url: '/api/v1/account-folders/{folder_id}', ...options });
+
+/**
+ * Rename Account Folder
+ */
+export const renameAccountFolder = <ThrowOnError extends boolean = false>(
+  options: Options<RenameAccountFolderData, ThrowOnError>,
+): RequestResult<RenameAccountFolderResponses, RenameAccountFolderErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    RenameAccountFolderResponses,
+    RenameAccountFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Accounts To Folder
+ *
+ * Add accounts; ``account_ids`` in the answer are only the newly added ones.
+ */
+export const addAccountsToFolder = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountsToFolderData, ThrowOnError>,
+): RequestResult<AddAccountsToFolderResponses, AddAccountsToFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AddAccountsToFolderResponses,
+    AddAccountsToFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Accounts From Folder
+ *
+ * Take accounts out; ``account_ids`` in the answer are only those that were in it.
+ */
+export const removeAccountsFromFolder = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountsFromFolderData, ThrowOnError>,
+): RequestResult<RemoveAccountsFromFolderResponses, RemoveAccountsFromFolderErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RemoveAccountsFromFolderResponses,
+    RemoveAccountsFromFolderErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/account-folders/{folder_id}/accounts/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List User Parser Accounts
+ *
+ * Every account the parser may read with, busy ones marked with why.
+ */
+export const listUserParserAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserAccountsData, ThrowOnError>,
+): RequestResult<ListUserParserAccountsResponses, ListUserParserAccountsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserAccountsResponses,
+    ListUserParserAccountsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/accounts', ...options });
+
+/**
+ * Start User Parser Run
+ */
+export const startUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<StartUserParserRunData, ThrowOnError>,
+): RequestResult<StartUserParserRunResponses, StartUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StartUserParserRunResponses,
+    StartUserParserRunErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/runs',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get User Parser Run
+ */
+export const getUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<GetUserParserRunData, ThrowOnError>,
+): RequestResult<GetUserParserRunResponses, GetUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetUserParserRunResponses, GetUserParserRunErrors, ThrowOnError>({
+    url: '/api/v1/user-parser/runs/{run_id}',
+    ...options,
+  });
+
+/**
+ * Stop User Parser Run
+ *
+ * Stop a run; whatever it collected is saved as its base.
+ */
+export const stopUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<StopUserParserRunData, ThrowOnError>,
+): RequestResult<StopUserParserRunResponses, StopUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StopUserParserRunResponses,
+    StopUserParserRunErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/stop', ...options });
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsers = <ThrowOnError extends boolean = false>(
+  options: Options<ListUserParserRunUsersData, ThrowOnError>,
+): RequestResult<ListUserParserRunUsersResponses, ListUserParserRunUsersErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListUserParserRunUsersResponses,
+    ListUserParserRunUsersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/users', ...options });
+
+/**
+ * Export User Parser Run
+ *
+ * The base as a file: CSV (UTF-8 with BOM, opens in Excel) or JSON.
+ */
+export const exportUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<ExportUserParserRunData, ThrowOnError>,
+): RequestResult<ExportUserParserRunResponses, ExportUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ExportUserParserRunResponses,
+    ExportUserParserRunErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/export', ...options });
+
+/**
+ * List User Parser Presets
+ */
+export const listUserParserPresets = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserPresetsData, ThrowOnError>,
+): RequestResult<ListUserParserPresetsResponses, ListUserParserPresetsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserPresetsResponses,
+    ListUserParserPresetsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/presets', ...options });
+
+/**
+ * Create User Parser Preset
+ */
+export const createUserParserPreset = <ThrowOnError extends boolean = false>(
+  options: Options<CreateUserParserPresetData, ThrowOnError>,
+): RequestResult<CreateUserParserPresetResponses, CreateUserParserPresetErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateUserParserPresetResponses,
+    CreateUserParserPresetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/presets',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete User Parser Preset
+ */
+export const deleteUserParserPreset = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteUserParserPresetData, ThrowOnError>,
+): RequestResult<DeleteUserParserPresetResponses, DeleteUserParserPresetErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteUserParserPresetResponses,
+    DeleteUserParserPresetErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/presets/{preset_id}', ...options });
+
+/**
+ * List User Parser Bases
+ *
+ * Every settled run as a folder, newest first. Nothing deletes one but the operator.
+ */
+export const listUserParserBases = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserBasesData, ThrowOnError>,
+): RequestResult<ListUserParserBasesResponses, ListUserParserBasesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserBasesResponses,
+    ListUserParserBasesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases', ...options });
+
+/**
+ * Delete User Parser Base
+ *
+ * Delete a base and every person in it, for good.
+ */
+export const deleteUserParserBase = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteUserParserBaseData, ThrowOnError>,
+): RequestResult<DeleteUserParserBaseResponses, DeleteUserParserBaseErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteUserParserBaseResponses,
+    DeleteUserParserBaseErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases/{run_id}', ...options });
+
+/**
+ * Rename User Parser Base
+ */
+export const renameUserParserBase = <ThrowOnError extends boolean = false>(
+  options: Options<RenameUserParserBaseData, ThrowOnError>,
+): RequestResult<RenameUserParserBaseResponses, RenameUserParserBaseErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    RenameUserParserBaseResponses,
+    RenameUserParserBaseErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/bases/{run_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsers = <ThrowOnError extends boolean = false>(
+  options: Options<ListUserParserBaseUsersData, ThrowOnError>,
+): RequestResult<ListUserParserBaseUsersResponses, ListUserParserBaseUsersErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListUserParserBaseUsersResponses,
+    ListUserParserBaseUsersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases/{run_id}/users', ...options });

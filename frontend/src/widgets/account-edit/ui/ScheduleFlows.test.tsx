@@ -196,7 +196,7 @@ test('a retry re-sends neither the stored file nor a new key, and a refused row 
   expect(retried?.body.client_key).toBe(refusedKey);
 });
 
-test('a bulk plan whose last account lands past 30 days cannot start', async () => {
+test('a bulk plan whose last account lands past a year cannot start', async () => {
   route();
   const user = userEvent.setup();
   renderWithClient(<BulkEditModal account={FLEET[0] as AccountRead} onClose={vi.fn()} />);
@@ -208,12 +208,12 @@ test('a bulk plan whose last account lands past 30 days cannot start', async () 
   pick([png('face.png')]);
   await user.click(screen.getByText('По расписанию'));
   fireEvent.change(screen.getByLabelText('Между аккаунтами, мин'), { target: { value: '1440' } });
-  const base = Date.now() + 29 * 86_400_000;
+  const base = Date.now() + 364 * 86_400_000;
   fireEvent.change(screen.getByLabelText('Первый аккаунт'), {
     target: { value: toLocalInput(base) },
   });
 
-  expect(screen.getByRole('alert')).toHaveTextContent('позже чем через 30 дней');
+  expect(screen.getByRole('alert')).toHaveTextContent('позже чем через год');
   expect(screen.getByRole('button', { name: 'Запланировать для 3 аккаунтов' })).toBeDisabled();
 });
 

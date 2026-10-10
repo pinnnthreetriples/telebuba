@@ -80,12 +80,33 @@ test('next advances the cursor stack and prev goes back', async () => {
   await waitFor(() => {
     expect(screen.getByText('first')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Вперёд'));
+  await userEvent.click(screen.getByRole('button', { name: 'Вперёд' }));
   await waitFor(() => {
     expect(screen.getByText('second')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Назад'));
+  await userEvent.click(screen.getByRole('button', { name: 'Назад' }));
   await waitFor(() => {
     expect(screen.getByText('first')).toBeInTheDocument();
   });
+});
+
+test('groups rows under a day heading and marks deleted comments', async () => {
+  const deleted = { ...comment(3, 'gone'), deleted_at: '2026-07-11T11:00:00+00:00' };
+  const earlier = { ...comment(4, 'older'), created_at: '2026-07-09T10:00:00+00:00' };
+  routeComments({ items: [deleted, comment(2, 'kept'), earlier], next_cursor: null });
+  renderWithClient(<CommentHistoryModal campaignId="c1" accounts={ACCOUNTS} onClose={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('gone')).toBeInTheDocument();
+  });
+  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(2);
+  expect(screen.getByText('gone').tagName).toBe('DEL');
+  expect(screen.getByText('удалён')).toBeInTheDocument();
+});
+
+test('the close button calls onClose', async () => {
+  routeComments({ items: [], next_cursor: null });
+  const onClose = vi.fn();
+  renderWithClient(<CommentHistoryModal campaignId="c1" accounts={ACCOUNTS} onClose={onClose} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(onClose).toHaveBeenCalled();
 });

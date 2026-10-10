@@ -9,7 +9,7 @@ const meta = {
   args: {
     account: { account_id: 'example', first_name: 'Иван', last_name: 'Петров' },
     className: 'size-tile shrink-0 rounded-full',
-    fallbackClassName: 'bg-info-tint text-info-strong text-body font-semibold',
+    fallbackClassName: 'bg-info-tint text-info-strong text-body font-medium',
   },
 } satisfies Meta<typeof AccountAvatar>;
 
@@ -20,6 +20,6 @@ export const InTable: Story = {};
 export const InWarmingCard: Story = {
   args: {
     className: 'size-tile shrink-0 rounded-full ring-2 ring-success',
-    fallbackClassName: 'bg-info-tint text-info-strong text-tiny font-bold',
+    fallbackClassName: 'bg-info-tint text-info-strong text-small font-medium',
   },
 };

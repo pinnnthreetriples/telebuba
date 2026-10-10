@@ -22,16 +22,14 @@ export function ProxyDeleteModal({
       size="confirm"
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
-      <div className="p-2xl">
-        <div className="mb-sm type-dialog-title">
-          {t('accounts.proxyDeleteModal.title', { endpoint })}
-        </div>
-        <div className="mb-2xl type-dialog-body">
+      <div className="p-6">
+        <div className="mb-2 type-h2">{t('accounts.proxyDeleteModal.title', { endpoint })}</div>
+        <div className="mb-6 type-body text-content-muted">
           {used > 0
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}
         </div>
-        <div className="flex justify-end gap-sm">
+        <div className="flex justify-end gap-2">
           <Button onClick={onClose}>{t('accounts.proxyDeleteModal.cancel')}</Button>
           <Button
             variant="danger"

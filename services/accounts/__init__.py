@@ -27,6 +27,7 @@ fake an external collaborator monkeypatch it on its owning submodule, e.g.
 from __future__ import annotations
 
 from core.db import list_accounts
+from services.accounts._filter_options import account_filter_options
 from services.accounts._result import AccountActionError, AccountNotFoundError
 from services.accounts._table import (
     InvalidCursorError,
@@ -131,6 +132,7 @@ __all__ = [
     "PhoneLoginError",
     "SessionAlreadyExistsError",
     "account_avatar_image",
+    "account_filter_options",
     "account_profile_image",
     "account_profile_view",
     "account_stats",

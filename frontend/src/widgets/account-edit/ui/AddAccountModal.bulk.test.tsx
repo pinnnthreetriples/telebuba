@@ -126,12 +126,12 @@ test('one failed file keeps the others; Next unlocks on the survivors and retry 
   await waitFor(() => {
     expect(screen.getByText('Импортировано 1 из 2')).toBeInTheDocument();
   });
-  expect(screen.getByText('Не удалось импортировать')).toBeInTheDocument();
+  expect(screen.getByText('Этот аккаунт уже добавлен')).toBeInTheDocument();
   // Nothing in flight and one account exists — the operator may go on without b.
   expect(screen.getByText('Далее')).toBeEnabled();
 
   failB = false;
-  await userEvent.click(screen.getByText('Повторить'));
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
   await waitFor(() => {
     expect(screen.getByText('Импортировано 2 из 2')).toBeInTheDocument();
   });

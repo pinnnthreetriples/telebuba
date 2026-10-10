@@ -223,6 +223,9 @@ test('an account picked and then cancelled is never applied', async () => {
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
   await userEvent.click(screen.getByText('Maria Sidorova'));
   await userEvent.click(screen.getByText('Отмена'));
+  // A pending pick is an edit: Cancel asks first.
+  expect(onClose).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
 
   expect(onSave).not.toHaveBeenCalled();
   expect(onClose).toHaveBeenCalledTimes(1);
@@ -265,6 +268,7 @@ test('a mode picked and then cancelled sends nothing', async () => {
   expect(screen.getByRole('radio', { name: REPLY })).toHaveAttribute('aria-checked', 'true');
 
   await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
 
   expect(puts()).toHaveLength(0);
   expect(onClose).toHaveBeenCalledTimes(1);

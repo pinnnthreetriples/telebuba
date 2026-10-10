@@ -1,4 +1,6 @@
 ---
+name: runtime-neuroshilling
+description: Neuroshilling campaigns, scenarios, dialogue runs and chat revival.
 last_updated: 2026-09-27
 edges:
   - target: context/runtime-warming.md

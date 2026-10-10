@@ -32,17 +32,17 @@ export function PrivacyLevelRow({
     <div
       role="group"
       aria-label={label}
-      className="flex flex-col items-stretch gap-md rounded-lg border border-line px-lg py-md sm:flex-row sm:items-center"
+      className="flex flex-col items-stretch gap-3 rounded-md border border-line px-4 py-3 sm:flex-row sm:items-center"
     >
       <div className="min-w-0 sm:flex-1">
-        <div className="truncate type-card-title">{label}</div>
-        <div className="mt-hair type-caption">
+        <div className="truncate type-h3">{label}</div>
+        <div className="mt-1 type-small">
           {t('accounts.profile.privacy.current', {
             value: t(`accounts.profile.privacy.level.${current}`),
           })}
         </div>
         {current === 'unknown' && (
-          <div className="mt-hair type-caption">{t('accounts.profile.privacy.unknownNote')}</div>
+          <div className="mt-1 type-small">{t('accounts.profile.privacy.unknownNote')}</div>
         )}
       </div>
       <SegmentedControl

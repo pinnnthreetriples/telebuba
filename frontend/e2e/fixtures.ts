@@ -24,6 +24,7 @@ function account(i: number, over: Record<string, unknown> = {}) {
     label: null,
     session_name: `session_${String(i)}`,
     status: 'alive',
+    folder_ids: i < 3 ? ['f-main'] : i === 3 ? ['f-reserve'] : [],
     user_id: 100000 + i,
     phone: `+7 900 ${String(100 + i)}-22-33`,
     username: `user_${String(i)}`,
@@ -69,6 +70,24 @@ export const accounts = {
 };
 
 export const accountStats = { total: 5, active: 2, idle: 1, needs_code: 1, problem: 1 };
+
+export const accountFolders = {
+  items: [
+    { folder_id: 'f-main', name: 'Основные', account_count: 3, created_at: NOW },
+    { folder_id: 'f-reserve', name: 'Резерв', account_count: 1, created_at: NOW },
+  ],
+  total_count: 5,
+  unfiled_count: 1,
+};
+
+export const accountFilterOptions = {
+  phone_codes: [
+    { calling_code: 7, country_code: 'RU', count: 3 },
+    { calling_code: 49, country_code: 'DE', count: 2 },
+  ],
+  proxy_countries: [{ country_code: 'NL', country_name: 'Netherlands', count: 3 }],
+  no_proxy_count: 1,
+};
 
 export const proxies = {
   proxies: [0, 1, 2].map((i) => ({

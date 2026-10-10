@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   AudioLines,
+  Calendar,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -10,10 +11,15 @@ import {
   CircleX,
   Clock,
   CloudUpload,
+  Download,
   Eye,
   EyeOff,
   FileIcon,
+  Folder,
+  FolderPlus,
   Globe,
+  GripVertical,
+  Minus,
   Paperclip,
   Pause,
   PencilLine,
@@ -24,6 +30,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Trash,
   TriangleAlert,
@@ -38,6 +45,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { iconStroke } from './iconStroke';
 import { AlertSquare } from './iconsLocal';
 
 // The app's glyphs, drawn once each. Before this they were 98 hand-copied <svg>
@@ -66,6 +74,7 @@ const GLYPH = {
   'alert-triangle': TriangleAlert,
   'arrow-right': ArrowRight,
   'arrow-swap': ArrowLeftRight,
+  calendar: Calendar,
   chart: AudioLines,
   check: Check,
   'check-circle': CircleCheck,
@@ -74,11 +83,16 @@ const GLYPH = {
   'chevron-right': ChevronRight,
   clock: Clock,
   close: X,
+  download: Download,
   eye: Eye,
   'eye-off': EyeOff,
   file: FileIcon,
+  folder: Folder,
+  'folder-plus': FolderPlus,
   gear: Settings,
   globe: Globe,
+  'grip-vertical': GripVertical,
+  minus: Minus,
   paperclip: Paperclip,
   pause: Pause,
   // `pencil`, not `pencil-line`, would drop the baseline stroke the app's edit glyph
@@ -90,6 +104,7 @@ const GLYPH = {
   search: Search,
   send: Send,
   'shield-check': ShieldCheck,
+  'sliders-horizontal': SlidersHorizontal,
   sparkles: Sparkles,
   trash: Trash,
   'upload-cloud': CloudUpload,
@@ -118,8 +133,8 @@ export type IconSize = 10 | 12 | 14 | 16 | 18 | 20;
 // `strokeWidth * size / 24`. Across the 119 stroked icons this replaced that lands at
 // a median of 1.28 CSS px and a mean of 1.30 — flat enough to be a constant that was
 // never written down. This writes it down: 1.3px at every rung, which works out to
-// 2.0 at 16px and 2.2 at 14px, the two spellings the app already used most.
-const STROKE_PX = 1.3;
+// 2.0 at 16px and 2.2 at 14px, the two spellings the app already used most. The rule
+// itself lives in `iconStroke.ts`, so the hand-drawn glyphs outside this table follow it.
 
 export function Icon({
   name,
@@ -145,7 +160,7 @@ export function Icon({
       // same quantity, but unrounded: 16px would render 1.95 where every one of the
       // sites this replaced wrote 2. Rounding to a tenth keeps the six numbers the
       // codebase already used, so the width goes over as a number, not as the flag.
-      strokeWidth={Math.round((STROKE_PX * 24 * 10) / size) / 10}
+      strokeWidth={iconStroke(size)}
       className={className}
       {...(solid ? { fill: 'currentColor', stroke: 'none' } : {})}
     />

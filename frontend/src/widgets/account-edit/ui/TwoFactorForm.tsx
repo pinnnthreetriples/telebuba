@@ -77,9 +77,9 @@ export function TwoFactorForm({
 
   return (
     <>
-      <div className="mb-md type-prose">{t('accounts.edit.twofaExplain')}</div>
+      <div className="mb-3 type-body text-content-subtle">{t('accounts.edit.twofaExplain')}</div>
       <SegmentedControl
-        className="mb-md"
+        className="mb-3"
         value={mode}
         options={(['generate', 'custom'] as const).map((option) => ({
           value: option,
@@ -97,7 +97,7 @@ export function TwoFactorForm({
         }}
       />
       {mode === 'custom' ? (
-        <div className="mb-md">
+        <div className="mb-3">
           <twofaForm.Field name="password">
             {(field) => (
               // FormField's `children` slot rather than its default input: the
@@ -127,7 +127,7 @@ export function TwoFactorForm({
                       setShowPass((value) => !value);
                     }}
                     aria-label={t('accounts.edit.twofaReveal')}
-                    className="absolute right-sm top-1/2 -translate-y-1/2 text-content-subtle"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-content-subtle"
                   >
                     {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                   </button>
@@ -137,7 +137,7 @@ export function TwoFactorForm({
           </twofaForm.Field>
         </div>
       ) : null}
-      <div className="mb-tight">
+      <div className="mb-2">
         <twofaForm.Field name="hint">
           {(field) => (
             <FormField
@@ -148,7 +148,7 @@ export function TwoFactorForm({
           )}
         </twofaForm.Field>
       </div>
-      <div className="mb-lg type-caption">{t('accounts.edit.twofaHintWarn')}</div>
+      <div className="mb-4 type-small">{t('accounts.edit.twofaHintWarn')}</div>
       <Button
         fullWidth
         className="font-medium"

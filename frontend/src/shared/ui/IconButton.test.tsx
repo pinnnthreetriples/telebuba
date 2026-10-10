@@ -40,7 +40,7 @@ test('ступень задаёт коробку, а радиус у всех с
         <svg />
       </IconButton>,
     );
-    expect(screen.getByRole('button', { name: 'a' })).toHaveClass(box, 'rounded-md');
+    expect(screen.getByRole('button', { name: 'a' })).toHaveClass(box, 'rounded-sm');
     unmount();
   }
 });
@@ -85,7 +85,7 @@ test('all tones have a hover treatment and retain the shared press state', () =>
   );
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
     'hover:border-info-line',
-    'hover:bg-action-hover',
+    'hover:bg-info-tint',
     'hover:text-info-strong',
     'active:scale-press',
   );
@@ -115,7 +115,7 @@ test('disabled is inert and dimmed, so a pending action cannot be fired twice', 
   expect(button).toHaveClass(
     'disabled:opacity-50',
     'disabled:pointer-events-none',
-    'focus-visible:outline-focus',
+    'focus-visible:outline-action-primary',
     'active:scale-press',
   );
   await userEvent.click(button);
@@ -137,10 +137,10 @@ test('aria-busy icon actions cannot show press feedback', () => {
 
 test('extra classes are appended, so a caller can size the glyph it puts inside', () => {
   render(
-    <IconButton aria-label="Закрыть" className="text-title">
+    <IconButton aria-label="Закрыть" className="text-h3">
       ×
     </IconButton>,
   );
 
-  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'size-icon');
+  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-h3', 'size-icon');
 });

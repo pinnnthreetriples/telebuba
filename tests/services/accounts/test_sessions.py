@@ -92,6 +92,21 @@ async def test_concurrent_identical_session_imports_serialize() -> None:
 
 
 @pytest.mark.asyncio
+async def test_import_account_session_drops_the_phone_plus() -> None:
+    """Sellers name sessions by phone, ``+522491104289.session``.
+
+    ``+`` is outside the account_id charset, so every such file was refused with a
+    bare ``validation_error``. The leading ``+`` carries nothing the digits don't.
+    """
+    account = await import_account_session(
+        AccountSessionFileImport(filename="+522491104289.session", content=b"bytes"),
+    )
+
+    assert account.account_id == "522491104289"
+    assert (settings.telegram.session_dir / "522491104289.session").read_bytes() == b"bytes"
+
+
+@pytest.mark.asyncio
 async def test_import_account_session_rejects_non_session_file() -> None:
     with pytest.raises(ValueError, match=r"\.session"):
         await import_account_session(

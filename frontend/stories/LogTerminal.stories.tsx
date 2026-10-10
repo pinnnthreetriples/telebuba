@@ -34,7 +34,11 @@ const meta = {
   args: {
     title: 'Лог кампании',
     logLines: lines,
-    accountName: (id: string) => (id === 'acc-1' ? 'Иван Петров' : 'Мария Смирнова'),
+    // No avatar_etag, so the faces are initials circles — a story has no avatar endpoint.
+    accountOf: (id: string) =>
+      id === 'acc-1'
+        ? { account_id: id, first_name: 'Иван', last_name: 'Петров', username: 'ivan' }
+        : { account_id: id, first_name: 'Мария', last_name: 'Смирнова' },
   },
   decorators: [
     (Story: () => React.ReactNode) => (

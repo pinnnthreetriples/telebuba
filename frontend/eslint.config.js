@@ -69,8 +69,9 @@ export default tseslint.config(
   {
     // The rule's own fixtures are the patterns it bans, so it cannot lint them: a
     // gate that flags nothing looks identical to a gate that catches nothing, and
-    // this is the file that tells them apart.
-    files: ['**/designTokenRule.test.ts'],
+    // this is the file that tells them apart. `closedScales.test.ts` is the same file for
+    // Tailwind itself: its fixtures are the off-scale classes it proves emit nothing.
+    files: ['**/designTokenRule.test.ts', '**/closedScales.test.ts'],
     rules: { 'design-tokens/no-raw-values': 'off' },
   },
   prettier,

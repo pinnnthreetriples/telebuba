@@ -81,21 +81,21 @@ export function SurfHover({
     // The clip exists only to hide the surface as it slides LEFT, but `overflow`
     // clips every side, and the surface's box is this box: the caller's 1px bottom
     // border landed exactly on the clip boundary and was rasterized away, so the
-    // selected campaign card read as an open-bottomed frame. 2px of padding drops
-    // the boundary clear of it; the negative margin gives the 2px straight back, so
-    // nothing below moves. Measured: clip 2px under the card, card and actions
-    // unmoved. A 5px border survived where a 1px one did not, which is what says
+    // selected campaign card read as an open-bottomed frame. 4px of padding (`pb-1`)
+    // drops the boundary clear of it; the negative margin gives the 4px straight back,
+    // so nothing below moves. Measured at 2px, before the 4px grid: clip under the
+    // card, card and actions unmoved. A 5px border survived where a 1px one did not, which is what says
     // this is the boundary and not a missing border.
-    <div className="group relative -mb-hair overflow-hidden rounded-lg pb-hair">
-      {/* `bottom-[2px]`, not `inset-0`: the padding above is behind the card, and an
+    <div className="group relative -mb-1 overflow-hidden rounded-md pb-1">
+      {/* `bottom-1`, not `inset-0`: the padding above is behind the card, and an
           action layer stretched into it would show a grey sliver under every row.
           Слой прозрачный, а не `bg-canvas`: карточка при раскрытии сужается и сохраняет
           свою рамку, и серый фон вокруг компактных кнопок читался пустой дырой. */}
-      <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-center justify-end">
+      <div className="absolute inset-x-0 bottom-1 top-0 flex items-center justify-end">
         <div
           ref={actionsRef}
           data-measured="actions"
-          className="flex items-center gap-xs px-sm"
+          className="flex items-center gap-1 px-2"
           onFocus={() => {
             setReached(true);
           }}
@@ -118,7 +118,7 @@ export function SurfHover({
         ref={surfaceRef}
         id={surfaceId}
         className={cn(
-          'relative rounded-lg bg-surface-card transition-[margin] duration-reveal ease-out group-hover:mr-[var(--shift)]',
+          'relative rounded-md bg-surface-card transition-[margin] duration-reveal ease-out group-hover:mr-[var(--shift)]',
           // Карточка СУЖАЕТСЯ справа, а не уезжает влево. Сдвиг `translate` + `pl` сужал
           // содержимое и переносил текст на новые строки; один `translate` уносил под клип
           // имя вместе с левой рамкой. Сужение оставляет имя и рамку на месте, а длинный

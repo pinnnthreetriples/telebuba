@@ -17,9 +17,19 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, InputChannelEmpty
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.types import (
+    ChatReactionsNone,
+    ChatReactionsSome,
+    InputChannelEmpty,
+    InputUserSelf,
+)
 
 from core.config import settings
+from core.telegram_client._broadcast import (
+    dispatch_check_chatlist,
+    dispatch_list_writable_groups,
+)
 from core.telegram_client._channels import _input_channel
 from core.telegram_client._read_discovery import (
     dispatch_get_similar_channels,
@@ -40,6 +50,7 @@ from schemas.telegram_actions import (
     SearchGlobalPosts,
 )
 from schemas.telegram_actions_activity import LastPostResult
+from schemas.telegram_actions_broadcast import CheckChatlist, ListWritableGroups
 from schemas.telegram_actions_channels import (
     ChannelUsernameCheck,
     TelegramChannelPost,
@@ -124,9 +135,14 @@ async def dispatch_get_own_channel(
     idiom as ``_read._resolve_linked_group_entity``). Index 0 once paired this
     channel's id with the discussion group's title/username — and the edit
     modal prefills from that title.
+
+    The profile pin lives on the account, not the channel: ``userFull`` names
+    the one personal channel, so a second read answers "is it this one".
     """
     entity = await _input_channel(client, action.channel_id)
     full = await client(GetFullChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
+    me = await client(GetFullUserRequest(InputUserSelf()))
+    pinned_id = getattr(getattr(me, "full_user", None), "personal_channel_id", None)
     full_chat = getattr(full, "full_chat", None)
     chat = next(
         (
@@ -143,6 +159,7 @@ async def dispatch_get_own_channel(
         about=str(getattr(full_chat, "about", "") or ""),
         participants_count=getattr(full_chat, "participants_count", None),
         reactions_enabled=_reactions_enabled(full_chat),
+        pinned_to_profile=pinned_id == action.channel_id,
     )
 
 
@@ -245,7 +262,7 @@ async def dispatch_check_channel_username(
     return ChannelUsernameCheck(available=True)
 
 
-async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-action case
+async def _dispatch_channel_read_action(  # noqa: C901, PLR0911 - one return per read-action case
     client: TelegramClient,
     action: TelegramReadAction,
 ) -> BaseModel:
@@ -279,6 +296,10 @@ async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-
             return await dispatch_search_global_posts(client, action)
         case GetLastPostAt():
             return await dispatch_get_last_post_at(client, action)
+        case ListWritableGroups():
+            return await dispatch_list_writable_groups(client, action)
+        case CheckChatlist():
+            return await dispatch_check_chatlist(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)

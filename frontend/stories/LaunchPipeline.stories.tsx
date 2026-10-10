@@ -6,7 +6,7 @@ import type {
   NeuroshillingRole,
   NeuroshillingStep,
 } from '../src/shared/api';
-import { PipelineCard } from '../src/pages/neuroshilling/ui/PipelineCard';
+import { LaunchPipeline } from '../src/pages/neuroshilling/ui/LaunchPipeline';
 
 const campaign: NeuroshillingCampaign = {
   campaign_id: 'c1',
@@ -50,7 +50,7 @@ const pool: NeuroshillingBoardAccount[] = [
 
 const meta = {
   title: 'Patterns/Launch readiness',
-  component: PipelineCard,
+  component: LaunchPipeline,
   tags: ['autodocs'],
   args: {
     campaign,
@@ -63,7 +63,7 @@ const meta = {
     onStop: () => undefined,
     busy: false,
   },
-} satisfies Meta<typeof PipelineCard>;
+} satisfies Meta<typeof LaunchPipeline>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

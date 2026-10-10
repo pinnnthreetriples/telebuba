@@ -9,8 +9,11 @@ import {
 
 import { client } from '../client.gen';
 import {
+  accountFilterOptions,
   accountStats,
+  actOnChatBroadcastTarget,
   addAccountMusic,
+  addAccountsToFolder,
   addWarmingChannels,
   adoptCampaignDiscovery,
   approveNeuroshillingScenario,
@@ -32,17 +35,27 @@ import {
   countCampaignChallengeOutcomes,
   countLogs,
   createAccountChannel,
+  createAccountFolder,
   createCampaign,
+  createChatBroadcastCampaign,
+  createChatCollection,
   createNeuroshillingCampaign,
   createProxy,
+  createUserParserPreset,
   deleteAccount,
   deleteAccountChannel,
   deleteAccountChannelPost,
+  deleteAccountFolder,
   deleteCampaign,
+  deleteChatBroadcastCampaign,
+  deleteChatCollection,
   deleteNeuroshillingCampaign,
   deleteProxy,
+  deleteUserParserBase,
+  deleteUserParserPreset,
   editAccountChannelPost,
   expandDiscoveryKeywords,
+  exportUserParserRun,
   generateBulkMessage,
   generateNeuroshillingScenario,
   getAccountChannel,
@@ -55,6 +68,8 @@ import {
   getActiveContactLookupJob,
   getBulkMessageJob,
   getCampaignDiscovery,
+  getChatBroadcastBoard,
+  getChatBroadcastSettings,
   getContactLookupJob,
   getHealth,
   getLatestBulkMessageJob,
@@ -67,6 +82,7 @@ import {
   getNeuroshillingScenario,
   getNeuroshillingSettings,
   getReadiness,
+  getUserParserRun,
   getWarmingBoard,
   getWarmingSettings,
   handoffToNeurocomment,
@@ -77,16 +93,25 @@ import {
   listAccountChannels,
   listAccountChatMessages,
   listAccountChats,
+  listAccountFolders,
   listAccounts,
   listAccountScheduledPosts,
   listCampaignChallenges,
   listCampaigns,
   listChannelChallenges,
+  listChatBroadcastCampaigns,
+  listChatBroadcastOwnChats,
+  listChatCollections,
   listDiscoveryAccounts,
   listLogs,
   listNeurocommentComments,
   listNeuroshillingCampaigns,
   listProxies,
+  listUserParserAccounts,
+  listUserParserBases,
+  listUserParserBaseUsers,
+  listUserParserPresets,
+  listUserParserRunUsers,
   listWarmedAccounts,
   listWarmingChannels,
   listWarmingDialogues,
@@ -102,16 +127,23 @@ import {
   publishAccountChannelPost,
   removeAccountMusic,
   removeAccountPhoto,
+  removeAccountsFromFolder,
   removeAccountStory,
   removeAccountTwofa,
   removeCampaignAccount,
   removeCampaignChannel,
   removeWarmingChannel,
+  renameAccountFolder,
+  renameUserParserBase,
   requestLoginCode,
   rescheduleScheduledPost,
   resendAccountTwofaEmail,
   resetAccountSession,
+  resolveChatBroadcastTargets,
   resyncAccountAvatar,
+  saveChatBroadcastPace,
+  saveChatBroadcastSettings,
+  saveChatCollection,
   saveNeuroshillingSettings,
   scheduleAccountPhoto,
   scheduleAccountStory,
@@ -133,13 +165,17 @@ import {
   skipNeurocommentPair,
   spamCheckAccount,
   startCampaignDiscovery,
+  startChatBroadcastCampaign,
   startContactLookup,
   startNeurocomment,
   startNeuroshillingCampaign,
   startPhoneLogin,
+  startUserParserRun,
   startWarming,
+  stopChatBroadcastCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
+  stopUserParserRun,
   stopWarming,
   submitLoginCode,
   unassignProxy,
@@ -151,15 +187,25 @@ import {
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
   updateWarmingSettings,
+  uploadChatBroadcastPhoto,
   uploadScheduledMedia,
 } from '../sdk.gen';
 import type {
+  AccountFilterOptionsData,
+  AccountFilterOptionsError,
+  AccountFilterOptionsResponse,
   AccountStatsData,
   AccountStatsError,
   AccountStatsResponse,
+  ActOnChatBroadcastTargetData,
+  ActOnChatBroadcastTargetError,
+  ActOnChatBroadcastTargetResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
+  AddAccountsToFolderData,
+  AddAccountsToFolderError,
+  AddAccountsToFolderResponse,
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
@@ -223,15 +269,27 @@ import type {
   CreateAccountChannelData,
   CreateAccountChannelError,
   CreateAccountChannelResponse,
+  CreateAccountFolderData,
+  CreateAccountFolderError,
+  CreateAccountFolderResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
+  CreateChatBroadcastCampaignData,
+  CreateChatBroadcastCampaignError,
+  CreateChatBroadcastCampaignResponse,
+  CreateChatCollectionData,
+  CreateChatCollectionError,
+  CreateChatCollectionResponse,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignError,
   CreateNeuroshillingCampaignResponse,
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
+  CreateUserParserPresetData,
+  CreateUserParserPresetError,
+  CreateUserParserPresetResponse,
   DeleteAccountChannelData,
   DeleteAccountChannelError,
   DeleteAccountChannelPostData,
@@ -240,22 +298,39 @@ import type {
   DeleteAccountChannelResponse,
   DeleteAccountData,
   DeleteAccountError,
+  DeleteAccountFolderData,
+  DeleteAccountFolderError,
+  DeleteAccountFolderResponse,
   DeleteAccountResponse,
   DeleteCampaignData,
   DeleteCampaignError,
   DeleteCampaignResponse,
+  DeleteChatBroadcastCampaignData,
+  DeleteChatBroadcastCampaignError,
+  DeleteChatBroadcastCampaignResponse,
+  DeleteChatCollectionData,
+  DeleteChatCollectionError,
+  DeleteChatCollectionResponse,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignError,
   DeleteNeuroshillingCampaignResponse,
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  DeleteUserParserBaseData,
+  DeleteUserParserBaseError,
+  DeleteUserParserBaseResponse,
+  DeleteUserParserPresetData,
+  DeleteUserParserPresetError,
+  DeleteUserParserPresetResponse,
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostResponse,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsError,
   ExpandDiscoveryKeywordsResponse,
+  ExportUserParserRunData,
+  ExportUserParserRunError,
   GenerateBulkMessageData,
   GenerateBulkMessageError,
   GenerateBulkMessageResponse,
@@ -291,6 +366,12 @@ import type {
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryError,
   GetCampaignDiscoveryResponse,
+  GetChatBroadcastBoardData,
+  GetChatBroadcastBoardError,
+  GetChatBroadcastBoardResponse,
+  GetChatBroadcastSettingsData,
+  GetChatBroadcastSettingsError,
+  GetChatBroadcastSettingsResponse,
   GetContactLookupJobData,
   GetContactLookupJobError,
   GetContactLookupJobResponse,
@@ -327,6 +408,9 @@ import type {
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
+  GetUserParserRunData,
+  GetUserParserRunError,
+  GetUserParserRunResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -357,6 +441,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsError,
   ListAccountChatsResponse,
+  ListAccountFoldersData,
+  ListAccountFoldersError,
+  ListAccountFoldersResponse,
   ListAccountScheduledPostsData,
   ListAccountScheduledPostsError,
   ListAccountScheduledPostsResponse,
@@ -372,6 +459,15 @@ import type {
   ListChannelChallengesData,
   ListChannelChallengesError,
   ListChannelChallengesResponse,
+  ListChatBroadcastCampaignsData,
+  ListChatBroadcastCampaignsError,
+  ListChatBroadcastCampaignsResponse,
+  ListChatBroadcastOwnChatsData,
+  ListChatBroadcastOwnChatsError,
+  ListChatBroadcastOwnChatsResponse,
+  ListChatCollectionsData,
+  ListChatCollectionsError,
+  ListChatCollectionsResponse,
   ListDiscoveryAccountsData,
   ListDiscoveryAccountsError,
   ListDiscoveryAccountsResponse,
@@ -387,6 +483,21 @@ import type {
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
+  ListUserParserAccountsData,
+  ListUserParserAccountsError,
+  ListUserParserAccountsResponse,
+  ListUserParserBasesData,
+  ListUserParserBasesError,
+  ListUserParserBasesResponse,
+  ListUserParserBaseUsersData,
+  ListUserParserBaseUsersError,
+  ListUserParserBaseUsersResponse,
+  ListUserParserPresetsData,
+  ListUserParserPresetsError,
+  ListUserParserPresetsResponse,
+  ListUserParserRunUsersData,
+  ListUserParserRunUsersError,
+  ListUserParserRunUsersResponse,
   ListWarmedAccountsData,
   ListWarmedAccountsError,
   ListWarmedAccountsResponse,
@@ -429,6 +540,9 @@ import type {
   RemoveAccountPhotoData,
   RemoveAccountPhotoError,
   RemoveAccountPhotoResponse,
+  RemoveAccountsFromFolderData,
+  RemoveAccountsFromFolderError,
+  RemoveAccountsFromFolderResponse,
   RemoveAccountStoryData,
   RemoveAccountStoryError,
   RemoveAccountStoryResponse,
@@ -444,6 +558,12 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
+  RenameAccountFolderData,
+  RenameAccountFolderError,
+  RenameAccountFolderResponse,
+  RenameUserParserBaseData,
+  RenameUserParserBaseError,
+  RenameUserParserBaseResponse,
   RequestLoginCodeData,
   RequestLoginCodeError,
   RequestLoginCodeResponse,
@@ -456,9 +576,21 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
+  ResolveChatBroadcastTargetsData,
+  ResolveChatBroadcastTargetsError,
+  ResolveChatBroadcastTargetsResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SaveChatBroadcastPaceData,
+  SaveChatBroadcastPaceError,
+  SaveChatBroadcastPaceResponse,
+  SaveChatBroadcastSettingsData,
+  SaveChatBroadcastSettingsError,
+  SaveChatBroadcastSettingsResponse,
+  SaveChatCollectionData,
+  SaveChatCollectionError,
+  SaveChatCollectionResponse,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsError,
   SaveNeuroshillingSettingsResponse,
@@ -522,6 +654,9 @@ import type {
   StartCampaignDiscoveryData,
   StartCampaignDiscoveryError,
   StartCampaignDiscoveryResponse,
+  StartChatBroadcastCampaignData,
+  StartChatBroadcastCampaignError,
+  StartChatBroadcastCampaignResponse,
   StartContactLookupData,
   StartContactLookupError,
   StartContactLookupResponse,
@@ -534,15 +669,24 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginError,
   StartPhoneLoginResponse,
+  StartUserParserRunData,
+  StartUserParserRunError,
+  StartUserParserRunResponse,
   StartWarmingData,
   StartWarmingError,
   StartWarmingResponse,
+  StopChatBroadcastCampaignData,
+  StopChatBroadcastCampaignError,
+  StopChatBroadcastCampaignResponse,
   StopNeurocommentData,
   StopNeurocommentError,
   StopNeurocommentResponse,
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignError,
   StopNeuroshillingCampaignResponse,
+  StopUserParserRunData,
+  StopUserParserRunError,
+  StopUserParserRunResponse,
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
@@ -576,6 +720,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
+  UploadChatBroadcastPhotoData,
+  UploadChatBroadcastPhotoError,
+  UploadChatBroadcastPhotoResponse,
   UploadScheduledMediaData,
   UploadScheduledMediaError,
   UploadScheduledMediaResponse,
@@ -740,6 +887,12 @@ export const listAccountsQueryKey = (options?: Options<ListAccountsData>) =>
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccountsOptions = (options?: Options<ListAccountsData>) =>
   queryOptions<
@@ -800,6 +953,12 @@ export const listAccountsInfiniteQueryKey = (
 
 /**
  * List Accounts
+ *
+ * One page of accounts; ``total`` counts every account the filters match.
+ *
+ * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
+ * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
+ * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
  */
 export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) => {
   const opts = infiniteQueryOptions<
@@ -866,6 +1025,33 @@ export const accountStatsOptions = (options?: Options<AccountStatsData>) =>
       return data;
     },
     queryKey: accountStatsQueryKey(options),
+  });
+
+export const accountFilterOptionsQueryKey = (options?: Options<AccountFilterOptionsData>) =>
+  createQueryKey('accountFilterOptions', options);
+
+/**
+ * Account Filter Options
+ *
+ * The phone calling codes and proxy countries the fleet has, for the filter pills.
+ */
+export const accountFilterOptionsOptions = (options?: Options<AccountFilterOptionsData>) =>
+  queryOptions<
+    AccountFilterOptionsResponse,
+    AccountFilterOptionsError,
+    AccountFilterOptionsResponse,
+    ReturnType<typeof accountFilterOptionsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await accountFilterOptions({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: accountFilterOptionsQueryKey(options),
   });
 
 /**
@@ -4780,4 +4966,1105 @@ export const stopNeuroshillingCampaignMutation = (
     },
   };
   return mutationOptions;
+};
+
+export const listChatBroadcastCampaignsQueryKey = (
+  options?: Options<ListChatBroadcastCampaignsData>,
+) => createQueryKey('listChatBroadcastCampaigns', options);
+
+/**
+ * List Campaigns
+ */
+export const listChatBroadcastCampaignsOptions = (
+  options?: Options<ListChatBroadcastCampaignsData>,
+) =>
+  queryOptions<
+    ListChatBroadcastCampaignsResponse,
+    ListChatBroadcastCampaignsError,
+    ListChatBroadcastCampaignsResponse,
+    ReturnType<typeof listChatBroadcastCampaignsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatBroadcastCampaigns({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatBroadcastCampaignsQueryKey(options),
+  });
+
+/**
+ * Create Campaign
+ */
+export const createChatBroadcastCampaignMutation = (
+  options?: Partial<Options<CreateChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  CreateChatBroadcastCampaignResponse,
+  CreateChatBroadcastCampaignError,
+  Options<CreateChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateChatBroadcastCampaignResponse,
+    CreateChatBroadcastCampaignError,
+    Options<CreateChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign with its chats and history; refused while it runs.
+ */
+export const deleteChatBroadcastCampaignMutation = (
+  options?: Partial<Options<DeleteChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  DeleteChatBroadcastCampaignResponse,
+  DeleteChatBroadcastCampaignError,
+  Options<DeleteChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteChatBroadcastCampaignResponse,
+    DeleteChatBroadcastCampaignError,
+    Options<DeleteChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getChatBroadcastSettingsQueryKey = (options: Options<GetChatBroadcastSettingsData>) =>
+  createQueryKey('getChatBroadcastSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getChatBroadcastSettingsOptions = (options: Options<GetChatBroadcastSettingsData>) =>
+  queryOptions<
+    GetChatBroadcastSettingsResponse,
+    GetChatBroadcastSettingsError,
+    GetChatBroadcastSettingsResponse,
+    ReturnType<typeof getChatBroadcastSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getChatBroadcastSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getChatBroadcastSettingsQueryKey(options),
+  });
+
+/**
+ * Save Settings
+ *
+ * Save name, accounts and settings at once, only on the version the dialog read.
+ */
+export const saveChatBroadcastSettingsMutation = (
+  options?: Partial<Options<SaveChatBroadcastSettingsData>>,
+): UseMutationOptions<
+  SaveChatBroadcastSettingsResponse,
+  SaveChatBroadcastSettingsError,
+  Options<SaveChatBroadcastSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatBroadcastSettingsResponse,
+    SaveChatBroadcastSettingsError,
+    Options<SaveChatBroadcastSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatBroadcastSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Pace
+ *
+ * Save the pauses only — accepted while the campaign runs; the run reads them live.
+ *
+ * 409 ``campaign_changed`` when the campaign moved between the read and the write.
+ */
+export const saveChatBroadcastPaceMutation = (
+  options?: Partial<Options<SaveChatBroadcastPaceData>>,
+): UseMutationOptions<
+  SaveChatBroadcastPaceResponse,
+  SaveChatBroadcastPaceError,
+  Options<SaveChatBroadcastPaceData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatBroadcastPaceResponse,
+    SaveChatBroadcastPaceError,
+    Options<SaveChatBroadcastPaceData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatBroadcastPace({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getChatBroadcastBoardQueryKey = (options: Options<GetChatBroadcastBoardData>) =>
+  createQueryKey('getChatBroadcastBoard', options);
+
+/**
+ * Get Board
+ *
+ * The pipeline, the board by chat with its history, and the accounts.
+ */
+export const getChatBroadcastBoardOptions = (options: Options<GetChatBroadcastBoardData>) =>
+  queryOptions<
+    GetChatBroadcastBoardResponse,
+    GetChatBroadcastBoardError,
+    GetChatBroadcastBoardResponse,
+    ReturnType<typeof getChatBroadcastBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getChatBroadcastBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getChatBroadcastBoardQueryKey(options),
+  });
+
+/**
+ * Start Campaign
+ *
+ * Start the campaign, or continue a stopped one from where it was.
+ *
+ * 409 covers every reason it cannot: already running, changed since it was read, no
+ * message, no chat, no account, or every account busy with another feature.
+ */
+export const startChatBroadcastCampaignMutation = (
+  options?: Partial<Options<StartChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  StartChatBroadcastCampaignResponse,
+  StartChatBroadcastCampaignError,
+  Options<StartChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartChatBroadcastCampaignResponse,
+    StartChatBroadcastCampaignError,
+    Options<StartChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Campaign
+ *
+ * Stop for real and answer with the board; stopping a stopped one is a no-op.
+ */
+export const stopChatBroadcastCampaignMutation = (
+  options?: Partial<Options<StopChatBroadcastCampaignData>>,
+): UseMutationOptions<
+  StopChatBroadcastCampaignResponse,
+  StopChatBroadcastCampaignError,
+  Options<StopChatBroadcastCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopChatBroadcastCampaignResponse,
+    StopChatBroadcastCampaignError,
+    Options<StopChatBroadcastCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopChatBroadcastCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Act On Target
+ *
+ * Write now, hand to another account, skip, or keep one chat of the board.
+ *
+ * ``keep`` returns a chat skipped for deleted messages; deletions no longer skip it.
+ * 409 ``target_state_changed`` when the chat moved on before the click landed, or
+ * ``keep`` was asked of a chat not skipped for deletions.
+ */
+export const actOnChatBroadcastTargetMutation = (
+  options?: Partial<Options<ActOnChatBroadcastTargetData>>,
+): UseMutationOptions<
+  ActOnChatBroadcastTargetResponse,
+  ActOnChatBroadcastTargetError,
+  Options<ActOnChatBroadcastTargetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ActOnChatBroadcastTargetResponse,
+    ActOnChatBroadcastTargetError,
+    Options<ActOnChatBroadcastTargetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await actOnChatBroadcastTarget({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Resolve Targets
+ *
+ * Classify pasted links; a folder link is opened with the first account.
+ */
+export const resolveChatBroadcastTargetsMutation = (
+  options?: Partial<Options<ResolveChatBroadcastTargetsData>>,
+): UseMutationOptions<
+  ResolveChatBroadcastTargetsResponse,
+  ResolveChatBroadcastTargetsError,
+  Options<ResolveChatBroadcastTargetsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResolveChatBroadcastTargetsResponse,
+    ResolveChatBroadcastTargetsError,
+    Options<ResolveChatBroadcastTargetsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resolveChatBroadcastTargets({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatBroadcastOwnChatsQueryKey = (
+  options: Options<ListChatBroadcastOwnChatsData>,
+) => createQueryKey('listChatBroadcastOwnChats', options);
+
+/**
+ * Own Chats
+ *
+ * The groups these accounts are in and may write to.
+ */
+export const listChatBroadcastOwnChatsOptions = (options: Options<ListChatBroadcastOwnChatsData>) =>
+  queryOptions<
+    ListChatBroadcastOwnChatsResponse,
+    ListChatBroadcastOwnChatsError,
+    ListChatBroadcastOwnChatsResponse,
+    ReturnType<typeof listChatBroadcastOwnChatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatBroadcastOwnChats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatBroadcastOwnChatsQueryKey(options),
+  });
+
+/**
+ * Upload Photo
+ *
+ * Store a photo for a text message; the text goes out as its caption.
+ */
+export const uploadChatBroadcastPhotoMutation = (
+  options?: Partial<Options<UploadChatBroadcastPhotoData>>,
+): UseMutationOptions<
+  UploadChatBroadcastPhotoResponse,
+  UploadChatBroadcastPhotoError,
+  Options<UploadChatBroadcastPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UploadChatBroadcastPhotoResponse,
+    UploadChatBroadcastPhotoError,
+    Options<UploadChatBroadcastPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await uploadChatBroadcastPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listChatCollectionsQueryKey = (options?: Options<ListChatCollectionsData>) =>
+  createQueryKey('listChatCollections', options);
+
+/**
+ * List Collections
+ */
+export const listChatCollectionsOptions = (options?: Options<ListChatCollectionsData>) =>
+  queryOptions<
+    ListChatCollectionsResponse,
+    ListChatCollectionsError,
+    ListChatCollectionsResponse,
+    ReturnType<typeof listChatCollectionsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChatCollections({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChatCollectionsQueryKey(options),
+  });
+
+/**
+ * Create Collection
+ *
+ * Save a named list of chats; 409 ``collection_name_taken`` for a name in use.
+ */
+export const createChatCollectionMutation = (
+  options?: Partial<Options<CreateChatCollectionData>>,
+): UseMutationOptions<
+  CreateChatCollectionResponse,
+  CreateChatCollectionError,
+  Options<CreateChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateChatCollectionResponse,
+    CreateChatCollectionError,
+    Options<CreateChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Collection
+ *
+ * Delete a list; campaigns that took chats from it keep them.
+ */
+export const deleteChatCollectionMutation = (
+  options?: Partial<Options<DeleteChatCollectionData>>,
+): UseMutationOptions<
+  DeleteChatCollectionResponse,
+  DeleteChatCollectionError,
+  Options<DeleteChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteChatCollectionResponse,
+    DeleteChatCollectionError,
+    Options<DeleteChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Save Collection
+ *
+ * Replace a list's name and chats at once.
+ */
+export const saveChatCollectionMutation = (
+  options?: Partial<Options<SaveChatCollectionData>>,
+): UseMutationOptions<
+  SaveChatCollectionResponse,
+  SaveChatCollectionError,
+  Options<SaveChatCollectionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveChatCollectionResponse,
+    SaveChatCollectionError,
+    Options<SaveChatCollectionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveChatCollection({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listAccountFoldersQueryKey = (options?: Options<ListAccountFoldersData>) =>
+  createQueryKey('listAccountFolders', options);
+
+/**
+ * List Account Folders
+ *
+ * Folders in creation order with their account counts, plus the views' counts.
+ */
+export const listAccountFoldersOptions = (options?: Options<ListAccountFoldersData>) =>
+  queryOptions<
+    ListAccountFoldersResponse,
+    ListAccountFoldersError,
+    ListAccountFoldersResponse,
+    ReturnType<typeof listAccountFoldersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountFolders({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountFoldersQueryKey(options),
+  });
+
+/**
+ * Create Account Folder
+ */
+export const createAccountFolderMutation = (
+  options?: Partial<Options<CreateAccountFolderData>>,
+): UseMutationOptions<
+  CreateAccountFolderResponse,
+  CreateAccountFolderError,
+  Options<CreateAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateAccountFolderResponse,
+    CreateAccountFolderError,
+    Options<CreateAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Account Folder
+ *
+ * Delete a folder; its accounts stay in the list and in their other folders.
+ */
+export const deleteAccountFolderMutation = (
+  options?: Partial<Options<DeleteAccountFolderData>>,
+): UseMutationOptions<
+  DeleteAccountFolderResponse,
+  DeleteAccountFolderError,
+  Options<DeleteAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteAccountFolderResponse,
+    DeleteAccountFolderError,
+    Options<DeleteAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Rename Account Folder
+ */
+export const renameAccountFolderMutation = (
+  options?: Partial<Options<RenameAccountFolderData>>,
+): UseMutationOptions<
+  RenameAccountFolderResponse,
+  RenameAccountFolderError,
+  Options<RenameAccountFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RenameAccountFolderResponse,
+    RenameAccountFolderError,
+    Options<RenameAccountFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await renameAccountFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Add Accounts To Folder
+ *
+ * Add accounts; ``account_ids`` in the answer are only the newly added ones.
+ */
+export const addAccountsToFolderMutation = (
+  options?: Partial<Options<AddAccountsToFolderData>>,
+): UseMutationOptions<
+  AddAccountsToFolderResponse,
+  AddAccountsToFolderError,
+  Options<AddAccountsToFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddAccountsToFolderResponse,
+    AddAccountsToFolderError,
+    Options<AddAccountsToFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addAccountsToFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Accounts From Folder
+ *
+ * Take accounts out; ``account_ids`` in the answer are only those that were in it.
+ */
+export const removeAccountsFromFolderMutation = (
+  options?: Partial<Options<RemoveAccountsFromFolderData>>,
+): UseMutationOptions<
+  RemoveAccountsFromFolderResponse,
+  RemoveAccountsFromFolderError,
+  Options<RemoveAccountsFromFolderData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountsFromFolderResponse,
+    RemoveAccountsFromFolderError,
+    Options<RemoveAccountsFromFolderData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountsFromFolder({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserAccountsQueryKey = (options?: Options<ListUserParserAccountsData>) =>
+  createQueryKey('listUserParserAccounts', options);
+
+/**
+ * List User Parser Accounts
+ *
+ * Every account the parser may read with, busy ones marked with why.
+ */
+export const listUserParserAccountsOptions = (options?: Options<ListUserParserAccountsData>) =>
+  queryOptions<
+    ListUserParserAccountsResponse,
+    ListUserParserAccountsError,
+    ListUserParserAccountsResponse,
+    ReturnType<typeof listUserParserAccountsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserAccounts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserAccountsQueryKey(options),
+  });
+
+/**
+ * Start User Parser Run
+ */
+export const startUserParserRunMutation = (
+  options?: Partial<Options<StartUserParserRunData>>,
+): UseMutationOptions<
+  StartUserParserRunResponse,
+  StartUserParserRunError,
+  Options<StartUserParserRunData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartUserParserRunResponse,
+    StartUserParserRunError,
+    Options<StartUserParserRunData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startUserParserRun({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getUserParserRunQueryKey = (options: Options<GetUserParserRunData>) =>
+  createQueryKey('getUserParserRun', options);
+
+/**
+ * Get User Parser Run
+ */
+export const getUserParserRunOptions = (options: Options<GetUserParserRunData>) =>
+  queryOptions<
+    GetUserParserRunResponse,
+    GetUserParserRunError,
+    GetUserParserRunResponse,
+    ReturnType<typeof getUserParserRunQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getUserParserRun({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getUserParserRunQueryKey(options),
+  });
+
+/**
+ * Stop User Parser Run
+ *
+ * Stop a run; whatever it collected is saved as its base.
+ */
+export const stopUserParserRunMutation = (
+  options?: Partial<Options<StopUserParserRunData>>,
+): UseMutationOptions<
+  StopUserParserRunResponse,
+  StopUserParserRunError,
+  Options<StopUserParserRunData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopUserParserRunResponse,
+    StopUserParserRunError,
+    Options<StopUserParserRunData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopUserParserRun({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserRunUsersQueryKey = (options: Options<ListUserParserRunUsersData>) =>
+  createQueryKey('listUserParserRunUsers', options);
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsersOptions = (options: Options<ListUserParserRunUsersData>) =>
+  queryOptions<
+    ListUserParserRunUsersResponse,
+    ListUserParserRunUsersError,
+    ListUserParserRunUsersResponse,
+    ReturnType<typeof listUserParserRunUsersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserRunUsers({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserRunUsersQueryKey(options),
+  });
+
+export const listUserParserRunUsersInfiniteQueryKey = (
+  options: Options<ListUserParserRunUsersData>,
+): QueryKey<Options<ListUserParserRunUsersData>> =>
+  createQueryKey('listUserParserRunUsers', options, true);
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsersInfiniteOptions = (
+  options: Options<ListUserParserRunUsersData>,
+) => {
+  const opts = infiniteQueryOptions<
+    ListUserParserRunUsersResponse,
+    ListUserParserRunUsersError,
+    InfiniteData<ListUserParserRunUsersResponse>,
+    QueryKey<Options<ListUserParserRunUsersData>>,
+    | number
+    | Pick<QueryKey<Options<ListUserParserRunUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListUserParserRunUsersData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  offset: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listUserParserRunUsers({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listUserParserRunUsersInfiniteQueryKey(options),
+    },
+  );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
+
+export const exportUserParserRunQueryKey = (options: Options<ExportUserParserRunData>) =>
+  createQueryKey('exportUserParserRun', options);
+
+/**
+ * Export User Parser Run
+ *
+ * The base as a file: CSV (UTF-8 with BOM, opens in Excel) or JSON.
+ */
+export const exportUserParserRunOptions = (options: Options<ExportUserParserRunData>) =>
+  queryOptions<
+    unknown,
+    ExportUserParserRunError,
+    unknown,
+    ReturnType<typeof exportUserParserRunQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await exportUserParserRun({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: exportUserParserRunQueryKey(options),
+  });
+
+export const listUserParserPresetsQueryKey = (options?: Options<ListUserParserPresetsData>) =>
+  createQueryKey('listUserParserPresets', options);
+
+/**
+ * List User Parser Presets
+ */
+export const listUserParserPresetsOptions = (options?: Options<ListUserParserPresetsData>) =>
+  queryOptions<
+    ListUserParserPresetsResponse,
+    ListUserParserPresetsError,
+    ListUserParserPresetsResponse,
+    ReturnType<typeof listUserParserPresetsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserPresets({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserPresetsQueryKey(options),
+  });
+
+/**
+ * Create User Parser Preset
+ */
+export const createUserParserPresetMutation = (
+  options?: Partial<Options<CreateUserParserPresetData>>,
+): UseMutationOptions<
+  CreateUserParserPresetResponse,
+  CreateUserParserPresetError,
+  Options<CreateUserParserPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateUserParserPresetResponse,
+    CreateUserParserPresetError,
+    Options<CreateUserParserPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createUserParserPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete User Parser Preset
+ */
+export const deleteUserParserPresetMutation = (
+  options?: Partial<Options<DeleteUserParserPresetData>>,
+): UseMutationOptions<
+  DeleteUserParserPresetResponse,
+  DeleteUserParserPresetError,
+  Options<DeleteUserParserPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteUserParserPresetResponse,
+    DeleteUserParserPresetError,
+    Options<DeleteUserParserPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteUserParserPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserBasesQueryKey = (options?: Options<ListUserParserBasesData>) =>
+  createQueryKey('listUserParserBases', options);
+
+/**
+ * List User Parser Bases
+ *
+ * Every settled run as a folder, newest first. Nothing deletes one but the operator.
+ */
+export const listUserParserBasesOptions = (options?: Options<ListUserParserBasesData>) =>
+  queryOptions<
+    ListUserParserBasesResponse,
+    ListUserParserBasesError,
+    ListUserParserBasesResponse,
+    ReturnType<typeof listUserParserBasesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserBases({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserBasesQueryKey(options),
+  });
+
+/**
+ * Delete User Parser Base
+ *
+ * Delete a base and every person in it, for good.
+ */
+export const deleteUserParserBaseMutation = (
+  options?: Partial<Options<DeleteUserParserBaseData>>,
+): UseMutationOptions<
+  DeleteUserParserBaseResponse,
+  DeleteUserParserBaseError,
+  Options<DeleteUserParserBaseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteUserParserBaseResponse,
+    DeleteUserParserBaseError,
+    Options<DeleteUserParserBaseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteUserParserBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Rename User Parser Base
+ */
+export const renameUserParserBaseMutation = (
+  options?: Partial<Options<RenameUserParserBaseData>>,
+): UseMutationOptions<
+  RenameUserParserBaseResponse,
+  RenameUserParserBaseError,
+  Options<RenameUserParserBaseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RenameUserParserBaseResponse,
+    RenameUserParserBaseError,
+    Options<RenameUserParserBaseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await renameUserParserBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listUserParserBaseUsersQueryKey = (options: Options<ListUserParserBaseUsersData>) =>
+  createQueryKey('listUserParserBaseUsers', options);
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsersOptions = (options: Options<ListUserParserBaseUsersData>) =>
+  queryOptions<
+    ListUserParserBaseUsersResponse,
+    ListUserParserBaseUsersError,
+    ListUserParserBaseUsersResponse,
+    ReturnType<typeof listUserParserBaseUsersQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listUserParserBaseUsers({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listUserParserBaseUsersQueryKey(options),
+  });
+
+export const listUserParserBaseUsersInfiniteQueryKey = (
+  options: Options<ListUserParserBaseUsersData>,
+): QueryKey<Options<ListUserParserBaseUsersData>> =>
+  createQueryKey('listUserParserBaseUsers', options, true);
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsersInfiniteOptions = (
+  options: Options<ListUserParserBaseUsersData>,
+) => {
+  const opts = infiniteQueryOptions<
+    ListUserParserBaseUsersResponse,
+    ListUserParserBaseUsersError,
+    InfiniteData<ListUserParserBaseUsersResponse>,
+    QueryKey<Options<ListUserParserBaseUsersData>>,
+    | number
+    | Pick<QueryKey<Options<ListUserParserBaseUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListUserParserBaseUsersData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  offset: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listUserParserBaseUsers({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listUserParserBaseUsersInfiniteQueryKey(options),
+    },
+  );
+  return opts as Omit<typeof opts, 'initialData'>;
 };

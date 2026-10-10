@@ -2,27 +2,58 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { importAccountSessionMutation, importAccountTdataMutation } from '@/entities/account';
+import { errorCode } from '@/shared/lib';
 
-export type BulkFile = { name: string; state: 'importing' | 'ok' | 'error'; accountIds: string[] };
+// Why a file failed, in the operator's terms rather than the envelope's.
+export type ImportFailure = 'duplicate' | 'name' | 'size' | 'broken' | 'offline' | 'other';
+
+// `id` is the file's slot in the raw list, stable when other rows are removed.
+export type BulkFile = {
+  id: number;
+  name: string;
+  state: 'importing' | 'ok' | 'error';
+  accountIds: string[];
+  failure?: ImportFailure;
+};
+
+const FAILURE_BY_CODE: Record<string, ImportFailure> = {
+  conflict: 'duplicate',
+  validation_error: 'name',
+  payload_too_large: 'size',
+  bad_request: 'broken',
+};
 
 type Method = 'session' | 'tdata';
+
+// No envelope means no answer reached us; an unlisted code gets the neutral reason.
+// A tdata name is never validated, so its `validation_error` is an empty archive.
+function failureFor(method: Method, error: unknown): ImportFailure {
+  const code = errorCode(error);
+  if (code === undefined) return 'offline';
+  if (method === 'tdata' && code === 'validation_error') return 'broken';
+  return FAILURE_BY_CODE[code] ?? 'other';
+}
 
 // One import request per picked file, at most this many in flight at once.
 const MAX_IN_FLIGHT = 2;
 
 // Many `.session` / `tdata.zip` files, each imported by its own request with its
 // own outcome and retry. The raw File objects stay in a ref (retry re-sends them);
-// only name + verdict are rendered. `mutateAsync`, never `.mutate` in a loop: one
+// only name + verdict are rendered. Each row reports its own failure, so the
+// mutations opt out of the global error toast. `mutateAsync`, never `.mutate` in a loop: one
 // useMutation observer is a single callback slot.
 export function useBulkImport(method: Method, onSettledOne: () => void) {
   const [files, setFiles] = useState<BulkFile[]>([]);
-  const raw = useRef<File[]>([]);
+  const raw = useRef<(File | undefined)[]>([]);
   const queue = useRef<number[]>([]);
   const inFlight = useRef(0);
   // Bumped by reset(): a file settling afterwards must not touch the new list.
   const generation = useRef(0);
-  const importSession = useMutation(importAccountSessionMutation());
-  const importTdata = useMutation(importAccountTdataMutation());
+  const importSession = useMutation({
+    ...importAccountSessionMutation(),
+    meta: { inlineError: true },
+  });
+  const importTdata = useMutation({ ...importAccountTdataMutation(), meta: { inlineError: true } });
 
   // Cancel/× mid-batch: files already in flight finish (the account exists
   // server-side either way), but the queued ones must not keep POSTing
@@ -35,12 +66,12 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
     [],
   );
 
-  const patch = (index: number, gen: number, next: Partial<BulkFile>) => {
+  const patch = (id: number, gen: number, next: Partial<BulkFile>) => {
     if (gen !== generation.current) return;
-    setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, ...next } : f)));
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...next } : f)));
   };
 
-  const runOne = async (index: number, file: File, gen: number) => {
+  const runOne = async (id: number, file: File, gen: number) => {
     try {
       const accountIds =
         method === 'tdata'
@@ -48,9 +79,12 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
               (account) => account.account_id,
             ) ?? [])
           : [(await importSession.mutateAsync({ body: { file } })).account_id];
-      patch(index, gen, { state: 'ok', accountIds });
-    } catch {
-      patch(index, gen, { state: 'error' });
+      patch(id, gen, { state: 'ok', accountIds });
+    } catch (error) {
+      patch(id, gen, {
+        state: 'error',
+        failure: failureFor(method, error),
+      });
     } finally {
       // The account exists server-side even when this wizard has moved on, so the
       // accounts table refetches regardless of the generation.
@@ -64,12 +98,12 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
 
   const pump = () => {
     while (inFlight.current < MAX_IN_FLIGHT) {
-      const index = queue.current.shift();
-      if (index === undefined) return;
-      const file = raw.current[index];
+      const id = queue.current.shift();
+      if (id === undefined) return;
+      const file = raw.current[id];
       if (!file) continue;
       inFlight.current += 1;
-      void runOne(index, file, generation.current);
+      void runOne(id, file, generation.current);
     }
   };
 
@@ -81,15 +115,26 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
     queue.current.push(...picked.map((_, i) => start + i));
     setFiles((prev) => [
       ...prev,
-      ...picked.map((file) => ({ name: file.name, state: 'importing' as const, accountIds: [] })),
+      ...picked.map((file, i) => ({
+        id: start + i,
+        name: file.name,
+        state: 'importing' as const,
+        accountIds: [],
+      })),
     ]);
     pump();
   };
 
-  const retry = (index: number) => {
-    patch(index, generation.current, { state: 'importing' });
-    queue.current.push(index);
+  const retry = (id: number) => {
+    patch(id, generation.current, { state: 'importing', failure: undefined });
+    queue.current.push(id);
     pump();
+  };
+
+  // Drops a failed row and its credential bytes; nothing exists server-side to undo.
+  const remove = (id: number) => {
+    raw.current[id] = undefined;
+    setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const reset = () => {
@@ -104,6 +149,7 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
     files,
     add,
     retry,
+    remove,
     reset,
     accountIds: files.flatMap((f) => f.accountIds),
     importing: files.some((f) => f.state === 'importing'),

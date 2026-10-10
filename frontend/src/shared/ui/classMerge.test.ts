@@ -81,10 +81,10 @@ test('ни один примитив shared/ui не склеивает клас�
 // отступ другой ступени в том же файле гейт увидит.
 const BOX_MARGIN_DEBT = new Set([
   // Уведомление об ошибке списка постов: `mt-md` — расстояние ВВЕРХ до композера.
-  'src/widgets/account-edit/ui/ChannelPostsPanel.tsx mt-md',
+  'src/widgets/account-edit/ui/ChannelPostsPanel.tsx mt-3',
   // Два предупреждения о несохранённом пароле 2FA в теле, где `mb-md` носят ещё пять
   // соседей — от заголовка до кнопки копирования.
-  'src/widgets/account-edit/ui/TwoFactorSection.tsx mb-md',
+  'src/widgets/account-edit/ui/TwoFactorSection.tsx mb-3',
 ]);
 
 // Ступень захватывается, а не только опознаётся: без неё исключение пришлось бы называть

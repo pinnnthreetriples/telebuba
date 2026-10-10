@@ -160,9 +160,9 @@ test('карточку кампании можно выбрать с клави�
   const remove = screen.getByRole('button', { name: 'Удалить кампанию' });
 
   expect(pause).toHaveAttribute('aria-label', 'Поставить на паузу');
-  expect(pause).toHaveClass('focus-visible:outline-focus', 'hover:bg-warning-tint');
-  expect(edit).toHaveClass('focus-visible:outline-focus', 'hover:bg-action-hover');
-  expect(remove).toHaveClass('focus-visible:outline-focus', 'hover:bg-danger-tint');
+  expect(pause).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-warning-tint');
+  expect(edit).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-info-tint');
+  expect(remove).toHaveClass('focus-visible:outline-action-primary', 'hover:bg-danger-tint');
 
   // Шестерёнка не внутри кнопки выбора: вложенная кнопка — это то, что было.
   expect(select.contains(gear)).toBe(false);
@@ -178,7 +178,7 @@ test('карточку кампании можно выбрать с клави�
   await userEvent.tab();
   await userEvent.tab();
   expect(pause).toHaveFocus();
-  expect(pause).toHaveClass('focus-visible:outline-focus');
+  expect(pause).toHaveClass('focus-visible:outline-action-primary');
   expect(surface()?.className).toMatch(REVEALED);
 
   await userEvent.tab();
@@ -188,7 +188,7 @@ test('карточку кампании можно выбрать с клави�
   // Фокус ушёл с действий — поверхность вернулась на место.
   expect(surface()?.className).not.toMatch(REVEALED);
   // Видимый фокус, а не браузерное умолчание, снятое `outline-none`: обводка рецепта.
-  expect(select.className).toContain('focus-visible:outline-focus');
+  expect(select.className).toContain('focus-visible:outline-action-primary');
 
   await userEvent.keyboard('{Enter}');
   expect(onSelect).toHaveBeenCalledWith('c1');

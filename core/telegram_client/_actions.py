@@ -81,6 +81,9 @@ if TYPE_CHECKING:
 
     from schemas.telegram_actions import TelegramAction
 
+# Joins whose "already inside" answer is a success rather than an error.
+_JOIN_ACTION_TYPES = frozenset({"join_channel", "join_discussion_group", "broadcast_join_chatlist"})
+
 
 async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram error family
     account_id: str,
@@ -175,7 +178,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
     except (errors.SessionTooFreshError, errors.PasswordTooFreshError) as exc:
         return await _too_fresh_result(account_id, action, exc.seconds, domain=domain)
     except errors.UserAlreadyParticipantError as exc:
-        if action.action_type in {"join_channel", "join_discussion_group"}:
+        if action.action_type in _JOIN_ACTION_TYPES:
             await log_event(
                 "INFO",
                 event_name(domain, f"telegram_{action.action_type}_already_participant"),

@@ -38,6 +38,10 @@ class CreateChannel(BaseModel):
     ``reactions_enabled`` mirrors Telegram's own default (reactions on): only
     ``False`` costs an extra RPC after the create, since ``CreateChannelRequest``
     itself carries no reactions flag.
+
+    ``pinned_to_profile`` sets the channel as the account's personal channel
+    (shown in its profile). Telegram accepts only a PUBLIC broadcast channel
+    there, so it requires ``username``.
     """
 
     action_type: Literal["channel_create"] = "channel_create"
@@ -45,21 +49,35 @@ class CreateChannel(BaseModel):
     about: str = Field(default="", max_length=CHANNEL_ABOUT_MAX_LENGTH)
     username: str | None = Field(default=None, pattern=CHANNEL_USERNAME_PATTERN)
     reactions_enabled: bool = True
+    pinned_to_profile: bool = False
+
+    @model_validator(mode="after")
+    def _check_pin_needs_public(self) -> CreateChannel:
+        if self.pinned_to_profile and self.username is None:
+            msg = "pinned_to_profile requires a username (only public channels can be pinned)"
+            raise ValueError(msg)
+        return self
 
 
 class EditChannel(BaseModel):
-    """Edit title, about and/or reactions. ``None`` = unchanged, ``""`` clears about."""
+    """Edit title, about, reactions and/or the profile pin.
+
+    ``None`` = unchanged, ``""`` clears about. ``pinned_to_profile=False``
+    unpins only when THIS channel is the account's personal channel.
+    """
 
     action_type: Literal["channel_edit"] = "channel_edit"
     channel_id: int = Field(gt=0)
     title: str | None = Field(default=None, min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str | None = Field(default=None, max_length=CHANNEL_ABOUT_MAX_LENGTH)
     reactions_enabled: bool | None = None
+    pinned_to_profile: bool | None = None
 
     @model_validator(mode="after")
     def _check_any_field(self) -> EditChannel:
-        if self.title is None and self.about is None and self.reactions_enabled is None:
-            msg = "at least one of title/about/reactions_enabled must be set"
+        fields = (self.title, self.about, self.reactions_enabled, self.pinned_to_profile)
+        if all(value is None for value in fields):
+            msg = "at least one of title/about/reactions_enabled/pinned_to_profile must be set"
             raise ValueError(msg)
         return self
 
@@ -171,10 +189,11 @@ class TelegramOwnChannels(BaseModel):
 
 
 class TelegramOwnChannelDetail(TelegramOwnChannel):
-    """Gateway output for ``GetOwnChannel`` — the list row plus about and reactions."""
+    """Gateway output for ``GetOwnChannel`` — the list row plus about, reactions, pin."""
 
     about: str = ""
     reactions_enabled: bool = True
+    pinned_to_profile: bool = False
 
 
 class TelegramChannelPost(BaseModel):

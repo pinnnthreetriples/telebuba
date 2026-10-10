@@ -59,20 +59,18 @@ export function noticeTone(tone: FeedbackTone, bordered: boolean): string {
 // Третья форма того же смысла, и она не тон, а ИСХОД: контрол, который носит результат
 // своего же нажатия (правило репозитория — каждая мутация заканчивается зелёной галочкой
 // или красным крестом). Заливка тут не подложка под текстом, а сам ответ, поэтому у неё
-// своя карта: залито `success-deep`/`danger`, а не `-tint`, и краска — `on-*`.
+// своя карта: залито `success-deep`/`danger`, а не `-tint`, и краска — `on-fill`.
 //
 // Две сборки этого контрола стояли независимо: `AccountsTable` держал `CHECK_BTN` с тремя
 // рунгами, `ActionsSection` набирал те же три вложенным тернарником прямо в `className`.
-// Совпадали они не полностью — обе носили `text-on-action`, «чернила на ДЕЙСТВИИ», надетые
-// на исход, и это была одна и та же ошибка, записанная дважды.
 //
 // `idle` возвращает и рамку, и заливку, хотя `IconButton` уже красит их так же: вторая
 // сборка стоит на голом `<button>`, и рецепт, который отдаёт «ничего», ей не годится.
 // Совпадающие классы сливает `cn`, и лишним классом это не остаётся.
 const VERDICT = {
   idle: 'border-line bg-surface-card text-content-muted',
-  ok: 'border-success bg-success-deep text-on-success',
-  err: 'border-danger bg-danger text-on-danger',
+  ok: 'border-success bg-success-deep text-on-fill',
+  err: 'border-danger bg-danger text-on-fill',
 } as const;
 
 /**

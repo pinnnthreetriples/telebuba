@@ -41,6 +41,8 @@ export function routeApi(options: {
   checkStatus?: number;
   checked?: AccountRead;
   stats?: unknown;
+  folders?: unknown;
+  filterOptions?: unknown;
 }) {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
@@ -48,6 +50,18 @@ export function routeApi(options: {
     if (url.pathname === '/api/v1/accounts/stats' && request.method === 'GET') {
       return Promise.resolve(
         jsonResponse(options.stats ?? { total: 0, active: 0, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/account-folders' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse(options.folders ?? { items: [], total_count: 0, unfiled_count: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts/filter-options' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse(
+          options.filterOptions ?? { phone_codes: [], proxy_countries: [], no_proxy_count: 0 },
+        ),
       );
     }
     if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {

@@ -35,7 +35,12 @@ function getSnapshot(): boolean {
 // use the same one it does — a select-all relocated on a different query than the layout
 // it compensates for goes missing (or doubles).
 function useWideViewport(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+// Static markup (the blocks page) has no viewport to ask; it shows the table.
+function getServerSnapshot(): boolean {
+  return true;
 }
 
 // The same table-or-cards decision, keyed to the width the table actually gets

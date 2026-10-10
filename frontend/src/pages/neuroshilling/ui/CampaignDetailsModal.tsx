@@ -9,7 +9,16 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
-import { Badge, Button, DataTable, type DataTableColumnMeta, Modal } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  DataTable,
+  type DataTableColumnMeta,
+  EmptyState,
+  Modal,
+  ModalFooter,
+  ModalHeader,
+} from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 
@@ -132,38 +141,36 @@ export function CampaignDetailsModal({
 
   return (
     <Modal onClose={onClose} size="table" label={campaign.name}>
-      <div className="flex flex-wrap items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="min-w-0">
-          <div className="truncate type-dialog-title">{campaign.name}</div>
-          {campaign.topic ? (
-            <div className="mt-hair truncate type-caption">{campaign.topic}</div>
-          ) : null}
-        </div>
+      <ModalHeader
+        className="flex-wrap"
+        title={campaign.name}
+        subtitle={campaign.topic ? campaign.topic : undefined}
+      >
         <CampaignStatusBadge status={campaign.status ?? 'idle'} />
         <div className="flex-1" />
-        <span className="type-caption tabular-nums">
+        <span className="type-small tabular-nums">
           {t('neuroshilling.launch.progress', { sent: run.sent ?? 0, total: run.total ?? 0 })}
         </span>
-      </div>
+      </ModalHeader>
 
-      <div className="px-2xl py-lg">
+      <div className="px-6 py-4">
         {rows.length === 0 ? (
           // Пар «аккаунт × цель» нет, пока нет хотя бы одного из двух, и это не пустая
           // таблица, а незаконченная настройка — поэтому сюда же и кнопка.
-          <div className="py-xl text-center type-prose">{t('neuroshilling.details.none')}</div>
+          <EmptyState size="md">{t('neuroshilling.details.none')}</EmptyState>
         ) : (
           <DataTable data={rows} columns={columns} />
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
+      <ModalFooter>
         <Button size="sm" onClick={onClose}>
           {t('neuroshilling.details.close')}
         </Button>
         <Button variant="primary" size="sm" onClick={onOpenSettings}>
           {t('neuroshilling.details.settings')}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

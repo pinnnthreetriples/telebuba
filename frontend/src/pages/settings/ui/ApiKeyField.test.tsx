@@ -25,7 +25,7 @@ test('API key visibility action calls its toggle handler', async () => {
 
   expect(screen.getByPlaceholderText('Enter key')).toHaveAttribute('type', 'password');
   const toggle = screen.getByRole('button', { name: 'Show API key' });
-  expect(toggle).toHaveClass('focus-visible:outline-focus', 'h-control', 'w-action');
+  expect(toggle).toHaveClass('focus-visible:outline-action-primary', 'h-control', 'w-action');
   await user.click(toggle);
   expect(onToggleShow).toHaveBeenCalledOnce();
 });

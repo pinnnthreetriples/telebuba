@@ -7,11 +7,17 @@ const units = /(-?(?:\d+(?:\.\d*)?|\.\d+))(?:px|rem|em|vw|vh|vmin|vmax|ch|ex|lh|
 const rawColor = /#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})\b|(?:rgb|hsl|oklch)a?\(/i;
 const numericTypography = new Set(['line-height', 'font-weight', 'letter-spacing']);
 
+// Тема Tailwind — единственный CSS, в котором сырые значения законны: это сами токены,
+// переведённые генератором (`scripts/tailwind-theme.mjs`), и с исходником их сверяет не
+// этот гейт, а `ds:doc:check`. Исключён ровно этот путь, а не «сгенерированные файлы»
+// вообще: пометку в шапке мог бы поставить кто угодно.
+const GENERATED_THEME = resolve(source, 'app', 'styles', 'tailwind-theme.css');
+
 function cssFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) return cssFiles(path);
-    return path.endsWith('.css') ? [path] : [];
+    return path.endsWith('.css') && path !== GENERATED_THEME ? [path] : [];
   });
 }
 

@@ -83,7 +83,7 @@ export function Feedback() {
           {SPINNER_TONES.map((tone) => (
             <Cell key={tone} caption={tone}>
               {tone === 'onAction' ? (
-                <span className="inline-flex items-center rounded-md bg-action-primary p-sm">
+                <span className="inline-flex items-center rounded-sm bg-action-primary p-2">
                   <Spinner size={size} tone={tone} />
                 </span>
               ) : (

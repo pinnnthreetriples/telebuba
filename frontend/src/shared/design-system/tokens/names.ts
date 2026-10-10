@@ -14,13 +14,14 @@
 import { radius } from './primitives';
 import { flatColors } from './semantic';
 import { rhythm } from './spacing';
-import { fontSize, letterSpacing, lineHeight, typeRole } from './typography';
+import { fontSize, fontWeight, letterSpacing, lineHeight, typeRole } from './typography';
 
 export type TypeRoleName = keyof typeof typeRole;
 
 export const TYPE_ROLE_NAMES = Object.keys(typeRole) as TypeRoleName[];
 export const RHYTHM_NAMES = Object.keys(rhythm);
 export const FONT_SIZE_NAMES = Object.keys(fontSize);
+export const FONT_WEIGHT_NAMES = Object.keys(fontWeight);
 export const RADIUS_NAMES = Object.keys(radius);
 export const LINE_HEIGHT_NAMES = Object.keys(lineHeight);
 export const TRACKING_NAMES = Object.keys(letterSpacing);

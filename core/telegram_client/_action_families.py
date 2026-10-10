@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, NamedTuple
 
+from core.telegram_client._broadcast import broadcast_log_extra, dispatch_broadcast_action
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._warm_dispatch import dispatch_warming_action, warm_log_extra
 
@@ -29,6 +30,7 @@ class _Family(NamedTuple):
 _FAMILIES: dict[str, _Family] = {
     "channel_": _Family(_dispatch_channel_action, _channel_log_extra),
     "warm_": _Family(dispatch_warming_action, warm_log_extra),
+    "broadcast_": _Family(dispatch_broadcast_action, broadcast_log_extra),
 }
 
 

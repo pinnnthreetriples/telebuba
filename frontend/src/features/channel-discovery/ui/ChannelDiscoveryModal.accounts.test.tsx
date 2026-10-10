@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import '@/shared/i18n';
 
@@ -133,5 +133,23 @@ describe('ChannelDiscoveryModal account picker', () => {
     await waitFor(() => {
       expect(postedAccounts(calls)).toEqual(['acc-p', 'acc-n']);
     });
+  });
+});
+
+describe('ChannelDiscoveryModal unsaved input', () => {
+  it('closes at once while the form is untouched, and asks once it is filled in', async () => {
+    route();
+    const onClose = vi.fn();
+    renderModal(onClose);
+
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await typeKeywords();
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть без сохранения' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

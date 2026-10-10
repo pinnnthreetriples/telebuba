@@ -3,8 +3,12 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/shared/lib/cn';
 
 function DigitColumns({ digits }: { digits: string }) {
+  // Rendered without a window (the blocks page is static markup) there is no roll to
+  // play, so the digits start where they belong.
   const [settled, setSettled] = useState(
-    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    () =>
+      typeof window === 'undefined' ||
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false),
   );
 
   useEffect(() => {
@@ -50,7 +54,7 @@ export function Odometer({ value, className }: { value: number; className?: stri
   return (
     <span
       className={cn(
-        'inline-flex h-[1.1em] overflow-hidden type-stat leading-[1.1em] tabular-nums transition-[width] duration-roll ease-out',
+        'inline-flex h-[1.1em] overflow-hidden type-h1 leading-[1.1em] tabular-nums transition-[width] duration-roll ease-out',
         className,
       )}
       style={{ width: `${digits.length}ch` }}

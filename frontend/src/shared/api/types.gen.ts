@@ -55,6 +55,109 @@ export type AccountCheckRequest = {
 };
 
 /**
+ * AccountFilterOptions
+ *
+ * What the Accounts page's filter pills can offer: only values present in data.
+ */
+export type AccountFilterOptions = {
+  /**
+   * Phone Codes
+   */
+  phone_codes: Array<PhoneCodeOption>;
+  /**
+   * Proxy Countries
+   */
+  proxy_countries: Array<ProxyCountryOption>;
+  /**
+   * No Proxy Count
+   */
+  no_proxy_count: number;
+};
+
+/**
+ * AccountFolder
+ */
+export type AccountFolder = {
+  /**
+   * Folder Id
+   */
+  folder_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Account Count
+   */
+  account_count: number;
+  /**
+   * Created At
+   */
+  created_at: string;
+};
+
+/**
+ * AccountFolderAccounts
+ */
+export type AccountFolderAccounts = {
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * AccountFolderChange
+ *
+ * The accounts a membership write actually changed — what an undo must revert.
+ *
+ * Adding an account already in the folder, or removing one not in it, changes
+ * nothing and is left out; so is an id with no account behind it.
+ */
+export type AccountFolderChange = {
+  /**
+   * Folder Id
+   */
+  folder_id: string;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * AccountFolderWrite
+ *
+ * Create or rename: the name is trimmed; uniqueness ignores case (Cyrillic too).
+ */
+export type AccountFolderWrite = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * AccountFolders
+ *
+ * Folders in creation order, plus the counts of the two virtual views.
+ */
+export type AccountFolders = {
+  /**
+   * Items
+   */
+  items: Array<AccountFolder>;
+  /**
+   * Total Count
+   */
+  total_count: number;
+  /**
+   * Unfiled Count
+   */
+  unfiled_count: number;
+};
+
+/**
  * AccountLimitGauge
  *
  * One cap as the operator reads it: the number, what is spent, when a slot returns.
@@ -127,6 +230,26 @@ export type AccountLimitsView = {
    * Busiest Channel
    */
   busiest_channel?: string | null;
+};
+
+/**
+ * AccountPage
+ *
+ * One page of the Accounts table, plus how many accounts match its filters.
+ */
+export type AccountPage = {
+  /**
+   * Items
+   */
+  items: Array<AccountRead>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+  /**
+   * Total
+   */
+  total: number;
 };
 
 /**
@@ -450,6 +573,10 @@ export type AccountRead = {
    * Spam Detail
    */
   spam_detail?: string | null;
+  /**
+   * Folder Ids
+   */
+  folder_ids?: Array<string>;
 };
 
 /**
@@ -875,6 +1002,16 @@ export type BodySetAccountPhoto = {
 };
 
 /**
+ * Body_uploadChatBroadcastPhoto
+ */
+export type BodyUploadChatBroadcastPhoto = {
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * Body_uploadScheduledMedia
  */
 export type BodyUploadScheduledMedia = {
@@ -1178,6 +1315,10 @@ export type ChannelCreateRequest = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean;
 };
 
 /**
@@ -1208,6 +1349,10 @@ export type ChannelDetailView = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean;
 };
 
 /**
@@ -1289,6 +1434,10 @@ export type ChannelUpdateRequest = {
    * Reactions Enabled
    */
   reactions_enabled?: boolean | null;
+  /**
+   * Pinned To Profile
+   */
+  pinned_to_profile?: boolean | null;
 };
 
 /**
@@ -1333,6 +1482,753 @@ export type ChannelView = {
    * Participants Count
    */
   participants_count?: number | null;
+};
+
+/**
+ * ChatBroadcastBoard
+ */
+export type ChatBroadcastBoard = {
+  campaign: ChatBroadcastCampaign;
+  /**
+   * Phase
+   */
+  phase:
+    | 'draft'
+    | 'joining'
+    | 'running'
+    | 'resting'
+    | 'stopping'
+    | 'stopped'
+    | 'done'
+    | 'failed'
+    | 'stalled';
+  /**
+   * Chain Length
+   */
+  chain_length: number;
+  /**
+   * Started At
+   */
+  started_at?: string | null;
+  /**
+   * Resumed At
+   */
+  resumed_at?: string | null;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+  /**
+   * Accounts
+   */
+  accounts: Array<ChatBroadcastBoardAccount>;
+  counters: ChatBroadcastCounters;
+  /**
+   * Rows
+   */
+  rows: Array<ChatBroadcastBoardRow>;
+};
+
+/**
+ * ChatBroadcastBoardAccount
+ */
+export type ChatBroadcastBoardAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * State
+   */
+  state: 'active' | 'halted' | 'busy';
+  /**
+   * Halted Reason
+   */
+  halted_reason?: string | null;
+  /**
+   * Busy Owner
+   */
+  busy_owner?:
+    | 'warming'
+    | 'neurocomment'
+    | 'neuroshilling'
+    | 'chat_broadcast'
+    | 'discovery'
+    | 'user_parser'
+    | null;
+};
+
+/**
+ * ChatBroadcastBoardRow
+ */
+export type ChatBroadcastBoardRow = {
+  /**
+   * Chat Key
+   */
+  chat_key: string;
+  /**
+   * Raw
+   */
+  raw: string;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Kind
+   */
+  kind: 'public' | 'invite' | 'folder' | 'own';
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Handed From
+   */
+  handed_from?: string | null;
+  /**
+   * State
+   */
+  state:
+    | 'queued'
+    | 'joining'
+    | 'captcha'
+    | 'pending_approval'
+    | 'waiting'
+    | 'writing'
+    | 'reconnecting'
+    | 'waiting_account'
+    | 'round_done'
+    | 'done'
+    | 'skipped';
+  /**
+   * Skip Reason
+   */
+  skip_reason?:
+    | 'rejected'
+    | 'not_approved'
+    | 'admin_only'
+    | 'deleted'
+    | 'banned'
+    | 'captcha'
+    | 'manual'
+    | 'error'
+    | 'invalid_link'
+    | 'unreachable'
+    | 'already_written'
+    | 'removed'
+    | null;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Sent Total
+   */
+  sent_total: number;
+  /**
+   * Planned Total
+   */
+  planned_total?: number | null;
+  /**
+   * Next Action At
+   */
+  next_action_at?: string | null;
+  /**
+   * Requested At
+   */
+  requested_at?: string | null;
+  /**
+   * Last Text
+   */
+  last_text?: string | null;
+  /**
+   * Last Sent At
+   */
+  last_sent_at?: string | null;
+  /**
+   * Message Deleted
+   */
+  message_deleted?: boolean;
+  /**
+   * Ignore Deleted
+   */
+  ignore_deleted?: boolean;
+  /**
+   * Active
+   */
+  active: boolean;
+  /**
+   * History
+   */
+  history: Array<ChatBroadcastHistoryEntry>;
+};
+
+/**
+ * ChatBroadcastCampaign
+ *
+ * One campaign as the sidebar lists it.
+ */
+export type ChatBroadcastCampaign = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Status
+   */
+  status: 'draft' | 'running' | 'stopping' | 'stopped' | 'done' | 'failed' | 'stalled';
+  /**
+   * Target Mode
+   */
+  target_mode: 'list' | 'own';
+  /**
+   * Account Count
+   */
+  account_count: number;
+  /**
+   * Target Count
+   */
+  target_count: number;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Rest Until
+   */
+  rest_until?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * ChatBroadcastCampaigns
+ */
+export type ChatBroadcastCampaigns = {
+  /**
+   * Items
+   */
+  items: Array<ChatBroadcastCampaign>;
+};
+
+/**
+ * ChatBroadcastCounters
+ */
+export type ChatBroadcastCounters = {
+  /**
+   * Accounts
+   */
+  accounts: number;
+  /**
+   * Accounts Working
+   */
+  accounts_working: number;
+  /**
+   * Chats
+   */
+  chats: number;
+  /**
+   * Joined
+   */
+  joined: number;
+  /**
+   * Pending Approval
+   */
+  pending_approval: number;
+  /**
+   * Waiting
+   */
+  waiting: number;
+  /**
+   * Sent
+   */
+  sent: number;
+  /**
+   * Skipped
+   */
+  skipped: number;
+  /**
+   * Handed
+   */
+  handed: number;
+  /**
+   * Planned
+   */
+  planned?: number | null;
+  /**
+   * Rounds
+   */
+  rounds?: number | null;
+};
+
+/**
+ * ChatBroadcastCreate
+ */
+export type ChatBroadcastCreate = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastHistoryEntry
+ */
+export type ChatBroadcastHistoryEntry = {
+  /**
+   * At
+   */
+  at: string;
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * Round
+   */
+  round: number;
+  /**
+   * Kind
+   */
+  kind:
+    | 'sent'
+    | 'unconfirmed'
+    | 'failed'
+    | 'deleted'
+    | 'joined'
+    | 'already_member'
+    | 'requested'
+    | 'approved'
+    | 'captcha'
+    | 'handed'
+    | 'skipped'
+    | 'reconnecting';
+  /**
+   * Text
+   */
+  text?: string | null;
+  /**
+   * Detail
+   */
+  detail?: string | null;
+};
+
+/**
+ * ChatBroadcastMediaRead
+ */
+export type ChatBroadcastMediaRead = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastMessage
+ *
+ * One message of the chain: text (optionally with a photo) or a forwarded post.
+ */
+export type ChatBroadcastMessage = {
+  /**
+   * Kind
+   */
+  kind?: 'text' | 'post';
+  /**
+   * Text
+   */
+  text?: string;
+  photo?: ChatBroadcastPhoto | null;
+  /**
+   * Post
+   */
+  post?: string;
+  /**
+   * Repeat
+   */
+  repeat?: number;
+};
+
+/**
+ * ChatBroadcastOwnChats
+ */
+export type ChatBroadcastOwnChats = {
+  /**
+   * Groups
+   */
+  groups: Array<ChatBroadcastOwnGroup>;
+  /**
+   * Channels Skipped
+   */
+  channels_skipped: number;
+  /**
+   * Admin Only Skipped
+   */
+  admin_only_skipped: number;
+  /**
+   * Unavailable Account Ids
+   */
+  unavailable_account_ids: Array<string>;
+};
+
+/**
+ * ChatBroadcastOwnGroup
+ *
+ * A group selected accounts are in; ``peer_id`` is a decimal string (int64).
+ */
+export type ChatBroadcastOwnGroup = {
+  /**
+   * Peer Id
+   */
+  peer_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+};
+
+/**
+ * ChatBroadcastPace
+ *
+ * The pauses the board's gear edits — the only settings a running campaign takes.
+ *
+ * The run reads them live: a new value applies from the next pause, and a rest already
+ * under way is drawn again from the moment it began.
+ */
+export type ChatBroadcastPace = {
+  between_messages: SecondsRange;
+  between_chats: SecondsRange;
+  rest_minutes: MinutesRange;
+};
+
+/**
+ * ChatBroadcastPhoto
+ *
+ * An uploaded photo attached to a text message; the text becomes its caption.
+ */
+export type ChatBroadcastPhoto = {
+  /**
+   * Media Id
+   */
+  media_id: string;
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * ChatBroadcastResolveRequest
+ *
+ * Classify pasted chat links; a folder link is opened with one of the accounts.
+ */
+export type ChatBroadcastResolveRequest = {
+  /**
+   * Targets
+   */
+  targets: Array<string>;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+};
+
+/**
+ * ChatBroadcastResolved
+ */
+export type ChatBroadcastResolved = {
+  /**
+   * Items
+   */
+  items: Array<ChatBroadcastResolvedTarget>;
+};
+
+/**
+ * ChatBroadcastResolvedTarget
+ */
+export type ChatBroadcastResolvedTarget = {
+  /**
+   * Raw
+   */
+  raw: string;
+  /**
+   * Key
+   */
+  key?: string | null;
+  /**
+   * Kind
+   */
+  kind?: 'public' | 'invite' | 'folder' | 'own' | null;
+  /**
+   * Error
+   */
+  error?: 'invalid_target' | 'folder_unavailable' | null;
+  /**
+   * Folder Title
+   */
+  folder_title?: string | null;
+  /**
+   * Folder Count
+   */
+  folder_count?: number | null;
+};
+
+/**
+ * ChatBroadcastSettings
+ *
+ * Everything the settings dialog edits, persisted as one JSON document.
+ *
+ * Defaults are the ones agreed on the mockup; the accounts roster travels beside it
+ * (``ChatBroadcastSettingsUpdate.account_ids``) because it is a table, not a field.
+ */
+export type ChatBroadcastSettings = {
+  /**
+   * Target Mode
+   */
+  target_mode?: 'list' | 'own';
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+  /**
+   * Own Excluded
+   */
+  own_excluded?: Array<string>;
+  /**
+   * First Message
+   */
+  first_message?: 'template' | 'ai';
+  /**
+   * Ai Brief
+   */
+  ai_brief?: string;
+  /**
+   * Randomize
+   */
+  randomize?: boolean;
+  /**
+   * Messages
+   */
+  messages?: Array<ChatBroadcastMessage>;
+  /**
+   * Approval Wait Hours
+   */
+  approval_wait_hours?: 1 | 3 | 6 | 12 | 24;
+  /**
+   * Join Delay Minutes
+   */
+  join_delay_minutes?: 0 | 30 | 60 | 120;
+  between_chats?: SecondsRange;
+  between_messages?: SecondsRange;
+  /**
+   * Typing
+   */
+  typing?: boolean;
+  /**
+   * Stop Mode
+   */
+  stop_mode?: 'count' | 'time';
+  /**
+   * Stop Messages
+   */
+  stop_messages?: number;
+  /**
+   * Stop Hours
+   */
+  stop_hours?: number;
+  /**
+   * Loop
+   */
+  loop?: boolean;
+  rest_minutes?: MinutesRange;
+  /**
+   * Rounds
+   */
+  rounds?: number;
+  /**
+   * Skip Already Written
+   */
+  skip_already_written?: boolean;
+  /**
+   * Account Limit
+   */
+  account_limit?: boolean;
+  /**
+   * Per Hour
+   */
+  per_hour?: number;
+  /**
+   * Per Day
+   */
+  per_day?: number;
+  /**
+   * Skip Errors
+   */
+  skip_errors?: boolean;
+  /**
+   * Skip Deleted
+   */
+  skip_deleted?: boolean;
+  /**
+   * Max Consecutive Errors
+   */
+  max_consecutive_errors?: number;
+};
+
+/**
+ * ChatBroadcastSettingsRead
+ *
+ * What the settings dialog opens with; ``updated_at`` is the lock token.
+ */
+export type ChatBroadcastSettingsRead = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Status
+   */
+  status: 'draft' | 'running' | 'stopping' | 'stopped' | 'done' | 'failed' | 'stalled';
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  settings: ChatBroadcastSettings;
+};
+
+/**
+ * ChatBroadcastSettingsUpdate
+ *
+ * Whole-dialog save: name, roster and settings in one write.
+ */
+export type ChatBroadcastSettingsUpdate = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  settings: ChatBroadcastSettings;
+};
+
+/**
+ * ChatBroadcastTargetAction
+ *
+ * A manual action on one chat of the board.
+ */
+export type ChatBroadcastTargetAction = {
+  /**
+   * Chat Key
+   */
+  chat_key: string;
+  /**
+   * Action
+   */
+  action: 'now' | 'hand' | 'skip' | 'keep';
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+};
+
+/**
+ * ChatBroadcastVersionRequest
+ *
+ * The campaign version the operator actually viewed (optimistic lock).
+ */
+export type ChatBroadcastVersionRequest = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
+};
+
+/**
+ * ChatCollection
+ */
+export type ChatCollection = {
+  /**
+   * Collection Id
+   */
+  collection_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Targets
+   */
+  targets: Array<string>;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * ChatCollectionWrite
+ *
+ * Create, or replace whole: the name and every link at once.
+ */
+export type ChatCollectionWrite = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+};
+
+/**
+ * ChatCollections
+ */
+export type ChatCollections = {
+  /**
+   * Items
+   */
+  items: Array<ChatCollection>;
 };
 
 /**
@@ -2450,6 +3346,20 @@ export type LoginRequest = {
 };
 
 /**
+ * MinutesRange
+ */
+export type MinutesRange = {
+  /**
+   * Min
+   */
+  min: number;
+  /**
+   * Max
+   */
+  max: number;
+};
+
+/**
  * MusicRemoveRequest
  */
 export type MusicRemoveRequest = {
@@ -2856,7 +3766,8 @@ export type NeuroshillingBoardAccount = {
   /**
    * Busy Owner
    */
-  busy_owner?: 'warming' | 'neuroshilling' | 'neurocomment' | null;
+  busy_owner?:
+    'warming' | 'neuroshilling' | 'neurocomment' | 'chat_broadcast' | 'user_parser' | null;
   /**
    * Busy Campaign Name
    */
@@ -3438,20 +4349,6 @@ export type OpenWebResult = {
 };
 
 /**
- * Page[AccountRead]
- */
-export type PageAccountRead = {
-  /**
-   * Items
-   */
-  items: Array<AccountRead>;
-  /**
-   * Next Cursor
-   */
-  next_cursor?: string | null;
-};
-
-/**
  * Page[ChannelPostView]
  */
 export type PageChannelPostView = {
@@ -3519,6 +4416,26 @@ export type PageLogEntry = {
    * Next Cursor
    */
   next_cursor?: string | null;
+};
+
+/**
+ * PhoneCodeOption
+ *
+ * A calling code present in the fleet's phone numbers.
+ */
+export type PhoneCodeOption = {
+  /**
+   * Calling Code
+   */
+  calling_code: number;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Count
+   */
+  count: number;
 };
 
 /**
@@ -3758,6 +4675,24 @@ export type ProxyCheckResult = {
    * Is Datacenter
    */
   is_datacenter?: boolean;
+};
+
+/**
+ * ProxyCountryOption
+ */
+export type ProxyCountryOption = {
+  /**
+   * Country Code
+   */
+  country_code: string;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Count
+   */
+  count: number;
 };
 
 /**
@@ -4155,6 +5090,20 @@ export type ScheduledPostReschedule = {
 };
 
 /**
+ * SecondsRange
+ */
+export type SecondsRange = {
+  /**
+   * Min
+   */
+  min: number;
+  /**
+   * Max
+   */
+  max: number;
+};
+
+/**
  * SetAccountChannelRequest
  *
  * Set the campaign channels an account targets; an empty list = all channels.
@@ -4373,6 +5322,578 @@ export type UpdatePromptRequest = {
    * Prompt
    */
   prompt: string;
+};
+
+/**
+ * UserParserAccountList
+ */
+export type UserParserAccountList = {
+  /**
+   * Items
+   */
+  items: Array<UserParserAccountOption>;
+};
+
+/**
+ * UserParserAccountOption
+ */
+export type UserParserAccountOption = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Premium
+   */
+  premium?: boolean | null;
+  /**
+   * Busy Reason
+   */
+  busy_reason?: 'no_session' | 'account_busy' | 'account_cooling' | null;
+};
+
+/**
+ * UserParserAccountProgress
+ */
+export type UserParserAccountProgress = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * State
+   */
+  state?: 'idle' | 'reading' | 'waiting' | 'flooded' | 'dropped' | 'done';
+  /**
+   * Reads
+   */
+  reads?: number;
+  /**
+   * Flood Until
+   */
+  flood_until?: string | null;
+};
+
+/**
+ * UserParserBase
+ *
+ * A finished run as a folder in «Базы».
+ */
+export type UserParserBase = {
+  /**
+   * Run Id
+   */
+  run_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode: 'members' | 'messages' | 'comments';
+  /**
+   * Status
+   */
+  status: 'running' | 'done' | 'stopped' | 'failed' | 'interrupted';
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Sources
+   */
+  sources: Array<string>;
+  /**
+   * Kept
+   */
+  kept: number;
+};
+
+/**
+ * UserParserBaseList
+ */
+export type UserParserBaseList = {
+  /**
+   * Items
+   */
+  items: Array<UserParserBase>;
+};
+
+/**
+ * UserParserBaseRename
+ */
+export type UserParserBaseRename = {
+  /**
+   * Name
+   */
+  name: string;
+};
+
+/**
+ * UserParserLimits
+ *
+ * How much to read, per source. Only the current mode's fields are used.
+ */
+export type UserParserLimits = {
+  /**
+   * Members
+   */
+  members?: number;
+  /**
+   * Messages
+   */
+  messages?: number;
+  /**
+   * Days
+   */
+  days?: number;
+  /**
+   * Posts
+   */
+  posts?: number;
+  /**
+   * Per Post
+   */
+  per_post?: number;
+  /**
+   * Min Length
+   */
+  min_length?: number;
+};
+
+/**
+ * UserParserPreset
+ */
+export type UserParserPreset = {
+  /**
+   * Preset Id
+   */
+  preset_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  settings: UserParserSettings;
+  /**
+   * Created At
+   */
+  created_at: string;
+};
+
+/**
+ * UserParserPresetList
+ */
+export type UserParserPresetList = {
+  /**
+   * Items
+   */
+  items: Array<UserParserPreset>;
+};
+
+/**
+ * UserParserPresetWrite
+ */
+export type UserParserPresetWrite = {
+  /**
+   * Name
+   */
+  name: string;
+  settings: UserParserSettings;
+};
+
+/**
+ * UserParserRequest
+ *
+ * The form as a run is started with it: something to read, someone to read with.
+ */
+export type UserParserRequest = {
+  /**
+   * Mode
+   */
+  mode?: 'members' | 'messages' | 'comments';
+  /**
+   * Sources
+   */
+  sources: Array<string>;
+  /**
+   * Keywords
+   */
+  keywords?: Array<string>;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  limits?: UserParserLimits;
+  /**
+   * Min Messages
+   */
+  min_messages?: number;
+  /**
+   * Min Sources
+   */
+  min_sources?: number;
+  /**
+   * Last Seen
+   */
+  last_seen?: 'any' | 'recently' | 'week' | 'month';
+  /**
+   * Stop Words
+   */
+  stop_words?: Array<string>;
+  /**
+   * Blacklist
+   */
+  blacklist?: Array<string>;
+  toggles?: UserParserToggles;
+  /**
+   * Protect
+   */
+  protect?: boolean;
+  /**
+   * Fast
+   */
+  fast?: boolean;
+  /**
+   * Chat Delay
+   */
+  chat_delay?: number;
+  /**
+   * Request Delay
+   */
+  request_delay?: number;
+  /**
+   * Name
+   */
+  name?: string | null;
+};
+
+/**
+ * UserParserRun
+ *
+ * A run: the row it is stored as, plus the live progress while it is collecting.
+ */
+export type UserParserRun = {
+  /**
+   * Run Id
+   */
+  run_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode: 'members' | 'messages' | 'comments';
+  /**
+   * Status
+   */
+  status: 'running' | 'done' | 'stopped' | 'failed' | 'interrupted';
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+  /**
+   * Stop Reason
+   */
+  stop_reason?: string | null;
+  /**
+   * Sources Total
+   */
+  sources_total?: number;
+  /**
+   * Sources Done
+   */
+  sources_done?: number;
+  /**
+   * Collected Raw
+   */
+  collected_raw?: number;
+  /**
+   * Kept
+   */
+  kept?: number;
+  /**
+   * Sources
+   */
+  sources?: Array<UserParserSourceReport>;
+  /**
+   * Accounts
+   */
+  accounts?: Array<UserParserAccountProgress>;
+  /**
+   * Filtered
+   */
+  filtered?: {
+    [key: string]: number;
+  };
+};
+
+/**
+ * UserParserSettings
+ *
+ * The whole form. A preset stores this; a run is started with the stricter request.
+ */
+export type UserParserSettings = {
+  /**
+   * Mode
+   */
+  mode?: 'members' | 'messages' | 'comments';
+  /**
+   * Sources
+   */
+  sources?: Array<string>;
+  /**
+   * Keywords
+   */
+  keywords?: Array<string>;
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  limits?: UserParserLimits;
+  /**
+   * Min Messages
+   */
+  min_messages?: number;
+  /**
+   * Min Sources
+   */
+  min_sources?: number;
+  /**
+   * Last Seen
+   */
+  last_seen?: 'any' | 'recently' | 'week' | 'month';
+  /**
+   * Stop Words
+   */
+  stop_words?: Array<string>;
+  /**
+   * Blacklist
+   */
+  blacklist?: Array<string>;
+  toggles?: UserParserToggles;
+  /**
+   * Protect
+   */
+  protect?: boolean;
+  /**
+   * Fast
+   */
+  fast?: boolean;
+  /**
+   * Chat Delay
+   */
+  chat_delay?: number;
+  /**
+   * Request Delay
+   */
+  request_delay?: number;
+};
+
+/**
+ * UserParserSourceReport
+ */
+export type UserParserSourceReport = {
+  /**
+   * Source
+   */
+  source: string;
+  /**
+   * Status
+   */
+  status?: 'pending' | 'ok' | 'partial' | 'hidden' | 'join_failed' | 'flood' | 'failed';
+  /**
+   * Count
+   */
+  count?: number;
+  /**
+   * Total
+   */
+  total?: number | null;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+};
+
+/**
+ * UserParserStartOutcome
+ *
+ * A start's answer. A refusal names the first account it tripped over.
+ */
+export type UserParserStartOutcome = {
+  /**
+   * Status
+   */
+  status: 'started' | 'already_running' | 'account_busy' | 'account_cooling' | 'no_account';
+  /**
+   * Run Id
+   */
+  run_id?: string | null;
+  /**
+   * Refused Account Id
+   */
+  refused_account_id?: string | null;
+};
+
+/**
+ * UserParserToggles
+ *
+ * The form's switches, one per filter. Defaults are the prototype's.
+ */
+export type UserParserToggles = {
+  /**
+   * Skip Bots
+   */
+  skip_bots?: boolean;
+  /**
+   * Skip Deleted
+   */
+  skip_deleted?: boolean;
+  /**
+   * Skip Scam
+   */
+  skip_scam?: boolean;
+  /**
+   * With Username
+   */
+  with_username?: boolean;
+  /**
+   * With Photo
+   */
+  with_photo?: boolean;
+  /**
+   * Premium Only
+   */
+  premium_only?: boolean;
+  /**
+   * With Stories
+   */
+  with_stories?: boolean;
+  /**
+   * Include Replies
+   */
+  include_replies?: boolean;
+  /**
+   * Include Forwards
+   */
+  include_forwards?: boolean;
+  /**
+   * Exclude Own
+   */
+  exclude_own?: boolean;
+  /**
+   * Exclude Admins
+   */
+  exclude_admins?: boolean;
+  /**
+   * Exclude Collected
+   */
+  exclude_collected?: boolean;
+};
+
+/**
+ * UserParserUser
+ *
+ * One kept person. Message counts and dates are zero/absent in members mode.
+ */
+export type UserParserUser = {
+  /**
+   * User Id
+   */
+  user_id: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * First Name
+   */
+  first_name?: string;
+  /**
+   * Last Name
+   */
+  last_name?: string;
+  /**
+   * Is Bot
+   */
+  is_bot?: boolean;
+  /**
+   * Is Deleted
+   */
+  is_deleted?: boolean;
+  /**
+   * Is Scam
+   */
+  is_scam?: boolean;
+  /**
+   * Is Fake
+   */
+  is_fake?: boolean;
+  /**
+   * Is Premium
+   */
+  is_premium?: boolean;
+  /**
+   * Has Photo
+   */
+  has_photo?: boolean;
+  /**
+   * Has Stories
+   */
+  has_stories?: boolean;
+  /**
+   * Last Seen
+   */
+  last_seen?: 'online' | 'recently' | 'week' | 'month' | 'long' | 'hidden';
+  /**
+   * Message Count
+   */
+  message_count?: number;
+  /**
+   * First At
+   */
+  first_at?: string | null;
+  /**
+   * Last At
+   */
+  last_at?: string | null;
+  /**
+   * Sources
+   */
+  sources?: Array<string>;
+};
+
+/**
+ * UserParserUserPage
+ */
+export type UserParserUserPage = {
+  /**
+   * Items
+   */
+  items: Array<UserParserUser>;
+  /**
+   * Total
+   */
+  total: number;
 };
 
 /**
@@ -5108,6 +6629,22 @@ export type ListAccountsData = {
      */
     status?: string;
     /**
+     * Folder
+     */
+    folder?: string | null;
+    /**
+     * Phone Code
+     */
+    phone_code?: number | null;
+    /**
+     * Proxy Country
+     */
+    proxy_country?: string | null;
+    /**
+     * Min Trust
+     */
+    min_trust?: number | null;
+    /**
      * Cursor
      */
     cursor?: string | null;
@@ -5144,7 +6681,7 @@ export type ListAccountsResponses = {
   /**
    * Successful Response
    */
-  200: PageAccountRead;
+  200: AccountPage;
 };
 
 export type ListAccountsResponse = ListAccountsResponses[keyof ListAccountsResponses];
@@ -5181,6 +6718,41 @@ export type AccountStatsResponses = {
 };
 
 export type AccountStatsResponse = AccountStatsResponses[keyof AccountStatsResponses];
+
+export type AccountFilterOptionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/filter-options';
+};
+
+export type AccountFilterOptionsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AccountFilterOptionsError =
+  AccountFilterOptionsErrors[keyof AccountFilterOptionsErrors];
+
+export type AccountFilterOptionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFilterOptions;
+};
+
+export type AccountFilterOptionsResponse =
+  AccountFilterOptionsResponses[keyof AccountFilterOptionsResponses];
 
 export type CheckAccountData = {
   body: AccountCheckRequest;
@@ -11319,3 +12891,1541 @@ export type StopNeuroshillingCampaignResponses = {
 
 export type StopNeuroshillingCampaignResponse =
   StopNeuroshillingCampaignResponses[keyof StopNeuroshillingCampaignResponses];
+
+export type ListChatBroadcastCampaignsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns';
+};
+
+export type ListChatBroadcastCampaignsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatBroadcastCampaignsError =
+  ListChatBroadcastCampaignsErrors[keyof ListChatBroadcastCampaignsErrors];
+
+export type ListChatBroadcastCampaignsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastCampaigns;
+};
+
+export type ListChatBroadcastCampaignsResponse =
+  ListChatBroadcastCampaignsResponses[keyof ListChatBroadcastCampaignsResponses];
+
+export type CreateChatBroadcastCampaignData = {
+  body: ChatBroadcastCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns';
+};
+
+export type CreateChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateChatBroadcastCampaignError =
+  CreateChatBroadcastCampaignErrors[keyof CreateChatBroadcastCampaignErrors];
+
+export type CreateChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastCampaign;
+};
+
+export type CreateChatBroadcastCampaignResponse =
+  CreateChatBroadcastCampaignResponses[keyof CreateChatBroadcastCampaignResponses];
+
+export type DeleteChatBroadcastCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}';
+};
+
+export type DeleteChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteChatBroadcastCampaignError =
+  DeleteChatBroadcastCampaignErrors[keyof DeleteChatBroadcastCampaignErrors];
+
+export type DeleteChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteChatBroadcastCampaignResponse =
+  DeleteChatBroadcastCampaignResponses[keyof DeleteChatBroadcastCampaignResponses];
+
+export type GetChatBroadcastSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings';
+};
+
+export type GetChatBroadcastSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetChatBroadcastSettingsError =
+  GetChatBroadcastSettingsErrors[keyof GetChatBroadcastSettingsErrors];
+
+export type GetChatBroadcastSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type GetChatBroadcastSettingsResponse =
+  GetChatBroadcastSettingsResponses[keyof GetChatBroadcastSettingsResponses];
+
+export type SaveChatBroadcastSettingsData = {
+  body: ChatBroadcastSettingsUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/settings';
+};
+
+export type SaveChatBroadcastSettingsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatBroadcastSettingsError =
+  SaveChatBroadcastSettingsErrors[keyof SaveChatBroadcastSettingsErrors];
+
+export type SaveChatBroadcastSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type SaveChatBroadcastSettingsResponse =
+  SaveChatBroadcastSettingsResponses[keyof SaveChatBroadcastSettingsResponses];
+
+export type SaveChatBroadcastPaceData = {
+  body: ChatBroadcastPace;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/pace';
+};
+
+export type SaveChatBroadcastPaceErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatBroadcastPaceError =
+  SaveChatBroadcastPaceErrors[keyof SaveChatBroadcastPaceErrors];
+
+export type SaveChatBroadcastPaceResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastSettingsRead;
+};
+
+export type SaveChatBroadcastPaceResponse =
+  SaveChatBroadcastPaceResponses[keyof SaveChatBroadcastPaceResponses];
+
+export type GetChatBroadcastBoardData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/board';
+};
+
+export type GetChatBroadcastBoardErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetChatBroadcastBoardError =
+  GetChatBroadcastBoardErrors[keyof GetChatBroadcastBoardErrors];
+
+export type GetChatBroadcastBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type GetChatBroadcastBoardResponse =
+  GetChatBroadcastBoardResponses[keyof GetChatBroadcastBoardResponses];
+
+export type StartChatBroadcastCampaignData = {
+  body: ChatBroadcastVersionRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/start';
+};
+
+export type StartChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StartChatBroadcastCampaignError =
+  StartChatBroadcastCampaignErrors[keyof StartChatBroadcastCampaignErrors];
+
+export type StartChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type StartChatBroadcastCampaignResponse =
+  StartChatBroadcastCampaignResponses[keyof StartChatBroadcastCampaignResponses];
+
+export type StopChatBroadcastCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/stop';
+};
+
+export type StopChatBroadcastCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StopChatBroadcastCampaignError =
+  StopChatBroadcastCampaignErrors[keyof StopChatBroadcastCampaignErrors];
+
+export type StopChatBroadcastCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type StopChatBroadcastCampaignResponse =
+  StopChatBroadcastCampaignResponses[keyof StopChatBroadcastCampaignResponses];
+
+export type ActOnChatBroadcastTargetData = {
+  body: ChatBroadcastTargetAction;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/campaigns/{campaign_id}/targets/action';
+};
+
+export type ActOnChatBroadcastTargetErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ActOnChatBroadcastTargetError =
+  ActOnChatBroadcastTargetErrors[keyof ActOnChatBroadcastTargetErrors];
+
+export type ActOnChatBroadcastTargetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastBoard;
+};
+
+export type ActOnChatBroadcastTargetResponse =
+  ActOnChatBroadcastTargetResponses[keyof ActOnChatBroadcastTargetResponses];
+
+export type ResolveChatBroadcastTargetsData = {
+  body: ChatBroadcastResolveRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/targets/resolve';
+};
+
+export type ResolveChatBroadcastTargetsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ResolveChatBroadcastTargetsError =
+  ResolveChatBroadcastTargetsErrors[keyof ResolveChatBroadcastTargetsErrors];
+
+export type ResolveChatBroadcastTargetsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastResolved;
+};
+
+export type ResolveChatBroadcastTargetsResponse =
+  ResolveChatBroadcastTargetsResponses[keyof ResolveChatBroadcastTargetsResponses];
+
+export type ListChatBroadcastOwnChatsData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Account Ids
+     */
+    account_ids: Array<string>;
+  };
+  url: '/api/v1/chat-broadcast/own-chats';
+};
+
+export type ListChatBroadcastOwnChatsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatBroadcastOwnChatsError =
+  ListChatBroadcastOwnChatsErrors[keyof ListChatBroadcastOwnChatsErrors];
+
+export type ListChatBroadcastOwnChatsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastOwnChats;
+};
+
+export type ListChatBroadcastOwnChatsResponse =
+  ListChatBroadcastOwnChatsResponses[keyof ListChatBroadcastOwnChatsResponses];
+
+export type UploadChatBroadcastPhotoData = {
+  body: BodyUploadChatBroadcastPhoto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/media';
+};
+
+export type UploadChatBroadcastPhotoErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UploadChatBroadcastPhotoError =
+  UploadChatBroadcastPhotoErrors[keyof UploadChatBroadcastPhotoErrors];
+
+export type UploadChatBroadcastPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatBroadcastMediaRead;
+};
+
+export type UploadChatBroadcastPhotoResponse =
+  UploadChatBroadcastPhotoResponses[keyof UploadChatBroadcastPhotoResponses];
+
+export type ListChatCollectionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections';
+};
+
+export type ListChatCollectionsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListChatCollectionsError = ListChatCollectionsErrors[keyof ListChatCollectionsErrors];
+
+export type ListChatCollectionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollections;
+};
+
+export type ListChatCollectionsResponse =
+  ListChatCollectionsResponses[keyof ListChatCollectionsResponses];
+
+export type CreateChatCollectionData = {
+  body: ChatCollectionWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections';
+};
+
+export type CreateChatCollectionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateChatCollectionError =
+  CreateChatCollectionErrors[keyof CreateChatCollectionErrors];
+
+export type CreateChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollection;
+};
+
+export type CreateChatCollectionResponse =
+  CreateChatCollectionResponses[keyof CreateChatCollectionResponses];
+
+export type DeleteChatCollectionData = {
+  body?: never;
+  path: {
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections/{collection_id}';
+};
+
+export type DeleteChatCollectionErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteChatCollectionError =
+  DeleteChatCollectionErrors[keyof DeleteChatCollectionErrors];
+
+export type DeleteChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteChatCollectionResponse =
+  DeleteChatCollectionResponses[keyof DeleteChatCollectionResponses];
+
+export type SaveChatCollectionData = {
+  body: ChatCollectionWrite;
+  path: {
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+  };
+  query?: never;
+  url: '/api/v1/chat-broadcast/collections/{collection_id}';
+};
+
+export type SaveChatCollectionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveChatCollectionError = SaveChatCollectionErrors[keyof SaveChatCollectionErrors];
+
+export type SaveChatCollectionResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatCollection;
+};
+
+export type SaveChatCollectionResponse =
+  SaveChatCollectionResponses[keyof SaveChatCollectionResponses];
+
+export type ListAccountFoldersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/account-folders';
+};
+
+export type ListAccountFoldersErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListAccountFoldersError = ListAccountFoldersErrors[keyof ListAccountFoldersErrors];
+
+export type ListAccountFoldersResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolders;
+};
+
+export type ListAccountFoldersResponse =
+  ListAccountFoldersResponses[keyof ListAccountFoldersResponses];
+
+export type CreateAccountFolderData = {
+  body: AccountFolderWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/account-folders';
+};
+
+export type CreateAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateAccountFolderError = CreateAccountFolderErrors[keyof CreateAccountFolderErrors];
+
+export type CreateAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolder;
+};
+
+export type CreateAccountFolderResponse =
+  CreateAccountFolderResponses[keyof CreateAccountFolderResponses];
+
+export type DeleteAccountFolderData = {
+  body?: never;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}';
+};
+
+export type DeleteAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteAccountFolderError = DeleteAccountFolderErrors[keyof DeleteAccountFolderErrors];
+
+export type DeleteAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteAccountFolderResponse =
+  DeleteAccountFolderResponses[keyof DeleteAccountFolderResponses];
+
+export type RenameAccountFolderData = {
+  body: AccountFolderWrite;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}';
+};
+
+export type RenameAccountFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RenameAccountFolderError = RenameAccountFolderErrors[keyof RenameAccountFolderErrors];
+
+export type RenameAccountFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolder;
+};
+
+export type RenameAccountFolderResponse =
+  RenameAccountFolderResponses[keyof RenameAccountFolderResponses];
+
+export type AddAccountsToFolderData = {
+  body: AccountFolderAccounts;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}/accounts';
+};
+
+export type AddAccountsToFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AddAccountsToFolderError = AddAccountsToFolderErrors[keyof AddAccountsToFolderErrors];
+
+export type AddAccountsToFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolderChange;
+};
+
+export type AddAccountsToFolderResponse =
+  AddAccountsToFolderResponses[keyof AddAccountsToFolderResponses];
+
+export type RemoveAccountsFromFolderData = {
+  body: AccountFolderAccounts;
+  path: {
+    /**
+     * Folder Id
+     */
+    folder_id: string;
+  };
+  query?: never;
+  url: '/api/v1/account-folders/{folder_id}/accounts/remove';
+};
+
+export type RemoveAccountsFromFolderErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RemoveAccountsFromFolderError =
+  RemoveAccountsFromFolderErrors[keyof RemoveAccountsFromFolderErrors];
+
+export type RemoveAccountsFromFolderResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountFolderChange;
+};
+
+export type RemoveAccountsFromFolderResponse =
+  RemoveAccountsFromFolderResponses[keyof RemoveAccountsFromFolderResponses];
+
+export type ListUserParserAccountsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/user-parser/accounts';
+};
+
+export type ListUserParserAccountsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListUserParserAccountsError =
+  ListUserParserAccountsErrors[keyof ListUserParserAccountsErrors];
+
+export type ListUserParserAccountsResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserAccountList;
+};
+
+export type ListUserParserAccountsResponse =
+  ListUserParserAccountsResponses[keyof ListUserParserAccountsResponses];
+
+export type StartUserParserRunData = {
+  body: UserParserRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/user-parser/runs';
+};
+
+export type StartUserParserRunErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StartUserParserRunError = StartUserParserRunErrors[keyof StartUserParserRunErrors];
+
+export type StartUserParserRunResponses = {
+  /**
+   * Successful Response
+   */
+  202: UserParserStartOutcome;
+};
+
+export type StartUserParserRunResponse =
+  StartUserParserRunResponses[keyof StartUserParserRunResponses];
+
+export type GetUserParserRunData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: '/api/v1/user-parser/runs/{run_id}';
+};
+
+export type GetUserParserRunErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetUserParserRunError = GetUserParserRunErrors[keyof GetUserParserRunErrors];
+
+export type GetUserParserRunResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserRun;
+};
+
+export type GetUserParserRunResponse = GetUserParserRunResponses[keyof GetUserParserRunResponses];
+
+export type StopUserParserRunData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: '/api/v1/user-parser/runs/{run_id}/stop';
+};
+
+export type StopUserParserRunErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StopUserParserRunError = StopUserParserRunErrors[keyof StopUserParserRunErrors];
+
+export type StopUserParserRunResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserRun;
+};
+
+export type StopUserParserRunResponse =
+  StopUserParserRunResponses[keyof StopUserParserRunResponses];
+
+export type ListUserParserRunUsersData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: {
+    /**
+     * Offset
+     */
+    offset?: number;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/user-parser/runs/{run_id}/users';
+};
+
+export type ListUserParserRunUsersErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListUserParserRunUsersError =
+  ListUserParserRunUsersErrors[keyof ListUserParserRunUsersErrors];
+
+export type ListUserParserRunUsersResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserUserPage;
+};
+
+export type ListUserParserRunUsersResponse =
+  ListUserParserRunUsersResponses[keyof ListUserParserRunUsersResponses];
+
+export type ExportUserParserRunData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: {
+    /**
+     * Format
+     */
+    format?: 'csv' | 'json';
+  };
+  url: '/api/v1/user-parser/runs/{run_id}/export';
+};
+
+export type ExportUserParserRunErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ExportUserParserRunError = ExportUserParserRunErrors[keyof ExportUserParserRunErrors];
+
+export type ExportUserParserRunResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
+
+export type ListUserParserPresetsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/user-parser/presets';
+};
+
+export type ListUserParserPresetsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListUserParserPresetsError =
+  ListUserParserPresetsErrors[keyof ListUserParserPresetsErrors];
+
+export type ListUserParserPresetsResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserPresetList;
+};
+
+export type ListUserParserPresetsResponse =
+  ListUserParserPresetsResponses[keyof ListUserParserPresetsResponses];
+
+export type CreateUserParserPresetData = {
+  body: UserParserPresetWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/user-parser/presets';
+};
+
+export type CreateUserParserPresetErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateUserParserPresetError =
+  CreateUserParserPresetErrors[keyof CreateUserParserPresetErrors];
+
+export type CreateUserParserPresetResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserPreset;
+};
+
+export type CreateUserParserPresetResponse =
+  CreateUserParserPresetResponses[keyof CreateUserParserPresetResponses];
+
+export type DeleteUserParserPresetData = {
+  body?: never;
+  path: {
+    /**
+     * Preset Id
+     */
+    preset_id: string;
+  };
+  query?: never;
+  url: '/api/v1/user-parser/presets/{preset_id}';
+};
+
+export type DeleteUserParserPresetErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteUserParserPresetError =
+  DeleteUserParserPresetErrors[keyof DeleteUserParserPresetErrors];
+
+export type DeleteUserParserPresetResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteUserParserPresetResponse =
+  DeleteUserParserPresetResponses[keyof DeleteUserParserPresetResponses];
+
+export type ListUserParserBasesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/user-parser/bases';
+};
+
+export type ListUserParserBasesErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListUserParserBasesError = ListUserParserBasesErrors[keyof ListUserParserBasesErrors];
+
+export type ListUserParserBasesResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserBaseList;
+};
+
+export type ListUserParserBasesResponse =
+  ListUserParserBasesResponses[keyof ListUserParserBasesResponses];
+
+export type DeleteUserParserBaseData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: '/api/v1/user-parser/bases/{run_id}';
+};
+
+export type DeleteUserParserBaseErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteUserParserBaseError =
+  DeleteUserParserBaseErrors[keyof DeleteUserParserBaseErrors];
+
+export type DeleteUserParserBaseResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteUserParserBaseResponse =
+  DeleteUserParserBaseResponses[keyof DeleteUserParserBaseResponses];
+
+export type RenameUserParserBaseData = {
+  body: UserParserBaseRename;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: never;
+  url: '/api/v1/user-parser/bases/{run_id}';
+};
+
+export type RenameUserParserBaseErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RenameUserParserBaseError =
+  RenameUserParserBaseErrors[keyof RenameUserParserBaseErrors];
+
+export type RenameUserParserBaseResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserBase;
+};
+
+export type RenameUserParserBaseResponse =
+  RenameUserParserBaseResponses[keyof RenameUserParserBaseResponses];
+
+export type ListUserParserBaseUsersData = {
+  body?: never;
+  path: {
+    /**
+     * Run Id
+     */
+    run_id: string;
+  };
+  query?: {
+    /**
+     * Search
+     */
+    search?: string;
+    /**
+     * Offset
+     */
+    offset?: number;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/user-parser/bases/{run_id}/users';
+};
+
+export type ListUserParserBaseUsersErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListUserParserBaseUsersError =
+  ListUserParserBaseUsersErrors[keyof ListUserParserBaseUsersErrors];
+
+export type ListUserParserBaseUsersResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserParserUserPage;
+};
+
+export type ListUserParserBaseUsersResponse =
+  ListUserParserBaseUsersResponses[keyof ListUserParserBaseUsersResponses];

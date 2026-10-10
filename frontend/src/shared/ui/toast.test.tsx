@@ -1,14 +1,16 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-import config from '../../../tailwind.config';
+import { layer } from '@/shared/design-system/tokens';
 
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Modal } from './Modal';
 import { Toaster } from './Toaster';
-import { toastError } from './toast';
+import { toastError, toastSuccess } from './toast';
 
-const zIndex = config.theme?.zIndex as Record<string, string>;
+import '@/shared/i18n';
+
+const zIndex: Record<string, string> = layer;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -58,4 +60,55 @@ test('a toast raised before a dialog opens still sits above it', async () => {
   // portals to document.body, so the stack's own element is the root.
   vi.useRealTimers();
   await expectNoAxeViolations(toastLayer as Element);
+});
+
+test('a success toast carries an undo that runs once and dismisses the toast', () => {
+  render(<Toaster />);
+  const undo = vi.fn();
+  act(() => {
+    toastSuccess('2 аккаунта → «Основные»', { label: 'Отменить', onClick: undo });
+  });
+  const toast = screen.getByText('2 аккаунта → «Основные»').closest('[role="status"]')!;
+  expect(toast).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+  expect(undo).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('2 аккаунта → «Основные»')).not.toBeInTheDocument();
+});
+
+test('a success toast closes by hand and on its own after 5 s', () => {
+  render(<Toaster />);
+  act(() => {
+    toastSuccess('Папка создана');
+  });
+  expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Скрыть' }));
+  expect(screen.queryByText('Папка создана')).not.toBeInTheDocument();
+
+  act(() => {
+    toastSuccess('Папка удалена');
+  });
+  expect(screen.getByText('Папка удалена')).toBeInTheDocument();
+  act(() => {
+    vi.advanceTimersByTime(5000);
+  });
+  expect(screen.queryByText('Папка удалена')).not.toBeInTheDocument();
+});
+
+// A burst piles up as one stack: the newest in front, older ones peeking above it,
+// smaller, and beyond three hidden — not a column of cards over the dialog.
+test('toasts overlap as a pile, newest in front', () => {
+  render(<Toaster />);
+  act(() => {
+    for (let i = 0; i < 4; i++) toastError(`Ошибка ${i}`);
+  });
+  // From the end: an earlier test leaves its toast queued on a frozen clock.
+  const [oldest, , older, newest] = screen.getAllByRole('alert', { hidden: true }).slice(-4);
+  expect(newest!.style.translate).toBe('-50% 0px');
+  expect(older!.style.translate).toBe('-50% -10px');
+  expect(Number(older!.style.zIndex)).toBeLessThan(Number(newest!.style.zIndex));
+  expect(oldest).toHaveStyle({ visibility: 'hidden' });
+  act(() => {
+    vi.advanceTimersByTime(5000);
+  });
 });

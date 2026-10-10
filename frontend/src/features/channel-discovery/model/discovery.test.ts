@@ -11,6 +11,7 @@ import {
   splitKeywords,
   EMPTY_FORM,
   formatSubscribers,
+  isFormTouched,
   isPrivateRef,
   isSelectable,
   KEYWORD_MAX_LENGTH,
@@ -222,6 +223,18 @@ describe('buildSearchRequest', () => {
     expect(buildSearchRequest(form({ keywords: 'crypto', limit: 'abc' }), ACCOUNTS).limit).toBe(
       LIMIT_DEFAULT,
     );
+  });
+});
+
+describe('isFormTouched', () => {
+  it('is false for the form the dialog opens with', () => {
+    expect(isFormTouched(EMPTY_FORM)).toBe(false);
+  });
+
+  it('sees a typed field, a changed choice and a touched account picker', () => {
+    expect(isFormTouched(form({ keywords: 'crypto' }))).toBe(true);
+    expect(isFormTouched(form({ hideSeen: false }))).toBe(true);
+    expect(isFormTouched(form({ accountIds: [] }))).toBe(true);
   });
 });
 

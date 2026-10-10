@@ -6,7 +6,7 @@ const meta = {
   title: 'Shared/Card',
   component: Card,
   tags: ['autodocs'],
-  args: { children: <p className="type-prose">Карточка с содержимым.</p> },
+  args: { children: <p className="type-body text-content-subtle">Карточка с содержимым.</p> },
 } satisfies Meta<typeof Card>;
 
 export default meta;

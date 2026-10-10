@@ -25,6 +25,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # The larger self-contained domains live in a sibling module for the file-size
 # budget; re-exported here so ``from core.config import WarmingSettings`` etc.
 # keep working unchanged.
+from core._config_chat_broadcast import ChatBroadcastSettings
 from core._config_domains import (
     DeepseekSettings,
     GeminiSettings,
@@ -34,6 +35,7 @@ from core._config_domains import (
 )
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_scheduled import ScheduledPostsSettings
+from core._config_user_parser import UserParserSettings
 from core._config_warming import WarmingSettings
 
 # RFC 7518 §3.2: an HS256 HMAC key should be at least 32 bytes.
@@ -340,6 +342,8 @@ class Settings(BaseSettings):
     neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)
     neuroshilling: NeuroshillingSettings = Field(default_factory=NeuroshillingSettings)
     scheduled_posts: ScheduledPostsSettings = Field(default_factory=ScheduledPostsSettings)
+    chat_broadcast: ChatBroadcastSettings = Field(default_factory=ChatBroadcastSettings)
+    user_parser: UserParserSettings = Field(default_factory=UserParserSettings)
 
 
 def load_settings() -> Settings:

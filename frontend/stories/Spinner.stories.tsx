@@ -15,7 +15,7 @@ export const Default: Story = {};
 export const Large: Story = { args: { size: 'lg' } };
 export const OnAction: Story = {
   render: () => (
-    <span className="inline-flex rounded-md bg-action-primary p-sm">
+    <span className="inline-flex rounded-sm bg-action-primary p-2">
       <Spinner tone="onAction" />
     </span>
   ),

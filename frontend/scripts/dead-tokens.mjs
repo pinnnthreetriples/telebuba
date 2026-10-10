@@ -9,7 +9,7 @@
 // Ступень считается ношеной, если её носит хоть одна утилита в `src` — класс
 // вида `<приставка>-<имя>` — или если на неё ссылаются изнутри самой системы:
 // роль в `typeRole` называет рунг размера и краску, а `index.css` берёт значения
-// через `theme('шкала.путь')`. Обе эти формы — настоящее ношение, и обе не
+// через `--theme(--переменная)`. Обе эти формы — настоящее ношение, и обе не
 // выглядят как класс.
 //
 // Чего проверка НЕ умеет: приставки у шкал пересекаются с чужими именами
@@ -23,7 +23,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { colorIds, roleRefs, scaleNames } from './configScales.mjs';
+import { colorIds, roleRefs, scaleNames, THEME_NAMESPACES } from './configScales.mjs';
 
 const SRC_DIR = new URL('../src/', import.meta.url);
 
@@ -43,6 +43,7 @@ const PREFIXES = {
   minHeight: 'min-h',
   maxHeight: 'max-h',
   fontSize: 'text',
+  fontWeight: 'font',
   typeRole: 'type',
   lineHeight: 'leading',
   letterSpacing: 'tracking',
@@ -74,26 +75,46 @@ function readScales() {
 
 /* ── Чтение исходников ────────────────────────────────────────────────────── */
 
+// Сгенерированная тема Tailwind не читается: она называет КАЖДУЮ ступень по
+// определению (`--color-…`, `.type-…`), и её ношение зачло бы мёртвые ступени живыми.
+const GENERATED = 'tailwind-theme.css';
+
 function sources(dir) {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name))
+    .filter((entry) => entry.name !== GENERATED)
     .map((entry) => readFileSync(join(entry.parentPath, entry.name), 'utf8'))
     .join('\n');
 }
 
-// `theme('boxShadow.pop')`, `theme('colors.term.DEFAULT')` — ссылка на ступень
-// по пути, а не классом. Приводится к тому же виду, что и id краски.
+// `--theme(--shadow-pop)`, `--theme(--color-term)`, `--theme(--text-small--line-height)` —
+// ссылка на ступень переменной темы, а не классом. Пространство имён переводится обратно в
+// шкалу по той же карте, по которой генератор их пишет (`THEME_NAMESPACES`); краска — в
+// тот же вид, что id краски. Имя без шкалы (`--channel-*`) — не ступень и не считается.
 function themeRefs(text) {
-  return [...text.matchAll(/theme\('([\w$]+)\.([\w$.-]+)'\)/g)].map(([, scale, path]) => {
-    const rungs = path.split('.');
-    if (scale !== 'colors') return `${scale}.${rungs[0]}`;
-    return `colors.${rungs[1] === undefined || rungs[1] === 'DEFAULT' ? rungs[0] : rungs.join('-')}`;
-  });
+  const scaleNamesByScale = Object.fromEntries(
+    Object.keys(THEME_NAMESPACES).map((scale) => [
+      scale,
+      new Set(scale === 'colors' ? colorIds() : scaleNames(scale)),
+    ]),
+  );
+  const refs = [];
+  for (const [, variable] of text.matchAll(/--theme\(--([\w-]+)\)/g)) {
+    // Подключи ступени текста (`--text-small--line-height`) принадлежат самой ступени.
+    const name = variable.replace(/--(?:line-height|letter-spacing)$/, '');
+    for (const [scale, namespaces] of Object.entries(THEME_NAMESPACES)) {
+      for (const namespace of namespaces) {
+        const rung = name.startsWith(`${namespace}-`) ? name.slice(namespace.length + 1) : null;
+        if (rung !== null && scaleNamesByScale[scale].has(rung)) refs.push(`${scale}.${rung}`);
+      }
+    }
+  }
+  return refs;
 }
 
 function worn(text, scale, name) {
   const prefix = PREFIXES[scale].split(' ').join('|');
-  // Отрицательный отступ пишется `-mt-lg`: минус перед приставкой — часть класса,
+  // Отрицательный отступ пишется `-mt-4`: минус перед приставкой — часть класса,
   // а не граница. Справа граница нужна, иначе `w-col` зачлось бы `w-column`;
   // `/` пропускается — это модификатор прозрачности, `bg-primary/40`.
   return new RegExp(`(?:^|[^\\w-])-?(?:${prefix})-${name}(?![\\w-])`, 'm').test(text);

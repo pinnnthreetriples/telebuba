@@ -30,7 +30,7 @@ _rng = random.SystemRandom()
 
 # A channel's allowed-reaction set changes rarely, but the react action re-read it
 # on every reaction. Cache it per channel for an hour. Single event loop / one
-# uvicorn worker (CLAUDE.md) → no lock needed. Failures are not cached so a
+# uvicorn worker (AGENTS.md) → no lock needed. Failures are not cached so a
 # transient error re-probes next time rather than sticking a bad "None".
 _WHITELIST_TTL_SECONDS = 3600.0
 _whitelist_cache: dict[str, tuple[float, set[str] | None]] = {}

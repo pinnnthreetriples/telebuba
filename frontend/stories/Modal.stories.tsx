@@ -11,9 +11,9 @@ const meta = {
     size: 'form',
     onClose: () => undefined,
     children: (
-      <div className="flex flex-col gap-lg p-xl">
-        <h3 className="type-dialog-title">Настройки прогрева</h3>
-        <p className="type-dialog-body">Диалог поверх страницы.</p>
+      <div className="flex flex-col gap-4 p-6">
+        <h3 className="type-h2">Настройки прогрева</h3>
+        <p className="type-body text-content-muted">Диалог поверх страницы.</p>
         <div className="flex justify-end">
           <Button variant="primary">Сохранить</Button>
         </div>
