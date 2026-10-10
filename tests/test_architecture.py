@@ -1,6 +1,6 @@
 """Architecture guardrails — enforce the layer matrix and config/env sync as tests.
 
-The four-layer rules (`context/conventions.md`, `context/architecture.md`) and the
+The four-layer rules (`CODING_STANDARDS.md`, `.mex/context/architecture.md`) and the
 "`.env.example` mirrors `core/config.py`" contract are otherwise only prose. These
 tests fail the build the moment a layer boundary is crossed or a config field has no
 documented env key, which is cheaper than catching layer-rot by eye in review.

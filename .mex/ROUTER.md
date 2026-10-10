@@ -24,7 +24,7 @@ edges:
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-10-06
+last_updated: 2026-10-10
 ---
 
 # Telebuba Router
@@ -37,4 +37,4 @@ Trust code, tests, manifests, migrations and workflows over prose memory.
 1. Load the matching context and, only if useful, one pattern.
 2. Implement through the documented boundaries.
 3. Verify with commands from `context/setup.md`; report only checks actually run.
-4. If durable truth changed, update only its route; use `mex log` for rationale and a pattern only for recurring work.
+4. If durable truth changed, update only its route; use `mex log` for rationale and a pattern only for recurring work. Keep bug/PR history, counts, benchmarks and transient state out, and never copy symbol lists, signatures or paths that the code graph answers live.

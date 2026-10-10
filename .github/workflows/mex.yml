@@ -69,6 +69,8 @@ jobs:
           }
           check_max .mex/AGENTS.md 1500
           check_max .mex/ROUTER.md 2500
+          # Not routed, but every backend route points at it, so it is a context in all but name.
+          check_max CODING_STANDARDS.md 5000
           for file in .mex/context/*.md; do check_max "$file" 5000; done
           for file in .mex/patterns/*.md; do check_max "$file" 3000; done
 
