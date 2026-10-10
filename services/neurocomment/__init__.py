@@ -29,6 +29,7 @@ from services.neurocomment._runtime import (
 from services.neurocomment._runtime_operations import (
     ListenerBusyChatBroadcastError,
     ListenerBusyDiscoveryError,
+    ListenerBusyMasstaggingError,
     ListenerBusyNeuroshillingError,
     ListenerBusyUserParserError,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "InvalidCursorError",
     "ListenerBusyChatBroadcastError",
     "ListenerBusyDiscoveryError",
+    "ListenerBusyMasstaggingError",
     "ListenerBusyNeuroshillingError",
     "ListenerBusyUserParserError",
     "ListenerBusyWarmingError",

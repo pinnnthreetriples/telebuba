@@ -33,6 +33,7 @@ from core._config_domains import (
     OpenAISettings,
     TrustSettings,
 )
+from core._config_masstagging import MasstaggingSettings
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_user_parser import UserParserSettings
@@ -344,6 +345,7 @@ class Settings(BaseSettings):
     scheduled_posts: ScheduledPostsSettings = Field(default_factory=ScheduledPostsSettings)
     chat_broadcast: ChatBroadcastSettings = Field(default_factory=ChatBroadcastSettings)
     user_parser: UserParserSettings = Field(default_factory=UserParserSettings)
+    masstagging: MasstaggingSettings = Field(default_factory=MasstaggingSettings)
 
 
 def load_settings() -> Settings:

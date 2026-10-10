@@ -75,7 +75,13 @@ ChatBroadcastHistoryKind = Literal[
     "reconnecting",
 ]
 ChatBroadcastBusyOwner = Literal[
-    "warming", "neurocomment", "neuroshilling", "chat_broadcast", "discovery", "user_parser"
+    "warming",
+    "neurocomment",
+    "neuroshilling",
+    "chat_broadcast",
+    "discovery",
+    "user_parser",
+    "masstagging",
 ]
 
 

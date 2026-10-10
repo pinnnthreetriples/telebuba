@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
+from telethon import utils
 from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
@@ -20,10 +22,13 @@ from telethon.tl.types import (
     DocumentAttributeVideo,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
+    InputMessageEntityMentionName,
     InputPeerSelf,
     InputPrivacyValueAllowAll,
     InputPrivacyValueAllowCloseFriends,
     InputPrivacyValueAllowContacts,
+    MediaAreaCoordinates,
+    MediaAreaUrl,
 )
 
 from core.telegram_client._io import _named_bytes
@@ -32,11 +37,17 @@ from core.telegram_client._story_image import (
     _default_collage_layout,
     _normalize_story_image_for_telegram,
 )
+from core.telegram_client._story_link import LINK_AREA, caption_with_mentions, draw_link_plate
 from core.telegram_client._video import normalize_story_video_for_telegram
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
-    from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
+    from telethon.tl.types import (
+        TypeInputMedia,
+        TypeInputPrivacyRule,
+        TypeMediaArea,
+        TypeMessageEntity,
+    )
 
     from schemas.telegram_actions import PostStory, RemoveStory, ToggleStoryPinned
 
@@ -45,17 +56,43 @@ async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
     peer = await client.get_input_entity("me")
     await client(CanSendStoryRequest(peer=peer))
     media = await _story_media(client, action)
+    caption, spans = caption_with_mentions(action.caption, action.mentions)
+    entities: list[TypeMessageEntity] = [
+        InputMessageEntityMentionName(
+            offset=span.offset,
+            length=span.length,
+            user_id=utils.get_input_user(await client.get_input_entity(span.user_id)),
+        )
+        for span in spans
+    ]
     result = await client(
         SendStoryRequest(
             peer=peer,
             media=media,
             privacy_rules=_story_privacy_rules(action.privacy_preset),
-            caption=action.caption or "",
+            caption=caption,
+            entities=entities or None,
+            media_areas=_link_areas(action),
             period=action.period_seconds,
             noforwards=action.protect_content,
         ),
     )
     return _story_id_from_updates(result)
+
+
+def _link_areas(action: PostStory) -> list[TypeMediaArea] | None:
+    if action.link is None:
+        return None
+    x, y, w, h = LINK_AREA
+    coordinates = MediaAreaCoordinates(x=x, y=y, w=w, h=h, rotation=0.0)
+    return [MediaAreaUrl(coordinates=coordinates, url=action.link.url)]
+
+
+def _plate_text(action: PostStory) -> str | None:
+    """What the link plate says: the operator's words, else the link's host."""
+    if action.link is None:
+        return None
+    return action.link.text.strip() or urlsplit(action.link.url).hostname or action.link.url
 
 
 def _story_id_from_updates(result: object) -> int | None:
@@ -94,6 +131,8 @@ async def _story_media(
             content = await asyncio.to_thread(_compose_story_collage, images, layout)
         else:
             content = await asyncio.to_thread(_normalize_story_image_for_telegram, action.content)
+        if (plate := _plate_text(action)) is not None:
+            content = await asyncio.to_thread(draw_link_plate, content, plate)
         uploaded = await client.upload_file(
             _named_bytes(action.filename, content),
             file_name=action.filename,

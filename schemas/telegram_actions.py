@@ -74,10 +74,11 @@ from schemas.telegram_actions_contacts import LookupContactsByPhone
 
 # The channel-discovery read cluster likewise lives in a sibling module; the read
 # union below references every name.
-from schemas.telegram_actions_discovery import (
-    GetSimilarChannels,
-    SearchChannels,
-    SearchGlobalPosts,
+from schemas.telegram_actions_discovery import GetSimilarChannels, SearchChannels, SearchGlobalPosts
+from schemas.telegram_actions_masstagging import (
+    ListMasstagContacts,
+    MasstagToggleTtl,
+    ResolveMasstagTarget,
 )
 
 # The profile-media / story action cluster lives in a sibling module (file-size
@@ -397,7 +398,8 @@ TelegramAction = Annotated[
     | WarmEmojiStatus
     | BroadcastSendMessage
     | BroadcastForwardPost
-    | BroadcastJoinChatlist,
+    | BroadcastJoinChatlist
+    | MasstagToggleTtl,
     Field(discriminator="action_type"),
 ]
 
@@ -431,6 +433,8 @@ TelegramReadAction = Annotated[
     | CheckChatlist
     | ReadChatParticipants
     | ReadChatHistoryAuthors
-    | ReadChannelPostReplies,
+    | ReadChannelPostReplies
+    | ResolveMasstagTarget
+    | ListMasstagContacts,
     Field(discriminator="action_type"),
 ]
