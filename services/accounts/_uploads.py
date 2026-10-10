@@ -17,10 +17,13 @@ def _session_filename(filename: str) -> str:
     if Path(name).suffix.lower() != ".session":
         msg = "Upload a .session file"
         raise ValueError(msg)
-    if not Path(name).stem:
+    # Phone-named sessions (``+522491104289.session``) are the common case, and
+    # ``+`` is outside the account_id charset; the digits alone identify them.
+    stem = Path(name).stem.lstrip("+")
+    if not stem:
         msg = "Session file name is empty"
         raise ValueError(msg)
-    return name
+    return stem + Path(name).suffix
 
 
 def _write_session_file(path: Path, content: bytes) -> None:

@@ -315,7 +315,7 @@ test('a failed import shows the error state and keeps Next disabled', async () =
     target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
   });
   // The file card reports the failure instead of a premature "File ready".
-  expect(await screen.findByText('Не удалось импортировать')).toBeInTheDocument();
+  expect(await screen.findByText('Сервер не ответил — попробуйте ещё раз')).toBeInTheDocument();
   expect(screen.getByText('Далее')).toBeDisabled();
 });
 

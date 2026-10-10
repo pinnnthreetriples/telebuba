@@ -382,7 +382,11 @@ export function AddAccountModal({
                         {t('accounts.addWizard.browse')}
                       </span>
                     </button>
-                    <ImportFileList files={bulk.files} onRetry={bulk.retry} />
+                    <ImportFileList
+                      files={bulk.files}
+                      onRetry={bulk.retry}
+                      onRemove={bulk.remove}
+                    />
                   </>
                 )}
               </div>
