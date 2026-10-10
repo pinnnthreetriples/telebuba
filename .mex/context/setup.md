@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Setup, commands, CI, hooks, Windows checkout and verification.
-last_updated: 2026-09-28
+last_updated: 2026-10-10
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -37,9 +37,9 @@ npx --yes mex-agent@0.8.3 check && npx --yes mex-agent@0.8.3 doctor
 cd frontend && npm run gates && npm run build
 ```
 
-Run the relevant subset, not every command blindly. `.github/workflows/*.yml` are the CI source of truth. Code CI and MEX memory CI run on every PR/push to `main`. MEX blocks on every issue except `STALE_FILE`, which only nags: it counts commits and days across the WHOLE repo, so it reddens on other people's activity and blocking it would just train agents to bump `last_updated`. The weekly MEX schedule is a backstop when no PR is open. Nightly is the third workflow and gates no PR: its mutation sweep over `services/`/`schemas/` is far too slow for one, so it holds a tracked aggregate score floor — never a demand that each mutant die — and reports catalogue drift rather than failing on it. Policy lives in `docs/mutation-testing.md`.
+Run the relevant subset. `.github/workflows/*.yml` are the CI source of truth. Code CI and MEX memory CI run on every PR/push to `main`. MEX blocks on every issue except `STALE_FILE`, which only nags: it counts commits and days across the WHOLE repo, so it reddens on other people's activity and blocking it would just train agents to bump `last_updated`. The weekly MEX schedule is a backstop when no PR is open. A Claude Code Stop hook (`tools/mex_grow_gate.py`) demands GROW once per session and HEAD when branch commits touch code but not `.mex/`. Nightly is the third workflow and gates no PR: its mutation sweep over `services/`/`schemas/` is far too slow for one, so it holds a tracked aggregate score floor — never a demand that each mutant die — and reports catalogue drift rather than failing on it. Policy lives in `docs/mutation-testing.md`.
 
-Deep-domain memory is grounded: `grounds_to` in the frontmatter pins a claim to an exact code symbol, and CI rebuilds the graph (`.mex/graph.db`, gitignored, and large enough that it never belongs in a commit) before checking. Delete a grounded symbol → `GROUNDING_GONE` (error). Change its BODY under a note still describing the old behaviour → `GROUNDING_DRIFT` (warning, and warnings block). A rename that keeps the body is silently reconciled as a move, by design.
+Deep-domain memory is grounded: `grounds_to` in the frontmatter pins a claim to an exact code symbol, and CI rebuilds the graph (`.mex/graph.db`, gitignored, never committed) before checking. Delete a grounded symbol → `GROUNDING_GONE` (error). Change its BODY under a note still describing the old behaviour → `GROUNDING_DRIFT` (warning, and warnings block). A rename that keeps the body is silently reconciled as a move, by design.
 
 Drift needs a baseline and a rebuilt graph has none, so each `grounds_to` entry carries `bodyHash`, which mex compares to the node's current body. An entry without it is never drift-checked, so CI fails it. **If you change a grounded function, re-read the note against the new code, fix its prose, then re-pin `bodyHash` with the tool below.** The hash lives in the note on purpose: re-pinning it edits that note, so it lands in the diff where a reviewer judges whether it still holds. CI rebuilds the graph on each run while cached graphs are unreliable; this takes minutes but keeps the grounding gate active.
 
