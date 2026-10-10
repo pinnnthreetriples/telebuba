@@ -118,8 +118,10 @@ export function ScheduleTimeField({
   const pickDay = (day: Date) => {
     const earliest = now + minLeadMs;
     const ms = onDay(day, draft);
-    // A day picked today at a time already gone moves to the first tidy slot ahead.
-    setDraft(ms < earliest ? Math.max(onDay(day, defaultRunAt(now)), earliest) : ms);
+    // A day picked today at a time already gone moves to the first tidy slot ahead; the
+    // last day offered, at a time of day past `now`'s, comes back to the year's edge.
+    const next = ms < earliest ? Math.max(onDay(day, defaultRunAt(now)), earliest) : ms;
+    setDraft(Math.min(next, now + MAX_LEAD_MS));
   };
   const draftProblem = runAtProblem(draft, now, minLeadMs);
   const commit = () => {
@@ -157,7 +159,12 @@ export function ScheduleTimeField({
         }}
         onBlur={(event) => {
           // Tabbing out of the calendar closes it rather than leaving it open behind focus.
-          if (open && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+          // Only for focus landing on an element outside: focus going to nothing is Safari
+          // pressing a button (it does not focus buttons) or a press on the popover's
+          // padding, and closing then would eat the press. Outside presses are the
+          // document listener's.
+          const to = event.relatedTarget;
+          if (open && to !== null && !event.currentTarget.contains(to)) setOpen(false);
         }}
       >
         <label className="flex min-w-0 flex-1 flex-col gap-2">

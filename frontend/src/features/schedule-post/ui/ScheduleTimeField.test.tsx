@@ -115,6 +115,46 @@ test('the calendar offers days up to a year ahead, and no further', () => {
   }
 });
 
+test('the last day offered never lands past the year, whatever the time of day', async () => {
+  const user = userEvent.setup();
+  // Three hours past `now`'s time of day: on the last day, that would be past the year.
+  render(<Harness initial={NOW + 3 * 3_600_000} />);
+
+  await user.click(screen.getByRole('button', { name: 'Выбрать дату и время' }));
+  const popover = screen.getByRole('dialog');
+  const next = within(popover).getByRole('button', { name: 'Следующий месяц' });
+  for (let i = 0; i < 12; i += 1) await user.click(next);
+  const last = new Date(NOW + MAX_LEAD_MS);
+  await user.click(
+    within(popover).getByRole('button', {
+      name: last.toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' }),
+    }),
+  );
+  await user.click(within(popover).getByRole('button', { name: 'Готово' }));
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Когда')).toHaveValue(toLocalInput(NOW + MAX_LEAD_MS));
+});
+
+test('focus dropping to nothing keeps the popover; Tab to a control outside closes it', async () => {
+  const user = userEvent.setup();
+  render(
+    <>
+      <Harness initial={NOW + 3_600_000} />
+      <button type="button">снаружи</button>
+    </>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Выбрать дату и время' }));
+  const day = within(screen.getByRole('dialog')).getAllByRole('button')[2];
+  // Safari, or a press on the popover's padding: focus leaves for no element.
+  fireEvent.blur(day as HTMLElement, { relatedTarget: null });
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+  fireEvent.blur(day as HTMLElement, { relatedTarget: screen.getByText('снаружи') });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
 test('Escape closes the calendar without reaching the editor around it', () => {
   const onEscape = vi.fn();
   render(

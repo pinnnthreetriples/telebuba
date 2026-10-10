@@ -48,6 +48,21 @@ test('autoFocus lands on the selected day and arrows walk across months', () => 
   expect(day(new Date(2026, 10, 1))).toHaveFocus();
 });
 
+test('a selection later in the day than maxDate is still pickable and takes focus', () => {
+  render(
+    <DatePicker
+      value={new Date(2026, 9, 20, 15, 0)}
+      onChange={vi.fn()}
+      today={TODAY}
+      maxDate={new Date(2026, 9, 20, 10, 0)}
+      autoFocus
+    />,
+  );
+
+  expect(day(new Date(2026, 9, 20))).toBeEnabled();
+  expect(day(new Date(2026, 9, 20))).toHaveFocus();
+});
+
 test('month and weekday names follow the locale', () => {
   render(<DatePicker value={null} onChange={vi.fn()} today={TODAY} locale="en" />);
 

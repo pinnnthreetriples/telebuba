@@ -110,8 +110,9 @@ export function DatePicker({
 
   const isDisabled = useCallback(
     (date: Date) =>
-      (minDate !== undefined && date < startOfDay(minDate)) ||
-      (maxDate !== undefined && date > startOfDay(maxDate)),
+      // By day: a focused or selected date can carry a time of day.
+      (minDate !== undefined && startOfDay(date) < startOfDay(minDate)) ||
+      (maxDate !== undefined && startOfDay(date) > startOfDay(maxDate)),
     [minDate, maxDate],
   );
 
