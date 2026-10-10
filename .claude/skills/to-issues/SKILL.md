@@ -1,6 +1,5 @@
 ---
 name: to-issues
-disable-model-invocation: true
 description: Break a plan, spec, or PRD into independently-grabbable issues on the project issue tracker using tracer-bullet vertical slices.
 when_to_use: >
   Invoke after a PRD lands, when a conversation has grown several actionable
