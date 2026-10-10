@@ -5,7 +5,7 @@ import { importAccountSessionMutation, importAccountTdataMutation } from '@/enti
 import { errorCode } from '@/shared/lib';
 
 // Why a file failed, in the operator's terms rather than the envelope's.
-export type ImportFailure = 'duplicate' | 'name' | 'size' | 'broken' | 'other';
+export type ImportFailure = 'duplicate' | 'name' | 'size' | 'broken' | 'offline' | 'other';
 
 // `id` is the file's slot in the raw list, stable when other rows are removed.
 export type BulkFile = {
@@ -24,6 +24,15 @@ const FAILURE_BY_CODE: Record<string, ImportFailure> = {
 };
 
 type Method = 'session' | 'tdata';
+
+// No envelope means no answer reached us; an unlisted code gets the neutral reason.
+// A tdata name is never validated, so its `validation_error` is an empty archive.
+function failureFor(method: Method, error: unknown): ImportFailure {
+  const code = errorCode(error);
+  if (code === undefined) return 'offline';
+  if (method === 'tdata' && code === 'validation_error') return 'broken';
+  return FAILURE_BY_CODE[code] ?? 'other';
+}
 
 // One import request per picked file, at most this many in flight at once.
 const MAX_IN_FLIGHT = 2;
@@ -74,7 +83,7 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
     } catch (error) {
       patch(id, gen, {
         state: 'error',
-        failure: FAILURE_BY_CODE[errorCode(error) ?? ''] ?? 'other',
+        failure: failureFor(method, error),
       });
     } finally {
       // The account exists server-side even when this wizard has moved on, so the

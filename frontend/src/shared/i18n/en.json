@@ -855,7 +855,8 @@
         "name": "File name: Latin letters, digits, _ and - only",
         "size": "File is too large",
         "broken": "File is damaged or not a session",
-        "other": "Server didn't respond — try again"
+        "offline": "Server didn't respond — try again",
+        "other": "Import failed — try again"
       },
       "removeFile": "Remove from list",
       "cancel": "Cancel",
