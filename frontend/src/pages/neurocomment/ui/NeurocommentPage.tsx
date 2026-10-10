@@ -117,6 +117,7 @@ export function NeurocommentPage() {
   const [addingChannel, setAddingChannel] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
   const [confirmClearLogs, setConfirmClearLogs] = useState(false);
+  const [confirmRemoveListener, setConfirmRemoveListener] = useState(false);
   const channelFeedback = useTransientFeedback();
   const accountFeedback = useTransientFeedback();
   // "Проверить каналы" verdicts: banned channels stay red until the next check;
@@ -422,10 +423,12 @@ export function NeurocommentPage() {
   };
 
   // Remove the listener entirely (finding #4) — distinct from pausing (stop).
-  const removeListener = () => {
-    setListener('');
-    clearListener.mutate({}, { onSettled: invalidateNeuro });
-  };
+  // Asked first: it stops the whole engine, and the trash sits next to «edit».
+  // Returned so ConfirmModal holds its spinner and stays open on a refusal.
+  const removeListener = () =>
+    clearListener.mutateAsync({}, { onSettled: invalidateNeuro }).then(() => {
+      setListener('');
+    });
 
   const cancelAddChannel = () => {
     setAddingChannel(false);
@@ -581,7 +584,7 @@ export function NeurocommentPage() {
             }}
             onRemove={() => {
               setListenerActionsOpen(false);
-              removeListener();
+              setConfirmRemoveListener(true);
             }}
             accountOptions={listenerOptions}
             onPickListener={pickListener}
@@ -734,6 +737,19 @@ export function NeurocommentPage() {
             setChannelToRemove(null);
           }}
           onConfirm={confirmRemoveChannel}
+        />
+      ) : null}
+
+      {confirmRemoveListener ? (
+        <ConfirmModal
+          title={t('neurocomment.listener.removeTitle')}
+          body={t('neurocomment.listener.removeBody')}
+          confirmLabel={t('neurocomment.listener.removeConfirm')}
+          cancelLabel={t('neurocomment.modal.cancel')}
+          onClose={() => {
+            setConfirmRemoveListener(false);
+          }}
+          onConfirm={removeListener}
         />
       ) : null}
 
