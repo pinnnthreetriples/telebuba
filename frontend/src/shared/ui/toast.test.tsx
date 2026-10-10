@@ -103,11 +103,11 @@ test('toasts overlap as a pile, newest in front', () => {
     for (let i = 0; i < 4; i++) toastError(`Ошибка ${i}`);
   });
   // From the end: an earlier test leaves its toast queued on a frozen clock.
-  const [oldest, , older, newest] = screen.getAllByRole('alert').slice(-4);
+  const [oldest, , older, newest] = screen.getAllByRole('alert', { hidden: true }).slice(-4);
   expect(newest!.style.translate).toBe('-50% 0px');
   expect(older!.style.translate).toBe('-50% -10px');
   expect(Number(older!.style.zIndex)).toBeLessThan(Number(newest!.style.zIndex));
-  expect(oldest).toHaveStyle({ opacity: '0' });
+  expect(oldest).toHaveStyle({ visibility: 'hidden' });
   act(() => {
     vi.advanceTimersByTime(5000);
   });

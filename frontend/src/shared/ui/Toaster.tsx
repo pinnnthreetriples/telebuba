@@ -43,7 +43,8 @@ export function Toaster() {
           translate: `-50% ${-depth * PEEK_PX}px`,
           scale: `${1 - depth * 0.05}`,
           zIndex: index,
-          opacity: depth < VISIBLE ? 1 : 0,
+          // `visibility`, not `opacity`: the arrival animation fills forwards and would hold opacity at 1.
+          visibility: depth < VISIBLE ? ('visible' as const) : ('hidden' as const),
         };
         return toast.tone === 'error' ? (
           <div
@@ -51,7 +52,7 @@ export function Toaster() {
             role="alert"
             style={style}
             className={cn(
-              'pointer-events-auto absolute bottom-0 left-1/2 w-max max-w-full px-4 py-3 text-body text-on-fill shadow-pop origin-top transition-[translate,scale,opacity] tb-arrive',
+              'pointer-events-auto absolute bottom-0 left-1/2 w-max max-w-full px-4 py-3 text-body text-on-fill shadow-pop origin-top transition-[translate,scale] tb-arrive',
               surface('inverse'),
             )}
           >
@@ -74,7 +75,7 @@ function SuccessToast({ toast, style }: { toast: Toast; style: CSSProperties }) 
       role="status"
       style={style}
       className={cn(
-        'pointer-events-auto absolute bottom-0 left-1/2 flex w-max max-w-full origin-top transition-[translate,scale,opacity] items-center gap-3 py-2 pl-4 pr-2 text-on-fill shadow-pop tb-arrive',
+        'pointer-events-auto absolute bottom-0 left-1/2 flex w-max max-w-full origin-top transition-[translate,scale] items-center gap-3 py-2 pl-4 pr-2 text-on-fill shadow-pop tb-arrive',
         surface('inverse'),
       )}
     >
