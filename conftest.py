@@ -1,6 +1,6 @@
 """Root pytest configuration.
 
-Test policy: see ``.mex/context/conventions.md``.
+Test policy: see ``CODING_STANDARDS.md``.
 All knobs that affect pass/fail live in ``pyproject.toml [tool.pytest.ini_options]``.
 This file is for fixtures and Hypothesis profile registration only.
 

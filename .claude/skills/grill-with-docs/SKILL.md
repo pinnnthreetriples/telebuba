@@ -1,5 +1,6 @@
 ---
 name: grill-with-docs
+disable-model-invocation: true
 description: Stress-test a significant Telebuba design against code and routed MEX memory, recording only durable outcomes.
 when_to_use: >
   Invoke for explicit grilling/stress-testing requests or significant design
