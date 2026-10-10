@@ -166,3 +166,20 @@ test('a slow-mode refusal reads as copy with its retry-after seconds', async () 
     );
   });
 });
+
+test('a mutation that reports its error inline raises no toast', async () => {
+  vi.mocked(toastError).mockClear();
+  const { result } = renderHook(
+    () =>
+      useMutation({
+        mutationFn: () => Promise.reject({ error: { code: 'conflict', message: 'exists' } }),
+        meta: { inlineError: true },
+      }),
+    { wrapper },
+  );
+  result.current.mutate(undefined);
+  await waitFor(() => {
+    expect(result.current.isError).toBe(true);
+  });
+  expect(toastError).not.toHaveBeenCalled();
+});

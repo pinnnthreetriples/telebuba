@@ -1,24 +1,29 @@
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Spinner } from '@/shared/ui';
+import { Icon, IconButton, Spinner } from '@/shared/ui';
 
 import type { BulkFile } from './useBulkImport';
 
 // One row per picked file, styled as the wizard's single-file card; a summary
-// line above once there is more than one.
+// line above once there is more than one. A failed row says why in one short
+// line and offers two icons: retry, and × that drops the row on the spot (nothing
+// was created server-side, so there is nothing to confirm).
 export function ImportFileList({
   files,
   onRetry,
+  onRemove,
 }: {
   files: BulkFile[];
-  onRetry: (index: number) => void;
+  onRetry: (id: number) => void;
+  onRemove: (id: number) => void;
 }) {
   const { t } = useTranslation();
   const ok = files.filter((f) => f.state === 'ok').length;
 
   const verdict = (file: BulkFile) => {
     if (file.state === 'importing') return t('accounts.addWizard.importing');
-    if (file.state === 'error') return t('accounts.addWizard.importError');
+    if (file.state === 'error')
+      return t(`accounts.addWizard.importFailure.${file.failure ?? 'other'}`);
     return file.accountIds.length > 1
       ? t('accounts.addWizard.importedMany', { count: file.accountIds.length })
       : t('accounts.addWizard.imported');
@@ -31,9 +36,9 @@ export function ImportFileList({
           {t('accounts.addWizard.importSummary', { ok, total: files.length })}
         </div>
       )}
-      {files.map((file, index) => (
+      {files.map((file) => (
         <div
-          key={index}
+          key={file.id}
           className="tb-fadeup rounded-md border border-line bg-surface-card px-3 py-3"
         >
           <div className="flex items-center gap-3">
@@ -52,17 +57,26 @@ export function ImportFileList({
               <Spinner className="m-1" />
             ) : file.state === 'error' ? (
               <>
-                <Button
-                  size="sm"
+                <IconButton
+                  tone="primary"
+                  aria-label={t('accounts.addWizard.retry')}
+                  title={t('accounts.addWizard.retry')}
                   onClick={() => {
-                    onRetry(index);
+                    onRetry(file.id);
                   }}
                 >
-                  {t('accounts.addWizard.retry')}
-                </Button>
-                <span className="m-1 inline-flex text-danger">
-                  <Icon name="x-circle" size={18} />
-                </span>
+                  <Icon name="refresh" size={16} />
+                </IconButton>
+                <IconButton
+                  tone="danger"
+                  aria-label={t('accounts.addWizard.removeFile')}
+                  title={t('accounts.addWizard.removeFile')}
+                  onClick={() => {
+                    onRemove(file.id);
+                  }}
+                >
+                  <Icon name="close" size={16} />
+                </IconButton>
               </>
             ) : (
               <span className="tb-pop m-1 inline-flex text-success-deep">

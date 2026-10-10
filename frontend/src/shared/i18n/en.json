@@ -850,7 +850,14 @@
       "browse": "Browse",
       "importing": "Importing…",
       "imported": "Account imported",
-      "importError": "Import failed",
+      "importFailure": {
+        "duplicate": "This account is already added",
+        "name": "File name: Latin letters, digits, _ and - only",
+        "size": "File is too large",
+        "broken": "File is damaged or not a session",
+        "other": "Server didn't respond — try again"
+      },
+      "removeFile": "Remove from list",
       "cancel": "Cancel",
       "next": "Next",
       "back": "Back",
