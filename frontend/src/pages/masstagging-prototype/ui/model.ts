@@ -16,7 +16,7 @@ export type MockAccount = {
   busy: boolean;
 };
 
-export const ACCOUNTS: MockAccount[] = [
+export let ACCOUNTS: MockAccount[] = [
   { id: 'a1', name: 'Артём', phone: '5563948135484', username: 'artemgs_y5x', country: 'BR', premium: true, proxyOk: true, ageDays: 8, spamblock: false, busy: false },
   { id: 'a2', name: 'Иван', phone: '992115542736', username: 'ivanhj_97x', country: 'TJ', premium: false, proxyOk: true, ageDays: 7, spamblock: false, busy: false },
   { id: 'a3', name: 'Carolina', phone: '998951950321', username: 'carolina1999_jbjw', country: 'US', premium: true, proxyOk: true, ageDays: 120, spamblock: false, busy: false },
@@ -27,6 +27,12 @@ export const ACCOUNTS: MockAccount[] = [
   { id: 'a8', name: 'Гена', phone: '16075550142', username: 'gena_rk20', country: 'US', premium: false, proxyOk: false, ageDays: 3, spamblock: false, busy: false },
   { id: 'a9', name: 'Софья', phone: '79210004411', username: 'sofya_lnt', country: 'KZ', premium: false, proxyOk: true, ageDays: 64, spamblock: true, busy: false },
 ];
+
+// Once the real fleet loads it replaces the mock one, so the picker is the app's own
+// and every estimate counts the accounts actually chosen.
+export function setFleet(accounts: MockAccount[]) {
+  ACCOUNTS = accounts;
+}
 
 export type Draft = {
   mode: Mode;
@@ -51,6 +57,12 @@ export type Draft = {
   maxTags: number;
   maxMinutes: number;
   skipTagged: boolean;
+  // Stories mode: open the DM with the auto-delete toggle before the mention, so the
+  // mention lands in an existing dialog and pushes (TgNinja does this every time).
+  primeFirst: boolean;
+  visibility: 'all' | 'contacts';
+  // First three days: fewer targets and longer pauses (GramGPT's warm-up schedule).
+  rampUp: boolean;
   lifetime: '6' | '12' | '24' | '48';
 };
 
@@ -71,13 +83,16 @@ export const INITIAL_DRAFT: Draft = {
   dialogDelayMin: 20,
   dialogDelayMax: 60,
   dialogsPerDay: 6,
-  floodPause: 300,
+  floodPause: 500,
   floodsToQuarantine: 3,
   volume: 'count',
   maxTags: 50,
   maxMinutes: 0,
   skipTagged: true,
-  lifetime: '24',
+  primeFirst: true,
+  visibility: 'all',
+  rampUp: true,
+  lifetime: '48',
 };
 
 // Telegram's own ceilings, per limits.tginfo.me (checked 2026-10). A free account
@@ -107,22 +122,28 @@ export function dailyReach(account: MockAccount, draft: Draft): number {
   return Math.min(stories * perStory, USERNAME_RESOLVES_PER_DAY);
 }
 
+// A spam-blocked account still posts the story, but the people it mentions get no
+// push — so it never takes work; it stays selected and shows as excluded.
+export function workingAccounts(draft: Draft): MockAccount[] {
+  return selectedAccounts(draft).filter((account) => !account.spamblock);
+}
+
 export function estimate(draft: Draft) {
-  const accounts = selectedAccounts(draft);
+  const accounts = workingAccounts(draft);
+  const excluded = selectedAccounts(draft).length - accounts.length;
   const perDay = accounts.reduce((sum, account) => sum + dailyReach(account, draft), 0);
   const free = accounts.filter((account) => !account.premium).length;
   const days = perDay === 0 ? null : Math.ceil(draft.targets.length / perDay);
-  return { accounts, perDay, free, days };
+  return { accounts, perDay, free, days, excluded };
 }
 
 // What blocks a launch, in the order the operator would fix it.
 export function blockers(draft: Draft): string[] {
   const out: string[] = [];
   if (draft.accountIds.length === 0) out.push('Не выбрано ни одного аккаунта');
+  else if (workingAccounts(draft).length === 0) out.push('У всех выбранных аккаунтов спамблок');
   if (draft.targets.length === 0) out.push('Список целей пуст');
   if (draft.mode === 'stories' && draft.media.length === 0) out.push('Пул медиа пуст');
-  if (draft.mode === 'stories' && selectedAccounts(draft).every((a) => !a.premium) && draft.accountIds.length > 0)
-    out.push('Все аккаунты без Premium — 1 сторис в сутки на аккаунт');
   return out;
 }
 

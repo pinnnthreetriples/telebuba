@@ -56,10 +56,10 @@ export function VariantC({
   const { accounts, free, perDay, days } = estimate(draft);
 
   return (
-    <div className="pb-empty">
-      <h1 className="m-0 mb-xl type-page-title">Масстегинг</h1>
+    <div className="pb-16">
+      <h1 className="m-0 mb-4 type-h1">Масстегинг</h1>
 
-      <ol className="m-0 mb-lg flex list-none flex-wrap gap-sm p-0">
+      <ol className="m-0 mb-4 flex list-none flex-wrap gap-2 p-0">
         {steps.map((s, index) => {
           const done = index < at;
           const active = index === at;
@@ -70,7 +70,7 @@ export function VariantC({
                 onClick={() => {
                   setStep(s.key);
                 }}
-                className={`inline-flex items-center gap-sm rounded-full border px-md py-tight text-body font-medium ${
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-body font-medium ${
                   active
                     ? 'border-action-primary bg-info-tint text-info-strong'
                     : done
@@ -79,8 +79,8 @@ export function VariantC({
                 }`}
               >
                 <span
-                  className={`flex size-chip items-center justify-center rounded-full text-tiny ${
-                    done ? 'bg-success text-on-success' : active ? 'bg-action-primary text-on-action' : 'bg-canvas'
+                  className={`flex size-chip items-center justify-center rounded-full text-small ${
+                    done ? 'bg-success text-on-fill' : active ? 'bg-action-primary text-on-fill' : 'bg-canvas'
                   }`}
                 >
                   {done ? <Icon name="check" size={12} /> : index + 1}
@@ -92,25 +92,25 @@ export function VariantC({
         })}
       </ol>
 
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
-        <Card className="flex min-w-0 flex-1 flex-col gap-lg px-xl py-xl">
-          <div className="type-card-title">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <Card className="flex min-w-0 flex-1 flex-col gap-4 px-6 py-6">
+          <div className="type-h3">
             {at + 1}. {current?.title}
           </div>
 
           {step === 'mode' ? (
             <SegmentedControl
               variant="outline"
-              className="grid gap-md sm:grid-cols-2"
+              className="grid gap-3 sm:grid-cols-2"
               value={draft.mode}
               ariaLabel="Режим"
               options={(['stories', 'priming'] as const satisfies readonly Mode[]).map((mode) => ({
                 value: mode,
                 label: (
-                  <span className="block py-sm text-left">
-                    <span className="block type-item-title">{MODE_LABEL[mode]}</span>
-                    <span className="mt-xs block type-caption">{MODE_BODY[mode]}</span>
-                    <span className="mt-sm flex flex-wrap gap-xs">
+                  <span className="block py-2 text-left">
+                    <span className="block type-body-medium">{MODE_LABEL[mode]}</span>
+                    <span className="mt-1 block type-small">{MODE_BODY[mode]}</span>
+                    <span className="mt-2 flex flex-wrap gap-1">
                       {mode === 'stories' ? (
                         <>
                           <Badge tone="info">Premium желателен</Badge>
@@ -135,12 +135,12 @@ export function VariantC({
           {step === 'targets' ? <TargetsEditor draft={draft} patch={patch} /> : null}
           {step === 'creative' ? <CreativeFields draft={draft} patch={patch} /> : null}
           {step === 'pacing' ? (
-            <div className="grid gap-xl md:grid-cols-2 md:gap-2xl">
+            <div className="grid gap-4 md:grid-cols-2 md:gap-6">
               <div>
                 <Eyebrow title="Задержки и лимиты" />
                 <PacingRows draft={draft} patch={patch} inactive="hide" />
               </div>
-              <div className="flex flex-col gap-lg">
+              <div className="flex flex-col gap-4">
                 <div>
                   <Eyebrow title="Объём" caption="на каждый аккаунт" />
                   <VolumeFields draft={draft} patch={patch} />
@@ -153,7 +153,7 @@ export function VariantC({
             <LaunchPanel draft={draft} running={running} onToggle={onToggleRun} />
           ) : null}
 
-          <div className="flex justify-between border-t border-line-row pt-lg">
+          <div className="flex justify-between border-t border-canvas pt-4">
             <Button
               variant="ghost"
               disabled={at === 0}
@@ -178,17 +178,17 @@ export function VariantC({
           </div>
         </Card>
 
-        <div className="flex flex-col gap-md lg:w-sidebar lg:shrink-0">
-          <Card className="flex flex-col gap-md px-lg py-lg">
+        <div className="flex flex-col gap-3 lg:w-sidebar lg:shrink-0">
+          <Card className="flex flex-col gap-3 px-4 py-4">
             <Eyebrow title="Сводка" caption={MODE_LABEL[draft.mode]} />
-            <div className="grid grid-cols-2 gap-md">
+            <div className="grid grid-cols-2 gap-3">
               <Stat label={free > 0 ? `аккаунтов, без Premium ${String(free)}` : 'аккаунтов'} value={String(accounts.length)} />
               <Stat label="целей" value={String(draft.targets.length)} />
               <Stat label="отметок в сутки" value={String(perDay)} />
               <Stat label="дней на список" value={days === null ? '—' : String(days)} />
             </div>
           </Card>
-          <Card className="px-lg py-lg">
+          <Card className="px-4 py-4">
             <TargetPreview draft={draft} />
           </Card>
         </div>

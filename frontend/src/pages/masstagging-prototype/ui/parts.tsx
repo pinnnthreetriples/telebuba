@@ -54,21 +54,35 @@ export function SectionHead({
   badge?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-md">
+    <div className="flex min-w-0 items-center gap-3">
       <span className={HEADING_ICON_TILE}>
         <Icon name={icon} size={16} />
       </span>
-      <span className="type-card-title">{title}</span>
+      <span className="type-h3">{title}</span>
       {badge}
     </div>
   );
 }
 
-export function Eyebrow({ title, caption }: { title: string; caption?: string }) {
+export function Eyebrow({
+  title,
+  caption,
+  hint,
+  example,
+  aside,
+}: {
+  title: string;
+  caption?: string;
+  hint?: string;
+  example?: string;
+  aside?: ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-baseline gap-sm pb-sm">
-      <span className="type-eyebrow">{title}</span>
-      {caption === undefined ? null : <span className="type-caption">{caption}</span>}
+    <div className="flex flex-wrap items-center gap-2 pb-2">
+      <span className="type-small-medium">{title}</span>
+      {caption === undefined ? null : <span className="type-small">{caption}</span>}
+      {aside}
+      {hint === undefined ? null : <HelpHint text={hint} example={example} />}
     </div>
   );
 }
@@ -76,6 +90,7 @@ export function Eyebrow({ title, caption }: { title: string; caption?: string })
 export function Row({
   label,
   hint,
+  example,
   caption,
   dim = false,
   first = false,
@@ -83,6 +98,7 @@ export function Row({
 }: {
   label: string;
   hint?: string;
+  example?: string;
   caption?: string;
   dim?: boolean;
   first?: boolean;
@@ -90,14 +106,13 @@ export function Row({
 }) {
   return (
     <div
-      className={`flex min-h-touch flex-wrap items-center gap-md py-sm ${first ? '' : 'border-t border-line-row'} ${dim ? 'opacity-60' : ''}`}
+      className={`flex min-h-touch flex-wrap items-center gap-3 py-2 ${first ? '' : 'border-t border-canvas'} ${dim ? 'opacity-60' : ''}`}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-xs">
-        <div className="min-w-0">
-          <div className="text-body">{label}</div>
-          {caption === undefined ? null : <div className="mt-hair type-caption">{caption}</div>}
-        </div>
-        {hint === undefined ? null : <HelpHint text={hint} />}
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <span className="min-w-0 text-body">{label}</span>
+        {hint === undefined && caption === undefined ? null : (
+          <HelpHint text={[hint, caption].filter(Boolean).join(' ')} example={example} />
+        )}
       </div>
       {children}
     </div>
@@ -118,9 +133,9 @@ export function Num({
   unit?: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-xs">
+    <span className="inline-flex items-center gap-1">
       <Input
-        size="xs"
+        size="sm"
         type="number"
         className="w-number tabular-nums"
         min={0}
@@ -131,7 +146,7 @@ export function Num({
           onChange(Math.max(0, Number(event.target.value) || 0));
         }}
       />
-      {unit === undefined ? null : <span className="type-caption">{unit}</span>}
+      {unit === undefined ? null : <span className="type-small">{unit}</span>}
     </span>
   );
 }
@@ -152,7 +167,7 @@ export function NumRange({
   unit: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-sm">
+    <span className="inline-flex items-center gap-2">
       <Num
         value={min}
         disabled={disabled}
@@ -161,7 +176,7 @@ export function NumRange({
           onChange(next, Math.max(next, max));
         }}
       />
-      <span className="type-caption">—</span>
+      <span className="type-small">—</span>
       <Num
         value={max}
         disabled={disabled}
@@ -179,7 +194,7 @@ export function NumRange({
 
 export function Initials({ name }: { name: string }) {
   return (
-    <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-body font-semibold text-info-strong">
+    <span className="flex size-tile shrink-0 items-center justify-center rounded-full bg-info-tint text-body font-medium text-info-strong">
       {name.slice(0, 1)}
     </span>
   );
@@ -187,7 +202,7 @@ export function Initials({ name }: { name: string }) {
 
 export function AccountBadges({ account, mode }: { account: MockAccount; mode: Mode }) {
   return (
-    <span className="flex flex-wrap items-center gap-xs">
+    <span className="flex flex-wrap items-center gap-1">
       {account.premium ? (
         <Badge tone="info">Premium</Badge>
       ) : mode === 'stories' ? (
@@ -219,14 +234,14 @@ export function AccountLine({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-md">
+    <div className="flex min-w-0 flex-1 items-center gap-3">
       <Initials name={account.name} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-sm">
-          <span className="type-item-title">{account.name}</span>
-          <span className="type-caption">{account.country}</span>
+        <div className="flex items-center gap-2">
+          <span className="type-body-medium">{account.name}</span>
+          <span className="type-small">{account.country}</span>
         </div>
-        <div className="truncate type-caption">
+        <div className="truncate type-small">
           {account.phone} · <span className="text-info-strong">@{account.username}</span>
         </div>
       </div>
@@ -266,7 +281,7 @@ export function AccountFilterBar({
   setFilters: (next: AccountFilters) => void;
 }) {
   const chip = (key: 'premiumOnly' | 'hideBusy' | 'hideSpam', label: string) => (
-    <label className="inline-flex cursor-pointer items-center gap-tight rounded-full border border-line px-md py-xs text-body">
+    <label className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-line px-3 py-1 text-body">
       <input
         type="checkbox"
         className="accent-action-primary"
@@ -279,7 +294,7 @@ export function AccountFilterBar({
     </label>
   );
   return (
-    <div className="flex flex-col gap-sm">
+    <div className="flex flex-col gap-2">
       <Input
         size="sm"
         placeholder="Поиск по имени, телефону, username…"
@@ -288,7 +303,7 @@ export function AccountFilterBar({
           setFilters({ ...filters, search: event.target.value });
         }}
       />
-      <div className="flex flex-wrap gap-sm">
+      <div className="flex flex-wrap gap-2">
         {chip('premiumOnly', 'Только Premium')}
         {chip('hideBusy', 'Скрыть в работе')}
         {chip('hideSpam', 'Скрыть со спамблоком')}
@@ -309,14 +324,14 @@ export function AccountChecklist({ draft, patch }: { draft: Draft; patch: Patch 
   };
   const allOn = visible.length > 0 && visible.every((a) => draft.accountIds.includes(a.id));
   return (
-    <div className="flex flex-col gap-md">
+    <div className="flex flex-col gap-3">
       <AccountFilterBar filters={filters} setFilters={setFilters} />
       <div className="flex items-center justify-between">
-        <span className="type-caption">
+        <span className="type-small">
           Выбрано {draft.accountIds.length} из {ACCOUNTS.length}
         </span>
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           onClick={() => {
             patch({
@@ -333,7 +348,7 @@ export function AccountChecklist({ draft, patch }: { draft: Draft; patch: Patch 
         {visible.map((account) => (
           <label
             key={account.id}
-            className="flex cursor-pointer items-center gap-md border-t border-line-row py-sm first:border-t-0"
+            className="flex cursor-pointer items-center gap-3 border-t border-canvas py-2 first:border-t-0"
           >
             <input
               type="checkbox"
@@ -374,7 +389,7 @@ export function TargetsEditor({ draft, patch }: { draft: Draft; patch: Patch }) 
     setEntry('');
   };
   return (
-    <div className="flex flex-col gap-md">
+    <div className="flex flex-col gap-3">
       <SegmentedControl
         variant="tray"
         value={draft.targetSource}
@@ -396,7 +411,7 @@ export function TargetsEditor({ draft, patch }: { draft: Draft; patch: Patch }) 
               setEntry(event.target.value);
             }}
           />
-          <div className="flex flex-wrap gap-sm">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary" disabled={entry.trim() === ''} onClick={add}>
               <Icon name="plus" size={14} />
               Добавить ({parseTargets(entry).length})
@@ -419,16 +434,14 @@ export function TargetsEditor({ draft, patch }: { draft: Draft; patch: Patch }) 
           </div>
         </>
       ) : (
-        <Notice tone="info">
-          Цели берутся из контактов каждого выбранного аккаунта: аккаунт отмечает только свои контакты.
-        </Notice>
+        <span className="type-body text-content-subtle">Цели — контакты выбранных аккаунтов.</span>
       )}
       {draft.targets.length === 0 ? null : (
-        <div className="flex flex-wrap gap-sm">
+        <div className="flex flex-wrap gap-2">
           {draft.targets.map((target) => (
             <span
               key={target}
-              className="inline-flex items-center gap-sm rounded-full border border-line bg-canvas px-md py-tight text-body text-content-secondary"
+              className="inline-flex items-center gap-2 rounded-full border border-line bg-canvas px-3 py-1 text-body text-content-secondary"
             >
               {target}
               <IconButton
@@ -445,10 +458,6 @@ export function TargetsEditor({ draft, patch }: { draft: Draft; patch: Patch }) 
           ))}
         </div>
       )}
-      <span className="type-caption">
-        Telegram резолвит до {USERNAME_RESOLVES_PER_DAY} username в сутки на аккаунт — это потолок
-        отметок по @username.
-      </span>
     </div>
   );
 }
@@ -465,28 +474,33 @@ export function CreativeFields({
   disabled?: boolean;
 }) {
   return (
-    <fieldset disabled={disabled} className={`flex flex-col gap-md ${disabled ? 'opacity-60' : ''}`}>
+    <fieldset disabled={disabled} className={`flex flex-col gap-3 ${disabled ? 'opacity-60' : ''}`}>
       <div
         className={surface(
           'inset',
-          'flex flex-col items-center gap-xs border border-dashed border-line-strong px-lg py-xl text-center',
+          'flex flex-col items-center gap-1 border border-dashed border-line-strong px-4 py-6 text-center',
         )}
       >
         <Icon name="upload-cloud" size={20} />
-        <span className="text-body">Перетащите фото или видео сюда</span>
-        <span className="type-caption">Сторис ротируют пул по кругу · видео до 60 с</span>
+        <span className="flex items-center gap-1 text-body">
+          Перетащите фото или видео сюда
+          <HelpHint text="Сторис берут медиа из пула по кругу. Видео — до 60 секунд." />
+        </span>
       </div>
-      <div className="flex flex-wrap gap-sm">
+      <div className="flex flex-wrap gap-2">
         {draft.media.map((file) => (
           <Badge key={file} size="sm">
             <Icon name="video" size={12} /> {file}
           </Badge>
         ))}
       </div>
-      <label className="flex flex-col gap-xs">
+      <label className="flex flex-col gap-1">
         <span className="flex items-center justify-between">
-          <span className="type-label">Подпись к сторис</span>
-          <span className="type-caption tabular-nums">
+          <span className="flex items-center gap-1">
+            <span className="type-body-medium">Подпись к сторис</span>
+            <HelpHint text="Упоминания целей дописываются к подписи автоматически. Без Premium — до 200 символов." />
+          </span>
+          <span className="type-small tabular-nums">
             {draft.caption.length}/{FREE_CAPTION_LIMIT}
           </span>
         </span>
@@ -496,12 +510,11 @@ export function CreativeFields({
             patch({ caption: event.target.value });
           }}
         />
-        <span className="type-caption">Упоминания целей дописываются к подписи автоматически.</span>
       </label>
-      <div className="grid gap-md sm:grid-cols-2">
-        <label className="flex flex-col gap-xs">
-          <span className="flex items-center gap-xs">
-            <span className="type-label">Ссылка-стикер</span>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="flex items-center gap-1">
+            <span className="type-body-medium">Ссылка-стикер</span>
             <Badge tone="info">Premium</Badge>
           </span>
           <Input
@@ -512,8 +525,8 @@ export function CreativeFields({
             }}
           />
         </label>
-        <label className="flex flex-col gap-xs">
-          <span className="type-label">Вид ссылки</span>
+        <label className="flex flex-col gap-1">
+          <span className="type-body-medium">Вид ссылки</span>
           <Select
             value={draft.linkStyle}
             disabled={disabled}
@@ -528,8 +541,8 @@ export function CreativeFields({
           />
         </label>
       </div>
-      <label className="flex flex-col gap-xs">
-        <span className="type-label">Текст на плашке</span>
+      <label className="flex flex-col gap-1">
+        <span className="type-body-medium">Текст на плашке</span>
         <Input
           size="sm"
           value={draft.plateText}
@@ -647,7 +660,7 @@ export function PacingRows({
 
 export function VolumeFields({ draft, patch }: { draft: Draft; patch: Patch }) {
   return (
-    <div className="flex flex-col gap-md">
+    <div className="flex flex-col gap-3">
       <SegmentedControl
         variant="tray"
         value={draft.volume}
@@ -709,7 +722,22 @@ export function StoryOptions({
           />
         </Row>
       ) : null}
-      <Row first={!withPrimingSwitch} label="Пропускать уже отмеченных" hint="Цель, которую любой аккаунт уже отметил, второй раз не трогаем.">
+      {priming ? null : (
+        <Row
+          first={!withPrimingSwitch}
+          label="Сначала создать диалог"
+          hint="Перед отметкой аккаунт включает и выключает автоудаление в личке с целью. Без диалога отметка может не прийти пушем."
+        >
+          <Switch
+            checked={draft.primeFirst}
+            label="Сначала создать диалог"
+            onChange={(primeFirst) => {
+              patch({ primeFirst });
+            }}
+          />
+        </Row>
+      )}
+      <Row first={!withPrimingSwitch && priming} label="Пропускать уже отмеченных" hint="Цель, которую любой аккаунт уже отметил, второй раз не трогаем.">
         <Switch
           checked={draft.skipTagged}
           label="Пропускать уже отмеченных"
@@ -718,8 +746,32 @@ export function StoryOptions({
           }}
         />
       </Row>
-      {priming && withPrimingSwitch ? null : (
-        <Row label="Время жизни сторис" dim={priming}>
+      {priming ? null : (
+        <Row
+          label="Кто видит сторис"
+          dim={priming}
+          hint="Если сторис видят не все, отмеченная цель может её не увидеть."
+        >
+          <Select
+            value={draft.visibility}
+            disabled={priming}
+            ariaLabel="Кто видит сторис"
+            options={[
+              { value: 'all', label: 'Все' },
+              { value: 'contacts', label: 'Только контакты' },
+            ]}
+            onChange={(value) => {
+              patch({ visibility: value as Draft['visibility'] });
+            }}
+          />
+        </Row>
+      )}
+      {priming ? null : (
+        <Row
+          label="Время жизни сторис"
+          dim={priming}
+          hint="48 часов — дольше висит и больше переходов. 6, 12 и 48 ч — только Premium; без него сторис живёт 24 ч."
+        >
           <Select
             value={draft.lifetime}
             disabled={priming}
@@ -745,23 +797,23 @@ export function StoryOptions({
 export function TargetPreview({ draft }: { draft: Draft }) {
   const sender = 'Артём';
   return (
-    <div className={surface('inset', 'flex flex-col gap-sm p-md')}>
-      <span className="type-eyebrow">Что увидит цель</span>
+    <div className={surface('inset', 'flex flex-col gap-2 p-3')}>
+      <span className="type-small-medium">Что увидит цель</span>
       {draft.mode === 'stories' ? (
         <>
-          <div className="flex items-center gap-sm rounded-lg bg-surface-card p-sm shadow-ring">
+          <div className="flex items-center gap-2 rounded-lg bg-surface-card p-2 shadow-ring">
             <Initials name={sender} />
             <div className="min-w-0">
-              <div className="type-item-title">{sender}</div>
-              <div className="type-caption">упомянул(а) вас в истории</div>
+              <div className="type-body-medium">{sender}</div>
+              <div className="type-small">упомянул(а) вас в истории</div>
             </div>
           </div>
-          <div className="flex flex-col items-center gap-sm rounded-lg bg-term p-lg text-center text-term-text">
+          <div className="flex flex-col items-center gap-2 rounded-lg bg-term p-4 text-center text-term-text">
             <Icon name="play" size={20} />
-            <span className="text-body font-semibold">{draft.caption || 'Подпись'}</span>
-            <span className="text-tiny">@bivenmo @eduardafc_b7z</span>
+            <span className="text-body font-medium">{draft.caption || 'Подпись'}</span>
+            <span className="text-small">@bivenmo @eduardafc_b7z</span>
             {draft.linkStyle === 'visible' ? (
-              <span className="rounded-full bg-surface-card px-md py-xs text-tiny font-semibold text-content-primary">
+              <span className="rounded-full bg-surface-card px-3 py-1 text-small font-medium text-content-primary">
                 {draft.plateText || 'Ссылка'}
               </span>
             ) : null}
@@ -769,23 +821,23 @@ export function TargetPreview({ draft }: { draft: Draft }) {
         </>
       ) : (
         <>
-          <div className="flex flex-col gap-xs rounded-lg bg-surface-card p-sm shadow-ring">
-            <div className="flex items-center gap-sm pb-xs">
+          <div className="flex flex-col gap-1 rounded-lg bg-surface-card p-2 shadow-ring">
+            <div className="flex items-center gap-2 pb-1">
               <Initials name={sender} />
-              <span className="type-item-title">{sender}</span>
+              <span className="type-body-medium">{sender}</span>
             </div>
-            <span className="self-center rounded-full bg-canvas px-md py-xs text-tiny text-content-muted">
+            <span className="self-center rounded-full bg-canvas px-3 py-1 text-small text-content-muted">
               {sender} включил(а) автоудаление: 1 день
             </span>
-            <span className="self-center rounded-full bg-canvas px-md py-xs text-tiny text-content-muted">
+            <span className="self-center rounded-full bg-canvas px-3 py-1 text-small text-content-muted">
               {sender} отключил(а) автоудаление
             </span>
-            <div className="flex gap-sm pt-xs">
-              <span className="flex-1 text-center text-tiny font-semibold text-info-strong">Добавить контакт</span>
-              <span className="flex-1 text-center text-tiny font-semibold text-danger">Заблокировать</span>
+            <div className="flex gap-2 pt-1">
+              <span className="flex-1 text-center text-small font-medium text-info-strong">Добавить контакт</span>
+              <span className="flex-1 text-center text-small font-medium text-danger">Заблокировать</span>
             </div>
           </div>
-          <span className="type-caption">
+          <span className="type-small">
             Дальше цель открывает профиль: там должен быть креатив — закреплённый канал-переходник или
             сторис в профиле. Оформляется в карточке аккаунта.
           </span>
@@ -806,9 +858,9 @@ const LOG_LINES = [
 
 export function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-hair">
-      <span className={`type-stat tabular-nums ${tone ?? ''}`}>{value}</span>
-      <span className="type-caption">{label}</span>
+    <div className="flex flex-col gap-1">
+      <span className={`type-h1 tabular-nums ${tone ?? ''}`}>{value}</span>
+      <span className="type-small">{label}</span>
     </div>
   );
 }
@@ -826,8 +878,8 @@ export function LaunchPanel({
   const blocked = blockers(draft);
   const verb = draft.mode === 'priming' ? 'прайминг' : 'отметки';
   return (
-    <div className="flex flex-col gap-md">
-      <div className="grid grid-cols-2 gap-md">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="аккаунтов" value={String(accounts.length)} />
         <Stat label="целей" value={String(draft.targets.length)} />
         <Stat label="отметок в сутки, потолок" value={String(perDay)} />
@@ -835,7 +887,7 @@ export function LaunchPanel({
       </div>
       {blocked.length === 0 ? null : (
         <Notice tone="danger" bordered>
-          <ul className="m-0 flex list-none flex-col gap-xs p-0">
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {blocked.map((item) => (
               <li key={item}>{item}</li>
             ))}
@@ -854,7 +906,7 @@ export function LaunchPanel({
       </Button>
       {running ? (
         <>
-          <div className="grid grid-cols-3 gap-md border-t border-line-row pt-md">
+          <div className="grid grid-cols-3 gap-3 border-t border-canvas pt-3">
             <Stat label="отмечено" value="14" tone="text-success-deep" />
             <Stat label="ошибок" value="1" tone="text-danger-deep" />
             <Stat label="осталось" value={String(Math.max(draft.targets.length - 15, 0))} />
@@ -869,3 +921,11 @@ export function LaunchPanel({
     </div>
   );
 }
+
+export const TARGETS_HINT = `@username, телефон или чат — из чата берутся его участники. Telegram находит не больше ${String(USERNAME_RESOLVES_PER_DAY)} username в сутки на аккаунт: это потолок отметок по @username.`;
+
+export const MODE_HINT =
+  'Отметки в историях: аккаунт публикует сторис из пула медиа и упоминает в ней цели — им приходит пуш «вас упомянули в истории». Нужен Premium: без него Telegram даёт 1 сторис в сутки. Прайминг: без сторис и сообщений — аккаунт включает и выключает автоудаление в личке с целью, у неё остаётся служебная строка, и она идёт смотреть профиль. Креатив держите в профиле.';
+
+export const PREMIUM_HINT =
+  'Telegram даёт аккаунту без Premium 1 сторис в сутки (до 5 отметок) и всего несколько сторис за жизнь аккаунта, без ссылок-стикеров. С Premium — до 100 сторис в сутки. Для прайминга Premium не нужен.';

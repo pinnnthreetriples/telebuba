@@ -11,7 +11,6 @@ import {
   LaunchPanel,
   PacingRows,
   PremiumNotice,
-  SectionHead,
   StoryOptions,
   TargetsEditor,
   useAccountFilters,
@@ -25,11 +24,11 @@ function DualList({ draft, patch }: { draft: Draft; patch: Patch }) {
   const available = visible.filter((a) => !draft.accountIds.includes(a.id));
   const chosen = ACCOUNTS.filter((a) => draft.accountIds.includes(a.id));
   return (
-    <div className="flex flex-col gap-md">
-      <div className="grid gap-lg md:grid-cols-2">
-        <div className="flex flex-col gap-md rounded-lg border border-line p-md">
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
           <div className="flex items-center justify-between">
-            <span className="type-item-title">Доступные аккаунты</span>
+            <span className="type-body-medium">Доступные аккаунты</span>
             <Badge>{available.length}</Badge>
           </div>
           <AccountFilterBar filters={filters} setFilters={setFilters} />
@@ -45,7 +44,7 @@ function DualList({ draft, patch }: { draft: Draft; patch: Patch }) {
           </Button>
           <div className="flex flex-col">
             {available.map((account) => (
-              <div key={account.id} className="flex items-center border-t border-line-row py-sm">
+              <div key={account.id} className="flex items-center border-t border-canvas py-2">
                 <AccountLine
                   account={account}
                   mode={draft.mode}
@@ -66,9 +65,9 @@ function DualList({ draft, patch }: { draft: Draft; patch: Patch }) {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-md rounded-lg border border-line p-md">
+        <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
           <div className="flex items-center justify-between">
-            <span className="type-item-title">Выбрано для отметок</span>
+            <span className="type-body-medium">Выбрано для отметок</span>
             <Badge tone="info">{chosen.length}</Badge>
           </div>
           <Button
@@ -84,7 +83,7 @@ function DualList({ draft, patch }: { draft: Draft; patch: Patch }) {
           </Button>
           <div className="flex flex-col">
             {chosen.map((account) => (
-              <div key={account.id} className="flex items-center border-t border-line-row py-sm">
+              <div key={account.id} className="flex items-center border-t border-canvas py-2">
                 <AccountLine
                   account={account}
                   mode={draft.mode}
@@ -128,10 +127,10 @@ export function VariantA({
   const priming = draft.mode === 'priming';
   const { perDay } = estimate(draft);
   return (
-    <div className="flex flex-col gap-lg pb-empty">
+    <div className="flex flex-col gap-4 pb-16">
       <div>
-        <h1 className="m-0 mb-xs type-page-title">Масстегинг</h1>
-        <p className="m-0 type-caption">
+        <h1 className="m-0 mb-1 type-h1">Масстегинг</h1>
+        <p className="m-0 type-small">
           Отмечаем пользователей в сторис по списку целей — пуш «вас упомянули в истории» читается как
           соцвзаимодействие, а не реклама.
         </p>
@@ -140,51 +139,33 @@ export function VariantA({
       <CollapsibleCard
         defaultOpen
         label="Аккаунты"
-        header={
-          <SectionHead
-            icon="users"
-            title="Аккаунты"
-            badge={<Badge tone="info">{draft.accountIds.length} выбрано</Badge>}
-          />
-        }
+        title="Аккаунты" icon={<Icon name="users" size={16} />} badge={<Badge tone="info">{draft.accountIds.length} выбрано</Badge>}
       >
         <DualList draft={draft} patch={patch} />
       </CollapsibleCard>
 
-      <div className="grid items-start gap-lg lg:grid-cols-2">
-        <div className="flex flex-col gap-lg">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="flex flex-col gap-4">
           <CollapsibleCard
             defaultOpen
             label="Цели"
-            header={
-              <SectionHead
-                icon="user-plus"
-                title="Цели (кого отмечаем)"
-                badge={<Badge>{draft.targets.length}</Badge>}
-              />
-            }
+            title="Цели (кого отмечаем)" icon={<Icon name="user-plus" size={16} />} badge={<Badge>{draft.targets.length}</Badge>}
           >
             <TargetsEditor draft={draft} patch={patch} />
           </CollapsibleCard>
           <CollapsibleCard
             defaultOpen
             label="Пул медиа"
-            header={
-              <SectionHead
-                icon="video"
-                title="Пул медиа"
-                badge={
+            title="Пул медиа" icon={<Icon name="video" size={16} />} badge={
                   priming ? (
                     <Badge tone="warning">не используется</Badge>
                   ) : (
                     <Badge>{draft.media.length} файлов</Badge>
                   )
                 }
-              />
-            }
           >
             {priming ? (
-              <Notice tone="info" className="mb-md">
+              <Notice tone="info" className="mb-3">
                 {PRIMING_OFF}
               </Notice>
             ) : null}
@@ -192,14 +173,14 @@ export function VariantA({
           </CollapsibleCard>
         </div>
 
-        <div className="flex flex-col gap-lg">
+        <div className="flex flex-col gap-4">
           <CollapsibleCard
             defaultOpen
             label="Задержки"
-            header={<SectionHead icon="clock" title="Задержки и лимиты" />}
+            title="Задержки и лимиты" icon={<Icon name="clock" size={16} />}
           >
             {priming ? (
-              <Notice tone="info" className="mb-sm">
+              <Notice tone="info" className="mb-2">
                 Режим «Только прайминг»: настройки сторис не используются. Пауза перед диалогом и
                 флуд-лимиты — работают.
               </Notice>
@@ -209,21 +190,21 @@ export function VariantA({
           <CollapsibleCard
             defaultOpen
             label="Темп и объём"
-            header={<SectionHead icon="chart" title="Темп и объём" />}
+            title="Темп и объём" icon={<Icon name="chart" size={16} />}
           >
             <VolumeFields draft={draft} patch={patch} />
           </CollapsibleCard>
           <CollapsibleCard
             defaultOpen
             label="Настройки сторис"
-            header={<SectionHead icon="eye" title="Настройки сторис" />}
+            title="Настройки сторис" icon={<Icon name="eye" size={16} />}
           >
             <StoryOptions draft={draft} patch={patch} withPrimingSwitch />
           </CollapsibleCard>
           <CollapsibleCard
             defaultOpen
             label="Запуск"
-            header={<SectionHead icon="play" title="Запуск" badge={<Badge>{perDay} в сутки</Badge>} />}
+            title="Запуск" icon={<Icon name="play" size={16} />} badge={<Badge>{perDay} в сутки</Badge>}
           >
             <LaunchPanel draft={draft} running={running} onToggle={onToggleRun} />
           </CollapsibleCard>

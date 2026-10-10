@@ -34,23 +34,23 @@ export function VariantB({
 }) {
   const priming = draft.mode === 'priming';
   return (
-    <div className="pb-empty">
-      <h1 className="m-0 mb-xl type-page-title">Масстегинг</h1>
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
-        <div className="flex flex-col gap-md lg:w-sidebar lg:shrink-0">
-          <Card className="px-lg py-lg">
+    <div className="pb-16">
+      <h1 className="m-0 mb-4 type-h1">Масстегинг</h1>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-3 lg:w-sidebar lg:shrink-0">
+          <Card className="px-4 py-4">
             <Eyebrow title="Режим" />
             <SegmentedControl
               variant="outline"
-              className="grid gap-sm"
+              className="grid gap-2"
               value={draft.mode}
               ariaLabel="Режим"
               options={(['stories', 'priming'] as const satisfies readonly Mode[]).map((mode) => ({
                 value: mode,
                 label: (
                   <span className="block text-left">
-                    <span className="block type-item-title">{MODE_LABEL[mode]}</span>
-                    <span className="mt-xs block type-caption">{MODE_BODY[mode]}</span>
+                    <span className="block type-body-medium">{MODE_LABEL[mode]}</span>
+                    <span className="mt-1 block type-small">{MODE_BODY[mode]}</span>
                   </span>
                 ),
               }))}
@@ -59,26 +59,26 @@ export function VariantB({
               }}
             />
           </Card>
-          <Card className="px-lg py-lg">
+          <Card className="px-4 py-4">
             <TargetPreview draft={draft} />
           </Card>
-          <Card className="px-lg py-lg">
+          <Card className="px-4 py-4">
             <Eyebrow title="Запуск" />
             <LaunchPanel draft={draft} running={running} onToggle={onToggleRun} />
           </Card>
         </div>
 
-        <Card className="flex min-w-0 flex-1 flex-col gap-xl px-xl py-xl">
+        <Card className="flex min-w-0 flex-1 flex-col gap-4 px-6 py-6">
           <section>
             <Eyebrow title="Аккаунты" caption="кто отмечает" />
             <AccountChecklist draft={draft} patch={patch} />
           </section>
-          <section className="border-t border-line pt-lg">
+          <section className="border-t border-line pt-4">
             <Eyebrow title="Цели" caption={`${String(draft.targets.length)} в списке`} />
             <TargetsEditor draft={draft} patch={patch} />
           </section>
           {priming ? (
-            <section className="border-t border-line pt-lg">
+            <section className="border-t border-line pt-4">
               <Eyebrow title="Креатив" caption="в профиле аккаунта" />
               <Notice tone="info">
                 В прайминге сторис не публикуются. Цель увидит то, что уже лежит в профиле аккаунта:
@@ -86,17 +86,17 @@ export function VariantB({
               </Notice>
             </section>
           ) : (
-            <section className="border-t border-line pt-lg">
+            <section className="border-t border-line pt-4">
               <Eyebrow title="Креатив" caption="пул медиа, подпись, ссылка" />
               <CreativeFields draft={draft} patch={patch} />
             </section>
           )}
-          <section className="grid gap-xl border-t border-line pt-lg md:grid-cols-2 md:gap-2xl md:divide-x md:divide-line">
+          <section className="grid gap-4 border-t border-line pt-4 md:grid-cols-2 md:gap-6 md:divide-x md:divide-line">
             <div className="min-w-0">
               <Eyebrow title="Задержки и лимиты" />
               <PacingRows draft={draft} patch={patch} inactive="hide" />
             </div>
-            <div className="flex min-w-0 flex-col gap-lg md:pl-2xl">
+            <div className="flex min-w-0 flex-col gap-4 md:pl-6">
               <div>
                 <Eyebrow title="Объём" caption="на каждый аккаунт" />
                 <VolumeFields draft={draft} patch={patch} />

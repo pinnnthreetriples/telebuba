@@ -9,6 +9,9 @@ Arrows in the bottom bar (or ← →) switch variants; the draft is shared, so t
 | A | Reference (GramGPT) layout: dual-list account picker, two columns of collapsible cards | «Только прайминг» switch in «Настройки сторис»; story fields go grey |
 | B | Neuroshilling shape: 328px sidebar (mode, what the target sees, launch) + one settings card | Mode picked first as two cards; story-only sections disappear |
 | C | Six-step wizard + sticky summary | Mode is step 1; the «Креатив» step is skipped |
+| D (default) | Chat broadcast / neuroshilling shape: campaigns sidebar, PipelineCard, targets board, log; settings in a dialog | Mode is section 1 of the dialog; the «Сторис» section disappears |
+
+In D the sidebar campaigns cover every state: draft/ready (the live one, wired to the draft), paused, resting until tomorrow, stopped on flood limits, done. The account picker uses the real fleet (read-only). Competitor research: `RESEARCH.md`.
 
 ## Domain facts the UI is built on (Tavily research, 2026-10)
 - **Story mentions:** the account posts a story from the media pool, and its caption @mentions N targets → the target gets a "mentioned you in a story" push.
