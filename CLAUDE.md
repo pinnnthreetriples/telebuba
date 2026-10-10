@@ -17,7 +17,7 @@ Telegram operations dashboard for accounts, proxies, warming, neurocomment, neur
 ## Commands
 - Backend: `uv run pytest`; quality: `uv run pre-commit run --all-files`.
 - Frontend: `cd frontend && npm run gates && npm run build`.
-- Memory: `npx --yes mex-agent@0.7.1 check --quiet`.
+- Memory: `npx --yes mex-agent@0.8.3 check --quiet`.
 - Setup, CI and pre-push commands live in `.mex/context/setup.md`.
 
 ## Memory discipline

@@ -1,4 +1,6 @@
 ---
+name: runtime-chat-broadcast
+description: Chat broadcast campaigns, joins into lists, chains, rounds and the board by chat.
 last_updated: 2026-10-08
 edges:
   - target: context/runtime-neuroshilling.md

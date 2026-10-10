@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sqlite3
+import struct
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -41,15 +42,19 @@ def _graph(tmp_path: Path, nodes: dict[str, str]) -> None:
     connection = sqlite3.connect(tmp_path / ".mex" / "graph.db")
     with connection:
         connection.execute("CREATE TABLE nodes (id TEXT PRIMARY KEY, body_hash TEXT)")
+        # mex's schema v4: keyed by subject, `scaffold_file` a read-only projection.
         connection.execute(
             "CREATE TABLE _mex_grounded_source ("
-            "scaffold_file TEXT NOT NULL, node_id TEXT NOT NULL, source TEXT NOT NULL, "
+            "subject_kind TEXT NOT NULL DEFAULT 'scaffold', subject_id TEXT NOT NULL, "
+            "node_id TEXT NOT NULL, source TEXT NOT NULL, "
             "body_hash TEXT NOT NULL, fingerprint TEXT NOT NULL, "
-            "PRIMARY KEY (scaffold_file, node_id))",
+            "scaffold_file TEXT GENERATED ALWAYS AS "
+            "(CASE WHEN subject_kind = 'scaffold' THEN subject_id END) VIRTUAL, "
+            "PRIMARY KEY (subject_kind, subject_id, node_id))",
         )
         connection.execute(
             "CREATE TABLE node_fingerprints ("
-            "node_id TEXT PRIMARY KEY, minhash TEXT NOT NULL, "
+            "node_id TEXT PRIMARY KEY, minhash BLOB NOT NULL, "
             "neighbors TEXT NOT NULL, token_count INTEGER NOT NULL)",
         )
         connection.executemany("INSERT INTO nodes VALUES (?, ?)", list(nodes.items()))
@@ -222,6 +227,22 @@ def test_a_renamed_mex_table_fails_loudly(baseline: ModuleType, tmp_path: Path) 
         baseline.capture()
 
 
+def test_a_pre_v4_baseline_table_fails_loudly(baseline: ModuleType, tmp_path: Path) -> None:
+    """A graph built by mex before 0.8 has no `subject_kind`; the upsert would not fit it."""
+    connection = sqlite3.connect(tmp_path / ".mex" / "graph.db")
+    with connection:
+        connection.execute("CREATE TABLE nodes (id TEXT PRIMARY KEY, body_hash TEXT)")
+        connection.execute(
+            "CREATE TABLE _mex_grounded_source (scaffold_file TEXT, node_id TEXT, "
+            "source TEXT, body_hash TEXT, fingerprint TEXT)",
+        )
+    connection.close()
+    _note(tmp_path, _NODE)
+
+    with pytest.raises(SystemExit):
+        baseline.capture()
+
+
 def test_a_missing_graph_fails_loudly(baseline: ModuleType, tmp_path: Path) -> None:
     _note(tmp_path, _NODE)
 
@@ -251,7 +272,7 @@ def test_fingerprint_serializes_the_way_mex_does(
     with connection:
         connection.execute(
             "INSERT INTO node_fingerprints VALUES (?, ?, ?, ?)",
-            (_NODE, "[1,2]", f'["{_OTHER}"]', 7),
+            (_NODE, struct.pack(">2I", 1, 2), f'["{_OTHER}"]', 7),
         )
     connection.close()
 

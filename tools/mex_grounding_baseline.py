@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import struct
 import subprocess
 import sys
 from contextlib import closing
@@ -45,9 +46,13 @@ _WITH_ARG = 2  # argv length once a subcommand carries its own argument
 _ENTRY = re.compile(r'-\s+node:\s*"([^"]+)"\s*\r?\n\s+fingerprint:\s*"([^"]+)"')
 _FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 
+# Graph schema v4 (mex 0.8) keys a baseline by subject, so wiki entities can be
+# grounded too; `scaffold_file` survives only as a read-only generated column.
 _UPSERT = (
-    f"INSERT INTO {_TABLE} (scaffold_file, node_id, source, body_hash, fingerprint) "  # noqa: S608
-    "VALUES (?, ?, '', ?, ?) ON CONFLICT(scaffold_file, node_id) DO UPDATE SET "
+    f"INSERT INTO {_TABLE} "  # noqa: S608
+    "(subject_kind, subject_id, node_id, source, body_hash, fingerprint) "
+    "VALUES ('scaffold', ?, ?, '', ?, ?) "
+    "ON CONFLICT(subject_kind, subject_id, node_id) DO UPDATE SET "
     "source=excluded.source, body_hash=excluded.body_hash, fingerprint=excluded.fingerprint"
 )
 
@@ -85,11 +90,16 @@ def _connect() -> sqlite3.Connection:
     tables = {
         row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
-    if _TABLE not in tables:
-        # Fail loudly: this table is mex's, and a rename upstream must not degrade
-        # into a green run with the drift check quietly disabled.
+    columns = (
+        {row[1] for row in connection.execute(f"PRAGMA table_info({_TABLE})")}
+        if _TABLE in tables
+        else set()
+    )
+    if "subject_kind" not in columns:
+        # Fail loudly: this table is mex's, and a rename or reshape upstream must not
+        # degrade into a green run with the drift check quietly disabled.
         connection.close()
-        _fail(f"{_GRAPH} has no {_TABLE}; mex's grounding schema changed")
+        _fail(f"{_GRAPH} has no v4 {_TABLE}; mex's grounding schema changed")
         raise SystemExit(1)
     return connection
 
@@ -167,8 +177,10 @@ def fingerprint(node_id: str) -> int:
     if row is None:
         _fail(f"no fingerprint for {node_id} — check the id against `mex graph query`")
         return 1
+    # The graph stores the minhash as big-endian uint32s; the wire format wants the list.
+    minhash = list(struct.unpack(f">{len(row[0]) // 4}I", row[0]))
     payload = {
-        "minhash": json.loads(row[0]),
+        "minhash": minhash,
         "neighbors": json.loads(row[1]),
         "tokenCount": row[2],
     }

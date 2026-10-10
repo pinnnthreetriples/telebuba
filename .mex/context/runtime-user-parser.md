@@ -1,4 +1,6 @@
 ---
+name: runtime-user-parser
+description: User parser runs, bases, presets and exports.
 last_updated: 2026-10-09
 edges:
   - target: context/runtime-discovery.md

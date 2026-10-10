@@ -1,4 +1,6 @@
 ---
+name: setup
+description: Setup, commands, CI, hooks, Windows checkout and verification.
 last_updated: 2026-09-28
 edges:
   - target: context/architecture.md
@@ -31,7 +33,7 @@ uv run pre-commit run --hook-stage pre-push aislop --all-files
 uv run python -m tools.gen_api
 uv run pip-audit --strict && uv run semgrep --config auto --error .
 node frontend/scripts/npm-audit-gate.mjs  # npm audit + reviewed ignores
-npx --yes mex-agent@0.7.1 check && npx --yes mex-agent@0.7.1 doctor
+npx --yes mex-agent@0.8.3 check && npx --yes mex-agent@0.8.3 doctor
 cd frontend && npm run gates && npm run build
 ```
 
@@ -43,8 +45,8 @@ Drift only works because `.mex/grounding-baseline.json` is tracked and CI replay
 
 To ground a NEW claim: find the symbol with `mex graph query where-defined` or `mex graph scope`, read it with `mex graph get <id> --detail source`, then `python3 tools/mex_grounding_baseline.py fingerprint <node-id>` prints the frontmatter lines. Prefer it over `mex graph scope --fingerprint`, which attaches a 1.7–16kB blob to every node it returns. Ground only functions that embody a claim the prose already makes, and keep broad convention files (`architecture`, `conventions`, `frontend`, this file) ungrounded — that split is mex's own rule, not ours. Where prose already names a load-bearing symbol, wrapping that visible name in a `mex://` anchor makes it navigable and puts the id under the same check; the anchor carries the node id alone, never a fingerprint.
 
-When a check does fail, `npx --yes mex-agent@0.7.1 sync --dry-run --warnings` prints a targeted repair prompt per flagged file instead of leaving you to guess what drifted.
+When a check does fail, `npx --yes mex-agent@0.8.3 sync --dry-run --warnings` prints a targeted repair prompt per flagged file instead of leaving you to guess what drifted.
 
-The secret gate is CI's full-history scan, NOT the pre-commit hook: the hook scans a staged diff, which is 0 commits after a CI checkout, so it would pass unconditionally — CI skips it and runs history detection instead, which needs full fetch depth. Never add `.gitleaks.toml` or `.gitleaksignore` to this repo: `detect` auto-loads both, and either one turns the gate green by its own mechanism (a repo-local config REPLACES the ruleset; the ignore file suppresses by fingerprint). CI asserts a non-zero commits-scanned count for the same reason — a container that scans nothing exits 0. Implementation (image digest, flags) stays in `ci.yml`. Never plant a test secret here to exercise it; use a throwaway repo.
+The secret gate is CI's full-history scan, NOT the pre-commit hook: the hook scans a staged diff, which is 0 commits after a CI checkout, so it would pass unconditionally — CI skips it and runs history detection instead, which needs full fetch depth. Keep `.gitleaks.toml` and `.gitleaksignore` absent from this repo: `detect` auto-loads both, and either one turns the gate green by its own mechanism (a repo-local config REPLACES the ruleset; the ignore file suppresses by fingerprint). CI asserts a non-zero commits-scanned count for the same reason — a container that scans nothing exits 0. Implementation (image digest, flags) stays in `ci.yml`. Never plant a test secret here to exercise it; use a throwaway repo.
 
 On Windows checkouts with `core.autocrlf=true`, repo-wide format hooks may rewrite pre-existing CRLF files. Format touched files and verify real scope with `git diff HEAD --name-only` rather than relying on `git status` alone.
