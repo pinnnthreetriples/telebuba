@@ -1,4 +1,4 @@
-# Pre-commit policy: see .mex/context/conventions.md.
+# Pre-commit policy: see CODING_STANDARDS.md.
 # Run all hooks manually: uv run pre-commit run --all-files
 # Update pinned revs:    uv run pre-commit autoupdate
 

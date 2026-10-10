@@ -33,12 +33,15 @@ jobs:
         with:
           node-version: '24'
 
+      # AGENTS.md is the one instruction file every agent reads; Claude Code loads it
+      # natively when no CLAUDE.md exists, so a CLAUDE.md must not come back. The byte
+      # copies are mex's scaffold and template, which no agent loads into context.
       - name: Check memory adapter sync
         shell: bash
         run: |
           cmp -s .mex/AGENTS.md AGENTS.md
-          cmp -s .mex/AGENTS.md CLAUDE.md
           cmp -s .mex/AGENTS.md .tool-configs/CLAUDE.md
+          test ! -e CLAUDE.md
 
       # Budgets cap PROSE, so the YAML frontmatter is stripped before counting.
       # One `grounds_to` fingerprint is a serialized minhash of 1.7kB to 16kB
@@ -64,8 +67,11 @@ jobs:
               exit 1
             fi
           }
-          check_max .mex/AGENTS.md 1500
+          # Every session pays for AGENTS.md; detail belongs behind its pointers.
+          check_max .mex/AGENTS.md 800
           check_max .mex/ROUTER.md 2500
+          # Not routed, but every backend route points at it, so it is a context in all but name.
+          check_max CODING_STANDARDS.md 5000
           for file in .mex/context/*.md; do check_max "$file" 5000; done
           for file in .mex/patterns/*.md; do check_max "$file" 3000; done
 
@@ -88,11 +94,13 @@ jobs:
             echo "$1: $2 / $3"
           }
           always=$(( $(prose_bytes .mex/AGENTS.md) + $(prose_bytes .mex/ROUTER.md) ))
-          worst=$(( always + $(largest ".mex/context/*.md") + $(largest ".mex/patterns/*.md") ))
+          worst=$(( always + $(prose_bytes CODING_STANDARDS.md) + $(largest ".mex/context/*.md") + $(largest ".mex/patterns/*.md") ))
           # Every session pays this one, whatever the task.
           check_total "always-loaded (AGENTS+ROUTER)" "$always" 3000
-          # ROUTER admits one context + one pattern, so this is the ceiling per session.
-          check_total "worst-case route" "$worst" 11000
+          # ROUTER admits one context + one pattern, and AGENTS.md sends every code task
+          # to CODING_STANDARDS.md first, so this is the ceiling per session. 11500, not
+          # the old 11000: those rules were already read, from conventions.md.
+          check_total "worst-case route" "$worst" 11500
           # A count cap, because the two above only see the LARGEST file of each kind:
           # twenty small contexts would pass both while making the routing table itself
           # the thing nobody can hold in their head.
