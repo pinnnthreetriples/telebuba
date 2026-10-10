@@ -80,7 +80,7 @@ Let them edit before writing.
 
 **Pick the file to edit:**
 
-- If `AGENTS.md` exists, edit it (a `CLAUDE.md` that only imports `@AGENTS.md` is not a separate target).
+- If `AGENTS.md` exists, edit it.
 - Else if `CLAUDE.md` exists, edit it.
 - If neither exists, ask the user which one to create — don't pick for them.
 

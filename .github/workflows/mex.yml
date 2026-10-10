@@ -33,15 +33,15 @@ jobs:
         with:
           node-version: '24'
 
-      # AGENTS.md is the one instruction file every agent reads. CLAUDE.md only
-      # imports it, so Claude Code never loads the text twice; byte copies elsewhere
-      # are mex's scaffold and template, which no agent loads into context.
+      # AGENTS.md is the one instruction file every agent reads; Claude Code loads it
+      # natively when no CLAUDE.md exists, so a CLAUDE.md must not come back. The byte
+      # copies are mex's scaffold and template, which no agent loads into context.
       - name: Check memory adapter sync
         shell: bash
         run: |
           cmp -s .mex/AGENTS.md AGENTS.md
           cmp -s .mex/AGENTS.md .tool-configs/CLAUDE.md
-          test "$(cat CLAUDE.md)" = "@AGENTS.md"
+          test ! -e CLAUDE.md
 
       # Budgets cap PROSE, so the YAML frontmatter is stripped before counting.
       # One `grounds_to` fingerprint is a serialized minhash of 1.7kB to 16kB
@@ -177,11 +177,8 @@ jobs:
             const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
             const issues = r.issues ?? [];
             console.log(`MEX drift score ${r.score}/100 over ${r.filesChecked} files.`);
-            // mex compares CLAUDE.md with AGENTS.md byte for byte and cannot know
-            // the former is an `@AGENTS.md` import; the adapter step above checks it.
-            const advisory = (i) => i.code === "STALE_FILE" || i.code === "TOOL_CONFIG_DRIFT";
-            const stale = issues.filter(advisory);
-            const blocking = issues.filter((i) => !advisory(i));
+            const stale = issues.filter((i) => i.code === "STALE_FILE");
+            const blocking = issues.filter((i) => i.code !== "STALE_FILE");
             for (const i of stale) console.log(`  note  ${i.code} ${i.file}: ${i.message}`);
             for (const i of blocking) console.error(`  ${i.severity} ${i.code} ${i.file}: ${i.message}`);
             if (blocking.length) {
