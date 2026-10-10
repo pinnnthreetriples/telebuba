@@ -22,6 +22,7 @@ from core.repositories.neurocomment import get_listener_account_id, get_listener
 from schemas.neurocomment_discovery import DiscoverySearchOutcome
 from schemas.neurocomment_discovery_request import DiscoveryAccountList, DiscoveryAccountOption
 from schemas.warming import is_warming
+from services import _account_owner
 from services.neurocomment import _discovery_state
 from services.neurocomment._discovery_providers import account_cooling, record_flood
 from services.neurocomment._state import in_cooldown
@@ -216,8 +217,11 @@ def _blocker(
     # of its freeze avoidance.
     if account_id in fleet.warming:
         return "account_busy"
-    # Another campaign's run is reading with it right now.
-    if _discovery_state.account_busy(account_id, other_than=campaign_id):
+    # Another campaign's run is reading with it right now — or a user-parser run is.
+    if (
+        _discovery_state.account_busy(account_id, other_than=campaign_id)
+        or _account_owner.owner_of(account_id) == "user_parser"
+    ):
         return "account_busy"
     return None
 
@@ -309,6 +313,7 @@ async def taken_account(campaign_id: str, account_ids: list[str]) -> str | None:
             account_id in fleet.warming
             or (fleet.listener_running and fleet.listener_id == account_id)
             or _discovery_state.account_busy(account_id, other_than=campaign_id)
+            or _account_owner.owner_of(account_id) == "user_parser"
         ):
             return account_id
     return None

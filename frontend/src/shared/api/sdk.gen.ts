@@ -106,6 +106,9 @@ import type {
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
+  CreateUserParserPresetData,
+  CreateUserParserPresetErrors,
+  CreateUserParserPresetResponses,
   DeleteAccountChannelData,
   DeleteAccountChannelErrors,
   DeleteAccountChannelPostData,
@@ -133,12 +136,21 @@ import type {
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  DeleteUserParserBaseData,
+  DeleteUserParserBaseErrors,
+  DeleteUserParserBaseResponses,
+  DeleteUserParserPresetData,
+  DeleteUserParserPresetErrors,
+  DeleteUserParserPresetResponses,
   EditAccountChannelPostData,
   EditAccountChannelPostErrors,
   EditAccountChannelPostResponses,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponses,
+  ExportUserParserRunData,
+  ExportUserParserRunErrors,
+  ExportUserParserRunResponses,
   GenerateBulkMessageData,
   GenerateBulkMessageErrors,
   GenerateBulkMessageResponses,
@@ -217,6 +229,9 @@ import type {
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
+  GetUserParserRunData,
+  GetUserParserRunErrors,
+  GetUserParserRunResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -289,6 +304,21 @@ import type {
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
+  ListUserParserAccountsData,
+  ListUserParserAccountsErrors,
+  ListUserParserAccountsResponses,
+  ListUserParserBasesData,
+  ListUserParserBasesErrors,
+  ListUserParserBasesResponses,
+  ListUserParserBaseUsersData,
+  ListUserParserBaseUsersErrors,
+  ListUserParserBaseUsersResponses,
+  ListUserParserPresetsData,
+  ListUserParserPresetsErrors,
+  ListUserParserPresetsResponses,
+  ListUserParserRunUsersData,
+  ListUserParserRunUsersErrors,
+  ListUserParserRunUsersResponses,
   ListWarmedAccountsData,
   ListWarmedAccountsErrors,
   ListWarmedAccountsResponses,
@@ -352,6 +382,9 @@ import type {
   RenameAccountFolderData,
   RenameAccountFolderErrors,
   RenameAccountFolderResponses,
+  RenameUserParserBaseData,
+  RenameUserParserBaseErrors,
+  RenameUserParserBaseResponses,
   RequestLoginCodeData,
   RequestLoginCodeErrors,
   RequestLoginCodeResponses,
@@ -457,6 +490,9 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginErrors,
   StartPhoneLoginResponses,
+  StartUserParserRunData,
+  StartUserParserRunErrors,
+  StartUserParserRunResponses,
   StartWarmingData,
   StartWarmingErrors,
   StartWarmingResponses,
@@ -469,6 +505,9 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignErrors,
   StopNeuroshillingCampaignResponses,
+  StopUserParserRunData,
+  StopUserParserRunErrors,
+  StopUserParserRunResponses,
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
@@ -3387,3 +3426,189 @@ export const removeAccountsFromFolder = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * List User Parser Accounts
+ *
+ * Every account the parser may read with, busy ones marked with why.
+ */
+export const listUserParserAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserAccountsData, ThrowOnError>,
+): RequestResult<ListUserParserAccountsResponses, ListUserParserAccountsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserAccountsResponses,
+    ListUserParserAccountsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/accounts', ...options });
+
+/**
+ * Start User Parser Run
+ */
+export const startUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<StartUserParserRunData, ThrowOnError>,
+): RequestResult<StartUserParserRunResponses, StartUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StartUserParserRunResponses,
+    StartUserParserRunErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/runs',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get User Parser Run
+ */
+export const getUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<GetUserParserRunData, ThrowOnError>,
+): RequestResult<GetUserParserRunResponses, GetUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetUserParserRunResponses, GetUserParserRunErrors, ThrowOnError>({
+    url: '/api/v1/user-parser/runs/{run_id}',
+    ...options,
+  });
+
+/**
+ * Stop User Parser Run
+ *
+ * Stop a run; whatever it collected is saved as its base.
+ */
+export const stopUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<StopUserParserRunData, ThrowOnError>,
+): RequestResult<StopUserParserRunResponses, StopUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StopUserParserRunResponses,
+    StopUserParserRunErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/stop', ...options });
+
+/**
+ * List User Parser Run Users
+ */
+export const listUserParserRunUsers = <ThrowOnError extends boolean = false>(
+  options: Options<ListUserParserRunUsersData, ThrowOnError>,
+): RequestResult<ListUserParserRunUsersResponses, ListUserParserRunUsersErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListUserParserRunUsersResponses,
+    ListUserParserRunUsersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/users', ...options });
+
+/**
+ * Export User Parser Run
+ *
+ * The base as a file: CSV (UTF-8 with BOM, opens in Excel) or JSON.
+ */
+export const exportUserParserRun = <ThrowOnError extends boolean = false>(
+  options: Options<ExportUserParserRunData, ThrowOnError>,
+): RequestResult<ExportUserParserRunResponses, ExportUserParserRunErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ExportUserParserRunResponses,
+    ExportUserParserRunErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/runs/{run_id}/export', ...options });
+
+/**
+ * List User Parser Presets
+ */
+export const listUserParserPresets = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserPresetsData, ThrowOnError>,
+): RequestResult<ListUserParserPresetsResponses, ListUserParserPresetsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserPresetsResponses,
+    ListUserParserPresetsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/presets', ...options });
+
+/**
+ * Create User Parser Preset
+ */
+export const createUserParserPreset = <ThrowOnError extends boolean = false>(
+  options: Options<CreateUserParserPresetData, ThrowOnError>,
+): RequestResult<CreateUserParserPresetResponses, CreateUserParserPresetErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateUserParserPresetResponses,
+    CreateUserParserPresetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/presets',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete User Parser Preset
+ */
+export const deleteUserParserPreset = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteUserParserPresetData, ThrowOnError>,
+): RequestResult<DeleteUserParserPresetResponses, DeleteUserParserPresetErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteUserParserPresetResponses,
+    DeleteUserParserPresetErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/presets/{preset_id}', ...options });
+
+/**
+ * List User Parser Bases
+ *
+ * Every settled run as a folder, newest first. Nothing deletes one but the operator.
+ */
+export const listUserParserBases = <ThrowOnError extends boolean = false>(
+  options?: Options<ListUserParserBasesData, ThrowOnError>,
+): RequestResult<ListUserParserBasesResponses, ListUserParserBasesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListUserParserBasesResponses,
+    ListUserParserBasesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases', ...options });
+
+/**
+ * Delete User Parser Base
+ *
+ * Delete a base and every person in it, for good.
+ */
+export const deleteUserParserBase = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteUserParserBaseData, ThrowOnError>,
+): RequestResult<DeleteUserParserBaseResponses, DeleteUserParserBaseErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteUserParserBaseResponses,
+    DeleteUserParserBaseErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases/{run_id}', ...options });
+
+/**
+ * Rename User Parser Base
+ */
+export const renameUserParserBase = <ThrowOnError extends boolean = false>(
+  options: Options<RenameUserParserBaseData, ThrowOnError>,
+): RequestResult<RenameUserParserBaseResponses, RenameUserParserBaseErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    RenameUserParserBaseResponses,
+    RenameUserParserBaseErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/user-parser/bases/{run_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List User Parser Base Users
+ */
+export const listUserParserBaseUsers = <ThrowOnError extends boolean = false>(
+  options: Options<ListUserParserBaseUsersData, ThrowOnError>,
+): RequestResult<ListUserParserBaseUsersResponses, ListUserParserBaseUsersErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListUserParserBaseUsersResponses,
+    ListUserParserBaseUsersErrors,
+    ThrowOnError
+  >({ url: '/api/v1/user-parser/bases/{run_id}/users', ...options });

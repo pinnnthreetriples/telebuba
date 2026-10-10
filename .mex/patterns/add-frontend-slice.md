@@ -1,4 +1,6 @@
 ---
+name: add-frontend-slice
+description: Add React/FSD UI.
 last_updated: 2026-09-28
 edges:
   - target: context/frontend.md

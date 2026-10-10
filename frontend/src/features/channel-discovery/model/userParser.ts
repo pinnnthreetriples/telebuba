@@ -1,6 +1,7 @@
-// Парсер пользователей — ПРОТОТИП: форма и демонстрационный прогон без бэкенда. Живёт
-// рядом с автопоиском каналов, потому что открывается из той же строки «Каналы кампании»
-// и собран из тех же строк формы и того же выбора аккаунтов.
+// Парсер пользователей: форма и её перевод в запрос сервера. Живёт рядом с автопоиском
+// каналов, потому что открывается из той же строки «Каналы кампании» и собран из тех же
+// строк формы и того же выбора аккаунтов.
+import type { UserParserRequest, UserParserSettings } from '@/shared/api';
 
 export type ParserMode = 'members' | 'messages' | 'comments';
 
@@ -139,145 +140,111 @@ export function topicOf(source: string): string | null {
   return /t\.me\/[\w+]+\/(\d+)\/?$/.exec(source)?.[1] ?? null;
 }
 
-export type ParsedUser = {
-  id: number;
-  name: string;
-  username: string | null;
-  premium: boolean;
-  photo: boolean;
-  stories: boolean;
-  bot: boolean;
-  deleted: boolean;
-  admin: boolean;
-  lastSeen: 'online' | 'recently' | 'week' | 'month' | 'long' | 'hidden';
-  count: number;
-  firstAt: string;
-  lastAt: string;
-  sources: string[];
-};
+// Ключи лимитов в форме — camelCase, на сервере — snake_case.
+const LIMIT_KEYS = {
+  members: 'members',
+  messages: 'messages',
+  days: 'days',
+  posts: 'posts',
+  perPost: 'per_post',
+  minLength: 'min_length',
+} as const;
 
-// Имя и латинский хэндл: username в Telegram бывает только латиницей. Пара «магазинов» —
-// чтобы стоп-слова в демо было на ком показать.
-const NAMES: [string, string][] = [
-  ['Алексей', 'alexey'],
-  ['Мария', 'maria'],
-  ['Dmitry K.', 'dmitry'],
-  ['Анна', 'anna'],
-  ['Crypto Shop', 'cryptoshop'],
-  ['Олег', 'oleg'],
-  ['Kate', 'kate'],
-  ['Игорь', 'igor'],
-  ['Liam', 'liam'],
-  ['Наталья', 'natalia'],
-  ['Promo Bot', 'promo_bot'],
-  ['Elena V.', 'elena'],
-  ['Павел', 'pavel'],
-  ['Ксения', 'ksenia'],
-  ['Mehmet', 'mehmet'],
-  ['Юлия', 'yulia'],
-];
-const SEEN: ParsedUser['lastSeen'][] = [
-  'online',
-  'recently',
-  'recently',
-  'week',
-  'month',
-  'long',
-  'hidden',
-];
+const TOGGLE_KEYS = {
+  skipBots: 'skip_bots',
+  skipDeleted: 'skip_deleted',
+  skipScam: 'skip_scam',
+  withUsername: 'with_username',
+  withPhoto: 'with_photo',
+  premiumOnly: 'premium_only',
+  withStories: 'with_stories',
+  includeReplies: 'include_replies',
+  includeForwards: 'include_forwards',
+  excludeOwn: 'exclude_own',
+  excludeAdmins: 'exclude_admins',
+  excludeCollected: 'exclude_collected',
+} as const satisfies Record<ParserToggle, string>;
 
-/** Детерминированный «сырой» улов: одинаковый на каждый запуск прототипа. */
-export function mockUsers(sources: string[], total: number): ParsedUser[] {
-  const now = Date.UTC(2026, 9, 4);
-  const day = 86_400_000;
-  return Array.from({ length: total }, (_, i) => {
-    const [name, handle] = NAMES[i % NAMES.length] ?? ['User', 'user'];
-    const span = (i * 7) % 29;
-    // Каждый третий встречается сразу в нескольких источниках — для фильтра пересечения.
-    const extra = i % 3 === 0 ? Math.min(sources.length, 1 + (i % 4)) : 1;
-    const picked = Array.from(
-      { length: extra },
-      (_, k) => sources[(i + k) % Math.max(sources.length, 1)] ?? '',
-    );
-    return {
-      id: 5_100_000_000 + i * 7919,
-      name,
-      username: i % 4 === 3 ? null : `${handle}_${String(i)}`,
-      premium: i % 6 === 0,
-      photo: i % 5 !== 4,
-      stories: i % 3 === 1,
-      bot: i % 11 === 10,
-      deleted: i % 13 === 12,
-      admin: i % 17 === 0,
-      lastSeen: SEEN[i % SEEN.length] ?? 'long',
-      count: 1 + ((i * 13) % 12),
-      firstAt: new Date(now - (span + 1) * day).toISOString(),
-      lastAt: new Date(now - (i % 3) * day).toISOString(),
-      sources: [...new Set(picked)],
-    };
-  });
+type ServerLimits = NonNullable<UserParserSettings['limits']>;
+type ServerToggles = NonNullable<UserParserSettings['toggles']>;
+
+/** Форма как заготовка: может быть заполнена наполовину. */
+export function formToSettings(form: ParserForm): UserParserSettings {
+  const limits = Object.fromEntries(
+    Object.entries(LIMIT_KEYS).map(([key, server]) => [
+      server,
+      form.limits[key] ?? ALL_LIMITS[key],
+    ]),
+  ) as ServerLimits;
+  const toggles = Object.fromEntries(
+    (Object.keys(TOGGLE_KEYS) as ParserToggle[]).map((key) => [
+      TOGGLE_KEYS[key],
+      form.toggles[key],
+    ]),
+  ) as ServerToggles;
+  return {
+    mode: form.mode,
+    sources: parseSources(form.sources),
+    keywords: parseWords(form.keywords),
+    account_ids: form.accountIds ?? [],
+    limits,
+    min_messages: form.minMessages,
+    min_sources: form.minSources,
+    last_seen: form.lastSeen,
+    stop_words: parseWords(form.stopWords),
+    blacklist: parseWords(form.blacklist),
+    toggles,
+    protect: form.protect,
+    fast: form.fast,
+    chat_delay: form.chatDelay,
+    request_delay: form.requestDelay,
+  };
 }
 
-const SEEN_RANK: Record<ParsedUser['lastSeen'], number> = {
-  online: 0,
-  recently: 1,
-  week: 2,
-  month: 3,
-  long: 4,
-  hidden: 5,
-};
-const WANT_RANK: Record<LastSeen, number> = { any: 5, recently: 1, week: 2, month: 3 };
-
-/** Те же фильтры, что обещает форма, — на демо-данных, чтобы было видно их действие. */
-export function applyFilters(users: ParsedUser[], form: ParserForm): ParsedUser[] {
-  const stop = parseWords(form.stopWords);
-  const banned = new Set(
-    parseWords(form.blacklist).map((entry) => entry.replace(/^@/, '').replace(/^t\.me\//, '')),
-  );
-  const counted = form.mode !== 'members';
-  return users.filter((user) => {
-    const handle = user.username?.toLowerCase() ?? '';
-    if (form.toggles.skipBots && user.bot) return false;
-    if (form.toggles.skipDeleted && user.deleted) return false;
-    if (form.toggles.excludeAdmins && user.admin) return false;
-    if (counted && user.count < form.minMessages) return false;
-    if (user.sources.length < form.minSources) return false;
-    if (SEEN_RANK[user.lastSeen] > WANT_RANK[form.lastSeen]) return false;
-    if (form.toggles.withUsername && user.username === null) return false;
-    if (form.toggles.withPhoto && !user.photo) return false;
-    if (form.toggles.premiumOnly && !user.premium) return false;
-    if (form.toggles.withStories && !user.stories) return false;
-    const haystack = `${user.name} ${handle}`.toLowerCase();
-    if (stop.some((word) => haystack.includes(word))) return false;
-    if (banned.has(handle) || banned.has(String(user.id))) return false;
-    return true;
-  });
+/** Запуск: аккаунты — те, что реально выбраны (свои или по умолчанию), имя — папки в «Базах». */
+export function formToRequest(
+  form: ParserForm,
+  accountIds: string[],
+  name: string,
+): UserParserRequest {
+  return {
+    ...formToSettings(form),
+    sources: parseSources(form.sources),
+    account_ids: accountIds,
+    name,
+  };
 }
 
-// Сохранённый сбор — «папка» во вкладке «Базы». Без автоудаления: удаляет только оператор.
-export type ParsedBase = {
-  id: string;
-  name: string;
-  mode: ParserMode;
-  createdAt: string;
-  sources: string[];
-  users: ParsedUser[];
-};
-
-export function usersToCsv(users: ParsedUser[]): string {
-  const head = 'id,name,username,premium,last_seen,count,first_at,last_at,sources';
-  const rows = users.map((u) =>
-    [
-      u.id,
-      JSON.stringify(u.name),
-      u.username ?? '',
-      u.premium,
-      u.lastSeen,
-      u.count,
-      u.firstAt,
-      u.lastAt,
-      JSON.stringify(u.sources.join(' ')),
-    ].join(','),
-  );
-  return [head, ...rows].join('\n');
+/** Заготовка обратно в форму. Пустой список аккаунтов — «как по умолчанию». */
+export function settingsToForm(settings: UserParserSettings): ParserForm {
+  const base = EMPTY_PARSER_FORM;
+  const limits = settings.limits ?? {};
+  const toggles = settings.toggles ?? {};
+  return {
+    mode: settings.mode ?? base.mode,
+    sources: (settings.sources ?? []).join('\n'),
+    keywords: (settings.keywords ?? []).join(', '),
+    accountIds: settings.account_ids?.length ? settings.account_ids : null,
+    limits: Object.fromEntries(
+      Object.entries(LIMIT_KEYS).map(([key, server]) => [
+        key,
+        limits[server] ?? ALL_LIMITS[key] ?? 0,
+      ]),
+    ),
+    minMessages: settings.min_messages ?? base.minMessages,
+    minSources: settings.min_sources ?? base.minSources,
+    lastSeen: settings.last_seen ?? base.lastSeen,
+    stopWords: (settings.stop_words ?? []).join(', '),
+    blacklist: (settings.blacklist ?? []).join(', '),
+    toggles: Object.fromEntries(
+      (Object.keys(TOGGLE_KEYS) as ParserToggle[]).map((key) => [
+        key,
+        toggles[TOGGLE_KEYS[key]] ?? base.toggles[key],
+      ]),
+    ) as Record<ParserToggle, boolean>,
+    protect: settings.protect ?? base.protect,
+    fast: settings.fast ?? base.fast,
+    chatDelay: settings.chat_delay ?? base.chatDelay,
+    requestDelay: settings.request_delay ?? base.requestDelay,
+  };
 }

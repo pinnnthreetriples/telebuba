@@ -48,6 +48,7 @@ DISCOVERY_CODE: WarmingRefusalCode = DISCOVERY_BUSY_CODE
 COOLING_CODE: WarmingRefusalCode = "account_cooling"
 NEUROSHILLING_CODE: WarmingRefusalCode = "account_busy_neuroshilling"
 CHAT_BROADCAST_CODE: WarmingRefusalCode = "account_busy_chat_broadcast"
+USER_PARSER_CODE: WarmingRefusalCode = "account_busy_user_parser"
 
 
 class AccountUnavailableError(ValueError):
@@ -114,6 +115,8 @@ def assert_not_campaign_held(account_id: str) -> None:
         raise AccountUnavailableError(NEUROSHILLING_CODE, account_id)
     if owner == "chat_broadcast":
         raise AccountUnavailableError(CHAT_BROADCAST_CODE, account_id)
+    if owner == "user_parser":
+        raise AccountUnavailableError(USER_PARSER_CODE, account_id)
 
 
 def assert_not_cooling(account_id: str) -> None:
