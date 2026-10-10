@@ -91,6 +91,9 @@ export interface InlineTimeEditProps extends DivProps {
   editLabel?: string;
   saveLabel?: string;
   disabled?: boolean;
+  /** Leaving the control saves the edit instead of discarding it — for a control that is
+   *  one part of a larger form, where the next press is that form's own confirm. */
+  saveOnBlur?: boolean;
 }
 
 /**
@@ -114,6 +117,7 @@ export function InlineTimeEdit({
   editLabel = 'Изменить время',
   saveLabel = 'Сохранить время',
   disabled = false,
+  saveOnBlur = false,
   className,
   style,
   ...rest
@@ -157,7 +161,7 @@ export function InlineTimeEdit({
   };
   // Saving the same total never fires onValueChange: the controllable state drops a
   // value equal to the current one.
-  const save = (refocus: true | 'quiet' = true) => {
+  const save = (refocus: boolean | 'quiet' = true) => {
     const hours = Math.min(Number(h) || 0, maxHours);
     const minutes = Math.min(Number(m) || 0, 59);
     setTotal(hours * 60 + minutes);
@@ -337,8 +341,11 @@ export function InlineTimeEdit({
       onBlur={(e) => {
         rest.onBlur?.(e);
         // Focus leaving the control (a click elsewhere, Tab past the button) discards the
-        // edit, the same as Escape.
-        if (open && !root.current?.contains(e.relatedTarget as Node | null)) close(false);
+        // edit, the same as Escape — or keeps it, under `saveOnBlur`.
+        if (open && !root.current?.contains(e.relatedTarget as Node | null)) {
+          if (saveOnBlur) save(false);
+          else close(false);
+        }
       }}
       onFocus={(e) => {
         rest.onFocus?.(e);

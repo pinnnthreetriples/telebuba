@@ -673,7 +673,7 @@
         "media_invalid": "Telegram rejected the file — try another one",
         "validation_error": "The request was rejected — check the highlighted fields",
         "failed": "Telegram refused the action — try again",
-        "scheduled_run_at_out_of_range": "Pick a time at least a minute from now and within 30 days",
+        "scheduled_run_at_out_of_range": "Pick a time at least a minute from now and within a year",
         "scheduled_not_reschedulable": "The post is being published right now or is already done",
         "scheduled_media_missing": "The file of this post is gone — schedule it again",
         "scheduled_media_invalid": "The file could not be used — choose a JPG/PNG/WebP image or an MP4/MOV video within the size limit",
@@ -895,8 +895,18 @@
       "problem": {
         "empty": "Pick a date and time",
         "past": "Too soon — pick a time at least {{n}} min from now",
-        "tooFar": "Too far ahead — at most 30 days"
+        "tooFar": "Too far ahead — at most a year"
       },
+      "pickWhen": "Pick a date and time",
+      "hours": "Hours",
+      "minutes": "Minutes",
+      "hourUnit": "h",
+      "minuteUnit": "min",
+      "editTime": "Change the time",
+      "saveTime": "Save the time",
+      "done": "Done",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
       "listTitle": "Scheduled",
       "state": {
         "pending": "Waiting",
@@ -937,7 +947,7 @@
       "bulkApply_one": "Schedule for {{count}} account",
       "bulkApply_other": "Schedule for {{count}} accounts",
       "bulkRowOk": "Scheduled for {{when}}",
-      "bulkTooFar": "The last account would land more than 30 days out — move the start earlier or shrink the interval",
+      "bulkTooFar": "The last account would land more than a year out — move the start earlier or shrink the interval",
       "rowStatus": {
         "busy": "Scheduling",
         "done": "Scheduled",

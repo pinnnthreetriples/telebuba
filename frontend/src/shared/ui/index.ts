@@ -11,6 +11,8 @@ export { SectionLabel, SettingRow } from './SettingRow';
 export { CollapsibleCard } from './CollapsibleCard';
 export { ConfirmModal } from './ConfirmModal';
 export { DataTable } from './DataTable';
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
 export { DateRangePicker } from './DateRangePicker';
 export type { DateRangePickerProps } from './DateRangePicker';
 export { DEFAULT_DATE_RANGE_PRESETS } from './dateRangePresets';
