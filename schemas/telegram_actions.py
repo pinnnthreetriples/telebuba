@@ -106,6 +106,13 @@ from schemas.telegram_actions_twofa import (
     SetTwoFactorPassword,
 )
 
+# The user-parser reads (members, history authors, post comments) are a sibling too.
+from schemas.telegram_actions_user_parser import (
+    ReadChannelPostReplies,
+    ReadChatHistoryAuthors,
+    ReadChatParticipants,
+)
+
 # Warming extras (``warm_*``) are a sibling module too; the write union below carries
 # every member, and the gateway routes the whole family through one prefix arm.
 from schemas.telegram_actions_warming import (
@@ -421,6 +428,9 @@ TelegramReadAction = Annotated[
     | GetLastPostAt
     | LookupContactsByPhone
     | ListWritableGroups
-    | CheckChatlist,
+    | CheckChatlist
+    | ReadChatParticipants
+    | ReadChatHistoryAuthors
+    | ReadChannelPostReplies,
     Field(discriminator="action_type"),
 ]
