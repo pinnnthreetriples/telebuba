@@ -1,4 +1,6 @@
 ---
+name: frontend
+description: React, FSD, TypeScript, i18n, design tokens and frontend gates.
 last_updated: 2026-10-07
 edges:
   - target: context/conventions.md
@@ -14,7 +16,7 @@ React 19 + strict TypeScript + Vite. Server I/O uses the generated `shared/api` 
 FSD order is `app → routes → pages → widgets → features → entities → shared`. Import only lower layers and cross slice boundaries through public `index.ts` exports.
 
 - Routes/pages compose; features own interactions; entities own business nouns; `shared` owns generic API/UI/lib/config/i18n.
-- Generated TanStack query/mutation options are wrapped in entity `api/` modules; pages/widgets/features consume entity barrels. `import type` from `@/shared/api` is allowed.
+- Generated TanStack query/mutation options are wrapped in entity `api/` modules; pages/widgets/features consume entity barrels. `import type` from `shared/api` is allowed.
 - No `any` or ignored type failures without a precise upstream justification.
 - Display strings/formatting use react-i18next/`Intl` for `ru` and `en`; compose `shared/ui` primitives rather than re-drawing them, and take every design value from the closed set below.
 - Reuse `entities/account` identity helpers/avatar. Account-bearing payloads carry the fields the surface needs instead of reconstructing backend policy in the SPA.

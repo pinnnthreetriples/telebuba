@@ -119,7 +119,7 @@ jobs:
       # a fresh graph build completed and checked successfully. Build the graph for
       # each run until the cached-graph path can be made reliable.
       - name: Build the code graph
-        run: npx --yes mex-agent@0.7.1 graph --json
+        run: npx --yes mex-agent@0.8.3 graph --json
 
       # A freshly built graph has no grounding baseline, and without one the drift
       # branch compares against nothing: a grounded body could change under a note
@@ -166,7 +166,7 @@ jobs:
           # belongs to the filter, which is the only thing that knows which codes
           # block. A real mex failure still fails the step -- it leaves no valid
           # JSON, so the JSON.parse below throws.
-          npx --yes mex-agent@0.7.1 check --json > "$report" || true
+          npx --yes mex-agent@0.8.3 check --json > "$report" || true
           node -e '
             const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
             const issues = r.issues ?? [];
@@ -191,4 +191,4 @@ jobs:
       - name: MEX diagnostics
         if: always()
         continue-on-error: true
-        run: npx --yes mex-agent@0.7.1 doctor
+        run: npx --yes mex-agent@0.8.3 doctor
