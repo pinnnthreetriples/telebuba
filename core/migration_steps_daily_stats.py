@@ -33,6 +33,13 @@ _COUNTER_KEYS = (
     ("failures", "failures"),
 )
 _COLUMNS = ("cycles", *(column for column, _key in _COUNTER_KEYS), "floods")
+# Spelled out rather than built from ``_COLUMNS`` so no SQL is assembled at runtime;
+# the order must match ``_COLUMNS``, which the backfill test pins.
+_INSERT = (
+    "INSERT INTO warming_daily_stats (account_id, day, cycles, reads, reactions, joins,"
+    " dms, failures, floods, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    " ON CONFLICT (account_id, day) DO NOTHING"
+)
 
 
 def _create_table(connection: Connection) -> None:
@@ -93,16 +100,11 @@ def _backfill_warming_daily_stats(connection: Connection, now: datetime) -> None
         (_CYCLE_EVENT, cutoff),
     ).all()
     stamp = now.isoformat()
-    placeholders = ", ".join("?" for _ in _COLUMNS)
-    statement = (
-        f"INSERT INTO warming_daily_stats (account_id, day, {', '.join(_COLUMNS)}, updated_at)"  # noqa: S608 - column names are module constants.
-        f" VALUES (?, ?, {placeholders}, ?) ON CONFLICT (account_id, day) DO NOTHING"
-    )
     for (account_id, day), counters in sorted(
         _aggregate([(str(r[0]), str(r[1]), str(r[2] or "")) for r in rows]).items(),
     ):
         connection.exec_driver_sql(
-            statement,
+            _INSERT,
             (account_id, day, *(counters[column] for column in _COLUMNS), stamp),
         )
 
