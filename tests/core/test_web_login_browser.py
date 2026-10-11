@@ -397,6 +397,22 @@ async def test_launched_window_reports_alive() -> None:
     assert fresh.alive is False
 
 
+@pytest.mark.asyncio
+async def test_wait_closed_waits_on_the_browser_process() -> None:
+    """The service watches this to release the window's relay when the operator closes it."""
+    recorder: dict[str, Any] = {}
+    window = WebWindow(
+        session=RecordingSession(),  # ty: ignore[invalid-argument-type]
+        driver=TargetDriver(RecordingSession(), _FINGERPRINT),  # ty: ignore[invalid-argument-type]
+        page=PAGE,
+        process=FakeProc(recorder),  # ty: ignore[invalid-argument-type]
+    )
+
+    await window.wait_closed()
+
+    assert recorder["waited"] is True
+
+
 # ------------------------------------------------------- failures after the spawn
 
 

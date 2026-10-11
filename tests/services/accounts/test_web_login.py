@@ -503,12 +503,12 @@ async def test_second_click_reuses_the_same_relay(
     calls: dict[str, Any] = {}
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    window = _wire(monkeypatch, calls, states=["logged_in"])
+    _wire(monkeypatch, calls, states=["logged_in"])
 
     await open_account_web("acct")
-    window.alive = False
     await open_account_web("acct")
 
+    assert calls["focused"] == 1  # the window was still open, so it was raised
     assert len(relay.created) == 1  # one relay for both clicks
     assert relay.created[0].starts == 1
 
