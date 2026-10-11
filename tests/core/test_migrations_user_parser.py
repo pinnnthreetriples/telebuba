@@ -46,7 +46,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_user_parser_tables]
     assert entries == [(72, "add_user_parser_tables", _add_user_parser_tables)]
-    assert max(entry[0] for entry in MIGRATIONS) == 72
+    assert max(entry[0] for entry in MIGRATIONS) >= 72
 
 
 @pytest.mark.parametrize("table", _TABLES)

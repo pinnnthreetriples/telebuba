@@ -140,7 +140,11 @@ async def test_a_running_campaign_keeps_its_settings_but_takes_the_pace(
 
     assert saved is not None
     assert saved.settings.stories_per_day == 3
-    assert _state.live_pace(campaign_id) == MasstaggingPace(stories_per_day=3)
+    # The seed's pauses survive a body that names only the stories a day.
+    assert saved.settings.story_gap_minutes.min == 0
+    live = _state.live_pace(campaign_id)
+    assert live is not None
+    assert (live.stories_per_day, live.story_gap_minutes.max) == (3, 0)
     await service.stop_campaign(campaign_id)
 
 

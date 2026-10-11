@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from core.logging import log_event
 from core.repositories import masstagging as repository
 from services.masstagging import _state
+from services.masstagging._context import pace_of
 from services.masstagging._errors import CAMPAIGN_CHANGED, MasstaggingConflictError
 from services.masstagging.campaigns import load_settings, settings_of
 
@@ -20,11 +21,15 @@ if TYPE_CHECKING:
 
 
 async def save_pace(campaign_id: str, pace: MasstaggingPace) -> MasstaggingSettingsRead | None:
-    """Store «Темп»; ``None`` means no such campaign."""
+    """Store the «Темп» fields the request names; ``None`` means no such campaign.
+
+    A field the request leaves out keeps its saved value (PATCH), so a partial body
+    never resets the rest of the pace to its defaults.
+    """
     record = await repository.fetch_campaign(campaign_id)
     if record is None:
         return None
-    fields = {name: getattr(pace, name) for name in type(pace).model_fields}
+    fields = {name: getattr(pace, name) for name in pace.model_fields_set}
     updated = settings_of(record).model_copy(update=fields)
     if not await repository.save_pace(
         campaign_id,
@@ -32,6 +37,6 @@ async def save_pace(campaign_id: str, pace: MasstaggingPace) -> MasstaggingSetti
         expected_updated_at=record.updated_at,
     ):
         raise MasstaggingConflictError(CAMPAIGN_CHANGED)
-    _state.set_pace(campaign_id, pace)
+    _state.set_pace(campaign_id, pace_of(updated))
     await log_event("INFO", "masstagging_pace_changed", extra={"campaign_id": campaign_id})
     return await load_settings(campaign_id)

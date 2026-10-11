@@ -28,7 +28,6 @@ from services.masstagging.pace import daily_reach, left_today, next_day_start
 from services.masstagging.targets import seeds_of
 
 if TYPE_CHECKING:
-    from schemas.masstagging import MasstaggingMode, MasstaggingPace
     from schemas.masstagging_board import MasstaggingBusyOwner
     from schemas.masstagging_records import JournalRecord, TargetRecord
     from services.masstagging._fleet import FleetAccount
@@ -50,7 +49,10 @@ async def load_board(campaign_id: str) -> MasstaggingBoard | None:
     busy = await _fleet.busy_owners(campaign_id, roster)
     now = _seams.now()
     views = await _fleet.views(fleet, pace, now)
-    accounts = [_account(fleet[a], views[a], busy.get(a), parsed.mode, pace, now) for a in roster]
+    accounts = [
+        _account(fleet[a], views[a], busy.get(a), left_today(views[a], parsed.mode, pace), now)
+        for a in roster
+    ]
     targets = await repository.list_targets(campaign_id)
     if record.run_status == "idle" and not targets:
         rows = [_preview(seed.target_key, seed.raw) for seed in seeds_of(parsed.targets)]
@@ -70,12 +72,11 @@ async def load_board(campaign_id: str) -> MasstaggingBoard | None:
     )
 
 
-def _account(  # noqa: PLR0913 - one row joins the fleet, the day and the registry
+def _account(
     account: FleetAccount,
     view: AccountView,
     owner: MasstaggingBusyOwner | None,
-    mode: MasstaggingMode,
-    pace: MasstaggingPace,
+    left: int,
     now: int,
 ) -> MasstaggingBoardAccount:
     row = MasstaggingBoardAccount(
@@ -88,7 +89,7 @@ def _account(  # noqa: PLR0913 - one row joins the fleet, the day and the regist
     if owner is not None:
         return row.model_copy(update={"state": "busy", "busy_owner": owner})
     paused = view.day.paused_until_unix
-    if left_today(view, mode, pace) <= 0:
+    if left <= 0:
         return row.model_copy(update={"state": "resting", "until": _at(next_day_start(now))})
     if paused is not None and paused > now:
         return row.model_copy(update={"state": "flood", "until": _at(paused)})
