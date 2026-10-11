@@ -105,7 +105,6 @@ export function MasstaggingPage() {
   const stop = useMutation(stopMasstaggingCampaignMutation());
   const act = useMutation(actOnMasstaggingTargetMutation());
   const clearLogs = useMutation(clearLogsMutation());
-  const busy = start.isPending || stop.isPending || act.isPending;
 
   const run = (call: Promise<unknown>) => {
     void call
@@ -115,16 +114,42 @@ export function MasstaggingPage() {
         void refreshSettings();
       });
   };
+  // Start needs the version the operator saw. Until the campaign's settings are loaded
+  // (another campaign was selected, or the read is in flight), the press waits here and
+  // fires once they arrive, instead of being dropped.
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const loadedStamp =
+    settings.data?.campaign_id === pendingStart ? settings.data?.updated_at : null;
+  const settingsFailed = settings.isError;
+  useEffect(() => {
+    if (pendingStart !== null && settingsFailed) {
+      // The read failed (its toast says why): the press is dropped, not kept waiting.
+      setPendingStart(null);
+      return;
+    }
+    if (pendingStart === null || loadedStamp === null || loadedStamp === undefined) return;
+    setPendingStart(null);
+    void start
+      .mutateAsync({
+        path: { campaign_id: pendingStart },
+        body: { expected_updated_at: loadedStamp },
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        void refresh();
+        void refreshSettings();
+      });
+    // `start`, `refresh` and `refreshSettings` are stable for the press being served.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingStart, loadedStamp, settingsFailed]);
+  const busy = start.isPending || stop.isPending || act.isPending || pendingStart !== null;
   const startCampaign = (id: string) => {
-    const stamp = settings.data?.campaign_id === id ? settings.data.updated_at : undefined;
-    if (stamp === undefined) return;
-    run(start.mutateAsync({ path: { campaign_id: id }, body: { expected_updated_at: stamp } }));
+    setSelected(id);
+    setPendingStart(id);
   };
   const toggleRun = (campaign: MasstaggingCampaign) => {
     if (GOING.includes(campaign.status)) {
       run(stop.mutateAsync({ path: { campaign_id: campaign.campaign_id } }));
-    } else if (campaign.campaign_id !== campaignId) {
-      setSelected(campaign.campaign_id);
     } else {
       startCampaign(campaign.campaign_id);
     }

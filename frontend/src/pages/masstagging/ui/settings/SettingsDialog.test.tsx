@@ -139,3 +139,17 @@ test('a stale save says the campaign changed elsewhere', async () => {
 
   expect(await screen.findByText(/изменились в другом окне/)).toBeInTheDocument();
 });
+
+test('an uploaded story file joins the media already in the draft', async () => {
+  open();
+
+  const input = screen.getByLabelText('Перетащите фото или видео') as HTMLInputElement;
+  const file = new File(['png'], 'cover.png', { type: 'image/png' });
+  fireEvent.change(input, { target: { files: [file] } });
+
+  expect(await screen.findByText('cover.png')).toBeInTheDocument();
+  expect(screen.getByText('lesson.mp4')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Убрать lesson.mp4' }));
+  expect(screen.queryByText('lesson.mp4')).toBeNull();
+  expect(screen.getByText('cover.png')).toBeInTheDocument();
+});

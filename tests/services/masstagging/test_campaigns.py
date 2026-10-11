@@ -190,3 +190,16 @@ async def test_list_counts_roster_and_planned_list() -> None:
     item = next(c for c in (await service.list_campaigns()).items if c.campaign_id == campaign_id)
 
     assert (item.account_count, item.target_count, item.mode) == (2, 3, "stories")
+
+
+@pytest.mark.asyncio
+async def test_a_dialog_save_replaces_the_gear_s_pace() -> None:
+    campaign_id = await seed()
+    await service.save_pace(campaign_id, MasstaggingPace(stories_per_day=3))
+
+    await _save(campaign_id, stories_per_day=7)
+
+    assert _state.live_pace(campaign_id) is None
+    board = await service.load_board(campaign_id)
+    assert board is not None
+    assert board.counters.per_day == 35

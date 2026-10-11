@@ -126,6 +126,12 @@ export function SettingsDialog({
                   settings={settings}
                   captionLimit={premiumOnly ? PREMIUM_CAPTION_LIMIT : FREE_CAPTION_LIMIT}
                   onPatch={patch}
+                  onMedia={(update) => {
+                    setDraft((current) => ({
+                      ...current,
+                      settings: { ...current.settings, media: update(current.settings.media) },
+                    }));
+                  }}
                 />
               ) : null}
               <PaceSection

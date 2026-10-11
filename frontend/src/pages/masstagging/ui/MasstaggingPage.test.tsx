@@ -113,3 +113,18 @@ test('deleting asks first', async () => {
     expect(callsTo(BASE, 'DELETE')).toHaveLength(1);
   });
 });
+
+test('the sidebar play of another campaign starts it once its settings load', async () => {
+  const other = campaign({ campaign_id: 'c2', name: 'Вторая' });
+  routeApi({ campaigns: [campaign(), other] });
+  renderPage();
+
+  const actions = await screen.findAllByRole('button', { name: 'Действия с кампанией' });
+  fireEvent.click(actions[1] as HTMLElement);
+  // Every card carries its action layer; the second one is the other campaign's.
+  fireEvent.click(screen.getAllByRole('button', { name: 'Запустить' })[1] as HTMLElement);
+
+  await waitFor(() => {
+    expect(callsTo('/api/v1/masstagging/campaigns/c2/start', 'POST')).toHaveLength(1);
+  });
+});

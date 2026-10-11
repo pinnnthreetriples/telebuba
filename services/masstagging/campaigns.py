@@ -179,6 +179,8 @@ async def save_settings(
         )
         if saved is None:
             raise MasstaggingConflictError(CAMPAIGN_CHANGED)
+        # The dialog's «Темп» replaces whatever the board's gear saved before it.
+        _state.forget_pace(campaign_id)
     finally:
         _state.finish_edit(campaign_id)
     return await load_settings(campaign_id)

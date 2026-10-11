@@ -105,7 +105,10 @@ export function routeApi(over: Partial<Api> = {}): Api {
     if (path.endsWith('/media')) {
       return jsonResponse({ media_id: `${'b'.repeat(64)}.png`, name: 'cover.png' });
     }
-    if (path.endsWith('/settings') || path.endsWith('/pace')) return jsonResponse(api.settings);
+    if (path.endsWith('/settings') || path.endsWith('/pace')) {
+      // The settings of the campaign the path names, so switching campaigns is real.
+      return jsonResponse({ ...api.settings, campaign_id: path.split('/')[5] });
+    }
     if (path.endsWith('/board') || path.endsWith('/start') || path.endsWith('/stop')) {
       return jsonResponse(api.board);
     }

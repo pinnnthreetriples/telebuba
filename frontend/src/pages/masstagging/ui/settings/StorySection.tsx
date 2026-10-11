@@ -23,6 +23,10 @@ import type { Settings } from '../../model/draft';
 import { Row, Section } from './fields';
 
 type Patch = (next: Partial<Settings>) => void;
+type Media = Settings['media'];
+// Media changes are applied to the draft as it is when they land, not as it was when an
+// upload started: a removal or a second drop during a slow upload must survive it.
+export type MediaUpdate = (update: (media: Media) => Media) => void;
 
 const LIFETIMES = [6, 12, 24, 48] as const;
 const VIDEO = /\.(mp4|mov)$/i;
@@ -30,29 +34,30 @@ const VIDEO = /\.(mp4|mov)$/i;
 function MediaPool({
   campaignId,
   media,
-  onPatch,
+  onMedia,
 }: {
   campaignId: string;
-  media: Settings['media'];
-  onPatch: Patch;
+  media: Media;
+  onMedia: MediaUpdate;
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const upload = useMutation(uploadMasstaggingMediaMutation());
   const add = async (files: File[]) => {
-    let next = media;
     for (const file of files) {
       try {
         const stored = await upload.mutateAsync({
           path: { campaign_id: campaignId },
           body: { file },
         });
-        next = [...next.filter((item) => item.media_id !== stored.media_id), stored];
+        onMedia((current) => [
+          ...current.filter((item) => item.media_id !== stored.media_id),
+          stored,
+        ]);
       } catch {
         // The toast already said why; the files after it still get their turn.
       }
     }
-    onPatch({ media: next });
   };
   return (
     <>
@@ -101,7 +106,7 @@ function MediaPool({
                 shape="circle"
                 aria-label={t('masstagging.settings.story.removeMedia', { name: item.name })}
                 onClick={() => {
-                  onPatch({ media: media.filter((other) => other.media_id !== item.media_id) });
+                  onMedia((current) => current.filter((other) => other.media_id !== item.media_id));
                 }}
               >
                 <Icon name="close" size={12} />
@@ -119,11 +124,13 @@ export function StorySection({
   settings,
   captionLimit,
   onPatch,
+  onMedia,
 }: {
   campaignId: string;
   settings: Settings;
   captionLimit: number;
   onPatch: Patch;
+  onMedia: MediaUpdate;
 }) {
   const { t } = useTranslation();
   return (
@@ -133,7 +140,7 @@ export function StorySection({
       hint={t('masstagging.settings.story.hint')}
       example={t('masstagging.settings.story.example')}
     >
-      <MediaPool campaignId={campaignId} media={settings.media} onPatch={onPatch} />
+      <MediaPool campaignId={campaignId} media={settings.media} onMedia={onMedia} />
       <label className="flex flex-col gap-1">
         <span className="flex items-center gap-1">
           <span className="type-body-medium">{t('masstagging.settings.story.caption')}</span>

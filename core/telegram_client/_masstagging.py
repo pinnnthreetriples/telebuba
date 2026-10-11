@@ -65,8 +65,12 @@ def masstag_log_extra(action: TelegramAction) -> dict[str, object]:
 async def _toggle_ttl(client: TelegramClient, action: MasstagToggleTtl) -> None:
     peer = await client.get_input_entity(peer_reference(action.peer))
     await client(SetHistoryTTLRequest(peer=peer, period=action.period_seconds))
-    await asyncio.sleep(action.hold_seconds)
-    await client(SetHistoryTTLRequest(peer=peer, period=0))
+    try:
+        await asyncio.sleep(action.hold_seconds)
+    finally:
+        # Once the timer is on it must go off again, even when a pause cancels the hold:
+        # left on, it would delete the person's whole DM after a day.
+        await asyncio.shield(client(SetHistoryTTLRequest(peer=peer, period=0)))
 
 
 def _user(entity: object) -> MasstagUser:

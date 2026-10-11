@@ -279,3 +279,24 @@ def test_the_link_plate_is_drawn_where_the_area_is() -> None:
             assert image.getpixel((200 - 100, int(600 * 0.82))) == (255, 255, 255)
     else:
         assert drawn == content
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_hold_still_switches_the_timer_off() -> None:
+    import asyncio  # noqa: PLC0415
+
+    from core.telegram_client._masstagging import _toggle_ttl  # noqa: PLC0415
+
+    client = _Client()
+    task = asyncio.create_task(
+        _toggle_ttl(client, MasstagToggleTtl(peer="42", hold_seconds=10))  # ty: ignore[invalid-argument-type]
+    )
+    # The fake answers without suspending, so one tick lands the task inside the hold.
+    await asyncio.sleep(0)
+    assert len(client.requests) == 1
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    periods = [r.period for r in client.requests if isinstance(r, SetHistoryTTLRequest)]
+    assert periods == [86_400, 0]
