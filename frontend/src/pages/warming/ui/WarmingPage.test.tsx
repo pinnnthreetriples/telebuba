@@ -251,6 +251,9 @@ test('a handed-off account disappears from the warmed card', async () => {
   expect(screen.queryByText('+70001112233')).not.toBeInTheDocument();
 });
 
+// The stream's 400 ms flush plus the board's 1 s debounce, with slack for CI.
+const LIVE_REFRESH_WAIT_MS = 4000;
+
 test('refetches the board on a live SSE event', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
@@ -263,15 +266,19 @@ test('refetches the board on a live SSE event', async () => {
       .mock.calls.filter(([input]) => (input as Request).url.includes('/warming/board')).length;
   const before = boardCalls();
   act(() => {
-    lastEventSource()?.emit({ id: 1, event: 'cycle_started' });
+    lastEventSource()?.emit({ id: 1, event: 'warming_cycle_completed', account_id: 'warm-1' });
   });
-  await waitFor(() => {
-    expect(boardCalls()).toBeGreaterThan(before);
-  });
+  // SSE flush + the board's 1 s quiet window.
+  await waitFor(
+    () => {
+      expect(boardCalls()).toBeGreaterThan(before);
+    },
+    { timeout: LIVE_REFRESH_WAIT_MS },
+  );
 });
 
 test('a live SSE event refetches an expanded card activity log', async () => {
-  // Pins 'listLogs' in WARMING_QUERY_IDS: without it the terminal keeps showing the
+  // Pins the account-scoped listLogs refresh: without it the terminal keeps showing the
   // rows it loaded on expand, and the "new events still show" promise is a lie.
   routeApi();
   renderWithClient(<WarmingPage />);
@@ -289,11 +296,14 @@ test('a live SSE event refetches an expanded card activity log', async () => {
   });
   const before = logCalls();
   act(() => {
-    lastEventSource()?.emit({ id: 1, event: 'warming_subscribe' });
+    lastEventSource()?.emit({ id: 1, event: 'warming_subscribe', account_id: 'warm-1' });
   });
-  await waitFor(() => {
-    expect(logCalls()).toBeGreaterThan(before);
-  });
+  await waitFor(
+    () => {
+      expect(logCalls()).toBeGreaterThan(before);
+    },
+    { timeout: LIVE_REFRESH_WAIT_MS },
+  );
 });
 
 test('starts an idle account', async () => {
