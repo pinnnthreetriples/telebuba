@@ -115,6 +115,15 @@ const settingsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage'),
 });
 
+const masstaggingRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/masstagging',
+  errorComponent: PageErrorPanel,
+  loader: () =>
+    import('./preload').then(({ preloadMasstagging }) => preloadMasstagging(queryClient)),
+  component: lazyRouteComponent(() => import('@/pages/masstagging'), 'MasstaggingPage'),
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   protectedRoute.addChildren([
@@ -123,6 +132,7 @@ const routeTree = rootRoute.addChildren([
     neurocommentRoute,
     neuroshillingRoute,
     broadcastRoute,
+    masstaggingRoute,
     logsRoute,
     settingsRoute,
   ]),

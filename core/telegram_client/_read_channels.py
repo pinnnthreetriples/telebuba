@@ -31,6 +31,7 @@ from core.telegram_client._broadcast import (
     dispatch_list_writable_groups,
 )
 from core.telegram_client._channels import _input_channel
+from core.telegram_client._masstagging import dispatch_masstag_read
 from core.telegram_client._read_discovery import (
     dispatch_get_similar_channels,
     dispatch_search_channels,
@@ -59,6 +60,7 @@ from schemas.telegram_actions_channels import (
     TelegramOwnChannelDetail,
     TelegramOwnChannels,
 )
+from schemas.telegram_actions_masstagging import ListMasstagContacts, ResolveMasstagTarget
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -300,6 +302,8 @@ async def _dispatch_channel_read_action(  # noqa: C901, PLR0911 - one return per
             return await dispatch_list_writable_groups(client, action)
         case CheckChatlist():
             return await dispatch_check_chatlist(client, action)
+        case ResolveMasstagTarget() | ListMasstagContacts():
+            return await dispatch_masstag_read(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)

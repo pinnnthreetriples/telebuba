@@ -47,7 +47,8 @@ function LogLine({
   accountOf?: (accountId: string) => LogAccount | undefined;
   onPickAccount: (accountId: string) => void;
 }) {
-  const channel = extraStr(line.extra, 'channel');
+  // A channel, or the person a masstagging row is about: the same column, never both.
+  const channel = extraStr(line.extra, 'channel') ?? extraStr(line.extra, 'target');
   // Who did it — a burst of identical rows is unattributable without this. Rows
   // with no account_id (listener / sweep) leave the column empty, like `channel`.
   const accountId = line.account_id;

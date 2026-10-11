@@ -15,6 +15,10 @@ import {
   chatBroadcastBoardQueryOptions,
   chatBroadcastCampaignsQueryOptions,
 } from '@/entities/chat-broadcast';
+import {
+  masstaggingBoardQueryOptions,
+  masstaggingCampaignsQueryOptions,
+} from '@/entities/masstagging';
 import { logsQueryOptions } from '@/entities/log';
 import {
   neuroshillingBoardQueryOptions,
@@ -121,6 +125,21 @@ export async function preloadChatBroadcast(client: QueryClient): Promise<void> {
   });
   void Promise.allSettled([
     client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'chat_broadcast', limit: 80 } })),
+  ]);
+  await waitForFirstScreen([campaigns, scoped]);
+}
+
+export async function preloadMasstagging(client: QueryClient): Promise<void> {
+  const campaigns = client.fetchQuery(masstaggingCampaignsQueryOptions());
+  const scoped = campaigns.then(async ({ items }) => {
+    const first = items[0];
+    if (!first) return;
+    await Promise.allSettled([
+      client.fetchQuery(masstaggingBoardQueryOptions({ path: { campaign_id: first.campaign_id } })),
+    ]);
+  });
+  void Promise.allSettled([
+    client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'masstagging', limit: 80 } })),
   ]);
   await waitForFirstScreen([campaigns, scoped]);
 }

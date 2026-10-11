@@ -20,14 +20,32 @@ class SetProfilePhoto(BaseModel):
     content: bytes = Field(min_length=1)
 
 
+class StoryMention(BaseModel):
+    """A person tagged in the caption. ``user_id`` was resolved by the POSTING account."""
+
+    user_id: int
+    # Written into the caption as ``@username``; without one the first name is used.
+    username: str | None = Field(default=None, max_length=64)
+    first_name: str = Field(default="", max_length=64)
+
+
+class StoryLink(BaseModel):
+    """A clickable link area on the story (Premium only); ``text`` is drawn on photos."""
+
+    url: str = Field(min_length=1, max_length=512)
+    text: str = Field(default="", max_length=40)
+
+
 class PostStory(BaseModel):
     action_type: Literal["post_story"] = "post_story"
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     media_kind: Literal["image", "video"]
-    caption: str | None = Field(default=None, max_length=1024)
+    # 2048 is the Premium ceiling; a free account's 200 is the caller's to keep.
+    caption: str | None = Field(default=None, max_length=2048)
     privacy_preset: Literal["contacts", "close_friends", "public"] = "contacts"
-    period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
+    # Up to 48 h, which only a Premium account may ask for.
+    period_seconds: int = Field(default=86_400, ge=21_600, le=172_800)
     protect_content: bool = False
     # Collage images 2..N (``content`` is image #1). Non-empty turns the post
     # into a client-side collage: the gateway stitches them into ONE composite
@@ -35,6 +53,9 @@ class PostStory(BaseModel):
     # per-image validation live in config + the service, not here.
     extra_images: list[bytes] = Field(default_factory=list)
     collage_layout: str | None = None
+    # Appended to the caption, each with a mention entity, so the person gets the push.
+    mentions: list[StoryMention] = Field(default_factory=list, max_length=10)
+    link: StoryLink | None = None
 
     @model_validator(mode="after")
     def _check_collage(self) -> PostStory:

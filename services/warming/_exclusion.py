@@ -49,6 +49,14 @@ COOLING_CODE: WarmingRefusalCode = "account_cooling"
 NEUROSHILLING_CODE: WarmingRefusalCode = "account_busy_neuroshilling"
 CHAT_BROADCAST_CODE: WarmingRefusalCode = "account_busy_chat_broadcast"
 USER_PARSER_CODE: WarmingRefusalCode = "account_busy_user_parser"
+MASSTAGGING_CODE: WarmingRefusalCode = "account_busy_masstagging"
+# Every other runtime that can hold an account, and the code naming it.
+_HOLD_CODES: dict[str, WarmingRefusalCode] = {
+    "neuroshilling": NEUROSHILLING_CODE,
+    "chat_broadcast": CHAT_BROADCAST_CODE,
+    "user_parser": USER_PARSER_CODE,
+    "masstagging": MASSTAGGING_CODE,
+}
 
 
 class AccountUnavailableError(ValueError):
@@ -111,12 +119,9 @@ def assert_not_campaign_held(account_id: str) -> None:
     slip through.
     """
     owner = _account_owner.owner_of(account_id)
-    if owner == "neuroshilling":
-        raise AccountUnavailableError(NEUROSHILLING_CODE, account_id)
-    if owner == "chat_broadcast":
-        raise AccountUnavailableError(CHAT_BROADCAST_CODE, account_id)
-    if owner == "user_parser":
-        raise AccountUnavailableError(USER_PARSER_CODE, account_id)
+    code = _HOLD_CODES.get(owner) if owner is not None else None
+    if code is not None:
+        raise AccountUnavailableError(code, account_id)
 
 
 def assert_not_cooling(account_id: str) -> None:

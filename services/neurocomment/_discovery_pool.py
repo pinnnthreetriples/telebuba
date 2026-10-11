@@ -218,10 +218,9 @@ def _blocker(
     if account_id in fleet.warming:
         return "account_busy"
     # Another campaign's run is reading with it right now — or a user-parser run is.
-    if (
-        _discovery_state.account_busy(account_id, other_than=campaign_id)
-        or _account_owner.owner_of(account_id) == "user_parser"
-    ):
+    if _discovery_state.account_busy(account_id, other_than=campaign_id) or _account_owner.owner_of(
+        account_id
+    ) in {"user_parser", "masstagging"}:
         return "account_busy"
     return None
 
@@ -313,7 +312,7 @@ async def taken_account(campaign_id: str, account_ids: list[str]) -> str | None:
             account_id in fleet.warming
             or (fleet.listener_running and fleet.listener_id == account_id)
             or _discovery_state.account_busy(account_id, other_than=campaign_id)
-            or _account_owner.owner_of(account_id) == "user_parser"
+            or _account_owner.owner_of(account_id) in {"user_parser", "masstagging"}
         ):
             return account_id
     return None

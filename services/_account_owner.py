@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-Owner = Literal["warming", "neuroshilling", "chat_broadcast", "user_parser"]
+Owner = Literal["warming", "neuroshilling", "chat_broadcast", "user_parser", "masstagging"]
 
 # account_id -> (owner, holder)
 _OWNED: dict[str, tuple[Owner, str]] = {}

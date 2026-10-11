@@ -57,6 +57,7 @@ NeurocommentRefusalCode = Literal[
     "listener_busy_neuroshilling",
     "listener_busy_chat_broadcast",
     "listener_busy_user_parser",
+    "listener_busy_masstagging",
 ]
 # Annotated, so a code invented at the raise site is a type error rather than a raw
 # snake_case token in the operator's toast.
@@ -64,6 +65,7 @@ LISTENER_BUSY_WARMING_CODE: NeurocommentRefusalCode = "listener_busy_warming"
 LISTENER_BUSY_NEUROSHILLING_CODE: NeurocommentRefusalCode = "listener_busy_neuroshilling"
 LISTENER_BUSY_CHAT_BROADCAST_CODE: NeurocommentRefusalCode = "listener_busy_chat_broadcast"
 LISTENER_BUSY_USER_PARSER_CODE: NeurocommentRefusalCode = "listener_busy_user_parser"
+LISTENER_BUSY_MASSTAGGING_CODE: NeurocommentRefusalCode = "listener_busy_masstagging"
 
 
 class CampaignCreate(BaseModel):

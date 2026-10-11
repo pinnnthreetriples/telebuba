@@ -17402,6 +17402,1281 @@
           }
         }
       }
+    },
+    "/api/v1/masstagging/campaigns": {
+      "get": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "List Campaigns",
+        "operationId": "listMasstaggingCampaigns",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingCampaigns"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Create Campaign",
+        "operationId": "createMasstaggingCampaign",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingCampaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}": {
+      "delete": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign with its list and history; refused while it runs.",
+        "operationId": "deleteMasstaggingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/settings": {
+      "get": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Get Settings",
+        "operationId": "getMasstaggingSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Save Settings",
+        "description": "Save name, accounts and settings at once, only on the version the dialog read.\n\n409 ``campaign_running`` while a run is attached, ``campaign_changed`` when the\ncampaign moved since the dialog read it.",
+        "operationId": "saveMasstaggingSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/pace": {
+      "patch": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Save Pace",
+        "description": "Save \u00ab\u0422\u0435\u043c\u043f\u00bb only \u2014 accepted while the campaign runs; the run reads it live.",
+        "operationId": "saveMasstaggingPace",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingPace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingSettingsRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/board": {
+      "get": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Get Board",
+        "description": "The pipeline's numbers, the accounts and the board by person with its history.",
+        "operationId": "getMasstaggingBoard",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/start": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Start Campaign",
+        "description": "Start, continue a paused or stopped campaign, or start a finished one again.\n\n409 covers every reason it cannot: already running, changed since it was read, no\naccount, no list, no media, or no account that may work.",
+        "operationId": "startMasstaggingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/stop": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Stop Campaign",
+        "description": "Pause for real and answer with the board; pausing a paused one is a no-op.",
+        "operationId": "stopMasstaggingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/targets/action": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Act On Target",
+        "description": "Tag now, skip, or put back in the queue one person of the board.\n\n409 ``masstagging_target_state_changed`` when the person moved on before the click\nlanded.",
+        "operationId": "actOnMasstaggingTarget",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingTargetAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/media": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Upload Media",
+        "description": "Store a photo or a video for the campaign's stories.",
+        "operationId": "uploadMasstaggingMedia",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_uploadMasstaggingMedia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingMediaRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/targets/import": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Import Targets",
+        "description": "Read a text or CSV list; the dialog adds what it found to its list.",
+        "operationId": "importMasstaggingTargets",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_importMasstaggingTargets"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingTargetList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/masstagging/campaigns/{campaign_id}/targets/base": {
+      "post": {
+        "tags": [
+          "masstagging"
+        ],
+        "summary": "Copy Base",
+        "description": "A saved parser base as usernames, copied \u2014 the campaign never follows the base.",
+        "operationId": "copyMasstaggingBase",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasstaggingBaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasstaggingTargetList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18967,6 +20242,20 @@
         ],
         "title": "Body_importAccountTdata"
       },
+      "Body_importMasstaggingTargets": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_importMasstaggingTargets"
+      },
       "Body_postAccountStory": {
         "properties": {
           "files": {
@@ -19144,6 +20433,20 @@
           "file"
         ],
         "title": "Body_uploadChatBroadcastPhoto"
+      },
+      "Body_uploadMasstaggingMedia": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_uploadMasstaggingMedia"
       },
       "Body_uploadScheduledMedia": {
         "properties": {
@@ -20004,7 +21307,8 @@
                   "neuroshilling",
                   "chat_broadcast",
                   "discovery",
-                  "user_parser"
+                  "user_parser",
+                  "masstagging"
                 ]
               },
               {
@@ -22961,6 +24265,917 @@
         ],
         "title": "LoginRequest"
       },
+      "MasstaggingBaseRequest": {
+        "properties": {
+          "base_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Base Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "base_id"
+        ],
+        "title": "MasstaggingBaseRequest",
+        "description": "Copy a saved parser base into the list."
+      },
+      "MasstaggingBoard": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/MasstaggingCampaign"
+          },
+          "next_action_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action At"
+          },
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/MasstaggingBoardAccount"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "counters": {
+            "$ref": "#/components/schemas/MasstaggingCounters"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MasstaggingBoardRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign",
+          "accounts",
+          "counters",
+          "rows"
+        ],
+        "title": "MasstaggingBoard"
+      },
+      "MasstaggingBoardAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "working",
+              "resting",
+              "flood",
+              "spamblock",
+              "not_alive",
+              "busy",
+              "volume"
+            ],
+            "title": "State"
+          },
+          "premium": {
+            "type": "boolean",
+            "title": "Premium"
+          },
+          "busy_owner": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "warming",
+                  "neurocomment",
+                  "neuroshilling",
+                  "chat_broadcast",
+                  "discovery",
+                  "user_parser",
+                  "masstagging"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Owner"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "state",
+          "premium"
+        ],
+        "title": "MasstaggingBoardAccount"
+      },
+      "MasstaggingBoardRow": {
+        "properties": {
+          "target_key": {
+            "type": "string",
+            "title": "Target Key"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "primed",
+              "working",
+              "tagged",
+              "flood",
+              "skipped",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "already_tagged",
+                  "username_not_found",
+                  "phone_not_found",
+                  "not_a_user",
+                  "chat_expanded",
+                  "chat_hidden",
+                  "privacy",
+                  "bot",
+                  "deleted_account",
+                  "manual",
+                  "unconfirmed",
+                  "error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/MasstaggingHistoryEntry"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_key",
+          "target",
+          "state",
+          "active",
+          "history"
+        ],
+        "title": "MasstaggingBoardRow"
+      },
+      "MasstaggingCampaign": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "stories",
+              "priming"
+            ],
+            "title": "Mode"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ready",
+              "running",
+              "paused",
+              "resting",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "target_count": {
+            "type": "integer",
+            "title": "Target Count"
+          },
+          "account_count": {
+            "type": "integer",
+            "title": "Account Count"
+          },
+          "missing": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "no_accounts",
+                "all_spamblocked",
+                "no_targets",
+                "no_media"
+              ]
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "rest_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rest Until"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "mode",
+          "status",
+          "target_count",
+          "account_count",
+          "missing",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MasstaggingCampaign",
+        "description": "One campaign as the sidebar lists it."
+      },
+      "MasstaggingCampaigns": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MasstaggingCampaign"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "MasstaggingCampaigns"
+      },
+      "MasstaggingCounters": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "tagged": {
+            "type": "integer",
+            "title": "Tagged"
+          },
+          "left": {
+            "type": "integer",
+            "title": "Left"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "per_day": {
+            "type": "integer",
+            "title": "Per Day"
+          },
+          "days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Left"
+          },
+          "working_accounts": {
+            "type": "integer",
+            "title": "Working Accounts"
+          },
+          "excluded_accounts": {
+            "type": "integer",
+            "title": "Excluded Accounts"
+          },
+          "free_accounts": {
+            "type": "integer",
+            "title": "Free Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "tagged",
+          "left",
+          "failed",
+          "skipped",
+          "per_day",
+          "working_accounts",
+          "excluded_accounts",
+          "free_accounts"
+        ],
+        "title": "MasstaggingCounters"
+      },
+      "MasstaggingCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MasstaggingCreate"
+      },
+      "MasstaggingHistoryEntry": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "dialog_created",
+              "tagged",
+              "flood",
+              "skipped",
+              "failed",
+              "requeued",
+              "now",
+              "expanded"
+            ],
+            "title": "Event"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "event"
+        ],
+        "title": "MasstaggingHistoryEntry"
+      },
+      "MasstaggingMedia": {
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}\\.(jpg|jpeg|png|webp|mp4|mov)$",
+            "title": "Media Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "media_id",
+          "name"
+        ],
+        "title": "MasstaggingMedia",
+        "description": "An uploaded photo or video; stories take them in turn."
+      },
+      "MasstaggingMediaRead": {
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "title": "Media Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "media_id",
+          "name"
+        ],
+        "title": "MasstaggingMediaRead"
+      },
+      "MasstaggingPace": {
+        "properties": {
+          "mentions_per_story": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Mentions Per Story",
+            "default": 5
+          },
+          "stories_per_day": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Stories Per Day",
+            "default": 15
+          },
+          "story_gap_minutes": {
+            "$ref": "#/components/schemas/MinutesRange"
+          },
+          "dialogs_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Dialogs Per Day",
+            "default": 6
+          },
+          "dialog_gap_seconds": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "ramp_up": {
+            "type": "boolean",
+            "title": "Ramp Up",
+            "default": true
+          },
+          "skip_tagged": {
+            "type": "boolean",
+            "title": "Skip Tagged",
+            "default": true
+          },
+          "stop_mode": {
+            "type": "string",
+            "enum": [
+              "count",
+              "time"
+            ],
+            "title": "Stop Mode",
+            "default": "count"
+          },
+          "stop_tags": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Stop Tags",
+            "default": 50
+          },
+          "stop_minutes": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Stop Minutes",
+            "default": 0
+          },
+          "flood_pause_seconds": {
+            "type": "integer",
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Flood Pause Seconds",
+            "default": 500
+          },
+          "floods_to_rest": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Floods To Rest",
+            "default": 3
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MasstaggingPace",
+        "description": "\u00ab\u0422\u0435\u043c\u043f\u00bb \u2014 the only settings a running campaign takes (the board's gear)."
+      },
+      "MasstaggingSettings": {
+        "properties": {
+          "mentions_per_story": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Mentions Per Story",
+            "default": 5
+          },
+          "stories_per_day": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Stories Per Day",
+            "default": 15
+          },
+          "story_gap_minutes": {
+            "$ref": "#/components/schemas/MinutesRange"
+          },
+          "dialogs_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Dialogs Per Day",
+            "default": 6
+          },
+          "dialog_gap_seconds": {
+            "$ref": "#/components/schemas/SecondsRange"
+          },
+          "ramp_up": {
+            "type": "boolean",
+            "title": "Ramp Up",
+            "default": true
+          },
+          "skip_tagged": {
+            "type": "boolean",
+            "title": "Skip Tagged",
+            "default": true
+          },
+          "stop_mode": {
+            "type": "string",
+            "enum": [
+              "count",
+              "time"
+            ],
+            "title": "Stop Mode",
+            "default": "count"
+          },
+          "stop_tags": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Stop Tags",
+            "default": 50
+          },
+          "stop_minutes": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Stop Minutes",
+            "default": 0
+          },
+          "flood_pause_seconds": {
+            "type": "integer",
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Flood Pause Seconds",
+            "default": 500
+          },
+          "floods_to_rest": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Floods To Rest",
+            "default": 3
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "stories",
+              "priming"
+            ],
+            "title": "Mode",
+            "default": "stories"
+          },
+          "target_source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "contacts",
+              "base"
+            ],
+            "title": "Target Source",
+            "default": "manual"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Targets"
+          },
+          "base_name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Base Name",
+            "default": ""
+          },
+          "media": {
+            "items": {
+              "$ref": "#/components/schemas/MasstaggingMedia"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Media"
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Caption",
+            "default": ""
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Link",
+            "default": ""
+          },
+          "link_text": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Link Text",
+            "default": ""
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "all",
+              "contacts"
+            ],
+            "title": "Visibility",
+            "default": "all"
+          },
+          "lifetime_hours": {
+            "type": "integer",
+            "enum": [
+              6,
+              12,
+              24,
+              48
+            ],
+            "title": "Lifetime Hours",
+            "default": 48
+          },
+          "prime_first": {
+            "type": "boolean",
+            "title": "Prime First",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MasstaggingSettings",
+        "description": "Everything the settings dialog edits, persisted as one JSON document.\n\nThe accounts roster travels beside it (``MasstaggingSettingsUpdate.account_ids``)\nbecause it is a table, not a field."
+      },
+      "MasstaggingSettingsRead": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ready",
+              "running",
+              "paused",
+              "resting",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Account Ids"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/MasstaggingSettings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "status",
+          "updated_at",
+          "account_ids",
+          "settings"
+        ],
+        "title": "MasstaggingSettingsRead",
+        "description": "What the settings dialog opens with; ``updated_at`` is the lock token."
+      },
+      "MasstaggingSettingsUpdate": {
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Account Ids"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/MasstaggingSettings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_updated_at",
+          "name",
+          "settings"
+        ],
+        "title": "MasstaggingSettingsUpdate",
+        "description": "Whole-dialog save: name, roster and settings in one write."
+      },
+      "MasstaggingTargetAction": {
+        "properties": {
+          "target_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Key"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "now",
+              "skip",
+              "requeue"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_key",
+          "action"
+        ],
+        "title": "MasstaggingTargetAction",
+        "description": "A manual action on one target of the board."
+      },
+      "MasstaggingTargetList": {
+        "properties": {
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Targets"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "targets"
+        ],
+        "title": "MasstaggingTargetList",
+        "description": "Targets read from a file or a parser base, for the dialog to add to its list.\n\n``skipped`` counts the lines or people that cannot be a target (no username,\na bot, a line that is not a username, phone or link)."
+      },
+      "MasstaggingVersionRequest": {
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_updated_at"
+        ],
+        "title": "MasstaggingVersionRequest",
+        "description": "The campaign version the operator actually viewed (optimistic lock)."
+      },
       "MinutesRange": {
         "properties": {
           "min": {
@@ -23608,7 +25823,8 @@
                   "neuroshilling",
                   "neurocomment",
                   "chat_broadcast",
-                  "user_parser"
+                  "user_parser",
+                  "masstagging"
                 ]
               },
               {

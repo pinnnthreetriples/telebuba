@@ -127,6 +127,10 @@ def _delete_account(account_id: str) -> None:
         _chat_broadcast_accounts,
     )
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
+    from core.repositories.masstagging._tables import (  # noqa: PLC0415
+        _masstagging_account_day,
+        _masstagging_accounts,
+    )
     from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
 
     with _get_engine().begin() as connection:
@@ -153,6 +157,15 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_chat_broadcast_accounts).where(
                 _chat_broadcast_accounts.c.account_id == account_id,
+            ),
+        )
+        # The masstagging roster FKs accounts; its day counters are the account's own.
+        connection.execute(
+            delete(_masstagging_accounts).where(_masstagging_accounts.c.account_id == account_id),
+        )
+        connection.execute(
+            delete(_masstagging_account_day).where(
+                _masstagging_account_day.c.account_id == account_id,
             ),
         )
         connection.execute(

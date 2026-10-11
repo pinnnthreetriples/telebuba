@@ -971,7 +971,8 @@
     "neuroshilling": "Neuroshilling",
     "logs": "Logs",
     "settings": "Settings",
-    "broadcast": "Broadcast"
+    "broadcast": "Broadcast",
+    "masstagging": "Mass tagging"
   },
   "shell": {
     "systemActive": "System active",
@@ -1057,7 +1058,22 @@
       "media_invalid": "That is not a photo: JPG, PNG and WEBP work.",
       "media_too_large": "The photo is too large.",
       "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo.",
-      "collection_name_taken": "A category with this name already exists. Pick another name."
+      "collection_name_taken": "A category with this name already exists. Pick another name.",
+      "account_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign, then start warming.",
+      "listener_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign or pick another listener account.",
+      "masstagging_no_accounts": "The campaign has no account. Add accounts in the settings.",
+      "masstagging_no_free_accounts": "No account of the campaign can work: a spam block, an inactive session or another module holds it.",
+      "masstagging_no_targets": "Add at least one person to tag.",
+      "masstagging_no_media": "Add a photo or a video for the stories.",
+      "masstagging_invalid_target": "Could not read a target. Use @username, t.me/username or a +7… phone.",
+      "masstagging_too_many_accounts": "Too many accounts in one campaign.",
+      "masstagging_too_many_media": "Too many story files — remove some.",
+      "masstagging_target_not_found": "This target is no longer in the campaign. Refresh the board.",
+      "masstagging_target_state_changed": "The target already moved on — the board is refreshed, try again.",
+      "masstagging_media_invalid": "Not a photo or a video: JPG, PNG, WEBP, MP4 and MOV work.",
+      "masstagging_media_too_large": "The file is too large.",
+      "masstagging_import_invalid": "Could not read the file: plain text or CSV in UTF-8 is needed.",
+      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1466,7 +1482,26 @@
     "chat_broadcast_account_limit": "Account hit its message limit",
     "chat_broadcast_chats_handed": "Chats handed to other accounts",
     "chat_broadcast_folder_unavailable": "Could not open the folder",
-    "chat_broadcast_rewrite_fallback": "AI did not rewrite — the original text went out"
+    "chat_broadcast_rewrite_fallback": "AI did not rewrite — the original text went out",
+    "masstagging_run_started": "Mass tagging: campaign started",
+    "masstagging_run_resumed": "Mass tagging: campaign resumed after a restart",
+    "masstagging_run_paused": "Mass tagging: campaign paused",
+    "masstagging_run_resting": "Mass tagging: today's limit is spent — going on tomorrow",
+    "masstagging_run_done": "Mass tagging: the list is done — campaign finished",
+    "masstagging_run_failed": "Mass tagging: campaign stopped",
+    "masstagging_pace_changed": "Mass tagging: pace changed",
+    "masstagging_dialog_created": "Mass tagging: dialog opened",
+    "masstagging_story_posted": "Mass tagging: story posted",
+    "masstagging_target_tagged": "Mass tagging: tagged",
+    "masstagging_target_skipped": "Mass tagging: skipped",
+    "masstagging_target_failed": "Mass tagging: could not tag",
+    "masstagging_target_now": "Mass tagging: moved to the head of the queue",
+    "masstagging_target_requeued": "Mass tagging: back in the queue",
+    "masstagging_flood_pause": "Mass tagging: flood limit — the account pauses",
+    "masstagging_account_rested": "Mass tagging: the account rests until tomorrow",
+    "masstagging_account_halted": "Mass tagging: the account left — its session does not work",
+    "masstagging_spamblock": "Mass tagging: spam block — the account left",
+    "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts"
   },
   "logEventReason": {
     "account_cooling": "the account is waiting out a Telegram limit",
@@ -1576,7 +1611,21 @@
     "admin_only": "only admins can write",
     "already_written": "already written to",
     "removed": "removed from the list",
-    "errors_in_a_row": "too many errors in a row"
+    "errors_in_a_row": "too many errors in a row",
+    "busy_masstagging": "the account is busy with a running mass-tagging campaign",
+    "already_tagged": "already tagged",
+    "username_not_found": "no such username",
+    "phone_not_found": "phone not found",
+    "not_a_user": "not a person",
+    "chat_expanded": "a chat — its members were taken",
+    "chat_hidden": "the chat hides its members",
+    "deleted_account": "account deleted",
+    "unconfirmed": "unknown whether the story went out",
+    "floods": "flood limits in a row",
+    "stories_limit": "no stories left for today",
+    "volume": "«Stop after» was reached",
+    "no_accounts": "no working account left",
+    "dead": "the session does not work"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -1708,7 +1757,10 @@
       "broadcast_forward_post": "Forward post to chat",
       "broadcast_join_chatlist": "Join folder chat",
       "list_writable_groups": "List account groups",
-      "check_chatlist": "Check folder"
+      "check_chatlist": "Check folder",
+      "masstag_toggle_ttl": "Auto-delete on → off",
+      "resolve_masstag_target": "Masstagging target lookup",
+      "list_masstag_contacts": "Reading contacts"
     },
     "status": {
       "failed": "failed",
@@ -2582,7 +2634,8 @@
           "neuroshilling": "held by another neuroshilling campaign",
           "neurocomment": "held by neurocomment",
           "chat_broadcast": "busy with a chat broadcast",
-          "user_parser": "busy with the user parser"
+          "user_parser": "busy with the user parser",
+          "masstagging": "busy with mass tagging"
         },
         "busyNamed": "{{owner}} — {{name}}"
       },
@@ -3152,7 +3205,8 @@
       "neuroshilling": "neuroshilling",
       "chat_broadcast": "another broadcast",
       "discovery": "channel search",
-      "user_parser": "user parser"
+      "user_parser": "user parser",
+      "masstagging": "mass tagging"
     },
     "board": {
       "title": "Work board",
@@ -3845,6 +3899,325 @@
       "account_cooling": "The account is under a Telegram limit right now",
       "no_account": "The account cannot read: no session or not found",
       "account": "account {{name}}"
+    }
+  },
+  "masstagging": {
+    "title": "Mass tagging",
+    "log": "Log",
+    "empty": {
+      "title": "No campaigns yet",
+      "text": "Create the first one — «+ New campaign» on the left. Then pick the mode, the accounts and who to tag."
+    },
+    "clearLogs": {
+      "title": "Clear the mass-tagging log?",
+      "body": "Entries to delete: {{count}} — the whole mass-tagging log, not just the visible page.",
+      "confirm": "Clear",
+      "cancel": "Cancel"
+    },
+    "mode": {
+      "stories": "Stories",
+      "priming": "Priming"
+    },
+    "status": {
+      "draft": "Draft",
+      "ready": "Ready",
+      "running": "Running",
+      "paused": "Paused",
+      "resting": "Until tomorrow",
+      "done": "Done",
+      "failed": "Stopped"
+    },
+    "missing": {
+      "no_accounts": "No account selected",
+      "all_spamblocked": "Every selected account has a spam block",
+      "no_targets": "The target list is empty",
+      "no_media": "The media pool is empty"
+    },
+    "freeAccounts": "without Premium: {{count}}",
+    "campaign": {
+      "actions": "Campaign actions",
+      "run": "Start",
+      "pause": "Pause",
+      "settings": "Settings",
+      "delete": "Delete",
+      "deleteTitle": "Delete campaign «{{name}}»?",
+      "deleteBody": "The campaign, its list and history will be deleted. Posted stories stay up, and the people tagged stay in the shared «already tagged» list.",
+      "deleteConfirm": "Delete",
+      "deleteCancel": "Cancel"
+    },
+    "campaigns": {
+      "title": "Campaigns",
+      "none": "No campaigns yet",
+      "create": "+ New campaign",
+      "namePlaceholder": "Campaign name",
+      "confirm": "Create",
+      "cancel": "Cancel",
+      "meta": "{{mode}} · {{targets}}",
+      "noTargets": "no targets",
+      "targets_one": "{{count}} target",
+      "targets_other": "{{count}} targets"
+    },
+    "howto": {
+      "title": "How it works",
+      "step1": "Create a campaign and open its settings.",
+      "step2": "Pick the mode, the accounts and who to tag.",
+      "step3": "Press «Start» — the accounts work through the list on their own.",
+      "step4": "Follow the progress on the «Targets» board and in the log."
+    },
+    "pipeline": {
+      "title": "Pipeline",
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Continue",
+      "restart": "Start again",
+      "progress": "Targets done",
+      "freeHint": "Such accounts post 1 story a day.",
+      "freeExample": "With Premium — up to 100.",
+      "inMinutes_one": "{{count}} min",
+      "inMinutes_other": "{{count}} min",
+      "inSeconds_one": "{{count}} s",
+      "inSeconds_other": "{{count}} s",
+      "step": {
+        "accounts": "Accounts",
+        "targets": "Targets",
+        "dialog": "Dialog",
+        "story": "Story",
+        "toggle": "Auto-delete",
+        "done": "Done"
+      },
+      "sub": {
+        "accountsExcluded": "{{count}} · {{excluded}} excl.",
+        "dialog": "auto-delete",
+        "story": "{{count}} in each",
+        "toggle": "{{count}} a day"
+      },
+      "notice": {
+        "draft": "To start: {{missing}}",
+        "ready": "All set — you can start",
+        "running": "Running",
+        "runningStory": "Running · next story in {{next}}",
+        "runningDialog": "Running · next dialog in {{next}}",
+        "paused": "Paused · tagged {{tagged}} of {{total}}",
+        "pausedVolume": "Paused: «Stop after» was reached · tagged {{tagged}} of {{total}}",
+        "resting": "Today's limit is spent · we go on tomorrow at {{time}}",
+        "done": "Done · tagged {{tagged}} of {{total}}",
+        "failedFloods": "Stopped: every account hit a flood limit. Add accounts or continue later",
+        "failedAccounts": "Stopped: no working account is left. Add accounts or continue later",
+        "failed": "Stopped by an error. Check the log and continue"
+      },
+      "stat": {
+        "tagged": "Tagged",
+        "taggedOf": "{{tagged}} of {{total}}",
+        "left": "Left",
+        "failed": "Errors",
+        "perDay": "A day",
+        "perDayLeft_one": "A day · ≈{{count}} more day",
+        "perDayLeft_other": "A day · ≈{{count}} more days"
+      }
+    },
+    "board": {
+      "title": "Targets",
+      "tabs": "Which targets to show",
+      "tabActive": "In work · {{count}}",
+      "tabDone": "Done · {{count}}",
+      "queueEmpty": "The queue is empty",
+      "noneDone": "Nobody tagged yet",
+      "untouched": "Not touched yet.",
+      "tagNow": "Tag now",
+      "primeNow": "Now",
+      "skip": "Skip",
+      "requeue": "Back to the queue",
+      "empty": {
+        "title": "People from the list will show up here",
+        "note": "Add who to tag in the campaign settings.",
+        "add": "Add"
+      },
+      "resting": {
+        "title_one": "We go on tomorrow at {{time}} · {{count}} person waits",
+        "title_other": "We go on tomorrow at {{time}} · {{count}} people wait",
+        "note": "The accounts spent today's limit.",
+        "show": "Show the list"
+      },
+      "columns": {
+        "target": "Who",
+        "when": "When",
+        "account": "Account",
+        "status": "Status",
+        "details": "Details"
+      },
+      "state": {
+        "queued": "Queued",
+        "primed": "Dialog open",
+        "working": "Now",
+        "tagged": "Tagged",
+        "skipped": "Skipped",
+        "failed": "Error",
+        "flood": "Waits for an account"
+      },
+      "when": {
+        "tomorrow": "tomorrow",
+        "afterPause": "after the pause",
+        "afterPauseAt": "after the pause · {{time}}",
+        "nextStory": "with the next story",
+        "now": "now"
+      },
+      "history": {
+        "dialog_created": "Dialog opened (auto-delete on → off)",
+        "taggedStory_one": "Tagged in a story ({{count}} in it)",
+        "taggedStory_other": "Tagged in a story ({{count}} in it)",
+        "taggedPriming": "Auto-delete on → off, the line stays in the DM",
+        "flood": "The account hit a flood limit — the target waits {{seconds}} s",
+        "skipped": "Skipped: {{reason}}",
+        "failed": "Error: {{reason}}",
+        "requeued": "Back in the queue",
+        "now": "Moved to the head of the queue",
+        "expanded_one": "Chat opened up: {{count}} member in the list",
+        "expanded_other": "Chat opened up: {{count}} members in the list"
+      }
+    },
+    "reason": {
+      "already_tagged": "already tagged",
+      "username_not_found": "no such username",
+      "phone_not_found": "phone not found",
+      "not_a_user": "not a person",
+      "chat_expanded": "a chat — its members were taken",
+      "chat_hidden": "the chat hides its members",
+      "privacy": "closed by privacy",
+      "bot": "a bot",
+      "deleted_account": "account deleted",
+      "manual": "by hand",
+      "unconfirmed": "unknown whether the story went out",
+      "error": "Telegram error"
+    },
+    "paceDialog": {
+      "title": "Pace",
+      "subtitle": "Changes on the fly — no pause needed.",
+      "conflict": "The campaign was just changed in another window. Close this one and open it again."
+    },
+    "settings": {
+      "subtitle": "Campaign settings",
+      "unsaved": "Not saved",
+      "running": "The campaign is running. Pause it to change the settings.",
+      "conflict": "The campaign settings changed in another window. Copy your unsaved edits and open the window again.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "from": "{{label}}: from",
+      "to": "{{label}}: to",
+      "min": "min",
+      "sec": "s",
+      "mode": {
+        "title": "Mode",
+        "hint": "Stories — the account posts a story and tags people in it. Priming — it posts nothing, it only flickers in the person's DM.",
+        "example": "The person sees «Anna mentioned you in her story» or «Anna turned on auto-delete» — and goes to look at the profile.",
+        "stories": "Story mentions",
+        "storiesLine": "A story with @mentions",
+        "priming": "Priming",
+        "primingLine": "No story, only the DM"
+      },
+      "accounts": {
+        "title": "Accounts",
+        "hint": "Who tags. Accounts with a spam block take no part — their tags never arrive.",
+        "example": "Without Premium — 1 story a day. With Premium — up to 100.",
+        "spamblock": "spam block: {{count}}",
+        "add": "Add accounts",
+        "empty": "Nobody yet — press «+»",
+        "remove": "Remove {{name}}",
+        "excluded": "{{name}} — spam block, takes no part"
+      },
+      "targets": {
+        "title": "Who to tag",
+        "hint": "One per line: a username, a phone or a chat link — a chat gives its members.",
+        "example": "@ivan · +79001234567 · t.me/moscow_chat",
+        "source": "Where the targets come from",
+        "sources": {
+          "manual": "My list",
+          "contacts": "Accounts' contacts",
+          "base": "Parser base"
+        },
+        "contacts": "Each account tags its own contacts.",
+        "entry": "Who to add",
+        "placeholder": "@username\n+79001234567\nt.me/chat",
+        "add": "Add",
+        "addCount": "Add {{count}}",
+        "file": "From a file",
+        "clear": "Clear",
+        "skipped_one": "{{count}} line not understood",
+        "skipped_other": "{{count}} lines not understood",
+        "remove": "Remove {{target}}",
+        "more": "{{count}} more",
+        "collapse": "Collapse",
+        "base": "Parser base",
+        "basePlaceholder": "Pick a base",
+        "baseOption": "{{name}} · {{count}}",
+        "noBases": "No saved bases yet — collect people in the user parser.",
+        "copiedFrom": "Copied from the base «{{name}}»"
+      },
+      "story": {
+        "title": "Story",
+        "hint": "What the person sees when they open the mention.",
+        "example": "A 15 s video + the caption «Free lesson» + a link button.",
+        "drop": "Drop a photo or a video",
+        "dropHint": "With several files, stories take them in turn.",
+        "dropExample": "Video — up to 60 seconds.",
+        "removeMedia": "Remove {{name}}",
+        "caption": "Caption",
+        "captionHint": "We add the mentions ourselves.",
+        "captionExample": "«Watch the lesson» → «Watch the lesson @ivan @olga»",
+        "link": "Link",
+        "linkHint": "A button on the story. Works only for Premium accounts.",
+        "linkExample": "https://t.me/your_channel",
+        "linkText": "Button text",
+        "linkTextPlaceholder": "Watch",
+        "visibility": "Who sees it",
+        "visibilityHint": "Choose «Everyone» — otherwise the tagged person may not see the story.",
+        "visibilityAll": "Everyone",
+        "visibilityContacts": "Contacts",
+        "lifetime": "How long it stays",
+        "lifetimeHint": "The longer it stays, the more people come.",
+        "lifetimeExample": "Without Premium — 24 hours only.",
+        "hours_one": "{{count}} h",
+        "hours_other": "{{count}} h",
+        "primeFirst": "Open a dialog first",
+        "primeFirstHint": "Before the mention the account turns auto-delete on in the DM for a second — so the notification surely arrives."
+      },
+      "pace": {
+        "title": "Pace",
+        "hint": "How fast the accounts work. Slower is safer.",
+        "example": "The defaults are fine to begin with.",
+        "mentions": "Mentions in one story",
+        "mentionsHint": "How many people in one story.",
+        "mentionsExample": "5 is safe.",
+        "stories": "Stories a day",
+        "storiesHint": "From one account.",
+        "storiesExample": "Without Premium — 1.",
+        "storyGap": "Pause between stories",
+        "storyGapExample": "1–2 min",
+        "gapHint": "Random every time — within these bounds.",
+        "dialogs": "People a day",
+        "dialogsHint": "From one account.",
+        "dialogsExample": "A new one — 5–6, a warmed one — up to 40.",
+        "dialogGap": "Pause between people",
+        "dialogGapExample": "20–60 s",
+        "ramp": "Soft start",
+        "rampHint": "The first 3 days — fewer people and longer pauses.",
+        "rampExample": "5–6 a day with 3–10 min pauses, then the usual pace.",
+        "skipTagged": "Skip those already tagged",
+        "skipTaggedHint": "Leave alone anyone any campaign has already tagged.",
+        "stop": "Stop after",
+        "stopHint": "Per account, per start.",
+        "stopExample": "0 — until the list ends.",
+        "stopUnit": "Unit",
+        "stopTags": "tags",
+        "stopMinutes": "minutes",
+        "safety": "Protection from bans",
+        "safetySummary": "pause {{seconds}} s · stop after {{count}}",
+        "floodPause": "Pause on a flood limit",
+        "floodPauseHint": "Telegram asked to wait — we wait this long.",
+        "floodPauseExample": "500 s",
+        "floodsToRest": "Stop after flood limits",
+        "floodsToRestHint": "This many in a row — and the account rests until tomorrow.",
+        "floodsToRestExample": "3"
+      }
     }
   }
 }

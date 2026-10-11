@@ -19,6 +19,9 @@ import type {
   ActOnChatBroadcastTargetData,
   ActOnChatBroadcastTargetErrors,
   ActOnChatBroadcastTargetResponses,
+  ActOnMasstaggingTargetData,
+  ActOnMasstaggingTargetErrors,
+  ActOnMasstaggingTargetResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
@@ -79,6 +82,9 @@ import type {
   ConfirmAccountTwofaEmailData,
   ConfirmAccountTwofaEmailErrors,
   ConfirmAccountTwofaEmailResponses,
+  CopyMasstaggingBaseData,
+  CopyMasstaggingBaseErrors,
+  CopyMasstaggingBaseResponses,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
@@ -100,6 +106,9 @@ import type {
   CreateChatCollectionData,
   CreateChatCollectionErrors,
   CreateChatCollectionResponses,
+  CreateMasstaggingCampaignData,
+  CreateMasstaggingCampaignErrors,
+  CreateMasstaggingCampaignResponses,
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignErrors,
   CreateNeuroshillingCampaignResponses,
@@ -130,6 +139,9 @@ import type {
   DeleteChatCollectionData,
   DeleteChatCollectionErrors,
   DeleteChatCollectionResponses,
+  DeleteMasstaggingCampaignData,
+  DeleteMasstaggingCampaignErrors,
+  DeleteMasstaggingCampaignResponses,
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignErrors,
   DeleteNeuroshillingCampaignResponses,
@@ -205,6 +217,12 @@ import type {
   GetLatestContactLookupJobData,
   GetLatestContactLookupJobErrors,
   GetLatestContactLookupJobResponses,
+  GetMasstaggingBoardData,
+  GetMasstaggingBoardErrors,
+  GetMasstaggingBoardResponses,
+  GetMasstaggingSettingsData,
+  GetMasstaggingSettingsErrors,
+  GetMasstaggingSettingsResponses,
   GetMeData,
   GetMeErrors,
   GetMeResponses,
@@ -247,6 +265,9 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
+  ImportMasstaggingTargetsData,
+  ImportMasstaggingTargetsErrors,
+  ImportMasstaggingTargetsResponses,
   LinkCampaignChannelData,
   LinkCampaignChannelErrors,
   LinkCampaignChannelResponses,
@@ -295,6 +316,9 @@ import type {
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
+  ListMasstaggingCampaignsData,
+  ListMasstaggingCampaignsErrors,
+  ListMasstaggingCampaignsResponses,
   ListNeurocommentCommentsData,
   ListNeurocommentCommentsErrors,
   ListNeurocommentCommentsResponses,
@@ -412,6 +436,12 @@ import type {
   SaveChatCollectionData,
   SaveChatCollectionErrors,
   SaveChatCollectionResponses,
+  SaveMasstaggingPaceData,
+  SaveMasstaggingPaceErrors,
+  SaveMasstaggingPaceResponses,
+  SaveMasstaggingSettingsData,
+  SaveMasstaggingSettingsErrors,
+  SaveMasstaggingSettingsResponses,
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsErrors,
   SaveNeuroshillingSettingsResponses,
@@ -481,6 +511,9 @@ import type {
   StartContactLookupData,
   StartContactLookupErrors,
   StartContactLookupResponses,
+  StartMasstaggingCampaignData,
+  StartMasstaggingCampaignErrors,
+  StartMasstaggingCampaignResponses,
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
@@ -499,6 +532,9 @@ import type {
   StopChatBroadcastCampaignData,
   StopChatBroadcastCampaignErrors,
   StopChatBroadcastCampaignResponses,
+  StopMasstaggingCampaignData,
+  StopMasstaggingCampaignErrors,
+  StopMasstaggingCampaignResponses,
   StopNeurocommentData,
   StopNeurocommentErrors,
   StopNeurocommentResponses,
@@ -544,6 +580,9 @@ import type {
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoErrors,
   UploadChatBroadcastPhotoResponses,
+  UploadMasstaggingMediaData,
+  UploadMasstaggingMediaErrors,
+  UploadMasstaggingMediaResponses,
   UploadScheduledMediaData,
   UploadScheduledMediaErrors,
   UploadScheduledMediaResponses,
@@ -3612,3 +3651,254 @@ export const listUserParserBaseUsers = <ThrowOnError extends boolean = false>(
     ListUserParserBaseUsersErrors,
     ThrowOnError
   >({ url: '/api/v1/user-parser/bases/{run_id}/users', ...options });
+
+/**
+ * List Campaigns
+ */
+export const listMasstaggingCampaigns = <ThrowOnError extends boolean = false>(
+  options?: Options<ListMasstaggingCampaignsData, ThrowOnError>,
+): RequestResult<ListMasstaggingCampaignsResponses, ListMasstaggingCampaignsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListMasstaggingCampaignsResponses,
+    ListMasstaggingCampaignsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/masstagging/campaigns', ...options });
+
+/**
+ * Create Campaign
+ */
+export const createMasstaggingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<CreateMasstaggingCampaignData, ThrowOnError>,
+): RequestResult<
+  CreateMasstaggingCampaignResponses,
+  CreateMasstaggingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateMasstaggingCampaignResponses,
+    CreateMasstaggingCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign with its list and history; refused while it runs.
+ */
+export const deleteMasstaggingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteMasstaggingCampaignData, ThrowOnError>,
+): RequestResult<
+  DeleteMasstaggingCampaignResponses,
+  DeleteMasstaggingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteMasstaggingCampaignResponses,
+    DeleteMasstaggingCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/masstagging/campaigns/{campaign_id}', ...options });
+
+/**
+ * Get Settings
+ */
+export const getMasstaggingSettings = <ThrowOnError extends boolean = false>(
+  options: Options<GetMasstaggingSettingsData, ThrowOnError>,
+): RequestResult<GetMasstaggingSettingsResponses, GetMasstaggingSettingsErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetMasstaggingSettingsResponses,
+    GetMasstaggingSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/masstagging/campaigns/{campaign_id}/settings', ...options });
+
+/**
+ * Save Settings
+ *
+ * Save name, accounts and settings at once, only on the version the dialog read.
+ *
+ * 409 ``campaign_running`` while a run is attached, ``campaign_changed`` when the
+ * campaign moved since the dialog read it.
+ */
+export const saveMasstaggingSettings = <ThrowOnError extends boolean = false>(
+  options: Options<SaveMasstaggingSettingsData, ThrowOnError>,
+): RequestResult<SaveMasstaggingSettingsResponses, SaveMasstaggingSettingsErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SaveMasstaggingSettingsResponses,
+    SaveMasstaggingSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Save Pace
+ *
+ * Save «Темп» only — accepted while the campaign runs; the run reads it live.
+ */
+export const saveMasstaggingPace = <ThrowOnError extends boolean = false>(
+  options: Options<SaveMasstaggingPaceData, ThrowOnError>,
+): RequestResult<SaveMasstaggingPaceResponses, SaveMasstaggingPaceErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    SaveMasstaggingPaceResponses,
+    SaveMasstaggingPaceErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/pace',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Board
+ *
+ * The pipeline's numbers, the accounts and the board by person with its history.
+ */
+export const getMasstaggingBoard = <ThrowOnError extends boolean = false>(
+  options: Options<GetMasstaggingBoardData, ThrowOnError>,
+): RequestResult<GetMasstaggingBoardResponses, GetMasstaggingBoardErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetMasstaggingBoardResponses,
+    GetMasstaggingBoardErrors,
+    ThrowOnError
+  >({ url: '/api/v1/masstagging/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * Start Campaign
+ *
+ * Start, continue a paused or stopped campaign, or start a finished one again.
+ *
+ * 409 covers every reason it cannot: already running, changed since it was read, no
+ * account, no list, no media, or no account that may work.
+ */
+export const startMasstaggingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StartMasstaggingCampaignData, ThrowOnError>,
+): RequestResult<StartMasstaggingCampaignResponses, StartMasstaggingCampaignErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StartMasstaggingCampaignResponses,
+    StartMasstaggingCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Stop Campaign
+ *
+ * Pause for real and answer with the board; pausing a paused one is a no-op.
+ */
+export const stopMasstaggingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StopMasstaggingCampaignData, ThrowOnError>,
+): RequestResult<StopMasstaggingCampaignResponses, StopMasstaggingCampaignErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StopMasstaggingCampaignResponses,
+    StopMasstaggingCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/masstagging/campaigns/{campaign_id}/stop', ...options });
+
+/**
+ * Act On Target
+ *
+ * Tag now, skip, or put back in the queue one person of the board.
+ *
+ * 409 ``masstagging_target_state_changed`` when the person moved on before the click
+ * landed.
+ */
+export const actOnMasstaggingTarget = <ThrowOnError extends boolean = false>(
+  options: Options<ActOnMasstaggingTargetData, ThrowOnError>,
+): RequestResult<ActOnMasstaggingTargetResponses, ActOnMasstaggingTargetErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ActOnMasstaggingTargetResponses,
+    ActOnMasstaggingTargetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/action',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Upload Media
+ *
+ * Store a photo or a video for the campaign's stories.
+ */
+export const uploadMasstaggingMedia = <ThrowOnError extends boolean = false>(
+  options: Options<UploadMasstaggingMediaData, ThrowOnError>,
+): RequestResult<UploadMasstaggingMediaResponses, UploadMasstaggingMediaErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    UploadMasstaggingMediaResponses,
+    UploadMasstaggingMediaErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/media',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Import Targets
+ *
+ * Read a text or CSV list; the dialog adds what it found to its list.
+ */
+export const importMasstaggingTargets = <ThrowOnError extends boolean = false>(
+  options: Options<ImportMasstaggingTargetsData, ThrowOnError>,
+): RequestResult<ImportMasstaggingTargetsResponses, ImportMasstaggingTargetsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ImportMasstaggingTargetsResponses,
+    ImportMasstaggingTargetsErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/import',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Copy Base
+ *
+ * A saved parser base as usernames, copied — the campaign never follows the base.
+ */
+export const copyMasstaggingBase = <ThrowOnError extends boolean = false>(
+  options: Options<CopyMasstaggingBaseData, ThrowOnError>,
+): RequestResult<CopyMasstaggingBaseResponses, CopyMasstaggingBaseErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CopyMasstaggingBaseResponses,
+    CopyMasstaggingBaseErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/targets/base',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });

@@ -67,6 +67,7 @@ from core.migration_steps_llm_keys import (
     _add_warming_settings_text_llm_provider,
     _drop_warming_settings_dead_columns,
 )
+from core.migration_steps_masstagging import _add_masstagging_tables
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
@@ -208,6 +209,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (70, "add_chat_broadcast_collections", _add_chat_broadcast_collections),
     (71, "add_account_folders", _add_account_folders),
     (72, "add_user_parser_tables", _add_user_parser_tables),
+    (73, "add_masstagging_tables", _add_masstagging_tables),
 )
 
 

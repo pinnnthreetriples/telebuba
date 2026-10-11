@@ -45,6 +45,10 @@ from services.chat_broadcast import (
     shutdown_chat_broadcast_on_shutdown,
 )
 from services.inbox_runtime import reconcile_inboxes_on_startup, shutdown_inbox_runtime
+from services.masstagging import (
+    reconcile_masstagging_on_startup,
+    shutdown_masstagging_on_shutdown,
+)
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
@@ -155,6 +159,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
     await reconcile_chat_broadcast_on_startup()
+    await reconcile_masstagging_on_startup()
     await reconcile_user_parser_on_startup()
     await reconcile_inboxes_on_startup()
     await start_scheduled_posts()
@@ -168,6 +173,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("chat_broadcast", shutdown_chat_broadcast_on_shutdown)
+        await _shutdown_step("masstagging", shutdown_masstagging_on_shutdown)
         # Before the pool: a run saves what it collected as it is cancelled.
         await _shutdown_step("user_parser", shutdown_user_parser_on_shutdown)
         await _shutdown_step("inbox", shutdown_inbox_runtime)

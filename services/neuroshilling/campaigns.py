@@ -17,6 +17,9 @@ from core.repositories import neuroshilling as repository
 from core.repositories.chat_broadcast import (
     list_running_account_names as list_broadcast_rosters,
 )
+from core.repositories.masstagging import (
+    list_running_account_names as list_masstagging_rosters,
+)
 from core.repositories.neurocomment import (
     get_listener_account_id,
     get_listener_running,
@@ -332,6 +335,13 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
     )
 
 
+# The other campaign features whose running roster names the campaign holding an account.
+_OTHER_ROSTERS = {
+    "chat_broadcast": list_broadcast_rosters,
+    "masstagging": list_masstagging_rosters,
+}
+
+
 async def _busy_owners(campaign_id: str) -> _BusyMap:
     """``account_id -> (owner, holder name)`` for every account something holds.
 
@@ -380,7 +390,7 @@ async def _busy_owners(campaign_id: str) -> _BusyMap:
         name = None
         if owner == "neuroshilling" and running is not None and running[0] == holder:
             name = running[1]
-        elif owner == "chat_broadcast":
-            name = (await list_broadcast_rosters()).get(account_id, (None, None))[1]
+        elif (rosters := _OTHER_ROSTERS.get(owner)) is not None:
+            name = (await rosters()).get(account_id, (None, None))[1]
         busy[account_id] = (owner, name)
     return busy
