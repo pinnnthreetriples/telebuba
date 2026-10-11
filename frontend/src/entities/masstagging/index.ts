@@ -1,0 +1,15 @@
+export {
+  actOnMasstaggingTargetMutation,
+  copyMasstaggingBaseMutation,
+  createMasstaggingCampaignMutation,
+  deleteMasstaggingCampaignMutation,
+  importMasstaggingTargetsMutation,
+  masstaggingBoardQueryOptions,
+  masstaggingCampaignsQueryOptions,
+  masstaggingSettingsQueryOptions,
+  saveMasstaggingPaceMutation,
+  saveMasstaggingSettingsMutation,
+  startMasstaggingCampaignMutation,
+  stopMasstaggingCampaignMutation,
+  uploadMasstaggingMediaMutation,
+} from './api/masstagging.queries';

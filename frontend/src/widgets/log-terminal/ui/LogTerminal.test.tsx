@@ -135,3 +135,20 @@ test('the clear button appears only with a handler and rows, and fires it', asyn
   await userEvent.click(screen.getByRole('button', { name: 'Очистить лог' }));
   expect(onClear).toHaveBeenCalledTimes(1);
 });
+
+test('a masstagging row names its person where a channel would stand', () => {
+  render(
+    <LogTerminal
+      title="Лог"
+      logLines={[
+        entry({
+          event: 'masstagging_target_skipped',
+          extra: { target: '@ivan', reason: 'already_tagged' },
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByText('@ivan')).toBeInTheDocument();
+  expect(screen.getByText('Масстегинг: пропущен')).toBeInTheDocument();
+  expect(screen.getByText('· уже отмечен')).toBeInTheDocument();
+});
