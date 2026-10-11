@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -84,17 +84,41 @@ test('opens on the board default and reaches thirty days, no further', async () 
   expect(onConfirm).toHaveBeenCalledWith(30, 'normal');
 });
 
-test('a board default past the slider is held at its ends', () => {
+test('a configured default past thirty days widens the slider instead of being cut', async () => {
+  const onConfirm = vi.fn();
   renderWithClient(
     <WarmDaysModal
       accountId="a1"
       phone="+79991234567"
       defaultDays={45}
       onClose={vi.fn()}
-      onConfirm={vi.fn()}
+      onConfirm={onConfirm}
     />,
   );
-  expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '30');
+  const slider = screen.getByRole('slider');
+  expect(slider).toHaveAttribute('aria-valuenow', '45');
+  expect(slider).toHaveAttribute('aria-valuemax', '45');
+
+  await userEvent.click(screen.getByText('Запустить прогрев'));
+  expect(onConfirm).toHaveBeenCalledWith(45, 'normal');
+});
+
+test('handled slider keys do not also scroll the dialog', () => {
+  renderWithClient(
+    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={vi.fn()} onConfirm={vi.fn()} />,
+  );
+  const slider = screen.getByRole('slider');
+  for (const key of ['Home', 'End', 'ArrowLeft', 'ArrowRight']) {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    act(() => {
+      slider.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+  }
+  // An unhandled key keeps its browser behaviour (Tab still leaves the slider).
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  slider.dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(false);
 });
 
 test('persona chip selection is forwarded on confirm', async () => {

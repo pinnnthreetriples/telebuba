@@ -7,6 +7,7 @@ import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
 
 const MIN = 1;
+// The slider's usual end; a longer configured default widens it (see `max` below).
 const MAX = 30;
 const PRESETS = [7, 14, 30];
 // A dot per preset (plus the floor), not per day: thirty dots on one track read as noise.
@@ -21,8 +22,13 @@ type SpamState = 'idle' | 'loading' | 'clean' | 'limited';
 
 const DEFAULT_PERSONA: ActivityPersona = 'normal';
 
-const clampDays = (n: number) => Math.min(MAX, Math.max(MIN, Math.round(n)));
-const dayRatio = (n: number) => ((n - MIN) / (MAX - MIN)) * 100;
+// Arrow/Home/End steps for the day slider, given its current upper end.
+const SLIDER_KEYS: Record<string, (days: number, max: number) => number> = {
+  ArrowLeft: (d) => Math.max(MIN, d - 1),
+  ArrowRight: (d, max) => Math.min(max, d + 1),
+  Home: () => MIN,
+  End: (_d, max) => max,
+};
 
 // The design's "warm account" modal: a draggable day-length slider (1–30) that opens
 // on the length a start would run anyway (the board's `default_target_days`), quick
@@ -41,7 +47,11 @@ export function WarmDaysModal({
   onConfirm: (days: number, persona: ActivityPersona) => void;
 }) {
   const { t } = useTranslation();
-  const initialDays = clampDays(defaultDays);
+  // The configured default is never cut down: a 45-day `warmed_min_days` would
+  // otherwise start a 30-day stint just because the operator pressed Start.
+  const initialDays = Math.max(MIN, Math.round(defaultDays));
+  const max = Math.max(MAX, initialDays);
+  const dayRatio = (n: number) => ((n - MIN) / (max - MIN)) * 100;
   const [days, setDays] = useState(initialDays);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
   // A length or cadence picked and not yet started.
@@ -75,7 +85,7 @@ export function WarmDaysModal({
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    setDays(Math.round(MIN + ratio * (MAX - MIN)));
+    setDays(Math.round(MIN + ratio * (max - MIN)));
   };
 
   return (
@@ -143,7 +153,7 @@ export function WarmDaysModal({
             role="slider"
             tabIndex={0}
             aria-valuemin={MIN}
-            aria-valuemax={MAX}
+            aria-valuemax={max}
             aria-valuenow={days}
             aria-valuetext={dayCount(days)}
             aria-label={t('warming.days.title')}
@@ -155,10 +165,11 @@ export function WarmDaysModal({
               if (e.buttons === 1) setFromClientX(e.clientX);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
-              if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
-              if (e.key === 'Home') setDays(MIN);
-              if (e.key === 'End') setDays(MAX);
+              const step = SLIDER_KEYS[e.key];
+              if (!step) return;
+              // Home/End would otherwise also scroll the dialog under the slider.
+              e.preventDefault();
+              setDays((d) => step(d, max));
             }}
             className="relative mx-3 mb-2 h-compact cursor-grab touch-none select-none outline-hidden"
           >
@@ -184,7 +195,7 @@ export function WarmDaysModal({
           </div>
           <div className="mx-3 mb-6 flex justify-between type-small">
             <span>{dayCount(MIN)}</span>
-            <span>{dayCount(MAX)}</span>
+            <span>{dayCount(max)}</span>
           </div>
 
           <SegmentedControl

@@ -14,8 +14,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Settings models live in a sibling module for the file-size budget; re-exported
-# here so ``from schemas.warming import WarmingSettings`` etc. keep working.
+# Settings and board roll-up models live in sibling modules for the file-size budget;
+# re-exported here so ``from schemas.warming import WarmingSettings`` etc. keep working.
+from schemas._warming_board import (
+    WarmingMechanics,
+    WarmingSummary,
+)
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -323,29 +327,6 @@ class WarmingAccountState(BaseModel):
     promoted_to_nc: bool = False
     # See WarmingStateRecord.nc_handed_off — handed to the neurocomment idle pool.
     nc_handed_off: bool = False
-
-
-class WarmingSummary(BaseModel):
-    """Fleet-level roll-up shown at the top of the warming page."""
-
-    total: int = Field(default=0, ge=0)
-    warming: int = Field(default=0, ge=0)
-    active: int = Field(default=0, ge=0)
-    ready: int = Field(default=0, ge=0)
-    attention: int = Field(default=0, ge=0)
-    trust_healthy: int = Field(default=0, ge=0)
-    trust_watch: int = Field(default=0, ge=0)
-    trust_risk: int = Field(default=0, ge=0)
-
-
-class WarmingMechanics(BaseModel):
-    """Optional warming steps and whether the current settings let them run."""
-
-    join: bool = True
-    reactions: bool = True
-    stories: bool = True
-    # Needs the switch AND a text-LLM key: without a key the chat step never writes.
-    dialogue: bool = False
 
 
 class WarmingBoardState(BaseModel):
