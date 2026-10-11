@@ -14,6 +14,7 @@ from __future__ import annotations
 # string falls through verbatim — so English sentences here reach a Russian-first
 # operator as English. Every code added must be added to BOTH tables.
 _NO_PROXY_REFUSAL = "web_login_no_proxy"
+_PROXY_DEAD_REFUSAL = "web_login_proxy_dead"
 _LAUNCH_REFUSAL = "web_login_browser_failed"
 _DRIVE_REFUSAL = "web_login_drive_failed"
 _RELAY_REFUSAL = "web_login_relay_failed"

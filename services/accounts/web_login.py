@@ -50,6 +50,7 @@ from services.accounts._web_errors import (
     _DRIVE_REFUSAL,
     _LAUNCH_REFUSAL,
     _NO_PROXY_REFUSAL,
+    _PROXY_DEAD_REFUSAL,
     _RELAY_REFUSAL,
     _RELOAD_LOOP_REFUSAL,
     _SHUTDOWN_REFUSAL,
@@ -76,6 +77,7 @@ __all__ = [
 # Overall bound on driving a first-open login. The poll cadence within it, the 2FA
 # grace and the profile marker belong to ``_web_drive``.
 _DRIVE_TIMEOUT = 90.0
+_PROXY_PROBE_TIMEOUT = 5.0  # bounds the proxy probe's exit-IP fetch, never its geolocation
 
 # One relay and one window per account, created lazily and reused across clicks. Both
 # registries are guarded by their own lock so dict access stays consistent; the whole
@@ -140,8 +142,9 @@ async def open_account_web(account_id: str) -> OpenWebResult:
                 return OpenWebResult(launched=True, signed_in=reused)
         if _closing.is_set():
             raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
+        country = await _probe_exit_country(account_id, proxy)
         relay_port = await _relay_port_for(account_id, proxy)
-        signed_in = await _launch(account_id, relay_port, profile, proxy)
+        signed_in = await _launch(account_id, relay_port, profile, proxy, country)
     return OpenWebResult(launched=True, signed_in=signed_in)
 
 
@@ -206,9 +209,8 @@ async def _drop_window(account_id: str, window: WebWindow) -> None:
     fails on a wedged renderer whose process is very much alive. The orphan then still
     holds the profile (so the next launch fails as a hand-off) and still points
     ``--proxy-server`` at a relay port this same open may rebind — after which it
-    egresses through ANOTHER account's proxy.
-
-    Callers hold the account's open lock, so the relay registered now is this window's.
+    egresses through ANOTHER account's proxy. Callers hold the account's open lock: the
+    relay registered now is this window's, and no click can reuse its port mid-close.
     """
     async with _windows_lock:
         # Only drop the entry we actually examined; a concurrent open for this account
@@ -228,7 +230,6 @@ async def _drop_window(account_id: str, window: WebWindow) -> None:
 
 async def _window_closed(account_id: str, window: WebWindow) -> None:
     """Drop the window the operator closed, and its relay — unless an open replaced it."""
-    # Under the open lock: a click must not reuse the relay's port before it is closed.
     async with await _account_open_lock(account_id):
         await _drop_window(account_id, window)
 
@@ -296,29 +297,27 @@ def _loop_cannot_spawn() -> bool:
     )
 
 
-async def _fingerprint_country(account_id: str, proxy: ProxySettings) -> str | None:
-    """The exit country the window's timezone and locale are aligned to.
+async def _probe_exit_country(account_id: str, proxy: ProxySettings) -> str | None:
+    """Refuse a dead proxy up front; return the country the identity is aligned to.
 
-    The stored one when a check has already resolved it, otherwise one measured now
-    with the same probe the proxy pool uses. Without this second step the COMMON case
-    — a freshly added proxy nobody has checked — falls through to the no-country
-    default, and comparing a claimed timezone against the exit IP's geolocation is the
-    most routinely computed geo check there is. A probe that cannot answer is not
-    fatal: the default then claims no place at all rather than the wrong one.
+    The relay never touches the upstream, so a dead proxy otherwise failed only at the
+    drive deadline as "not signed in". Once per new window. A stored country wins and
+    skips geolocation; a fresh proxy gets the measured one, or None (claim no place).
     """
     stored = await fetch_account_proxy_country(account_id)
-    if stored:
-        return stored
-    with suppress(Exception):
-        return (await check_proxy_connectivity(proxy)).country_code
-    return None
+    result = await check_proxy_connectivity(
+        proxy, exit_ip_timeout=_PROXY_PROBE_TIMEOUT, geolocate=not stored
+    )
+    if result.status == "failed":
+        raise WebLoginLaunchError(_PROXY_DEAD_REFUSAL)
+    return stored or result.country_code
 
 
 async def _spawn(
     account_id: str,
     relay_port: int,
     profile: Path,
-    proxy: ProxySettings,
+    country: str | None,
     *,
     capture: bool,
 ) -> WebWindow:
@@ -327,7 +326,7 @@ async def _spawn(
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
         # launch itself raises rather than as a bare 500.
-        fingerprint = fingerprint_for(account_id, await _fingerprint_country(account_id, proxy))
+        fingerprint = fingerprint_for(account_id, country)
         window = await launch_account_web(
             relay_port,
             profile_dir=profile,
@@ -355,7 +354,9 @@ async def _spawn(
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
 
 
-async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxySettings) -> bool:
+async def _launch(
+    account_id: str, relay_port: int, profile: Path, proxy: ProxySettings, country: str | None
+) -> bool:
     """Launch the window, drive the login if needed; report whether it signed in.
 
     Keeps the invariant the raised-window path relies on: a REGISTERED window whose
@@ -365,7 +366,7 @@ async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxyS
     ``capture_tokens`` decision cannot be revisited after the launch.
     """
     seeded = profile_is_seeded(profile)
-    window = await _spawn(account_id, relay_port, profile, proxy, capture=not seeded)
+    window = await _spawn(account_id, relay_port, profile, country, capture=not seeded)
     if not seeded:
         return await _drive_and_mark(account_id, window, profile, type_password=True)
     if await still_signed_in(window):
@@ -373,7 +374,7 @@ async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxyS
     forget_signed_in(profile)
     await _drop_window(account_id, window)  # its relay went with it
     relay_port = await _relay_port_for(account_id, proxy)
-    window = await _spawn(account_id, relay_port, profile, proxy, capture=True)
+    window = await _spawn(account_id, relay_port, profile, country, capture=True)
     return await _drive_and_mark(account_id, window, profile, type_password=True)
 
 

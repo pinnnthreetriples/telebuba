@@ -117,12 +117,13 @@ def patch_proxy(
     *,
     stored_country: str | None = "DE",
     probed_country: str | None = None,
+    alive: bool = True,
 ) -> list[ProxySettings]:
     """Stub the proxy lookups; return the list the live connectivity probe records into.
 
     ``stored_country`` is what a past proxy check saved — ``None`` is the common state
-    of a freshly added proxy, and the one that makes the service measure the exit
-    country itself before the identity is built.
+    of a freshly added proxy, where the probe's own country is what the identity gets.
+    ``alive=False`` makes the probe report the proxy as unreachable.
     """
     probed: list[ProxySettings] = []
 
@@ -132,8 +133,10 @@ def patch_proxy(
     async def _country(account_id: str) -> str | None:  # noqa: ARG001
         return stored_country
 
-    async def _check(settings: ProxySettings) -> ProxyCheckResult:
+    async def _check(settings: ProxySettings, **_bounds: object) -> ProxyCheckResult:
         probed.append(settings)
+        if not alive:
+            return ProxyCheckResult(status="failed", last_error="Proxy check timed out")
         return ProxyCheckResult(status="tcp_working", country_code=probed_country)
 
     monkeypatch.setattr(web_login, "fetch_account_proxy_settings", _fetch)
