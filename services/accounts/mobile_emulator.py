@@ -93,8 +93,26 @@ def _is_authenticated_chat_screen(dump: str | None) -> bool:
     """Positively confirm that Telegram is displaying an authenticated chat screen."""
     if not dump:
         return False
-    texts = _extract_ui_texts(dump)
-    unauth_markers = (
+
+    dump_lower = dump.lower()
+    strong_chat_markers = (
+        "org.telegram.messenger:id/chat_list",
+        "org.telegram.messenger:id/chats_container",
+        "org.telegram.messenger:id/floating_button",
+        "org.telegram.messenger:id/menu_search",
+        "chats",
+        "чаты",
+        "open navigation drawer",
+        "открыть панель навигации",
+        "new message",
+        "новое сообщение",
+    )
+    # Positive chat-screen markers take precedence over any message preview or title text
+    if any(m in dump_lower for m in strong_chat_markers):
+        return True
+
+    # Limit negative checks to specific login controls when chat markers are absent
+    login_screen_markers = (
         "start messaging",
         "продолжить",
         "phone number",
@@ -102,33 +120,55 @@ def _is_authenticated_chat_screen(dump: str | None) -> bool:
         "your phone",
         "check your phone",
         "two-step",
-        "password",
-        "пароль",
-        "cloud password",
-        "облачный пароль",
         "enter code",
         "введите код",
     )
-    for text in texts:
-        if any(m in text for m in unauth_markers):
-            return False
+    texts = _extract_ui_texts(dump)
+    if any(any(m in t for m in login_screen_markers) for t in texts):
+        return False
 
-    auth_markers = (
-        "chats",
-        "чаты",
-        "search",
-        "поиск",
-        "new message",
-        "новое сообщение",
-        "open navigation drawer",
-        "открыть панель навигации",
-        "org.telegram.messenger:id/chat_list",
-        "org.telegram.messenger:id/chats_container",
-        "org.telegram.messenger:id/menu_search",
-        "org.telegram.messenger:id/floating_button",
+    return "search" in dump_lower or "поиск" in dump_lower
+
+
+def _find_password_input_coords(dump: str) -> tuple[int, int] | None:
+    """Find the center coordinates of an editable password input field."""
+    if not dump:
+        return None
+    try:
+        root = ET.fromstring(dump)  # nosec B314 # noqa: S314
+        for elem in root.iter():
+            is_password_attr = elem.attrib.get("password") == "true"
+            is_edit = "edittext" in elem.attrib.get("class", "").lower()
+            elem_text = (elem.attrib.get("text") or "").lower()
+            elem_desc = (elem.attrib.get("content-desc") or "").lower()
+            has_pw_text = any(k in elem_text or k in elem_desc for k in ("password", "пароль"))
+            if is_password_attr or (is_edit and has_pw_text):
+                bounds = elem.attrib.get("bounds", "")
+                m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+                if m:
+                    x1, y1, x2, y2 = map(int, m.groups())
+                    return ((x1 + x2) // 2, (y1 + y2) // 2)
+    except (ET.ParseError, ValueError, AttributeError, TypeError):
+        pass
+    return parse_element_center(dump, "Password") or parse_element_center(dump, "Пароль")
+
+
+def _has_twofa_prompt(dump: str) -> bool:
+    """Check if the UI dump represents an active 2FA password prompt."""
+    if not dump or _is_authenticated_chat_screen(dump):
+        return False
+    texts = _extract_ui_texts(dump)
+    prompt_keywords = (
+        "password",
+        "two-step",
+        "пароль",
+        "cloud password",
+        "облачный пароль",
+        "двухэтапная",
     )
-    dump_lower = dump.lower()
-    return any(m in dump_lower for m in auth_markers)
+    has_prompt_text = any(any(kw in t for kw in prompt_keywords) for t in texts)
+    has_pw_field = _find_password_input_coords(dump) is not None
+    return has_prompt_text and has_pw_field
 
 
 async def _start_messaging_and_enter_phone(
@@ -172,19 +212,19 @@ async def _start_messaging_and_enter_phone(
 
 
 async def _handle_twofa_if_needed(account_id: str, adb: ADBDriver) -> None:
-    """Submit 2FA password if prompted."""
+    """Submit 2FA password if prompted on an editable password control."""
     dump = await _safe_dump(adb)
-    prompt_keywords = ("password", "two-step", "пароль", "cloud password")
-    if not any(kw in dump.lower() for kw in prompt_keywords):
+    if not _has_twofa_prompt(dump):
+        return
+
+    pw_coords = _find_password_input_coords(dump)
+    if not pw_coords:
         return
 
     password = await fetch_account_twofa_password(account_id)
     if not password:
         return
 
-    pw_coords = (
-        parse_element_center(dump, "Password") or parse_element_center(dump, "Пароль") or (206, 250)
-    )
     await adb.tap(pw_coords[0], pw_coords[1])
     await adb.input_text(password)
     await asyncio.sleep(0.5)

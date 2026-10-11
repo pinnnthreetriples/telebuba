@@ -12,6 +12,7 @@ from schemas.mobile_emulator import OpenMobileResult
 from schemas.proxy import ProxySettings
 from services.accounts.mobile_emulator import (
     _active_relays,
+    _handle_twofa_if_needed,
     _is_authenticated_chat_screen,
     open_account_mobile,
     shutdown_mobile_emulator,
@@ -241,6 +242,57 @@ def test_is_authenticated_chat_screen_logic() -> None:
         'resource-id="org.telegram.messenger:id/chat_list"/></hierarchy>'
     )
     assert _is_authenticated_chat_screen(ui_node_with_pw_attr) is True
+    chat_with_pw_preview = (
+        '<hierarchy><node text="Chats" resource-id="org.telegram.messenger:id/chat_list"/>'
+        '<node text="Your password is safe" bounds="[0,200][100,250]"/></hierarchy>'
+    )
+    assert _is_authenticated_chat_screen(chat_with_pw_preview) is True
+
+
+@pytest.mark.asyncio
+async def test_handle_twofa_skips_on_chat_screen_with_password_false_attribute() -> None:
+    mock_adb = MagicMock()
+    chat_dump = (
+        '<hierarchy><node text="Chats" password="false" '
+        'resource-id="org.telegram.messenger:id/chat_list"/></hierarchy>'
+    )
+    mock_adb.dump_ui_hierarchy = AsyncMock(return_value=chat_dump)
+    mock_adb.input_text = AsyncMock()
+    mock_adb.tap = AsyncMock()
+
+    with patch(
+        "services.accounts.mobile_emulator.fetch_account_twofa_password",
+        new_callable=AsyncMock,
+        return_value="secret123",
+    ) as mock_fetch:
+        await _handle_twofa_if_needed("acc-1", mock_adb)
+        mock_fetch.assert_not_called()
+        mock_adb.tap.assert_not_called()
+        mock_adb.input_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_twofa_enters_password_on_prompt() -> None:
+    mock_adb = MagicMock()
+    twofa_dump = (
+        '<hierarchy><node text="Two-step verification"/>'
+        '<node class="android.widget.EditText" password="true" '
+        'bounds="[100,200][300,250]"/></hierarchy>'
+    )
+    mock_adb.dump_ui_hierarchy = AsyncMock(return_value=twofa_dump)
+    mock_adb.input_text = AsyncMock()
+    mock_adb.tap = AsyncMock()
+    mock_adb.press_key = AsyncMock()
+
+    with patch(
+        "services.accounts.mobile_emulator.fetch_account_twofa_password",
+        new_callable=AsyncMock,
+        return_value="secret123",
+    ):
+        await _handle_twofa_if_needed("acc-1", mock_adb)
+        mock_adb.tap.assert_called_once_with(200, 225)
+        mock_adb.input_text.assert_called_once_with("secret123")
+        mock_adb.press_key.assert_called_once()
 
 
 @pytest.mark.asyncio
