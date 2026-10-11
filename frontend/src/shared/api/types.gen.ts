@@ -4899,6 +4899,7 @@ export type NeuroshillingVersionRequest = {
  * login actually completed in it. They differ whenever every QR token was refused or
  * the 2FA screen was left standing — a case that is otherwise indistinguishable from
  * a clean login, and that the operator has to finish in the window by hand.
+ * ``reason`` says which of those it was, and is ``None`` once signed in.
  */
 export type OpenWebResult = {
   /**
@@ -4909,6 +4910,15 @@ export type OpenWebResult = {
    * Signed In
    */
   signed_in: boolean;
+  /**
+   * Reason
+   */
+  reason?:
+    | 'web_login_2fa_rejected'
+    | 'web_login_2fa_required'
+    | 'web_login_page_not_loaded'
+    | 'web_login_qr_timeout'
+    | null;
 };
 
 /**

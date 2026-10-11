@@ -148,7 +148,7 @@ async def test_open_web_launches_the_window(
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/acc-1/open-web")
     assert resp.status_code == 200
-    assert resp.json() == {"launched": True, "signed_in": True}
+    assert resp.json() == {"launched": True, "signed_in": True, "reason": None}
 
 
 @pytest.mark.asyncio
@@ -163,14 +163,18 @@ async def test_open_web_reports_a_window_whose_login_never_completed(
     """
 
     async def _fake(account_id: str) -> OpenWebResult:  # noqa: ARG001
-        return OpenWebResult(launched=True, signed_in=False)
+        return OpenWebResult(launched=True, signed_in=False, reason="web_login_qr_timeout")
 
     monkeypatch.setattr("services.accounts.open_account_web", _fake)
     await add_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/acc-1/open-web")
     assert resp.status_code == 200
-    assert resp.json() == {"launched": True, "signed_in": False}
+    assert resp.json() == {
+        "launched": True,
+        "signed_in": False,
+        "reason": "web_login_qr_timeout",
+    }
 
 
 @pytest.mark.asyncio

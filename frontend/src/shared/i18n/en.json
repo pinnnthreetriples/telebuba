@@ -315,7 +315,13 @@
       "web": "Open in Telegram Web"
     },
     "openWeb": {
-      "notSignedIn": "The window opened but the account is not signed in — finish the login in that window."
+      "notSignedIn": "The window opened but the account is not signed in — finish the login in that window.",
+      "reason": {
+        "web_login_2fa_rejected": "The window opened, but Telegram rejected the saved 2FA password — type the correct one in that window.",
+        "web_login_2fa_required": "The window opened and is waiting for the 2FA password — type it in that window.",
+        "web_login_page_not_loaded": "Telegram Web never loaded in the window — the account's proxy is most likely not reaching Telegram.",
+        "web_login_qr_timeout": "QR login was not confirmed in time — click the globe again to retry."
+      }
     },
     "pagination": {
       "prev": "Prev",

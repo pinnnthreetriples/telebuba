@@ -114,6 +114,23 @@ test('a window that opened without signing in tells the operator to finish the l
   });
 });
 
+test.each([
+  ['web_login_2fa_rejected', 'Telegram отклонил сохранённый пароль 2FA'],
+  ['web_login_2fa_required', 'ждёт пароль 2FA'],
+  ['web_login_page_not_loaded', 'прокси аккаунта'],
+  ['web_login_qr_timeout', 'Вход по QR не подтвердился вовремя'],
+])('a %s window says why the login did not finish', async (reason, copy) => {
+  // The generic "finish the login" toast cannot tell a rejected 2FA password from a
+  // proxy that never loaded the page, and each needs a different move from the operator.
+  const { release } = await clickTheGlobe(() => json({ launched: true, signed_in: false, reason }));
+  release();
+
+  await waitFor(() => {
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining(copy));
+  });
+  expect(toastError).toHaveBeenCalledTimes(1);
+});
+
 test('a completed login says nothing', async () => {
   const { release } = await clickTheGlobe(() => json({ launched: true, signed_in: true }));
   release();
