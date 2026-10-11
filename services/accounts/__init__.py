@@ -69,6 +69,7 @@ from services.accounts.chats import (
 from services.accounts.lifecycle import (
     add_account,
     evaluate_account_geo,
+    get_account_delete_reason,
     remove_account,
     require_account,
 )
@@ -156,6 +157,7 @@ __all__ = [
     "evaluate_account_geo",
     "fetch_live_account_profile",
     "get_account_channel",
+    "get_account_delete_reason",
     "get_chat_media_download",
     "import_account_session",
     "import_account_tdata",

@@ -7,6 +7,7 @@ export {
   accountChannelsQueryOptions,
   accountChannelUsernameCheckQueryKey,
   accountChannelUsernameCheckQueryOptions,
+  accountDeleteReasonQueryOptions,
   accountPrivacyQueryKey,
   accountPrivacyQueryOptions,
   accountProfileSnapshotQueryKey,

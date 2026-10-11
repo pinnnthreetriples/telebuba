@@ -429,7 +429,7 @@ async def test_delete_account_returns_conflict_while_warming_task_is_still_stopp
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(account_id: str) -> None:
+    async def _boom(account_id: str, reason: object = None) -> None:  # noqa: ARG001
         raise warming_service.WarmingTaskNotQuiescentError(account_id)
 
     monkeypatch.setattr("services.accounts.remove_account", _boom)
@@ -444,7 +444,7 @@ async def test_delete_account_returns_conflict_while_neuroshilling_holds_it(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _held(account_id: str) -> None:
+    async def _held(account_id: str, reason: object = None) -> None:  # noqa: ARG001
         code = "account_busy_neuroshilling"
         raise warming_service.AccountUnavailableError(code, account_id)
 

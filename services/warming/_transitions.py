@@ -15,6 +15,7 @@ from core.config import settings
 from core.db import get_spam_status, list_warming_channels
 from core.logging import log_event
 from schemas.warming import WarmingCycleResult
+from services.lifecycle_journal import record_lifecycle_event
 from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._local_day import _next_local_wake
@@ -191,6 +192,7 @@ async def _gate_target_reached(
         account_id=account_id,
         extra={"target_days": record.target_days, "warming_days": days},
     )
+    await record_lifecycle_event(account_id, "warmed", {"warming_days": days})
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="target reached")
 
 
@@ -207,6 +209,7 @@ async def _calculate_next_run(
     if result.status == "peer_flood":
         sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
         next_state = "quarantine"
+        await record_lifecycle_event(account_id, "quarantined", {"status": "peer_flood"})
     elif result.status == "flood_wait":
         # An unknown flood duration (seconds is None) must NOT collapse to a 0s
         # park that immediately retries the just-flooded account — treat unknown

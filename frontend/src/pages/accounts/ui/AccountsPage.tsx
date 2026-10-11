@@ -62,7 +62,7 @@ import {
   ProfileModal,
   ProxyAddModal,
 } from '@/widgets/account-edit';
-import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
+import { AccountsTable, DeleteAccountModal, type DeleteReason } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
 import { SearchToggle } from './SearchToggle';
@@ -348,9 +348,12 @@ export function AccountsPage() {
         void webWindows.refetch();
       });
   };
-  const confirmDelete = () => {
+  const confirmDelete = (reason: DeleteReason | undefined) => {
     if (!deletingId) return;
-    runOnRow(deletingId, remove.mutateAsync({ path: { account_id: deletingId } }));
+    runOnRow(
+      deletingId,
+      remove.mutateAsync({ path: { account_id: deletingId }, query: { reason } }),
+    );
   };
   const items = data?.items ?? [];
   const { drag, startDrag } = useAccountDrag((folderId, accountIds) => {
@@ -631,6 +634,7 @@ export function AccountsPage() {
       />
       {deletingId ? (
         <DeleteAccountModal
+          accountId={deletingId}
           phone={items.find((a) => a.account_id === deletingId)?.phone ?? deletingId}
           onClose={() => {
             setDeletingId(null);

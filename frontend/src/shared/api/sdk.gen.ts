@@ -181,6 +181,9 @@ import type {
   GetAccountChatMediaData,
   GetAccountChatMediaErrors,
   GetAccountChatMediaResponses,
+  GetAccountDeleteReasonData,
+  GetAccountDeleteReasonErrors,
+  GetAccountDeleteReasonResponses,
   GetAccountLimitsData,
   GetAccountLimitsErrors,
   GetAccountLimitsResponses,
@@ -895,6 +898,20 @@ export const updateAccountProfile = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Get Account Delete Reason
+ *
+ * The reason the delete dialog pre-selects: ``dead`` or ``retired``.
+ */
+export const getAccountDeleteReason = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountDeleteReasonData, ThrowOnError>,
+): RequestResult<GetAccountDeleteReasonResponses, GetAccountDeleteReasonErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetAccountDeleteReasonResponses,
+    GetAccountDeleteReasonErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/delete-reason', ...options });
 
 /**
  * Delete Account

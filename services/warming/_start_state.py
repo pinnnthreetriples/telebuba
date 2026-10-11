@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from schemas.warming import is_warming
+from services.lifecycle_journal import record_lifecycle_event
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
@@ -43,3 +44,13 @@ def carry_or_restamp(
     )
     persona = existing.activity_persona if continuing else data.activity_persona
     return CarriedStint(started_at, target_days, persona, first_run_at)
+
+
+async def journal_start(
+    account_id: str,
+    existing: WarmingStateRecord | None,
+    stint: CarriedStint,
+) -> None:
+    """Journal a start; ``new_stint`` False = a restart that carried the stint's clock."""
+    new_stint = existing is None or existing.started_at != stint.started_at
+    await record_lifecycle_event(account_id, "warming_started", {"new_stint": new_stint})

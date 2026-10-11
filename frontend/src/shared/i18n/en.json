@@ -336,7 +336,13 @@
       "title": "Delete account {{phone}}?",
       "body": "The session, proxy and activity history will be deleted. This action is irreversible.",
       "cancel": "Cancel",
-      "confirm": "Delete"
+      "confirm": "Delete",
+      "reasonLabel": "Reason",
+      "reasonPending": "Working it out…",
+      "reason": {
+        "dead": "Dead",
+        "retired": "Retired"
+      }
     },
     "proxyDeleteModal": {
       "title": "Delete proxy {{endpoint}}?",

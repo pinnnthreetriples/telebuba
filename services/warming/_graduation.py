@@ -25,6 +25,7 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
+from services.lifecycle_journal import record_lifecycle_event
 from services.warming import _runtime
 from services.warming._runtime import _account_lock
 from services.warming._state import _current_card, _set_state
@@ -108,6 +109,7 @@ async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
         await _stop_warming_locked(account_id)
         await mark_promoted_to_nc(account_id)
     await log_event("INFO", "warming_promoted_to_neurocomment", account_id=account_id)
+    await record_lifecycle_event(account_id, "promoted")
     await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable seam, reached via the module.
     return await _current_card(account_id)
 
@@ -124,6 +126,7 @@ async def handoff_to_neurocomment(account_id: str) -> WarmingAccountState:
         _runtime.assert_runtime_quiescent(account_id)
         await mark_nc_handed_off(account_id)
     await log_event("INFO", "warming_nc_handoff", account_id=account_id)
+    await record_lifecycle_event(account_id, "handed_off")
     return await _current_card(account_id)
 
 
