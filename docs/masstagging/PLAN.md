@@ -1,5 +1,8 @@
 # Масстегинг — план реализации по макету D
 
+> Реализовано: `pages/masstagging`, `services/masstagging`, `api/v1/masstagging.py`. Прототип
+> (`pages/masstagging-prototype`) удалён после переноса; пути ниже — исторические.
+
 Источник истины по виду и поведению — макет D. Его файлы:
 - `ui/VariantD.tsx` — страница;
 - `ui/SettingsDialogD.tsx` — окно настроек и окно «Темп»;
