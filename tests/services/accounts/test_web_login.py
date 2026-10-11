@@ -13,6 +13,7 @@ proxy changes under it, and how the refusals are worded live in
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -80,11 +81,12 @@ async def test_an_unchecked_proxy_has_its_exit_country_measured_before_the_ident
 
 
 @pytest.mark.asyncio
-async def test_a_country_a_check_already_resolved_is_not_measured_again(
+async def test_a_country_a_check_already_resolved_wins_over_the_probe(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     relay: type[_FakeRelay],  # noqa: ARG001 - the launch needs a relay port
 ) -> None:
+    """The probe still runs — it is the liveness gate — but the stored country stands."""
     calls: dict[str, Any] = {}
     probed = _patch_proxy(monkeypatch, _PROXY, stored_country="DE", probed_country="NL")
     _patch_profile(monkeypatch, tmp_path / "acct")
@@ -92,8 +94,62 @@ async def test_a_country_a_check_already_resolved_is_not_measured_again(
 
     await open_account_web("acct")
 
-    assert probed == []
+    assert probed == [_PROXY]
     assert calls["fingerprint"].timezone == "Europe/Berlin"
+
+
+@pytest.mark.asyncio
+async def test_a_dead_proxy_is_refused_before_any_relay_or_window(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relay: type[_FakeRelay],
+) -> None:
+    """A dead proxy used to cost the whole 90 s drive and end in "not signed in".
+
+    The relay starts fine without ever touching the upstream, Chrome launches, and WebK
+    just never loads — so nothing failed until the drive deadline. The probe says so up
+    front, with a code the SPA translates.
+    """
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY, alive=False)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    _wire(monkeypatch, calls, states=["qr"])
+
+    with pytest.raises(WebLoginLaunchError) as caught:
+        await open_account_web("acct")
+
+    assert str(caught.value) == "web_login_proxy_dead"
+    assert relay.created == []
+    assert calls.get("launches") is None
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_a_hung_probe_is_bounded_and_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``check_proxy_connectivity`` bounds each step at 8 s, not the whole probe."""
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    _wire(monkeypatch, calls, states=["qr"])
+
+    async def _hang(_proxy: ProxySettings) -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(web_login, "check_proxy_connectivity", _hang)
+    monkeypatch.setattr(web_login, "_PROXY_PROBE_TIMEOUT", 0.01)
+
+    with pytest.raises(WebLoginLaunchError) as caught:
+        await open_account_web("acct")
+
+    assert str(caught.value) == "web_login_proxy_dead"
+    assert calls.get("launches") is None
+
+
+def test_the_shipped_probe_bound_is_a_few_seconds() -> None:
+    assert web_login._PROXY_PROBE_TIMEOUT <= 5.0
 
 
 @pytest.mark.asyncio
@@ -332,6 +388,23 @@ async def test_a_still_open_window_is_raised_not_duplicated(
     assert calls["launches"] == 1  # the second click launched nothing
     assert calls["focused"] == 1  # it raised the window that was already open
     assert window.closed is False
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_raising_an_open_window_does_not_probe_the_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: dict[str, Any] = {}
+    probed = _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    _wire(monkeypatch, calls, states=["logged_in"])
+
+    await open_account_web("acct")
+    await open_account_web("acct")
+
+    assert probed == [_PROXY]  # the first open only; the raise skipped it
 
 
 @pytest.mark.usefixtures("relay")

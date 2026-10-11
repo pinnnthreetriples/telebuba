@@ -1032,6 +1032,7 @@
       "twofa_removal_unconfirmed": "Telegram answered that a recovery-email confirmation is still pending, so it is unknown whether the password was removed. Re-read the state before trying again.",
       "twofa_rollback_failed": "Telegram refused the password and the dashboard could not delete the copy it had already saved. Use “forget the saved password”, then try again.",
       "web_login_no_proxy": "This account has no proxy assigned, and the browser must reach Telegram through the account's own exit. Assign a proxy and try again.",
+      "web_login_proxy_dead": "The account's proxy is not answering, so Telegram Web cannot load through it. Check or replace it in the proxy pool and try again.",
       "web_login_browser_failed": "The web-login browser window could not be started. Check that Chrome or Edge is installed and that no window for this account is still open.",
       "web_login_relay_failed": "The local proxy relay for the web session could not be started. Try again in a moment.",
       "web_login_drive_failed": "The account could not be signed in to Telegram Web. Try again, or finish the login by hand in the window.",
