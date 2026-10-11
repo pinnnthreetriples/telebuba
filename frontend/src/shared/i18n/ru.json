@@ -1400,6 +1400,8 @@
     "warming_log_retention_purged": "Старые записи журнала удалены",
     "warming_dialogue_message_retention_purged": "Старые сообщения диалогов удалены",
     "warming_sent_hash_retention_purged": "Старые отпечатки сообщений удалены",
+    "warming_daily_stats_retention_purged": "Старая дневная статистика прогрева удалена",
+    "warming_daily_stats_write_failed": "Не удалось сохранить дневную статистику прогрева",
     "neurocomment_retention_purge_failed": "Ошибка очистки старой истории нейрокомментов",
     "neurocomment_post_commit_failed": "Не удалось сохранить комментарий",
     "neurocomment_post_dropped_overloaded": "Пост пропущен: движок не успевал, повтора не будет",

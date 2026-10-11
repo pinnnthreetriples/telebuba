@@ -355,6 +355,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
+  ListWarmingDailyStatsData,
+  ListWarmingDailyStatsErrors,
+  ListWarmingDailyStatsResponses,
   ListWarmingDialoguesData,
   ListWarmingDialoguesErrors,
   ListWarmingDialoguesResponses,
@@ -2164,6 +2167,20 @@ export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
     ListWarmingDialoguesErrors,
     ThrowOnError
   >({ url: '/api/v1/warming/dialogues', ...options });
+
+/**
+ * List Warming Daily Stats
+ *
+ * One account's per-day warming totals for the last ``days`` days, oldest first.
+ */
+export const listWarmingDailyStats = <ThrowOnError extends boolean = false>(
+  options: Options<ListWarmingDailyStatsData, ThrowOnError>,
+): RequestResult<ListWarmingDailyStatsResponses, ListWarmingDailyStatsErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListWarmingDailyStatsResponses,
+    ListWarmingDailyStatsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/daily-stats', ...options });
 
 /**
  * Start Discovery

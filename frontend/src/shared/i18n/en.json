@@ -1375,6 +1375,8 @@
     "warming_log_retention_purged": "Old log rows purged",
     "warming_dialogue_message_retention_purged": "Old dialogue messages purged",
     "warming_sent_hash_retention_purged": "Old message fingerprints purged",
+    "warming_daily_stats_retention_purged": "Old daily warming totals purged",
+    "warming_daily_stats_write_failed": "Failed to save daily warming totals",
     "neurocomment_retention_purge_failed": "Failed to purge old neurocomment history",
     "neurocomment_post_commit_failed": "Failed to save comment",
     "neurocomment_post_dropped_overloaded": "Post skipped: the engine could not keep up, there will be no retry",

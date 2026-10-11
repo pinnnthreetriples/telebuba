@@ -23,10 +23,14 @@ from schemas.warming import (
     WarmingSettings,
     WarmingSettingsUpdate,
 )
+from schemas.warming_daily_stats import WarmingDailyStatsList
 from services import dialogues as dialogues_service
 from services import warming as warming_service
 
 router = APIRouter(prefix="/warming", tags=["warming"])
+
+# A leap year of daily rows — the most the retention window can hold.
+_DAILY_STATS_MAX_DAYS = 366
 
 
 @router.get("/board", response_model=WarmingBoardState, operation_id="getWarmingBoard")
@@ -179,3 +183,16 @@ async def list_warming_dialogues(
 ) -> DialogueFeed:
     """Recent inter-account warming messages, newest first, for the live feed."""
     return await dialogues_service.load_dialogue_overview(recent_limit=limit)
+
+
+@router.get(
+    "/daily-stats",
+    response_model=WarmingDailyStatsList,
+    operation_id="listWarmingDailyStats",
+)
+async def list_warming_daily_stats(
+    account_id: Annotated[str, Query(min_length=1)],
+    days: Annotated[int, Query(ge=1, le=_DAILY_STATS_MAX_DAYS)] = 30,
+) -> WarmingDailyStatsList:
+    """One account's per-day warming totals for the last ``days`` days, oldest first."""
+    return await warming_service.load_daily_stats(account_id, days)

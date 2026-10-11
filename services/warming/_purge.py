@@ -17,13 +17,14 @@ from core.db import (
     purge_sent_hashes_older_than,
 )
 from core.logging import log_event
+from core.repositories.warming_daily_stats import purge_warming_daily_stats_older_than
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
 
 
 async def purge_stale_history() -> None:
-    """Best-effort retention pass on append-only tables (logs / dialogues / hashes).
+    """Best-effort retention pass on the append-only and history tables.
 
     Each window comes from ``settings.warming``; setting a window to 0 disables
     the corresponding purge. Failures are logged and swallowed — retention is
@@ -45,6 +46,11 @@ async def purge_stale_history() -> None:
             settings.warming.sent_hash_retention_days,
             "warming_sent_hash_retention_purged",
             purge_sent_hashes_older_than,
+        ),
+        (
+            settings.warming.daily_stats_retention_days,
+            "warming_daily_stats_retention_purged",
+            purge_warming_daily_stats_older_than,
         ),
     ]
     for window_days, event, purge in plans:

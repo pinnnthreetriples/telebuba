@@ -40,6 +40,9 @@ from core._schema_tables import (  # noqa: F401 - re-exported for existing impor
     _warming_joined_channels,
     _warming_settings,
 )
+from core._schema_warming_daily_stats import (  # noqa: F401 - registers the table for create_all.
+    _warming_daily_stats,
+)
 from core.config import settings
 from core.migrations import apply_migrations
 from core.secure_paths import make_private_dir, make_private_file
