@@ -43,6 +43,15 @@ function clampNumber(raw: string, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, n));
 }
 
+// Digits and one decimal point; a comma (the Russian keyboard's separator) counts as one.
+function digitsWithPoint(raw: string): string {
+  const [whole = '', ...fraction] = raw
+    .replace(/,/g, '.')
+    .replace(/[^\d.]/g, '')
+    .split('.');
+  return fraction.length > 0 ? `${whole}.${fraction.join('')}` : whole;
+}
+
 function stored(settings: WarmingSettings, provider: Provider): { set: boolean; hint: string } {
   const set = {
     gemini: settings.has_gemini_key,
@@ -221,13 +230,15 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
                 />
               </span>
               <Input
-                type="number"
-                min={0}
-                max={5}
+                // Text, not `type="number"`: that one still takes `e`, `+` and `-`.
                 inputMode="numeric"
+                maxLength={1}
                 value={retries}
                 onChange={(event) => {
-                  setRetries(event.target.value);
+                  setRetries(event.target.value.replace(/\D/g, ''));
+                }}
+                onBlur={() => {
+                  setRetries(String(clampNumber(retries, 0, 5, 1)));
                 }}
                 aria-label={t('settings.api.retries')}
               />
@@ -241,14 +252,14 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
                 />
               </span>
               <Input
-                type="number"
-                min={0}
-                max={60}
-                step="0.5"
                 inputMode="decimal"
+                maxLength={5}
                 value={pause}
                 onChange={(event) => {
-                  setPause(event.target.value);
+                  setPause(digitsWithPoint(event.target.value));
+                }}
+                onBlur={() => {
+                  setPause(String(clampNumber(pause, 0, 60, 0)));
                 }}
                 aria-label={t('settings.api.interval')}
               />

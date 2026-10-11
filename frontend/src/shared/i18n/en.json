@@ -341,16 +341,19 @@
       "loginPlaceholder": "login",
       "password": "Password",
       "passwordPlaceholder": "password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
       "type": "Proxy type",
-      "detect": "Detect",
+      "detect": "Check",
       "detected": "Detect",
+      "detectHint": "Check the connection and detect the proxy country",
       "checking": "Checking connection…",
       "resultOk": "Proxy is reachable",
       "resultErr": "Proxy not responding",
       "errHost": "Enter a host",
       "errHostIpv4": "Enter an IPv4 address, for example 123.45.67.89",
       "errPort": "Port must be a number",
-      "errPortRange": "Port must be between 1 and 65535"
+      "errPortRange": "1 to 65535"
     },
     "proxyAdd": {
       "title": "Add proxy",
