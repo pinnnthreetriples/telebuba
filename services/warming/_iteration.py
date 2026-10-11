@@ -11,6 +11,7 @@ from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _loop, _seams
+from services.warming._local_day import _local_date
 from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import _release_reservation_on_exit, _Reservation
 from services.warming._steps import _ChannelTally
@@ -81,7 +82,7 @@ async def _plan_iteration(
     if not_ready is not None:
         return not_ready
     intensity = compute_intensity(age_hours, trust_band=trust.band)
-    daily = _roll_daily(record, now.date().isoformat())
+    daily = _roll_daily(record, _local_date(await _loop._account_tz(account_id), now))  # noqa: SLF001
     quiet = await _loop._gate_quiet_day(account_id, daily, now, run_id=run_id)  # noqa: SLF001
     if quiet is not None:
         return quiet
