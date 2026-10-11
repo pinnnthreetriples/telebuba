@@ -1,12 +1,12 @@
 """Per-account, per-day warming totals: what one settled cycle adds, and the read back.
 
 ``stats_day`` is the single place that decides which calendar day a cycle belongs
-to, so switching from the UTC date to the account's local date is a one-function
-change.
+to: the account's local date, resolved exactly like the daily budget's day.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -18,6 +18,8 @@ from core.repositories.warming_daily_stats import (
 )
 from schemas.warming_daily_stats import WarmingDailyStats, WarmingDailyStatsList
 from services.trust import account_trust_score
+from services.warming._local_day import _local_date
+from services.warming.pacing import _account_tz
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingCycleResult, WarmingPhase
@@ -26,11 +28,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _FLOOD_STATUSES = frozenset({"flood_wait", "peer_flood"})
+# Strong references to stats writes that outlived a cancelled caller (see below);
+# the event loop alone holds tasks weakly.
+_DETACHED: set[asyncio.Task[None]] = set()
 
 
-def stats_day(now: datetime) -> str:
-    """The ``YYYY-MM-DD`` day a moment is counted under — the UTC date for now."""
-    return now.astimezone(UTC).date().isoformat()
+async def stats_day(account_id: str, now: datetime) -> str:
+    """The ``YYYY-MM-DD`` day a moment is counted under: the account's local date.
+
+    Same zone resolution as the daily budget, so a day's totals and its budget agree;
+    an unknown zone falls back to UTC.
+    """
+    return _local_date(await _account_tz(account_id), now)
 
 
 def cycle_increment(
@@ -64,12 +73,26 @@ async def record_cycle_stats(
     """Add a settled cycle to its day's row. Best-effort: never fails the cycle.
 
     Call only after the cycle's state write landed, so a cycle a newer generation
-    retired is never counted.
+    retired is never counted. The write is shielded: a Stop that cancels the loop
+    right after that state write still lets the increment finish, so the state
+    never counts a cycle its day's row is missing. The caller's cancellation still
+    propagates at once.
     """
+    task = asyncio.ensure_future(_record_cycle_stats(result, phase, now or datetime.now(UTC)))
+    _DETACHED.add(task)
+    task.add_done_callback(_DETACHED.discard)
+    await asyncio.shield(task)
+
+
+async def _record_cycle_stats(
+    result: WarmingCycleResult,
+    phase: WarmingPhase | None,
+    now: datetime,
+) -> None:
     account_id = result.account_id
     try:
         trust = await account_trust_score(account_id)
-        day = stats_day(now or datetime.now(UTC))
+        day = await stats_day(account_id, now)
         increment = cycle_increment(result, day=day, phase=phase).model_copy(
             update={"trust_score": trust.score, "trust_band": trust.band},
         )
@@ -92,5 +115,5 @@ async def load_daily_stats(
 ) -> WarmingDailyStatsList:
     """The last ``days`` days of one account (today included), oldest first."""
     moment = now if now is not None else datetime.now(UTC)
-    since = stats_day(moment - timedelta(days=max(days, 1) - 1))
+    since = await stats_day(account_id, moment - timedelta(days=max(days, 1) - 1))
     return WarmingDailyStatsList(items=await list_warming_daily_stats(account_id, since))
