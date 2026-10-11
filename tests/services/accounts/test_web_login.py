@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from schemas.proxy import ProxyCheckResult
-from services.accounts import web_login
+from services.accounts import _web_drive, web_login
 from services.accounts.web_login import (
     NoProxyForWebLoginError,
     WebLoginLaunchError,
@@ -180,6 +180,7 @@ async def test_first_open_accepts_the_token_once_and_holds_the_window(
     assert capture is True  # a fresh profile needs the QR hook
     assert relay_port == relay.created[0].port
     assert result.signed_in is True
+    assert result.reason is None  # nothing to explain
     # A completed login is what marks the profile — nothing else does.
     assert (profile / _MARKER).exists()
     # The window is KEPT: closing its socket would strip the fingerprint.
@@ -260,6 +261,36 @@ async def test_first_open_types_stored_password_on_the_password_screen(
     assert calls["typed"] == ["hunter2"]
     assert len(calls["accepted"]) == 1
     assert result.signed_in is False  # the screen was left standing, not completed
+    # We typed it and WebK stayed put: the stored password is what is wrong.
+    assert result.reason == "web_login_2fa_rejected"
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_a_password_that_never_reached_the_field_is_not_called_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The typing helper found no field to click, so nothing was submitted.
+
+    Blaming the stored password would send the operator to fix a credential Telegram
+    never saw; the screen is simply waiting for a hand-typed one.
+    """
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    _wire(monkeypatch, calls, states=["password"], twofa="hunter2")
+
+    async def _no_field(_window: object, password: str) -> bool:
+        calls.setdefault("typed", []).append(password)
+        return False
+
+    monkeypatch.setattr(_web_drive, "type_2fa_password", _no_field)
+
+    result = await open_account_web("acct")
+
+    assert calls["typed"] == ["hunter2"]  # it was attempted, once...
+    assert result.reason == "web_login_2fa_required"  # ...but never submitted
 
 
 @pytest.mark.usefixtures("relay")
@@ -304,6 +335,7 @@ async def test_password_screen_without_stored_password_still_launches(
     assert "typed" not in calls  # nothing stored -> nothing typed
     # ...and "launched" is NOT "signed in": the toast has to say so.
     assert result.signed_in is False
+    assert result.reason == "web_login_2fa_required"  # the operator types it by hand
 
 
 @pytest.mark.usefixtures("relay")
@@ -349,8 +381,33 @@ async def test_a_login_that_never_finished_does_not_mark_the_profile(
     result = await open_account_web("acct")
 
     assert result.signed_in is False  # the body, not just the marker, has to say so
+    assert result.reason == "web_login_qr_timeout"
     assert any(profile.iterdir())  # Chrome wrote to it...
     assert not (profile / _MARKER).exists()  # ...but nobody signed in
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_a_page_that_never_loads_is_told_apart_from_an_unanswered_qr(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Both end on the drive deadline, but they ask the operator for different things.
+
+    A QR nobody accepted in time is worth another click; a WebK still reading "loading"
+    after 90 s almost always means the account's proxy cannot reach Telegram, and
+    clicking again changes nothing.
+    """
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    monkeypatch.setattr(web_login, "_DRIVE_TIMEOUT", 0.05)
+    _wire(monkeypatch, calls, states=["loading"], token=None)
+
+    result = await open_account_web("acct")
+
+    assert result.signed_in is False
+    assert result.reason == "web_login_page_not_loaded"
 
 
 @pytest.mark.usefixtures("relay")
