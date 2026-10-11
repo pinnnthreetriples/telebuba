@@ -139,3 +139,36 @@ async def test_summary_ready_counts_only_startable_accounts() -> None:
 
     assert board.summary.warming == 1
     assert board.summary.ready == 1  # only acc-idle; acc-warm is already warming
+
+
+@pytest.mark.asyncio
+async def test_load_board_default_target_days_follows_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The start modal preselects this, so it must be the length a start without an
+    # explicit pick runs for (``_start_state`` falls back to the same setting).
+    monkeypatch.setattr(settings.neurocomment, "warmed_min_days", 21)
+
+    assert (await warming.load_board()).default_target_days == 21
+
+
+@pytest.mark.asyncio
+async def test_load_board_mechanics_mirror_cycle_gates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "story_view_enabled", False)
+    # An empty stored key falls back to config, so blank the config fallbacks too.
+    monkeypatch.setattr(settings.gemini, "api_key", "")
+    monkeypatch.setattr(settings.deepseek, "api_key", "")
+    await _set_settings(chat=True, reactions=False, key="")
+
+    off = (await warming.load_board()).mechanics
+    # Chat switched on but no text-LLM key: the DM step never writes, so it is off.
+    assert (off.reactions, off.stories, off.dialogue) == (False, False, False)
+    assert off.join is True
+
+    monkeypatch.setattr(settings.warming, "story_view_enabled", True)
+    await _set_settings(chat=True, reactions=True, key="test-key-not-real")
+
+    on = (await warming.load_board()).mechanics
+    assert (on.reactions, on.stories, on.dialogue) == (True, True, True)

@@ -64,6 +64,18 @@ function reasonKey(reason: string): string {
     : (READINESS_REASON_KEY[reason] ?? '');
 }
 
+// «Как работает» in cycle order. A key from the board's `mechanics` is a step the
+// settings can switch off; `null` is one the engine always runs.
+const HOWTO_STEPS = [
+  ['join', 'join'],
+  ['read', null],
+  ['reactions', 'reactions'],
+  ['stories', 'stories'],
+  ['dialogue', 'dialogue'],
+  ['ramp', null],
+  ['pauses', null],
+] as const;
+
 export function WarmingPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -211,6 +223,14 @@ export function WarmingPage() {
   );
   const errors = [...idle, ...warming].filter((a) => a.state === 'error').length;
   const poolOn = warming.length > 0;
+  // With the readiness check switched off the engine starts a not-ready account, so
+  // the button does too; the reasons stay on the row as a warning, not a block.
+  const enforceReadiness = data.settings.enforce_readiness ?? true;
+  const howtoSteps = HOWTO_STEPS.map(([step, mechanic]) => {
+    const label = t(`warming.howto.steps.${step}`);
+    const on = mechanic === null || (data.mechanics?.[mechanic] ?? true);
+    return on ? label : t('warming.howto.off', { step: label });
+  });
 
   return (
     <div className="tb-fadeup">
@@ -272,6 +292,7 @@ export function WarmingPage() {
                   const pc = account.proxy_country?.toLowerCase() ?? null;
                   const ptype = account.proxy_type;
                   const ready = account.readiness?.ready ?? false;
+                  const startable = ready || !enforceReadiness;
                   const blockers = (account.readiness?.reasons ?? [])
                     .map((reason) => {
                       const key = reasonKey(reason);
@@ -334,19 +355,19 @@ export function WarmingPage() {
                           type="button"
                           variant="primary"
                           size="lg"
-                          disabled={!ready || busyIds.has(account.account_id)}
+                          disabled={!startable || busyIds.has(account.account_id)}
                           title={ready ? undefined : blockers}
                           aria-describedby={!ready && blockers ? blockersId : undefined}
                           onClick={() => {
                             setWarmDaysFor(account);
                           }}
                           className={
-                            ready
+                            startable
                               ? undefined
                               : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
                           }
                         >
-                          {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
+                          {startable ? t('warming.ready.start') : t('warming.ready.unavailable')}
                         </Button>
                       </div>
                       {/* Spelled out, not only in the button's `title`: a disabled button
@@ -549,7 +570,7 @@ export function WarmingPage() {
             title={t('warming.howto.title')}
             hint={t('warming.howto.hint')}
             columns={2}
-            steps={[0, 1, 2, 3, 4, 5].map((index) => t(`warming.howto.steps.${String(index)}`))}
+            steps={howtoSteps}
           />
         </div>
 
@@ -566,6 +587,7 @@ export function WarmingPage() {
             feedback={accountFeedback.feedback}
             logLimit={data.card_log_limit}
             channelLabels={channelLabels}
+            defaultTargetDays={data.default_target_days}
           />
 
           {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна:
@@ -583,6 +605,7 @@ export function WarmingPage() {
         <WarmDaysModal
           accountId={warmDaysFor.account_id}
           phone={warmDaysFor.phone ?? warmDaysFor.label ?? warmDaysFor.account_id}
+          defaultDays={data.default_target_days}
           onClose={() => {
             setWarmDaysFor(null);
           }}

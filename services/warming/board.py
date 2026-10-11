@@ -25,6 +25,7 @@ from schemas.warming import (
     WarmingAccountState,
     WarmingBoardState,
     WarmingChannelList,
+    WarmingMechanics,
     WarmingSettings,
     WarmingState,
     WarmingSummary,
@@ -214,6 +215,23 @@ async def load_board() -> WarmingBoardState:
         card_log_limit=settings.warming.card_log_limit,
         # Folded in from the same cards so the warming page needs one poll, not two.
         warmed=_warmed_from_cards(cards, settings.neurocomment.warmed_min_days),
+        default_target_days=settings.neurocomment.warmed_min_days,
+        mechanics=_derive_mechanics(masked),
+    )
+
+
+def _derive_mechanics(masked: WarmingSettings) -> WarmingMechanics:
+    """Which optional cycle steps the engine runs under ``masked`` settings.
+
+    Mirrors the cycle's own gates: join/reactions follow their switches, stories the
+    ``story_view_enabled`` config, and the DM step needs the switch plus a text-LLM
+    key (``_chat._should_chat`` refuses without one).
+    """
+    return WarmingMechanics(
+        join=masked.join_enabled,
+        reactions=masked.reactions_enabled,
+        stories=settings.warming.story_view_enabled,
+        dialogue=masked.inter_account_chat and (masked.has_gemini_key or masked.has_deepseek_key),
     )
 
 

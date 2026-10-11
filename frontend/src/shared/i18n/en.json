@@ -2759,15 +2759,17 @@
     },
     "howto": {
       "title": "How warming works",
-      "hint": "These mechanics are always on and run automatically — nothing to configure",
-      "steps": [
-        "Subscribing to the topical channels from the list",
-        "Reading posts with realistic delays",
-        "Reactions and viewing stories",
-        "Dialogues between farm accounts",
-        "Gradually ramping up daily activity",
-        "Anti-ban pauses and rate-limit quotas"
-      ]
+      "hint": "What warming does with the current settings. A step marked off is switched off in the settings below or waits for an LLM key",
+      "off": "{{step}} — off",
+      "steps": {
+        "join": "Subscribing to the topical channels from the list",
+        "read": "Reading posts with realistic delays",
+        "reactions": "Reactions to posts",
+        "stories": "Viewing stories",
+        "dialogue": "Dialogues between farm accounts",
+        "ramp": "Gradually ramping up daily activity",
+        "pauses": "Anti-ban pauses and rate-limit quotas"
+      }
     },
     "inProgress": {
       "title": "Warming",
@@ -2815,7 +2817,6 @@
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
-      "helpTip": "1 cycle = 1 warming day",
       "cycleTip_one": "Cycle {{count}}",
       "cycleTip_other": "Cycle {{count}}",
       "dmAllowed": "DMs: allowed",
@@ -3045,8 +3046,6 @@
     "days": {
       "title": "Warm up account",
       "subtitle": "{{phone}} · choose the warming length",
-      "min": "1 day",
-      "max": "14 days",
       "start": "Start warming",
       "cancel": "Cancel",
       "spamCheck": "Spam check",

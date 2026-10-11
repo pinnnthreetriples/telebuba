@@ -41,6 +41,47 @@ test('disables warming for a not-ready account and shows the reason', async () =
   expect(blocked).toHaveAccessibleDescription('нет прокси');
 });
 
+function serveBoard(board: WarmingBoardState) {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+}
+
+test('with the readiness check off a not-ready account can start; its reasons stay as a warning', async () => {
+  serveBoard({ ...BOARD, settings: { ...BOARD.settings, enforce_readiness: false } });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+  expect(screen.queryByText('Недоступен')).toBeNull();
+  const starts = screen.getAllByRole('button', { name: 'Прогреть' });
+  expect(starts).toHaveLength(2);
+  for (const button of starts) expect(button).toBeEnabled();
+  // The not-ready row still names why, in the warning tone, and the button points at it.
+  const reason = screen.getByText('нет прокси');
+  expect(reason).toHaveClass('text-warning-deep');
+  expect(starts[1]).toHaveAccessibleDescription('нет прокси');
+});
+
+test('«Как работает» marks the steps the current settings switch off', async () => {
+  serveBoard({
+    ...BOARD,
+    mechanics: { join: true, reactions: false, stories: true, dialogue: false },
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-1')).toBeInTheDocument();
+  });
+  // The collapsed card keeps its steps mounted, so they are readable unopened.
+
+  expect(screen.getByText('Реакции на посты — выключено')).toBeInTheDocument();
+  expect(screen.getByText('Диалоги между аккаунтами фермы — выключено')).toBeInTheDocument();
+  expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
+  expect(screen.getByText('Подписка на тематические каналы из списка')).toBeInTheDocument();
+});
+
 test('warming row actions meet the touch target size', async () => {
   const board: WarmingBoardState = {
     ...BOARD,
@@ -307,7 +348,7 @@ test('a live SSE event refetches an expanded card activity log', async () => {
 });
 
 test('starts an idle account', async () => {
-  routeApi();
+  serveBoard({ ...BOARD, default_target_days: 21 });
   renderWithClient(<WarmingPage />);
   await waitFor(() => {
     expect(screen.getByText('idle-1')).toBeInTheDocument();
@@ -321,9 +362,9 @@ test('starts an idle account', async () => {
       .mock.calls.find(([input]) => (input as Request).url.includes('/warming/start'));
     expect(startCall).toBeDefined();
   });
-  // The day slider's value (default 7) must reach the backend — was dropped before.
+  // The slider opens on the board's default, and its value must reach the backend.
   const body = (await (startCall![0] as Request).clone().json()) as { target_days?: number };
-  expect(body.target_days).toBe(7);
+  expect(body.target_days).toBe(21);
 });
 
 test('removing a channel asks for confirmation, then calls the remove endpoint', async () => {

@@ -14,8 +14,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Settings models live in a sibling module for the file-size budget; re-exported
-# here so ``from schemas.warming import WarmingSettings`` etc. keep working.
+# Settings and board roll-up models live in sibling modules for the file-size budget;
+# re-exported here so ``from schemas.warming import WarmingSettings`` etc. keep working.
+from schemas._warming_board import (
+    WarmingMechanics,
+    WarmingSummary,
+)
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -325,19 +329,6 @@ class WarmingAccountState(BaseModel):
     nc_handed_off: bool = False
 
 
-class WarmingSummary(BaseModel):
-    """Fleet-level roll-up shown at the top of the warming page."""
-
-    total: int = Field(default=0, ge=0)
-    warming: int = Field(default=0, ge=0)
-    active: int = Field(default=0, ge=0)
-    ready: int = Field(default=0, ge=0)
-    attention: int = Field(default=0, ge=0)
-    trust_healthy: int = Field(default=0, ge=0)
-    trust_watch: int = Field(default=0, ge=0)
-    trust_risk: int = Field(default=0, ge=0)
-
-
 class WarmingBoardState(BaseModel):
     """Everything the warming page renders in one poll tick."""
 
@@ -357,6 +348,13 @@ class WarmingBoardState(BaseModel):
     # Same rows ``list_warmed_accounts`` returns; the /warmed endpoint stays for
     # the neurocomment page.
     warmed: list[WarmedAccount] = Field(default_factory=list)
+    # The warming length a start falls back to when the operator picks none — the
+    # same ``settings.neurocomment.warmed_min_days`` the start path uses, so the
+    # start modal's preselected length is the one that would run anyway.
+    default_target_days: int = Field(default=14, ge=1)
+    # Which optional cycle steps the engine will actually run with the current
+    # settings, so «Как работает» shows what is on instead of promising every step.
+    mechanics: WarmingMechanics = Field(default_factory=WarmingMechanics)
 
 
 class WarmedAccount(BaseModel):

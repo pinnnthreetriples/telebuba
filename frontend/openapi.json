@@ -30336,6 +30336,15 @@
             },
             "type": "array",
             "title": "Warmed"
+          },
+          "default_target_days": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Default Target Days",
+            "default": 14
+          },
+          "mechanics": {
+            "$ref": "#/components/schemas/WarmingMechanics"
           }
         },
         "type": "object",
@@ -30392,6 +30401,33 @@
         },
         "type": "object",
         "title": "WarmingChannelList"
+      },
+      "WarmingMechanics": {
+        "properties": {
+          "join": {
+            "type": "boolean",
+            "title": "Join",
+            "default": true
+          },
+          "reactions": {
+            "type": "boolean",
+            "title": "Reactions",
+            "default": true
+          },
+          "stories": {
+            "type": "boolean",
+            "title": "Stories",
+            "default": true
+          },
+          "dialogue": {
+            "type": "boolean",
+            "title": "Dialogue",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "WarmingMechanics",
+        "description": "Optional warming steps and whether the current settings let them run."
       },
       "WarmingReadiness": {
         "properties": {
