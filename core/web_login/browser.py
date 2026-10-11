@@ -108,6 +108,10 @@ class WebWindow:
         await self.driver.aclose()
         await self.session.aclose()
 
+    async def wait_closed(self) -> None:
+        """Return once the browser process has exited — the operator closed the window."""
+        await self.process.wait()
+
     async def kill(self) -> None:
         """Close the socket AND end the browser process. Shutdown only.
 
