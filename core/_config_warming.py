@@ -288,6 +288,19 @@ class WarmingSettings(BaseSettings):
             "warmed": 80,
         },
     )
+    # New channels joined per rolling 24h, by phase. Without it a young account joins
+    # every not-yet-joined channel its cycles pick, so a grown pool hands a newcomer
+    # a dozen joins on day one. Re-joins count (they restart the joined-at clock);
+    # reads of channels already joined are not limited by it. 0 = no joins at all.
+    phase_joins_per_day_max: dict[str, Annotated[int, Field(ge=0)]] = Field(
+        default_factory=lambda: {
+            "intro": 1,
+            "settling": 1,
+            "warming": 2,
+            "active": 3,
+            "warmed": 4,
+        },
+    )
     # Activity-persona presets — the operator's chosen *target* cadence: sessions/
     # day (a range, drawn per next-run) plus per-session reaction and inter-account
     # DM probability. calm < normal < active for every lever.
@@ -398,6 +411,14 @@ class WarmingSettings(BaseSettings):
             msg = f"extras_inline_bots outside INLINE_BOT_WHITELIST: {sorted(unknown)}"
             raise ValueError(msg)
         return bots
+
+    @model_validator(mode="after")
+    def _check_phase_joins(self) -> WarmingSettings:
+        # A phase missing here is a KeyError on the join step mid-cycle; fail at boot.
+        if self.phase_joins_per_day_max.keys() != self.phase_daily_cap.keys():
+            msg = "phase_joins_per_day_max must name exactly the phases of phase_daily_cap"
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _check_persona_extras(self) -> WarmingSettings:

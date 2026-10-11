@@ -242,6 +242,7 @@ async def run_one_cycle(
             secret,
             persona_reaction_probability(data.activity_persona),
             on_step,
+            phase=intensity.phase,
         )
 
         # One low-risk "glanced at stories" signal per session (every persona).
