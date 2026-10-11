@@ -75,6 +75,10 @@ async def test_reuses_already_running_instance(
     mock_adb.dump_ui_hierarchy = AsyncMock(
         return_value='<hierarchy><node text="Chats" bounds="[0,0][100,100]"/></hierarchy>'
     )
+    mock_adb.set_reverse_proxy = AsyncMock()
+    mock_relay = MagicMock()
+    mock_relay.start = AsyncMock(return_value=12345)
+    mock_relay.aclose = AsyncMock()
     with (
         patch("services.accounts.mobile_emulator.require_account", return_value=mock_account),
         patch(
@@ -84,12 +88,15 @@ async def test_reuses_already_running_instance(
         patch("services.accounts.mobile_emulator.is_emulator_available", return_value=True),
         patch("services.accounts.mobile_emulator.is_running", return_value=True),
         patch("services.accounts.mobile_emulator.ADBDriver", return_value=mock_adb),
+        patch("services.accounts.mobile_emulator.LocalProxyRelay", return_value=mock_relay),
     ):
         res = await open_account_mobile("acc-1")
         assert res.launched is True
         assert res.signed_in is True
         assert res.instance_name == "telebuba_acc-1"
         assert res.message == "Emulator instance already running"
+        mock_relay.start.assert_called_once()
+        mock_adb.set_reverse_proxy.assert_called_with(12345)
 
 
 @pytest.mark.asyncio

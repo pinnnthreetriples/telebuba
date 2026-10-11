@@ -80,6 +80,8 @@ def _is_authenticated_chat_screen(dump: str | None) -> bool:
         "your phone",
         "check your phone",
         "two-step",
+        "password",
+        "пароль",
         "cloud password",
         "облачный пароль",
         "enter code",
@@ -244,6 +246,28 @@ async def _cleanup_failed_launch(
         await stop_instance(instance_name)
 
 
+async def _rebind_running_authenticated_instance(
+    account_id: str,
+    instance_name: str,
+    proxy: ProxySettings,
+    adb: ADBDriver,
+) -> OpenMobileResult:
+    """Rebind proxy relay and return success for an already-running authenticated instance."""
+    relay, relay_port = await _register_proxy_relay(account_id, proxy)
+    try:
+        await adb.set_reverse_proxy(relay_port)
+    except BaseException:
+        await _cleanup_failed_launch(account_id, instance_name, relay)
+        raise
+
+    return OpenMobileResult(
+        launched=True,
+        signed_in=True,
+        instance_name=instance_name,
+        message="Emulator instance already running",
+    )
+
+
 async def open_account_mobile(account_id: str) -> OpenMobileResult:
     """Open (or raise) an Android emulator instance for the account and authenticate.
 
@@ -272,11 +296,8 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
         if running:
             dump = await _safe_dump(adb)
             if _is_authenticated_chat_screen(dump):
-                return OpenMobileResult(
-                    launched=True,
-                    signed_in=True,
-                    instance_name=instance_name,
-                    message="Emulator instance already running",
+                return await _rebind_running_authenticated_instance(
+                    account_id, instance_name, proxy, adb
                 )
 
         if not running:
