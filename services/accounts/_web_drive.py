@@ -189,12 +189,15 @@ async def drive_login(
 
 
 async def _type_stored_password(account_id: str, window: WebWindow) -> bool:
-    """Type the stored 2FA password once, if one is on file (never logged); say so."""
+    """Type the stored 2FA password once, if one is on file (never logged).
+
+    True only once it was actually submitted: none on file, or no field to type into,
+    means Telegram never saw it and so cannot have rejected it.
+    """
     password = await fetch_account_twofa_password(account_id)
     if not password:
         return False
-    await type_2fa_password(window, password)
-    return True
+    return await type_2fa_password(window, password)
 
 
 async def _accept_fresh_token(

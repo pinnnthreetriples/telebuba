@@ -154,15 +154,16 @@ async def _click_center(window: WebWindow, rect_expr: str) -> bool:
     return True
 
 
-async def type_2fa_password(window: WebWindow, password: str) -> None:
+async def type_2fa_password(window: WebWindow, password: str) -> bool:
     """Type the account's 2FA password into WebK's field and submit. Never logged.
 
     Real-mouse-clicks the visible password input to focus it (a JS focus leaves WebK's
     controlled input empty), clears it (Ctrl+A, Delete), types each character with real
-    CDP key events, then submits with Enter.
+    CDP key events, then submits with Enter. False when there was no field to click, so
+    nothing was submitted.
     """
     if not await _click_center(window, _INPUT_RECT_EXPR):
-        return
+        return False
     await asyncio.sleep(_CLICK_SETTLE_SECONDS)
     for kind in ("keyDown", "keyUp"):
         await _dispatch_key(
@@ -176,3 +177,4 @@ async def type_2fa_password(window: WebWindow, password: str) -> None:
         await asyncio.sleep(_KEY_GAP_SECONDS)
     for kind in ("keyDown", "keyUp"):
         await _dispatch_key(window, {"type": kind, **_ENTER_KEY})
+    return True

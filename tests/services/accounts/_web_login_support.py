@@ -227,10 +227,11 @@ def wire(
     async def _release(_window: object) -> None:
         calls["released"] = calls.get("released", 0) + 1
 
-    async def _type(_window: object, password: str) -> None:
+    async def _type(_window: object, password: str) -> bool:
         # A LIST, never a scalar: assigning would overwrite, so "typed exactly once"
         # — the whole point of the 2FA re-submit guard — could not be asserted at all.
         calls.setdefault("typed", []).append(password)
+        return True  # the field was there and the password was submitted
 
     async def _twofa(_account_id: str) -> str | None:
         return twofa
