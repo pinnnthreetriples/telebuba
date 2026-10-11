@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
+import xml.etree.ElementTree as ET  # nosec B405
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -67,11 +69,31 @@ async def _safe_dump(adb: ADBDriver) -> str:
     return ""
 
 
+def _extract_ui_texts(dump: str) -> list[str]:
+    """Extract visible text and content descriptions from a UI Automator XML dump."""
+    texts: list[str] = []
+    try:
+        root = ET.fromstring(dump)  # nosec B314 # noqa: S314
+        for elem in root.iter():
+            text = elem.attrib.get("text")
+            if text:
+                texts.append(text.lower())
+            desc = elem.attrib.get("content-desc")
+            if desc:
+                texts.append(desc.lower())
+    except (ET.ParseError, ValueError, AttributeError, TypeError):
+        for match in re.finditer(r'(?:text|content-desc)="([^"]*)"', dump, re.IGNORECASE):
+            val = match.group(1).strip()
+            if val:
+                texts.append(val.lower())
+    return texts
+
+
 def _is_authenticated_chat_screen(dump: str | None) -> bool:
     """Positively confirm that Telegram is displaying an authenticated chat screen."""
     if not dump:
         return False
-    dump_lower = dump.lower()
+    texts = _extract_ui_texts(dump)
     unauth_markers = (
         "start messaging",
         "продолжить",
@@ -87,8 +109,9 @@ def _is_authenticated_chat_screen(dump: str | None) -> bool:
         "enter code",
         "введите код",
     )
-    if any(m in dump_lower for m in unauth_markers):
-        return False
+    for text in texts:
+        if any(m in text for m in unauth_markers):
+            return False
 
     auth_markers = (
         "chats",
@@ -104,6 +127,7 @@ def _is_authenticated_chat_screen(dump: str | None) -> bool:
         "org.telegram.messenger:id/menu_search",
         "org.telegram.messenger:id/floating_button",
     )
+    dump_lower = dump.lower()
     return any(m in dump_lower for m in auth_markers)
 
 

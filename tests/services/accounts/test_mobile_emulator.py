@@ -236,6 +236,11 @@ def test_is_authenticated_chat_screen_logic() -> None:
     assert _is_authenticated_chat_screen('<node content-desc="Search"/>') is True
     res_id_node = '<node resource-id="org.telegram.messenger:id/chat_list"/>'
     assert _is_authenticated_chat_screen(res_id_node) is True
+    ui_node_with_pw_attr = (
+        '<hierarchy><node text="Chats" password="false" '
+        'resource-id="org.telegram.messenger:id/chat_list"/></hierarchy>'
+    )
+    assert _is_authenticated_chat_screen(ui_node_with_pw_attr) is True
 
 
 @pytest.mark.asyncio
