@@ -1,8 +1,9 @@
 """Account lifecycle journal repository (``account_lifecycle_events``, migration #74).
 
 Append-only. The write snapshots the account's Telegram user id and the start of its
-current warming stint IN THE SAME TRANSACTION as the insert, so a row stays
-attributable after the account row — and its warming state — are deleted.
+current warming stint IN THE SAME TRANSACTION as the insert (or takes a snapshot the
+caller read earlier, before a delete cascade), so a row stays attributable after the
+account row — and its warming state — are deleted.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from core.db import (
     _optional_str,
     _warming_account_state,
 )
-from schemas.lifecycle import LifecycleEvent, LifecycleEventKind
+from schemas.lifecycle import LifecycleEvent, LifecycleEventKind, LifecycleSnapshot
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -51,7 +52,7 @@ def _row_to_event(mapping: Mapping[str, object]) -> LifecycleEvent:
     )
 
 
-def _snapshot(connection: Connection, account_id: str) -> tuple[object, object]:
+def _snapshot(connection: Connection, account_id: str) -> LifecycleSnapshot:
     user_id = connection.execute(
         select(_accounts.c.user_id).where(_accounts.c.account_id == account_id),
     ).scalar_one_or_none()
@@ -60,22 +61,35 @@ def _snapshot(connection: Connection, account_id: str) -> tuple[object, object]:
             _warming_account_state.c.account_id == account_id,
         ),
     ).scalar_one_or_none()
-    return user_id, started_at
+    return LifecycleSnapshot(
+        tg_user_id=_optional_int(user_id), stint_started_at=_optional_str(started_at)
+    )
+
+
+def _fetch_lifecycle_snapshot(account_id: str) -> LifecycleSnapshot:
+    with _get_engine().connect() as connection:
+        return _snapshot(connection, account_id)
+
+
+async def fetch_lifecycle_snapshot(account_id: str) -> LifecycleSnapshot:
+    """The user id and stint start a journal row would snapshot right now."""
+    return await asyncio.to_thread(_fetch_lifecycle_snapshot, account_id)
 
 
 def _append_lifecycle_event(
     account_id: str,
     kind: LifecycleEventKind,
     extra: dict[str, object],
+    snapshot: LifecycleSnapshot | None,
 ) -> LifecycleEvent:
     with _get_engine().begin() as connection:
-        user_id, started_at = _snapshot(connection, account_id)
+        taken = snapshot if snapshot is not None else _snapshot(connection, account_id)
         result = connection.execute(
             insert(_account_lifecycle_events)
             .values(
                 account_id=account_id,
-                tg_user_id=user_id,
-                stint_started_at=started_at,
+                tg_user_id=taken.tg_user_id,
+                stint_started_at=taken.stint_started_at,
                 kind=kind,
                 created_at=_now_iso(),
                 extra=json.dumps(extra, default=str, sort_keys=True),
@@ -91,9 +105,14 @@ async def append_lifecycle_event(
     account_id: str,
     kind: LifecycleEventKind,
     extra: dict[str, object] | None = None,
+    snapshot: LifecycleSnapshot | None = None,
 ) -> LifecycleEvent:
-    """Append one journal row, snapshotting the account's user id and current stint."""
-    return await asyncio.to_thread(_append_lifecycle_event, account_id, kind, extra or {})
+    """Append one journal row.
+
+    Without ``snapshot`` the account's user id and current stint are read in the insert's
+    own transaction; a caller that is about to delete those rows passes one taken earlier.
+    """
+    return await asyncio.to_thread(_append_lifecycle_event, account_id, kind, extra or {}, snapshot)
 
 
 def _list_lifecycle_events(account_id: str) -> list[LifecycleEvent]:

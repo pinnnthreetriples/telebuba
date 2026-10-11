@@ -62,6 +62,16 @@ class LifecycleEvent(BaseModel):
     backfilled: bool = False
 
 
+class LifecycleSnapshot(BaseModel):
+    """What a journal row snapshots from the live account.
+
+    A deletion takes it before the cascade and writes it only after the delete succeeded.
+    """
+
+    tg_user_id: int | None = None
+    stint_started_at: str | None = None
+
+
 class AccountDeleteReasonGuess(BaseModel):
     """The reason the delete dialog pre-selects; the operator may change it."""
 

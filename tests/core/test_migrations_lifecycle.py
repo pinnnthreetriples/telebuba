@@ -103,7 +103,7 @@ def test_backfill_maps_each_log_event_to_its_kind(migrated_engine: Engine) -> No
     with engine.begin() as connection:
         connection.exec_driver_sql(
             "INSERT INTO accounts (account_id, status, user_id, created_at, updated_at)"
-            " VALUES ('a1', 'alive', 777, 'x', 'x')"
+            " VALUES ('a1', 'alive', 777, '2000-01-01', '2000-01-01')"
         )
     start = _log(engine, "a1", "warming_started")
     _log(engine, "a1", "warming_cycle_completed", {"status": "ok"})
@@ -166,7 +166,7 @@ def test_backfill_does_not_lend_a_reimported_row_to_an_older_life(
     with engine.begin() as connection:
         connection.exec_driver_sql(
             "INSERT INTO accounts (account_id, status, user_id, created_at, updated_at)"
-            " VALUES ('re', 'alive', 999, 'x', 'x')"
+            " VALUES ('re', 'alive', 999, '2000-01-01', '2000-01-01')"
         )
         connection.exec_driver_sql(
             "INSERT INTO warming_account_state (account_id, state, cycles_completed,"
@@ -181,6 +181,48 @@ def test_backfill_does_not_lend_a_reimported_row_to_an_older_life(
     ]
 
 
+def test_backfill_keeps_each_life_to_its_own_history(migrated_engine: Engine) -> None:
+    """A second life of the same id inherits neither the first life's stint nor its death."""
+    engine = migrated_engine
+    _log(engine, "re", "warming_started")
+    _log(engine, "re", "spam_status_refreshed", {"status": "limited"})
+    _log(engine, "re", "account_removed")
+    _log(engine, "re", "warming_nc_handoff")
+    _log(engine, "re", "account_removed")
+
+    _migrate(engine)
+
+    rows = _rows(engine)
+    assert [row["kind"] for row in rows] == [
+        "warming_started",
+        "spambot_verdict",
+        "deleted",
+        "handed_off",
+        "deleted",
+    ]
+    assert json.loads(str(rows[2]["extra"]))["reason"] == "dead"
+    assert rows[3]["stint_started_at"] is None
+    assert json.loads(str(rows[4]["extra"]))["reason"] == "retired"
+
+
+def test_backfill_never_lends_an_account_created_after_the_event(
+    migrated_engine: Engine,
+) -> None:
+    """The ``account_removed`` row may be purged; a younger row still must not lend its id."""
+    engine = migrated_engine
+    _log(engine, "re", "warming_started")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, status, user_id, created_at, updated_at)"
+            " VALUES ('re', 'alive', 999, '9999-01-01', '9999-01-01')"
+        )
+
+    _migrate(engine)
+
+    [row] = _rows(engine)
+    assert row["tg_user_id"] is None
+
+
 def test_backfill_falls_back_to_the_live_stint_and_tolerates_broken_json(
     migrated_engine: Engine,
 ) -> None:
@@ -188,7 +230,7 @@ def test_backfill_falls_back_to_the_live_stint_and_tolerates_broken_json(
     with engine.begin() as connection:
         connection.exec_driver_sql(
             "INSERT INTO accounts (account_id, status, created_at, updated_at)"
-            " VALUES ('a1', 'alive', 'x', 'x')"
+            " VALUES ('a1', 'alive', '2000-01-01', '2000-01-01')"
         )
         connection.exec_driver_sql(
             "INSERT INTO warming_account_state (account_id, state, cycles_completed,"

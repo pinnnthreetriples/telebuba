@@ -226,3 +226,21 @@ async def test_a_delete_survives_a_broken_journal() -> None:
     await remove_account("acc-1", reason="retired")
 
     assert await fetch_account("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_delete_leaves_no_deleted_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The account survives a failed cascade, so the journal must not call it deleted."""
+
+    async def refuse(_account_id: str) -> None:
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.accounts.lifecycle.delete_account", refuse)
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    with pytest.raises(RuntimeError, match="locked"):
+        await remove_account("acc-1", reason="dead")
+
+    assert await fetch_account("acc-1") is not None
+    assert await _kinds() == []

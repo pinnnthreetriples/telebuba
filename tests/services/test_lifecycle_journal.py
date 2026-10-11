@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from core.db import create_account, update_account_from_session_check, upsert_spam_status
+from core.db import (
+    create_account,
+    delete_account,
+    update_account_from_session_check,
+    upsert_spam_status,
+)
 from core.repositories.lifecycle import append_lifecycle_event, list_lifecycle_events
 from schemas.accounts import AccountCreate
 from schemas.spam_status import SpamStatusVerdict
@@ -16,6 +21,7 @@ from schemas.telegram_session import TelegramSessionCheckResult
 from services import lifecycle_journal
 from services.lifecycle_journal import (
     guess_delete_reason,
+    prepare_account_deleted,
     record_account_deleted,
     record_lifecycle_event,
 )
@@ -123,34 +129,65 @@ async def test_a_reimported_id_does_not_inherit_a_previous_death() -> None:
 
 
 @pytest.mark.asyncio
-async def test_record_account_deleted_keeps_the_operator_reason() -> None:
+async def test_a_prepared_deletion_writes_nothing_until_recorded() -> None:
     await _account(status="unauthorized")
 
-    await record_account_deleted("a1", "retired")
+    pending = await prepare_account_deleted("a1", "retired")
 
+    assert await list_lifecycle_events("a1") == []
+    await record_account_deleted(pending)
     [event] = await list_lifecycle_events("a1")
     assert event.kind == "deleted"
     assert event.extra == {"reason": "retired", "reason_source": "operator"}
 
 
 @pytest.mark.asyncio
-async def test_record_account_deleted_falls_back_to_the_guess() -> None:
+async def test_a_prepared_deletion_falls_back_to_the_guess() -> None:
     await _account(status="unauthorized")
 
-    await record_account_deleted("a1", None)
+    await record_account_deleted(await prepare_account_deleted("a1", None))
 
     [event] = await list_lifecycle_events("a1")
     assert event.extra == {"reason": "dead", "reason_source": "guess"}
 
 
 @pytest.mark.asyncio
-async def test_a_failing_guess_records_nothing_and_does_not_raise(
+async def test_the_snapshot_is_the_one_taken_before_the_cascade() -> None:
+    """Written after the account is gone, the row still carries the pre-delete user id."""
+    await _account()
+    pending = await prepare_account_deleted("a1", "dead")
+    await delete_account("a1")
+
+    await record_account_deleted(pending)
+
+    [event] = await list_lifecycle_events("a1")
+    assert event.tg_user_id == 4242
+
+
+@pytest.mark.asyncio
+async def test_a_failing_guess_prepares_nothing_and_does_not_raise(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(lifecycle_journal, "fetch_account", _async_explode)
 
     with caplog.at_level(logging.WARNING, logger="services.lifecycle_journal"):
-        await record_account_deleted("a1", None)
+        pending = await prepare_account_deleted("a1", None)
+        await record_account_deleted(pending)
 
+    assert pending is None
     assert await list_lifecycle_events("a1") == []
     assert "delete-reason guess failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_failing_deletion_write_is_swallowed(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    await _account()
+    pending = await prepare_account_deleted("a1", "dead")
+    monkeypatch.setattr(lifecycle_journal, "append_lifecycle_event", _async_explode)
+
+    with caplog.at_level(logging.WARNING, logger="services.lifecycle_journal"):
+        await record_account_deleted(pending)
+
+    assert "kind=deleted" in caplog.text

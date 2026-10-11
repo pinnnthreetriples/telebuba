@@ -20,7 +20,11 @@ from schemas.geo import GeoMatch
 from schemas.lifecycle import AccountDeleteReasonGuess
 from services.accounts._result import AccountNotFoundError
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
-from services.lifecycle_journal import guess_delete_reason, record_account_deleted
+from services.lifecycle_journal import (
+    guess_delete_reason,
+    prepare_account_deleted,
+    record_account_deleted,
+)
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
@@ -161,10 +165,12 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
                 # resolved to. Guard, never sanitise; the API maps this to 404.
                 raise AccountNotFoundError(account_id)
             await remove_account_session(account_id, account.session_name)
-            # Before the cascade: the guess reads the spam verdict and the snapshot reads
-            # the warming state, both of which the delete takes with it. Never raises.
-            await record_account_deleted(account_id, reason)
+            # Read before the cascade (it removes the spam verdict and warming state the
+            # journal row needs), write only after the delete succeeded — a failed delete
+            # must not leave a ``deleted`` row for a live account. Neither step raises.
+            pending = await prepare_account_deleted(account_id, reason)
             await delete_account(account_id)
+            await record_account_deleted(pending)
         # Only once the row is really gone: the listener registries are keyed by
         # account id and nothing else ever drops those keys, so an app that outlives
         # many deletes accumulates one dead generation and one dead lock per account.

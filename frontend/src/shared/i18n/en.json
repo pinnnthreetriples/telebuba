@@ -1527,6 +1527,7 @@
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts"
   },
   "logEventReason": {
+    "retired": "the account was retired",
     "account_cooling": "the account is waiting out a Telegram limit",
     "row_kept": "account row kept, session file left in place",
     "file_kept": "session file left on disk with no account",
