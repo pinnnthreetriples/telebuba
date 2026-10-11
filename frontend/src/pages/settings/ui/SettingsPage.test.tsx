@@ -175,8 +175,8 @@ test('retry and pause fields load, show help hints, and are sent in the warming 
   const retries = screen.getByLabelText('Повторные попытки при ошибке');
   const interval = screen.getByLabelText('Пауза между запросами (сек)');
   // loaded from the settings row
-  expect(retries).toHaveValue(2);
-  expect(interval).toHaveValue(1.5);
+  expect(retries).toHaveValue('2');
+  expect(interval).toHaveValue('1.5');
   // each field carries a "?" help hint with a plain-language explanation
   expect(
     screen.getByText(/упереться в лимит запросов в минуту/, { exact: false }),
@@ -194,6 +194,23 @@ test('retry and pause fields load, show help hints, and are sent in the warming 
   });
 });
 
+test('retry and pause fields refuse letters and read a comma as the decimal point', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  const retries = screen.getByLabelText('Повторные попытки при ошибке');
+  const interval = screen.getByLabelText('Пауза между запросами (сек)');
+  await userEvent.clear(retries);
+  await userEvent.type(retries, 'e-4');
+  expect(retries).toHaveValue('4');
+  await userEvent.clear(interval);
+  await userEvent.type(interval, 'a2,5x.1');
+  expect(interval).toHaveValue('2.51');
+});
+
 test('an out-of-range retry value is clamped before the PUT', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
@@ -202,7 +219,7 @@ test('an out-of-range retry value is clamped before the PUT', async () => {
   });
 
   const retries = screen.getByLabelText('Повторные попытки при ошибке');
-  // Set an over-max value directly (a number input rejects out-of-range typing).
+  // Set an over-max value directly (maxLength stops it from the keyboard).
   fireEvent.change(retries, { target: { value: '99' } });
   await userEvent.click(screen.getByText('Сохранить'));
   await waitFor(async () => {

@@ -1,12 +1,12 @@
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { type ClipboardEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, FormField, Icon, IconButton, Input, SegmentedControl, Spinner } from '@/shared/ui';
+import { Badge, Button, FormField, Icon, IconButton, Input, SegmentedControl } from '@/shared/ui';
 
-import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
+import { parseProxyLine, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 
 // Shared proxy-form fields (host / port / type / login / password+eye + a real
 // connectivity probe), now on @tanstack/react-form + zod. The form owns field
@@ -48,9 +48,40 @@ export function ProxyForm({
     onValidityChange?.(canSubmit);
   }, [canSubmit, onValidityChange]);
 
-  const canProbe = detect !== 'loading' && proxyFormSchema.safeParse(values).success;
+  // A probe result belongs to the values it was run on: edit or paste over them and
+  // it no longer shows, and a reply that lands after a newer probe started is dropped.
+  const valuesKey = JSON.stringify(values);
+  const [probedKey, setProbedKey] = useState('');
+  const probeRun = useRef(0);
+  const shown: DetectState = probedKey === valuesKey ? detect : 'idle';
+  const canProbe = shown !== 'loading' && proxyFormSchema.safeParse(values).success;
+
+  // A whole proxy line pasted into host or port fills every field it names;
+  // anything else pastes as usual and the field's own filter cleans it.
+  const portRef = useRef<HTMLInputElement>(null);
+  const pasteLine = (event: ClipboardEvent<HTMLInputElement>) => {
+    const parsed = parseProxyLine(event.clipboardData.getData('text'));
+    if (!parsed) return;
+    event.preventDefault();
+    const { proxy_type: proxyType, ...text } = parsed;
+    for (const [name, fieldValue] of Object.entries(text) as [
+      Exclude<keyof ProxyFormValue, 'proxy_type'>,
+      string,
+    ][]) {
+      form.setFieldValue(name, fieldValue);
+      form.setFieldMeta(name, (meta) => ({ ...meta, isTouched: true }));
+    }
+    if (proxyType) form.setFieldValue('proxy_type', proxyType);
+  };
+
+  // Cleared back to empty is not a mistake either: drop the touch so the error goes.
+  const untouchIfEmpty = (name: 'host' | 'port', next: string) => {
+    if (!next) form.setFieldMeta(name, (meta) => ({ ...meta, isTouched: false }));
+  };
 
   const runDetect = () => {
+    const run = ++probeRun.current;
+    setProbedKey(valuesKey);
     setDetect('loading');
     probe.mutate(
       {
@@ -64,10 +95,12 @@ export function ProxyForm({
       },
       {
         onSuccess: (result) => {
+          if (run !== probeRun.current) return;
           setCountry(result.country_code ?? null);
           setDetect(result.status === 'tcp_working' ? 'ok' : 'err');
         },
         onError: () => {
+          if (run !== probeRun.current) return;
           setDetect('err');
         },
       },
@@ -76,7 +109,9 @@ export function ProxyForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[2fr_1fr_auto]">
+      {/* `items-start`, not `items-end`: an error line under one field grew its cell,
+          and bottom alignment pushed the neighbouring inputs down to meet it. */}
+      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[2fr_1fr_auto]">
         <form.Field name="host">
           {(field) => (
             <FormField field={field} label={t('accounts.proxyForm.host')}>
@@ -85,9 +120,27 @@ export function ProxyForm({
                 name={field.name}
                 value={field.state.value}
                 onChange={(event) => {
-                  field.handleChange(event.target.value.replace(/[^\d.]/g, ''));
+                  // A typed `:` ends the address: the rest belongs to the port.
+                  const raw = event.target.value;
+                  const colon = raw.indexOf(':');
+                  const host = (colon === -1 ? raw : raw.slice(0, colon)).replace(/[^\d.]/g, '');
+                  field.handleChange(host);
+                  untouchIfEmpty('host', host);
+                  if (colon !== -1) {
+                    const digits = raw
+                      .slice(colon + 1)
+                      .replace(/\D/g, '')
+                      .slice(0, 5);
+                    if (digits) form.setFieldValue('port', digits);
+                    portRef.current?.focus();
+                  }
                 }}
-                onBlur={field.handleBlur}
+                onPaste={pasteLine}
+                // Leaving an empty field is not a mistake: the disabled Add button
+                // already says it is required. The error waits for something typed.
+                onBlur={() => {
+                  if (field.state.value) field.handleBlur();
+                }}
                 inputMode="decimal"
                 placeholder="123.45.67.89"
                 invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
@@ -100,13 +153,19 @@ export function ProxyForm({
           {(field) => (
             <FormField field={field} label={t('accounts.proxyForm.port')}>
               <Input
+                ref={portRef}
                 id={field.name}
                 name={field.name}
                 value={field.state.value}
                 onChange={(event) => {
-                  field.handleChange(event.target.value.replace(/\D/g, ''));
+                  const port = event.target.value.replace(/\D/g, '');
+                  field.handleChange(port);
+                  untouchIfEmpty('port', port);
                 }}
-                onBlur={field.handleBlur}
+                onPaste={pasteLine}
+                onBlur={() => {
+                  if (field.state.value) field.handleBlur();
+                }}
                 inputMode="numeric"
                 maxLength={5}
                 placeholder="1080"
@@ -116,31 +175,35 @@ export function ProxyForm({
             </FormField>
           )}
         </form.Field>
-        <IconButton
-          size="md"
-          tone="primary"
-          className="mb-1"
-          onClick={runDetect}
-          disabled={!canProbe}
-          aria-label={t('accounts.proxyForm.detect')}
-          title={t('accounts.proxyForm.detect')}
-        >
-          {detect === 'loading' ? (
-            <Spinner tone="onAction" />
-          ) : (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-            >
-              <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-          )}
-        </IconButton>
+        <div>
+          {/* Stands in for a label so the button lines up with the inputs. */}
+          <span aria-hidden className={`${LABEL} hidden md:block`}>
+            &nbsp;
+          </span>
+          <Button
+            fullWidth
+            onClick={runDetect}
+            disabled={!canProbe}
+            loading={shown === 'loading'}
+            title={t('accounts.proxyForm.detectHint')}
+          >
+            {shown === 'loading' ? null : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                aria-hidden
+              >
+                <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            )}
+            {t('accounts.proxyForm.detect')}
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <form.Field name="username">
@@ -177,7 +240,12 @@ export function ProxyForm({
                   onClick={() => {
                     setShowPass((shown) => !shown);
                   }}
-                  aria-label={t('accounts.proxyForm.password')}
+                  aria-label={t(
+                    showPass
+                      ? 'accounts.proxyForm.hidePassword'
+                      : 'accounts.proxyForm.showPassword',
+                  )}
+                  aria-pressed={showPass}
                   className="absolute right-2 top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
@@ -205,14 +273,14 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      {detect !== 'idle' && (
+      {shown !== 'idle' && (
         <div className="flex flex-wrap items-center gap-3">
-          {detect === 'loading' && (
+          {shown === 'loading' && (
             <span className="type-body text-content-subtle">
               {t('accounts.proxyForm.checking')}
             </span>
           )}
-          {detect === 'ok' && (
+          {shown === 'ok' && (
             <Badge tone="success" size="md" className="tb-pop gap-2">
               {country ? (
                 <span
@@ -222,7 +290,7 @@ export function ProxyForm({
               {country ?? t('accounts.proxyForm.resultOk')}
             </Badge>
           )}
-          {detect === 'err' && (
+          {shown === 'err' && (
             <span className="inline-flex items-center gap-2 type-body-medium text-danger">
               <Icon name="x-circle" size={14} />
               {t('accounts.proxyForm.resultErr')}

@@ -26,6 +26,53 @@ export function isProxyFormTouched(value: ProxyFormValue): boolean {
   );
 }
 
+// A proxy line as sellers hand it out, pasted into the host field: `ip:port`,
+// `ip:port:login:password`, `login:password@ip:port`, each optionally behind a
+// `socks5://` / `http(s)://` scheme. Returns the fields it names, or null when the
+// text is not such a line — then the host field keeps it as typed text.
+const SCHEME_TYPE: Record<string, ProxyFormValue['proxy_type']> = {
+  socks5: 'socks5',
+  socks5h: 'socks5',
+  http: 'https',
+  https: 'https',
+};
+const ENDPOINT = /^((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})$/;
+
+export function parseProxyLine(text: string): Partial<ProxyFormValue> | null {
+  let rest = text.trim();
+  let proxyType: ProxyFormValue['proxy_type'] | undefined;
+  const scheme = /^([a-z0-9]+):\/\//i.exec(rest);
+  if (scheme) {
+    proxyType = SCHEME_TYPE[(scheme[1] ?? '').toLowerCase()];
+    if (!proxyType) return null;
+    rest = rest.slice(scheme[0].length);
+  }
+  let credentials: string | undefined;
+  const parts = rest.split(':');
+  const head = parts.slice(0, 2).join(':');
+  if (parts.length > 2 && ENDPOINT.test(head)) {
+    // `ip:port:login:password` — checked first, so an `@` stays in the password.
+    credentials = parts.slice(2).join(':');
+    rest = head;
+  } else {
+    const at = rest.lastIndexOf('@');
+    if (at !== -1) {
+      credentials = rest.slice(0, at);
+      rest = rest.slice(at + 1);
+    }
+  }
+  const [, host, port] = ENDPOINT.exec(rest) ?? [];
+  if (!host || !port) return null;
+  const parsed: Partial<ProxyFormValue> = { host, port };
+  if (credentials) {
+    const colon = credentials.indexOf(':');
+    parsed.username = colon === -1 ? credentials : credentials.slice(0, colon);
+    if (colon !== -1) parsed.password = credentials.slice(colon + 1);
+  }
+  if (proxyType) parsed.proxy_type = proxyType;
+  return parsed;
+}
+
 // Client-side validation for the proxy form. Messages are i18n keys resolved by
 // the field renderer via t(); host + port are the only required fields.
 export const proxyFormSchema = z.object({
