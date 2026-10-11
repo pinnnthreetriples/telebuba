@@ -34,6 +34,9 @@ interface WarmingBoardProps {
   // Maps a configured channel handle → its friendly label, so the activity log
   // can show "which channel" a join/read/react touched by name, not raw handle.
   channelLabels?: Record<string, string>;
+  // The target a card falls back to when its stint carries none — the board's
+  // `default_target_days`, the same length a start without a pick runs for.
+  defaultTargetDays?: number;
 }
 
 type WarmingState = WarmingAccountState['state'];
@@ -44,8 +47,9 @@ type WarmingState = WarmingAccountState['state'];
 // the emission order in services/warming (else a completed step would un-fill).
 const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
 const DAY_SEGMENTS = 42;
-const DAY_TICKS = [0, 4, 7, 11, 14];
-const WARMING_DAYS = 14;
+// Hand-placed ticks for the usual two-week stint; any other target gets 0 / half / end.
+const TWO_WEEK_DAYS = 14;
+const TWO_WEEK_TICKS = [0, 4, 7, 11, 14];
 
 // Per-state warming-status pill tone. Sleeping and flood-wait/quarantine share amber
 // deliberately — throttled and recovering on its own is not an error.
@@ -177,6 +181,7 @@ function WarmingCard({
   result,
   logLimit,
   channelLabels,
+  defaultTargetDays,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
@@ -185,6 +190,7 @@ function WarmingCard({
   result?: FeedbackResult;
   logLimit: number;
   channelLabels: Record<string, string>;
+  defaultTargetDays: number;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -240,12 +246,12 @@ function WarmingCard({
   const active = hold ? -1 : activeStage(account);
   // Real elapsed warming days vs the operator-chosen target (the start slider);
   // the card auto-flips to "complete" once the account reaches its own target.
-  const target = account.target_days ?? WARMING_DAYS;
+  const target = account.target_days ?? defaultTargetDays;
   const elapsed = account.warming_days ?? 0;
   const days = Math.min(elapsed, target);
   const complete = elapsed >= target;
   const dayTicks =
-    target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
+    target === TWO_WEEK_DAYS ? TWO_WEEK_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const statusTone = badgeTone(WARM_STATUS[account.state]);
   // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
   const dailyActions = account.daily_actions ?? 0;
@@ -552,6 +558,7 @@ export function WarmingBoard({
   feedback = {},
   logLimit = DEFAULT_CARD_LOG_LIMIT,
   channelLabels = {},
+  defaultTargetDays = TWO_WEEK_DAYS,
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
@@ -592,6 +599,7 @@ export function WarmingBoard({
             result={feedback[account.account_id]}
             logLimit={logLimit}
             channelLabels={channelLabels}
+            defaultTargetDays={defaultTargetDays}
           />
         ))}
         {warming.length === 0 ? (

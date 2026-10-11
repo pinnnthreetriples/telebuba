@@ -24,28 +24,77 @@ test('presets, keyboard arrows and confirm', async () => {
   const onClose = vi.fn();
   const onConfirm = vi.fn();
   renderWithClient(
-    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={onClose} onConfirm={onConfirm} />,
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      defaultDays={14}
+      onClose={onClose}
+      onConfirm={onConfirm}
+    />,
   );
   expect(screen.getByText('Прогрев аккаунта')).toBeInTheDocument();
 
   const slider = screen.getByRole('slider');
-  expect(slider).toHaveAttribute('aria-valuenow', '7');
+  expect(slider).toHaveAttribute('aria-valuenow', '14');
 
   // preset button sets the day count
-  await userEvent.click(screen.getByText('3 дня'));
-  expect(slider).toHaveAttribute('aria-valuenow', '3');
+  await userEvent.click(screen.getByRole('radio', { name: '7 дней' }));
+  expect(slider).toHaveAttribute('aria-valuenow', '7');
 
   // keyboard arrows move within bounds
   slider.focus();
   await userEvent.keyboard('{ArrowRight}{ArrowRight}');
-  expect(slider).toHaveAttribute('aria-valuenow', '5');
+  expect(slider).toHaveAttribute('aria-valuenow', '9');
   await userEvent.keyboard('{ArrowLeft}');
-  expect(slider).toHaveAttribute('aria-valuenow', '4');
+  expect(slider).toHaveAttribute('aria-valuenow', '8');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
   // defaults to the balanced persona when none is picked
-  expect(onConfirm).toHaveBeenCalledWith(4, 'normal');
+  expect(onConfirm).toHaveBeenCalledWith(8, 'normal');
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('opens on the board default and reaches thirty days, no further', async () => {
+  const onConfirm = vi.fn();
+  renderWithClient(
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      defaultDays={21}
+      onClose={vi.fn()}
+      onConfirm={onConfirm}
+    />,
+  );
+  const slider = screen.getByRole('slider');
+  expect(slider).toHaveAttribute('aria-valuenow', '21');
+  expect(slider).toHaveAttribute('aria-valuemax', '30');
+
+  await userEvent.click(screen.getByRole('radio', { name: '30 дней' }));
+  slider.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  expect(slider).toHaveAttribute('aria-valuenow', '30');
+  expect(slider).toHaveAttribute('aria-valuetext', '30 дней');
+  // Home/End jump to the ends, as the slider pattern expects.
+  await userEvent.keyboard('{Home}');
+  expect(slider).toHaveAttribute('aria-valuenow', '1');
+  await userEvent.keyboard('{End}');
+  expect(slider).toHaveAttribute('aria-valuenow', '30');
+
+  await userEvent.click(screen.getByText('Запустить прогрев'));
+  expect(onConfirm).toHaveBeenCalledWith(30, 'normal');
+});
+
+test('a board default past the slider is held at its ends', () => {
+  renderWithClient(
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      defaultDays={45}
+      onClose={vi.fn()}
+      onConfirm={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '30');
 });
 
 test('persona chip selection is forwarded on confirm', async () => {
@@ -58,7 +107,8 @@ test('persona chip selection is forwarded on confirm', async () => {
   await userEvent.click(screen.getByText('Активный'));
   await userEvent.click(screen.getByText('Запустить прогрев'));
 
-  expect(onConfirm).toHaveBeenCalledWith(7, 'active');
+  // Without a board default the dialog opens on the two-week stint.
+  expect(onConfirm).toHaveBeenCalledWith(14, 'active');
 });
 
 test('cancel closes without confirming', async () => {
@@ -136,7 +186,7 @@ test('a picked length asks before Escape closes; an untouched dialog closes at o
   renderWithClient(
     <WarmDaysModal accountId="a1" phone="+79991234567" onClose={onClose} onConfirm={vi.fn()} />,
   );
-  await userEvent.click(screen.getByText('3 дня'));
+  await userEvent.click(screen.getByRole('radio', { name: '7 дней' }));
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();

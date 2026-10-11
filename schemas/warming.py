@@ -338,6 +338,16 @@ class WarmingSummary(BaseModel):
     trust_risk: int = Field(default=0, ge=0)
 
 
+class WarmingMechanics(BaseModel):
+    """Optional warming steps and whether the current settings let them run."""
+
+    join: bool = True
+    reactions: bool = True
+    stories: bool = True
+    # Needs the switch AND a text-LLM key: without a key the chat step never writes.
+    dialogue: bool = False
+
+
 class WarmingBoardState(BaseModel):
     """Everything the warming page renders in one poll tick."""
 
@@ -357,6 +367,13 @@ class WarmingBoardState(BaseModel):
     # Same rows ``list_warmed_accounts`` returns; the /warmed endpoint stays for
     # the neurocomment page.
     warmed: list[WarmedAccount] = Field(default_factory=list)
+    # The warming length a start falls back to when the operator picks none — the
+    # same ``settings.neurocomment.warmed_min_days`` the start path uses, so the
+    # start modal's preselected length is the one that would run anyway.
+    default_target_days: int = Field(default=14, ge=1)
+    # Which optional cycle steps the engine will actually run with the current
+    # settings, so «Как работает» shows what is on instead of promising every step.
+    mechanics: WarmingMechanics = Field(default_factory=WarmingMechanics)
 
 
 class WarmedAccount(BaseModel):

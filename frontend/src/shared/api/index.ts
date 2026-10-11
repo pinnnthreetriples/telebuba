@@ -1407,6 +1407,7 @@ export type {
   WarmingBoardState,
   WarmingChannel,
   WarmingChannelList,
+  WarmingMechanics,
   WarmingReadiness,
   WarmingSettings,
   WarmingSettingsUpdate,

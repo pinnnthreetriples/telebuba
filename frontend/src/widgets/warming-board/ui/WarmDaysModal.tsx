@@ -7,42 +7,52 @@ import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
 
 const MIN = 1;
-const MAX = 14;
-const PRESETS = [3, 7, 14];
-const TICKS = [...Array(MAX).keys()];
+const MAX = 30;
+const PRESETS = [7, 14, 30];
+// A dot per preset (plus the floor), not per day: thirty dots on one track read as noise.
+const TICKS = [MIN, ...PRESETS];
+// Only until the board answers; the board's `default_target_days` is the real default.
+const FALLBACK_DAYS = 14;
 
 type ActivityPersona = 'calm' | 'normal' | 'active';
 const PERSONAS: ActivityPersona[] = ['calm', 'normal', 'active'];
 
 type SpamState = 'idle' | 'loading' | 'clean' | 'limited';
 
-const DEFAULT_DAYS = 7;
 const DEFAULT_PERSONA: ActivityPersona = 'normal';
 
-// The design's "warm account" modal: a draggable day-length slider (1–14),
-// quick presets, an activity persona (cadence), and a real @SpamBot pre-check.
+const clampDays = (n: number) => Math.min(MAX, Math.max(MIN, Math.round(n)));
+const dayRatio = (n: number) => ((n - MIN) / (MAX - MIN)) * 100;
+
+// The design's "warm account" modal: a draggable day-length slider (1–30) that opens
+// on the length a start would run anyway (the board's `default_target_days`), quick
+// presets, an activity persona (cadence), and a real @SpamBot pre-check.
 export function WarmDaysModal({
   accountId,
   phone,
+  defaultDays = FALLBACK_DAYS,
   onClose,
   onConfirm,
 }: {
   accountId: string;
   phone: string;
+  defaultDays?: number;
   onClose: () => void;
   onConfirm: (days: number, persona: ActivityPersona) => void;
 }) {
   const { t } = useTranslation();
-  const [days, setDays] = useState(DEFAULT_DAYS);
+  const initialDays = clampDays(defaultDays);
+  const [days, setDays] = useState(initialDays);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
   // A length or cadence picked and not yet started.
-  const dirty = days !== DEFAULT_DAYS || persona !== DEFAULT_PERSONA;
+  const dirty = days !== initialDays || persona !== DEFAULT_PERSONA;
   const [spam, setSpam] = useState<SpamState>('idle');
   const spamMutation = useMutation(spamCheckAccountMutation());
   const trackRef = useRef<HTMLDivElement>(null);
   const spamTipId = useId();
   const personaTipId = useId();
-  const pct = ((days - MIN) / (MAX - MIN)) * 100;
+  const pct = dayRatio(days);
+  const dayCount = (n: number) => `${String(n)} ${t('warming.days.label', { count: n })}`;
 
   // Real @SpamBot probe against this account; the result is shown on the pill.
   const runSpamCheck = () => {
@@ -135,6 +145,8 @@ export function WarmDaysModal({
             aria-valuemin={MIN}
             aria-valuemax={MAX}
             aria-valuenow={days}
+            aria-valuetext={dayCount(days)}
+            aria-label={t('warming.days.title')}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
               setFromClientX(e.clientX);
@@ -145,6 +157,8 @@ export function WarmDaysModal({
             onKeyDown={(e) => {
               if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
               if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
+              if (e.key === 'Home') setDays(MIN);
+              if (e.key === 'End') setDays(MAX);
             }}
             className="relative mx-3 mb-2 h-compact cursor-grab touch-none select-none outline-hidden"
           >
@@ -155,11 +169,11 @@ export function WarmDaysModal({
               />
             </div>
             <div className="pointer-events-none absolute inset-x-0 top-1/2 h-meter -translate-y-1/2">
-              {TICKS.map((i) => (
+              {TICKS.map((n) => (
                 <span
-                  key={i}
+                  key={n}
                   className="absolute top-1/2 size-tick -translate-x-1/2 -translate-y-1/2 rounded-full bg-line-strong"
-                  style={{ left: `${String((i / (MAX - 1)) * 100)}%` }}
+                  style={{ left: `${String(dayRatio(n))}%` }}
                 />
               ))}
             </div>
@@ -169,8 +183,8 @@ export function WarmDaysModal({
             />
           </div>
           <div className="mx-3 mb-6 flex justify-between type-small">
-            <span>{t('warming.days.min')}</span>
-            <span>{t('warming.days.max')}</span>
+            <span>{dayCount(MIN)}</span>
+            <span>{dayCount(MAX)}</span>
           </div>
 
           <SegmentedControl
@@ -181,7 +195,7 @@ export function WarmDaysModal({
             value={String(days)}
             options={PRESETS.map((n) => ({
               value: String(n),
-              label: `${String(n)} ${t('warming.days.label', { count: n })}`,
+              label: dayCount(n),
             }))}
             onChange={(value) => {
               setDays(Number(value));

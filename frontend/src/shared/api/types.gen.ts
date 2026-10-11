@@ -6777,6 +6777,11 @@ export type WarmingBoardState = {
    * Warmed
    */
   warmed?: Array<WarmedAccount>;
+  /**
+   * Default Target Days
+   */
+  default_target_days?: number;
+  mechanics?: WarmingMechanics;
 };
 
 /**
@@ -6807,6 +6812,30 @@ export type WarmingChannelList = {
    * Channels
    */
   channels?: Array<WarmingChannel>;
+};
+
+/**
+ * WarmingMechanics
+ *
+ * Optional warming steps and whether the current settings let them run.
+ */
+export type WarmingMechanics = {
+  /**
+   * Join
+   */
+  join?: boolean;
+  /**
+   * Reactions
+   */
+  reactions?: boolean;
+  /**
+   * Stories
+   */
+  stories?: boolean;
+  /**
+   * Dialogue
+   */
+  dialogue?: boolean;
 };
 
 /**
