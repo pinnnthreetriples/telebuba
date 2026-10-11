@@ -19,6 +19,13 @@ from services.accounts.mobile_emulator import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _clean_active_relays():
+    _active_relays.clear()
+    yield
+    _active_relays.clear()
+
+
 @pytest.fixture
 def mock_account() -> AccountRead:
     return AccountRead(

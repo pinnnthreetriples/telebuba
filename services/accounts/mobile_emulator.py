@@ -18,6 +18,7 @@ from core.emulator.adb import (
     parse_element_center,
 )
 from core.emulator.config import (
+    EmulatorError,
     EmulatorLaunchError,
     EmulatorNotFoundError,
     NoProxyForMobileError,
@@ -263,7 +264,7 @@ async def _perform_zero_click_login(
 async def _setup_instance_hardware(account_id: str, instance_name: str) -> None:
     """Create and configure deterministic hardware profiles for the emulator instance."""
     hw = generate_device_profile(account_id)
-    with contextlib.suppress(EmulatorLaunchError, OSError):
+    with contextlib.suppress(EmulatorError, OSError):
         await create_instance(instance_name)
 
     await set_device_profile(
@@ -306,7 +307,7 @@ async def _cleanup_failed_launch(
             _active_relays.pop(account_id)
     with contextlib.suppress(OSError):
         await relay.aclose()
-    with contextlib.suppress(EmulatorLaunchError, OSError):
+    with contextlib.suppress(EmulatorError, OSError):
         await stop_instance(instance_name)
 
 
@@ -323,7 +324,6 @@ async def _rebind_running_authenticated_instance(
     except BaseException:
         await _cleanup_failed_launch(account_id, instance_name, relay)
         raise
-
     return OpenMobileResult(
         launched=True,
         signed_in=True,
@@ -405,7 +405,7 @@ async def shutdown_mobile_emulator() -> None:
 
     for account_id, (relay, _proxy) in active:
         instance_name = f"telebuba_{account_id}"
-        with contextlib.suppress(EmulatorLaunchError, OSError):
+        with contextlib.suppress(EmulatorError, OSError):
             await stop_instance(instance_name)
         with contextlib.suppress(OSError):
             await relay.aclose()
