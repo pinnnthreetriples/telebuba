@@ -12,6 +12,8 @@ already signed in.
 
 from __future__ import annotations
 
+import asyncio
+
 from services.accounts import web_login
 
 __all__ = ["close_all_web_windows", "count_open_web_windows"]
@@ -24,15 +26,17 @@ async def count_open_web_windows() -> int:
 
 
 async def close_all_web_windows() -> int:
-    """Kill every registered window; return how many were still on screen.
+    """Kill every registered window and its relay; return how many were still on screen.
 
-    The same discipline as ``shutdown_web_login``: the registry lock is held only to
-    read, and each kill runs outside it through the one path that deregisters and
-    ends a window. A window an open registers after the read is left alone.
+    The registry lock is held only to read, as in ``shutdown_web_login``. Each window
+    then goes through the path that ends an operator-closed one: under its account's
+    open lock, so an open in flight finishes first and a window it replaced is left
+    alone. Concurrently, so one account mid-login does not hold up the rest.
     """
     async with web_login._windows_lock:  # noqa: SLF001 - registry owned by web_login
         registered = list(web_login._windows.items())  # noqa: SLF001
     on_screen = sum(1 for _account_id, window in registered if window.alive)
-    for account_id, window in registered:
-        await web_login._drop_window(account_id, window)  # noqa: SLF001
+    await asyncio.gather(
+        *(web_login._window_closed(account_id, window) for account_id, window in registered)  # noqa: SLF001
+    )
     return on_screen

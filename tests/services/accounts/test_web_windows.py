@@ -8,6 +8,7 @@ window closed here reopens already signed in.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -17,6 +18,7 @@ from services.accounts.web_login import open_account_web
 from services.accounts.web_windows import close_all_web_windows, count_open_web_windows
 from tests.services.accounts._web_login_support import PROXY as _PROXY
 from tests.services.accounts._web_login_support import SIGNED_IN_MARKER as _MARKER
+from tests.services.accounts._web_login_support import FakeRelay as _FakeRelay
 from tests.services.accounts._web_login_support import FakeWindow as _FakeWindow
 from tests.services.accounts._web_login_support import counted_states as _counted_states
 from tests.services.accounts._web_login_support import fresh_registry, relay
@@ -102,3 +104,31 @@ async def test_a_closed_window_reopens_already_signed_in(
     assert "accepted" not in calls
     assert seen == ["logged_in"]
     assert result.signed_in is True
+
+
+@pytest.mark.asyncio
+async def test_close_all_releases_each_windows_relay(relay: type[_FakeRelay]) -> None:
+    _register("a")
+    fronting = relay(_PROXY)
+    web_login._relays["a"] = (fronting, _PROXY)  # ty: ignore[invalid-assignment]
+
+    await close_all_web_windows()
+
+    # A relay left listening fronts a proxy nothing uses, for the life of the process.
+    assert fronting.closed is True
+    assert web_login._relays == {}
+
+
+@pytest.mark.asyncio
+async def test_close_all_waits_for_an_open_in_flight() -> None:
+    window = _register("a")
+    lock = await web_login._account_open_lock("a")
+
+    async with lock:  # an open for this account is mid-login
+        closing = asyncio.create_task(close_all_web_windows())
+        done, _pending = await asyncio.wait({closing}, timeout=0.05)
+        # Killing under a running open would pull the window out from under its drive.
+        assert done == set()
+        assert window.killed is False
+    assert await closing == 1
+    assert window.killed is True
