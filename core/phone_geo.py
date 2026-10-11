@@ -58,9 +58,10 @@ def timezone_for_phone(phone: str | None) -> str | None:
 
     Numbers on a shared calling code (e.g. +7 → RU/KZ, +1 → US/CA/CA-tz-many)
     map to many zones; we take the first as a representative. When that
-    happens we emit a debug log so operators can see whose schedule is
-    pinned to a coarse fallback — the call site itself has no async path
-    to ``log_event`` so a sync loguru line is the right level here.
+    happens we emit a debug log with the number's region (never the number
+    itself) so operators can see schedules pinned to a coarse fallback — the
+    call site itself has no async path to ``log_event`` so a sync loguru line
+    is the right level here.
     """
     parsed = _parse(phone)
     if parsed is None:
@@ -73,10 +74,10 @@ def timezone_for_phone(phone: str | None) -> str | None:
         return None
     if len(zones) > 1:
         logger.debug(
-            "phone_timezone_ambiguous phone={} picked={} candidates={}",
-            phone,
+            "phone_timezone_ambiguous region={} picked={} candidates={}",
+            phonenumbers.region_code_for_number(parsed),
             zone,
-            list(zones),
+            len(zones),
         )
     return zone
 

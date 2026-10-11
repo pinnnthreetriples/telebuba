@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from loguru import logger
+
 from core.phone_geo import country_for_phone, evaluate_geo, timezone_for_phone
 
 
@@ -43,3 +45,21 @@ def test_evaluate_geo_unknown_when_country_missing() -> None:
     assert verdict.status == "unknown"
     assert verdict.phone_country is None
     assert verdict.lang_matches is None
+
+
+def test_timezone_for_phone_ambiguous_log_omits_the_number() -> None:
+    phone = "+18005550123"  # made-up toll-free number: one calling code, many zones
+    timezone_for_phone.cache_clear()
+    lines: list[str] = []
+    sink_id = logger.add(lines.append, level="DEBUG", format="{message}")
+    try:
+        zone = timezone_for_phone(phone)
+    finally:
+        logger.remove(sink_id)
+
+    assert zone is not None
+    output = "".join(lines)
+    assert "phone_timezone_ambiguous" in output
+    assert "8005550123" not in output
+    assert "5550123" not in output
+    assert "region=US" in output
