@@ -143,3 +143,26 @@ test('the open that reaches eight windows warns; seven does not', async () => {
     );
   });
 });
+
+test('the warning fires once per crossing, not on every open past it', async () => {
+  routeApi(7);
+  await renderPage();
+
+  await openOneMore();
+  await waitFor(() => {
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+  await openOneMore();
+  await screen.findByTitle('Закрыть все окна Telegram Web (открыто: 9)');
+  expect(toastError).toHaveBeenCalledTimes(1);
+
+  // Back under the threshold re-arms it.
+  await userEvent.click(screen.getByTitle('Закрыть все окна Telegram Web (открыто: 9)'));
+  await waitFor(() => {
+    expect(screen.queryByTitle(/Закрыть все окна Telegram Web/)).not.toBeInTheDocument();
+  });
+  for (let i = 0; i < 8; i += 1) await openOneMore();
+  await waitFor(() => {
+    expect(toastError).toHaveBeenCalledTimes(2);
+  });
+});

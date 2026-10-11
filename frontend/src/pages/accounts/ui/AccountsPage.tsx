@@ -244,6 +244,12 @@ export function AccountsPage() {
   const webWindows = useQuery(accountWebWindowsQueryOptions());
   const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
   const openWebWindows = webWindows.data?.count ?? 0;
+  // Once per crossing: warning again on every open past the threshold is noise.
+  // Re-armed whenever the count is seen below it (a close-all, a window closed by hand).
+  const webWindowsWarned = useRef(false);
+  useEffect(() => {
+    if (openWebWindows < WEB_WINDOWS_WARN_AT) webWindowsWarned.current = false;
+  }, [openWebWindows]);
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -312,10 +318,11 @@ export function AccountsPage() {
           return next;
         });
         // Refetched even after a refusal: a failed open can still have dropped a window.
-        void webWindows.refetch().then(({ data: open }) => {
-          if (open && open.count >= WEB_WINDOWS_WARN_AT) {
-            toastError(t('accounts.webWindows.tooMany', { count: open.count }));
-          }
+        void webWindows.refetch().then(({ data }) => {
+          const count = data?.count ?? 0;
+          if (count < WEB_WINDOWS_WARN_AT || webWindowsWarned.current) return;
+          webWindowsWarned.current = true;
+          toastError(t('accounts.webWindows.tooMany', { count }));
         });
       });
   };

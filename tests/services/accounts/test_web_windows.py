@@ -145,3 +145,21 @@ async def test_close_all_waits_for_an_open_in_flight() -> None:
         assert window.killed is False
     assert await closing == 1
     assert window.killed is True
+
+
+@pytest.mark.asyncio
+async def test_close_all_closes_the_window_an_open_in_flight_replaced_it_with() -> None:
+    stale = _register("a")
+    lock = await web_login._account_open_lock("a")
+
+    async with lock:
+        closing = asyncio.create_task(close_all_web_windows())
+        await asyncio.wait({closing}, timeout=0.05)
+        # The open finishes by relaunching: a new window now holds the account.
+        stale.operator_closes()
+        fresh = _register("a")
+
+    # "Close all" closes what is open when it gets the account, not a stale snapshot.
+    assert await closing == 1
+    assert fresh.killed is True
+    assert web_login._windows == {}

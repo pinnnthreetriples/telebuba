@@ -32,15 +32,29 @@ async def count_open_web_windows() -> int:
 async def close_all_web_windows() -> int:
     """Kill every registered window and its relay; return how many were still on screen.
 
-    The registry lock is held only to read, as in ``shutdown_web_login``. Each window
-    then goes through the path that ends an operator-closed one: under its account's
-    open lock, so an open in flight finishes first and a window it replaced is left
-    alone. Concurrently, so one account mid-login does not hold up the rest.
+    The registry lock is held only to list the accounts, as in ``shutdown_web_login``.
+    Concurrently, so one account mid-login does not hold up the rest.
     """
     async with web_login._windows_lock:  # noqa: SLF001 - registry owned by web_login
-        registered = list(web_login._windows.items())  # noqa: SLF001
-    on_screen = sum(1 for _account_id, window in registered if window.running)
-    await asyncio.gather(
-        *(web_login._window_closed(account_id, window) for account_id, window in registered)  # noqa: SLF001
+        account_ids = list(web_login._windows)  # noqa: SLF001
+    closed = await asyncio.gather(
+        *(_close_current_window(account_id) for account_id in account_ids)
     )
-    return on_screen
+    return sum(closed)
+
+
+async def _close_current_window(account_id: str) -> int:
+    """End the window the account holds once its open lock is free; 1 if it was running.
+
+    Under the open lock, as ``_drop_window`` requires: an open in flight finishes first,
+    and the window read AFTER it is the one closed — a relaunch it made, not the stale
+    one it replaced.
+    """
+    async with await web_login._account_open_lock(account_id):  # noqa: SLF001
+        async with web_login._windows_lock:  # noqa: SLF001
+            window = web_login._windows.get(account_id)  # noqa: SLF001
+        if window is None:
+            return 0
+        running = window.running
+        await web_login._drop_window(account_id, window)  # noqa: SLF001
+    return int(running)
