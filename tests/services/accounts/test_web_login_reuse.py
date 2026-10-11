@@ -130,6 +130,7 @@ async def test_a_raised_window_on_the_password_screen_types_nothing(
     first = await open_account_web("acct")
     assert first.signed_in is False
     assert calls["typed"] == ["hunter2"]  # the ONE submission this window ever gets
+    assert first.reason == "web_login_2fa_rejected"
 
     # Second click: the window is still open on the password screen and is driven
     # again — for the QR half, which is what re-driving exists for.
@@ -140,6 +141,8 @@ async def test_a_raised_window_on_the_password_screen_types_nothing(
     assert second.signed_in is False
     assert calls["focused"] == 1  # it really was the raised-window path
     assert calls["typed"] == []  # ...and it typed NOTHING
+    # So it cannot claim the password was rejected again: the operator types it by hand.
+    assert second.reason == "web_login_2fa_required"
 
 
 @pytest.mark.usefixtures("relay")
@@ -563,4 +566,6 @@ async def test_a_wedged_drive_is_bounded_by_the_deadline(
 
     assert result.launched is True
     assert result.signed_in is False  # a timeout is not an error, and not a success
+    # Not one reading came back, so nothing says the QR was ever up.
+    assert result.reason == "web_login_page_not_loaded"
     assert not (profile / _MARKER).exists()

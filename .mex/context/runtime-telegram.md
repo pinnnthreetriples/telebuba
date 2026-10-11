@@ -1,7 +1,7 @@
 ---
 name: runtime-telegram
 description: Telegram client, sessions, proxies, profile, privacy and account removal.
-last_updated: 2026-09-28
+last_updated: 2026-10-11
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -30,6 +30,7 @@ grounds_to:
 - The gateway's "was this dispatched" verdict keys off whether a client was borrowed, not off which RPC failed, so a dispatcher's FIRST call must be one it owns: a convenience method that reads before it writes turns a lost read into a reported "may have been applied", which the service then persists as an unconfirmed credential.
 - A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied — unless the live read shows no password at all, which makes the stored value stale rather than the previous one in force.
 - Web-login dresses the page AND every paused worker (Telegram reads it in WebK's MTProto worker; page overrides never cross), holding its CDP socket open — Chrome strips overrides on detach. The profile dir must be absolute, or Chrome hands its argv to a running Chrome and exits 0, on the operator's IP.
+- A web-login open that did not sign in says why with a fixed reason code, classified from the drive's last page reading: the caller's `wait_for` cancels the drive, so the drive records what it saw as it goes rather than returning it. A re-drive never types the stored 2FA password, so it reports "type it by hand", never "rejected" again.
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
 

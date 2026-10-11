@@ -125,6 +125,18 @@ class AccountPage(Page[AccountRead]):
     total: int = Field(ge=0)
 
 
+# Why a window opened without signing in. FIXED codes the SPA translates, never
+# exception text: the stored 2FA password was typed and refused, the 2FA screen waits
+# for a hand-typed password, WebK never finished loading (usually the proxy), or the QR
+# screen was up but no token was accepted before the deadline.
+WebLoginNotSignedInReason = Literal[
+    "web_login_2fa_rejected",
+    "web_login_2fa_required",
+    "web_login_page_not_loaded",
+    "web_login_qr_timeout",
+]
+
+
 class OpenWebResult(BaseModel):
     """The outcome of opening a web.telegram.org window for the account.
 
@@ -132,10 +144,12 @@ class OpenWebResult(BaseModel):
     login actually completed in it. They differ whenever every QR token was refused or
     the 2FA screen was left standing — a case that is otherwise indistinguishable from
     a clean login, and that the operator has to finish in the window by hand.
+    ``reason`` says which of those it was, and is ``None`` once signed in.
     """
 
     launched: bool
     signed_in: bool
+    reason: WebLoginNotSignedInReason | None = None
 
 
 class AccountCheckRequest(BaseModel):

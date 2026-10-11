@@ -40,6 +40,7 @@ from core.web_login._cdp import CdpError
 from core.web_login.browser import BrowserNotFoundError, BrowserStartError, WebWindow
 from schemas.accounts import OpenWebResult
 from services.accounts._web_drive import (
+    DriveTrace,
     drive_login,
     forget_signed_in,
     mark_signed_in,
@@ -156,19 +157,18 @@ async def open_account_web(account_id: str) -> OpenWebResult:
         if window is not None:
             reused = await _reuse_raised_window(account_id, window, profile)
             if reused is not None:
-                return OpenWebResult(launched=True, signed_in=reused)
+                return reused
         if _closing.is_set():
             raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
         relay_port = await _relay_port_for(account_id, proxy)
-        signed_in = await _launch(account_id, relay_port, profile, proxy)
-    return OpenWebResult(launched=True, signed_in=signed_in)
+        return await _launch(account_id, relay_port, profile, proxy)
 
 
 async def _reuse_raised_window(
     account_id: str,
     window: WebWindow,
     profile: Path,
-) -> bool | None:
+) -> OpenWebResult | None:
     """What a raised window may claim; ``None`` means it was dropped — relaunch.
 
     Raising a window whose login never completed and calling that a success strands
@@ -184,7 +184,7 @@ async def _reuse_raised_window(
     if not profile_is_seeded(profile):
         return await _drive_and_mark(account_id, window, profile, type_password=False)
     if await still_signed_in(window):
-        return True
+        return OpenWebResult(launched=True, signed_in=True)
     # The stored session is gone. This window was launched WITHOUT the QR capture hook
     # (a seeded profile must not accept a second token) so it cannot be driven; forget
     # the marker and end it, and the relaunch opens one that can.
@@ -357,7 +357,9 @@ async def _spawn(
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
 
 
-async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxySettings) -> bool:
+async def _launch(
+    account_id: str, relay_port: int, profile: Path, proxy: ProxySettings
+) -> OpenWebResult:
     """Launch the window, drive the login if needed; report whether it signed in.
 
     Keeps the invariant the raised-window path relies on: a REGISTERED window whose
@@ -371,7 +373,7 @@ async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxyS
     if not seeded:
         return await _drive_and_mark(account_id, window, profile, type_password=True)
     if await still_signed_in(window):
-        return True
+        return OpenWebResult(launched=True, signed_in=True)
     forget_signed_in(profile)
     await _drop_window(account_id, window)
     window = await _spawn(account_id, relay_port, profile, proxy, capture=True)
@@ -379,12 +381,8 @@ async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxyS
 
 
 async def _drive_and_mark(
-    account_id: str,
-    window: WebWindow,
-    profile: Path,
-    *,
-    type_password: bool,
-) -> bool:
+    account_id: str, window: WebWindow, profile: Path, *, type_password: bool
+) -> OpenWebResult:
     """Drive the login under a hard deadline and mark the profile only on success.
 
     The deadline is a ``wait_for``, not a loop-entry check: each CDP command has its
@@ -393,22 +391,24 @@ async def _drive_and_mark(
     A timeout is "did not sign in", never an error — the window is up and the operator
     can finish by hand, and the profile stays unmarked so the next click drives again.
     """
+    trace = DriveTrace()
     try:
         signed_in = await asyncio.wait_for(
-            drive_login(account_id, window, type_password=type_password),
+            drive_login(account_id, window, type_password=type_password, trace=trace),
             _DRIVE_TIMEOUT,
         )
     except TimeoutError:
-        return False
+        signed_in = False
     except Exception as exc:
         # Blind on purpose: the callees raise anything. ``token_bytes`` raises
         # binascii.Error on a malformed capture, and ``accept_web_login_token`` raises
         # Telethon errors for a dead or deauthorized session — exactly the account an
         # operator wants to inspect. Uncaught, those are bare 500s with a traceback.
         raise WebLoginLaunchError(_DRIVE_REFUSAL) from exc
-    if signed_in:
-        mark_signed_in(profile)
-    return signed_in
+    if not signed_in:
+        return OpenWebResult(launched=True, signed_in=False, reason=trace.classify_failure())
+    mark_signed_in(profile)
+    return OpenWebResult(launched=True, signed_in=True)
 
 
 async def shutdown_web_login() -> None:

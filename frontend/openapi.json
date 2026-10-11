@@ -26753,6 +26753,23 @@
           "signed_in": {
             "type": "boolean",
             "title": "Signed In"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "web_login_2fa_rejected",
+                  "web_login_2fa_required",
+                  "web_login_page_not_loaded",
+                  "web_login_qr_timeout"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -26761,7 +26778,7 @@
           "signed_in"
         ],
         "title": "OpenWebResult",
-        "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand."
+        "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand.\n``reason`` says which of those it was, and is ``None`` once signed in."
       },
       "Page_ChannelPostView_": {
         "properties": {
