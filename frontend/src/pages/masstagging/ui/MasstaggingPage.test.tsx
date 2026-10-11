@@ -25,10 +25,12 @@ test.each([
   routeApi({ campaigns: [shown], board: board({ campaign: shown }) });
   renderPage();
 
-  const button = await pipelineButton(new RegExp(`^${label}$`));
+  const button = await pipelineButton(label);
   if (disabled) expect(button).toBeDisabled();
   else expect(button).toBeEnabled();
-  expect((await screen.findAllByText(new RegExp(notice))).length).toBeGreaterThan(0);
+  expect(
+    (await screen.findAllByText((content) => content.includes(notice))).length,
+  ).toBeGreaterThan(0);
 });
 
 test('Start sends the version the page read, Pause stops', async () => {
