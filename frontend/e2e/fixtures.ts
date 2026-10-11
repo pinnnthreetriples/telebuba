@@ -70,6 +70,8 @@ export const accounts = {
 };
 
 export const accountStats = { total: 5, active: 2, idle: 1, needs_code: 1, problem: 1 };
+// None open: the close-all action stays hidden, so the baselines are unchanged.
+export const accountWebWindows = { count: 0 };
 
 export const accountFolders = {
   items: [

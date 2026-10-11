@@ -32,8 +32,10 @@ import {
   clearAccountTwofaEmail,
   clearLogs,
   clearNeurocommentListener,
+  closeAccountWebWindows,
   confirmAccountTwofaEmail,
   copyMasstaggingBase,
+  countAccountWebWindows,
   countCampaignChallengeOutcomes,
   countLogs,
   createAccountChannel,
@@ -273,12 +275,18 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
+  CloseAccountWebWindowsData,
+  CloseAccountWebWindowsError,
+  CloseAccountWebWindowsResponse,
   ConfirmAccountTwofaEmailData,
   ConfirmAccountTwofaEmailError,
   ConfirmAccountTwofaEmailResponse,
   CopyMasstaggingBaseData,
   CopyMasstaggingBaseError,
   CopyMasstaggingBaseResponse,
+  CountAccountWebWindowsData,
+  CountAccountWebWindowsError,
+  CountAccountWebWindowsResponse,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
@@ -1176,6 +1184,64 @@ export const openAccountWebMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await openAccountWeb({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const countAccountWebWindowsQueryKey = (options?: Options<CountAccountWebWindowsData>) =>
+  createQueryKey('countAccountWebWindows', options);
+
+/**
+ * Count Account Web Windows
+ *
+ * How many web.telegram.org windows are open right now.
+ */
+export const countAccountWebWindowsOptions = (options?: Options<CountAccountWebWindowsData>) =>
+  queryOptions<
+    CountAccountWebWindowsResponse,
+    CountAccountWebWindowsError,
+    CountAccountWebWindowsResponse,
+    ReturnType<typeof countAccountWebWindowsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await countAccountWebWindows({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: countAccountWebWindowsQueryKey(options),
+  });
+
+/**
+ * Close Account Web Windows
+ *
+ * Close every open web.telegram.org window; the count is how many were closed.
+ *
+ * Closed windows reopen already signed in on the next click.
+ */
+export const closeAccountWebWindowsMutation = (
+  options?: Partial<Options<CloseAccountWebWindowsData>>,
+): UseMutationOptions<
+  CloseAccountWebWindowsResponse,
+  CloseAccountWebWindowsError,
+  Options<CloseAccountWebWindowsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountWebWindowsResponse,
+    CloseAccountWebWindowsError,
+    Options<CloseAccountWebWindowsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountWebWindows({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -8,6 +8,7 @@ export {
   cancelScheduledPostMutation,
   checkAccountMutation,
   clearAccountTwofaEmailMutation,
+  closeAccountWebWindowsMutation,
   confirmAccountTwofaEmailMutation,
   createAccountChannelMutation,
   deleteAccountChannelMutation,

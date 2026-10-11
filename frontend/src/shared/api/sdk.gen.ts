@@ -79,12 +79,18 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
+  CloseAccountWebWindowsData,
+  CloseAccountWebWindowsErrors,
+  CloseAccountWebWindowsResponses,
   ConfirmAccountTwofaEmailData,
   ConfirmAccountTwofaEmailErrors,
   ConfirmAccountTwofaEmailResponses,
   CopyMasstaggingBaseData,
   CopyMasstaggingBaseErrors,
   CopyMasstaggingBaseResponses,
+  CountAccountWebWindowsData,
+  CountAccountWebWindowsErrors,
+  CountAccountWebWindowsResponses,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
@@ -760,6 +766,36 @@ export const openAccountWeb = <ThrowOnError extends boolean = false>(
     url: '/api/v1/accounts/{account_id}/open-web',
     ...options,
   });
+
+/**
+ * Count Account Web Windows
+ *
+ * How many web.telegram.org windows are open right now.
+ */
+export const countAccountWebWindows = <ThrowOnError extends boolean = false>(
+  options?: Options<CountAccountWebWindowsData, ThrowOnError>,
+): RequestResult<CountAccountWebWindowsResponses, CountAccountWebWindowsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    CountAccountWebWindowsResponses,
+    CountAccountWebWindowsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/web-windows', ...options });
+
+/**
+ * Close Account Web Windows
+ *
+ * Close every open web.telegram.org window; the count is how many were closed.
+ *
+ * Closed windows reopen already signed in on the next click.
+ */
+export const closeAccountWebWindows = <ThrowOnError extends boolean = false>(
+  options?: Options<CloseAccountWebWindowsData, ThrowOnError>,
+): RequestResult<CloseAccountWebWindowsResponses, CloseAccountWebWindowsErrors, ThrowOnError> =>
+  (options?.client ?? client).post<
+    CloseAccountWebWindowsResponses,
+    CloseAccountWebWindowsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/web-windows/close', ...options });
 
 /**
  * Start Phone Login

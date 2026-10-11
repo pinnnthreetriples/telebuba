@@ -86,6 +86,10 @@ class FakeWindow:
         self.killed = False
         self._exited = asyncio.Event()
 
+    @property
+    def running(self) -> bool:
+        return not self._exited.is_set()
+
     async def aclose(self) -> None:
         self.closed = True
         self.alive = False

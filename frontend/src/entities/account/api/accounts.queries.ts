@@ -85,6 +85,7 @@ export {
   accountStatsOptions as accountStatsQueryOptions,
   accountStatsQueryKey,
   checkAccountChannelUsernameOptions as accountChannelUsernameCheckQueryOptions,
+  countAccountWebWindowsOptions as accountWebWindowsQueryOptions,
   checkAccountChannelUsernameQueryKey as accountChannelUsernameCheckQueryKey,
   getAccountChannelOptions as accountChannelQueryOptions,
   getAccountChannelQueryKey as accountChannelQueryKey,

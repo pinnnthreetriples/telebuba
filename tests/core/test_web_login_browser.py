@@ -398,6 +398,23 @@ async def test_launched_window_reports_alive() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_window_whose_socket_dropped_is_still_running() -> None:
+    """``running`` is the process alone: a dropped socket still leaves a Chrome to end.
+
+    Nothing notices that case — the close watcher waits on the process — so counting
+    by ``alive`` would hide a live browser from the page's close-all action.
+    """
+    session = RecordingSession()
+    session.closed = True
+    window = window_for(session)
+    assert window.alive is False
+    assert window.running is True
+
+    window.process.kill()
+    assert window.running is False
+
+
+@pytest.mark.asyncio
 async def test_wait_closed_waits_on_the_browser_process() -> None:
     """The service watches this to release the window's relay when the operator closes it."""
     recorder: dict[str, Any] = {}
