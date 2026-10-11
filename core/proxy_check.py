@@ -48,9 +48,19 @@ class _GeoOutcome:
     error: str | None = None
 
 
-async def check_proxy_connectivity(proxy: ProxySettings) -> ProxyCheckResult:
+async def check_proxy_connectivity(
+    proxy: ProxySettings,
+    *,
+    exit_ip_timeout: float | None = None,
+    geolocate: bool = True,
+) -> ProxyCheckResult:
+    """Probe the proxy's exit IP, then (unless ``geolocate`` is off) its country.
+
+    ``exit_ip_timeout`` bounds the liveness fetch as a whole — its socket steps are
+    each bounded only by ``check_timeout_seconds`` — and never the geolocation.
+    """
     try:
-        exit_ip = await _fetch_exit_ip(proxy)
+        exit_ip = await asyncio.wait_for(_fetch_exit_ip(proxy), exit_ip_timeout)
     except TimeoutError:
         return ProxyCheckResult(status="failed", last_error="Proxy check timed out")
     except OSError as exc:
@@ -58,6 +68,8 @@ async def check_proxy_connectivity(proxy: ProxySettings) -> ProxyCheckResult:
     except Exception as exc:  # noqa: BLE001 - proxy libraries expose mixed exception types.
         return _failed_result(exc)
 
+    if not geolocate:
+        return ProxyCheckResult(status="tcp_working", exit_ip=exit_ip)
     # A reachable proxy must never be marked failed because geolocation errored.
     # The per-provider helpers already degrade to "unavailable", but guard the
     # whole lookup so any unexpected escape (e.g. a misconfigured base URL) can

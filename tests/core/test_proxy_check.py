@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import cast
 
@@ -403,6 +404,77 @@ async def test_geo_lookup_raising_does_not_mark_reachable_proxy_dead(
     assert result.status == "tcp_working"
     assert result.exit_ip == "45.130.253.151"
     assert result.geo_status == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_exit_ip_timeout_bounds_a_hung_exit_ip_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each socket step is bounded at ``check_timeout_seconds``, not the whole fetch."""
+
+    async def hung_fetch(_proxy: ProxySettings) -> str:
+        await asyncio.Event().wait()
+        return "unreachable"
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", hung_fetch)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+        exit_ip_timeout=0.01,
+    )
+
+    assert result.status == "failed"
+    assert result.last_error == "Proxy check timed out"
+
+
+@pytest.mark.asyncio
+async def test_a_slow_geolocation_does_not_count_against_the_exit_ip_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liveness is the exit-IP fetch; a slow geo provider must not fail a live proxy."""
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        return "45.130.253.151"
+
+    async def slow_geo(_exit_ip: str) -> _GeoOutcome:
+        await asyncio.sleep(0.05)
+        return _GeoOutcome(status="single_source", country_code="NL")
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+    monkeypatch.setattr(proxy_check_module, "_lookup_geolocation", slow_geo)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+        exit_ip_timeout=0.01,
+    )
+
+    assert result.status == "tcp_working"
+    assert result.country_code == "NL"
+
+
+@pytest.mark.asyncio
+async def test_geolocate_false_skips_the_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    looked_up: list[str] = []
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        return "45.130.253.151"
+
+    async def fake_geo(exit_ip: str) -> _GeoOutcome:
+        looked_up.append(exit_ip)
+        return _GeoOutcome(status="single_source", country_code="NL")
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+    monkeypatch.setattr(proxy_check_module, "_lookup_geolocation", fake_geo)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+        geolocate=False,
+    )
+
+    assert result.status == "tcp_working"
+    assert result.exit_ip == "45.130.253.151"
+    assert result.country_code is None
+    assert looked_up == []
 
 
 def test_datacenter_asn_is_flagged_from_ipinfo_name() -> None:
