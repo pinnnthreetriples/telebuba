@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.db import fetch_account_twofa_password
@@ -28,8 +29,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from core.web_login.browser import WebWindow
+    from schemas.accounts import WebLoginNotSignedInReason
 
 __all__ = [
+    "DriveTrace",
     "drive_login",
     "forget_signed_in",
     "mark_signed_in",
@@ -79,6 +82,29 @@ def forget_signed_in(profile: Path) -> None:
         (profile / _SIGNED_IN_MARKER).unlink(missing_ok=True)
 
 
+@dataclass
+class DriveTrace:
+    """What a drive last saw, still readable after the caller's deadline cancelled it.
+
+    A timed-out drive returns nothing, yet "WebK never loaded" (usually the proxy) and
+    "nobody took the QR" ask the operator for different things, so the loop records
+    as it goes and the caller classifies afterwards.
+    """
+
+    state: str | None = None
+    typed_password: bool = False
+
+    def classify_failure(self) -> WebLoginNotSignedInReason:
+        """The fixed code for a drive that ended without logging in."""
+        if self.state == "password":
+            # Typed and still standing after the grace: the stored password is wrong.
+            # Nothing typed (none stored, or a re-drive): only a hand can finish it.
+            return "web_login_2fa_rejected" if self.typed_password else "web_login_2fa_required"
+        if self.state == "qr":
+            return "web_login_qr_timeout"
+        return "web_login_page_not_loaded"
+
+
 async def _settled_state(window: WebWindow) -> str:
     """Poll until WebK stops reading "loading"; the caller bounds the wait."""
     while True:
@@ -107,12 +133,19 @@ async def still_signed_in(window: WebWindow) -> bool:
     return state not in _LOGIN_SCREENS
 
 
-async def drive_login(account_id: str, window: WebWindow, *, type_password: bool) -> bool:
+async def drive_login(
+    account_id: str,
+    window: WebWindow,
+    *,
+    type_password: bool,
+    trace: DriveTrace,
+) -> bool:
     """Poll WebK until it logs in: accept rotating QR tokens, type 2FA at most once.
 
     Returns whether the login actually completed. A ``False`` leaves the profile
     unmarked, so the next click drives the login again instead of assuming success.
-    The caller owns the overall deadline; this loop only ends on a verdict.
+    The caller owns the overall deadline; this loop only ends on a verdict, and
+    ``trace`` is how the caller learns why it did not log in.
 
     ``type_password`` is False when an ALREADY-OPEN window is driven again. Re-driving
     exists for the QR half, where every re-run is harmless; the password half is not.
@@ -133,6 +166,7 @@ async def drive_login(account_id: str, window: WebWindow, *, type_password: bool
     password_deadline: float | None = None
     while True:
         state = await page_state(window)
+        trace.state = state
         if state == "logged_in":
             # The one moment at which the capture hook is provably finished with. It
             # holds live login tokens, and nothing inside the page can tell this moment
@@ -145,7 +179,7 @@ async def drive_login(account_id: str, window: WebWindow, *, type_password: bool
             if password_deadline is None:
                 password_deadline = loop.time() + _PASSWORD_GRACE
                 if type_password:
-                    await _type_stored_password(account_id, window)
+                    trace.typed_password = await _type_stored_password(account_id, window)
             elif loop.time() >= password_deadline:
                 # Leave the (blank or filled) screen for the operator. Not a success:
                 # if they finish it by hand the next click simply drives again, which
@@ -154,11 +188,16 @@ async def drive_login(account_id: str, window: WebWindow, *, type_password: bool
         await asyncio.sleep(_POLL_INTERVAL)
 
 
-async def _type_stored_password(account_id: str, window: WebWindow) -> None:
-    """Type the stored 2FA password once, if one is on file (never logged)."""
+async def _type_stored_password(account_id: str, window: WebWindow) -> bool:
+    """Type the stored 2FA password once, if one is on file (never logged).
+
+    True only once it was actually submitted: none on file, or no field to type into,
+    means Telegram never saw it and so cannot have rejected it.
+    """
     password = await fetch_account_twofa_password(account_id)
-    if password:
-        await type_2fa_password(window, password)
+    if not password:
+        return False
+    return await type_2fa_password(window, password)
 
 
 async def _accept_fresh_token(

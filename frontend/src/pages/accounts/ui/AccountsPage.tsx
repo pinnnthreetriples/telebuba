@@ -308,7 +308,17 @@ export function AccountsPage() {
         // A 200 is not a login: every QR token can be refused for 90s, or the 2FA
         // screen can be left standing, and the window still opens. Ignoring the body
         // showed that as a silent success while the browser sat on a login screen.
-        if (!result.signed_in) toastError(t('accounts.openWeb.notSignedIn'));
+        // The reason code says which move the operator has to make; the generic copy
+        // stays for a body that carries none.
+        if (!result.signed_in) {
+          toastError(
+            t(
+              result.reason
+                ? `accounts.openWeb.reason.${result.reason}`
+                : 'accounts.openWeb.notSignedIn',
+            ),
+          );
+        }
       })
       .catch(() => undefined)
       .finally(() => {

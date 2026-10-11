@@ -126,7 +126,7 @@ async def test_page_primitives_address_the_page_session() -> None:
 async def test_type_2fa_password_clicks_field_types_and_submits_with_enter() -> None:
     session = RecordingSession({_page._INPUT_RECT_EXPR: '{"x":100,"y":200}'})
 
-    await type_2fa_password(window_for(session), "pw1")
+    assert await type_2fa_password(window_for(session), "pw1") is True
 
     key_events = [
         params for method, params, _s in session.commands if method == "Input.dispatchKeyEvent"
@@ -150,6 +150,20 @@ async def test_type_2fa_password_clicks_field_types_and_submits_with_enter() -> 
         if method == "Runtime.evaluate"
     ]
     assert evals == [_page._INPUT_RECT_EXPR]
+
+
+@pytest.mark.asyncio
+async def test_a_password_field_that_is_not_there_types_nothing_and_says_so() -> None:
+    """No field to click means nothing was submitted, so nothing can have been rejected.
+
+    Reporting a submit here made the toast blame the stored 2FA password for a screen
+    it never reached.
+    """
+    session = RecordingSession()  # the rect probe finds no field
+
+    assert await type_2fa_password(window_for(session), "pw1") is False
+
+    assert not [m for m, _p, _s in session.commands if m == "Input.dispatchKeyEvent"]
 
 
 @pytest.mark.asyncio
