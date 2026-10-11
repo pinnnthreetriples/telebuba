@@ -15,7 +15,7 @@ import {
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
-import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { useTransientFeedback } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -35,14 +35,10 @@ import {
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
+import { invalidateWarmingQueries, useWarmingLiveRefresh } from '../model/liveRefresh';
+
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
-
-// The only queries this page reads (createQueryKey stamps _id on key[0]); a live
-// event refreshes just these, never the whole cache. The warmed pool now rides
-// the board payload, so there's no separate listWarmedAccounts fetch here.
-// listLogs is included so the card terminals actually pick up new events.
-const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels', 'listLogs'];
 
 // Trust 3-tier tone (design): healthy / watch / risk. Tokens, not hexes, so the
 // tiers read the same as every other health signal in the dashboard.
@@ -94,15 +90,10 @@ export function WarmingPage() {
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({
-      predicate: (query) => {
-        const id = (query.queryKey[0] as { _id?: string } | undefined)?._id;
-        return id != null && WARMING_QUERY_IDS.includes(id);
-      },
-    });
+    invalidateWarmingQueries(queryClient, 'all');
   };
-  // Live status: any runtime event refreshes the board (event-driven, not timed).
-  useLogEventStream(invalidate);
+  // Live status: warming events refresh the board and the affected cards' logs.
+  useWarmingLiveRefresh();
   const start = useMutation(startWarmingMutation());
   const stop = useMutation(stopWarmingMutation());
   const addChannels = useMutation(addWarmingChannelsMutation());
