@@ -38,6 +38,7 @@ from schemas.accounts import (
     OpenWebResult,
     WebWindowCount,
 )
+from schemas.mobile_emulator import OpenMobileResult
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
@@ -190,6 +191,23 @@ async def close_account_web_windows() -> WebWindowCount:
     Closed windows reopen already signed in on the next click.
     """
     return WebWindowCount(count=await accounts.close_all_web_windows())
+
+
+@router.post(
+    "/accounts/{account_id}/open-mobile",
+    response_model=OpenMobileResult,
+    operation_id="openAccountMobile",
+    responses=SERVICE_ERRORS,
+)
+async def open_account_mobile(account_id: AccountIdPath) -> OpenMobileResult:
+    """Open (or raise) an Android emulator instance for the account with Telegram.
+
+    Binds network traffic to the account's assigned proxy and executes Zero-Click
+    login via ADB and Telethon 777000 verification code interception.
+    """
+    with service_errors_to_http():
+        await accounts.require_account(account_id)
+        return await accounts.open_account_mobile(account_id)
 
 
 @router.post(

@@ -19,6 +19,7 @@ export {
   importAccountSessionMutation,
   importAccountTdataMutation,
   logoutAccountMutation,
+  openAccountMobileMutation,
   openAccountWebMutation,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,

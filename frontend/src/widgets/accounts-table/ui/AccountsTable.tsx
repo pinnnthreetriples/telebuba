@@ -30,11 +30,13 @@ interface AccountsTableProps {
   onOpen?: (account: AccountRead) => void;
   onProfile?: (account: AccountRead) => void;
   onOpenWeb?: (accountId: string) => void;
+  onOpenMobile?: (accountId: string) => void;
   // A set, not one id: two rows can have a check or a delete in flight at once.
   busyIds: ReadonlySet<string>;
   // Its own set, kept apart from busyIds: opening web must not disable the row's
   // check/delete, and the globe's spinner must not light up during a check.
   openWebBusyIds?: ReadonlySet<string>;
+  openMobileBusyIds?: ReadonlySet<string>;
   // Verdict of the row's last check, while it is being flashed. Absent = the
   // button shows its ordinary refresh glyph.
   checkResults: Readonly<Record<string, FeedbackResult>>;
@@ -125,8 +127,10 @@ export function AccountsTable({
   onOpen,
   onProfile,
   onOpenWeb,
+  onOpenMobile,
   busyIds,
   openWebBusyIds,
+  openMobileBusyIds,
   checkResults,
   selectedIds,
   renderPick,
@@ -226,6 +230,7 @@ export function AccountsTable({
         // check. One expression, because three of them drifted apart once already.
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
+        const openingMobile = openMobileBusyIds?.has(account.account_id) ?? false;
         return (
           <div className="flex items-center justify-end gap-2">
             <IconButton
@@ -244,6 +249,21 @@ export function AccountsTable({
               }}
             >
               {openingWeb ? <Spinner /> : <Icon name="globe" size={14} />}
+            </IconButton>
+            <IconButton
+              size="touch"
+              shape="circle"
+              tone="primary"
+              title={t('accounts.actions.mobile')}
+              aria-label={t('accounts.actions.mobile')}
+              className="md:size-icon"
+              disabled={!account.proxy_id || openingMobile}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenMobile?.(account.account_id);
+              }}
+            >
+              {openingMobile ? <Spinner /> : <Icon name="smartphone" size={14} />}
             </IconButton>
             <IconButton
               size="touch"

@@ -370,6 +370,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadErrors,
   MarkAccountChatReadResponses,
+  OpenAccountMobileData,
+  OpenAccountMobileErrors,
+  OpenAccountMobileResponses,
   OpenAccountWebData,
   OpenAccountWebErrors,
   OpenAccountWebResponses,
@@ -796,6 +799,23 @@ export const closeAccountWebWindows = <ThrowOnError extends boolean = false>(
     CloseAccountWebWindowsErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/web-windows/close', ...options });
+
+/**
+ * Open Account Mobile
+ *
+ * Open (or raise) an Android emulator instance for the account with Telegram.
+ *
+ * Binds network traffic to the account's assigned proxy and executes Zero-Click
+ * login via ADB and Telethon 777000 verification code interception.
+ */
+export const openAccountMobile = <ThrowOnError extends boolean = false>(
+  options: Options<OpenAccountMobileData, ThrowOnError>,
+): RequestResult<OpenAccountMobileResponses, OpenAccountMobileErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    OpenAccountMobileResponses,
+    OpenAccountMobileErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/open-mobile', ...options });
 
 /**
  * Start Phone Login

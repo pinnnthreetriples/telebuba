@@ -91,6 +91,11 @@ from services.accounts.media import (
     set_account_profile_photo,
     set_account_story_pinned,
 )
+from services.accounts.mobile_emulator import (
+    OpenMobileResult,
+    open_account_mobile,
+    shutdown_mobile_emulator,
+)
 from services.accounts.privacy import (
     apply_account_privacy,
     apply_privacy_to_all_accounts,
@@ -129,6 +134,7 @@ __all__ = [
     "ChatMediaDownload",
     "ChatServiceError",
     "InvalidCursorError",
+    "OpenMobileResult",
     "OpenWebResult",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
@@ -169,6 +175,7 @@ __all__ = [
     "list_listener_accounts",
     "logout_account",
     "mark_chat_read",
+    "open_account_mobile",
     "open_account_web",
     "post_account_story",
     "publish_account_channel_post",
@@ -191,6 +198,7 @@ __all__ = [
     "set_account_story_pinned",
     "set_account_twofa",
     "set_account_twofa_email",
+    "shutdown_mobile_emulator",
     "shutdown_web_login",
     "start_phone_login",
     "submit_login_code",

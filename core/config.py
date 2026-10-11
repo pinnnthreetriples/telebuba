@@ -323,6 +323,16 @@ class LoggingSettings(BaseSettings):
     sentry_dsn: str = Field(default="", repr=False)
 
 
+class EmulatorSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="EMULATOR__", extra="ignore")
+
+    ldplayer_dir: Path = Path("C:/LDPlayer/LDPlayer9")
+    apk_path: Path = Path("data/apks/Telegram.apk")
+    boot_timeout_seconds: int = Field(default=60, ge=1)
+    code_timeout_seconds: int = Field(default=45, ge=1)
+    ui_timeout_seconds: int = Field(default=15, ge=1)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -346,6 +356,7 @@ class Settings(BaseSettings):
     chat_broadcast: ChatBroadcastSettings = Field(default_factory=ChatBroadcastSettings)
     user_parser: UserParserSettings = Field(default_factory=UserParserSettings)
     masstagging: MasstaggingSettings = Field(default_factory=MasstaggingSettings)
+    emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
 
 
 def load_settings() -> Settings:

@@ -4891,6 +4891,30 @@ export type NeuroshillingVersionRequest = {
 };
 
 /**
+ * OpenMobileResult
+ *
+ * The outcome of launching the Telegram Android emulator for the account.
+ */
+export type OpenMobileResult = {
+  /**
+   * Launched
+   */
+  launched: boolean;
+  /**
+   * Signed In
+   */
+  signed_in: boolean;
+  /**
+   * Instance Name
+   */
+  instance_name: string;
+  /**
+   * Message
+   */
+  message?: string | null;
+};
+
+/**
  * OpenWebResult
  *
  * The outcome of opening a web.telegram.org window for the account.
@@ -7556,6 +7580,57 @@ export type CloseAccountWebWindowsResponses = {
 
 export type CloseAccountWebWindowsResponse =
   CloseAccountWebWindowsResponses[keyof CloseAccountWebWindowsResponses];
+
+export type OpenAccountMobileData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-mobile';
+};
+
+export type OpenAccountMobileErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenAccountMobileError = OpenAccountMobileErrors[keyof OpenAccountMobileErrors];
+
+export type OpenAccountMobileResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenMobileResult;
+};
+
+export type OpenAccountMobileResponse =
+  OpenAccountMobileResponses[keyof OpenAccountMobileResponses];
 
 export type StartPhoneLoginData = {
   body: StartPhoneLoginRequest;

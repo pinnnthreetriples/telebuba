@@ -15,6 +15,7 @@ import {
   closeAccountWebWindowsMutation,
   deleteAccountMutation,
   invalidateAccountViews,
+  openAccountMobileMutation,
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
@@ -100,6 +101,7 @@ export function AccountsPage() {
   // Kept apart from busyIds so opening web doesn't disable a row's check/delete
   // and its spinner sits only on the globe.
   const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
+  const [openMobileBusyIds, setOpenMobileBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -241,6 +243,7 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
   const openWeb = useMutation(openAccountWebMutation());
+  const openMobile = useMutation(openAccountMobileMutation());
   const webWindows = useQuery(accountWebWindowsQueryOptions());
   const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
   const openWebWindows = webWindows.data?.count ?? 0;
@@ -346,6 +349,22 @@ export function AccountsPage() {
       .catch(() => undefined)
       .finally(() => {
         void webWindows.refetch();
+      });
+  };
+  const onOpenMobile = (accountId: string) => {
+    setOpenMobileBusyIds((ids) => new Set(ids).add(accountId));
+    void openMobile
+      .mutateAsync({ path: { account_id: accountId } })
+      .then((result) => {
+        if (!result.signed_in) toastError(t('accounts.openMobile.notSignedIn'));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setOpenMobileBusyIds((ids) => {
+          const next = new Set(ids);
+          next.delete(accountId);
+          return next;
+        });
       });
   };
   const confirmDelete = () => {
@@ -568,8 +587,10 @@ export function AccountsPage() {
                 setProfilingRow(account);
               }}
               onOpenWeb={onOpenWeb}
+              onOpenMobile={onOpenMobile}
               busyIds={busyIds}
               openWebBusyIds={openWebBusyIds}
+              openMobileBusyIds={openMobileBusyIds}
               checkResults={checkResults}
             />
           ) : activeView === ALL_VIEW && !filtered && debouncedSearch === '' ? (

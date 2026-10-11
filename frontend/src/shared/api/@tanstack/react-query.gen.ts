@@ -129,6 +129,7 @@ import {
   logout,
   logoutAccount,
   markAccountChatRead,
+  openAccountMobile,
   openAccountWeb,
   type Options,
   postAccountStory,
@@ -564,6 +565,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadError,
   MarkAccountChatReadResponse,
+  OpenAccountMobileData,
+  OpenAccountMobileError,
+  OpenAccountMobileResponse,
   OpenAccountWebData,
   OpenAccountWebError,
   OpenAccountWebResponse,
@@ -1242,6 +1246,38 @@ export const closeAccountWebWindowsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await closeAccountWebWindows({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Open Account Mobile
+ *
+ * Open (or raise) an Android emulator instance for the account with Telegram.
+ *
+ * Binds network traffic to the account's assigned proxy and executes Zero-Click
+ * login via ADB and Telethon 777000 verification code interception.
+ */
+export const openAccountMobileMutation = (
+  options?: Partial<Options<OpenAccountMobileData>>,
+): UseMutationOptions<
+  OpenAccountMobileResponse,
+  OpenAccountMobileError,
+  Options<OpenAccountMobileData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    OpenAccountMobileResponse,
+    OpenAccountMobileError,
+    Options<OpenAccountMobileData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await openAccountMobile({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -311,8 +311,12 @@
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
+      "mobile": "Mobile Telegram (Emulator)",
       "profile": "Edit profile",
       "web": "Open in Telegram Web"
+    },
+    "openMobile": {
+      "notSignedIn": "Failed to authenticate mobile app automatically"
     },
     "openWeb": {
       "notSignedIn": "The window opened but the account is not signed in — finish the login in that window.",

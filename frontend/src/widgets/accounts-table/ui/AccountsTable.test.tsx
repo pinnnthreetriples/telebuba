@@ -341,7 +341,7 @@ test('mobile account actions sit below the title instead of squeezing it', () =>
   const card = title.closest('[role="listitem"]')!;
   const actions = card.querySelectorAll<HTMLButtonElement>('button[aria-label]');
   expect(title).toBeInTheDocument();
-  expect(actions).toHaveLength(4);
+  expect(actions).toHaveLength(5);
   for (const action of actions) expect(action).toHaveClass('size-touch');
   expect(card.firstElementChild as HTMLElement).not.toContainElement(actions[0]!);
   expect(card.children[1] as HTMLElement).toContainElement(actions[0]!);
@@ -437,4 +437,57 @@ test('the page slots render around the identity, and selected rows are tinted', 
   expect(screen.getByText('tags acc-2')).toBeInTheDocument();
   expect(screen.getByText('pick acc-2').closest('tr')).toHaveClass('bg-info-tint');
   expect(screen.getByText('pick acc-1').closest('tr')).not.toHaveClass('bg-info-tint');
+});
+
+test('mobile action button is enabled when account has proxy and disabled when proxy is missing', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  // acc-1 has proxy_id 'p1', acc-2 has no proxy_id
+  const mobileButtons = screen.getAllByTitle('Мобильный Telegram (Эмулятор)');
+  expect(mobileButtons).toHaveLength(2);
+  expect(mobileButtons[0]).not.toBeDisabled();
+  expect(mobileButtons[1]).toBeDisabled();
+});
+
+test('clicking mobile button fires onOpenMobile and does not bubble to row', async () => {
+  const onOpenMobile = vi.fn();
+  const onOpen = vi.fn();
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpen={onOpen}
+      onOpenMobile={onOpenMobile}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  const mobileButton = screen.getAllByTitle('Мобильный Telegram (Эмулятор)')[0]!;
+  await userEvent.click(mobileButton);
+  expect(onOpenMobile).toHaveBeenCalledWith('acc-1');
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
+test('mobile button shows spinner and is disabled while in openMobileBusyIds', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      openMobileBusyIds={new Set(['acc-1'])}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  const mobileButtons = screen.getAllByTitle('Мобильный Telegram (Эмулятор)');
+  expect(mobileButtons[0]).toBeDisabled();
+  expect(mobileButtons[0]?.querySelector('.tb-spin')).not.toBeNull();
 });
