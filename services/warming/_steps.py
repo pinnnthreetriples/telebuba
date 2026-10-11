@@ -29,7 +29,7 @@ from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel
 from services.pacing import human_delay
 from services.warming import _seams
-from services.warming._phases import _PHASE_ORDER
+from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
 from services.warming.pacing import (
     _FAILURE_STATUSES,
     _HALT_STATUSES,
@@ -265,7 +265,6 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     tally: _ChannelTally,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
-    reaction_probability: float,
     on_step: _OnStep | None = None,
     *,
     phase: WarmingPhase,
@@ -320,7 +319,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             channel.channel,
             tally,
             reactions_enabled=secret.reactions_enabled,
-            reaction_probability=reaction_probability,
+            reaction_probability=persona_reaction_probability(data.activity_persona),
             remaining_actions=remaining_actions,
         )
         recent_ids[channel.channel] = outcome.recent_ids

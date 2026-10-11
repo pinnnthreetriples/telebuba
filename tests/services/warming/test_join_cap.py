@@ -47,7 +47,6 @@ async def _walk(
         tally,
         _affinity_pool(channels),
         await load_warming_settings(),
-        0.0,
         phase=phase,
     )
     return tally
@@ -162,7 +161,6 @@ async def test_join_disabled_never_counts_or_joins(monkeypatch: pytest.MonkeyPat
         _steps._ChannelTally(),
         _affinity_pool(2),
         secret,
-        0.0,
         phase="warmed",
     )
 
