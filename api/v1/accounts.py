@@ -36,6 +36,7 @@ from schemas.accounts import (
     AccountSessionFileImport,
     AccountStats,
     OpenWebResult,
+    WebWindowCount,
 )
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
@@ -166,6 +167,29 @@ async def open_account_web(account_id: AccountIdPath) -> OpenWebResult:
     with service_errors_to_http():
         await accounts.require_account(account_id)
         return await accounts.open_account_web(account_id)
+
+
+@router.get(
+    "/accounts/web-windows",
+    response_model=WebWindowCount,
+    operation_id="countAccountWebWindows",
+)
+async def count_account_web_windows() -> WebWindowCount:
+    """How many web.telegram.org windows are open right now."""
+    return WebWindowCount(count=await accounts.count_open_web_windows())
+
+
+@router.post(
+    "/accounts/web-windows/close",
+    response_model=WebWindowCount,
+    operation_id="closeAccountWebWindows",
+)
+async def close_account_web_windows() -> WebWindowCount:
+    """Close every open web.telegram.org window; the count is how many were closed.
+
+    Closed windows reopen already signed in on the next click.
+    """
+    return WebWindowCount(count=await accounts.close_all_web_windows())
 
 
 @router.post(

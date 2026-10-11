@@ -321,6 +321,11 @@
       "prev": "Prev",
       "next": "Next"
     },
+    "webWindows": {
+      "closeAll": "Close all Telegram Web windows ({{count}} open)",
+      "closed": "Telegram Web windows closed: {{count}}",
+      "tooMany": "Telegram Web windows open: {{count}}. Each one is a separate Chrome — close the ones you no longer need."
+    },
     "deleteModal": {
       "title": "Delete account {{phone}}?",
       "body": "The session, proxy and activity history will be deleted. This action is irreversible.",

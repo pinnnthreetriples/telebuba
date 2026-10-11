@@ -121,6 +121,7 @@ from services.accounts.web_login import (
     open_account_web,
     shutdown_web_login,
 )
+from services.accounts.web_windows import close_all_web_windows, count_open_web_windows
 
 __all__ = [
     "AccountActionError",
@@ -145,7 +146,9 @@ __all__ = [
     "check_account_channel_username",
     "check_account_session",
     "clear_account_twofa_email",
+    "close_all_web_windows",
     "confirm_account_twofa_email",
+    "count_open_web_windows",
     "create_account_channel",
     "delete_account_channel",
     "delete_account_channel_post",

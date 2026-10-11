@@ -8,9 +8,11 @@ import {
   accountFoldersQueryOptions,
   accountsQueryOptions,
   accountStatsQueryOptions,
+  accountWebWindowsQueryOptions,
   activeBulkMessageJobQueryOptions,
   latestBulkMessageJobQueryOptions,
   checkAccountMutation,
+  closeAccountWebWindowsMutation,
   deleteAccountMutation,
   invalidateAccountViews,
   openAccountWebMutation,
@@ -25,6 +27,7 @@ import {
   type Stat,
   StatGrid,
   toastError,
+  toastSuccess,
 } from '@/shared/ui';
 import {
   ALL_VIEW,
@@ -69,6 +72,9 @@ const PAGE_SIZE = 20;
 // brand-new key per keystroke — no cached data, `isPending` true, and the table
 // plus the pagination row replaced by the loading line on every character.
 const SEARCH_DEBOUNCE_MS = 300;
+// Each Telegram Web window is a full Chrome process; past this many the operator is
+// told to close some.
+const WEB_WINDOWS_WARN_AT = 8;
 
 export function AccountsPage() {
   const { t } = useTranslation();
@@ -235,6 +241,9 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
   const openWeb = useMutation(openAccountWebMutation());
+  const webWindows = useQuery(accountWebWindowsQueryOptions());
+  const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
+  const openWebWindows = webWindows.data?.count ?? 0;
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -302,6 +311,24 @@ export function AccountsPage() {
           next.delete(accountId);
           return next;
         });
+        // Refetched even after a refusal: a failed open can still have dropped a window.
+        void webWindows.refetch().then(({ data: open }) => {
+          if (open && open.count >= WEB_WINDOWS_WARN_AT) {
+            toastError(t('accounts.webWindows.tooMany', { count: open.count }));
+          }
+        });
+      });
+  };
+  // Refusals surface through the global MutationCache toast, as for the globe.
+  const onCloseWebWindows = () => {
+    void closeWebWindows
+      .mutateAsync({})
+      .then((closed) => {
+        toastSuccess(t('accounts.webWindows.closed', { count: closed.count }));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        void webWindows.refetch();
       });
   };
   const confirmDelete = () => {
@@ -449,6 +476,22 @@ export function AccountsPage() {
               >
                 {messagesBusy ? <Spinner tone="default" /> : <Icon name="send" size={16} />}
               </IconButton>
+              {openWebWindows > 0 ? (
+                <IconButton
+                  size="md"
+                  tone="neutral"
+                  disabled={closeWebWindows.isPending}
+                  aria-label={t('accounts.webWindows.closeAll', { count: openWebWindows })}
+                  title={t('accounts.webWindows.closeAll', { count: openWebWindows })}
+                  onClick={onCloseWebWindows}
+                >
+                  {closeWebWindows.isPending ? (
+                    <Spinner tone="default" />
+                  ) : (
+                    <Icon name="x-circle" size={16} />
+                  )}
+                </IconButton>
+              ) : null}
               <IconButton
                 size="md"
                 tone="primary"

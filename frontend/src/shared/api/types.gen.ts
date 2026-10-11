@@ -7018,6 +7018,21 @@ export type WarmingSummary = {
   trust_risk?: number;
 };
 
+/**
+ * WebWindowCount
+ *
+ * How many web.telegram.org windows are open — or were just closed.
+ *
+ * Each is a full Chrome process, so the Accounts page warns when many are up and
+ * offers to close them all; that action answers with the number it closed.
+ */
+export type WebWindowCount = {
+  /**
+   * Count
+   */
+  count: number;
+};
+
 export type LoginData = {
   body: LoginRequest;
   path?: never;
@@ -7461,6 +7476,76 @@ export type OpenAccountWebResponses = {
 };
 
 export type OpenAccountWebResponse = OpenAccountWebResponses[keyof OpenAccountWebResponses];
+
+export type CountAccountWebWindowsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/web-windows';
+};
+
+export type CountAccountWebWindowsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CountAccountWebWindowsError =
+  CountAccountWebWindowsErrors[keyof CountAccountWebWindowsErrors];
+
+export type CountAccountWebWindowsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WebWindowCount;
+};
+
+export type CountAccountWebWindowsResponse =
+  CountAccountWebWindowsResponses[keyof CountAccountWebWindowsResponses];
+
+export type CloseAccountWebWindowsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/web-windows/close';
+};
+
+export type CloseAccountWebWindowsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CloseAccountWebWindowsError =
+  CloseAccountWebWindowsErrors[keyof CloseAccountWebWindowsErrors];
+
+export type CloseAccountWebWindowsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WebWindowCount;
+};
+
+export type CloseAccountWebWindowsResponse =
+  CloseAccountWebWindowsResponses[keyof CloseAccountWebWindowsResponses];
 
 export type StartPhoneLoginData = {
   body: StartPhoneLoginRequest;

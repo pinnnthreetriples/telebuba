@@ -227,3 +227,13 @@ class AccountProfileSnapshot(BaseModel):
     music_supported: bool = True
     fetched_at_unix: float = 0.0
     error: str | None = None
+
+
+class WebWindowCount(BaseModel):
+    """How many web.telegram.org windows are open — or were just closed.
+
+    Each is a full Chrome process, so the Accounts page warns when many are up and
+    offers to close them all; that action answers with the number it closed.
+    """
+
+    count: int = Field(ge=0)
