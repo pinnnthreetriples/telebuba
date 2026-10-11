@@ -22,11 +22,13 @@ edges:
     condition: chat broadcast campaigns, joins into lists, chains, rounds, or the board by chat
   - target: context/runtime-user-parser.md
     condition: user parser runs, bases, presets, or exports
+  - target: context/runtime-masstagging.md
+    condition: masstagging campaigns, story mentions, priming, or the tagged registry
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-10-10
+last_updated: 2026-10-11
 ---
 
 # Telebuba Router
