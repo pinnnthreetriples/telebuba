@@ -485,6 +485,7 @@ def test_every_refusal_is_a_translatable_code() -> None:
         web_login._RELAY_REFUSAL,
         web_login._SHUTDOWN_REFUSAL,
         web_login._RELOAD_LOOP_REFUSAL,
+        web_login._PROXY_DEAD_REFUSAL,
     ]
     for code in codes:
         assert code == code.lower()
