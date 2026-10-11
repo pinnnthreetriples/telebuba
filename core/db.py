@@ -424,6 +424,7 @@ from core.repositories.warming import (  # noqa: E402, F401
     upsert_warming_state,
 )
 from core.repositories.warming_joined import (  # noqa: E402, F401
+    count_joins_since,
     is_channel_joined,
     list_joined_channels,
     record_channel_joined,

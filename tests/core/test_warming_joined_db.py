@@ -6,6 +6,7 @@ The migration cases live here for the reason ``test_warming_extras_db.py`` gives
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,6 +16,7 @@ from core.db import (
     _get_engine,
     _warming_joined_channels,
     configure_database,
+    count_joins_since,
     is_channel_joined,
     list_joined_channels,
     record_channel_joined,
@@ -144,3 +146,19 @@ def test_the_step_skips_a_database_without_the_table(legacy_engine: _EngineFacto
     with engine.begin() as connection:
         _add_warming_joined_left_at(connection)
     assert _columns(engine, _TABLE) == set()
+
+
+@pytest.mark.asyncio
+async def test_count_joins_since_is_a_rolling_window_that_counts_rejoins() -> None:
+    now = datetime.now(UTC)
+    for channel in ("fresh", "stale", "rejoined", "left"):
+        await record_channel_joined("acc", channel)
+    await record_channel_joined("other", "fresh")
+    _backdate("acc", "stale", (now - timedelta(hours=25)).isoformat())
+    _backdate("acc", "rejoined", (now - timedelta(hours=40)).isoformat())
+    await record_channel_left("acc", "rejoined")
+    await record_channel_joined("acc", "rejoined")  # a re-join restarts created_at
+    await record_channel_left("acc", "left")  # left again, but the join was today
+
+    assert await count_joins_since("acc", now - timedelta(hours=24)) == 3
+    assert await count_joins_since("acc", now + timedelta(hours=1)) == 0

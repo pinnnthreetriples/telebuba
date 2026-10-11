@@ -1,11 +1,12 @@
 """The per-channel action steps of a warming cycle — join, read, react.
 
 Split out of :mod:`services.warming._cycle` to keep that module under the
-file-size budget. This half owns the channel walk (``_run_channel_loop``), the
-read-then-maybe-react step, the tallies their outcomes fold into, and the pacing
-/ progress primitives every step shares (``_human_delay`` / ``_human_pause`` /
-``_emit_step``). ``_cycle`` keeps the session-level orchestration and imports
-from here, never the other way round, so the dependency stays one-directional.
+file-size budget. This half owns the channel walk (``_run_channel_loop``) and its
+per-phase daily join cap, the read-then-maybe-react step, the tallies their
+outcomes fold into, and the pacing / progress primitives every step shares
+(``_human_delay`` / ``_human_pause`` / ``_emit_step``). ``_cycle`` keeps the
+session-level orchestration and imports from here, never the other way round, so
+the dependency stays one-directional.
 Telegram and randomness are still reached via :mod:`services.warming._seams` so
 tests patch them in one place.
 """
@@ -14,14 +15,21 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import is_channel_joined, record_channel_joined
+from core.db import (
+    count_joins_since,
+    fetch_warming_state,
+    is_channel_joined,
+    record_channel_joined,
+)
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel
 from services.pacing import human_delay
 from services.warming import _seams
+from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
 from services.warming.pacing import (
     _FAILURE_STATUSES,
     _HALT_STATUSES,
@@ -34,12 +42,21 @@ if TYPE_CHECKING:
 
     from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import ActionResult
-    from schemas.warming import WarmingChannel, WarmingCycleRequest, WarmingSettingsSecret
+    from schemas.warming import (
+        WarmingChannel,
+        WarmingCycleRequest,
+        WarmingPhase,
+        WarmingSettingsSecret,
+    )
 
     # Live progress hook: the loop passes a callback that persists the named
     # step (set_online/join/read/react/send_dm) so the board rail can advance
     # mid-cycle. None = no-op (every non-loop caller and most tests).
     _OnStep = Callable[[str], Awaitable[None]]
+
+# The join cap is a rolling day, not a calendar one: a join at 23:59 still counts
+# against the next morning's cycles.
+_JOIN_CAP_WINDOW = timedelta(hours=24)
 
 
 def _human_delay(min_seconds: float, max_seconds: float) -> float:
@@ -67,6 +84,22 @@ async def _emit_step(on_step: _OnStep | None, step: str) -> None:
     """Fire the live-progress hook for ``step`` when the loop supplied one."""
     if on_step is not None:
         await on_step(step)
+
+
+async def _joins_left_today(account_id: str, age_phase: WarmingPhase) -> int:
+    """How many more channels the account may join in the rolling 24h window.
+
+    The cap follows the safer of the cycle's age phase and the phase the loop last
+    persisted, because only the latter knows the trust ceiling (a poorly trusted
+    old account sits in a lower phase than its age says).
+    """
+    phase = age_phase
+    state = await fetch_warming_state(account_id)
+    if state is not None and state.current_phase is not None:
+        phase = min(age_phase, state.current_phase, key=_PHASE_ORDER.index)
+    cap = settings.warming.phase_joins_per_day_max[phase]
+    joined = await count_joins_since(account_id, datetime.now(UTC) - _JOIN_CAP_WINDOW)
+    return max(0, cap - joined)
 
 
 @dataclass
@@ -184,8 +217,8 @@ class _ChannelTally:
 def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str) -> bool:
     """Fold a join result into the tally. Returns True if the cycle should stop."""
     if result.status in {"ok", "already_participant"}:
-        # Already a member counts as a joined channel — warming has no rolling-24h
-        # cap, so there is nothing to skip; it is success just like a real join.
+        # Already a member counts as a joined channel: it is success just like a
+        # real join, and it is recorded (so counted by the daily join cap) the same way.
         tally.joined += 1
         return False
     tally.last_failed_action = "join"
@@ -232,8 +265,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     tally: _ChannelTally,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
-    reaction_probability: float,
     on_step: _OnStep | None = None,
+    *,
+    phase: WarmingPhase,
 ) -> tuple[dict[str, list[int]], dict[str, dict[int, RecentMediaKind]]]:
     """Walk the chosen channels, folding every outcome into the caller's ``tally``.
 
@@ -241,6 +275,10 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     return) so the running ``attempts`` count is readable while the walk is still
     in flight: the loop reconciles its daily-budget reservation from it when a
     cycle is cancelled or raises mid-channel (#208).
+
+    A channel not joined yet is skipped outright — no join, no read, no budget —
+    once the phase's daily join cap is reached; channels already joined are still
+    read. ``phase`` is the cycle's age phase (see ``_joins_left_today``).
 
     Returns channel → the post ids its read fetched, and channel → which of those
     carry a poll / video / voice, both for the extras step.
@@ -250,6 +288,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     remaining_actions = data.remaining_actions
     recent_ids: dict[str, list[int]] = {}
     recent_media: dict[str, dict[int, RecentMediaKind]] = {}
+    # Counted once per cycle, then spent locally per dispatched join (a failed join
+    # is not recorded, so the next cycle may retry it; this one does not).
+    joins_left = await _joins_left_today(account_id, phase) if secret.join_enabled else 0
 
     def _can_attempt() -> bool:
         if remaining_actions is None:
@@ -260,6 +301,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if not _can_attempt():
             break
         if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
+            if joins_left <= 0:
+                continue
+            joins_left -= 1
             tally.attempts += 1
             join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
             if join_result.status in {"ok", "already_participant"}:
@@ -275,7 +319,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             channel.channel,
             tally,
             reactions_enabled=secret.reactions_enabled,
-            reaction_probability=reaction_probability,
+            reaction_probability=persona_reaction_probability(data.activity_persona),
             remaining_actions=remaining_actions,
         )
         recent_ids[channel.channel] = outcome.recent_ids

@@ -155,6 +155,16 @@ def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
         WarmingSettings(phase_daily_cap={"intro": 0})
 
 
+def test_phase_joins_per_day_max_must_name_every_phase() -> None:
+    """A phase missing from the join cap would be a KeyError mid-cycle, not at boot."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(phase_joins_per_day_max={"intro": 1})
+    with pytest.raises(ValidationError):
+        WarmingSettings(
+            phase_joins_per_day_max=dict.fromkeys(WarmingSettings().phase_daily_cap, -1)
+        )
+
+
 def test_extras_inline_bots_must_stay_within_the_whitelist() -> None:
     """Any bot outside the schema whitelist is a third party that would see the query."""
     with pytest.raises(ValidationError):

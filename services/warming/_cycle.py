@@ -43,7 +43,6 @@ from services.warming.pacing import (
     _account_age_hours,
     _classify_flood,
     compute_intensity,
-    persona_reaction_probability,
 )
 
 if TYPE_CHECKING:
@@ -240,8 +239,8 @@ async def run_one_cycle(
             tally,
             chosen,
             secret,
-            persona_reaction_probability(data.activity_persona),
             on_step,
+            phase=intensity.phase,
         )
 
         # One low-risk "glanced at stories" signal per session (every persona).

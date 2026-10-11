@@ -9,8 +9,9 @@ cycle uses ``left_at`` to keep the channel out until the re-join cooldown lapses
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso, _warming_joined_channels
@@ -72,6 +73,25 @@ def _record_channel_left(account_id: str, channel: str) -> None:
 async def record_channel_left(account_id: str, channel: str) -> None:
     """Record that the account left this channel (the row stays, for the cooldown)."""
     await asyncio.to_thread(_record_channel_left, account_id, channel)
+
+
+def _count_joins_since(account_id: str, since: str) -> int:
+    statement = select(func.count()).where(
+        (_warming_joined_channels.c.account_id == account_id)
+        & (_warming_joined_channels.c.created_at >= since),
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_joins_since(account_id: str, since: datetime) -> int:
+    """How many channels this account joined (or re-joined) at or after ``since``.
+
+    A re-join restarts ``created_at``, so it counts as a fresh join; a channel left
+    since still counts, because the join itself happened inside the window.
+    """
+    since_iso = since.astimezone(UTC).isoformat()
+    return await asyncio.to_thread(_count_joins_since, account_id, since_iso)
 
 
 def _list_joined_channels(account_id: str) -> list[JoinedChannel]:
