@@ -17,12 +17,12 @@ from core.logging import log_event
 from schemas.warming import WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _seams
+from services.warming._local_day import _next_local_wake
 from services.warming._state import _set_state
 from services.warming.pacing import (
     _PHASE_ORDER,
     _SECONDS_PER_HOUR,
     _account_tz,
-    _next_utc_midnight,
     _now_iso,
     _shift_to_active_hours,
     compute_intensity,
@@ -49,6 +49,11 @@ class _PhaseEvent(NamedTuple):
 
     level: LogLevel
     extra: dict[str, object]
+
+
+async def _wake(account_id: str, now: datetime) -> datetime:
+    """The account's next local-morning wake (a completed account re-parks there)."""
+    return _next_local_wake(await _account_tz(account_id), now, _seams.rng, account_id)
 
 
 def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
@@ -163,7 +168,7 @@ async def _gate_target_reached(
             account_id,
             "sleeping",
             last_event="warming_complete",
-            next_run_at=_next_utc_midnight(now).isoformat(),
+            next_run_at=(await _wake(account_id, now)).isoformat(),
             heartbeat_at=now.isoformat(),
             expected_run_id=run_id,
         )
@@ -174,7 +179,7 @@ async def _gate_target_reached(
         account_id,
         "sleeping",
         last_event="warming_complete",
-        next_run_at=_next_utc_midnight(now).isoformat(),
+        next_run_at=(await _wake(account_id, now)).isoformat(),
         heartbeat_at=now.isoformat(),
         expected_run_id=run_id,
     )

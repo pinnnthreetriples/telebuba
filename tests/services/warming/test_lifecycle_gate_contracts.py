@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from core.db import (
     create_account,
     fetch_warming_state,
@@ -30,9 +31,15 @@ def _events_named(entries: list[LogEntry], event: str) -> list[LogEntry]:
     return [entry for entry in entries if entry.event == event]
 
 
-def _assert_utc_midnight(value: datetime) -> None:
+def _assert_next_local_morning(value: datetime, heartbeat: datetime) -> None:
+    """The account has no known zone, so its local morning is the next UTC morning."""
+    warm = settings.warming
     assert value.utcoffset() == timedelta(0)
-    assert (value.hour, value.minute, value.second, value.microsecond) == (0, 0, 0, 0)
+    morning = datetime.combine(
+        heartbeat.date() + timedelta(days=1), time(warm.active_hours_start), tzinfo=UTC
+    )
+    spread = timedelta(minutes=warm.active_hours_start_spread_minutes)
+    assert morning <= value <= morning + spread
 
 
 @pytest.mark.asyncio
@@ -141,14 +148,10 @@ async def test_target_completion_is_observable_at_the_exact_day_boundary(
     assert completed.last_event == "warming_complete"
     assert completed.next_run_at is not None
     first_wake = datetime.fromisoformat(completed.next_run_at)
-    _assert_utc_midnight(first_wake)
     assert completed.heartbeat_at is not None
     first_heartbeat = datetime.fromisoformat(completed.heartbeat_at)
     assert first_started <= first_heartbeat <= first_finished
-    expected_first_wake = (first_heartbeat + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    assert first_wake == expected_first_wake
+    _assert_next_local_morning(first_wake, first_heartbeat)
     first_events = _events_named(await list_recent_logs(limit=100), "warming_target_reached")
     assert len(first_events) == 1
     first_event = first_events[0]
@@ -198,14 +201,10 @@ async def test_completed_target_is_reparked_without_duplicate_event(
     assert repeated.last_event == "warming_complete"
     assert repeated.next_run_at is not None
     second_wake = datetime.fromisoformat(repeated.next_run_at)
-    _assert_utc_midnight(second_wake)
     assert repeated.heartbeat_at is not None
     second_heartbeat = datetime.fromisoformat(repeated.heartbeat_at)
     assert second_started <= second_heartbeat <= second_finished
     assert repeated.heartbeat_at != stale_heartbeat
-    expected_second_wake = (second_heartbeat + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    assert second_wake == expected_second_wake
+    _assert_next_local_morning(second_wake, second_heartbeat)
     repeated_events = _events_named(await list_recent_logs(limit=100), "warming_target_reached")
     assert repeated_events == []

@@ -17,6 +17,7 @@ from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
+from services.warming._local_day import _next_local_wake
 from services.warming._reservation import _reconcile_reservation, _Reservation
 from services.warming._state import _set_state
 from services.warming._transitions import (
@@ -26,9 +27,7 @@ from services.warming._transitions import (
 )
 from services.warming.pacing import (
     _account_tz,
-    _next_utc_midnight,
     _now_iso,
-    _shift_to_active_hours,
 )
 
 if TYPE_CHECKING:
@@ -79,20 +78,17 @@ async def _gate_quiet_day(
     """Park until tomorrow if today is this account's quiet day.
 
     A quiet day mimics the natural gaps in a real user's activity — some days
-    they just don't open the app. Parks in ``sleeping`` until the next UTC
-    midnight (shifted into the active window), exactly like the daily-cap gate,
-    so the loop resumes and re-evaluates for the fresh calendar day. Because the
-    decision is deterministic per ``(account, date)`` and parks past midnight, it
-    fires at most once per calendar day.
+    they just don't open the app. Parks in ``sleeping`` until the account's next
+    local morning, exactly like the daily-cap gate, so the loop resumes and
+    re-evaluates for the fresh local day. Because the decision is deterministic
+    per ``(account, local date)`` and parks into the next local day, it fires at
+    most once per calendar day.
     """
     daily_count, daily_date = daily
     if not _is_quiet_day(account_id, daily_date):
         return None
-    next_run = _shift_to_active_hours(
-        _next_utc_midnight(now),
-        await _account_tz(account_id),
-        _seams.rng,
-        account_id,
+    next_run = _next_local_wake(
+        await _account_tz(account_id), now, _seams.rng, account_id
     ).isoformat()
     write = await _set_state(
         account_id,
@@ -132,11 +128,8 @@ async def _gate_daily_limit(
     headroom = min(_MIN_CYCLE_ACTIONS, effective_cap)
     if effective_cap <= 0 or daily_count <= effective_cap - headroom:
         return None
-    next_run = _shift_to_active_hours(
-        _next_utc_midnight(now),
-        await _account_tz(account_id),
-        _seams.rng,
-        account_id,
+    next_run = _next_local_wake(
+        await _account_tz(account_id), now, _seams.rng, account_id
     ).isoformat()
     write = await _set_state(
         account_id,

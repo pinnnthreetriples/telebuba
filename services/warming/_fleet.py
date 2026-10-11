@@ -146,9 +146,9 @@ def _is_quiet_day(account_id: str, day_iso: str) -> bool:
     Decided once per calendar day from a stable ``account:day`` hash — not per
     session: #202 removed the per-session version because independent rolls
     compounded into far too much idling. Weekends carry a higher rest
-    probability; a ``0`` probability for the day's class disables it. The UTC
-    calendar day (matching ``daily_count_date``) is a deliberate approximation —
-    fine for a coarse weekly-seasonality signal.
+    probability; a ``0`` probability for the day's class disables it. ``day_iso``
+    is the account's local calendar day (matching ``daily_count_date``), so the
+    weekend is the account's own weekend.
     """
     warm = settings.warming
     try:

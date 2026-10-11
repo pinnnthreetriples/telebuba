@@ -8,7 +8,7 @@ can both import them.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -97,15 +97,26 @@ def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
     return hour >= start_hour or hour < end_hour
 
 
-def _next_utc_midnight(now: datetime) -> datetime:
-    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-
-
 def _roll_daily(record: WarmingStateRecord | None, today: str) -> tuple[int, str]:
-    """Return ``(count, date)`` for today, resetting the counter on a new day."""
-    if record is None or record.daily_count_date != today:
+    """Return ``(count, date)`` for the local ``today``, resetting it on a new day.
+
+    A stored date exactly one day ahead of ``today`` is the same day: rows written
+    while the day was a UTC date run ahead of a western account's local date, and
+    resetting them would hand that account a second budget for one local day.
+    """
+    if record is None or record.daily_count_date is None:
         return 0, today
-    return record.daily_actions, today
+    if record.daily_count_date == today or _is_next_day(record.daily_count_date, today):
+        return record.daily_actions, today
+    return 0, today
+
+
+def _is_next_day(stored: str, today: str) -> bool:
+    """Whether ``stored`` is the calendar day right after ``today`` (both ISO dates)."""
+    try:
+        return date.fromisoformat(stored) - date.fromisoformat(today) == timedelta(days=1)
+    except ValueError:
+        return False
 
 
 def _proxy_snapshot(account: AccountRead) -> str | None:
