@@ -122,7 +122,7 @@ def patch_proxy(
     async def _country(account_id: str) -> str | None:  # noqa: ARG001
         return stored_country
 
-    async def _check(settings: ProxySettings) -> ProxyCheckResult:
+    async def _check(settings: ProxySettings, **_bounds: object) -> ProxyCheckResult:
         probed.append(settings)
         if not alive:
             return ProxyCheckResult(status="failed", last_error="Proxy check timed out")

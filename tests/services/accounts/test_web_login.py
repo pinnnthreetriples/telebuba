@@ -13,11 +13,11 @@ proxy changes under it, and how the refusals are worded live in
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from schemas.proxy import ProxyCheckResult
 from services.accounts import web_login
 from services.accounts.web_login import (
     NoProxyForWebLoginError,
@@ -124,28 +124,34 @@ async def test_a_dead_proxy_is_refused_before_any_relay_or_window(
 
 
 @pytest.mark.usefixtures("relay")
+@pytest.mark.parametrize(("stored", "geolocate"), [("DE", False), (None, True)])
 @pytest.mark.asyncio
-async def test_a_hung_probe_is_bounded_and_refused(
+async def test_the_probe_bounds_liveness_only_and_geolocates_only_when_needed(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    stored: str | None,
+    geolocate: bool,  # noqa: FBT001 - a parametrized expectation, not a flag argument
 ) -> None:
-    """``check_proxy_connectivity`` bounds each step at 8 s, not the whole probe."""
+    """The bound covers the exit-IP fetch, never geolocation.
+
+    Wrapping the whole check refused a LIVE proxy whenever a geo provider was slow —
+    even for an account whose stored country needs no geolocation at all.
+    """
     calls: dict[str, Any] = {}
-    _patch_proxy(monkeypatch, _PROXY)
+    seen: list[dict[str, object]] = []
+    _patch_proxy(monkeypatch, _PROXY, stored_country=stored)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    _wire(monkeypatch, calls, states=["qr"])
+    _wire(monkeypatch, calls, states=["logged_in"])
 
-    async def _hang(_proxy: ProxySettings) -> None:
-        await asyncio.Event().wait()
+    async def _check(_proxy: ProxySettings, **bounds: object) -> ProxyCheckResult:
+        seen.append(bounds)
+        return ProxyCheckResult(status="tcp_working", country_code="NL")
 
-    monkeypatch.setattr(web_login, "check_proxy_connectivity", _hang)
-    monkeypatch.setattr(web_login, "_PROXY_PROBE_TIMEOUT", 0.01)
+    monkeypatch.setattr(web_login, "check_proxy_connectivity", _check)
 
-    with pytest.raises(WebLoginLaunchError) as caught:
-        await open_account_web("acct")
+    await open_account_web("acct")
 
-    assert str(caught.value) == "web_login_proxy_dead"
-    assert calls.get("launches") is None
+    assert seen == [{"exit_ip_timeout": web_login._PROXY_PROBE_TIMEOUT, "geolocate": geolocate}]
 
 
 def test_the_shipped_probe_bound_is_a_few_seconds() -> None:

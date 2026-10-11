@@ -64,8 +64,7 @@ __all__ = [
 # Overall bound on driving a first-open login. The poll cadence within it, the 2FA
 # grace and the profile marker belong to ``_web_drive``.
 _DRIVE_TIMEOUT = 90.0
-# Whole-probe bound: ``check_proxy_connectivity`` only bounds each step (8 s apiece).
-_PROXY_PROBE_TIMEOUT = 5.0
+_PROXY_PROBE_TIMEOUT = 5.0  # bounds the proxy probe's exit-IP fetch, never its geolocation
 
 # FIXED operator-facing refusals. ``str(exc)`` here would pipe arbitrary third-party
 # text — Telethon's, binascii's, an OSError carrying an absolute host path — straight
@@ -307,15 +306,16 @@ async def _probe_exit_country(account_id: str, proxy: ProxySettings) -> str | No
     """Refuse a dead proxy up front; return the country the identity is aligned to.
 
     The relay never touches the upstream, so a dead proxy otherwise failed only at the
-    drive deadline as "not signed in". Once per new window. A stored country wins; the
-    measured one covers a fresh, unchecked proxy; None makes the default claim no place.
+    drive deadline as "not signed in". Once per new window. A stored country wins and
+    skips geolocation; a fresh proxy gets the measured one, or None (claim no place).
     """
-    result = None
-    with suppress(TimeoutError):
-        result = await asyncio.wait_for(check_proxy_connectivity(proxy), _PROXY_PROBE_TIMEOUT)
-    if result is None or result.status == "failed":
+    stored = await fetch_account_proxy_country(account_id)
+    result = await check_proxy_connectivity(
+        proxy, exit_ip_timeout=_PROXY_PROBE_TIMEOUT, geolocate=not stored
+    )
+    if result.status == "failed":
         raise WebLoginLaunchError(_PROXY_DEAD_REFUSAL)
-    return await fetch_account_proxy_country(account_id) or result.country_code
+    return stored or result.country_code
 
 
 async def _spawn(
