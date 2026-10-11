@@ -104,6 +104,11 @@ class WebWindow:
         """True while the browser process runs and the DevTools socket is up."""
         return self.process.returncode is None and not self.session.closed
 
+    @property
+    def running(self) -> bool:
+        """True while the browser process runs, whether or not the socket is still up."""
+        return self.process.returncode is None
+
     async def aclose(self) -> None:
         await self.driver.aclose()
         await self.session.aclose()

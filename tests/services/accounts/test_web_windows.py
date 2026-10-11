@@ -34,9 +34,10 @@ if TYPE_CHECKING:
 __all__ = ["fresh_registry", "relay"]
 
 
-def _register(account_id: str, *, alive: bool = True) -> _FakeWindow:
+def _register(account_id: str, *, running: bool = True) -> _FakeWindow:
     window = _FakeWindow()
-    window.alive = alive
+    if not running:
+        window.operator_closes()
     web_login._windows[account_id] = window  # ty: ignore[invalid-assignment]
     return window
 
@@ -47,9 +48,21 @@ async def test_the_count_is_the_windows_still_on_screen() -> None:
     _register("b")
     # Closed by hand in the browser: still registered until the next click drops it,
     # but no Chrome process is holding memory for it any more.
-    _register("c", alive=False)
+    _register("c", running=False)
 
     assert await count_open_web_windows() == 2
+
+
+@pytest.mark.asyncio
+async def test_a_window_whose_socket_dropped_still_counts_and_is_closed() -> None:
+    # Fingerprint gone with the socket, but Chrome still runs and still holds memory;
+    # the close watcher waits on the process, so nothing else would ever end it.
+    window = _register("a")
+    window.alive = False
+
+    assert await count_open_web_windows() == 1
+    assert await close_all_web_windows() == 1
+    assert window.killed is True
 
 
 @pytest.mark.asyncio
@@ -62,7 +75,7 @@ async def test_nothing_open_counts_and_closes_zero() -> None:
 async def test_close_all_kills_every_window_and_reports_the_live_ones() -> None:
     a = _register("a")
     b = _register("b")
-    gone = _register("c", alive=False)
+    gone = _register("c", running=False)
 
     closed = await close_all_web_windows()
 

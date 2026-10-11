@@ -20,9 +20,13 @@ __all__ = ["close_all_web_windows", "count_open_web_windows"]
 
 
 async def count_open_web_windows() -> int:
-    """How many registered windows still have a running browser behind them."""
+    """How many registered windows still have a running browser behind them.
+
+    ``running``, not ``alive``: a window whose socket dropped is still a Chrome process,
+    and nothing else ends it — the close watcher waits on the process.
+    """
     async with web_login._windows_lock:  # noqa: SLF001 - registry owned by web_login
-        return sum(1 for window in web_login._windows.values() if window.alive)  # noqa: SLF001
+        return sum(1 for window in web_login._windows.values() if window.running)  # noqa: SLF001
 
 
 async def close_all_web_windows() -> int:
@@ -35,7 +39,7 @@ async def close_all_web_windows() -> int:
     """
     async with web_login._windows_lock:  # noqa: SLF001 - registry owned by web_login
         registered = list(web_login._windows.items())  # noqa: SLF001
-    on_screen = sum(1 for _account_id, window in registered if window.alive)
+    on_screen = sum(1 for _account_id, window in registered if window.running)
     await asyncio.gather(
         *(web_login._window_closed(account_id, window) for account_id, window in registered)  # noqa: SLF001
     )
