@@ -133,6 +133,23 @@ async def list_roster(campaign_id: str) -> list[str]:
     return await asyncio.to_thread(_list_roster, campaign_id)
 
 
+def _list_rosters() -> dict[str, list[str]]:
+    table = _masstagging_accounts
+    statement = select(table.c.campaign_id, table.c.account_id).order_by(
+        table.c.campaign_id, table.c.position.asc()
+    )
+    rosters: dict[str, list[str]] = {}
+    with _get_engine().connect() as connection:
+        for campaign_id, account_id in connection.execute(statement).all():
+            rosters.setdefault(str(campaign_id), []).append(str(account_id))
+    return rosters
+
+
+async def list_rosters() -> dict[str, list[str]]:
+    """Every campaign's accounts in roster order, in one read (the sidebar)."""
+    return await asyncio.to_thread(_list_rosters)
+
+
 def _list_running_account_names() -> dict[str, tuple[str, str]]:
     accounts, campaigns = _masstagging_accounts, _masstagging_campaigns
     statement = (

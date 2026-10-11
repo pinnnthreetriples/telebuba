@@ -202,3 +202,30 @@ async def test_a_dead_session_takes_the_account_out(telegram: FakeTelegram) -> N
 
     assert {state for state, _reason in (await _rows(campaign_id)).values()} == {"tagged"}
     assert {account for account, _peer in telegram.toggles} == {"a2"}
+
+
+@pytest.mark.asyncio
+async def test_a_refused_lookup_fails_the_person_instead_of_skipping(
+    telegram: FakeTelegram,
+) -> None:
+    campaign_id = await seed(targets=("@alpha", "@beta"))
+    telegram.lookup_errors["alpha"] = TelegramReadError("RPC: AuthKeyUnregisteredError")
+
+    await run_to_end(campaign_id)
+
+    rows = await _rows(campaign_id)
+    assert rows["@alpha"] == ("failed", "error")
+    assert telegram.tagged() == ["beta"]
+
+
+@pytest.mark.asyncio
+async def test_a_peer_flood_on_the_lookup_is_the_spam_block(telegram: FakeTelegram) -> None:
+    campaign_id = await seed(targets=("@alpha",))
+    telegram.lookup_errors["alpha"] = TelegramReadError("PeerFlood", kind="flood_wait")
+
+    await run_to_end(campaign_id)
+
+    verdict = await get_spam_status("a1")
+    assert verdict is not None
+    assert verdict.status == "limited"
+    assert await _record(campaign_id) == ("failed", "no_accounts")

@@ -103,3 +103,25 @@ async def test_stop_after_minutes_counts_from_the_start(telegram: FakeTelegram) 
     assert record is not None
     assert (record.run_status, record.last_error) == ("paused", "volume")
     assert len(telegram.toggles) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_batch_that_posts_nothing_owes_no_pause(
+    telegram: FakeTelegram, clock: Clock
+) -> None:
+    from schemas.telegram_actions_masstagging import MasstagResolvedTarget  # noqa: PLC0415
+
+    campaign_id = await seed(
+        mode="priming",
+        media=[],
+        targets=("@ghost", "@alpha"),
+        dialog_gap_seconds={"min": 600, "max": 600},
+    )
+    telegram.lookups["ghost"] = MasstagResolvedTarget(outcome="not_found")
+    start = clock.now()
+
+    await run_to_end(campaign_id)
+
+    assert len(telegram.toggles) == 1
+    # Only the one real toggle is followed by its 600 s pause.
+    assert clock.now() - start < 1200

@@ -139,9 +139,12 @@ async def _step(
         primed={t.target_key for t in batch if t.state == "primed"},
     )
     try:
-        await _play(ctx, step, batch)
+        acted = await _play(ctx, step, batch)
     except _steps.StepSignal as signal:
         return await _on_signal(ctx, step, signal)
+    if not acted:
+        # Nobody in the batch reached Telegram: no pause is owed, take the next one.
+        return None
     if view.day.floods_in_row:
         await repository.set_day(view.account_id, view.day.day, floods_in_row=0)
     gap = gap_seconds(view, ctx.settings.mode, ctx.pace, _seams.rng.random())
@@ -150,27 +153,38 @@ async def _step(
     return None
 
 
-async def _play(ctx: RunContext, step: _Step, batch: list[TargetRecord]) -> None:
-    account_id, primed = step.account_id, step.primed
-    ready: list[TargetRecord] = []
+async def _resolved(
+    ctx: RunContext, account_id: str, batch: list[TargetRecord]
+) -> list[tuple[TargetRecord, TargetRecord]]:
+    """Who each person is, minus anyone any campaign already tagged (one registry read)."""
+    found: list[tuple[TargetRecord, TargetRecord]] = []
     for target in batch:
         current = await _steps.resolve(ctx, account_id, target)
-        if current is None:
-            continue
-        user_id = current.resolved_user_id
-        if (
-            ctx.pace.skip_tagged
-            and user_id is not None
-            and await repository.tagged_user_ids([user_id])
-        ):
-            await _moves.skip(ctx, current, "already_tagged", account_id)
-            continue
+        if current is not None:
+            found.append((target, current))
+    if not ctx.pace.skip_tagged:
+        return found
+    ids = [c.resolved_user_id for _t, c in found if c.resolved_user_id is not None]
+    tagged = await repository.tagged_user_ids(ids)
+    for _target, current in [pair for pair in found if pair[1].resolved_user_id in tagged]:
+        await _moves.skip(ctx, current, "already_tagged", account_id)
+    return [pair for pair in found if pair[1].resolved_user_id not in tagged]
+
+
+async def _play(ctx: RunContext, step: _Step, batch: list[TargetRecord]) -> bool:
+    """One batch; ``True`` when a write went to Telegram (the pause after it is due)."""
+    account_id, primed = step.account_id, step.primed
+    ready: list[TargetRecord] = []
+    acted = False
+    for target, current in await _resolved(ctx, account_id, batch):
         if not ctx.stories:
+            acted = True
             if await _steps.toggle(ctx, account_id, current):
                 await _moves.tagged(ctx, [current], account_id)
             continue
         own_dialog = target.target_key in primed and target.account_id == account_id
         if ctx.settings.prime_first and not own_dialog:
+            acted = True
             if not await _steps.toggle(ctx, account_id, current):
                 continue
             await _moves.primed(ctx, current, account_id)
@@ -178,6 +192,7 @@ async def _play(ctx: RunContext, step: _Step, batch: list[TargetRecord]) -> None
         ready.append(current)
     if ready:
         await _steps.post_story(ctx, account_id, step.view, ready)
+    return acted or bool(ready)
 
 
 async def _held(ctx: RunContext, keys: set[str]) -> list[TargetRecord]:

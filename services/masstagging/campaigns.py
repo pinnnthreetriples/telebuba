@@ -109,7 +109,8 @@ async def campaign_view(record: CampaignRecord) -> MasstaggingCampaign:
 
 async def list_campaigns() -> MasstaggingCampaigns:
     records = await repository.list_campaigns()
-    rosters = {r.campaign_id: await repository.list_roster(r.campaign_id) for r in records}
+    all_rosters = await repository.list_rosters()
+    rosters = {r.campaign_id: all_rosters.get(r.campaign_id, []) for r in records}
     fleet = await fleet_of(sorted({a for roster in rosters.values() for a in roster}))
     return MasstaggingCampaigns(
         items=[to_campaign(r, rosters[r.campaign_id], fleet) for r in records]

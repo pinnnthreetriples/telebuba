@@ -42,6 +42,8 @@ if TYPE_CHECKING:
     from services.masstagging.pace import AccountView
 
 _DAY = 86_400
+# How the read ladder names a peer flood (``core.telegram_client._read``).
+_PEER_FLOOD = "PeerFlood"
 
 
 class StepSignal(Exception):  # noqa: N818 - a control-flow signal, not an error
@@ -61,7 +63,8 @@ def _user_of(target: TargetRecord) -> MasstagUser | None:
     )
 
 
-async def _lookup(account_id: str, target: TargetRecord) -> MasstagResolvedTarget:
+async def _lookup(account_id: str, target: TargetRecord) -> MasstagResolvedTarget | None:
+    """Who the target is; ``None`` when Telegram refused the lookup itself."""
     await repository.bump_day(account_id, day_of(_seams.now()), resolves=1)
     lookup = target.raw if target.kind == "phone" else (target.raw.removeprefix("@"))
     limit = settings.masstagging.chat_members_limit if target.kind == "username" else 0
@@ -70,10 +73,13 @@ async def _lookup(account_id: str, target: TargetRecord) -> MasstagResolvedTarge
             account_id, ResolveMasstagTarget(target=lookup, members_limit=limit)
         )
     except TelegramReadError as exc:
-        if exc.kind in {"flood_wait", "unavailable"}:
-            verdict: Verdict = "flood" if exc.kind == "flood_wait" else "reconnect"
-            raise StepSignal(verdict, exc.seconds) from exc
-        return MasstagResolvedTarget(outcome="not_found")
+        if exc.kind == "other":
+            return None
+        verdict: Verdict = "reconnect"
+        if exc.kind == "flood_wait":
+            # A peer flood is the spam block on the read side too, not a pause.
+            verdict = "spamblock" if exc.reason == _PEER_FLOOD else "flood"
+        raise StepSignal(verdict, exc.seconds) from exc
     if not isinstance(result, MasstagResolvedTarget):  # pragma: no cover - the read's contract
         return MasstagResolvedTarget(outcome="not_found")
     return result
@@ -108,23 +114,36 @@ async def resolve(ctx: RunContext, account_id: str, target: TargetRecord) -> Tar
         return target
     if target.kind == "contact" or (target.kind == "link" and target.username is None):
         # Known only to the account that found them; the worker never hands it elsewhere.
-        return target if target.resolved_user_id is not None else None
+        if target.resolved_user_id is not None:
+            return target
+        await _moves.fail(ctx, target, "error", account_id)
+        return None
     found = await _lookup(account_id, target)
+    if found is None:
+        # Not "nobody by that name": the lookup failed, so the person fails, retryable.
+        await _moves.fail(ctx, target, "error", account_id)
+        return None
+    return await _settle_lookup(ctx, account_id, target, found)
+
+
+async def _settle_lookup(
+    ctx: RunContext, account_id: str, target: TargetRecord, found: MasstagResolvedTarget
+) -> TargetRecord | None:
+    """A person goes on with who they are; anything else is skipped with its reason."""
     if found.outcome == "group":
         await _expand(ctx, account_id, target, found.members)
         return None
-    if found.outcome != "user" or found.user is None:
+    user = found.user
+    if found.outcome != "user" or user is None:
         reason = {"hidden": "chat_hidden", "not_user": "not_a_user"}.get(
             found.outcome, "phone_not_found" if target.kind == "phone" else "username_not_found"
         )
         await _moves.skip(ctx, target, reason, account_id)  # ty: ignore[invalid-argument-type]
         return None
-    if found.user.is_bot or found.user.is_deleted:
-        await _moves.skip(
-            ctx, target, "bot" if found.user.is_bot else "deleted_account", account_id
-        )
+    if user.is_bot or user.is_deleted:
+        await _moves.skip(ctx, target, "bot" if user.is_bot else "deleted_account", account_id)
         return None
-    return await _moves.resolved(ctx, target, found.user, account_id)
+    return await _moves.resolved(ctx, target, user, account_id)
 
 
 async def toggle(ctx: RunContext, account_id: str, target: TargetRecord) -> bool:
