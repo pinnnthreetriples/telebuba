@@ -7,6 +7,7 @@ const routes: [RegExp, unknown][] = [
   [/\/health$/, fx.health],
   [/\/accounts\/bulk-messages\/(active|latest)$/, null],
   [/\/accounts\/stats$/, fx.accountStats],
+  [/\/accounts\/web-windows$/, fx.accountWebWindows],
   [/\/accounts\/filter-options$/, fx.accountFilterOptions],
   [/\/account-folders$/, fx.accountFolders],
   [/\/accounts(\?|$)/, fx.accounts],
