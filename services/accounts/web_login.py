@@ -1,10 +1,10 @@
 """Open a signed-in web.telegram.org window for one account.
 
 Each account gets AT MOST ONE :class:`LocalProxyRelay` and at most one open window,
-both created lazily on the first click and both living for the backend process. The
-window is held, not just launched: its browser-level CDP socket is what carries the
-account's fingerprint, and Chrome strips every override the moment that socket drops.
-:func:`shutdown_web_login` tears both registries down on app shutdown.
+both created lazily on the first click and ended together when the window goes —
+dropped by us, or closed by the operator (``_web_watch`` notices). The window is held,
+not just launched: its browser-level CDP socket is what carries the account's
+fingerprint, and Chrome strips every override the moment that socket drops.
 
 A click on an account whose window is still open raises that window — and, unless a
 login has actually completed in that profile, drives the login again rather than
@@ -46,6 +46,18 @@ from services.accounts._web_drive import (
     profile_is_seeded,
     still_signed_in,
 )
+from services.accounts._web_errors import (
+    _DRIVE_REFUSAL,
+    _LAUNCH_REFUSAL,
+    _NO_PROXY_REFUSAL,
+    _RELAY_REFUSAL,
+    _RELOAD_LOOP_REFUSAL,
+    _SHUTDOWN_REFUSAL,
+    NoProxyForWebLoginError,
+    WebLoginLaunchError,
+    WebLoginServiceError,
+)
+from services.accounts._web_watch import cancel_watchers, watch_window
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -64,37 +76,6 @@ __all__ = [
 # Overall bound on driving a first-open login. The poll cadence within it, the 2FA
 # grace and the profile marker belong to ``_web_drive``.
 _DRIVE_TIMEOUT = 90.0
-
-# FIXED operator-facing refusals. ``str(exc)`` here would pipe arbitrary third-party
-# text — Telethon's, binascii's, an OSError carrying an absolute host path — straight
-# into a toast, so every refusal below picks one of these instead.
-#
-# CODES, not prose: the envelope's message is translated by the SPA through its
-# ``shell.code.<code>`` tables (frontend/src/shared/i18n/{en,ru}.json) and an unknown
-# string falls through verbatim — so English sentences here reach a Russian-first
-# operator as English. Every code added must be added to BOTH tables.
-_NO_PROXY_REFUSAL = "web_login_no_proxy"
-_LAUNCH_REFUSAL = "web_login_browser_failed"
-_DRIVE_REFUSAL = "web_login_drive_failed"
-_RELAY_REFUSAL = "web_login_relay_failed"
-_SHUTDOWN_REFUSAL = "web_login_shutting_down"
-# ``uvicorn --reload`` (and ``--workers N``) forces a Windows SelectorEventLoop, which
-# implements no subprocess transport at all: ``create_subprocess_exec`` raises
-# NotImplementedError. Nothing in the code can fix that, so say what to change.
-_RELOAD_LOOP_REFUSAL = "web_login_reload_loop"
-
-
-class WebLoginServiceError(ValueError):
-    """Base for web-login refusals the operator should see (maps to a 400)."""
-
-
-class NoProxyForWebLoginError(WebLoginServiceError):
-    """The account has no proxy assigned, so no relay can front the browser."""
-
-
-class WebLoginLaunchError(WebLoginServiceError):
-    """The relay or browser could not be started (never carries proxy creds)."""
-
 
 # One relay and one window per account, created lazily and reused across clicks. Both
 # registries are guarded by their own lock so dict access stays consistent; the whole
@@ -219,21 +200,37 @@ async def _raise_open_window(account_id: str) -> WebWindow | None:
 
 
 async def _drop_window(account_id: str, window: WebWindow) -> None:
-    """Deregister this window and END it — never merely detach.
+    """Deregister this window and END it — never merely detach — and its relay with it.
 
     ``aclose`` strips the fingerprint but leaves Chrome running, and ``focus_window``
     fails on a wedged renderer whose process is very much alive. The orphan then still
     holds the profile (so the next launch fails as a hand-off) and still points
     ``--proxy-server`` at a relay port this same open may rebind — after which it
     egresses through ANOTHER account's proxy.
+
+    Callers hold the account's open lock, so the relay registered now is this window's.
     """
     async with _windows_lock:
         # Only drop the entry we actually examined; a concurrent open for this account
-        # may already have registered a newer one.
-        if _windows.get(account_id) is window:
+        # may already have registered a newer one — and that one owns the relay.
+        dropped = _windows.get(account_id) is window
+        if dropped:
             del _windows[account_id]
     with suppress(Exception):
         await window.kill()
+    if dropped:
+        async with _relays_lock:
+            entry = _relays.pop(account_id, None)
+        if entry is not None:  # closed OUTSIDE the lock, as in ``_relay_port_for``
+            with suppress(Exception):
+                await entry[0].aclose()
+
+
+async def _window_closed(account_id: str, window: WebWindow) -> None:
+    """Drop the window the operator closed, and its relay — unless an open replaced it."""
+    # Under the open lock: a click must not reuse the relay's port before it is closed.
+    async with await _account_open_lock(account_id):
+        await _drop_window(account_id, window)
 
 
 async def _kill_registered_window(account_id: str) -> None:
@@ -351,6 +348,7 @@ async def _spawn(
     async with _windows_lock:
         if not _closing.is_set():
             _windows[account_id] = window
+            watch_window(window, lambda: _window_closed(account_id, window))
             return window
     with suppress(Exception):
         await window.kill()
@@ -373,7 +371,8 @@ async def _launch(account_id: str, relay_port: int, profile: Path, proxy: ProxyS
     if await still_signed_in(window):
         return True
     forget_signed_in(profile)
-    await _drop_window(account_id, window)
+    await _drop_window(account_id, window)  # its relay went with it
+    relay_port = await _relay_port_for(account_id, proxy)
     window = await _spawn(account_id, relay_port, profile, proxy, capture=True)
     return await _drive_and_mark(account_id, window, profile, type_password=True)
 
@@ -425,6 +424,7 @@ async def shutdown_web_login() -> None:
     fresh window after both lists were read, past process exit.
     """
     _closing.set()
+    await cancel_watchers()
     async with _windows_lock:
         windows = list(_windows.values())
         _windows.clear()

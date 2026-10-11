@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from schemas.proxy import ProxyCheckResult, ProxySettings
-from services.accounts import _web_drive, web_login
+from services.accounts import _web_drive, _web_watch, web_login
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -46,6 +46,7 @@ def fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web_login, "_open_locks", {})
     monkeypatch.setattr(web_login, "_open_locks_guard", asyncio.Lock())
     monkeypatch.setattr(web_login, "_closing", asyncio.Event())
+    monkeypatch.setattr(_web_watch, "_watchers", set())
     monkeypatch.setattr(_web_drive, "_POLL_INTERVAL", 0)
     monkeypatch.setattr(_web_drive, "_PASSWORD_GRACE", 0)
 
@@ -83,6 +84,7 @@ class FakeWindow:
         self.alive = True
         self.closed = False
         self.killed = False
+        self._exited = asyncio.Event()
 
     async def aclose(self) -> None:
         self.closed = True
@@ -91,6 +93,15 @@ class FakeWindow:
     async def kill(self) -> None:
         await self.aclose()
         self.killed = True
+        self._exited.set()
+
+    async def wait_closed(self) -> None:
+        await self._exited.wait()
+
+    def operator_closes(self) -> None:
+        """The operator closes the window: the browser process exits on its own."""
+        self.alive = False
+        self._exited.set()
 
 
 @pytest.fixture
@@ -196,8 +207,13 @@ def wire(
     token: str | None = "dG9rZW4x",  # base64url for b"token1"
     twofa: str | None = None,
 ) -> FakeWindow:
-    """Wire the launch + drive collaborators; return the window the launch hands back."""
+    """Wire the launch + drive collaborators; return the window the FIRST launch hands back.
+
+    Every later launch hands back a new window, recorded in ``calls["windows"]``: a
+    real relaunch is a new browser, and the registry tells windows apart by identity.
+    """
     window = FakeWindow()
+    calls["windows"] = []
 
     async def _launch(
         relay_port: int,
@@ -213,7 +229,9 @@ def wire(
         # fills it immediately — which is exactly why "has files" cannot mean signed in.
         profile_dir.mkdir(parents=True, exist_ok=True)
         (profile_dir / "Default").write_text("chrome state", encoding="utf-8")
-        return window
+        launched = window if not calls["windows"] else FakeWindow()
+        calls["windows"].append(launched)
+        return launched
 
     async def _focus(_window: object) -> None:
         calls["focused"] = calls.get("focused", 0) + 1
