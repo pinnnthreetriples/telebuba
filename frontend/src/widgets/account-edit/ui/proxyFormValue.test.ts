@@ -6,6 +6,14 @@ test.each([
   ['1.2.3.4:8080', { host: '1.2.3.4', port: '8080' }],
   ['  1.2.3.4:8080\n', { host: '1.2.3.4', port: '8080' }],
   ['1.2.3.4:8080:user:p:ss', { host: '1.2.3.4', port: '8080', username: 'user', password: 'p:ss' }],
+  [
+    '1.2.3.4:8080:alice:p@ss',
+    { host: '1.2.3.4', port: '8080', username: 'alice', password: 'p@ss' },
+  ],
+  [
+    'us:er:pa:ss@1.2.3.4:1080',
+    { host: '1.2.3.4', port: '1080', username: 'us', password: 'er:pa:ss' },
+  ],
   ['user:pass@1.2.3.4:1080', { host: '1.2.3.4', port: '1080', username: 'user', password: 'pass' }],
   ['socks5://1.2.3.4:1080', { host: '1.2.3.4', port: '1080', proxy_type: 'socks5' }],
   [

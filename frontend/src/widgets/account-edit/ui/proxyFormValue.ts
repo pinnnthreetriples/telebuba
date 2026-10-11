@@ -48,16 +48,18 @@ export function parseProxyLine(text: string): Partial<ProxyFormValue> | null {
     rest = rest.slice(scheme[0].length);
   }
   let credentials: string | undefined;
-  const at = rest.lastIndexOf('@');
-  if (at !== -1) {
-    credentials = rest.slice(0, at);
-    rest = rest.slice(at + 1);
-  }
-  // `ip:port:login:password` — the endpoint is the first two colon-separated parts.
   const parts = rest.split(':');
-  if (credentials === undefined && parts.length > 2) {
+  const head = parts.slice(0, 2).join(':');
+  if (parts.length > 2 && ENDPOINT.test(head)) {
+    // `ip:port:login:password` — checked first, so an `@` stays in the password.
     credentials = parts.slice(2).join(':');
-    rest = parts.slice(0, 2).join(':');
+    rest = head;
+  } else {
+    const at = rest.lastIndexOf('@');
+    if (at !== -1) {
+      credentials = rest.slice(0, at);
+      rest = rest.slice(at + 1);
+    }
   }
   const [, host, port] = ENDPOINT.exec(rest) ?? [];
   if (!host || !port) return null;

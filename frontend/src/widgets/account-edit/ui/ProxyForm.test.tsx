@@ -112,3 +112,46 @@ test('tabbing past an empty host shows no error, a bad one does', async () => {
   await user.tab();
   expect(screen.getByText(/Введите IPv4-адрес/)).toBeInTheDocument();
 });
+
+test('clearing a host that showed an error clears the error too', async () => {
+  const user = userEvent.setup();
+  renderWithClient();
+  const host = screen.getByPlaceholderText('123.45.67.89');
+
+  await user.type(host, '1.2.3');
+  await user.tab();
+  expect(screen.getByText(/Введите IPv4-адрес/)).toBeInTheDocument();
+
+  await user.clear(host);
+  expect(screen.queryByText(/Введите IPv4-адрес/)).not.toBeInTheDocument();
+  expect(host).not.toHaveAttribute('aria-invalid');
+});
+
+test('a probe reply for replaced values is not shown', async () => {
+  let reply: (response: Response) => void = () => undefined;
+  vi.mocked(fetch).mockReturnValue(
+    new Promise<Response>((resolve) => {
+      reply = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  renderWithClient();
+  const host = screen.getByPlaceholderText('123.45.67.89');
+
+  await user.click(host);
+  await user.paste('1.2.3.4:1080');
+  await user.click(screen.getByRole('button', { name: 'Проверить' }));
+  expect(screen.getByText('Проверяем соединение…')).toBeInTheDocument();
+
+  await user.clear(host);
+  await user.paste('5.6.7.8:3128');
+  expect(screen.queryByText('Проверяем соединение…')).not.toBeInTheDocument();
+  reply(
+    new Response(JSON.stringify({ status: 'tcp_working', country_code: 'NL' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(screen.queryByText('NL')).not.toBeInTheDocument();
+});
