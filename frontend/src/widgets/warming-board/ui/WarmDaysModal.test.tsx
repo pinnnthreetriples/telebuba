@@ -43,12 +43,12 @@ test('presets, keyboard arrows and confirm', async () => {
   expect(slider).toHaveAttribute('aria-valuenow', '4');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  // defaults to the balanced persona when none is picked
-  expect(onConfirm).toHaveBeenCalledWith(4, 'normal');
+  // defaults to the balanced persona and mobile device mode when none is picked
+  expect(onConfirm).toHaveBeenCalledWith(4, 'normal', 'mobile');
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test('persona chip selection is forwarded on confirm', async () => {
+test('persona and deviceMode chip selections are forwarded on confirm', async () => {
   const onClose = vi.fn();
   const onConfirm = vi.fn();
   renderWithClient(
@@ -56,9 +56,10 @@ test('persona chip selection is forwarded on confirm', async () => {
   );
 
   await userEvent.click(screen.getByText('Активный'));
+  await userEvent.click(screen.getByText('Десктоп'));
   await userEvent.click(screen.getByText('Запустить прогрев'));
 
-  expect(onConfirm).toHaveBeenCalledWith(7, 'active');
+  expect(onConfirm).toHaveBeenCalledWith(7, 'active', 'desktop');
 });
 
 test('cancel closes without confirming', async () => {

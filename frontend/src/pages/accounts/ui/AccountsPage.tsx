@@ -8,14 +8,11 @@ import {
   accountFoldersQueryOptions,
   accountsQueryOptions,
   accountStatsQueryOptions,
-  accountWebWindowsQueryOptions,
   activeBulkMessageJobQueryOptions,
   latestBulkMessageJobQueryOptions,
   checkAccountMutation,
-  closeAccountWebWindowsMutation,
   deleteAccountMutation,
   invalidateAccountViews,
-  openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
 import {
@@ -27,7 +24,6 @@ import {
   type Stat,
   StatGrid,
   toastError,
-  toastSuccess,
 } from '@/shared/ui';
 import {
   ALL_VIEW,
@@ -66,15 +62,13 @@ import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
 import { SearchToggle } from './SearchToggle';
+import { useAccountLaunchers } from './useAccountLaunchers';
 
 const PAGE_SIZE = 20;
 // The generated query key embeds `query`, so an undebounced search box means a
 // brand-new key per keystroke — no cached data, `isPending` true, and the table
 // plus the pagination row replaced by the loading line on every character.
 const SEARCH_DEBOUNCE_MS = 300;
-// Each Telegram Web window is a full Chrome process; past this many the operator is
-// told to close some.
-const WEB_WINDOWS_WARN_AT = 8;
 
 export function AccountsPage() {
   const { t } = useTranslation();
@@ -97,9 +91,15 @@ export function AccountsPage() {
   // row and re-enabled its buttons mid-request, and the first response to land
   // cleared the OTHER row's spinner.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
-  // Kept apart from busyIds so opening web doesn't disable a row's check/delete
-  // and its spinner sits only on the globe.
-  const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
+  const {
+    openWebBusyIds,
+    openMobileBusyIds,
+    openWebWindows,
+    closingWebWindows,
+    onOpenWeb,
+    onCloseWebWindows,
+    onOpenMobile,
+  } = useAccountLaunchers();
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -240,16 +240,6 @@ export function AccountsPage() {
   const { feedback: checkResults, mark: markChecked } = useTransientFeedback();
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
-  const openWeb = useMutation(openAccountWebMutation());
-  const webWindows = useQuery(accountWebWindowsQueryOptions());
-  const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
-  const openWebWindows = webWindows.data?.count ?? 0;
-  // Once per crossing: warning again on every open past the threshold is noise.
-  // Re-armed whenever the count is seen below it (a close-all, a window closed by hand).
-  const webWindowsWarned = useRef(false);
-  useEffect(() => {
-    if (openWebWindows < WEB_WINDOWS_WARN_AT) webWindowsWarned.current = false;
-  }, [openWebWindows]);
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -293,60 +283,6 @@ export function AccountsPage() {
   };
   const onDelete = (accountId: string) => {
     setDeletingId(accountId);
-  };
-  // Not runOnRow: opening web changes no account data, so there is nothing to
-  // invalidate, and its busy flag lives in its own set. Refusals (no proxy, no
-  // browser, relay or launch failure) surface through the global MutationCache
-  // toast; the .catch only keeps the rejection from escaping as unhandled. A
-  // window that opened without completing the login is NOT a refusal — that is
-  // the signed_in toast below.
-  const onOpenWeb = (accountId: string) => {
-    setOpenWebBusyIds((ids) => new Set(ids).add(accountId));
-    void openWeb
-      .mutateAsync({ path: { account_id: accountId } })
-      .then((result) => {
-        // A 200 is not a login: every QR token can be refused for 90s, or the 2FA
-        // screen can be left standing, and the window still opens. Ignoring the body
-        // showed that as a silent success while the browser sat on a login screen.
-        // The reason code says which move the operator has to make; the generic copy
-        // stays for a body that carries none.
-        if (!result.signed_in) {
-          toastError(
-            t(
-              result.reason
-                ? `accounts.openWeb.reason.${result.reason}`
-                : 'accounts.openWeb.notSignedIn',
-            ),
-          );
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        setOpenWebBusyIds((ids) => {
-          const next = new Set(ids);
-          next.delete(accountId);
-          return next;
-        });
-        // Refetched even after a refusal: a failed open can still have dropped a window.
-        void webWindows.refetch().then(({ data }) => {
-          const count = data?.count ?? 0;
-          if (count < WEB_WINDOWS_WARN_AT || webWindowsWarned.current) return;
-          webWindowsWarned.current = true;
-          toastError(t('accounts.webWindows.tooMany', { count }));
-        });
-      });
-  };
-  // Refusals surface through the global MutationCache toast, as for the globe.
-  const onCloseWebWindows = () => {
-    void closeWebWindows
-      .mutateAsync({})
-      .then((closed) => {
-        toastSuccess(t('accounts.webWindows.closed', { count: closed.count }));
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        void webWindows.refetch();
-      });
   };
   const confirmDelete = () => {
     if (!deletingId) return;
@@ -497,12 +433,12 @@ export function AccountsPage() {
                 <IconButton
                   size="md"
                   tone="neutral"
-                  disabled={closeWebWindows.isPending}
+                  disabled={closingWebWindows}
                   aria-label={t('accounts.webWindows.closeAll', { count: openWebWindows })}
                   title={t('accounts.webWindows.closeAll', { count: openWebWindows })}
                   onClick={onCloseWebWindows}
                 >
-                  {closeWebWindows.isPending ? (
+                  {closingWebWindows ? (
                     <Spinner tone="default" />
                   ) : (
                     <Icon name="x-circle" size={16} />
@@ -568,8 +504,10 @@ export function AccountsPage() {
                 setProfilingRow(account);
               }}
               onOpenWeb={onOpenWeb}
+              onOpenMobile={onOpenMobile}
               busyIds={busyIds}
               openWebBusyIds={openWebBusyIds}
+              openMobileBusyIds={openMobileBusyIds}
               checkResults={checkResults}
             />
           ) : activeView === ALL_VIEW && !filtered && debouncedSearch === '' ? (

@@ -27,12 +27,14 @@ _device_fingerprints = Table(
     "device_fingerprints",
     _metadata,
     Column("account_id", String, primary_key=True),
+    Column("device_type", String, primary_key=True, server_default="desktop"),
     Column("platform", String, nullable=False),
     Column("device_model", String, nullable=False),
     Column("system_version", String, nullable=False),
     Column("app_version", String, nullable=False),
     Column("lang_code", String, nullable=False),
     Column("system_lang_code", String, nullable=False),
+    Index("idx_device_fingerprints_account_type", "account_id", "device_type"),
 )
 _accounts = Table(
     "accounts",
@@ -157,6 +159,7 @@ _warming_settings = Table(
     # JSON object of the operator's extras toggles (``schemas._warming_extras``);
     # NULL = every key at its default.
     Column("extra_toggles", String, nullable=True),
+    Column("device_mode", String, nullable=False, server_default="mobile"),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(
@@ -206,6 +209,7 @@ _warming_account_state = Table(
     # Operator-chosen activity persona from the start modal. server_default keeps
     # existing/inserted rows on the balanced cadence; the reader maps NULL → normal.
     Column("activity_persona", String, nullable=False, server_default="normal"),
+    Column("device_mode", String, nullable=False, server_default="mobile"),
 )
 _account_spam_status = Table(
     "account_spam_status",

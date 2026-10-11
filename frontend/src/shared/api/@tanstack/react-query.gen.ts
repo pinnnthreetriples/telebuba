@@ -129,6 +129,7 @@ import {
   logout,
   logoutAccount,
   markAccountChatRead,
+  openAccountMobile,
   openAccountWeb,
   type Options,
   postAccountStory,
@@ -564,6 +565,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadError,
   MarkAccountChatReadResponse,
+  OpenAccountMobileData,
+  OpenAccountMobileError,
+  OpenAccountMobileResponse,
   OpenAccountWebData,
   OpenAccountWebError,
   OpenAccountWebResponse,
@@ -1184,6 +1188,35 @@ export const openAccountWebMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await openAccountWeb({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Open Account Mobile
+ *
+ * Open a native Android emulator running Telegram for the account through its proxy.
+ */
+export const openAccountMobileMutation = (
+  options?: Partial<Options<OpenAccountMobileData>>,
+): UseMutationOptions<
+  OpenAccountMobileResponse,
+  OpenAccountMobileError,
+  Options<OpenAccountMobileData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    OpenAccountMobileResponse,
+    OpenAccountMobileError,
+    Options<OpenAccountMobileData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await openAccountMobile({
         ...options,
         ...fnOptions,
         throwOnError: true,

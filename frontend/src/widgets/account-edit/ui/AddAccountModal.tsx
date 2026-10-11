@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal, Stepper } from '@/shared/ui';
+import { Button, CloseButton, Icon, Modal, SegmentedControl, Stepper } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
@@ -13,7 +13,7 @@ import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
 import { TwoFactorBulkStep } from './TwoFactorBulkStep';
-import { useBulkImport } from './useBulkImport';
+import { toDeviceProfiles, useBulkImport, type DeviceProfileSelection } from './useBulkImport';
 
 // The design's add-account wizard. STEP 1 provisions accounts: MANY .session /
 // tdata.zip files at once, each imported by its own request (useBulkImport), or
@@ -75,6 +75,7 @@ export function AddAccountModal({
   const fileInput = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [method, setMethod] = useState<Method>(null);
+  const [deviceProfiles, setDeviceProfiles] = useState<DeviceProfileSelection>('both');
   const [phone, setPhone] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
@@ -95,7 +96,7 @@ export function AddAccountModal({
   // because the title belongs to this component, which owns the chrome.
   const [twofaResult, setTwofaResult] = useState(false);
 
-  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported);
+  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported, deviceProfiles);
   const startLogin = useMutation(startPhoneLoginMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
@@ -153,7 +154,7 @@ export function AddAccountModal({
     setCreatedAccountId(null);
     const forMethod = method;
     startLogin.mutate(
-      { body: { phone: phone.trim() } },
+      { body: { phone: phone.trim(), device_profiles: toDeviceProfiles(deviceProfiles) } },
       {
         onSuccess: (account) => {
           if (methodRef.current !== forMethod) return;
@@ -314,6 +315,24 @@ export function AddAccountModal({
                     selectMethod('phone');
                   }}
                 />
+
+                {method !== null && (
+                  <div className="flex flex-col gap-2">
+                    <span className="type-small-medium text-content-subtle">
+                      {t('accounts.deviceProfiles.label')}
+                    </span>
+                    <SegmentedControl
+                      value={deviceProfiles}
+                      onChange={setDeviceProfiles}
+                      ariaLabel={t('accounts.deviceProfiles.label')}
+                      options={[
+                        { value: 'both', label: t('accounts.deviceProfiles.both') },
+                        { value: 'desktop', label: t('accounts.deviceProfiles.desktop') },
+                        { value: 'mobile', label: t('accounts.deviceProfiles.mobile') },
+                      ]}
+                    />
+                  </div>
+                )}
 
                 {method === 'phone' && (
                   <div className="tb-fadeup flex flex-col gap-3 rounded-md border border-line bg-surface-card px-3 py-4">

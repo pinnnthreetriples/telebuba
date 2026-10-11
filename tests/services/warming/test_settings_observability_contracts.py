@@ -81,6 +81,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         captcha_llm_provider="openai",
         deepseek_api_key=None,
         extra_toggles={"polls": True},
+        device_mode=None,
     )
     assert result.model_dump() == {
         "inter_account_chat": True,
@@ -100,6 +101,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         "has_deepseek_key": False,
         "deepseek_key_hint": None,
         "extra_toggles": {**EXTRA_TOGGLE_DEFAULTS, "polls": True},
+        "device_mode": "mobile",
         "updated_at": "2026-07-17T12:00:00+00:00",
     }
     log.assert_awaited_once_with(

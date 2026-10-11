@@ -31,6 +31,7 @@ from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.device_fingerprint import DeviceType
 
 __all__ = [
     "PhoneLoginError",
@@ -46,7 +47,12 @@ class PhoneLoginError(ValueError):
     """A phone-login step the operator can act on (no phone, bad code, expired)."""
 
 
-async def start_phone_login(phone: str, label: str | None = None) -> AccountRead:
+async def start_phone_login(
+    phone: str,
+    label: str | None = None,
+    *,
+    device_profiles: list[DeviceType] | None = None,
+) -> AccountRead:
     """Provision a NEW account carrying only a phone number, ready for request-code.
 
     No ``.session`` file is written here — Telethon mints it on the first connect
@@ -75,7 +81,13 @@ async def start_phone_login(phone: str, label: str | None = None) -> AccountRead
             raise SessionAlreadyExistsError(msg)
         try:
             account = await add_account(
-                AccountCreate(account_id=digits, session_name=digits, phone=phone, label=label),
+                AccountCreate(
+                    account_id=digits,
+                    session_name=digits,
+                    phone=phone,
+                    label=label,
+                    device_profiles=device_profiles or ["desktop", "mobile"],
+                ),
             )
         except DuplicateSessionNameError as exc:
             msg = f"An account for {phone} already exists."

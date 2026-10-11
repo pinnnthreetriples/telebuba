@@ -7,6 +7,11 @@ from pydantic import BaseModel, Field
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
 from schemas.api import Page
+from schemas.device_fingerprint import (
+    DeviceFingerprint,
+    DeviceType,
+    default_device_profiles,
+)
 from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
@@ -60,12 +65,20 @@ class AccountCreate(BaseModel):
     # invariant that every generator derives one from the other.
     session_name: str | None = Field(default=None, min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     phone: str | None = Field(default=None, min_length=1)
+    device_profiles: list[DeviceType] = Field(
+        default_factory=default_device_profiles,
+        min_length=1,
+    )
 
 
 class AccountSessionFileImport(BaseModel):
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     label: str | None = Field(default=None, min_length=1)
+    device_profiles: list[DeviceType] = Field(
+        default_factory=default_device_profiles,
+        min_length=1,
+    )
 
 
 class AccountRead(BaseModel):
@@ -93,6 +106,10 @@ class AccountRead(BaseModel):
     # System language from the device fingerprint, enriched by the service layer
     # for the edit card's read-only device panel (not an ``accounts`` column).
     device_lang: str | None = None
+    has_desktop_profile: bool = False
+    has_mobile_profile: bool = False
+    desktop_fingerprint: DeviceFingerprint | None = None
+    mobile_fingerprint: DeviceFingerprint | None = None
     bio: str | None = None
     proxy_id: str | None = None
     proxy_type: str | None = None

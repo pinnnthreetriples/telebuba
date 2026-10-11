@@ -960,6 +960,117 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/open-mobile": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Open Account Mobile",
+        "description": "Open a native Android emulator running Telegram for the account through its proxy.",
+        "operationId": "openAccountMobile",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenMobileResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/web-windows": {
       "get": {
         "tags": [
@@ -19684,6 +19795,36 @@
             ],
             "title": "Device Lang"
           },
+          "has_desktop_profile": {
+            "type": "boolean",
+            "title": "Has Desktop Profile",
+            "default": false
+          },
+          "has_mobile_profile": {
+            "type": "boolean",
+            "title": "Has Mobile Profile",
+            "default": false
+          },
+          "desktop_fingerprint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceFingerprint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mobile_fingerprint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviceFingerprint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bio": {
             "anyOf": [
               {
@@ -20349,6 +20490,24 @@
               }
             ],
             "title": "Label"
+          },
+          "device_profiles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "mobile"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Profiles"
           }
         },
         "type": "object",
@@ -20374,6 +20533,24 @@
               }
             ],
             "title": "Label"
+          },
+          "device_profiles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "mobile"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Profiles"
           }
         },
         "type": "object",
@@ -23113,6 +23290,71 @@
           "phones"
         ],
         "title": "ContactLookupRequest"
+      },
+      "DeviceFingerprint": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "device_type": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Type",
+            "default": "desktop"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "macos",
+              "linux",
+              "android",
+              "ios"
+            ],
+            "title": "Platform"
+          },
+          "device_model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Device Model"
+          },
+          "system_version": {
+            "type": "string",
+            "minLength": 1,
+            "title": "System Version"
+          },
+          "app_version": {
+            "type": "string",
+            "minLength": 1,
+            "title": "App Version"
+          },
+          "lang_code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Lang Code"
+          },
+          "system_lang_code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "System Lang Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "platform",
+          "device_model",
+          "system_version",
+          "app_version",
+          "lang_code",
+          "system_lang_code"
+        ],
+        "title": "DeviceFingerprint"
       },
       "DialogueFeed": {
         "properties": {
@@ -26884,6 +27126,42 @@
         "title": "NeuroshillingVersionRequest",
         "description": "Version of the campaign and dialogue the operator actually viewed."
       },
+      "OpenMobileResult": {
+        "properties": {
+          "launched": {
+            "type": "boolean",
+            "title": "Launched"
+          },
+          "signed_in": {
+            "type": "boolean",
+            "title": "Signed In"
+          },
+          "instance_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Instance Name"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "launched",
+          "signed_in",
+          "instance_name"
+        ],
+        "title": "OpenMobileResult",
+        "description": "Outcome of opening (or raising) an account's mobile Telegram emulator."
+      },
       "OpenWebResult": {
         "properties": {
           "launched": {
@@ -28452,6 +28730,18 @@
               }
             ],
             "title": "Label"
+          },
+          "device_profiles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Device Profiles"
           }
         },
         "type": "object",
@@ -28490,6 +28780,15 @@
             ],
             "title": "Activity Persona",
             "default": "normal"
+          },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "mobile"
           }
         },
         "type": "object",
@@ -30258,6 +30557,15 @@
             ],
             "title": "Activity Persona"
           },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "mobile"
+          },
           "readiness": {
             "anyOf": [
               {
@@ -30531,6 +30839,15 @@
           "extra_toggles": {
             "$ref": "#/components/schemas/ExtraToggles"
           },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "mobile"
+          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -30727,6 +31044,21 @@
                 "type": "null"
               }
             ]
+          },
+          "device_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "desktop",
+                  "mobile"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Mode"
           }
         },
         "additionalProperties": false,

@@ -61,6 +61,7 @@ from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
 )
+from core.migration_steps_dual_device import migrate_dual_device_fingerprints
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
@@ -210,6 +211,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (71, "add_account_folders", _add_account_folders),
     (72, "add_user_parser_tables", _add_user_parser_tables),
     (73, "add_masstagging_tables", _add_masstagging_tables),
+    (74, "add_dual_device_fingerprints", migrate_dual_device_fingerprints),
 )
 
 

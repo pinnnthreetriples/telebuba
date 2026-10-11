@@ -44,20 +44,54 @@ from schemas.accounts import (
     AccountRead,
     AccountStatus,
 )
+from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sqlalchemy.sql import Select
 
+_df_desktop = _device_fingerprints.alias("df_desktop")
+_df_mobile = _device_fingerprints.alias("df_mobile")
+
 
 class DuplicateSessionNameError(ValueError):
     """Two accounts cannot share one Telethon session file (F5)."""
 
 
+def _fingerprint_from_prefixed(
+    mapping: Mapping[str, object],
+    account_id: str,
+    prefix: str,
+    device_type: str,
+) -> DeviceFingerprint | None:
+    platform = _optional_str(mapping.get(f"{prefix}_platform"))
+    device_model = _optional_str(mapping.get(f"{prefix}_device_model"))
+    system_version = _optional_str(mapping.get(f"{prefix}_system_version"))
+    app_version = _optional_str(mapping.get(f"{prefix}_app_version"))
+    if not (platform and device_model and system_version and app_version):
+        return None
+    lang_code = _optional_str(mapping.get(f"{prefix}_lang_code")) or "en"
+    system_lang_code = _optional_str(mapping.get(f"{prefix}_system_lang_code")) or "en-US"
+    return DeviceFingerprint(
+        account_id=account_id,
+        device_type="mobile" if device_type == "mobile" else "desktop",
+        platform=cast("DevicePlatform", platform),
+        device_model=device_model,
+        system_version=system_version,
+        app_version=app_version,
+        lang_code=lang_code,
+        system_lang_code=system_lang_code,
+    )
+
+
 def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
+    account_id = str(mapping["account_id"])
+    desktop_fp = _fingerprint_from_prefixed(mapping, account_id, "desktop", "desktop")
+    mobile_fp = _fingerprint_from_prefixed(mapping, account_id, "mobile", "mobile")
+    primary_fp = desktop_fp or mobile_fp
     return AccountRead(
-        account_id=str(mapping["account_id"]),
+        account_id=account_id,
         label=_optional_str(mapping.get("label")),
         session_name=_optional_str(mapping.get("session_name")),
         status=cast("AccountStatus", mapping["status"]),
@@ -73,10 +107,15 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         created_at=str(mapping["created_at"]),
         updated_at=str(mapping["updated_at"]),
         proxy_id=_optional_str(mapping.get("proxy_id")),
-        device_platform=_optional_str(mapping.get("device_platform")),
-        device_model=_optional_str(mapping.get("device_model")),
-        device_system_version=_optional_str(mapping.get("device_system_version")),
-        device_app_version=_optional_str(mapping.get("device_app_version")),
+        device_platform=primary_fp.platform if primary_fp else None,
+        device_model=primary_fp.device_model if primary_fp else None,
+        device_system_version=primary_fp.system_version if primary_fp else None,
+        device_app_version=primary_fp.app_version if primary_fp else None,
+        device_lang=primary_fp.system_lang_code if primary_fp else None,
+        has_desktop_profile=desktop_fp is not None,
+        has_mobile_profile=mobile_fp is not None,
+        desktop_fingerprint=desktop_fp,
+        mobile_fingerprint=mobile_fp,
         proxy_type=_optional_str(mapping.get("proxy_type")),
         proxy_host=_optional_str(mapping.get("proxy_host")),
         proxy_port=_optional_int(mapping.get("proxy_port")),
@@ -109,10 +148,18 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.created_at,
         _accounts.c.updated_at,
         _accounts.c.proxy_id,
-        _device_fingerprints.c.platform.label("device_platform"),
-        _device_fingerprints.c.device_model.label("device_model"),
-        _device_fingerprints.c.system_version.label("device_system_version"),
-        _device_fingerprints.c.app_version.label("device_app_version"),
+        _df_desktop.c.platform.label("desktop_platform"),
+        _df_desktop.c.device_model.label("desktop_device_model"),
+        _df_desktop.c.system_version.label("desktop_system_version"),
+        _df_desktop.c.app_version.label("desktop_app_version"),
+        _df_desktop.c.lang_code.label("desktop_lang_code"),
+        _df_desktop.c.system_lang_code.label("desktop_system_lang_code"),
+        _df_mobile.c.platform.label("mobile_platform"),
+        _df_mobile.c.device_model.label("mobile_device_model"),
+        _df_mobile.c.system_version.label("mobile_system_version"),
+        _df_mobile.c.app_version.label("mobile_app_version"),
+        _df_mobile.c.lang_code.label("mobile_lang_code"),
+        _df_mobile.c.system_lang_code.label("mobile_system_lang_code"),
         _proxies.c.proxy_type.label("proxy_type"),
         _proxies.c.host.label("proxy_host"),
         _proxies.c.port.label("proxy_port"),
@@ -124,9 +171,16 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _proxies.c.country_name.label("proxy_country_name"),
     ).select_from(
         _accounts.outerjoin(
-            _device_fingerprints,
-            _accounts.c.account_id == _device_fingerprints.c.account_id,
-        ).outerjoin(
+            _df_desktop,
+            (_accounts.c.account_id == _df_desktop.c.account_id)
+            & (_df_desktop.c.device_type == "desktop"),
+        )
+        .outerjoin(
+            _df_mobile,
+            (_accounts.c.account_id == _df_mobile.c.account_id)
+            & (_df_mobile.c.device_type == "mobile"),
+        )
+        .outerjoin(
             _proxies,
             _accounts.c.proxy_id == _proxies.c.id,
         ),
@@ -144,6 +198,9 @@ def _fetch_account(account_id: str) -> AccountRead | None:
 
 async def fetch_account(account_id: str) -> AccountRead | None:
     return await asyncio.to_thread(_fetch_account, account_id)
+
+
+get_account = fetch_account
 
 
 def _fetch_account_avatar(account_id: str) -> tuple[bytes, str] | None:
@@ -231,6 +288,9 @@ def _create_account(data: AccountCreate) -> AccountRead:
 
 async def create_account(data: AccountCreate) -> AccountRead:
     return await asyncio.to_thread(_create_account, data)
+
+
+add_account = create_account
 
 
 def _list_accounts(

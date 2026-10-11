@@ -277,6 +277,22 @@ test('save writes the three stored toggles and the readiness gate', async () => 
   expect(body.reactions_enabled).toBe(true);
   expect(body.join_enabled).toBe(true);
   expect(body.enforce_readiness).toBe(true);
+  expect(body.device_mode).toBe('mobile');
+});
+
+test('switching warming device mode writes device_mode to settings', async () => {
+  routeApi();
+  renderWithClient(<ActionTuningCard />);
+  await openCard();
+
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByRole('radio', { name: 'Десктоп' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  const body = await savedBody();
+  expect(body.device_mode).toBe('desktop');
 });
 
 test('"Выключить все" reaches only the actions the backend can store', async () => {

@@ -22,6 +22,7 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsSecret,
     WarmingSettingsUpdate,
 )
+from schemas.device_fingerprint import DeviceType  # noqa: TC001
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
@@ -172,6 +173,7 @@ class WarmingStateRecord(BaseModel):
     # Operator-chosen activity persona. Legacy rows / NULL column → "normal" (the
     # reader maps NULL up), so this is never None on a loaded record.
     activity_persona: ActivityPersona = "normal"
+    device_mode: DeviceType = "mobile"
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -224,6 +226,7 @@ class WarmingStateWrite(BaseModel):
     target_days: int | None = None
     # See WarmingStateRecord.activity_persona. ``None`` = carry current.
     activity_persona: ActivityPersona | None = None
+    device_mode: DeviceType | None = None
     # #10: identifies ONE pre-cycle daily-budget booking. Written only by the
     # ``cycle_started`` write and read only by the hand-back's SQL guard, never by
     # a reader — so unlike every other field here, ``None`` means "leave the column
@@ -317,6 +320,7 @@ class WarmingAccountState(BaseModel):
     target_days: int | None = Field(default=None, ge=1)
     # Operator-chosen activity persona, surfaced on the card.
     activity_persona: ActivityPersona | None = None
+    device_mode: DeviceType = "mobile"
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).
@@ -397,6 +401,7 @@ class StartWarmingRequest(BaseModel):
     target_days: int | None = Field(default=None, ge=1, le=365)
     # Operator-chosen activity persona (default = balanced).
     activity_persona: ActivityPersona = "normal"
+    device_mode: DeviceType = "mobile"
 
 
 class PromoteRequest(BaseModel):
@@ -417,6 +422,7 @@ class WarmingCycleRequest(BaseModel):
     dm_allowed: bool | None = None
     # Operator persona — drives per-session reaction/DM probability + story view.
     activity_persona: ActivityPersona = "normal"
+    device_mode: DeviceType = "mobile"
 
 
 CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]

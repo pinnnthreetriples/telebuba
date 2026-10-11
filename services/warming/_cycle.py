@@ -185,7 +185,6 @@ async def run_one_cycle(
             detail="no channels configured",
         )
 
-    warm = settings.warming
     account = await fetch_account(account_id)
     # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
     # depend on it and those are enforced by the loop (remaining_actions), not
@@ -204,77 +203,87 @@ async def run_one_cycle(
     if not _can_attempt():
         return await _build_cycle_result(account_id, tally, messages_sent)
 
-    try:
-        # Book before dispatch: cancellation can land while the RPC is already
-        # outside the process, so its outcome is ambiguous and must count spent.
-        tally.attempts += 1
-        online_result = await _seams.execute(account_id, SetOnline(online=True))
-        if online_result.status != "ok":
-            if online_result.status in _WAIT_STATUSES:
-                flooded, seconds, until = _classify_flood(online_result)
-                tally.flooded = flooded
-                tally.flood_seconds = seconds
-                tally.flood_until = until
-            elif online_result.status == "peer_flood":
-                tally.peer_flooded = True
-            else:
-                tally.failures += 1
-                tally.last_failed_action = "set_online"
-            return await _build_cycle_result(account_id, tally, messages_sent)
+    with _seams.device_mode_scope(
+        "mobile"
+        if data.device_mode == "mobile" and account is not None and account.has_mobile_profile
+        else "desktop"
+    ):
+        try:
+            # Book before dispatch: cancellation can land while the RPC is already
+            # outside the process, so its outcome is ambiguous and must count spent.
+            tally.attempts += 1
+            online_result = await _seams.execute(account_id, SetOnline(online=True))
+            if online_result.status != "ok":
+                if online_result.status in _WAIT_STATUSES:
+                    flooded, seconds, until = _classify_flood(online_result)
+                    tally.flooded = flooded
+                    tally.flood_seconds = seconds
+                    tally.flood_until = until
+                elif online_result.status == "peer_flood":
+                    tally.peer_flooded = True
+                else:
+                    tally.failures += 1
+                    tally.last_failed_action = "set_online"
+                return await _build_cycle_result(account_id, tally, messages_sent)
 
-        online_set = True
-        await _emit_step(on_step, "set_online")
-        await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
+            online_set = True
+            await _emit_step(on_step, "set_online")
+            await _human_pause(
+                settings.warming.typing_min_seconds,
+                settings.warming.typing_max_seconds,
+            )
 
-        affinity = _account_channel_affinity(
-            account_id, channels, _affinity_epoch(datetime.now(UTC))
-        )
-        upper = min(intensity.channels_max, len(affinity))
-        lower = min(intensity.channels_min, upper)
-        chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
-        chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
-        joined = await list_joined_channels(account_id)
-        chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
-        recent_ids, recent_media = await _run_channel_loop(
-            data,
-            tally,
-            chosen,
-            secret,
-            persona_reaction_probability(data.activity_persona),
-            on_step,
-        )
+            affinity = _account_channel_affinity(
+                account_id, channels, _affinity_epoch(datetime.now(UTC))
+            )
+            upper = min(intensity.channels_max, len(affinity))
+            lower = min(intensity.channels_min, upper)
+            chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
+            chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
+            joined = await list_joined_channels(account_id)
+            chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
+            recent_ids, recent_media = await _run_channel_loop(
+                data,
+                tally,
+                chosen,
+                secret,
+                persona_reaction_probability(data.activity_persona),
+                on_step,
+            )
 
-        # One low-risk "glanced at stories" signal per session (every persona).
-        await _watch_stories_step(account_id, chosen, tally, on_step, can_attempt=_can_attempt())
+            # One low-risk "glanced at stories" signal per session (every persona).
+            await _watch_stories_step(
+                account_id, chosen, tally, on_step, can_attempt=_can_attempt()
+            )
 
-        dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
-        messages_sent = await _run_chat_step(
-            data, secret, tally, dm_allowed=dm_ok, can_attempt=_can_attempt()
-        )
-        if messages_sent:
-            await _emit_step(on_step, "send_dm")
+            dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
+            messages_sent = await _run_chat_step(
+                data, secret, tally, dm_allowed=dm_ok, can_attempt=_can_attempt()
+            )
+            if messages_sent:
+                await _emit_step(on_step, "send_dm")
 
-        # Extras go last so the budget-booking steps above never starve behind them.
-        await _extras_step(
-            _ExtraContext(
-                account_id=account_id,
-                secret=secret,
-                persona=data.activity_persona,
-                chosen=chosen,
-                recent_ids=recent_ids,
-                recent_media=recent_media,
-                tally=tally,
-                remaining_actions=data.remaining_actions,
-                joined=joined,
-                account=account,
-                media_bytes_left=warm.extras_media_bytes_per_cycle,
-            ),
-            on_step,
-        )
-    finally:
-        # SetOnline(False) must run even if any of the inner steps raises so the
-        # account does not stay online forever.
-        if online_set:
-            await _set_offline(account_id)
+            # Extras go last so the budget-booking steps above never starve behind them.
+            await _extras_step(
+                _ExtraContext(
+                    account_id=account_id,
+                    secret=secret,
+                    persona=data.activity_persona,
+                    chosen=chosen,
+                    recent_ids=recent_ids,
+                    recent_media=recent_media,
+                    tally=tally,
+                    remaining_actions=data.remaining_actions,
+                    joined=joined,
+                    account=account,
+                    media_bytes_left=settings.warming.extras_media_bytes_per_cycle,
+                ),
+                on_step,
+            )
+        finally:
+            # SetOnline(False) must run even if any of the inner steps raises so the
+            # account does not stay online forever.
+            if online_set:
+                await _set_offline(account_id)
 
     return await _build_cycle_result(account_id, tally, messages_sent)

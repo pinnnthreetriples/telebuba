@@ -1,7 +1,7 @@
 ---
 name: runtime-warming
 description: Warming scheduling, budget, dialogue, recovery and board runtime.
-last_updated: 2026-09-28
+last_updated: 2026-10-11
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -19,7 +19,7 @@ grounds_to:
 # Warming Runtime
 
 - One owned in-memory `asyncio.Task` runs per persisted active account. Ownership is retained until the task is terminal; a timed-out Stop remains non-quiescent and blocks restart, promotion, handoff and deletion. FastAPI lifespan reconciles persisted state; one uvicorn worker is required while ownership is process-local.
-- Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing.
+- Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing. `device_mode` (`mobile` by default, or `desktop`) is persisted on `warming_settings` and `warming_account_state`; each cycle binds its effective `device_type` via `_seams.device_mode_scope`, falling back to `desktop` when `device_mode == "mobile"` on an account without a mobile fingerprint.
 - Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Each Telegram attempt is booked immediately before dispatch; cancellation or lease loss after dispatch is an unknown outcome and remains spent. Hard process death remains fail-closed because actual spend is unknown.
 - Cycle work spends one shared budget across online/join/read/react/story/DM actions. When tuning caps or cadence, verify later steps remain reachable rather than reasoning from a single action in isolation.
 - Extras (the tuning card's side actions) are the last cycle step, drawn per persona from a registry of toggled-on eligible specs. Read extras never book the daily budget; write extras book it immediately before dispatch like every other step, and are skipped (never queued, never drawn) once it is spent. An extra that ran but found nothing to act on (`warm_skip`) stays booked yet is not a landed extra. Poll/video/voice extras aim only at posts the channel read classified as such.

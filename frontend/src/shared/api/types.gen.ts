@@ -514,6 +514,16 @@ export type AccountRead = {
    */
   device_lang?: string | null;
   /**
+   * Has Desktop Profile
+   */
+  has_desktop_profile?: boolean;
+  /**
+   * Has Mobile Profile
+   */
+  has_mobile_profile?: boolean;
+  desktop_fingerprint?: DeviceFingerprint | null;
+  mobile_fingerprint?: DeviceFingerprint | null;
+  /**
    * Bio
    */
   bio?: string | null;
@@ -899,6 +909,10 @@ export type BodyImportAccountSession = {
    * Label
    */
   label?: string | null;
+  /**
+   * Device Profiles
+   */
+  device_profiles?: Array<'desktop' | 'mobile'> | null;
 };
 
 /**
@@ -913,6 +927,10 @@ export type BodyImportAccountTdata = {
    * Label
    */
   label?: string | null;
+  /**
+   * Device Profiles
+   */
+  device_profiles?: Array<'desktop' | 'mobile'> | null;
 };
 
 /**
@@ -2524,6 +2542,44 @@ export type ContactLookupRequest = {
    * Max Delay Seconds
    */
   max_delay_seconds?: number;
+};
+
+/**
+ * DeviceFingerprint
+ */
+export type DeviceFingerprint = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Device Type
+   */
+  device_type?: 'desktop' | 'mobile';
+  /**
+   * Platform
+   */
+  platform: 'windows' | 'macos' | 'linux' | 'android' | 'ios';
+  /**
+   * Device Model
+   */
+  device_model: string;
+  /**
+   * System Version
+   */
+  system_version: string;
+  /**
+   * App Version
+   */
+  app_version: string;
+  /**
+   * Lang Code
+   */
+  lang_code: string;
+  /**
+   * System Lang Code
+   */
+  system_lang_code: string;
 };
 
 /**
@@ -4891,6 +4947,30 @@ export type NeuroshillingVersionRequest = {
 };
 
 /**
+ * OpenMobileResult
+ *
+ * Outcome of opening (or raising) an account's mobile Telegram emulator.
+ */
+export type OpenMobileResult = {
+  /**
+   * Launched
+   */
+  launched: boolean;
+  /**
+   * Signed In
+   */
+  signed_in: boolean;
+  /**
+   * Instance Name
+   */
+  instance_name: string;
+  /**
+   * Message
+   */
+  message?: string | null;
+};
+
+/**
  * OpenWebResult
  *
  * The outcome of opening a web.telegram.org window for the account.
@@ -5762,6 +5842,10 @@ export type StartPhoneLoginRequest = {
    * Label
    */
   label?: string | null;
+  /**
+   * Device Profiles
+   */
+  device_profiles?: Array<'desktop' | 'mobile'>;
 };
 
 /**
@@ -5780,6 +5864,10 @@ export type StartWarmingRequest = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active';
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
 };
 
 /**
@@ -6733,6 +6821,10 @@ export type WarmingAccountState = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active' | null;
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -6904,6 +6996,10 @@ export type WarmingSettings = {
   deepseek_key_hint?: string | null;
   extra_toggles?: ExtraToggles;
   /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
+  /**
    * Updated At
    */
   updated_at: string;
@@ -6986,6 +7082,10 @@ export type WarmingSettingsUpdate = {
    */
   clear_deepseek_key?: boolean;
   extra_toggles?: ExtraToggles | null;
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile' | null;
 };
 
 /**
@@ -7486,6 +7586,57 @@ export type OpenAccountWebResponses = {
 };
 
 export type OpenAccountWebResponse = OpenAccountWebResponses[keyof OpenAccountWebResponses];
+
+export type OpenAccountMobileData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-mobile';
+};
+
+export type OpenAccountMobileErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenAccountMobileError = OpenAccountMobileErrors[keyof OpenAccountMobileErrors];
+
+export type OpenAccountMobileResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenMobileResult;
+};
+
+export type OpenAccountMobileResponse =
+  OpenAccountMobileResponses[keyof OpenAccountMobileResponses];
 
 export type CountAccountWebWindowsData = {
   body?: never;

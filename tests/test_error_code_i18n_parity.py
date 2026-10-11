@@ -49,6 +49,7 @@ from core.telegram_client._twofa import _TWOFA_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.chat_broadcast import ChatBroadcastRefusalCode
 from schemas.masstagging import MasstaggingRefusalCode
+from schemas.mobile_emulator import MobileEmulatorRefusalCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.scheduled_posts import ScheduledPostRefusalCode
@@ -125,6 +126,7 @@ def _expected_codes() -> set[str]:
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
+        | set(get_args(MobileEmulatorRefusalCode))
         | set(get_args(NeurocommentRefusalCode))
         | set(get_args(NeuroshillingRefusalCode))
         | set(get_args(ChatBroadcastRefusalCode))

@@ -24,6 +24,13 @@ const FAILURE_BY_CODE: Record<string, ImportFailure> = {
 };
 
 type Method = 'session' | 'tdata';
+export type DeviceProfileSelection = 'both' | 'desktop' | 'mobile';
+
+export function toDeviceProfiles(selection: DeviceProfileSelection): Array<'desktop' | 'mobile'> {
+  if (selection === 'desktop') return ['desktop'];
+  if (selection === 'mobile') return ['mobile'];
+  return ['desktop', 'mobile'];
+}
 
 // No envelope means no answer reached us; an unlisted code gets the neutral reason.
 // A tdata name is never validated, so its `validation_error` is an empty archive.
@@ -42,13 +49,19 @@ const MAX_IN_FLIGHT = 2;
 // only name + verdict are rendered. Each row reports its own failure, so the
 // mutations opt out of the global error toast. `mutateAsync`, never `.mutate` in a loop: one
 // useMutation observer is a single callback slot.
-export function useBulkImport(method: Method, onSettledOne: () => void) {
+export function useBulkImport(
+  method: Method,
+  onSettledOne: () => void,
+  deviceProfiles: DeviceProfileSelection = 'both',
+) {
   const [files, setFiles] = useState<BulkFile[]>([]);
   const raw = useRef<(File | undefined)[]>([]);
   const queue = useRef<number[]>([]);
   const inFlight = useRef(0);
   // Bumped by reset(): a file settling afterwards must not touch the new list.
   const generation = useRef(0);
+  const deviceProfilesRef = useRef<DeviceProfileSelection>(deviceProfiles);
+  deviceProfilesRef.current = deviceProfiles;
   const importSession = useMutation({
     ...importAccountSessionMutation(),
     meta: { inlineError: true },
@@ -72,13 +85,22 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
   };
 
   const runOne = async (id: number, file: File, gen: number) => {
+    const selectedProfiles = toDeviceProfiles(deviceProfilesRef.current);
     try {
       const accountIds =
         method === 'tdata'
-          ? ((await importTdata.mutateAsync({ body: { file } })).accounts?.map(
-              (account) => account.account_id,
-            ) ?? [])
-          : [(await importSession.mutateAsync({ body: { file } })).account_id];
+          ? ((
+              await importTdata.mutateAsync({
+                body: { file, device_profiles: selectedProfiles },
+              })
+            ).accounts?.map((account) => account.account_id) ?? [])
+          : [
+              (
+                await importSession.mutateAsync({
+                  body: { file, device_profiles: selectedProfiles },
+                })
+              ).account_id,
+            ];
       patch(id, gen, { state: 'ok', accountIds });
     } catch (error) {
       patch(id, gen, {

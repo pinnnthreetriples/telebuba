@@ -4,11 +4,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-DevicePlatform = Literal["windows", "macos", "linux"]
+DeviceType = Literal["desktop", "mobile"]
+DevicePlatform = Literal["windows", "macos", "linux", "android", "ios"]
+
+
+def default_device_profiles() -> list[DeviceType]:
+    return ["desktop", "mobile"]
 
 
 class DeviceFingerprint(BaseModel):
     account_id: str = Field(min_length=1)
+    device_type: DeviceType = "desktop"
     platform: DevicePlatform
     device_model: str = Field(min_length=1)
     system_version: str = Field(min_length=1)
@@ -21,6 +27,7 @@ class TelegramClientRequest(BaseModel):
     account_id: str = Field(min_length=1)
     session_name: str | None = Field(default=None, min_length=1)
     receive_updates: bool = True
+    device_type: DeviceType = "desktop"
 
 
 class TelegramClientProfile(BaseModel):

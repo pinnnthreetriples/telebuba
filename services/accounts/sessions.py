@@ -92,6 +92,7 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
             account_id=session_name,
             label=data.label,
             session_name=session_name,
+            device_profiles=data.device_profiles,
         )
         await asyncio.to_thread(_write_session_file, session_path, data.content)
         try:

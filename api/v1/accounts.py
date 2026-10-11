@@ -38,6 +38,8 @@ from schemas.accounts import (
     OpenWebResult,
     WebWindowCount,
 )
+from schemas.device_fingerprint import DeviceType  # noqa: TC001
+from schemas.mobile_emulator import OpenMobileResult
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
@@ -169,6 +171,19 @@ async def open_account_web(account_id: AccountIdPath) -> OpenWebResult:
         return await accounts.open_account_web(account_id)
 
 
+@router.post(
+    "/accounts/{account_id}/open-mobile",
+    response_model=OpenMobileResult,
+    operation_id="openAccountMobile",
+    responses=SERVICE_ERRORS,
+)
+async def open_account_mobile(account_id: AccountIdPath) -> OpenMobileResult:
+    """Open a native Android emulator running Telegram for the account through its proxy."""
+    with service_errors_to_http():
+        await accounts.require_account(account_id)
+        return await accounts.open_account_mobile(account_id)
+
+
 @router.get(
     "/accounts/web-windows",
     response_model=WebWindowCount,
@@ -201,7 +216,13 @@ async def close_account_web_windows() -> WebWindowCount:
 async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     """Create a new account from a bare phone number, ready for request-code."""
     try:
-        return await accounts.start_phone_login(body.phone, body.label)
+        if body.device_profiles == ["desktop", "mobile"]:
+            return await accounts.start_phone_login(body.phone, body.label)
+        return await accounts.start_phone_login(
+            body.phone,
+            body.label,
+            device_profiles=body.device_profiles,
+        )
     except accounts.SessionAlreadyExistsError as exc:
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except accounts.PhoneLoginError as exc:
@@ -313,6 +334,7 @@ async def delete_account(account_id: AccountIdPath) -> None:
 async def import_account_tdata(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
+    device_profiles: Annotated[list[DeviceType] | None, Form()] = None,
 ) -> TdataImportResult:
     async with staged_upload(
         file,
@@ -328,6 +350,7 @@ async def import_account_tdata(
                 # Preserve the normal Pydantic 422 for an explicitly empty part.
                 content_path=content_path if file.size != 0 else None,
                 label=label,
+                device_profiles=device_profiles or ["desktop", "mobile"],
             )
             return await accounts.import_account_tdata(request)
 
@@ -341,6 +364,7 @@ async def import_account_tdata(
 async def import_account_session(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
+    device_profiles: Annotated[list[DeviceType] | None, Form()] = None,
 ) -> AccountRead:
     reject_oversized_upload(
         file,
@@ -352,6 +376,7 @@ async def import_account_session(
         filename=file.filename or "account.session",
         content=content,
         label=label,
+        device_profiles=device_profiles or ["desktop", "mobile"],
     )
     # ``service_errors_to_http`` owns the residual ValueError: the request model is
     # assembled here from Form/File params, so a refused ``account_id`` reaches this

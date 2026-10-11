@@ -43,7 +43,7 @@ from core._schema_tables import (  # noqa: F401 - re-exported for existing impor
 from core.config import settings
 from core.migrations import apply_migrations
 from core.secure_paths import make_private_dir, make_private_file
-from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
+from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform, DeviceType
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -149,8 +149,13 @@ def _build_engine() -> Engine:
 # Generic row/value helpers shared by the repositories below.
 # --------------------------------------------------------------------------- #
 def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerprint:
+    raw_type = mapping.get("device_type")
+    device_type: DeviceType = (
+        cast("DeviceType", str(raw_type)) if raw_type in ("desktop", "mobile") else "desktop"
+    )
     return DeviceFingerprint(
         account_id=str(mapping["account_id"]),
+        device_type=device_type,
         platform=cast("DevicePlatform", mapping["platform"]),
         device_model=str(mapping["device_model"]),
         system_version=str(mapping["system_version"]),
@@ -229,10 +234,12 @@ from core.repositories._accounts_twofa import (  # noqa: E402, F401
 from core.repositories.accounts import (  # noqa: E402, F401
     DuplicateSessionNameError,
     account_summary_counts,
+    add_account,
     create_account,
     delete_account,
     fetch_account,
     fetch_account_avatar,
+    get_account,
     list_accounts,
     list_accounts_by_ids,
     update_account_avatar,
@@ -249,9 +256,12 @@ from core.repositories.content import (  # noqa: E402, F401
 )
 from core.repositories.device_fingerprint import (  # noqa: E402, F401
     fetch_device_fingerprint,
+    get_device_fingerprint,
     insert_device_fingerprint,
+    list_account_device_fingerprints,
     list_device_fingerprints,
     list_device_fingerprints_by_ids,
+    upsert_device_fingerprint,
 )
 from core.repositories.dialogues import (  # noqa: E402, F401
     count_pair_messages_since,

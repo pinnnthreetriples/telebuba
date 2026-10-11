@@ -14,13 +14,17 @@ const TICKS = [...Array(MAX).keys()];
 type ActivityPersona = 'calm' | 'normal' | 'active';
 const PERSONAS: ActivityPersona[] = ['calm', 'normal', 'active'];
 
+type DeviceMode = 'mobile' | 'desktop';
+const DEVICE_MODES: DeviceMode[] = ['mobile', 'desktop'];
+
 type SpamState = 'idle' | 'loading' | 'clean' | 'limited';
 
 const DEFAULT_DAYS = 7;
 const DEFAULT_PERSONA: ActivityPersona = 'normal';
+const DEFAULT_DEVICE_MODE: DeviceMode = 'mobile';
 
 // The design's "warm account" modal: a draggable day-length slider (1–14),
-// quick presets, an activity persona (cadence), and a real @SpamBot pre-check.
+// quick presets, an activity persona (cadence), device mode, and a real @SpamBot pre-check.
 export function WarmDaysModal({
   accountId,
   phone,
@@ -30,18 +34,21 @@ export function WarmDaysModal({
   accountId: string;
   phone: string;
   onClose: () => void;
-  onConfirm: (days: number, persona: ActivityPersona) => void;
+  onConfirm: (days: number, persona: ActivityPersona, deviceMode: DeviceMode) => void;
 }) {
   const { t } = useTranslation();
   const [days, setDays] = useState(DEFAULT_DAYS);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
-  // A length or cadence picked and not yet started.
-  const dirty = days !== DEFAULT_DAYS || persona !== DEFAULT_PERSONA;
+  const [deviceMode, setDeviceMode] = useState<DeviceMode>(DEFAULT_DEVICE_MODE);
+  // A length, cadence, or device mode picked and not yet started.
+  const dirty =
+    days !== DEFAULT_DAYS || persona !== DEFAULT_PERSONA || deviceMode !== DEFAULT_DEVICE_MODE;
   const [spam, setSpam] = useState<SpamState>('idle');
   const spamMutation = useMutation(spamCheckAccountMutation());
   const trackRef = useRef<HTMLDivElement>(null);
   const spamTipId = useId();
   const personaTipId = useId();
+  const deviceModeTipId = useId();
   const pct = ((days - MIN) / (MAX - MIN)) * 100;
 
   // Real @SpamBot probe against this account; the result is shown on the pill.
@@ -223,11 +230,46 @@ export function WarmDaysModal({
             }}
           />
 
+          <div className="mb-2 flex items-center gap-2 type-body-medium">
+            {t('warming.deviceMode.label')}
+            <span className="tb-tip inline-flex">
+              <button
+                type="button"
+                aria-label={t('warming.deviceMode.label')}
+                aria-describedby={deviceModeTipId}
+                className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-small font-medium text-content-subtle"
+              >
+                ?
+              </button>
+              <span id={deviceModeTipId} role="tooltip" className="tb-tip-pop">
+                {t('warming.deviceMode.tip')}
+              </span>
+            </span>
+          </div>
+          <SegmentedControl
+            variant="outline"
+            className="mb-6"
+            value={deviceMode}
+            ariaLabel={t('warming.deviceMode.label')}
+            options={DEVICE_MODES.map((m) => ({
+              value: m,
+              label: (
+                <>
+                  <div className="type-body-medium">{t(`warming.deviceMode.${m}.name`)}</div>
+                  <div className="mt-1 type-small">{t(`warming.deviceMode.${m}.hint`)}</div>
+                </>
+              ),
+            }))}
+            onChange={(m) => {
+              setDeviceMode(m);
+            }}
+          />
+
           <div className="flex justify-end gap-2">
             <Button
               variant="primary"
               onClick={() => {
-                onConfirm(days, persona);
+                onConfirm(days, persona, deviceMode);
                 onClose();
               }}
             >

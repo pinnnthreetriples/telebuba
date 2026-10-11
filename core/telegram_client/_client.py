@@ -107,7 +107,10 @@ async def prepare_telegram_client_profile(
     request: TelegramClientRequest,
 ) -> TelegramClientProfile:
     await _ensure_session_dir()
-    device = await get_or_create_device_fingerprint(request.account_id)
+    device = await get_or_create_device_fingerprint(
+        request.account_id,
+        device_type=request.device_type,
+    )
     proxy = await fetch_account_proxy_settings(request.account_id)
     return TelegramClientProfile(
         account_id=request.account_id,

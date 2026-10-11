@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
+from schemas.device_fingerprint import DeviceType  # noqa: TC001
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
 CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
@@ -57,6 +58,7 @@ class WarmingSettings(BaseModel):
     deepseek_key_hint: str | None = None
     # Always the full key set — the repository merges the stored JSON over the defaults.
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
+    device_mode: DeviceType = "mobile"
     updated_at: str = Field(min_length=1)
 
 
@@ -78,6 +80,7 @@ class WarmingSettingsSecret(BaseModel):
     # Resolved like the others: the stored column, else ``DEEPSEEK__API_KEY``.
     deepseek_api_key: str = ""
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
+    device_mode: DeviceType = "mobile"
     updated_at: str = Field(min_length=1)
 
 
@@ -124,6 +127,7 @@ class WarmingSettingsUpdate(BaseModel):
     # endpoint without ever seeing the extras, so a full-replacement default would
     # reset the tuning card's toggles on every unrelated save. Unknown keys are a 422.
     extra_toggles: ExtraToggles | None = None
+    device_mode: DeviceType | None = None
 
     @field_validator("gemini_api_key", "openai_api_key", "deepseek_api_key")
     @classmethod

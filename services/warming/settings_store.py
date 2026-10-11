@@ -52,6 +52,7 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         has_deepseek_key=bool(secret.deepseek_api_key),
         deepseek_key_hint=_key_hint(secret.deepseek_api_key),
         extra_toggles=secret.extra_toggles,
+        device_mode=secret.device_mode,
         updated_at=secret.updated_at,
     )
 
@@ -83,6 +84,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         captcha_llm_provider=data.captcha_llm_provider,
         deepseek_api_key=deepseek_key,
         extra_toggles=data.extra_toggles,
+        device_mode=data.device_mode,
     )
     await log_event(
         "INFO",

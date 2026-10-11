@@ -9,7 +9,16 @@ import {
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
-import { Badge, Button, CollapsibleCard, FeedbackMark, HelpHint, Icon, Switch } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CollapsibleCard,
+  FeedbackMark,
+  HelpHint,
+  Icon,
+  SegmentedControl,
+  Switch,
+} from '@/shared/ui';
 import type { IconName } from '@/shared/ui';
 
 // Каждое действие прогрева одной строкой, сгруппированное так, как оператор их
@@ -187,6 +196,9 @@ export function ActionTuningCard() {
   const settings = useQuery(warmingSettingsQueryOptions()).data;
   const save = useMutation(updateWarmingSettingsMutation());
   const [toggles, setToggles] = useState<Toggles>(() => initialToggles(settings));
+  const [deviceMode, setDeviceMode] = useState<'mobile' | 'desktop'>(
+    () => settings?.device_mode ?? 'mobile',
+  );
 
   // Засеять ОДИН раз, когда придёт настоящая строка: на холодном кэше начальное
   // состояние — это заглушки выше, и «Сохранить» из него записало бы их поверх
@@ -199,6 +211,7 @@ export function ActionTuningCard() {
     if (!settings || seeded.current) return;
     seeded.current = true;
     setToggles(initialToggles(settings));
+    setDeviceMode(settings.device_mode ?? 'mobile');
   }, [settings]);
 
   const flip = (key: keyof Toggles) => {
@@ -219,6 +232,7 @@ export function ActionTuningCard() {
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
+          device_mode: deviceMode,
           // Путь записи мержит по ключам, так что и частичный объект был бы безопасен;
           // сейчас подключены все ключи, и объект полный.
           extra_toggles: Object.fromEntries(EXTRA_KEYS.map((k) => [k, toggles[k] ?? true])),
@@ -308,6 +322,23 @@ export function ActionTuningCard() {
       </div>
 
       <div className="mt-4 border-t border-canvas pt-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="type-body-medium">{t('warming.deviceMode.label')}</div>
+            <div className="mt-1 type-small">{t('warming.deviceMode.tip')}</div>
+          </div>
+          <SegmentedControl
+            variant="tray"
+            value={deviceMode}
+            ariaLabel={t('warming.deviceMode.label')}
+            options={[
+              { value: 'mobile', label: t('warming.deviceMode.mobile.name') },
+              { value: 'desktop', label: t('warming.deviceMode.desktop.name') },
+            ]}
+            onChange={setDeviceMode}
+          />
+        </div>
+
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="type-body-medium">{t('warming.tune.gate.title')}</div>

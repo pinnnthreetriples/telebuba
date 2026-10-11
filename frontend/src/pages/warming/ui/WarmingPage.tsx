@@ -595,7 +595,7 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={(days, persona) => {
+          onConfirm={(days, persona, deviceMode) => {
             const accountId = warmDaysFor.account_id;
             markBusy(accountId, true);
             // mutateAsync: this shares the `start` hook with the bulk pool button,
@@ -609,6 +609,7 @@ export function WarmingPage() {
                   account_id: accountId,
                   target_days: days,
                   activity_persona: persona,
+                  device_mode: deviceMode,
                 },
               })
               .then(

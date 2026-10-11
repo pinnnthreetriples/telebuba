@@ -307,12 +307,20 @@
         "error": "error"
       }
     },
+    "deviceProfiles": {
+      "label": "Device profiles",
+      "both": "Desktop + Mobile (recommended)",
+      "desktop": "Desktop only",
+      "mobile": "Mobile only"
+    },
     "actions": {
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
       "profile": "Edit profile",
-      "web": "Open in Telegram Web"
+      "web": "Open in Telegram Web",
+      "mobile": "Open in mobile emulator",
+      "mobileDisabled": "Mobile profile is not created for this account"
     },
     "openWeb": {
       "notSignedIn": "The window opened but the account is not signed in — finish the login in that window.",
@@ -321,6 +329,13 @@
         "web_login_2fa_required": "The window opened and is waiting for the 2FA password — type it in that window.",
         "web_login_page_not_loaded": "Telegram Web never loaded in the window — the account's proxy is most likely not reaching Telegram.",
         "web_login_qr_timeout": "QR login was not confirmed in time — click the globe again to retry."
+      }
+    },
+    "openMobile": {
+      "started": "Mobile emulator launched and signed in",
+      "twofaRequired": "Emulator launched. Enter the 2FA password in the LDPlayer window",
+      "reason": {
+        "mobile_emulator_2fa_required": "The emulator is open and waiting for the 2FA password — type it in the LDPlayer window."
       }
     },
     "pagination": {
@@ -1088,7 +1103,13 @@
       "masstagging_media_invalid": "Not a photo or a video: JPG, PNG, WEBP, MP4 and MOV work.",
       "masstagging_media_too_large": "The file is too large.",
       "masstagging_import_invalid": "Could not read the file: plain text or CSV in UTF-8 is needed.",
-      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases."
+      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases.",
+      "mobile_emulator_no_proxy": "This account has no proxy. Assign a proxy before launching the mobile emulator.",
+      "mobile_emulator_no_profile": "This account does not have a mobile digital passport.",
+      "mobile_emulator_not_found": "LDPlayer 9 was not found. Install LDPlayer 9 or set its path in settings.",
+      "mobile_emulator_code_timeout": "The Telegram confirmation code did not arrive in time. Retry launching the emulator.",
+      "mobile_emulator_launch_failed": "Failed to launch or configure the LDPlayer mobile emulator.",
+      "mobile_emulator_shutting_down": "The server is shutting down, so the mobile emulator cannot be launched right now."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -3071,6 +3092,18 @@
       "active": {
         "name": "Active",
         "hint": "20–28 visits/day"
+      }
+    },
+    "deviceMode": {
+      "label": "Warming device",
+      "tip": "Which digital passport the account uses when connecting to Telegram during warming. If the account has no mobile profile, warming falls back to the desktop profile.",
+      "mobile": {
+        "name": "Mobile",
+        "hint": "Android / iOS profile"
+      },
+      "desktop": {
+        "name": "Desktop",
+        "hint": "Telegram Desktop"
       }
     },
     "notReady": {

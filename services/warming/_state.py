@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Final, cast
 
 from core.db import fetch_account, fetch_warming_state, upsert_warming_state
+from schemas.device_fingerprint import DeviceType  # noqa: TC001
 from schemas.warming import (
     ActivityPersona,
     WarmingAccountState,
@@ -52,6 +53,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     phase_entered_at: str | None | _Sentinel = _SENTINEL,
     target_days: int | None | _Sentinel = _SENTINEL,
     activity_persona: ActivityPersona | None | _Sentinel = _SENTINEL,
+    device_mode: DeviceType | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -113,6 +115,10 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             activity_persona=cast(
                 "ActivityPersona | None",
                 _resolve(activity_persona, "activity_persona"),
+            ),
+            device_mode=cast(
+                "DeviceType | None",
+                _resolve(device_mode, "device_mode"),
             ),
         ),
     )

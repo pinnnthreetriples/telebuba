@@ -24,6 +24,7 @@ from services.spam_status import refresh_spam_status as _refresh_spam_status
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from schemas.device_fingerprint import DeviceType
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult, TelegramAction
 
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 # keeps issuing Telegram requests after the operator has stopped it.
 _LEASE: ContextVar[tuple[str, str] | None] = ContextVar("warming_lease", default=None)
 _ACTIVE_LEASES: dict[str, str] = {}
+_DEVICE_MODE: ContextVar[DeviceType] = ContextVar("warming_device_mode", default="desktop")
 
 
 class WarmingLeaseRevokedError(RuntimeError):
@@ -79,6 +81,21 @@ def lease_scope(account_id: str, run_id: str | None) -> Iterator[None]:
         _LEASE.reset(token)
 
 
+@contextmanager
+def device_mode_scope(mode: DeviceType) -> Iterator[None]:
+    """Bind the active warming cycle to its effective device profile ('desktop' | 'mobile')."""
+    token = _DEVICE_MODE.set(mode)
+    try:
+        yield
+    finally:
+        _DEVICE_MODE.reset(token)
+
+
+def current_device_mode() -> DeviceType:
+    """Return the effective device mode for the currently executing warming cycle."""
+    return _DEVICE_MODE.get()
+
+
 def _assert_live_lease(account_id: str, error: type[WarmingLeaseRevokedError]) -> None:
     lease = _LEASE.get()
     # Direct/test calls to ``run_one_cycle`` do not own a long-running runtime
@@ -112,7 +129,12 @@ def cleanup_scope() -> Iterator[None]:
         _LEASE.reset(token)
 
 
-async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+async def execute(
+    account_id: str,
+    action: TelegramAction,
+    *,
+    device_type: DeviceType | None = None,
+) -> ActionResult:
     """Dispatch a warming Telegram action only while its generation owns the lease.
 
     The second check handles a cancellation-suppressing gateway call that was
@@ -122,7 +144,13 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     unknown" without re-deriving it.
     """
     _assert_live_lease(account_id, WarmingLeaseRevokedError)
-    result = await _gateway_execute(account_id, action, domain="warming")
+    effective_mode: DeviceType = device_type if device_type is not None else _DEVICE_MODE.get()
+    if effective_mode == "desktop":
+        result = await _gateway_execute(account_id, action, domain="warming")
+    else:
+        result = await _gateway_execute(
+            account_id, action, domain="warming", device_type=effective_mode
+        )
     _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 

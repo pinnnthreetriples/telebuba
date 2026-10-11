@@ -43,7 +43,7 @@ _FINGERPRINT_SEAM = "services.accounts.lifecycle.get_or_create_device_fingerprin
 def _break_after_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail the first step that runs after ``create_account`` has committed."""
 
-    async def _boom(_account_id: str) -> None:
+    async def _boom(_account_id: str, **_kwargs: object) -> None:
         msg = "database is locked"
         raise RuntimeError(msg)
 

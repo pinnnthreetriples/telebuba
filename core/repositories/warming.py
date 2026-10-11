@@ -55,6 +55,8 @@ from schemas.warming import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from schemas.device_fingerprint import DeviceType
+
 
 def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
     return WarmingChannel(
@@ -140,6 +142,10 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         activity_persona=cast(
             "ActivityPersona",
             _optional_str(mapping.get("activity_persona")) or "normal",
+        ),
+        device_mode=cast(
+            "DeviceType",
+            _optional_str(mapping.get("device_mode")) or "mobile",
         ),
     )
 
@@ -327,6 +333,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # NOT NULL column — coalesce a carried/absent value to the balanced
         # persona so an explicit NULL write can never violate the constraint.
         "activity_persona": data.activity_persona or "normal",
+        "device_mode": data.device_mode or "mobile",
     }
     if data.reservation_token is not None:
         # #10: the only writer is the ``cycle_started`` booking. Absent means "leave

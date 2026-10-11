@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from schemas.device_fingerprint import DeviceType, default_device_profiles
+
 
 class PhoneCodeRequest(BaseModel):
     """Gateway input: send a login code to an account's phone."""
@@ -57,6 +59,10 @@ class StartPhoneLoginRequest(BaseModel):
 
     phone: str = Field(min_length=1)
     label: str | None = Field(default=None, min_length=1)
+    device_profiles: list[DeviceType] = Field(
+        default_factory=default_device_profiles,
+        min_length=1,
+    )
 
 
 class SubmitCodeRequest(BaseModel):

@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 
 from core.logging import log_event
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
-from schemas.device_fingerprint import TelegramClientRequest
+from schemas.device_fingerprint import DeviceType, TelegramClientRequest
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -104,6 +104,7 @@ class TelegramClientUnavailableError(TelegramClientPoolError):
 
 
 _CLIENTS: dict[str, TelegramClient] = {}
+_CLIENT_DEVICE_TYPES: dict[str, DeviceType] = {}
 _CONNECT_LOCKS: dict[str, asyncio.Lock] = {}
 _SHUTTING_DOWN = False
 
@@ -166,16 +167,18 @@ def _connect_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
-async def get_client(account_id: str) -> TelegramClient:
+async def get_client(
+    account_id: str,
+    device_type: DeviceType = "desktop",
+) -> TelegramClient:
     """Return a connected Telethon client for ``account_id`` (cached or freshly built).
 
-    Fast path: cached client whose ``is_connected()`` is True is returned
-    directly without acquiring the per-account lock. Slow path: under the
-    per-account lock we re-check, then build + connect a new client; on
-    cached-but-disconnected we disconnect-and-rebuild once. A transport
-    failure (``OSError``) or a second consecutive connect failure raises
-    :class:`TelegramClientPoolError` so the caller's existing error path (see
-    ``execute(...)``) classifies it like any other Telethon failure.
+    Fast path: cached client whose ``is_connected()`` is True and whose active
+    ``device_type`` matches is returned directly without acquiring the per-account
+    lock. Slow path: under the per-account lock we re-check; if a client is cached
+    with a different ``device_type`` (or is disconnected) we safely disconnect it
+    first before building and connecting a new client so two ``TelegramClient``
+    instances never hold the same Windows ``.session`` SQLite file concurrently.
     """
     if _SHUTTING_DOWN:
         msg = "telegram pool is shutting down"
@@ -184,7 +187,8 @@ async def get_client(account_id: str) -> TelegramClient:
         raise _removing_error(account_id)
 
     cached = _CLIENTS.get(account_id)
-    if cached is not None and cached.is_connected():
+    cached_type = _CLIENT_DEVICE_TYPES.get(account_id, "desktop")
+    if cached is not None and cached.is_connected() and cached_type == device_type:
         return cached
 
     async with _connect_lock(account_id):
@@ -192,14 +196,16 @@ async def get_client(account_id: str) -> TelegramClient:
             raise _removing_error(account_id)
         # Re-check under the lock — a peer may have connected while we waited.
         cached = _CLIENTS.get(account_id)
-        if cached is not None and cached.is_connected():
+        cached_type = _CLIENT_DEVICE_TYPES.get(account_id, "desktop")
+        if cached is not None and cached.is_connected() and cached_type == device_type:
             return cached
         if cached is not None:
-            # Stale entry: drop the lost connection before rebuilding.
+            # Stale entry or device_type switch: drop the connection before rebuilding.
             await _safe_disconnect(cached)
             _CLIENTS.pop(account_id, None)
+            _CLIENT_DEVICE_TYPES.pop(account_id, None)
 
-        client = await _connect_with_retry(account_id)
+        client = await _connect_with_retry(account_id, device_type=device_type)
 
         # Covers both build attempts: connecting awaits, so a removal may have
         # marked the account while we held the lock. Throw the fresh client away
@@ -209,14 +215,28 @@ async def get_client(account_id: str) -> TelegramClient:
             await _safe_disconnect(client)
             raise _removing_error(account_id)
         _CLIENTS[account_id] = client
+        _CLIENT_DEVICE_TYPES[account_id] = device_type
     await _fire_rebuild_hooks(account_id, client)
     return client
 
 
-async def _connect_with_retry(account_id: str) -> TelegramClient:
+async def _call_build_and_connect(
+    account_id: str,
+    device_type: DeviceType,
+) -> TelegramClient:
+    if device_type == "desktop":
+        return await _build_and_connect(account_id)
+    return await _build_and_connect(account_id, device_type=device_type)
+
+
+async def _connect_with_retry(
+    account_id: str,
+    *,
+    device_type: DeviceType = "desktop",
+) -> TelegramClient:
     """Build + connect under the caller's lock; one retry for non-transport faults."""
     try:
-        return await _build_and_connect(account_id)
+        return await _call_build_and_connect(account_id, device_type)
     except Exception as exc:  # second-attempt classifier sits below
         if isinstance(exc, OSError):
             # Transport failure: Telethon's connect() already ran its own retry ladder.
@@ -230,7 +250,7 @@ async def _connect_with_retry(account_id: str) -> TelegramClient:
             extra={"first_error": type(exc).__name__},
         )
         try:
-            return await _build_and_connect(account_id)
+            return await _call_build_and_connect(account_id, device_type)
         except Exception as second_exc:
             raise await _connect_failed(account_id, second_exc) from second_exc
 
@@ -280,6 +300,7 @@ async def evict_client(account_id: str) -> None:
         return
     async with _connect_lock(account_id):
         client = _CLIENTS.pop(account_id, None)
+        _CLIENT_DEVICE_TYPES.pop(account_id, None)
         if client is not None:
             await _safe_disconnect(client)
 
@@ -325,9 +346,13 @@ async def removing_client(account_id: str) -> AsyncIterator[None]:
             del _REMOVING[account_id]
 
 
-async def _build_and_connect(account_id: str) -> TelegramClient:
+async def _build_and_connect(
+    account_id: str,
+    *,
+    device_type: DeviceType = "desktop",
+) -> TelegramClient:
     profile = await prepare_telegram_client_profile(
-        TelegramClientRequest(account_id=account_id),
+        TelegramClientRequest(account_id=account_id, device_type=device_type),
     )
     client = create_telegram_client(profile)
     await client.connect()
@@ -367,6 +392,7 @@ async def shutdown_telegram_pool() -> None:
     _SHUTTING_DOWN = True
     clients = list(_CLIENTS.values())
     _CLIENTS.clear()
+    _CLIENT_DEVICE_TYPES.clear()
     _CONNECT_LOCKS.clear()
     if clients:
         await asyncio.gather(
@@ -380,6 +406,7 @@ def _reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     global _SHUTTING_DOWN  # noqa: PLW0603
     _CLIENTS.clear()
+    _CLIENT_DEVICE_TYPES.clear()
     _CONNECT_LOCKS.clear()
     _REMOVING.clear()
     _SHUTTING_DOWN = False

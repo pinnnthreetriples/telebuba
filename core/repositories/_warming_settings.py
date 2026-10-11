@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from schemas._warming_settings import TextLlmProvider
+    from schemas.device_fingerprint import DeviceType
 
 _WARMING_SETTINGS_ID = 1
 # DeepSeek, because it is what wrote every text before the choice existed: with its
@@ -74,6 +75,13 @@ def _text_provider(value: object) -> TextLlmProvider:
     return _DEFAULT_TEXT_LLM_PROVIDER
 
 
+def _device_mode(value: object) -> DeviceType:
+    text = "" if value is None else str(value)
+    if text in ("desktop", "mobile"):
+        return cast("DeviceType", text)
+    return "mobile"
+
+
 def _keep(new: str | None, current: object) -> str:
     """``None`` keeps the stored value; any value (incl. "" to clear) replaces it."""
     if new is None:
@@ -112,6 +120,7 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         text_llm_provider=_text_provider(mapping.get("text_llm_provider")),
         deepseek_api_key=_str_or(mapping.get("deepseek_api_key"), settings.deepseek.api_key),
         extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
+        device_mode=_device_mode(mapping.get("device_mode")),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -134,6 +143,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "text_llm_provider": _DEFAULT_TEXT_LLM_PROVIDER,
         "deepseek_api_key": "",
         "extra_toggles": None,
+        "device_mode": "mobile",
         "updated_at": _now_iso(),
     }
 
@@ -189,6 +199,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     text_llm_provider: str | None = None,
     deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
+    device_mode: str | None = None,
 ) -> WarmingSettingsSecret:
     # Ensure the singleton row exists, then read it so a ``None`` key/model/provider
     # argument keeps the stored value (keep/clear/replace). Keys ARE persisted now
@@ -252,6 +263,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
                 text_llm_provider, cur.get("text_llm_provider"), _DEFAULT_TEXT_LLM_PROVIDER
             ),
             "deepseek_api_key": _keep(deepseek_api_key, cur.get("deepseek_api_key")),
+            "device_mode": _keep_nonempty(device_mode, cur.get("device_mode"), "mobile"),
             "updated_at": _now_iso(),
         }
         if extra_toggles is not None:
@@ -285,6 +297,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     text_llm_provider: str | None = None,
     deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
+    device_mode: str | None = None,
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
 
@@ -309,4 +322,5 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         text_llm_provider=text_llm_provider,
         deepseek_api_key=deepseek_api_key,
         extra_toggles=extra_toggles,
+        device_mode=device_mode,
     )

@@ -341,10 +341,38 @@ test('mobile account actions sit below the title instead of squeezing it', () =>
   const card = title.closest('[role="listitem"]')!;
   const actions = card.querySelectorAll<HTMLButtonElement>('button[aria-label]');
   expect(title).toBeInTheDocument();
-  expect(actions).toHaveLength(4);
+  expect(actions).toHaveLength(5);
   for (const action of actions) expect(action).toHaveClass('size-touch');
   expect(card.firstElementChild as HTMLElement).not.toContainElement(actions[0]!);
   expect(card.children[1] as HTMLElement).toContainElement(actions[0]!);
+});
+
+test('the smartphone button opens mobile emulator and is disabled when has_mobile_profile is false', async () => {
+  const onOpenMobile = vi.fn();
+  const onOpen = vi.fn();
+  const rows: AccountRead[] = [
+    { ...ACCOUNTS[0]!, has_mobile_profile: true },
+    { ...ACCOUNTS[0]!, account_id: 'acc-no-mob', has_mobile_profile: false },
+  ];
+  render(
+    <AccountsTable
+      data={rows}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpen={onOpen}
+      onOpenMobile={onOpenMobile}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  const mobileBtn = screen.getByTitle('Открыть в мобильном эмуляторе');
+  const disabledMobileBtn = screen.getByTitle('Мобильный профиль не создан для этого аккаунта');
+  expect(mobileBtn).toBeEnabled();
+  expect(disabledMobileBtn).toBeDisabled();
+
+  await userEvent.click(mobileBtn);
+  expect(onOpenMobile).toHaveBeenCalledWith('acc-1');
+  expect(onOpen).not.toHaveBeenCalled();
 });
 
 test('a row opens from the keyboard', async () => {

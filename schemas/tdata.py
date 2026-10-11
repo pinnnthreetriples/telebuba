@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 from schemas.accounts import (
     AccountRead,  # noqa: TC001 - Pydantic needs the runtime class for field schema.
 )
+from schemas.device_fingerprint import DeviceType, default_device_profiles
 
 TdataConvertStatus = Literal[
     "ok",
@@ -42,6 +43,10 @@ class TdataConvertRequest(BaseModel):
     content: bytes = Field(default=b"")
     content_path: Path | None = None
     label: str | None = Field(default=None, min_length=1)
+    device_profiles: list[DeviceType] = Field(
+        default_factory=default_device_profiles,
+        min_length=1,
+    )
 
     @model_validator(mode="after")
     def _exactly_one_payload(self) -> TdataConvertRequest:

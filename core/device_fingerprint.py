@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import secrets
+from typing import TYPE_CHECKING, cast
 
 from core.db import fetch_account, fetch_device_fingerprint, insert_device_fingerprint
 from core.device_fingerprint_lang import language_pair
-from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
+from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform, DeviceType
+
+if TYPE_CHECKING:
+    import random
 
 _WINDOWS_VERSIONS = (
     "Windows 10",
@@ -111,28 +115,81 @@ _LINUX_APP_VERSIONS = (
 )
 _PLATFORMS: tuple[DevicePlatform, ...] = ("windows", "macos", "linux")
 
+# Each entry holds device_model, system_version, and app_version.
+_ANDROID_PROFILES: tuple[tuple[str, str, str], ...] = (
+    ("Samsung Galaxy S23 Ultra", "SDK 34 (Android 14)", "Telegram Android 10.9.2"),
+    ("Samsung Galaxy S24 Ultra", "SDK 34 (Android 14)", "Telegram Android 10.9.2"),
+    ("Google Pixel 8", "SDK 34 (Android 14)", "Telegram Android 10.9.2"),
+    ("Xiaomi 13", "SDK 34 (Android 14)", "Telegram Android 10.2"),
+    ("Xiaomi 14", "SDK 34 (Android 14)", "Telegram Android 10.9.2"),
+)
+
+_IOS_PROFILES: tuple[tuple[str, str, str], ...] = (
+    ("iPhone 14 Pro", "17.5", "Telegram iOS 10.2"),
+    ("iPhone 15 Pro", "17.5", "Telegram iOS 10.2"),
+    ("iPhone 16 Pro", "18.0", "Telegram iOS 10.2"),
+)
+
+_MOBILE_WEIGHTS: tuple[float, float] = (0.70, 0.30)
+_ANDROID_SHARE_PERCENT = 70
+
+
+def _choice(
+    seq: tuple[str, ...] | tuple[tuple[str, str, str], ...],
+    rng: random.Random | None,
+) -> str | tuple[str, str, str]:
+    return rng.choice(seq) if rng is not None else secrets.choice(seq)
+
 
 def generate_random_device_fingerprint(
     account_id: str,
     phone: str | None = None,
+    *,
+    device_type: DeviceType = "desktop",
+    rng: random.Random | None = None,
 ) -> DeviceFingerprint:
-    platform = secrets.choice(_PLATFORMS)
-    if platform == "windows":
-        device_model = secrets.choice(_DESKTOP_DEVICES)
-        system_version = secrets.choice(_WINDOWS_VERSIONS)
-        app_version = secrets.choice(_WINDOWS_APP_VERSIONS)
-    elif platform == "macos":
-        device_model = secrets.choice(_MAC_DEVICES)
-        system_version = secrets.choice(_MACOS_VERSIONS)
-        app_version = secrets.choice(_MAC_APP_VERSIONS)
-    else:
-        device_model = secrets.choice(_DESKTOP_DEVICES)
-        system_version = secrets.choice(_LINUX_DISTROS)
-        app_version = secrets.choice(_LINUX_APP_VERSIONS)
-
     lang_code, system_lang_code = language_pair(phone)
+    if device_type == "mobile":
+        if rng is not None:
+            platform = cast(
+                "DevicePlatform",
+                rng.choices(("android", "ios"), weights=_MOBILE_WEIGHTS, k=1)[0],
+            )
+        else:
+            platform = "android" if secrets.randbelow(100) < _ANDROID_SHARE_PERCENT else "ios"
+        pool = _ANDROID_PROFILES if platform == "android" else _IOS_PROFILES
+        device_model, system_version, app_version = cast(
+            "tuple[str, str, str]",
+            _choice(pool, rng),
+        )
+        return DeviceFingerprint(
+            account_id=account_id,
+            device_type="mobile",
+            platform=platform,
+            device_model=device_model,
+            system_version=system_version,
+            app_version=app_version,
+            lang_code=lang_code,
+            system_lang_code=system_lang_code,
+        )
+
+    platform = cast("DevicePlatform", _choice(_PLATFORMS, rng))
+    if platform == "windows":
+        device_model = cast("str", _choice(_DESKTOP_DEVICES, rng))
+        system_version = cast("str", _choice(_WINDOWS_VERSIONS, rng))
+        app_version = cast("str", _choice(_WINDOWS_APP_VERSIONS, rng))
+    elif platform == "macos":
+        device_model = cast("str", _choice(_MAC_DEVICES, rng))
+        system_version = cast("str", _choice(_MACOS_VERSIONS, rng))
+        app_version = cast("str", _choice(_MAC_APP_VERSIONS, rng))
+    else:
+        device_model = cast("str", _choice(_DESKTOP_DEVICES, rng))
+        system_version = cast("str", _choice(_LINUX_DISTROS, rng))
+        app_version = cast("str", _choice(_LINUX_APP_VERSIONS, rng))
+
     return DeviceFingerprint(
         account_id=account_id,
+        device_type="desktop",
         platform=platform,
         device_model=device_model,
         system_version=system_version,
@@ -142,8 +199,28 @@ def generate_random_device_fingerprint(
     )
 
 
-async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint:
-    existing = await fetch_device_fingerprint(account_id)
+def generate_fingerprint(
+    phone: str | None = None,
+    *,
+    device_type: DeviceType = "desktop",
+    rng: random.Random | None = None,
+    account_id: str = "pending",
+) -> DeviceFingerprint:
+    """Generate a Desktop or Mobile device fingerprint with phone-matched language."""
+    return generate_random_device_fingerprint(
+        account_id,
+        phone=phone,
+        device_type=device_type,
+        rng=rng,
+    )
+
+
+async def get_or_create_device_fingerprint(
+    account_id: str,
+    *,
+    device_type: DeviceType = "desktop",
+) -> DeviceFingerprint:
+    existing = await fetch_device_fingerprint(account_id, device_type=device_type)
     if existing is not None:
         return existing
 
@@ -155,5 +232,6 @@ async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint
     profile = generate_random_device_fingerprint(
         account_id,
         phone=account.phone if account else None,
+        device_type=device_type,
     )
     return await insert_device_fingerprint(profile)

@@ -22,6 +22,7 @@ from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
+    from schemas.device_fingerprint import DeviceType
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
@@ -29,7 +30,15 @@ logger = logging.getLogger(__name__)
 
 async def add_account(data: AccountCreate) -> AccountRead:
     account = await create_account(data)
-    await get_or_create_device_fingerprint(account.account_id)
+    profiles: list[DeviceType] = list(dict.fromkeys(data.device_profiles)) or [
+        "desktop",
+        "mobile",
+    ]
+    for dt in profiles:
+        if dt == "desktop":
+            await get_or_create_device_fingerprint(account.account_id)
+        else:
+            await get_or_create_device_fingerprint(account.account_id, device_type=dt)
     saved = await list_accounts()
     persisted = next(
         (item for item in saved.accounts if item.account_id == account.account_id),

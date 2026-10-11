@@ -22,6 +22,7 @@ from services.warming._transitions import (
 from services.warming.pacing import _account_age_hours, _now_iso, _roll_daily, compute_intensity
 
 if TYPE_CHECKING:
+    from schemas.device_fingerprint import DeviceType
     from schemas.warming import ActivityPersona, WarmingStateRecord
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class _IterationPlan(NamedTuple):
     remaining: int | None
     dm_allowed: bool
     persona: ActivityPersona
+    device_mode: DeviceType = "mobile"
 
 
 class _ReservedIteration(NamedTuple):
@@ -43,6 +45,7 @@ class _ReservedIteration(NamedTuple):
     dm_allowed: bool
     persona: ActivityPersona
     reservation: _Reservation
+    device_mode: DeviceType = "mobile"
 
 
 async def _gate_initial_state(
@@ -96,6 +99,7 @@ async def _plan_iteration(
         return gated
     remaining = max(0, intensity.daily_cap - daily[0]) if intensity.daily_cap > 0 else None
     persona = record.activity_persona if record is not None else "normal"
+    device_mode: DeviceType = record.device_mode if record is not None else "mobile"
     return _IterationPlan(
         age_hours,
         intensity.daily_cap,
@@ -103,6 +107,7 @@ async def _plan_iteration(
         remaining,
         intensity.dm_allowed,
         persona,
+        device_mode,
     )
 
 
@@ -135,6 +140,7 @@ async def _reserve_iteration(
         plan.dm_allowed,
         plan.persona,
         reservation,
+        plan.device_mode,
     )
 
 
@@ -184,6 +190,7 @@ async def _run_reserved_cycle(
                     remaining_actions=reserved.remaining,
                     dm_allowed=reserved.dm_allowed,
                     activity_persona=reserved.persona,
+                    device_mode=reserved.device_mode,
                 ),
                 on_step=_ProgressReporter(account_id, run_id),
                 tally=tally,

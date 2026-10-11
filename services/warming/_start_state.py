@@ -9,6 +9,7 @@ from schemas.warming import is_warming
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
+    from schemas.device_fingerprint import DeviceType
     from schemas.warming import ActivityPersona, StartWarmingRequest, WarmingStateRecord
 
 
@@ -18,6 +19,7 @@ class CarriedStint(NamedTuple):
     started_at: str
     target_days: int
     activity_persona: ActivityPersona
+    device_mode: DeviceType = "mobile"
 
 
 def carry_or_restamp(
@@ -33,4 +35,5 @@ def carry_or_restamp(
         else (data.target_days or settings.neurocomment.warmed_min_days)
     )
     persona = existing.activity_persona if continuing else data.activity_persona
-    return CarriedStint(started_at, target_days, persona)
+    device_mode = existing.device_mode if continuing else data.device_mode
+    return CarriedStint(started_at, target_days, persona, device_mode)
