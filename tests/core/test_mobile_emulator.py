@@ -84,6 +84,33 @@ class TestSessionCapture:
         assert code == "43210"
 
     @pytest.mark.asyncio
+    async def test_poll_for_login_code_skips_undated_or_older_messages(self) -> None:
+        since_dt = datetime(2026, 10, 11, 12, 0, 0, tzinfo=UTC)
+        undated_msg = MagicMock()
+        undated_msg.date = None
+        undated_msg.raw_text = "Login code: 11111"
+
+        old_msg = MagicMock()
+        old_msg.date = datetime(2026, 10, 11, 11, 59, 59, tzinfo=UTC)
+        old_msg.raw_text = "Login code: 22222"
+
+        valid_msg = MagicMock()
+        valid_msg.date = datetime(2026, 10, 11, 12, 0, 1, tzinfo=UTC)
+        valid_msg.raw_text = "Login code: 33333"
+
+        mock_client = AsyncMock()
+        mock_client.get_messages.return_value = [undated_msg, old_msg, valid_msg]
+
+        code = await poll_for_login_code(
+            account_id="acc-1",
+            since_timestamp=since_dt.timestamp(),
+            timeout_seconds=2.0,
+            poll_interval=0.1,
+            client=mock_client,
+        )
+        assert code == "33333"
+
+    @pytest.mark.asyncio
     async def test_poll_for_login_code_times_out(self) -> None:
         mock_client = AsyncMock()
         mock_client.get_messages.return_value = []
@@ -105,6 +132,25 @@ class TestLDConsoleRunner:
         runner = LDConsoleRunner(executable_path=tmp_path / "nonexistent.exe")
         with pytest.raises(EmulatorNotFoundError):
             await runner.is_running("test_instance")
+
+    @pytest.mark.asyncio
+    async def test_exec_timeout_kills_process(self, tmp_path: Path) -> None:
+        fake_exe = tmp_path / "ldconsole.exe"
+        fake_exe.write_text("dummy", encoding="utf-8")
+
+        runner = LDConsoleRunner(executable_path=fake_exe, timeout_seconds=0.1)
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            proc = AsyncMock()
+            proc.communicate.side_effect = TimeoutError()
+            proc.kill = MagicMock()
+            proc.wait = AsyncMock()
+            mock_exec.return_value = proc
+
+            with pytest.raises(EmulatorLaunchError, match=r"timed out after 0\.1s"):
+                await runner._exec("launch", "--name", "inst1")
+
+            proc.kill.assert_called_once()
+            proc.wait.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_exec_handles_non_zero_exit_code(self, tmp_path: Path) -> None:

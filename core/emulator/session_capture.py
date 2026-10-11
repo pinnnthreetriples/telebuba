@@ -67,8 +67,6 @@ async def poll_for_login_code(
     """
     tg_client = client or await get_client(account_id)
     deadline = asyncio.get_running_loop().time() + timeout_seconds
-    skew_buffer = 5.0  # seconds of tolerance for clock discrepancies
-
     while asyncio.get_running_loop().time() < deadline:
         try:
             raw_messages = await tg_client.get_messages(_TELEGRAM_SERVICE_PEER, limit=5)
@@ -77,10 +75,9 @@ async def poll_for_login_code(
                 if msg is None:
                     continue
 
-                msg_date = getattr(msg, "date", None)
-                if since_timestamp is not None and msg_date is not None:
-                    msg_ts = msg_date.timestamp()
-                    if msg_ts < (since_timestamp - skew_buffer):
+                if since_timestamp is not None:
+                    msg_date = getattr(msg, "date", None)
+                    if msg_date is None or msg_date.timestamp() < since_timestamp:
                         continue
 
                 text = getattr(msg, "raw_text", None) or getattr(msg, "message", "") or ""

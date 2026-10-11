@@ -109,9 +109,7 @@ test('openMobile not signed-in toasts the failure message', async () => {
   await waitFor(() => {
     expect(button()).not.toBeDisabled();
   });
-  expect(toastError).toHaveBeenCalledWith(
-    'Не удалось войти в мобильное приложение автоматически',
-  );
+  expect(toastError).toHaveBeenCalledWith('Не удалось войти в мобильное приложение автоматически');
 });
 
 test('openMobile refusal toasts the error and re-enables button', async () => {

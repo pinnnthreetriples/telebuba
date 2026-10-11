@@ -8,6 +8,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.db import fetch_account_proxy_settings, fetch_account_twofa_password
 from core.emulator.adb import (
     KEYCODE_ENTER,
@@ -64,6 +65,44 @@ async def _safe_dump(adb: ADBDriver) -> str:
     with contextlib.suppress(EmulatorLaunchError, OSError):
         return await adb.dump_ui_hierarchy()
     return ""
+
+
+def _is_authenticated_chat_screen(dump: str | None) -> bool:
+    """Positively confirm that Telegram is displaying an authenticated chat screen."""
+    if not dump:
+        return False
+    dump_lower = dump.lower()
+    unauth_markers = (
+        "start messaging",
+        "продолжить",
+        "phone number",
+        "номер телефона",
+        "your phone",
+        "check your phone",
+        "two-step",
+        "cloud password",
+        "облачный пароль",
+        "enter code",
+        "введите код",
+    )
+    if any(m in dump_lower for m in unauth_markers):
+        return False
+
+    auth_markers = (
+        "chats",
+        "чаты",
+        "search",
+        "поиск",
+        "new message",
+        "новое сообщение",
+        "open navigation drawer",
+        "открыть панель навигации",
+        "org.telegram.messenger:id/chat_list",
+        "org.telegram.messenger:id/chats_container",
+        "org.telegram.messenger:id/menu_search",
+        "org.telegram.messenger:id/floating_button",
+    )
+    return any(m in dump_lower for m in auth_markers)
 
 
 async def _start_messaging_and_enter_phone(
@@ -134,7 +173,7 @@ async def _perform_zero_click_login(
 ) -> bool:
     """Execute the automated login flow using ADB and 777000 code capture."""
     dump = await _safe_dump(adb)
-    if dump and "start messaging" not in dump.lower() and "продолжить" not in dump.lower():
+    if _is_authenticated_chat_screen(dump):
         return True
 
     start_time = await _start_messaging_and_enter_phone(dump, phone, adb)
@@ -142,7 +181,7 @@ async def _perform_zero_click_login(
     code = await poll_for_login_code(
         account_id=account_id,
         since_timestamp=start_time,
-        timeout_seconds=45.0,
+        timeout_seconds=float(settings.emulator.code_timeout_seconds),
     )
 
     await asyncio.sleep(2.0)
@@ -152,7 +191,57 @@ async def _perform_zero_click_login(
     await _handle_twofa_if_needed(account_id, adb)
 
     final_dump = await _safe_dump(adb)
-    return "start messaging" not in final_dump.lower() and "phone" not in final_dump.lower()
+    return _is_authenticated_chat_screen(final_dump)
+
+
+async def _setup_instance_hardware(account_id: str, instance_name: str) -> None:
+    """Create and configure deterministic hardware profiles for the emulator instance."""
+    hw = generate_device_profile(account_id)
+    with contextlib.suppress(EmulatorLaunchError, OSError):
+        await create_instance(instance_name)
+
+    await set_device_profile(
+        instance_name,
+        model=hw["model"],
+        imei=hw["imei"],
+        android_id=hw["android_id"],
+        mac=hw["mac"],
+    )
+    await set_resolution(instance_name, width=412, height=915, dpi=320)
+    await set_resource_limits(instance_name, cpus=1, ram_mb=1536)
+
+
+async def _register_proxy_relay(
+    account_id: str,
+    proxy: ProxySettings,
+) -> tuple[LocalProxyRelay, int]:
+    """Start and register a local proxy relay for the emulator."""
+    relay = LocalProxyRelay(proxy)
+    relay_port = await relay.start()
+
+    async with _active_relays_lock:
+        if account_id in _active_relays:
+            old_relay, _ = _active_relays.pop(account_id)
+            await old_relay.aclose()
+        _active_relays[account_id] = (relay, proxy)
+
+    return relay, relay_port
+
+
+async def _cleanup_failed_launch(
+    account_id: str,
+    instance_name: str,
+    relay: LocalProxyRelay,
+) -> None:
+    """Clean up proxy relay and stop emulator instance upon a failed launch or login."""
+    async with _active_relays_lock:
+        active = _active_relays.get(account_id)
+        if active is not None and active[0] is relay:
+            _active_relays.pop(account_id)
+    with contextlib.suppress(OSError):
+        await relay.aclose()
+    with contextlib.suppress(EmulatorLaunchError, OSError):
+        await stop_instance(instance_name)
 
 
 async def open_account_mobile(account_id: str) -> OpenMobileResult:
@@ -174,58 +263,47 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
     instance_name = f"telebuba_{account_id}"
 
     async with await _get_account_lock(account_id):
-        # Verify host emulator environment
         if not is_emulator_available():
             msg = "LDPlayer or ADB binary not located on host"
             raise EmulatorNotFoundError(msg)
 
-        if await is_running(instance_name):
-            return OpenMobileResult(
-                launched=True,
-                signed_in=True,
-                instance_name=instance_name,
-                message="Emulator instance already running",
-            )
-
-        hw = generate_device_profile(account_id)
-
-        with contextlib.suppress(EmulatorLaunchError, OSError):
-            await create_instance(instance_name)
-
-        await set_device_profile(
-            instance_name,
-            model=hw["model"],
-            imei=hw["imei"],
-            android_id=hw["android_id"],
-            mac=hw["mac"],
-        )
-        await set_resolution(instance_name, width=412, height=915, dpi=320)
-        await set_resource_limits(instance_name, cpus=1, ram_mb=1536)
-
-        relay = LocalProxyRelay(proxy)
-        relay_port = await relay.start()
-
-        async with _active_relays_lock:
-            # Close existing relay for this account if any
-            if account_id in _active_relays:
-                old_relay, _ = _active_relays.pop(account_id)
-                await old_relay.aclose()
-            _active_relays[account_id] = (relay, proxy)
-
-        await launch_instance(instance_name)
-
         adb = ADBDriver(instance_name)
+        running = await is_running(instance_name)
+        if running:
+            dump = await _safe_dump(adb)
+            if _is_authenticated_chat_screen(dump):
+                return OpenMobileResult(
+                    launched=True,
+                    signed_in=True,
+                    instance_name=instance_name,
+                    message="Emulator instance already running",
+                )
 
-        booted = await adb.wait_for_boot(timeout_seconds=60.0)
-        if not booted:
-            logger.warning("Instance %s boot wait timed out; attempting to proceed", instance_name)
+        if not running:
+            await _setup_instance_hardware(account_id, instance_name)
 
-        await adb.set_reverse_proxy(relay_port)
+        relay, relay_port = await _register_proxy_relay(account_id, proxy)
 
-        await adb.start_app("org.telegram.messenger")
-        await asyncio.sleep(3.0)
+        try:
+            if not running:
+                await launch_instance(instance_name)
+                booted = await adb.wait_for_boot(
+                    timeout_seconds=float(settings.emulator.boot_timeout_seconds),
+                )
+                if not booted:
+                    logger.warning(
+                        "Instance %s boot wait timed out; attempting to proceed",
+                        instance_name,
+                    )
 
-        signed_in = await _perform_zero_click_login(account_id, account.phone, adb)
+            await adb.set_reverse_proxy(relay_port)
+            await adb.start_app("org.telegram.messenger")
+            await asyncio.sleep(3.0)
+
+            signed_in = await _perform_zero_click_login(account_id, account.phone, adb)
+        except BaseException:
+            await _cleanup_failed_launch(account_id, instance_name, relay)
+            raise
 
     return OpenMobileResult(
         launched=True,
