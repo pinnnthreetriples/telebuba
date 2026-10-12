@@ -388,9 +388,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # unconditionally would have every unrelated write NULL out the token the
         # hand-back guards on, which is the stranded day all over again.
         insert_values["reservation_token"] = data.reservation_token
-    if data.warmed_days is not None:
-        # Same "absent means leave it" rule: only a fresh stint writes these here;
-        # the once-per-day count has its own guarded statement.
+    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
         insert_values["warmed_days"] = data.warmed_days
         insert_values["last_warmed_date"] = data.last_warmed_date
     update_values: dict[str, object] = dict(insert_values)

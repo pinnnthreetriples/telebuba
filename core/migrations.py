@@ -97,8 +97,8 @@ from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
-from core.migration_steps_warming_channels import _add_warming_channel_labels
 from core.migration_steps_warmed_days import _add_warming_warmed_days
+from core.migration_steps_warming_channels import _add_warming_channel_labels
 from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
     _add_warming_settings_extra_toggles,
