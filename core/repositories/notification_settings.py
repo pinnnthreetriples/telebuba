@@ -56,7 +56,7 @@ def _save(enabled: bool | None, bot_token: str | None, chat_id: str | None) -> N
         provided["bot_token"] = bot_token
     if chat_id is not None:
         provided["chat_id"] = chat_id
-    defaults = {"enabled": 0, "bot_token": "", "chat_id": ""}
+    defaults: dict[str, object] = {"enabled": 0, **dict.fromkeys(("bot_token", "chat_id"), "")}
     statement = sqlite_insert(_notification_settings).values(
         id=_SETTINGS_ID, **{**defaults, **provided}
     )
