@@ -14,6 +14,7 @@ from services.warming import _loop, _seams
 from services.warming._local_day import _local_date
 from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import _release_reservation_on_exit, _Reservation
+from services.warming._spam_check import _gate_spam_check
 from services.warming._steps import _ChannelTally
 from services.warming._transitions import (
     _gate_readiness,
@@ -74,6 +75,9 @@ async def _plan_iteration(
     initial_gate = await _gate_initial_state(account_id, record, now, run_id)
     if initial_gate is not None:
         return initial_gate
+    spam_gate = await _gate_spam_check(account_id, record, now, run_id=run_id)
+    if spam_gate is not None:
+        return spam_gate
 
     account = await fetch_account(account_id)
     age_hours = _account_age_hours(account, now)

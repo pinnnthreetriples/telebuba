@@ -264,6 +264,37 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
   });
 });
 
+test('a hand-off @SpamBot did not answer offers only a retry', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [{ account_id: 'grad', label: 'Graduate', warming_days: 20, target_days: 14 }],
+  };
+  let handoffs = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname === '/api/v1/warming/handoff') {
+      handoffs += 1;
+      if (handoffs === 1) {
+        const refusal = { error: { code: 'conflict', message: 'spam_check_unavailable' } };
+        return Promise.resolve(jsonResponse(refusal, 409));
+      }
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByText('В нейрокомментинг'));
+
+  const dialog = await screen.findByRole('dialog', { name: '@SpamBot не ответил' });
+  expect(dialog).toHaveTextContent('Повторить');
+
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: '@SpamBot не ответил' })).not.toBeInTheDocument();
+  });
+  expect(handoffs).toBe(2);
+});
+
 test('a handed-off account disappears from the warmed card', async () => {
   const board: WarmingBoardState = {
     ...BOARD,

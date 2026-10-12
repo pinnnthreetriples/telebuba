@@ -25,9 +25,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import fetch_warming_state
+from core.db import fetch_warming_state, upsert_spam_status
+from schemas.spam_status import SpamStatusVerdict
 from services import warming
 from services.warming import _loop, _seams
+from services.warming.pacing import _now_iso
 from tests.services.warming._support import (
     _no_quiet_days,
     _ok,
@@ -78,6 +80,11 @@ async def test_a_lease_revoked_before_the_first_dispatch_keeps_the_rest_of_the_d
     gateway = _GatewayRecorder()
     monkeypatch.setattr(_seams, "_gateway_execute", gateway)
     await _seed_warming_account(run_id="run-1")
+    # A fresh reading keeps the scheduled @SpamBot step quiet, so the first fenced
+    # call is the cycle's own dispatch rather than the spam probe.
+    await upsert_spam_status(
+        SpamStatusVerdict(account_id="acc-1", status="clean", checked_at=_now_iso()),
+    )
 
     # The generation owns the lease, then Stop revokes it before the cycle dispatches.
     _seams.activate_lease("acc-1", "run-1")

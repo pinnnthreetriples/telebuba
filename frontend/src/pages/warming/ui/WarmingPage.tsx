@@ -15,7 +15,7 @@ import {
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { StartWarmingRequest, WarmingAccountState } from '@/shared/api';
-import { useTransientFeedback } from '@/shared/lib';
+import { errorMessage, mutationErrorText, useTransientFeedback } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -31,9 +31,15 @@ import {
   IconButton,
   InlineChipEditor,
   StatGrid,
+  toastError,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
-import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
+import {
+  ActionTuningCard,
+  SpamRetryModal,
+  WarmDaysModal,
+  WarmingBoard,
+} from '@/widgets/warming-board';
 
 import { invalidateWarmingQueries, useWarmingLiveRefresh } from '../model/liveRefresh';
 
@@ -120,7 +126,10 @@ export function WarmingPage() {
   const removeChannel = useMutation(removeWarmingChannelMutation());
   const promote = useMutation(promoteToNeurocommentMutation());
   const unpromote = useMutation(unpromoteFromNeurocommentMutation());
-  const handoff = useMutation(handoffToNeurocommentMutation());
+  // Inline: "@SpamBot did not answer" opens the retry dialog rather than a toast;
+  // runHandoff toasts every other refusal itself.
+  const handoff = useMutation({ ...handoffToNeurocommentMutation(), meta: { inlineError: true } });
+  const [spamRetryFor, setSpamRetryFor] = useState<string | null>(null);
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -145,6 +154,33 @@ export function WarmingPage() {
         },
         () => {
           accountFeedback.mark(accountId, false);
+        },
+      )
+      .finally(() => {
+        markBusy(accountId, false);
+        invalidate();
+      });
+  };
+
+  // The hand-off refuses without an answer from @SpamBot. That refusal opens (or keeps
+  // open) the retry dialog — its promise rejects so the dialog stays — while every
+  // other outcome resolves, closing it.
+  const runHandoff = (accountId: string) => {
+    markBusy(accountId, true);
+    return handoff
+      .mutateAsync({ body: { account_id: accountId } })
+      .then(
+        () => {
+          accountFeedback.mark(accountId, true);
+        },
+        (error: unknown) => {
+          accountFeedback.mark(accountId, false);
+          if (errorMessage(error) !== 'spam_check_unavailable') {
+            toastError(mutationErrorText(error));
+            return;
+          }
+          setSpamRetryFor(accountId);
+          throw error;
         },
       )
       .finally(() => {
@@ -552,7 +588,7 @@ export function WarmingPage() {
                         variant="neutral"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
-                          runGraduation(handoff, acc.account_id);
+                          runHandoff(acc.account_id).catch(() => undefined);
                         }}
                         className="flex-1 shrink gap-2"
                       >
@@ -662,6 +698,15 @@ export function WarmingPage() {
             };
             runBatch(poolIdle.map((a) => startAccount(a.account_id, choice)));
           }}
+        />
+      ) : null}
+
+      {spamRetryFor ? (
+        <SpamRetryModal
+          onClose={() => {
+            setSpamRetryFor(null);
+          }}
+          onRetry={() => runHandoff(spamRetryFor)}
         />
       ) : null}
 

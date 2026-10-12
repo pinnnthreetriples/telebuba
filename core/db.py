@@ -224,6 +224,9 @@ from core.repositories._accounts_twofa import (  # noqa: E402, F401
     fetch_account_twofa_password,
     set_account_twofa_password,
 )
+from core.repositories._warming_spam_streak import (  # noqa: E402, F401
+    record_spam_check_outcome,
+)
 
 # --------------------------------------------------------------------------- #
 # Domain repositories (#38) — split out of this module and re-exported so that

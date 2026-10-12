@@ -209,6 +209,9 @@ _warming_account_state = Table(
     # When the last quarantine was released on a clean spam check; the daily-cap
     # ramp and the DM block after a spam block count from it. NULL = never released.
     Column("recovered_at", String, nullable=True),
+    # Unreadable @SpamBot checks in a row during warming; a reading resets it. Written
+    # only by ``core.repositories._warming_spam_streak`` (migration 79).
+    Column("spam_unknown_streak", Integer, nullable=False, server_default="0"),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

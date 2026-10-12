@@ -28,6 +28,12 @@ export function errorCode(error: unknown): string | undefined {
   return asEnvelope(error)?.code;
 }
 
+// The envelope's `message` — for a refusal, its stable code (`spam_check_unavailable`),
+// for a caller that answers one specific refusal in place instead of toasting it.
+export function errorMessage(error: unknown): string | undefined {
+  return asEnvelope(error)?.message;
+}
+
 // A dead session sends the user to /login — from either cache, guarding against
 // a redirect loop when we're already on the login page.
 function redirectToLogin(): void {

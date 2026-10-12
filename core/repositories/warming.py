@@ -142,6 +142,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
             _optional_str(mapping.get("activity_persona")) or "normal",
         ),
         recovered_at=_optional_str(mapping.get("recovered_at")),
+        spam_unknown_streak=_optional_int(mapping.get("spam_unknown_streak")) or 0,
     )
 
 

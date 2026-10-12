@@ -6832,6 +6832,10 @@ export type WarmingAccountState = {
    * Limit Factor
    */
   limit_factor?: number;
+  /**
+   * Spam Check Warning
+   */
+  spam_check_warning?: boolean;
 };
 
 /**

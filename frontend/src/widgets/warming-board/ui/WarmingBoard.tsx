@@ -400,6 +400,17 @@ function WarmingCard({
         }))}
       />
 
+      {/* The backend decides when @SpamBot has been silent long enough to say so. */}
+      {account.spam_check_warning ? (
+        <div
+          role="status"
+          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
+        >
+          <Icon name="alert-triangle" size={14} className="shrink-0" />
+          {t('warming.card.spamUnknown')}
+        </div>
+      ) : null}
+
       {!complete ? (
         <>
           {/* current activity */}

@@ -30722,6 +30722,11 @@
             "minimum": 0.0,
             "title": "Limit Factor",
             "default": 1.0
+          },
+          "spam_check_warning": {
+            "type": "boolean",
+            "title": "Spam Check Warning",
+            "default": false
           }
         },
         "type": "object",

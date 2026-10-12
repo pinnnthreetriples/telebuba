@@ -12,10 +12,12 @@ from core.db import (
     configure_database,
     create_account,
     mark_promoted_to_nc,
+    upsert_spam_status,
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
+from schemas.spam_status import SpamStatusVerdict
 from schemas.warming import WarmingStateWrite
 from services.warming import list_warmed_accounts, load_board
 
@@ -280,6 +282,17 @@ async def test_unmark_neurocomment_removes_from_warmed_list() -> None:
     assert (await list_warmed_accounts(14)).accounts == []
 
 
+async def _seed_clean_spam_reading(account_id: str) -> None:
+    """A fresh ``clean`` @SpamBot reading — the hand-off reuses it instead of asking."""
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id=account_id,
+            status="clean",
+            checked_at=datetime.now(UTC).isoformat(),
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_handoff_flags_account_and_survives_in_warmed_list() -> None:
     """Second stage: «в нейрокомментинг» flips nc_handed_off but keeps the graduation."""
@@ -290,6 +303,7 @@ async def test_handoff_flags_account_and_survives_in_warmed_list() -> None:
         WarmingStateWrite(account_id="handed", state="active", started_at=_days_ago(30)),
     )
     await promote_to_neurocomment("handed")
+    await _seed_clean_spam_reading("handed")
 
     card = await handoff_to_neurocomment("handed")
 
@@ -330,6 +344,7 @@ async def test_unmark_neurocomment_clears_handoff_flag() -> None:
         WarmingStateWrite(account_id="round", state="active", started_at=_days_ago(30)),
     )
     await promote_to_neurocomment("round")
+    await _seed_clean_spam_reading("round")
     await handoff_to_neurocomment("round")
 
     card = await unmark_neurocomment("round")
