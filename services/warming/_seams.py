@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.gemini import generate_text
 from core.openai import generate_text_deepseek
 from core.telegram_client import execute as _gateway_execute
@@ -34,6 +35,13 @@ if TYPE_CHECKING:
 # keeps issuing Telegram requests after the operator has stopped it.
 _LEASE: ContextVar[tuple[str, str] | None] = ContextVar("warming_lease", default=None)
 _ACTIVE_LEASES: dict[str, str] = {}
+
+# Fleet-wide ceiling on warming Telegram requests in flight (``warming.cycle_concurrency``).
+# Held only around one gateway call (lazy connect included), never across a cycle's
+# human pauses, so a sleeping account never starves the rest of the fleet. Core never
+# calls back into this seam, so a holder cannot re-enter it. Loop-bound: the warming
+# conftest rebinds it per test.
+_dispatch_slots = asyncio.Semaphore(settings.warming.cycle_concurrency)
 
 
 class WarmingLeaseRevokedError(RuntimeError):
@@ -119,18 +127,21 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     already in flight when Stop revoked the lease.  Its uncertain outcome is
     failed closed by raising instead of allowing the stale cycle to continue —
     as the distinct error type, so callers can tell "never sent" from "sent, outcome
-    unknown" without re-deriving it.
+    unknown" without re-deriving it. The first check runs after the slot is won, so
+    a generation retired while queued never dispatches.
     """
-    _assert_live_lease(account_id, WarmingLeaseRevokedError)
-    result = await _gateway_execute(account_id, action, domain="warming")
+    async with _dispatch_slots:
+        _assert_live_lease(account_id, WarmingLeaseRevokedError)
+        result = await _gateway_execute(account_id, action, domain="warming")
     _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 
 
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
-    """Fence the quarantine Telegram probe with the same runtime lease."""
-    _assert_live_lease(account_id, WarmingLeaseRevokedError)
-    result = await _refresh_spam_status(account_id, force=force)
+    """Fence the quarantine Telegram probe with the same runtime lease and slot."""
+    async with _dispatch_slots:
+        _assert_live_lease(account_id, WarmingLeaseRevokedError)
+        result = await _refresh_spam_status(account_id, force=force)
     _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 

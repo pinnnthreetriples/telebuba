@@ -178,17 +178,16 @@ async def _run_reserved_cycle(
     """Run and settle one reserved cycle, releasing budget on local failure."""
     tally = _ChannelTally()
     try:
-        async with _loop._cycle_semaphore:  # noqa: SLF001 - fleet-wide mutable test seam.
-            result = await _loop._execute_cycle(  # noqa: SLF001 - patchable cycle seam.
-                WarmingCycleRequest(
-                    account_id=account_id,
-                    remaining_actions=reserved.remaining,
-                    dm_allowed=reserved.dm_allowed,
-                    activity_persona=reserved.persona,
-                ),
-                on_step=_ProgressReporter(account_id, run_id),
-                tally=tally,
-            )
+        result = await _loop._execute_cycle(  # noqa: SLF001 - patchable cycle seam.
+            WarmingCycleRequest(
+                account_id=account_id,
+                remaining_actions=reserved.remaining,
+                dm_allowed=reserved.dm_allowed,
+                activity_persona=reserved.persona,
+            ),
+            on_step=_ProgressReporter(account_id, run_id),
+            tally=tally,
+        )
         schedule = await _loop._schedule_next_run(  # noqa: SLF001 - patchable schedule seam.
             account_id,
             result,

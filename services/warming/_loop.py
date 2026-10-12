@@ -7,10 +7,8 @@ are reached via :mod:`services.warming._seams`.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
-from core.config import settings
 from core.db import fetch_warming_state
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
@@ -59,14 +57,6 @@ _PROGRESS_STEPS: tuple[str, ...] = (
     # Appended LAST: ``_ProgressReporter`` is monotonic by index and extras run last.
     "extras",
 )
-
-# Fleet-wide ceiling on concurrently-running Telegram-heavy cycles (see
-# ``warming.cycle_concurrency``). Module-level and loop-bound like the runtime's
-# lock dicts, so a restart's reconcile — which recreates one loop task per active
-# account — can't drive dozens of simultaneous cycles. Acquired only around
-# ``run_one_cycle`` below, never the long inter-cycle sleep. Tests reset it (the
-# conftest rebinds it per test, mirroring ``_ACCOUNT_LOCKS``).
-_cycle_semaphore = asyncio.Semaphore(settings.warming.cycle_concurrency)
 
 
 async def _gate_quiet_day(

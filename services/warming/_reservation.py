@@ -154,8 +154,8 @@ async def _reconcile_reservation(
             # A forfeited day is otherwise indistinguishable from a legitimate park:
             # ``_gate_daily_limit`` writes the same ``last_event="daily_limit"`` either
             # way, so without this the fleet can lose a day of warming per deploy in
-            # total silence. Silent when nothing was spent (cancelled while queued on
-            # the semaphore), or every deploy would log one WARNING per account — and
+            # total silence. Silent when nothing was spent (cancelled before its first
+            # dispatch), or every deploy would log one WARNING per account — and
             # silent when there was nothing left to give back, which is a cycle that
             # spent its whole remaining budget and then got cancelled: this code says a
             # day was rescued, and saying it to an account that simply reached its cap

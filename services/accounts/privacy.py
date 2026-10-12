@@ -48,7 +48,7 @@ __all__ = [
 # request: a semaphore built inside the coroutine would let two overlapping sweeps
 # (double click, two browser tabs) reach 8 concurrent writes. Width 4 follows the
 # per-account fan-outs the codebase already runs (``neurocomment.ban_check_concurrency``
-# and ``warming.cycle_concurrency``, both defaulting low); both of those are config
+# and ``warming.cycle_concurrency``, both bounded); both of those are config
 # fields and this is a literal, because they pace continuous runtime loops while this
 # is a one-button operator action nobody will tune.
 _APPLY_SEMAPHORE = asyncio.Semaphore(4)
