@@ -129,6 +129,14 @@ async def test_a_reimported_id_does_not_inherit_a_previous_death() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_past_death_is_ignored_even_when_its_deleted_row_was_never_written() -> None:
+    """The ``deleted`` row is best-effort; the live row's creation time is the other fence."""
+    await append_lifecycle_event("a1", "session_dead", {"status": "unauthorized"})
+    await _account()
+    assert await guess_delete_reason("a1") == "retired"
+
+
+@pytest.mark.asyncio
 async def test_a_prepared_deletion_writes_nothing_until_recorded() -> None:
     await _account(status="unauthorized")
 

@@ -56,10 +56,18 @@ async def record_lifecycle_event(
         )
 
 
-def _current_life(events: list[LifecycleEvent]) -> list[LifecycleEvent]:
-    """Events since the last deletion: a re-imported id must not inherit a past death."""
+def _current_life(events: list[LifecycleEvent], born_at: str | None) -> list[LifecycleEvent]:
+    """Events of the live account only: a re-imported id must not inherit a past death.
+
+    Two independent boundaries, because the ``deleted`` row is best-effort and may be
+    missing: nothing before the last deletion, and nothing before the live account row
+    was created (``born_at``, ISO like every journal timestamp).
+    """
     last_delete = max((i for i, e in enumerate(events) if e.kind == "deleted"), default=-1)
-    return events[last_delete + 1 :]
+    since_delete = events[last_delete + 1 :]
+    if born_at is None:
+        return since_delete
+    return [event for event in since_delete if event.created_at >= born_at]
 
 
 def _is_death_event(event: LifecycleEvent) -> bool:
@@ -80,7 +88,8 @@ async def guess_delete_reason(account_id: str) -> DeleteReason:
     verdict = await get_spam_status(account_id)
     if verdict is not None and verdict.status == "limited":
         return "dead"
-    events = _current_life(await list_lifecycle_events(account_id))
+    born_at = account.created_at if account is not None else None
+    events = _current_life(await list_lifecycle_events(account_id), born_at)
     return "dead" if any(_is_death_event(event) for event in events) else "retired"
 
 
