@@ -66,6 +66,7 @@ from services.accounts.chats import (
     mark_chat_read,
     send_chat_message,
 )
+from services.accounts.devices import DeviceRefusedError, add_account_device
 from services.accounts.lifecycle import (
     add_account,
     evaluate_account_geo,
@@ -130,6 +131,7 @@ __all__ = [
     "AccountNotFoundError",
     "ChatMediaDownload",
     "ChatServiceError",
+    "DeviceRefusedError",
     "InvalidCursorError",
     "OpenWebResult",
     "PhoneLoginError",
@@ -141,6 +143,7 @@ __all__ = [
     "account_stats",
     "account_story_media",
     "add_account",
+    "add_account_device",
     "add_account_profile_music",
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",

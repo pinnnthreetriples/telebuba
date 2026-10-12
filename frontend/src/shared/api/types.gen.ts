@@ -452,6 +452,18 @@ export type AccountRead = {
    */
   session_name?: string | null;
   /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
+  /**
+   * Second Session Name
+   */
+  second_session_name?: string | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
+  /**
    * Status
    */
   status:
@@ -915,6 +927,18 @@ export type AddChannelsRequest = {
 };
 
 /**
+ * AddDeviceRequest
+ *
+ * API body for ``POST /accounts/{id}/devices``.
+ */
+export type AddDeviceRequest = {
+  /**
+   * Device Type
+   */
+  device_type: 'desktop' | 'mobile';
+};
+
+/**
  * AssignAccountRequest
  *
  * Assign an account to a campaign (the campaign id is the route path param).
@@ -960,6 +984,10 @@ export type BodyImportAccountSession = {
    * Registered At
    */
   registered_at?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
 };
 
 /**
@@ -6078,6 +6106,10 @@ export type StartPhoneLoginRequest = {
    * Label
    */
   label?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
 };
 
 /**
@@ -6166,6 +6198,10 @@ export type StartWarmingRequest = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active';
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
 };
 
 /**
@@ -7118,6 +7154,10 @@ export type WarmedAccount = {
    */
   geo_accepted?: boolean;
   survival?: AccountSurvival | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
 };
 
 /**
@@ -7340,6 +7380,10 @@ export type WarmingAccountState = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active' | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -11651,6 +11695,56 @@ export type RescheduleScheduledPostResponses = {
 
 export type RescheduleScheduledPostResponse =
   RescheduleScheduledPostResponses[keyof RescheduleScheduledPostResponses];
+
+export type AddAccountDeviceData = {
+  body: AddDeviceRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/devices';
+};
+
+export type AddAccountDeviceErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type AddAccountDeviceError = AddAccountDeviceErrors[keyof AddAccountDeviceErrors];
+
+export type AddAccountDeviceResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type AddAccountDeviceResponse = AddAccountDeviceResponses[keyof AddAccountDeviceResponses];
 
 export type ListProxiesData = {
   body?: never;

@@ -2,16 +2,23 @@ import { useMutation } from '@tanstack/react-query';
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { startPhoneLoginMutation } from '@/entities/account';
+import {
+  otherDevice,
+  startPhoneLoginMutation,
+  type DeviceChoice,
+  type DeviceType,
+} from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { Button, CloseButton, Icon, Input, Modal, Stepper } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
+import { DeviceChoicePicker } from './DeviceChoicePicker';
 import { ImportFileList } from './ImportFileList';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
+import { SecondDeviceStep } from './SecondDeviceStep';
 import { TwoFactorBulkStep } from './TwoFactorBulkStep';
 import { useBulkImport } from './useBulkImport';
 
@@ -20,10 +27,12 @@ import { useBulkImport } from './useBulkImport';
 // a bare phone number (start-login). STEP 2 assigns proxies to the just-created
 // accounts. For the phone method a STEP 3 then requests + confirms the Telegram
 // login code — run after the proxy is assigned so the first Telegram connection
-// uses it. A LAST step then offers Telegram's cloud password for the whole batch.
+// uses it. With "both" devices picked, a step then signs the other device in, again
+// behind the proxy. A LAST step offers Telegram's cloud password for the whole batch.
 // The created account ids thread across all steps.
 type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
+type StepKind = 'method' | 'proxy' | 'code' | 'device' | 'twofa';
 
 // The wizard's five choice rows — three method cards on step 1 and the two proxy
 // choices on step 2 — were byte-identical apart from the icon, the two strings
@@ -73,8 +82,12 @@ export function AddAccountModal({
 }) {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState(1);
   const [method, setMethod] = useState<Method>(null);
+  // Desktop unless the operator picks otherwise; "both" adds the other device later.
+  const [devices, setDevices] = useState<DeviceChoice>('desktop');
+  // For an uploaded .session with "both": which device the file itself is.
+  const [fileDevice, setFileDevice] = useState<DeviceType>('desktop');
   const [phone, setPhone] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
@@ -97,7 +110,17 @@ export function AddAccountModal({
 
   // Optional: when the uploaded accounts were registered in Telegram (item 4.8).
   const [registeredAt, setRegisteredAt] = useState('');
-  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported, registeredAt);
+  // The device the created session signs in as, and the one a "both" step adds.
+  const primaryDevice: DeviceType =
+    method === 'session' ? (devices === 'both' ? fileDevice : devices) : 'desktop';
+  const signInDevice: DeviceType =
+    method === 'phone' && devices === 'mobile' ? 'mobile' : primaryDevice;
+  const bulk = useBulkImport(
+    method === 'tdata' ? 'tdata' : 'session',
+    onImported,
+    primaryDevice,
+    registeredAt,
+  );
   const startLogin = useMutation(startPhoneLoginMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
@@ -131,7 +154,18 @@ export function AddAccountModal({
     if (!startLogin.isPending) startLogin.reset();
   };
 
-  const totalSteps = method === 'phone' ? 4 : 3;
+  // The wizard's steps in order; `step` is a 1-based index into it.
+  const flow: StepKind[] = [
+    'method',
+    'proxy',
+    ...(method === 'phone' ? (['code'] as const) : []),
+    ...(devices === 'both' ? (['device'] as const) : []),
+    'twofa',
+  ];
+  const totalSteps = flow.length;
+  const stepKind = flow[step - 1] ?? 'twofa';
+  // Once an account exists its device is decided; the pick no longer changes anything.
+  const devicesLocked = accountIds.length > 0 || bulk.importing || startLogin.isPending;
 
   // Picking a method un-provisions the wizard, because an account created by an
   // earlier method would keep "Next" unlocked with nothing to show for it and
@@ -142,6 +176,8 @@ export function AddAccountModal({
   const selectMethod = (next: Method) => {
     methodRef.current = next;
     if (method === next) return;
+    // A tdata archive is a desktop client's data: "mobile only" does not exist for it.
+    if (next === 'tdata' && devices === 'mobile') setDevices('desktop');
     bulk.reset();
     setCreatedAccountId(null);
     clearFinishedStartLogin();
@@ -155,7 +191,7 @@ export function AddAccountModal({
     setCreatedAccountId(null);
     const forMethod = method;
     startLogin.mutate(
-      { body: { phone: phone.trim() } },
+      { body: { phone: phone.trim(), session_device: signInDevice } },
       {
         onSuccess: (account) => {
           if (methodRef.current !== forMethod) return;
@@ -240,15 +276,17 @@ export function AddAccountModal({
                   : t('accounts.addWizard.title')}
               </div>
               <div className="mt-1 type-body text-content-subtle">
-                {step === 1
+                {stepKind === 'method'
                   ? t('accounts.addWizard.step1Label')
-                  : step === 2
+                  : stepKind === 'proxy'
                     ? t('accounts.addWizard.step2Label')
-                    : step === 3 && method === 'phone'
+                    : stepKind === 'code'
                       ? t('accounts.addWizard.step3Label')
-                      : // The cloud password is always the LAST step, and which
-                        // number that is depends on the method.
-                        t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
+                      : stepKind === 'device'
+                        ? t('accounts.addWizard.stepDeviceLabel', { n: step })
+                        : // The cloud password is always the LAST step, and which
+                          // number that is depends on the method.
+                          t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
               </div>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.addWizard.close')} />
@@ -316,6 +354,17 @@ export function AddAccountModal({
                     selectMethod('phone');
                   }}
                 />
+
+                {method && (
+                  <DeviceChoicePicker
+                    method={method}
+                    value={devices}
+                    fileDevice={fileDevice}
+                    disabled={devicesLocked}
+                    onChange={setDevices}
+                    onFileDevice={setFileDevice}
+                  />
+                )}
 
                 {method === 'phone' && (
                   <div className="tb-fadeup flex flex-col gap-3 rounded-md border border-line bg-surface-card px-3 py-4">
@@ -425,7 +474,7 @@ export function AddAccountModal({
                 </Button>
               </div>
             </>
-          ) : step === 4 || (step === 3 && method !== 'phone') ? (
+          ) : stepKind === 'twofa' ? (
             <TwoFactorBulkStep
               accountIds={accountIds}
               sources={sources}
@@ -433,13 +482,23 @@ export function AddAccountModal({
               onImported={onImported}
               onPhaseChange={setTwofaResult}
             />
-          ) : step === 3 ? (
+          ) : stepKind === 'device' ? (
+            <SecondDeviceStep
+              accountIds={accountIds}
+              sources={sources}
+              device={otherDevice(signInDevice)}
+              onImported={onImported}
+              onDone={() => {
+                setStep(step + 1);
+              }}
+            />
+          ) : stepKind === 'code' ? (
             <CodeLoginStep
               accountId={createdAccountId}
               phone={phone}
               onDone={() => {
                 onImported();
-                setStep(4);
+                setStep(step + 1);
               }}
             />
           ) : proxyStep === 'choice' ? (

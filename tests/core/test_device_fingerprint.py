@@ -70,8 +70,10 @@ async def test_insert_duplicate_device_fingerprint_returns_saved_row(tmp_path: P
 @pytest.mark.asyncio
 async def test_list_device_fingerprints_by_ids_scopes_and_guards_empty(tmp_path: Path) -> None:
     configure_database(tmp_path / "telebuba.db")
-    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="acc-1"))
-    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="acc-2"))
+    for account_id in ("acc-1", "acc-2"):
+        # Fingerprints are read through their account (its primary device).
+        await create_account(AccountCreateFactory.build(account_id=account_id))
+        await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id=account_id))
 
     scoped = await list_device_fingerprints_by_ids(["acc-1"])
 
@@ -494,7 +496,9 @@ def _patch_session_pool(monkeypatch, fake_client: FakeSessionClient) -> None:
     so ``connect_error`` is raised here.
     """
 
-    async def fake_get_client(_account_id: str) -> FakeSessionClient:
+    async def fake_get_client(
+        _account_id: str, _device_type: str | None = None
+    ) -> FakeSessionClient:
         if fake_client.connect_error is not None:
             raise fake_client.connect_error
         return fake_client

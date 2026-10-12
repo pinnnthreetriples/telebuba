@@ -924,7 +924,23 @@
       "twofaDownload": "Download .csv",
       "twofaNotRun": "not attempted — the batch was stopped",
       "registeredAt": "Telegram registration date (optional)",
-      "registeredAtHint": "Applies to every file in this upload. Older than half a year opens DMs a day earlier in warming; older than a year starts the «warming» phase on day 2."
+      "registeredAtHint": "Applies to every file in this upload. Older than half a year opens DMs a day earlier in warming; older than a year starts the «warming» phase on day 2.",
+      "deviceLabel": "Device",
+      "deviceChoice": {
+        "desktop": "Desktop",
+        "mobile": "Phone",
+        "both": "Both"
+      },
+      "deviceTdataDesktop": "tdata is a desktop client's data: only Desktop or Both.",
+      "deviceFileLabel": "The .session file is from",
+      "stepDeviceLabel": "Step {{n}} · second device",
+      "deviceStepHint": "Each account also signs in as “{{device}}” — a separate session, through its assigned proxy. Telegram sends the login code to the session already open.",
+      "deviceStart": "Sign in as “{{device}}”",
+      "deviceState": {
+        "pending": "waiting",
+        "working": "signing in…",
+        "ok": "device added"
+      }
     },
     "schedule": {
       "mode": "When to publish",
@@ -993,6 +1009,16 @@
         "error": "Failed"
       },
       "waitOutlasted": "A Telegram limit outlasted the 6-hour window — move the post to retry"
+    },
+    "devices": {
+      "label": "Devices",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "add": {
+        "desktop": "Add a desktop",
+        "mobile": "Add a mobile device"
+      },
+      "adding": "Signing the second device in: waiting for the code in the existing session — up to a minute."
     }
   },
   "nav": {
@@ -1110,7 +1136,22 @@
       "masstagging_media_invalid": "Not a photo or a video: JPG, PNG, WEBP, MP4 and MOV work.",
       "masstagging_media_too_large": "The file is too large.",
       "masstagging_import_invalid": "Could not read the file: plain text or CSV in UTF-8 is needed.",
-      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases."
+      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases.",
+      "device_missing": "The account has no such device. Add it first.",
+      "mobile_api_not_configured": "Mobile devices are not set up: fill in TELEGRAM__MOBILE_API_ID and TELEGRAM__MOBILE_API_HASH.",
+      "device_already_present": "The account already has this device.",
+      "device_phone_unknown": "The account has no phone number — check its session first.",
+      "device_session_conflict": "A second-device session file is already in the sessions folder. Remove it and try again.",
+      "device_code_cooldown": "A code was requested recently. Try again in {{s}} s.",
+      "device_code_timeout": "The login code did not reach the existing session in time.",
+      "device_code_invalid": "Telegram rejected the login code.",
+      "device_twofa_missing": "The account has a cloud password that is not stored. Set it in the 2FA section.",
+      "device_twofa_invalid": "The stored cloud password was rejected.",
+      "device_user_mismatch": "The sign-in landed on a different Telegram account — the device was not added.",
+      "device_flood_wait": "Telegram is limiting sign-ins. Try again in {{s}} s.",
+      "device_lang_pack_invalid": "Telegram refused the mobile app parameters.",
+      "device_primary_unavailable": "The existing session is unavailable — nothing can read the login code.",
+      "device_auth_failed": "Could not sign the second device in."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1579,7 +1620,10 @@
     "masstagging_spamblock": "Mass tagging: spam block — the account left",
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
     "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
-    "warming_resumed": "Account returned to warming, day count continued"
+    "warming_resumed": "Account returned to warming, day count continued",
+    "account_device_added": "Device added",
+    "account_device_refused": "Device not added",
+    "account_second_device_remove_failed": "Second device not removed"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1705,7 +1749,22 @@
     "volume": "«Stop after» was reached",
     "no_accounts": "no working account left",
     "dead": "the session does not work",
-    "quota_soft_day": "soft-start daily limit reached"
+    "quota_soft_day": "soft-start daily limit reached",
+    "device_missing": "the account has no such device",
+    "mobile_api_not_configured": "mobile devices are not set up",
+    "device_already_present": "the device is already there",
+    "device_phone_unknown": "no phone number",
+    "device_session_conflict": "the second device's session file already exists",
+    "device_code_cooldown": "a code was requested recently",
+    "device_code_timeout": "the login code never arrived",
+    "device_code_invalid": "the login code was rejected",
+    "device_twofa_missing": "the cloud password is not stored",
+    "device_twofa_invalid": "the cloud password was rejected",
+    "device_user_mismatch": "signed in to a different account",
+    "device_flood_wait": "Telegram is limiting sign-ins",
+    "device_lang_pack_invalid": "the app parameters were refused",
+    "device_primary_unavailable": "the existing session is unavailable",
+    "device_auth_failed": "the sign-in failed"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -3326,6 +3385,10 @@
         "binge": "long stay",
         "reply": "reply only"
       }
+    },
+    "device": {
+      "label": "Device",
+      "missing": "The account has no such device"
     }
   },
   "auth": {

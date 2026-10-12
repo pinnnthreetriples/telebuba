@@ -3,6 +3,8 @@ name: runtime-warming
 description: Warming scheduling, budget, dialogue, recovery and board runtime.
 last_updated: 2026-10-13
 edges:
+  - target: patterns/account-devices.md
+    condition: the warming device
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
   - target: patterns/add-warming-job.md

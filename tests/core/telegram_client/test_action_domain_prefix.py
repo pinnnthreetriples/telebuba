@@ -88,7 +88,7 @@ async def test_action_unavailable_event_carries_the_bound_domain(
 ) -> None:
     """The one fixed gateway name takes the prefix too — it is an action outcome."""
 
-    async def _failing_get_client(_account_id: str) -> object:
+    async def _failing_get_client(_account_id: str, _device_type: str | None = None) -> object:
         msg = "socket closed"
         raise ConnectionError(msg)
 

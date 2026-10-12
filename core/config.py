@@ -84,6 +84,17 @@ class TelegramSettings(BaseSettings):
     # valid in the in-memory login cache before the operator must re-request.
     # Telegram codes themselves expire in a few minutes; 300 s mirrors that.
     phone_code_ttl_seconds: int = Field(default=300, ge=1)
+    # The app credentials every MOBILE authorization connects with. Empty = mobile
+    # devices are unavailable: an Android fingerprint on the desktop app's api_id is a
+    # mismatch Telegram can see, and ``lang_pack`` is accepted from official apps only.
+    mobile_api_id: int = Field(default=0, ge=0, repr=False)
+    mobile_api_hash: str = Field(default="", repr=False)
+    # A second device's sign-in: how long to wait for the login code to reach the
+    # account's existing session (Telegram service messages from 777000), how often to
+    # look, and the per-account pause before another code may be requested.
+    second_device_code_wait_seconds: float = Field(default=60.0, gt=0)
+    second_device_code_poll_seconds: float = Field(default=3.0, gt=0)
+    second_device_code_cooldown_seconds: float = Field(default=180.0, ge=0)
 
 
 class ApiSettings(BaseSettings):

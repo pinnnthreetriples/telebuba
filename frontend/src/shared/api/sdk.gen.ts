@@ -22,6 +22,9 @@ import type {
   ActOnMasstaggingTargetData,
   ActOnMasstaggingTargetErrors,
   ActOnMasstaggingTargetResponses,
+  AddAccountDeviceData,
+  AddAccountDeviceErrors,
+  AddAccountDeviceResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
@@ -1897,6 +1900,25 @@ export const rescheduleScheduledPost = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/{account_id}/scheduled/{post_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Account Device
+ *
+ * Sign the other device in beside the account's existing one.
+ *
+ * A refusal answers 400 with a stable device code; a flood wait carries its seconds.
+ */
+export const addAccountDevice = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountDeviceData, ThrowOnError>,
+): RequestResult<AddAccountDeviceResponses, AddAccountDeviceErrors, ThrowOnError> =>
+  (options.client ?? client).post<AddAccountDeviceResponses, AddAccountDeviceErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/devices',
     ...options,
     headers: {
       'Content-Type': 'application/json',

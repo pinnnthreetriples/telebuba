@@ -56,6 +56,7 @@ export {
   sendAccountChatMessageRequest,
 } from './api/account-chats.mutations';
 export {
+  addAccountDeviceMutation,
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,
@@ -106,6 +107,7 @@ export {
   uploadScheduledMediaMutation,
 } from './api/accounts.mutations';
 export { accountDisplayName, accountInitials } from './model/displayName';
+export { DEVICE_TYPES, otherDevice, type DeviceChoice, type DeviceType } from './model/devices';
 export { AccountAvatar } from './ui/AccountAvatar';
 export { BulkAccountPicker } from './ui/BulkAccountPicker';
 export { StatusBadge } from './ui/StatusBadge';

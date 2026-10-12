@@ -5,7 +5,8 @@ The public API is re-exported here so callers keep importing from
 to keep each file small:
 
 - ``_client``  — client construction + per-call lifecycle (probe paths only)
-- ``_pool``    — long-lived connected-client cache, one per account
+- ``_pool``    — long-lived connected-client cache, one per account device
+- ``_second_device`` — a second, separate authorization of the other device type
 - ``_session`` — session liveness check
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
@@ -28,6 +29,7 @@ from __future__ import annotations
 from core.telegram_client._action_results import UNCONFIRMED_ERROR_TYPE
 from core.telegram_client._actions import execute
 from core.telegram_client._auth import (
+    account_auth_lock,
     log_out_session,
     remove_account_session,
     request_phone_code,
@@ -42,7 +44,9 @@ from core.telegram_client._chats import (
     send_message,
 )
 from core.telegram_client._client import (
+    DeviceUnavailableError,
     create_telegram_client,
+    mobile_api_configured,
     prepare_session_check_profile,
     prepare_telegram_client_profile,
     telegram_client,
@@ -65,6 +69,7 @@ from core.telegram_client._message_listener import (
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
+    forget_primary_device,
     get_client,
     removing_client,
     shutdown_telegram_pool,
@@ -77,6 +82,7 @@ from core.telegram_client._read import (
     execute_read_many,
 )
 from core.telegram_client._read_post_image import download_post_image
+from core.telegram_client._second_device import authorize_second_device, remove_second_device
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
 from core.telegram_client._story_image import is_known_collage_layout
@@ -85,10 +91,13 @@ from core.telegram_client._web_login import accept_web_login_token
 __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
     "ChatGatewayError",
+    "DeviceUnavailableError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
     "accept_web_login_token",
+    "account_auth_lock",
+    "authorize_second_device",
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
@@ -101,6 +110,7 @@ __all__ = [
     "fetch_recent_posts",
     "forget_incoming_message_listener",
     "forget_post_listener",
+    "forget_primary_device",
     "get_client",
     "invalidate_reaction_whitelist_cache",
     "is_known_collage_layout",
@@ -108,11 +118,13 @@ __all__ = [
     "log_out_session",
     "mark_read",
     "media_download",
+    "mobile_api_configured",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
     "read_history",
     "refresh_account_avatar",
     "remove_account_session",
+    "remove_second_device",
     "removing_client",
     "request_phone_code",
     "send_message",

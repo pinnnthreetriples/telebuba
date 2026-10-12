@@ -79,6 +79,7 @@ from schemas.telegram_actions import (
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
+    from schemas.device_fingerprint import DeviceType
     from schemas.telegram_actions import TelegramAction
 
 # Joins whose "already inside" answer is a success rather than an error.
@@ -90,8 +91,9 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
     action: TelegramAction,
     *,
     domain: str | None = None,
+    device_type: DeviceType | None = None,
 ) -> ActionResult:
-    """Dispatch a typed Telegram action against ``account_id``.
+    """Dispatch a typed Telegram action against ``account_id`` (its primary device by default).
 
     The only entry point for Telethon calls from outside ``core/``. Borrows
     the per-account pooled client (first borrow pays the connect cost; every
@@ -120,7 +122,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
     # None only while ``get_client`` runs, non-None once ``_dispatch_action`` is entered.
     client: TelegramClient | None = None
     try:
-        client = await get_client(account_id)
+        client = await get_client(account_id, device_type)
         outcome = await _dispatch_action(client, action)
     except errors.SlowModeWaitError as exc:
         return await _flood_action_result(

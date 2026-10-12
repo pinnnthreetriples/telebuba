@@ -127,7 +127,7 @@ async def test_tdata_rollback_evicts_the_pooled_client_per_placed_account(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)

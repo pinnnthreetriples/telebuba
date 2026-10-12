@@ -45,10 +45,8 @@ def _isolate_runtime(
     reset_logging_for_tests()
     setup_logging()
     listener_mod._reset_for_tests()
-    listener_mod._CLIENTS.clear()
     yield
     listener_mod._reset_for_tests()
-    listener_mod._CLIENTS.clear()
 
 
 class FakeClient:
@@ -90,15 +88,9 @@ class FakeClient:
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    """Fake ``get_client`` and mirror production's pool caching.
+    """Fake ``get_client``; the listener remembers the client each handler sits on."""
 
-    Production ``get_client`` stores the connected client in the pool's
-    ``_CLIENTS`` map; ``stop_post_listener`` now peeks that map instead of
-    forcing a fresh connect, so the fake caches the client the same way.
-    """
-
-    async def fake_get_client(account_id: str) -> object:
-        listener_mod._CLIENTS[account_id] = client  # ty: ignore[invalid-assignment]
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     monkeypatch.setattr("core.telegram_client._listener.get_client", fake_get_client)
@@ -340,13 +332,10 @@ async def test_stop_post_listener_without_cached_client_does_not_connect(
         return None
 
     await subscribe_posts("listener-broken", ["@news"], on_post)
-    # Simulate the pooled client being gone (crash / shutdown): drop it from the
-    # pool cache, leaving only the registry entry.
-    listener_mod._CLIENTS.clear()
 
     get_client_calls = {"n": 0}
 
-    async def exploding_get_client(_account_id: str) -> object:
+    async def exploding_get_client(_account_id: str, _device_type: str | None = None) -> object:
         get_client_calls["n"] += 1
         msg = "get_client must not be called by stop_post_listener"
         raise AssertionError(msg)

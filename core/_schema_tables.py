@@ -27,6 +27,8 @@ _device_fingerprints = Table(
     "device_fingerprints",
     _metadata,
     Column("account_id", String, primary_key=True),
+    # One row per authorization: ``desktop`` (every pre-#88 row) or ``mobile``.
+    Column("device_type", String, primary_key=True, server_default="desktop"),
     Column("platform", String, nullable=False),
     Column("device_model", String, nullable=False),
     Column("system_version", String, nullable=False),
@@ -40,6 +42,10 @@ _accounts = Table(
     Column("account_id", String, primary_key=True),
     Column("label", String, nullable=True),
     Column("session_name", String, nullable=True),
+    # The device ``session_name`` authorizes, and the ``.session`` of the account's
+    # second, separate authorization of the other device type (NULL = none).
+    Column("session_device", String, nullable=False, server_default="desktop"),
+    Column("second_session_name", String, nullable=True),
     Column("status", String, nullable=False),
     Column("user_id", BigInteger, nullable=True),
     Column("phone", String, nullable=True),
@@ -78,6 +84,7 @@ _accounts = Table(
     # same Telethon SQLite session DB. SQLite treats NULLs as distinct in a
     # UNIQUE index, so accounts without a custom session_name still coexist.
     Index("ix_accounts_session_name_unique", "session_name", unique=True),
+    Index("ix_accounts_second_session_name_unique", "second_session_name", unique=True),
 )
 _proxies = Table(
     "proxies",
@@ -240,6 +247,8 @@ _warming_account_state = Table(
     # The visit the cycle in flight runs and its step order (migration 87).
     Column("visit_kind", String, nullable=True),
     Column("cycle_plan", String, nullable=True),
+    # The device this stint warms through; desktop unless the operator chose mobile.
+    Column("device_mode", String, nullable=False, server_default="desktop"),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

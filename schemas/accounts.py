@@ -8,6 +8,7 @@ from pydantic import AfterValidator, BaseModel, Field
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
 from schemas.api import Page
+from schemas.device_fingerprint import DeviceType, desktop_only
 from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
@@ -79,6 +80,9 @@ class AccountCreate(BaseModel):
     # The operator's registration date given at upload (item 4.8), written in the same
     # insert so an import never lands half-done.
     registered_at: RegisteredDate | None = None
+    # Which device the account's own ``.session`` authorizes; mobile only by an
+    # explicit operator choice.
+    session_device: DeviceType = "desktop"
 
 
 class AccountSessionFileImport(BaseModel):
@@ -87,6 +91,8 @@ class AccountSessionFileImport(BaseModel):
     label: str | None = Field(default=None, min_length=1)
     # Optional at upload: when the account was registered in Telegram (item 4.8).
     registered_at: RegisteredDate | None = None
+    # The device the uploaded ``.session`` belongs to, as the operator declares it.
+    session_device: DeviceType = "desktop"
 
 
 class AccountRegisteredUpdate(BaseModel):
@@ -99,6 +105,12 @@ class AccountRead(BaseModel):
     account_id: str = Field(min_length=1)
     label: str | None = None
     session_name: str | None = None
+    # The device ``session_name`` authorizes, and the ``.session`` of the other
+    # device's separate authorization (``None`` = one device only).
+    session_device: DeviceType = "desktop"
+    second_session_name: str | None = None
+    # Primary first: desktop when the account has one, else mobile.
+    devices: list[DeviceType] = Field(default_factory=desktop_only)
     status: AccountStatus
     user_id: int | None = None
     phone: str | None = None

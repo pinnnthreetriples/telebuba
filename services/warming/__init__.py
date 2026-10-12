@@ -47,6 +47,7 @@ from services.warming._runtime import (
     unmark_neurocomment,
 )
 from services.warming._start_options import preview_start
+from services.warming._start_state import WarmingDeviceUnavailableError
 from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import (
@@ -77,6 +78,7 @@ __all__ = [
     "HandoffSpamRefusedError",
     "UnknownAccountError",
     "UnknownChannelError",
+    "WarmingDeviceUnavailableError",
     "WarmingNotReadyError",
     "WarmingTaskNotQuiescentError",
     "_human_delay",
