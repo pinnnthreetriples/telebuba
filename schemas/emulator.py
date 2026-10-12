@@ -33,7 +33,8 @@ EmulatorRefusalCode = Literal[
 ]
 
 # ``started``: the container was booted (and signed in when it could be);
-# ``already_running``: it was up and on the chat list, so nothing was touched.
+# ``already_running``: it was up already, so it was not booted or reconfigured again
+# (only signed in where it stood, when its app showed the intro or phone screen).
 OpenMobileStatus = Literal["started", "already_running"]
 
 

@@ -6,17 +6,23 @@ and its Telegram app connects straight to the account's SOCKS5 proxy. The I/O li
 in ``core.emulator``; the policy lives here:
 
 * refuse what cannot work before any container is touched — the feature switched
-  off, no mobile device, no proxy or a proxy the app cannot use;
+  off, no mobile device, no proxy or a proxy the app cannot use, or a stored 2FA
+  password ``input text`` cannot type (found out at the 2FA screen, it would cost a
+  login code already sent);
 * one start at a time per account (a second one answers ``emulator_busy``);
 * a NEW container starts with its network off and gets it back only once the app's
   proxy is set, so its first connection already goes through the proxy; the setting
   is the app's own and outlives the container's window being closed;
 * the sign-in state is read off the screen every time, never remembered;
+* a running container that shows the app's intro or phone screen is signed in where
+  it stands; one showing the chat list, or anything else, is left alone;
 * on any failure the container this call started is stopped again, and removed when
   this call created it, so the next attempt redoes the network-off first start.
 
 The per-account locks are process-local, like the rest of the runtime state (one
-uvicorn worker), and dropped once their start is over.
+uvicorn worker). A start takes the lock before it reads the account, and only the
+account's deletion drops it: a start never does, because a deletion queued on that
+same lock would otherwise share the account with the next start's fresh lock.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_device_fingerprint
+from core.db import fetch_account_twofa_password, fetch_device_fingerprint
 from core.emulator import (
     EmulatorError,
     adb_serial,
@@ -36,6 +42,7 @@ from core.emulator import (
     container_spec,
     create_instance,
     ensure_app,
+    escape_input_text,
     find_instance,
     launch_instance,
     quit_instance,
@@ -52,6 +59,7 @@ from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
 if TYPE_CHECKING:
+    from core.emulator.ui_dump import Screen
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
@@ -73,6 +81,9 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 _LOCKS: dict[str, asyncio.Lock] = {}
+
+# A running app on one of these still needs signing in; anything else is left as is.
+_ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
 
 
 class EmulatorRefusedError(AccountActionError):
@@ -106,18 +117,24 @@ async def _refuse_what_cannot_work(account: AccountRead) -> DeviceFingerprint:
     fingerprint = await fetch_device_fingerprint(account.account_id, "mobile")
     if fingerprint is None:
         raise DeviceRefusedError(_DEVICE_MISSING)
+    password = await fetch_account_twofa_password(account.account_id)
+    if password:
+        try:
+            escape_input_text(password)
+        except EmulatorError as exc:
+            raise EmulatorRefusedError(exc.code) from exc
     return fingerprint
 
 
 async def open_account_mobile(account_id: str) -> OpenMobileResult:
     """Start (or find running) the account's container and sign its Telegram app in."""
-    account = await require_account(account_id)
-    fingerprint = await _refuse_what_cannot_work(account)
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     if lock.locked():
         raise EmulatorBusyError
     try:
         async with lock:
+            account = await require_account(account_id)
+            fingerprint = await _refuse_what_cannot_work(account)
             result = await _open(account, fingerprint)
     except EmulatorError as exc:
         await log_event(
@@ -127,9 +144,6 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
             extra={"reason": exc.code},
         )
         raise EmulatorRefusedError(exc.code) from exc
-    finally:
-        if not lock.locked() and _LOCKS.get(account_id) is lock:
-            del _LOCKS[account_id]
     await log_event("INFO", "account_mobile_opened", account_id=account_id)
     return result
 
@@ -139,14 +153,19 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
     name = _container_name(account.account_id)
     instance = await find_instance(name)
     if instance is not None and instance.running:
-        # Up already: not touched, only asked what its app shows right now.
+        # Up already, so an earlier start booted it, and every boot a start makes
+        # applies the proxy offline before the network comes back: it is not booted
+        # or reconfigured again. Only an entry screen is acted on, through its nodes.
         serial = adb_serial(instance.index)
         await bring_app_to_front(serial)
         screen, _nodes = await read_screen(serial)
+        signed_in = screen == "chats"
+        if screen in _ENTRY_SCREENS:
+            signed_in = await sign_in(account, serial)
         return OpenMobileResult(
             account_id=account.account_id,
             status="already_running",
-            signed_in=screen == "chats",
+            signed_in=signed_in,
         )
     created = instance is None
     try:
@@ -186,7 +205,8 @@ async def remove_account_container(account_id: str) -> None:
     """Delete a removed account's container, if it has one; never blocks the deletion.
 
     Waits for a start of the same account in flight, so that start cannot create a
-    container after this one is gone.
+    container after this one is gone. It alone drops the account's lock: the account
+    row is already deleted, so a later start finds no account under a fresh lock.
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     try:
@@ -201,7 +221,7 @@ async def remove_account_container(account_id: str) -> None:
         )
         return
     finally:
-        if not lock.locked() and _LOCKS.get(account_id) is lock:
+        if _LOCKS.get(account_id) is lock:
             del _LOCKS[account_id]
     if removed:
         await log_event("INFO", "account_mobile_container_removed", account_id=account_id)

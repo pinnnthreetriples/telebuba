@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import ContainerSpec, container_spec
+from core.emulator._text import escape_input_text
 from core.emulator.adb import assert_sdk, set_network, wait_for_boot
 from core.emulator.ldconsole import (
     Instance,
@@ -49,6 +50,7 @@ __all__ = [
     "enter_code",
     "enter_password",
     "enter_phone",
+    "escape_input_text",
     "find_instance",
     "launch_instance",
     "press_start",

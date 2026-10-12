@@ -53,6 +53,9 @@ class _Container:
         self.launch_gate: asyncio.Event | None = None
         self.launched = asyncio.Event()
         self.code: str | None = "12345"
+        self.password: str | None = "cloud-pass"
+        self.remove_gate: asyncio.Event | None = None
+        self.removing = asyncio.Event()
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -119,6 +122,9 @@ class _Container:
         self.step(f"quit:{index}")
 
     async def remove_container(self, name: str) -> bool:
+        self.removing.set()
+        if self.remove_gate is not None:
+            await self.remove_gate.wait()
         self.step(f"remove:{name}")
         return True
 
@@ -139,7 +145,7 @@ class _Container:
         return self.code
 
     async def fetch_account_twofa_password(self, _account_id: str) -> str | None:
-        return "cloud-pass"
+        return self.password
 
     def ui(self, name: str):
         async def call(serial: str, _nodes: object, *values: str) -> None:
@@ -161,6 +167,7 @@ _SERVICE_FAKES = (
     "read_screen",
     "quit_instance",
     "remove_container",
+    "fetch_account_twofa_password",
 )
 _SIGN_IN_FAKES = (
     "wait_screen",
@@ -309,7 +316,7 @@ async def test_a_code_inside_the_cooldown_is_refused(container: _Container) -> N
     assert not any(step.startswith("phone:") for step in container.steps)
 
 
-@pytest.mark.parametrize(("screen", "signed_in"), [("chats", True), ("phone", False)])
+@pytest.mark.parametrize(("screen", "signed_in"), [("chats", True), ("unknown", False)])
 @pytest.mark.asyncio
 async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
     container: _Container,
@@ -324,6 +331,28 @@ async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
 
     assert (result.status, result.signed_in) == ("already_running", signed_in)
     assert container.steps == ["find:telebuba-acc", "front", "read"]
+
+
+@pytest.mark.parametrize("entry", ["intro", "phone"])
+@pytest.mark.asyncio
+async def test_a_running_signed_out_app_is_signed_in_where_it_stands(
+    container: _Container,
+    entry: Screen,
+) -> None:
+    """Neither booted nor reconfigured again: the start that booted it set the proxy."""
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    # Read once, then waited for again by the sign-in; intro goes on to the phone screen.
+    then: list[Screen] = ["phone", "code", "chats"] if entry == "intro" else ["code", "chats"]
+    container.screens = [entry, entry, *then]
+
+    result = await open_account_mobile("acc")
+
+    assert (result.status, result.signed_in) == ("already_running", True)
+    assert f"phone:{_PHONE}" in container.steps
+    assert "code:12345" in container.steps
+    booted = {"launch", "net", "app", "proxy", "create", "quit", "remove"}
+    assert not [step for step in container.steps if step.split(":")[0] in booted]
 
 
 @pytest.mark.asyncio
@@ -384,7 +413,30 @@ async def test_deletion_waits_for_a_start_in_flight(container: _Container) -> No
     await removal
 
     assert container.steps[-1] == "remove:telebuba-acc"
-    assert emulator_module._LOCKS == {}
+    assert emulator_module._LOCKS == {}, "the deletion alone drops the lock"
+
+
+@pytest.mark.asyncio
+async def test_a_start_after_a_queued_deletion_waits_for_it_not_a_fresh_lock(
+    container: _Container,
+) -> None:
+    await _account()
+    container.launch_gate = asyncio.Event()
+    container.remove_gate = asyncio.Event()
+    first = asyncio.create_task(open_account_mobile("acc"))
+    await container.launched.wait()
+    removal = asyncio.create_task(emulator_module.remove_account_container("acc"))
+    await asyncio.sleep(0)
+    container.launch_gate.set()
+    await first
+    await container.removing.wait()
+
+    with pytest.raises(EmulatorBusyError):
+        await open_account_mobile("acc")
+    container.remove_gate.set()
+    await removal
+
+    assert [step for step in container.steps if step.startswith("find:")] == ["find:telebuba-acc"]
 
 
 @pytest.mark.asyncio
@@ -403,7 +455,7 @@ async def test_signed_in_is_what_the_screen_shows_never_a_remembered_flag(
 
 
 @pytest.mark.asyncio
-async def test_a_second_concurrent_start_is_busy_and_the_lock_is_dropped_after(
+async def test_a_second_concurrent_start_is_busy_and_the_lock_is_freed_after(
     container: _Container,
 ) -> None:
     await _account()
@@ -417,7 +469,7 @@ async def test_a_second_concurrent_start_is_busy_and_the_lock_is_dropped_after(
     await first
 
     assert busy.value.code == "emulator_busy"
-    assert emulator_module._LOCKS == {}, "a finished start leaves no lock behind"
+    assert not emulator_module._LOCKS["acc"].locked(), "a finished start frees its lock"
 
 
 @pytest.mark.asyncio
@@ -432,7 +484,7 @@ async def test_a_failed_first_start_removes_the_container_it_created(
 
     assert refused.value.code == "emulator_boot_timeout"
     assert container.steps[-1] == "remove:telebuba-acc"
-    assert emulator_module._LOCKS == {}
+    assert not emulator_module._LOCKS["acc"].locked()
 
 
 @pytest.mark.asyncio
@@ -474,3 +526,21 @@ async def test_an_unusable_existing_session_while_waiting_is_a_refusal_not_a_500
 
     assert refused.value.code == "device_primary_unavailable"
     assert container.steps[-1] == "remove:telebuba-acc"
+
+
+@pytest.mark.parametrize("password", ["50%off", "пароль"])
+@pytest.mark.asyncio
+async def test_a_2fa_password_the_app_cannot_type_is_refused_before_the_number_is_sent(
+    container: _Container,
+    password: str,
+) -> None:
+    await _account()
+    container.password = password
+    container.screens = ["phone", "code", "password", "chats"]
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await open_account_mobile("acc")
+
+    assert refused.value.code == "emulator_text_unsupported"
+    assert container.steps == []
+    assert "acc" not in devices_module._LAST_CODE_REQUEST, "no login code was requested"
