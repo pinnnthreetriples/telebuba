@@ -8,6 +8,7 @@ cannot reach its target on the calendar alone.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -15,6 +16,8 @@ from core.repositories._warming_days import count_warmed_day
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingCycleResult
+
+logger = logging.getLogger(__name__)
 
 
 def _cycle_worked(result: WarmingCycleResult) -> bool:
@@ -30,8 +33,22 @@ def _cycle_worked(result: WarmingCycleResult) -> bool:
 
 
 async def _count_worked_day(account_id: str, local_date: str, *, run_id: str | None) -> None:
-    """Count ``local_date`` for the stint, at most once, and say so when it lands."""
-    total = await count_warmed_day(account_id, local_date, expected_run_id=run_id)
+    """Count ``local_date`` for the stint, at most once, and say so when it lands.
+
+    Bookkeeping after the cycle already settled (or the quiet day already parked the
+    account): a failed write is logged and the day stays uncounted, but it never turns
+    a finished cycle into an error state. Cancellation still propagates.
+    """
+    try:
+        total = await count_warmed_day(account_id, local_date, expected_run_id=run_id)
+    except Exception as exc:  # noqa: BLE001 - bookkeeping must not stop the loop.
+        logger.warning(
+            "warming worked-day count failed (account=%s): %s",
+            account_id,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        return
     if total is None:
         return
     await log_event(

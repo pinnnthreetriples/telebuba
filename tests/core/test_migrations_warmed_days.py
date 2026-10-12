@@ -197,3 +197,18 @@ def test_backfill_skips_a_row_with_an_unreadable_start(legacy: Engine) -> None:
         _backfill_warmed_days(connection, _NOW)
 
     assert _row(legacy, "acc-1") == (0, None)
+
+
+def test_backfill_counts_days_in_the_accounts_own_time_zone(legacy: Engine) -> None:
+    # Mexico City is UTC-6: 20:00 and 02:00 UTC around midnight are the same local
+    # evening, so they are one worked day, not two UTC dates.
+    with legacy.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE accounts (account_id VARCHAR, phone VARCHAR)")
+        connection.exec_driver_sql("INSERT INTO accounts VALUES ('mx', '+525512345678')")
+        _seed_state(connection, "mx", _NOW - timedelta(days=5))
+        evening = datetime(2026, 10, 9, 20, 0, tzinfo=UTC)
+        _log_cycle(connection, "mx", evening)
+        _log_cycle(connection, "mx", evening + timedelta(hours=6))
+        _add_warming_warmed_days(connection)
+
+    assert _row(legacy, "mx") == (1, "2026-10-09")

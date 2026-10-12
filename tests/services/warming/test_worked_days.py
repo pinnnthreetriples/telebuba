@@ -17,7 +17,7 @@ from core.repositories._warming_days import count_warmed_day
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, WarmingCycleResult, WarmingStateWrite
 from services import warming
-from services.warming import _runtime, _seams
+from services.warming import _runtime, _seams, _worked_days
 from services.warming._worked_days import _cycle_worked
 from services.warming.board import load_board
 from tests.services.warming._support import (
@@ -166,6 +166,50 @@ async def test_a_planned_quiet_day_counts(monkeypatch: pytest.MonkeyPatch) -> No
     assert result.detail == "quiet day"
     assert recorder.actions == []
     assert await _warmed_days() == 1
+
+
+async def _broken_count(*_args: object, **_kwargs: object) -> int:
+    msg = "db down"
+    raise RuntimeError(msg)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_day_count_leaves_the_settled_cycle_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _no_quiet_days(monkeypatch)
+    monkeypatch.setattr(_worked_days, "count_warmed_day", _broken_count)
+    monkeypatch.setattr(_seams, "execute", _Recorder().execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="sleeping"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "ok"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state != "error"
+    assert record.warmed_days == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failed_day_count_keeps_the_quiet_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 1.0)
+    monkeypatch.setattr(_worked_days, "count_warmed_day", _broken_count)
+    monkeypatch.setattr(_seams, "execute", _Recorder().execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="sleeping"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "quiet day"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+    assert record.warmed_days == 0
 
 
 @pytest.mark.asyncio
