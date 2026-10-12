@@ -61,7 +61,7 @@ function NotificationsForm({
   const onSave = async () => {
     setFeedback(null);
     try {
-      await save.mutateAsync({
+      const saved = await save.mutateAsync({
         body: {
           enabled,
           bot_token: clearToken || token.trim() === '' ? null : token.trim(),
@@ -72,9 +72,9 @@ function NotificationsForm({
       setToken('');
       setClearToken(false);
       setFeedback({ tone: 'success', text: t('settings.notify.saved') });
-      void queryClient.invalidateQueries({
-        queryKey: notificationSettingsQueryOptions().queryKey,
-      });
+      // The saved row goes into the cache in the same tick the form unlocks, so the
+      // re-mount on the new updated_at happens before any further edit can be typed.
+      queryClient.setQueryData(notificationSettingsQueryOptions().queryKey, saved);
     } catch (error) {
       setFeedback({
         tone: 'danger',

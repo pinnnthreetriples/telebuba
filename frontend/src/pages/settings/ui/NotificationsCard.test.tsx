@@ -228,3 +228,16 @@ test('a failed background refetch keeps the form and its draft', async () => {
   expect(screen.getByLabelText('Chat ID')).toHaveValue('@draft');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
+
+test('a save shows the stored row at once, without waiting on another settings fetch', async () => {
+  const saved = { ...STORED, enabled: false, updated_at: 'later' };
+  serve(STORED, (request) => (request.method === 'PUT' ? json(saved) : undefined));
+  renderCard();
+  const toggle = await screen.findByRole('switch', { name: 'Отправлять уведомления' });
+  await userEvent.click(toggle);
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить уведомления' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Уведомления сохранены');
+  expect(screen.getByRole('switch', { name: 'Отправлять уведомления' })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Сохранить уведомления' })).toBeDisabled();
+  expect(requests('GET', '/api/v1/notifications/settings')).toHaveLength(1);
+});
