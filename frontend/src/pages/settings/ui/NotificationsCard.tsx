@@ -198,7 +198,9 @@ export function NotificationsCard() {
   const query = useQuery(notificationSettingsQueryOptions());
   const [feedback, setFeedback] = useState<Feedback>(null);
   if (query.isPending) return <p className="text-content-muted">{t('settings.loading')}</p>;
-  if (query.isError) {
+  // Only a failed first load blocks the card: a failed background refetch keeps the
+  // cached settings, and unmounting the form then would throw away the drafts.
+  if (query.data === undefined) {
     return (
       <p role="alert" className="text-danger">
         {t('settings.error')}

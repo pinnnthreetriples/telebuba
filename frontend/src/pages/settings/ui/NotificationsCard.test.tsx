@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { notificationSettingsQueryOptions } from '@/entities/notification';
 import '@/shared/i18n';
 
 import { NotificationsCard } from './NotificationsCard';
@@ -201,4 +202,29 @@ test('the form follows settings changed elsewhere instead of keeping stale draft
   });
   expect(screen.getByRole('switch', { name: 'Отправлять уведомления' })).not.toBeChecked();
   expect(screen.getByRole('button', { name: 'Сохранить уведомления' })).toBeDisabled();
+});
+
+test('a failed background refetch keeps the form and its draft', async () => {
+  let fail = false;
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(fail ? json({ detail: 'down' }, 500) : json(STORED)),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <NotificationsCard />
+    </QueryClientProvider>,
+  );
+  const chat = await screen.findByLabelText('Chat ID');
+  await userEvent.clear(chat);
+  await userEvent.type(chat, '@draft');
+
+  fail = true;
+  await client.invalidateQueries();
+
+  await waitFor(() => {
+    expect(client.getQueryState(notificationSettingsQueryOptions().queryKey)?.status).toBe('error');
+  });
+  expect(screen.getByLabelText('Chat ID')).toHaveValue('@draft');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
