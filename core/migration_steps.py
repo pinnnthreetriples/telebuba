@@ -18,6 +18,7 @@ _ALLOWED_TABLES = frozenset(
         "accounts",
         "account_proxies",
         "warming_account_state",
+        "warming_channels",
         "warming_joined_channels",
         "warming_settings",
         "neurocomment_campaigns",

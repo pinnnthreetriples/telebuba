@@ -17,6 +17,7 @@ from schemas.warming import (
     RemoveChannelRequest,
     StartWarmingRequest,
     StopWarmingRequest,
+    UpdateChannelRequest,
     WarmedAccountList,
     WarmingAccountState,
     WarmingBoardState,
@@ -180,6 +181,23 @@ async def add_warming_channels(body: AddChannelsRequest) -> WarmingChannelList:
 )
 async def remove_warming_channel(body: RemoveChannelRequest) -> WarmingChannelList:
     return await warming_service.remove_channel(body)
+
+
+@router.patch(
+    "/channels",
+    response_model=WarmingChannelList,
+    operation_id="labelWarmingChannel",
+    responses=error_responses(404),
+)
+async def label_warming_channel(body: UpdateChannelRequest) -> WarmingChannelList:
+    """Set a channel's language and country — what accounts match their phone against."""
+    try:
+        return await warming_service.label_channel(body)
+    except warming_service.UnknownChannelError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="unknown channel",
+        ) from exc
 
 
 @router.get("/settings", response_model=WarmingSettings, operation_id="getWarmingSettings")

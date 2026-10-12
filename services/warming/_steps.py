@@ -29,6 +29,7 @@ from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel
 from services.pacing import human_delay
 from services.warming import _seams
+from services.warming._channel_language import record_read_facts
 from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
 from services.warming.pacing import (
     _FAILURE_STATUSES,
@@ -40,7 +41,7 @@ from services.warming.pacing import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from schemas.telegram_action_results import RecentMediaKind
+    from schemas.telegram_action_results import ReadChannelFacts, RecentMediaKind
     from schemas.telegram_actions import ActionResult
     from schemas.warming import (
         WarmingChannel,
@@ -102,6 +103,19 @@ async def _joins_left_today(account_id: str, age_phase: WarmingPhase) -> int:
     return max(0, cap - joined)
 
 
+async def _observe_read(account_id: str, channel: str, facts: ReadChannelFacts | None) -> None:
+    """Label the channel from its read, best-effort: a failed write never stops the cycle."""
+    try:
+        await record_read_facts(channel, facts)
+    except Exception as exc:  # noqa: BLE001 - the read already landed; the label can wait
+        await log_event(
+            "WARNING",
+            "warming_channel_observation_failed",
+            account_id=account_id,
+            extra={"channel": channel, "error_type": type(exc).__name__},
+        )
+
+
 @dataclass
 class _ReadReactOutcome:
     """One channel's read-then-maybe-react result (replaces a positional 5-tuple)."""
@@ -148,6 +162,7 @@ async def _read_and_react(  # noqa: PLR0913
         out.recent_ids = [int(x) for x in read_result.recent_message_ids or []]
         kinds = read_result.recent_media_kinds or {}
         out.recent_media = {int(x): kind for x, kind in kinds.items()}
+        await _observe_read(account_id, channel, read_result.read_facts)
     elif read_result.status in _FAILURE_STATUSES:
         out.failures += 1
     elif read_result.status in _HALT_STATUSES:

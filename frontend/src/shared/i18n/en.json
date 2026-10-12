@@ -1301,6 +1301,8 @@
     "warming_reaction_skipped": "No reaction placed",
     "warming_channels_added": "Channels added",
     "warming_channel_removed": "Channel removed",
+    "warming_channel_labelled": "Channel language set",
+    "warming_channel_observation_failed": "Could not record channel details",
     "warming_channel_limit_reached": "Channel limit reached",
     "warming_chat_filtered": "Message filtered",
     "warming_chat_duplicate": "Duplicate message",
@@ -2866,7 +2868,14 @@
       "cancel": "Cancel",
       "removeTitle": "Delete channel {{channel}}?",
       "removeBody": "Warming accounts will stop reading and reacting in this channel. This cannot be undone.",
-      "removeConfirm": "Delete"
+      "removeConfirm": "Delete",
+      "removeNamed": "Remove channel {{channel}}",
+      "languageTag": "Channel language and country",
+      "shortage": "for {{language}}: {{channels}} for {{accounts}}",
+      "channelCount_one": "{{count}} channel",
+      "channelCount_other": "{{count}} channels",
+      "accountCount_one": "{{count}} account",
+      "accountCount_other": "{{count}} accounts"
     },
     "warmStatus": {
       "active": "warming up",

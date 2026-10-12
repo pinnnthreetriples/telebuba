@@ -124,6 +124,15 @@ _warming_channels = Table(
     Column("channel", String, nullable=False, unique=True),
     Column("label", String, nullable=True),
     Column("created_at", String, nullable=False),
+    # Matching labels (migration #80): an account reads channels of its phone
+    # language; NULL is unknown and stays a fallback.
+    Column("language", String, nullable=True),
+    Column("country", String, nullable=True),
+    Column("kind", String, nullable=True),
+    Column("subscribers", Integer, nullable=True),
+    Column("last_post_at", String, nullable=True),
+    Column("source", String, nullable=False, server_default="manual"),
+    Column("status", String, nullable=False, server_default="approved"),
 )
 _warming_joined_channels = Table(
     "warming_joined_channels",

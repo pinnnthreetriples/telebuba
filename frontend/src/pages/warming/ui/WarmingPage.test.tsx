@@ -469,7 +469,7 @@ test('removing a channel asks for confirmation, then calls the remove endpoint',
   await waitFor(() => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByLabelText('Удалить'));
+  await userEvent.click(screen.getByLabelText('Удалить канал @news'));
   const confirm = await screen.findByText('Удалить', { selector: 'button' });
   expect(
     vi

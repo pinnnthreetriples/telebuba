@@ -1326,6 +1326,8 @@
     "warming_reaction_skipped": "Реакция не поставлена",
     "warming_channels_added": "Каналы добавлены",
     "warming_channel_removed": "Канал удалён",
+    "warming_channel_labelled": "Язык канала задан",
+    "warming_channel_observation_failed": "Не удалось записать сведения о канале",
     "warming_channel_limit_reached": "Достигнут лимит каналов",
     "warming_chat_filtered": "Сообщение отфильтровано",
     "warming_chat_duplicate": "Дубликат сообщения",
@@ -2905,7 +2907,18 @@
       "cancel": "Отмена",
       "removeTitle": "Удалить канал {{channel}}?",
       "removeBody": "Аккаунты прогрева перестанут читать и реагировать в этом канале. Это действие необратимо.",
-      "removeConfirm": "Удалить"
+      "removeConfirm": "Удалить",
+      "removeNamed": "Удалить канал {{channel}}",
+      "languageTag": "Язык и страна канала",
+      "shortage": "для {{language}}: {{channels}} на {{accounts}}",
+      "channelCount_one": "{{count}} канал",
+      "channelCount_few": "{{count}} канала",
+      "channelCount_many": "{{count}} каналов",
+      "channelCount_other": "{{count}} канала",
+      "accountCount_one": "{{count}} аккаунт",
+      "accountCount_few": "{{count}} аккаунта",
+      "accountCount_many": "{{count}} аккаунтов",
+      "accountCount_other": "{{count}} аккаунта"
     },
     "warmStatus": {
       "active": "прогревается",

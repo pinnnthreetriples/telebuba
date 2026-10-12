@@ -28,7 +28,6 @@ import {
   FeedbackMark,
   HowItWorksCard,
   Icon,
-  IconButton,
   InlineChipEditor,
   StatGrid,
   toastError,
@@ -36,9 +35,11 @@ import {
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import {
   ActionTuningCard,
+  ChannelLanguageShortages,
   SpamRetryModal,
   WarmDaysModal,
   WarmingBoard,
+  WarmingChannelPill,
 } from '@/widgets/warming-board';
 
 import { invalidateWarmingQueries, useWarmingLiveRefresh } from '../model/liveRefresh';
@@ -455,26 +456,15 @@ export function WarmingPage() {
             label={t('warming.channels.title')}
           >
             <div className="mb-3 type-small">{t('warming.channels.hint')}</div>
+            <ChannelLanguageShortages shortages={data.language_shortages ?? []} />
             <div className="flex flex-wrap gap-2">
               {channels.map((channel) => (
-                <Badge
-                  size="md"
-                  className="gap-2 border border-line text-content-secondary"
+                <WarmingChannelPill
                   key={channel.channel}
-                >
-                  <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
-                  {channel.channel}
-                  <IconButton
-                    size="sm"
-                    shape="circle"
-                    aria-label={t('warming.channels.remove')}
-                    onClick={() => {
-                      setChannelToRemove(channel.channel);
-                    }}
-                  >
-                    <Icon name="close" size={16} />
-                  </IconButton>
-                </Badge>
+                  channel={channel}
+                  feedback={channelFeedback.feedback[channel.channel]}
+                  onRemove={setChannelToRemove}
+                />
               ))}
               {addingChannel ? (
                 <InlineChipEditor

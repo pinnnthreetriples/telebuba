@@ -9826,6 +9826,94 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Label Warming Channel",
+        "description": "Set a channel's language and country \u2014 what accounts match their phone against.",
+        "operationId": "labelWarmingChannel",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingChannelList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/warming/channels/remove": {
@@ -20490,6 +20578,16 @@
             ],
             "title": "Recent Media Kinds"
           },
+          "read_facts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadChannelFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "warm_skip": {
             "anyOf": [
               {
@@ -21436,6 +21534,33 @@
           "title"
         ],
         "title": "ChannelDetailView"
+      },
+      "ChannelLanguageShortage": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Language"
+          },
+          "channels": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Channels"
+          },
+          "accounts": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "channels",
+          "accounts"
+        ],
+        "title": "ChannelLanguageShortage",
+        "description": "A phone language whose accounts have fewer channels of their own than the floor."
       },
       "ChannelLinkOutcome": {
         "properties": {
@@ -28190,6 +28315,44 @@
         "title": "ProxyRead",
         "description": "A pool proxy as shown on the Accounts page (masked credentials)."
       },
+      "ReadChannelFacts": {
+        "properties": {
+          "text_sample": {
+            "type": "string",
+            "title": "Text Sample",
+            "default": ""
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "channel",
+                  "group"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "last_post_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Post At"
+          }
+        },
+        "type": "object",
+        "title": "ReadChannelFacts",
+        "description": "What a ``read_channel`` page says about the channel itself (no extra RPC).\n\n``text_sample`` is the page's post text, bounded, for a language vote; ``kind`` is\n``channel`` when the posts are broadcast posts, ``group`` otherwise."
+      },
       "ReadinessStatus": {
         "properties": {
           "status": {
@@ -29055,6 +29218,46 @@
         "type": "object",
         "title": "TwoFactorStatusResult",
         "description": "Gateway output for ``GetTwoFactorStatus`` \u2014 booleans plus the public hint.\n\nEvery field is what ``account.getPassword`` reports, and every one of them is\noptional in the TL schema, so an absent flag degrades to the \"no password\"\ndefault rather than being guessed at. ``pending_reset_date`` is an ISO string\n(repo convention at the JSON boundary), never the ``datetime`` Telethon\nreturns. The password itself is not here and cannot be: Telegram never\nreturns it, and neither does this codebase after the one POST response."
+      },
+      "UpdateChannelRequest": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[a-z]{2}|other)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channel"
+        ],
+        "title": "UpdateChannelRequest",
+        "description": "The operator's labels for one channel; ``None`` clears a label back to unknown."
       },
       "UpdatePromptRequest": {
         "properties": {
@@ -30795,6 +30998,13 @@
           },
           "mechanics": {
             "$ref": "#/components/schemas/WarmingMechanics"
+          },
+          "language_shortages": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelLanguageShortage"
+            },
+            "type": "array",
+            "title": "Language Shortages"
           }
         },
         "type": "object",
@@ -30829,6 +31039,86 @@
             "type": "string",
             "minLength": 1,
             "title": "Created At"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[a-z]{2}|other)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "channel",
+                  "group"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "subscribers": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscribers"
+          },
+          "last_post_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Post At"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "discovery"
+            ],
+            "title": "Source",
+            "default": "manual"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "pending"
+            ],
+            "title": "Status",
+            "default": "approved"
           }
         },
         "type": "object",
@@ -30837,7 +31127,7 @@
           "created_at"
         ],
         "title": "WarmingChannel",
-        "description": "One channel the warming engine can join / read / react in."
+        "description": "One channel the warming engine can join / read / react in.\n\n``language`` is what an account matches its own phone language against; ``None``\nmeans nobody has told yet (no read has labelled it, the operator has not set it),\nand such a channel stays a fallback for any account."
       },
       "WarmingChannelList": {
         "properties": {

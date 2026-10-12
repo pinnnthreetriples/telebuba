@@ -45,18 +45,55 @@ def _affinity_epoch(now: datetime) -> int:
     return now.toordinal() // settings.warming.channel_affinity_churn_days
 
 
-# Memoised affinity subsets. The result is a pure function of the account, the
-# epoch, the channel-name set, and the (runtime-static) selection config, so a
-# hit skips re-hashing two SHA-256 per channel + a full re-sort every cycle. The
-# config fields are folded into the key so a test varying them mid-run recomputes
-# rather than reading a stale slice; in production they never change. Prior-epoch
-# entries are evicted on miss (see below) so the dict stays bounded to the live
-# epoch rather than growing forever. Cleared per test by the warming conftest.
+# Memoised affinity subsets. The result is a pure function of the account, its
+# language, the epoch, the channel names and labels, and the (runtime-static)
+# selection config, so a hit skips re-hashing two SHA-256 per channel + a full
+# re-sort every cycle. The config fields are folded into the key so a test varying
+# them mid-run recomputes rather than reading a stale slice; in production they
+# never change. Prior-epoch entries are evicted on miss (see below) so the dict
+# stays bounded to the live epoch rather than growing forever. Cleared per test by
+# the warming conftest.
 _AFFINITY_CACHE: dict[tuple[object, ...], list[WarmingChannel]] = {}
 
 
+def _affinity_floor() -> int:
+    warm = settings.warming
+    return max(warm.channel_affinity_min, warm.channels_per_cycle_min)
+
+
+def _language_pool(
+    channels: list[WarmingChannel], language: str | None
+) -> tuple[list[WarmingChannel], dict[str, int]]:
+    """The channels an account of ``language`` may draw from, each with its tier.
+
+    Tier 0 is the account's own language, tier 1 the unlabelled channels, tier 2 the
+    rest; a later tier joins only while the pool is still under the floor, so a
+    Mexican number reads Spanish channels and touches others only when there are too
+    few. An unknown account language keeps the whole pool in one tier.
+    """
+    if language is None:
+        return channels, dict.fromkeys((c.channel for c in channels), 0)
+    tiers = (
+        [c for c in channels if c.language == language],
+        [c for c in channels if c.language is None],
+        [c for c in channels if c.language not in {language, None}],
+    )
+    floor = _affinity_floor()
+    pool: list[WarmingChannel] = []
+    rank: dict[str, int] = {}
+    for tier, members in enumerate(tiers):
+        if len(pool) >= floor:
+            break
+        pool += members
+        rank.update(dict.fromkeys((c.channel for c in members), tier))
+    return pool, rank
+
+
 def _account_channel_affinity(
-    account_id: str, channels: list[WarmingChannel], epoch: int = 0
+    account_id: str,
+    channels: list[WarmingChannel],
+    epoch: int = 0,
+    language: str | None = None,
 ) -> list[WarmingChannel]:
     """A stable per-account interest subset of the global channel pool.
 
@@ -67,16 +104,18 @@ def _account_channel_affinity(
     by a salted, process-stable :func:`_stable_fraction`) and let each cycle
     sample from *that*. A small ``epoch``-keyed drift is added to each channel's
     score so membership churns slowly over time (``churn_strength`` keeps it to
-    the channels near the cutoff — gradual, not a wholesale swap). The subset is
-    never smaller than ``channels_per_cycle_min`` so a cycle can always draw its
-    floor; pools no larger than that floor stay whole (nothing to subdivide).
+    the channels near the cutoff — gradual, not a wholesale swap). The slice is
+    carved from the account's :func:`_language_pool`, own-language channels
+    first, and is never smaller than the affinity floor; pools no larger than
+    that floor stay whole (nothing to subdivide).
     """
     warm = settings.warming
     key = (
         account_id,
         epoch,
-        frozenset(c.channel for c in channels),
-        warm.channels_per_cycle_min,
+        language,
+        frozenset((c.channel, c.language) for c in channels),
+        _affinity_floor(),
         warm.channel_affinity_ratio,
         warm.channel_affinity_churn_strength,
         warm.fleet_hash_salt,
@@ -90,21 +129,20 @@ def _account_channel_affinity(
     for stale in [k for k in _AFFINITY_CACHE if k[1] != epoch]:
         del _AFFINITY_CACHE[stale]
 
-    if len(channels) <= warm.channels_per_cycle_min:
-        result = channels
+    pool, rank = _language_pool(channels, language)
+    floor = _affinity_floor()
+    if len(pool) <= floor:
+        result = pool
     else:
-        k = min(
-            len(channels),
-            max(warm.channels_per_cycle_min, round(len(channels) * warm.channel_affinity_ratio)),
-        )
+        k = min(len(pool), max(floor, round(len(pool) * warm.channel_affinity_ratio)))
         strength = warm.channel_affinity_churn_strength
 
-        def _score(channel: WarmingChannel) -> float:
+        def _score(channel: WarmingChannel) -> tuple[int, float]:
             base = _stable_fraction(f"aff:{account_id}:{channel.channel}")
             drift = _stable_fraction(f"aff:{account_id}:{channel.channel}:{epoch}")
-            return base + strength * drift
+            return rank[channel.channel], base + strength * drift
 
-        result = sorted(channels, key=_score)[:k]
+        result = sorted(pool, key=_score)[:k]
 
     _AFFINITY_CACHE[key] = result
     return result

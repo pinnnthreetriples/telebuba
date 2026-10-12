@@ -208,6 +208,37 @@ async def test_add_channels(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_label_channel_round_trips_through_the_real_service(app: FastAPI) -> None:
+    async with _client(app) as client:
+        await client.post("/api/v1/warming/channels", json={"raw": "@alpha"})
+        resp = await client.patch(
+            "/api/v1/warming/channels",
+            json={"channel": "alpha", "language": "es", "country": "MX"},
+        )
+    assert resp.status_code == 200
+    [row] = resp.json()["channels"]
+    assert (row["language"], row["country"]) == ("es", "MX")
+
+
+@pytest.mark.asyncio
+async def test_label_channel_answers_404_for_an_unknown_channel(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.patch("/api/v1/warming/channels", json={"channel": "ghost"})
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_label_channel_rejects_a_malformed_language(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.patch(
+            "/api/v1/warming/channels",
+            json={"channel": "alpha", "language": "Spanish"},
+        )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_update_settings(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[WarmingSettingsUpdate] = []
 
