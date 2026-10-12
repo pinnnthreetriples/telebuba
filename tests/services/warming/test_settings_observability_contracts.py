@@ -100,6 +100,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         "has_deepseek_key": False,
         "deepseek_key_hint": None,
         "extra_toggles": {**EXTRA_TOGGLE_DEFAULTS, "polls": True},
+        "dm_paused_until": None,
         "updated_at": "2026-07-17T12:00:00+00:00",
     }
     log.assert_awaited_once_with(

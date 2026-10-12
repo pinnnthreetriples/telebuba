@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from core.config import settings
@@ -11,6 +13,7 @@ from core.db import (
     upsert_spam_status,
     upsert_warming_state,
 )
+from core.repositories.warming_dm_pause import store_dm_paused_until
 from schemas.accounts import AccountCreate
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -126,6 +129,26 @@ async def test_load_board_dm_chip_mirrors_engine_readiness_enforcement(
 
     await _set_settings(chat=False, reactions=False, key="", enforce_readiness=True)
     assert (await warming.load_board()).idle[0].dm_allowed is False
+
+
+@pytest.mark.asyncio
+async def test_load_board_dm_chip_and_banner_follow_the_fleet_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(
+        "services.warming.board.account_trust_score_from",
+        lambda **_: TrustScore(account_id="acc-1", score=90, band="good"),
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    until = (datetime.now(UTC) + timedelta(hours=72)).isoformat()
+    await store_dm_paused_until(until)
+
+    board = await warming.load_board()
+
+    assert board.settings.dm_paused_until == until
+    assert board.idle[0].dm_allowed is False
 
 
 @pytest.mark.asyncio

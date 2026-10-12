@@ -100,6 +100,7 @@ import {
   importAccountTdata,
   importMasstaggingTargets,
   labelWarmingChannel,
+  liftWarmingDmPause,
   linkCampaignChannel,
   listAccountChannelPosts,
   listAccountChannels,
@@ -484,6 +485,9 @@ import type {
   LabelWarmingChannelData,
   LabelWarmingChannelError,
   LabelWarmingChannelResponse,
+  LiftWarmingDmPauseData,
+  LiftWarmingDmPauseError,
+  LiftWarmingDmPauseResponse,
   LinkCampaignChannelData,
   LinkCampaignChannelError,
   LinkCampaignChannelResponse,
@@ -3689,6 +3693,35 @@ export const updateWarmingSettingsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateWarmingSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Lift Warming Dm Pause
+ *
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ */
+export const liftWarmingDmPauseMutation = (
+  options?: Partial<Options<LiftWarmingDmPauseData>>,
+): UseMutationOptions<
+  LiftWarmingDmPauseResponse,
+  LiftWarmingDmPauseError,
+  Options<LiftWarmingDmPauseData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    LiftWarmingDmPauseResponse,
+    LiftWarmingDmPauseError,
+    Options<LiftWarmingDmPauseData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await liftWarmingDmPause({
         ...options,
         ...fnOptions,
         throwOnError: true,

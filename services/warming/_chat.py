@@ -105,8 +105,9 @@ def _should_chat(
     """All gates for an inter-account DM this cycle.
 
     П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
-    for direct callers); the fleet DM pause applies on top. The persona roll is last so it draws only once every
-    prior gate passed — it decides *how often* to chat, not whether it may.
+    for direct callers); the fleet DM pause applies on top. The persona roll is
+    last so it draws only once every prior gate passed — it decides *how often*
+    to chat, not whether it may.
     """
     return (
         can_attempt

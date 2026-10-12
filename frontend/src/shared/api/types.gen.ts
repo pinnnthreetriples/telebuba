@@ -7271,6 +7271,10 @@ export type WarmingSettings = {
   deepseek_key_hint?: string | null;
   extra_toggles?: ExtraToggles;
   /**
+   * Dm Paused Until
+   */
+  dm_paused_until?: string | null;
+  /**
    * Updated At
    */
   updated_at: string;
@@ -11981,6 +11985,40 @@ export type UpdateWarmingSettingsResponses = {
 
 export type UpdateWarmingSettingsResponse =
   UpdateWarmingSettingsResponses[keyof UpdateWarmingSettingsResponses];
+
+export type LiftWarmingDmPauseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/dm-pause/lift';
+};
+
+export type LiftWarmingDmPauseErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type LiftWarmingDmPauseError = LiftWarmingDmPauseErrors[keyof LiftWarmingDmPauseErrors];
+
+export type LiftWarmingDmPauseResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingSettings;
+};
+
+export type LiftWarmingDmPauseResponse =
+  LiftWarmingDmPauseResponses[keyof LiftWarmingDmPauseResponses];
 
 export type ListWarmingDialoguesData = {
   body?: never;

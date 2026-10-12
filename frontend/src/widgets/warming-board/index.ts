@@ -1,5 +1,6 @@
 export { ActionTuningCard } from './ui/ActionTuningCard';
 export { ChannelLanguageShortages } from './ui/ChannelLanguageShortages';
+export { DmPauseBanner } from './ui/DmPauseBanner';
 export { SpamRetryModal } from './ui/SpamRetryModal';
 export { WarmingBoard } from './ui/WarmingBoard';
 export { WarmingChannelPill } from './ui/WarmingChannelPill';

@@ -169,9 +169,10 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             card.spam_status = spam.status
             card.spam_detail = spam.detail
         card.age_hours = age_hours
-        # П11: mirror the engine — DM needs warming time + trust band + no fleet pause,
-        # plus readiness only when enforce_readiness is on. With it off the engine skips the readiness
-        # gate, so the card must not show DM blocked while the engine still sends.
+        # П11: mirror the engine — DM needs warming time + trust band + no fleet
+        # pause, plus readiness only when enforce_readiness is on. With it off the
+        # engine skips the readiness gate, so the card must not show DM blocked
+        # while the engine still sends.
         card.dm_allowed = (
             intensity.dm_allowed
             and (readiness.ready or not masked.enforce_readiness)

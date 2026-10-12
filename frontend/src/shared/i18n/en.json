@@ -2932,6 +2932,11 @@
       "keep": "Continue",
       "stop": "Stop"
     },
+    "dmPause": {
+      "banner": "DMs paused until {{date}}",
+      "detail": "Two DM spam blocks within a day — messages between accounts are stopped for the whole fleet.",
+      "lift": "Lift the pause"
+    },
     "tune": {
       "title": "Action fine-tuning",
       "subtitle": "Turn individual warming actions on or off. These settings apply to every account",

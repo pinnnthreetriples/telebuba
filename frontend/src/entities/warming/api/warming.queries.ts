@@ -8,6 +8,7 @@ export {
   listWarmingChannelsOptions as warmingChannelsQueryOptions,
   listWarmingDialoguesOptions as warmingDialoguesQueryOptions,
   handoffToNeurocommentMutation,
+  liftWarmingDmPauseMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
   startWarmingMutation,
