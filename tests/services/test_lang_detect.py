@@ -34,3 +34,8 @@ def test_a_short_latin_text_stays_unknown_when_the_words_say_too_little() -> Non
 def test_the_script_vote_never_splits_latin() -> None:
     # Discovery's filter keeps the coarse verdict, so its behaviour does not move.
     assert detect_script_language("Las mejores noticias del día con todo lo que pasa") == "en"
+
+
+def test_a_tie_between_latin_languages_stays_unlabelled() -> None:
+    # en and es score the same here; picking either would mislabel the channel.
+    assert detect_language("The festival is El Día de los Muertos") is None

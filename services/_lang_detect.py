@@ -60,8 +60,12 @@ def detect_script_language(text: str) -> str | None:
 def _latin_language(text: str) -> str | None:
     words = [word.casefold() for word in _WORD.findall(text)]
     hits = {lang: sum(word in stops for word in words) for lang, stops in _STOP_WORDS.items()}
-    best = max(hits, key=lambda lang: hits[lang])
-    return best if hits[best] >= _MIN_STOP_HITS else None
+    best_score = max(hits.values())
+    leaders = [lang for lang, score in hits.items() if score == best_score]
+    # A tie is ambiguous text (e.g. English quoting a Spanish name): leave it unlabelled.
+    if best_score < _MIN_STOP_HITS or len(leaders) != 1:
+        return None
+    return leaders[0]
 
 
 def detect_language(text: str) -> str | None:
