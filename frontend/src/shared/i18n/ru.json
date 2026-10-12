@@ -1362,6 +1362,8 @@
     "warming_dialogue_read_ack_skipped": "Отметка о прочтении пропущена",
     "warming_dialogue_peer_unresolved": "Собеседник недоступен по номеру телефона",
     "warming_dialogue_faded": "Диалог завершён",
+    "warming_dm_fleet_paused": "ЛС приостановлены для всего парка",
+    "warming_dm_fleet_pause_lifted": "Пауза ЛС снята",
     "warming_promoted_to_neurocomment": "Аккаунт передан в нейрокомментинг",
     "warming_nc_handoff": "Аккаунт перемещён в простаивающие нейрокомментинга",
     "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",

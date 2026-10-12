@@ -225,13 +225,15 @@ def compute_intensity(
     *,
     recovered_at: str | None = None,
     now: datetime | None = None,
+    started_at: str | None = None,
 ) -> WarmingIntensity:
     """Map an account's age + trust band to its safety ceiling for one cycle.
 
     Returns the lifecycle phase + daily action cap (from
     ``effective_phase(age, trust_band)``), the configured session size, and
-    whether DMs are permitted (age ≥ ``dm_min_age_hours`` AND the trust band
-    allows it AND no post-quarantine DM block is in force). A recent quarantine
+    whether DMs are permitted (warming for ≥ ``dm_min_age_hours`` since
+    ``started_at`` AND the trust band allows it AND no post-quarantine DM block is
+    in force; a missing ``started_at`` counts as just started). A recent quarantine
     release (``recovered_at``) also scales the daily cap down by the recovery
     ramp — see ``recovery_limits``. Per-session *frequency* (reactions/DM) is the
     persona's job, not this ceiling's — see ``persona_reaction_probability`` /
@@ -250,7 +252,10 @@ def compute_intensity(
         progress, days_to_next = None, None
     # П11: DM is gated by trust band (when known) on top of the age gate.
     dm_band_ok = trust_band is None or trust_band in _DM_ALLOWED_BANDS
-    factor, dm_until = recovery_limits(recovered_at, now or datetime.now(UTC))
+    now = now or datetime.now(UTC)
+    factor, dm_until = recovery_limits(recovered_at, now)
+    started = _parse_utc(started_at)
+    warming_hours = (now - started).total_seconds() / _SECONDS_PER_HOUR if started else 0.0
     cap = warm.phase_daily_cap[phase]
     # 0 means "no cap" and stays so; a real cap never ramps below one action.
     daily_cap = max(1, round(cap * factor)) if cap > 0 else cap
@@ -258,7 +263,7 @@ def compute_intensity(
         channels_min=warm.channels_per_cycle_min,
         channels_max=warm.channels_per_cycle_max,
         reaction_probability=warm.reaction_probability,
-        dm_allowed=(age_hours >= warm.dm_min_age_hours) and dm_band_ok and dm_until is None,
+        dm_allowed=warming_hours >= warm.dm_min_age_hours and dm_band_ok and dm_until is None,
         daily_cap=daily_cap,
         phase=phase,
         progress_to_next=progress,

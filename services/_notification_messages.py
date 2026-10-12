@@ -21,8 +21,7 @@ if TYPE_CHECKING:
 # A cycle that hit PeerFlood parks the account in quarantine (``_transitions``).
 _CYCLE_EVENT = "warming_cycle_completed"
 _SPAM_STATUS_EVENT = "spam_status_refreshed"
-# The fixed-name events; ``warming_dm_fleet_paused`` lands with a later change and is
-# supported by name ahead of it.
+# The fixed-name events; ``warming_dm_fleet_paused`` is fleet-wide (no account).
 _EVENT_KINDS: dict[str, NotificationKind] = {
     "warming_quarantine_extended": "quarantine",
     "warming_dm_fleet_paused": "fleet_dm_paused",

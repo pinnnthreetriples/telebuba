@@ -66,7 +66,7 @@ from services.warming.pacing import (
     evaluate_readiness,
     persona_next_run_seconds,
 )
-from services.warming.settings_store import load_settings, save_settings
+from services.warming.settings_store import lift_dm_pause, load_settings, save_settings
 
 __all__ = [
     "_ACCOUNT_LOCKS",
@@ -94,6 +94,7 @@ __all__ = [
     "evaluate_readiness",
     "handoff_to_neurocomment",
     "label_channel",
+    "lift_dm_pause",
     "list_channels",
     "list_warmed_accounts",
     "load_board",

@@ -160,6 +160,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             trust_band=trust.band,
             recovered_at=record.recovered_at if record else None,
             now=now,
+            started_at=record.started_at if record else None,
         )
         card.trust_score = trust.score
         card.trust_band = trust.band
@@ -168,10 +169,14 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             card.spam_status = spam.status
             card.spam_detail = spam.detail
         card.age_hours = age_hours
-        # П11: mirror the engine — DM needs age + trust band, plus readiness only
-        # when enforce_readiness is on. With it off the engine skips the readiness
+        # П11: mirror the engine — DM needs warming time + trust band + no fleet pause,
+        # plus readiness only when enforce_readiness is on. With it off the engine skips the readiness
         # gate, so the card must not show DM blocked while the engine still sends.
-        card.dm_allowed = intensity.dm_allowed and (readiness.ready or not masked.enforce_readiness)
+        card.dm_allowed = (
+            intensity.dm_allowed
+            and (readiness.ready or not masked.enforce_readiness)
+            and masked.dm_paused_until is None
+        )
         card.phone_country = country_for_phone(account.phone)
         card.proxy_country = (account.proxy_country_code or "").upper() or None
         card.phone = account.phone

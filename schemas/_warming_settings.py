@@ -57,6 +57,9 @@ class WarmingSettings(BaseModel):
     deepseek_key_hint: str | None = None
     # Always the full key set — the repository merges the stored JSON over the defaults.
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
+    # Fleet DM breaker: DMs are paused for every account until this instant; ``None``
+    # when no pause is in force (an expired or lifted pause reads as ``None``).
+    dm_paused_until: str | None = None
     updated_at: str = Field(min_length=1)
 
 
@@ -78,6 +81,8 @@ class WarmingSettingsSecret(BaseModel):
     # Resolved like the others: the stored column, else ``DEEPSEEK__API_KEY``.
     deepseek_api_key: str = ""
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
+    # The stored breaker stamp as written — possibly in the past (see the column note).
+    dm_paused_until: str | None = None
     updated_at: str = Field(min_length=1)
 
 

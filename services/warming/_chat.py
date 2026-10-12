@@ -29,6 +29,7 @@ from services.content import release_sent_text
 from services.dialogues import get_partners
 from services.warming import _seams
 from services.warming._chat_text import _opener_text, _reply_text
+from services.warming._dm_breaker import active_dm_pause
 from services.warming._fleet import _stable_fraction
 from services.warming.pacing import _HALT_STATUSES, _classify_flood, persona_dm_probability
 
@@ -104,7 +105,7 @@ def _should_chat(
     """All gates for an inter-account DM this cycle.
 
     П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
-    for direct callers). The persona roll is last so it draws only once every
+    for direct callers); the fleet DM pause applies on top. The persona roll is last so it draws only once every
     prior gate passed — it decides *how often* to chat, not whether it may.
     """
     return (
@@ -112,6 +113,8 @@ def _should_chat(
         and not tally.flooded
         and not tally.peer_flooded
         and dm_allowed
+        # Fleet DM breaker (1.5): two DM spam blocks in a day pause DMs for everyone.
+        and active_dm_pause(secret.dm_paused_until, datetime.now(UTC)) is None
         and secret.inter_account_chat
         # Either text provider can write the line (``_chat_text`` prefers DeepSeek).
         and bool(secret.gemini_api_key or secret.deepseek_api_key)

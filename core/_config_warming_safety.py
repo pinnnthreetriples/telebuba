@@ -40,3 +40,8 @@ class WarmingSafetySettings(BaseModel):
     content_forbidden_words: list[str] = Field(
         default_factory=lambda: ["реклама", "купить", "продам", "продаю", "скидк", "промокод"],
     )
+    # Fleet DM breaker: this many DM spam blocks (across the fleet) within the window
+    # pause inter-account DMs for every account for ``dm_breaker_pause_hours``.
+    dm_breaker_floods: int = Field(default=2, ge=1)
+    dm_breaker_window_hours: float = Field(default=24.0, gt=0.0)
+    dm_breaker_pause_hours: float = Field(default=72.0, gt=0.0)

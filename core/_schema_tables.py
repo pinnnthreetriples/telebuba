@@ -166,6 +166,9 @@ _warming_settings = Table(
     # JSON object of the operator's extras toggles (``schemas._warming_extras``);
     # NULL = every key at its default.
     Column("extra_toggles", String, nullable=True),
+    # Fleet DM breaker: DMs are paused until this instant; DM spam blocks before it
+    # are spent (a lifted or expired pause does not re-trip on them). NULL = never.
+    Column("dm_paused_until", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(
