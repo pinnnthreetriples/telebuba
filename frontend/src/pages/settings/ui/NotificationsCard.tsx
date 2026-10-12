@@ -22,7 +22,17 @@ type Feedback = { tone: 'success' | 'danger'; text: string } | null;
 // The operator bot: its own card and its own save, because it is a separate settings
 // row — saving it must never send the LLM form's fields, nor the other way round.
 // The token behaves like an LLM key: typed replaces, blank keeps, "clear" wipes.
-function NotificationsForm({ settings }: { settings: NotificationSettings }) {
+function NotificationsForm({
+  settings,
+  feedback,
+  setFeedback,
+}: {
+  settings: NotificationSettings;
+  // Held by the card, not the form: the form re-mounts on fresh settings and the
+  // outcome of the save that caused the refresh must survive that.
+  feedback: Feedback;
+  setFeedback: (feedback: Feedback) => void;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const save = useMutation({
@@ -38,7 +48,6 @@ function NotificationsForm({ settings }: { settings: NotificationSettings }) {
   const [showToken, setShowToken] = useState(false);
   const [clearToken, setClearToken] = useState(false);
   const [chatId, setChatId] = useState(settings.chat_id);
-  const [feedback, setFeedback] = useState<Feedback>(null);
 
   const trimmedChat = chatId.trim();
   const chatInvalid = trimmedChat !== '' && !CHAT_ID.test(trimmedChat);
@@ -187,6 +196,7 @@ function NotificationsForm({ settings }: { settings: NotificationSettings }) {
 export function NotificationsCard() {
   const { t } = useTranslation();
   const query = useQuery(notificationSettingsQueryOptions());
+  const [feedback, setFeedback] = useState<Feedback>(null);
   if (query.isPending) return <p className="text-content-muted">{t('settings.loading')}</p>;
   if (query.isError) {
     return (
@@ -195,5 +205,14 @@ export function NotificationsCard() {
       </p>
     );
   }
-  return <NotificationsForm settings={query.data} />;
+  // Re-mounted whenever the stored row changes (another tab, or this form's own save),
+  // so the drafts never carry stale values that a later save would write back.
+  return (
+    <NotificationsForm
+      key={query.data.updated_at ?? 'unsaved'}
+      settings={query.data}
+      feedback={feedback}
+      setFeedback={setFeedback}
+    />
+  );
 }

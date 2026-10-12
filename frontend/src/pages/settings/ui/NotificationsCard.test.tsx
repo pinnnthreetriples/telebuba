@@ -180,3 +180,25 @@ test('the form is locked while a save is in flight', async () => {
     expect(screen.getByLabelText('Chat ID')).toBeEnabled();
   });
 });
+
+test('the form follows settings changed elsewhere instead of keeping stale drafts', async () => {
+  let stored: Record<string, unknown> = STORED;
+  vi.mocked(fetch).mockImplementation(() => Promise.resolve(json(stored)));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <NotificationsCard />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByLabelText('Chat ID')).toHaveValue('-100500');
+
+  // Another tab saved a new chat and switched notifications off.
+  stored = { ...STORED, enabled: false, chat_id: '@other', updated_at: 'later' };
+  await client.invalidateQueries();
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Chat ID')).toHaveValue('@other');
+  });
+  expect(screen.getByRole('switch', { name: 'Отправлять уведомления' })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Сохранить уведомления' })).toBeDisabled();
+});
