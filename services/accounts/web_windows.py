@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import asyncio
 
+from core.web_login import close_orphaned_browsers, web_profiles_root
 from services.accounts import web_login
 
-__all__ = ["close_all_web_windows", "count_open_web_windows"]
+__all__ = ["close_all_web_windows", "close_orphaned_web_windows", "count_open_web_windows"]
 
 
 async def count_open_web_windows() -> int:
@@ -41,6 +42,16 @@ async def close_all_web_windows() -> int:
         *(_close_current_window(account_id) for account_id in account_ids)
     )
     return sum(closed)
+
+
+async def close_orphaned_web_windows() -> int:
+    """Close the windows a previous backend run left open; startup only.
+
+    Before any window of this run exists, so nothing found is one of ours. Such a window
+    has no DevTools client — no fingerprint after its next reload — and still claims its
+    profile, so the account's next open would fail as a hand-off.
+    """
+    return await close_orphaned_browsers(web_profiles_root())
 
 
 async def _close_current_window(account_id: str) -> int:

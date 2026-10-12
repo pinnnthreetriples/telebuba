@@ -32,7 +32,6 @@ from core.proxy_check import check_proxy_connectivity
 from core.web_login import (
     LocalProxyRelay,
     account_profile_dir,
-    fingerprint_for,
     focus_window,
     launch_account_web,
 )
@@ -59,6 +58,7 @@ from services.accounts._web_errors import (
     WebLoginLaunchError,
     WebLoginServiceError,
 )
+from services.accounts._web_identity import web_fingerprint
 from services.accounts._web_watch import cancel_watchers, watch_window
 
 if TYPE_CHECKING:
@@ -326,7 +326,7 @@ async def _spawn(
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
         # launch itself raises rather than as a bare 500.
-        fingerprint = fingerprint_for(account_id, country)
+        fingerprint = await web_fingerprint(account_id, country)
         window = await launch_account_web(
             relay_port,
             profile_dir=profile,

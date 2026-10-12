@@ -8,6 +8,7 @@ alias for them was one more name to keep in sync for nobody.
 
 from __future__ import annotations
 
+from core.web_login._lifetime import close_orphaned_browsers
 from core.web_login._page import (
     latest_login_token,
     page_state,
@@ -19,6 +20,7 @@ from core.web_login.browser import (
     focus_window,
     launch_account_web,
     token_bytes,
+    web_profiles_root,
 )
 from core.web_login.fingerprint import fingerprint_for
 from core.web_login.relay import LocalProxyRelay
@@ -26,6 +28,7 @@ from core.web_login.relay import LocalProxyRelay
 __all__ = [
     "LocalProxyRelay",
     "account_profile_dir",
+    "close_orphaned_browsers",
     "fingerprint_for",
     "focus_window",
     "latest_login_token",
@@ -34,4 +37,5 @@ __all__ = [
     "release_capture",
     "token_bytes",
     "type_2fa_password",
+    "web_profiles_root",
 ]

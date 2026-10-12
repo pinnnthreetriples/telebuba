@@ -15,7 +15,10 @@ a worker answers differently from its own page is a contradiction inside one win
 The device is chosen deterministically from ``account_id`` against a FIXED catalogue of
 row names (a given account always looks like the same machine, whatever the device table
 does), and re-seated only when that row's brand is not the binary this host will actually
-launch; timezone and language are aligned to the account's proxy country.
+launch or its OS is not this host's. The language is the one the account's Telethon device
+already announces (``device_fingerprints.system_lang_code``, from the phone number) when
+there is one, so Telegram does not see one account speak two languages; otherwise, and for
+the timezone always, the account's proxy country decides.
 
 An unresolvable country (:data:`_DEFAULT_LOCALE`) claims no place at all. Naming a
 concrete zone would be a positive geographic claim, and comparing the claimed timezone
@@ -30,6 +33,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -78,6 +82,11 @@ _observed: dict[str, str] = {}
 # ``...\Google\Chrome\Application\148.0.7778.217\`` — both Chrome and Edge keep a
 # version-named directory beside the executable, which is the installed build.
 _BUILD_DIR = re.compile(r"^\d+(?:\.\d+){2,3}$")
+# The OS this host really is, as a row's client-hints platform names it. A row from
+# another OS is betrayed by everything the page can measure past the overrides — the
+# installed fonts, the real GPU limits, the window frame — so none is handed out. The
+# launcher finds Windows binaries only, which is why anything else counts as Windows.
+_HOST_PLATFORM = "macOS" if sys.platform == "darwin" else "Windows"
 
 
 def note_installed_browser(build: str, *, is_edge: bool) -> None:
@@ -182,7 +191,7 @@ def _seed_index(account_id: str, modulo: int) -> int:
     return int(digest, 16) % modulo
 
 
-def _device_for(account_id: str, *, is_edge: bool) -> _Device:
+def _device_for(account_id: str, *, is_edge: bool, platform: str) -> _Device:
     """The account's row: seeded against :data:`CATALOGUE`, never against the table.
 
     Seeding against the live table is what broke the module's central promise. Filtering
@@ -192,26 +201,35 @@ def _device_for(account_id: str, *, is_edge: bool) -> _Device:
     exists to avoid. :data:`CATALOGUE` is fixed, so rows may be added, removed, reordered
     or filtered without moving anybody.
 
-    The brand fallback re-seats ONLY an account whose catalogue row is the wrong brand
-    (an Edge row on a Chrome host, which every feature probe would contradict). It reads
-    the catalogue too, so it is stable in the same way.
+    The fallback re-seats ONLY an account whose catalogue row is the wrong brand (an Edge
+    row on a Chrome host, which every feature probe would contradict) or the wrong OS (a
+    macOS row on a Windows host). It reads the catalogue too, so it is stable in the
+    same way: an account keeps a fitting row, and one that wore a row this host can no
+    longer hand out moves once, to the same new row every time.
     """
+
+    def fits(row: _Device | None) -> bool:
+        return row is not None and row.is_edge is is_edge and row.ua_platform == platform
+
     chosen = BY_NAME.get(CATALOGUE[_seed_index(account_id, len(CATALOGUE))])
-    if chosen is not None and chosen.is_edge is is_edge:
+    if chosen is not None and fits(chosen):
         return chosen
-    names = tuple(
-        name
-        for name in CATALOGUE
-        if (row := BY_NAME.get(name)) is not None and row.is_edge is is_edge
-    )
+    names = tuple(name for name in CATALOGUE if fits(BY_NAME.get(name)))
     return BY_NAME[names[_seed_index(f"{account_id}\x00brand", len(names))]]
 
 
-def fingerprint_for(account_id: str, country_code: str | None = None) -> Fingerprint:
-    """Deterministic per-account identity; timezone/locale aligned to the proxy country."""
+def fingerprint_for(
+    account_id: str, country_code: str | None = None, language: str | None = None
+) -> Fingerprint:
+    """Deterministic per-account identity; timezone from the proxy country.
+
+    ``language`` is the BCP-47 tag the account's Telethon device announces (e.g.
+    ``"ru-RU"``); without one the locale follows the proxy country as well.
+    """
     build, is_edge = _installed()
-    device = _device_for(account_id, is_edge=is_edge)
-    timezone, locale = _COUNTRY.get((country_code or "").upper(), _DEFAULT_LOCALE)
+    device = _device_for(account_id, is_edge=is_edge, platform=_HOST_PLATFORM)
+    timezone, country_locale = _COUNTRY.get((country_code or "").upper(), _DEFAULT_LOCALE)
+    locale = language or country_locale
     primary = locale.split("-")[0]
     languages: tuple[str, ...] = (locale, primary) if primary != locale else (locale,)
     if primary != "en":

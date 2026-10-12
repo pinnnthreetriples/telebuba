@@ -45,16 +45,18 @@ def _pinned_browser(monkeypatch: pytest.MonkeyPatch) -> None:
     dict makes the next ``fingerprint_for`` scan Program Files for real.
     """
     monkeypatch.setattr(fp_module, "_observed", {"build": _SEEN_BUILD, "edge": ""})
+    monkeypatch.setattr(fp_module, "_HOST_PLATFORM", "Windows")
 
 
 def _fingerprint_with(device_name: str) -> Any:
     """A real fingerprint that resolved to the named device row.
 
-    A row is only reachable on a host running that BRAND of browser, so the installed
-    brand is pinned to the row's before seeding. Undone by ``_pinned_browser``.
+    A row is only reachable on a host running that BRAND of browser on that OS, so both
+    are pinned to the row's before seeding. Undone by ``_pinned_browser``.
     """
     row = next(device for device in DEVICES if device.name == device_name)
     note_installed_browser(fingerprint_for("acct-0").chrome_full, is_edge=row.is_edge)
+    setattr(fp_module, "_HOST_PLATFORM", row.ua_platform)  # noqa: B010 - undone by the fixture
     for i in range(500):
         candidate = fingerprint_for(f"acct-{i}", "DE")
         if candidate.device.name == device_name:
@@ -122,6 +124,23 @@ def test_an_unresolvable_country_claims_no_place_at_all() -> None:
     assert unknown.timezone == "Etc/UTC"
     # And it is never silently one of the real countries we hand out on purpose.
     assert unknown.timezone not in {zone for zone, _lang in fp_module._COUNTRY.values()}
+
+
+def test_the_device_language_wins_over_the_proxy_country_but_not_its_timezone() -> None:
+    """Telegram must not hear one account speak two languages.
+
+    The Telethon device announces ``system_lang_code`` from the phone number; a web
+    window that took its language from the proxy country instead showed the same
+    account as, say, ``ru-RU`` on desktop and ``de-DE`` on the web. The timezone still
+    has to agree with the exit IP, so it stays the proxy's.
+    """
+    fingerprint = fingerprint_for("acct-1", "DE", "ru-RU")
+
+    assert fingerprint.locale == "ru-RU"
+    assert fingerprint.languages == ("ru-RU", "ru", "en")
+    assert fingerprint.accept_language == "ru-RU,ru,en"
+    assert fingerprint.timezone == "Europe/Berlin"
+    assert fingerprint_for("acct-1", "DE", None).locale == "de-DE"
 
 
 def test_an_english_locale_does_not_repeat_english() -> None:
@@ -459,14 +478,31 @@ def test_the_brand_filter_moves_only_the_accounts_it_has_to(
 
     for i in range(80):
         account = f"acct-{i}"
-        seated = _device_for(account, is_edge=False)
+        seated = _device_for(account, is_edge=False, platform="Windows")
         catalogue_row = BY_NAME[CATALOGUE[_seed_index(account, len(CATALOGUE))]]
         assert seated.is_edge is False
-        if not catalogue_row.is_edge:
+        if not catalogue_row.is_edge and catalogue_row.ua_platform == "Windows":
             assert seated.name == catalogue_row.name
 
 
-def test_the_identity_an_account_already_has_is_the_one_it_keeps() -> None:
+@pytest.mark.parametrize("is_edge", [False, True])
+def test_a_row_from_another_os_is_never_handed_out(
+    monkeypatch: pytest.MonkeyPatch,
+    is_edge: bool,  # noqa: FBT001 - parametrized flag
+) -> None:
+    """A Mac claimed from a Windows host is betrayed by the fonts, the GPU and the frame."""
+    monkeypatch.setattr(
+        fp_module, "_observed", {"build": _SEEN_BUILD, "edge": "1" if is_edge else ""}
+    )
+
+    platforms = {fingerprint_for(f"acct-{i}", "DE").device.ua_platform for i in range(80)}
+
+    assert platforms == {"Windows"}
+
+
+def test_the_identity_an_account_already_has_is_the_one_it_keeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Pinned to the rows accounts were ALREADY handed out, before the brand filter.
 
     A device row is not a private detail: Telegram has recorded it as the
@@ -476,15 +512,21 @@ def test_the_identity_an_account_already_has_is_the_one_it_keeps() -> None:
     mapping produced; the round that filtered ``DEVICES`` before seeding moved every
     single one of these (``acct-0`` to win11-chrome-intel, ``acct-1`` to
     macos-chrome-apple, ``acct-3`` to win11-chrome-nvidia, ...).
+
+    The OS filter moves only the accounts whose row was a Mac, once and to a fixed
+    Windows row; on a macOS host those keep their row.
     """
-    kept = {
-        "acct-0": "macos-chrome-apple",
-        "acct-1": "macos-chrome-amd",
-        "acct-2": "win11-chrome-intel",
-        "acct-3": "win11-chrome-intel",
-        "acct-4": "macos-chrome-apple",
+    kept = {"acct-2": "win11-chrome-intel", "acct-3": "win11-chrome-intel"}
+    moved_once = {
+        "acct-0": "win10-chrome-amd",
+        "acct-1": "win11-chrome-nvidia",
+        "acct-4": "win11-chrome-nvidia",
     }
-    assert {a: fingerprint_for(a, "DE").device.name for a in kept} == kept
+    on_windows = {**kept, **moved_once}
+    assert {a: fingerprint_for(a, "DE").device.name for a in on_windows} == on_windows
+    monkeypatch.setattr(fp_module, "_HOST_PLATFORM", "macOS")
+    on_mac = {"acct-0": "macos-chrome-apple", "acct-1": "macos-chrome-amd"}
+    assert {a: fingerprint_for(a, "DE").device.name for a in on_mac} == on_mac
     # The one account that MUST move on a Chrome host: its catalogue row is the Edge one.
     assert BY_NAME[CATALOGUE[_seed_index("acct-5", len(CATALOGUE))]].is_edge
     assert not fingerprint_for("acct-5", "DE").device.is_edge

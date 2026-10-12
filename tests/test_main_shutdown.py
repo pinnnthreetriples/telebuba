@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 # Neuroshilling reconciles last: it TAKES accounts, so it has to see the picture the
 # other two have already restored.
 _RECONCILE = (
+    # First: a window a previous run left open is closed before this run can open one.
+    "close_orphaned_web_windows",
     # The operator bot subscribes first, so it sees the events the reconciles emit.
     "start_notifications",
     "reconcile_warming_runtime",
