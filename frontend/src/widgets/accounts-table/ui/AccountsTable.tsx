@@ -30,6 +30,11 @@ interface AccountsTableProps {
   onOpen?: (account: AccountRead) => void;
   onProfile?: (account: AccountRead) => void;
   onOpenWeb?: (accountId: string) => void;
+  // The mobile account's Android container. Without it the phone button is not drawn;
+  // with the feature switched off it is drawn disabled, its tooltip saying why.
+  onOpenMobile?: (accountId: string) => void;
+  emulatorEnabled?: boolean;
+  openMobileBusyIds?: ReadonlySet<string>;
   // A set, not one id: two rows can have a check or a delete in flight at once.
   busyIds: ReadonlySet<string>;
   // Its own set, kept apart from busyIds: opening web must not disable the row's
@@ -125,6 +130,9 @@ export function AccountsTable({
   onOpen,
   onProfile,
   onOpenWeb,
+  onOpenMobile,
+  emulatorEnabled = false,
+  openMobileBusyIds,
   busyIds,
   openWebBusyIds,
   checkResults,
@@ -234,8 +242,32 @@ export function AccountsTable({
         // check. One expression, because three of them drifted apart once already.
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
+        const openingMobile = openMobileBusyIds?.has(account.account_id) ?? false;
+        const hasMobile = (account.devices ?? []).includes('mobile');
+        const mobileTitle = !emulatorEnabled
+          ? t('accounts.actions.mobileDisabled')
+          : hasMobile
+            ? t('accounts.actions.mobile')
+            : t('accounts.actions.mobileMissing');
         return (
           <div className="flex items-center justify-end gap-2">
+            {onOpenMobile ? (
+              <IconButton
+                size="touch"
+                shape="circle"
+                tone="primary"
+                title={mobileTitle}
+                aria-label={t('accounts.actions.mobile')}
+                className="md:size-icon"
+                disabled={!emulatorEnabled || !hasMobile || openingMobile}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenMobile(account.account_id);
+                }}
+              >
+                {openingMobile ? <Spinner /> : <Icon name="smartphone" size={14} />}
+              </IconButton>
+            ) : null}
             <IconButton
               size="touch"
               shape="circle"

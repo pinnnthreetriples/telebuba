@@ -9,12 +9,14 @@ import {
   accountsQueryOptions,
   accountStatsQueryOptions,
   accountWebWindowsQueryOptions,
+  emulatorStatusQueryOptions,
   activeBulkMessageJobQueryOptions,
   latestBulkMessageJobQueryOptions,
   checkAccountMutation,
   closeAccountWebWindowsMutation,
   deleteAccountMutation,
   invalidateAccountViews,
+  openAccountMobileMutation,
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
@@ -100,6 +102,7 @@ export function AccountsPage() {
   // Kept apart from busyIds so opening web doesn't disable a row's check/delete
   // and its spinner sits only on the globe.
   const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
+  const [openMobileBusyIds, setOpenMobileBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -241,6 +244,8 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
   const openWeb = useMutation(openAccountWebMutation());
+  const openMobile = useMutation(openAccountMobileMutation());
+  const emulator = useQuery(emulatorStatusQueryOptions());
   const webWindows = useQuery(accountWebWindowsQueryOptions());
   const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
   const openWebWindows = webWindows.data?.count ?? 0;
@@ -333,6 +338,26 @@ export function AccountsPage() {
           if (count < WEB_WINDOWS_WARN_AT || webWindowsWarned.current) return;
           webWindowsWarned.current = true;
           toastError(t('accounts.webWindows.tooMany', { count }));
+        });
+      });
+  };
+  // The container start can take minutes (boot, install, sign-in), so its spinner has
+  // its own set like the globe's. A refusal arrives as the global toast with its code;
+  // a container that opened without reaching the chat list says so, because the
+  // operator then finishes the sign-in in its window.
+  const openMobileAccount = (accountId: string) => {
+    setOpenMobileBusyIds((ids) => new Set(ids).add(accountId));
+    return openMobile
+      .mutateAsync({ path: { account_id: accountId } })
+      .then((result) => {
+        if (!result.signed_in) toastError(t('accounts.openMobile.notSignedIn'));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setOpenMobileBusyIds((ids) => {
+          const next = new Set(ids);
+          next.delete(accountId);
+          return next;
         });
       });
   };
@@ -571,6 +596,11 @@ export function AccountsPage() {
                 setProfilingRow(account);
               }}
               onOpenWeb={onOpenWeb}
+              onOpenMobile={(accountId) => {
+                void openMobileAccount(accountId);
+              }}
+              emulatorEnabled={emulator.data?.enabled ?? false}
+              openMobileBusyIds={openMobileBusyIds}
               busyIds={busyIds}
               openWebBusyIds={openWebBusyIds}
               checkResults={checkResults}

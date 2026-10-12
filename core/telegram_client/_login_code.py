@@ -13,6 +13,8 @@ import asyncio
 import re
 from typing import TYPE_CHECKING, cast
 
+from core.telegram_client._pool import get_client
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -80,3 +82,24 @@ async def wait_for_login_code(
         if loop.time() + poll_seconds > deadline:
             return None
         await asyncio.sleep(poll_seconds)
+
+
+async def login_code_cutoff(account_id: str) -> int:
+    """The newest 777000 id the account's primary session sees, taken before a code is asked."""
+    return await last_service_message_id(await get_client(account_id))
+
+
+async def wait_account_login_code(
+    account_id: str,
+    *,
+    after_id: int,
+    wait_seconds: float,
+    poll_seconds: float,
+) -> str | None:
+    """A login code that reached the account's primary session after ``after_id``."""
+    return await wait_for_login_code(
+        await get_client(account_id),
+        after_id=after_id,
+        wait_seconds=wait_seconds,
+        poll_seconds=poll_seconds,
+    )

@@ -3288,6 +3288,18 @@ export type DiscoveryWork = {
 };
 
 /**
+ * EmulatorStatus
+ *
+ * Whether the container feature is switched on (the SPA disables the button if not).
+ */
+export type EmulatorStatus = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
+};
+
+/**
  * ErrorDetail
  */
 export type ErrorDetail = {
@@ -5161,6 +5173,26 @@ export type NotificationTestResult = {
    * Sent
    */
   sent?: boolean;
+};
+
+/**
+ * OpenMobileResult
+ *
+ * What opening the container did; ``signed_in`` is read off the screen, never cached.
+ */
+export type OpenMobileResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'started' | 'already_running';
+  /**
+   * Signed In
+   */
+  signed_in: boolean;
 };
 
 /**
@@ -11745,6 +11777,94 @@ export type AddAccountDeviceResponses = {
 };
 
 export type AddAccountDeviceResponse = AddAccountDeviceResponses[keyof AddAccountDeviceResponses];
+
+export type EmulatorStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/emulator';
+};
+
+export type EmulatorStatusErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type EmulatorStatusError = EmulatorStatusErrors[keyof EmulatorStatusErrors];
+
+export type EmulatorStatusResponses = {
+  /**
+   * Successful Response
+   */
+  200: EmulatorStatus;
+};
+
+export type EmulatorStatusResponse = EmulatorStatusResponses[keyof EmulatorStatusResponses];
+
+export type OpenAccountMobileData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-mobile';
+};
+
+export type OpenAccountMobileErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenAccountMobileError = OpenAccountMobileErrors[keyof OpenAccountMobileErrors];
+
+export type OpenAccountMobileResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenMobileResult;
+};
+
+export type OpenAccountMobileResponse =
+  OpenAccountMobileResponses[keyof OpenAccountMobileResponses];
 
 export type ListProxiesData = {
   body?: never;

@@ -49,6 +49,7 @@ from core.telegram_client._twofa import _TWOFA_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.chat_broadcast import ChatBroadcastRefusalCode
 from schemas.devices import DeviceRefusalCode
+from schemas.emulator import EmulatorRefusalCode
 from schemas.masstagging import MasstaggingRefusalCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
@@ -126,7 +127,7 @@ def _expected_codes() -> set[str]:
     #
     # ``DeviceRefusalCode`` is the account-device vocabulary: the second-device sign-in,
     # the device choice at import/login, and warming's refusal of a device the account
-    # lacks all answer with it.
+    # lacks all answer with it. ``EmulatorRefusalCode`` is the mobile container's own.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
@@ -136,6 +137,7 @@ def _expected_codes() -> set[str]:
         | set(get_args(MasstaggingRefusalCode))
         | set(get_args(WarmingRefusalCode))
         | set(get_args(DeviceRefusalCode))
+        | set(get_args(EmulatorRefusalCode))
         | set(get_args(TwoFactorRefusalCode))
         | set(get_args(ScheduledPostRefusalCode))
         | set(get_args(StoryLimitErrorCode))

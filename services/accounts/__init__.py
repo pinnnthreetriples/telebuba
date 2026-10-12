@@ -93,6 +93,11 @@ from services.accounts.media import (
     set_account_profile_photo,
     set_account_story_pinned,
 )
+from services.accounts.mobile_emulator import (
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    open_account_mobile,
+)
 from services.accounts.privacy import (
     apply_account_privacy,
     apply_privacy_to_all_accounts,
@@ -132,6 +137,8 @@ __all__ = [
     "ChatMediaDownload",
     "ChatServiceError",
     "DeviceRefusedError",
+    "EmulatorBusyError",
+    "EmulatorRefusedError",
     "InvalidCursorError",
     "OpenWebResult",
     "PhoneLoginError",
@@ -175,6 +182,7 @@ __all__ = [
     "list_listener_accounts",
     "logout_account",
     "mark_chat_read",
+    "open_account_mobile",
     "open_account_web",
     "post_account_story",
     "publish_account_channel_post",

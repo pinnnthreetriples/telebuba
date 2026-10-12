@@ -21,6 +21,7 @@ from api.v1._accounts_channels import channels_router
 from api.v1._accounts_chats import chats_router
 from api.v1._accounts_contact_lookup import contact_lookup_router
 from api.v1._accounts_devices import devices_router
+from api.v1._accounts_emulator import emulator_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_registered import registered_router
@@ -415,3 +416,5 @@ router.include_router(contact_lookup_router)
 router.include_router(scheduled_router)
 # The account's second device (a separate sign-in of the other device type).
 router.include_router(devices_router)
+# The mobile account's local Android container (LDPlayer 9).
+router.include_router(emulator_router)

@@ -61,6 +61,7 @@ import {
   deleteUserParserBase,
   deleteUserParserPreset,
   editAccountChannelPost,
+  emulatorStatus,
   expandDiscoveryKeywords,
   exportUserParserRun,
   generateBulkMessage,
@@ -136,6 +137,7 @@ import {
   logout,
   logoutAccount,
   markAccountChatRead,
+  openAccountMobile,
   openAccountWeb,
   type Options,
   postAccountStory,
@@ -374,6 +376,9 @@ import type {
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostResponse,
+  EmulatorStatusData,
+  EmulatorStatusError,
+  EmulatorStatusResponse,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsError,
   ExpandDiscoveryKeywordsResponse,
@@ -597,6 +602,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadError,
   MarkAccountChatReadResponse,
+  OpenAccountMobileData,
+  OpenAccountMobileError,
+  OpenAccountMobileResponse,
   OpenAccountWebData,
   OpenAccountWebError,
   OpenAccountWebResponse,
@@ -3205,6 +3213,65 @@ export const addAccountDeviceMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await addAccountDevice({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const emulatorStatusQueryKey = (options?: Options<EmulatorStatusData>) =>
+  createQueryKey('emulatorStatus', options);
+
+/**
+ * Emulator Status
+ *
+ * Whether opening accounts in the Android container is switched on.
+ */
+export const emulatorStatusOptions = (options?: Options<EmulatorStatusData>) =>
+  queryOptions<
+    EmulatorStatusResponse,
+    EmulatorStatusError,
+    EmulatorStatusResponse,
+    ReturnType<typeof emulatorStatusQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await emulatorStatus({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: emulatorStatusQueryKey(options),
+  });
+
+/**
+ * Open Account Mobile
+ *
+ * Start the account's container and sign its Telegram app in.
+ *
+ * A refusal answers 400 with a stable code; a start already running for the same
+ * account answers 409 ``emulator_busy``.
+ */
+export const openAccountMobileMutation = (
+  options?: Partial<Options<OpenAccountMobileData>>,
+): UseMutationOptions<
+  OpenAccountMobileResponse,
+  OpenAccountMobileError,
+  Options<OpenAccountMobileData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    OpenAccountMobileResponse,
+    OpenAccountMobileError,
+    Options<OpenAccountMobileData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await openAccountMobile({
         ...options,
         ...fnOptions,
         throwOnError: true,
