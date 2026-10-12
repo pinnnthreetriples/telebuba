@@ -104,12 +104,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     # unscoped), narrowed to this campaign here and to the hour window per card.
     parked = [c for c in (await list_waiting_comments()).comments if c.campaign_id == campaign_id]
 
-    # The soft start's day per account: its caps are the ones the engine enforces, and
-    # the card names the day («Мягкий старт · день 2/5»).
-    soft = {
-        state.account_id: soft_day(state, now)
-        for state in await list_warming_states_by_ids(account_ids)
-    }
+    soft = await _soft_days(account_ids, now)
     cards = [
         _build_card(
             signals=_AccountSignals(
@@ -159,6 +154,16 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         channels=rows,
         comments=feed,
     )
+
+
+async def _soft_days(account_ids: list[str], now: datetime) -> dict[str, int | None]:
+    """The soft start's day per account (``None`` outside one).
+
+    Its caps are the ones the engine enforces, and the card names the day
+    («Мягкий старт · день 2/5»).
+    """
+    states = await list_warming_states_by_ids(account_ids)
+    return {state.account_id: soft_day(state, now) for state in states}
 
 
 def _soft_progress(day: int | None) -> dict[str, object]:
