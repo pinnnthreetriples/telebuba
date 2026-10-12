@@ -9,6 +9,7 @@ from fastapi import status as http_status
 
 from api.errors import error_responses
 from core.config import settings
+from schemas._warming_start import StartPreview, StartPreviewRequest
 from schemas.dialogues import DialogueFeed
 from schemas.warming import (
     AddChannelsRequest,
@@ -125,6 +126,16 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
             status_code=http_status.HTTP_409_CONFLICT,
             detail=exc.code,
         ) from exc
+
+
+@router.post(
+    "/start-preview",
+    response_model=StartPreview,
+    operation_id="previewWarmingStart",
+)
+async def preview_warming_start(body: StartPreviewRequest) -> StartPreview:
+    """When the chosen start delay lands in each account's own clock (read only)."""
+    return await warming_service.preview_start(body)
 
 
 @router.post(

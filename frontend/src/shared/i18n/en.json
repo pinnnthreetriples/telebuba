@@ -2751,7 +2751,12 @@
     },
     "pool": {
       "start": "Start pool",
-      "stop": "Stop pool"
+      "stop": "Stop pool",
+      "title": "Start the pool",
+      "subtitle_one": "{{count}} account — each starts at its own moment inside the window",
+      "subtitle_other": "{{count}} accounts — each starts at its own moment inside the window",
+      "skipped_one": "{{count}} account is not ready to warm and will not start",
+      "skipped_other": "{{count}} accounts are not ready to warm and will not start"
     },
     "ready": {
       "title": "Ready to warm",
@@ -3090,6 +3095,20 @@
       "pairs_other": "{{count}} pairs",
       "yesterday": "yesterday",
       "daysAgo": "{{n}}d ago"
+    },
+    "delay": {
+      "label": "First run in",
+      "short_one": "{{count}} h",
+      "short_other": "{{count}} h",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "at": "≈ {{time}} account time",
+      "atPool": "≈ {{time}} accounts’ time",
+      "range": "≈ {{from}}–{{to}} accounts’ time",
+      "rangeZone": "≈ {{from}}–{{to}} ({{zone}})",
+      "shifted": "(night there then, moved to the morning)",
+      "shiftedPool": "(night-time runs moved to the morning)",
+      "rangeOne": "≈ {{from}}–{{to}} account time"
     }
   },
   "auth": {

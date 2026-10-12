@@ -37,6 +37,7 @@ from services.warming import _exclusion, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
+from services.warming._start_options import first_run_at
 from services.warming._start_state import carry_or_restamp
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
@@ -339,7 +340,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        stint = carry_or_restamp(existing, data)
+        stint = carry_or_restamp(existing, data, first_run_at(account, data))
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -355,7 +356,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 data.account_id,
                 "active",
                 last_event="queued",
-                next_run_at=None,
+                next_run_at=stint.first_run_at,
                 started_at=stint.started_at,
                 stopped_at=None,
                 last_error=None,

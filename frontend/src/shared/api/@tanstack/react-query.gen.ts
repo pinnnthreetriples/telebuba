@@ -133,6 +133,7 @@ import {
   openAccountWeb,
   type Options,
   postAccountStory,
+  previewWarmingStart,
   probeProxy,
   promoteToNeurocomment,
   publishAccountChannelPost,
@@ -574,6 +575,9 @@ import type {
   PostAccountStoryData,
   PostAccountStoryError,
   PostAccountStoryResponse,
+  PreviewWarmingStartData,
+  PreviewWarmingStartError,
+  PreviewWarmingStartResponse,
   ProbeProxyData,
   ProbeProxyError,
   ProbeProxyResponse,
@@ -3426,6 +3430,35 @@ export const startWarmingMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await startWarming({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Preview Warming Start
+ *
+ * When the chosen start delay lands in each account's own clock (read only).
+ */
+export const previewWarmingStartMutation = (
+  options?: Partial<Options<PreviewWarmingStartData>>,
+): UseMutationOptions<
+  PreviewWarmingStartResponse,
+  PreviewWarmingStartError,
+  Options<PreviewWarmingStartData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PreviewWarmingStartResponse,
+    PreviewWarmingStartError,
+    Options<PreviewWarmingStartData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await previewWarmingStart({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -9372,6 +9372,86 @@
         }
       }
     },
+    "/api/v1/warming/start-preview": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Preview Warming Start",
+        "description": "When the chosen start delay lands in each account's own clock (read only).",
+        "operationId": "previewWarmingStart",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartPreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/warming/stop": {
       "post": {
         "tags": [
@@ -28553,8 +28633,108 @@
         "title": "StartPhoneLoginRequest",
         "description": "API body for ``POST /accounts/start-login`` \u2014 provision an account by phone."
       },
+      "StartPreview": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StartPreviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "StartPreview"
+      },
+      "StartPreviewItem": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "time_zone": {
+            "type": "string",
+            "title": "Time Zone"
+          },
+          "earliest_at": {
+            "type": "string",
+            "title": "Earliest At"
+          },
+          "latest_at": {
+            "type": "string",
+            "title": "Latest At"
+          },
+          "shifted": {
+            "type": "boolean",
+            "title": "Shifted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "time_zone",
+          "earliest_at",
+          "latest_at",
+          "shifted"
+        ],
+        "title": "StartPreviewItem",
+        "description": "When one account's first cycle can land, as UTC instants plus its zone."
+      },
+      "StartPreviewRequest": {
+        "properties": {
+          "account_ids": {
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Account Ids"
+          },
+          "start_delay_hours": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Start Delay Hours"
+          },
+          "spread_start": {
+            "type": "boolean",
+            "title": "Spread Start",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ids",
+          "start_delay_hours"
+        ],
+        "title": "StartPreviewRequest",
+        "description": "Body of ``POST /warming/start-preview``."
+      },
       "StartWarmingRequest": {
         "properties": {
+          "start_delay_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Delay Hours"
+          },
+          "spread_start": {
+            "type": "boolean",
+            "title": "Spread Start",
+            "default": false
+          },
           "account_id": {
             "type": "string",
             "minLength": 1,

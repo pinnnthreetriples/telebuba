@@ -44,6 +44,7 @@ from services.warming._runtime import (
     stop_warming,
     unmark_neurocomment,
 )
+from services.warming._start_options import preview_start
 from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
@@ -89,6 +90,7 @@ __all__ = [
     "load_daily_stats",
     "load_settings",
     "persona_next_run_seconds",
+    "preview_start",
     "promote_to_neurocomment",
     "reconcile_warming_runtime",
     "remove_channel",
