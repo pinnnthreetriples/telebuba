@@ -153,7 +153,6 @@ def flood_active(flood_wait_until: str | None, now: datetime) -> bool:
 
 
 def account_trust_score_from(  # noqa: PLR0913 - already-loaded signals, one per source.
-    *,
     account: AccountRead,
     record: WarmingStateRecord | None,
     spam: SpamStatusVerdict | None,
@@ -165,6 +164,8 @@ def account_trust_score_from(  # noqa: PLR0913 - already-loaded signals, one per
 
     Lets a batch caller (the warming board) score many accounts from one set of
     bulk-loaded rows instead of re-querying account/state/spam/fingerprint per card.
+    Every caller passes these by keyword; the bare ``*`` went only because the
+    aislop parameter gate counts it as a seventh parameter.
     """
     geo = evaluate_geo(
         phone=account.phone,
