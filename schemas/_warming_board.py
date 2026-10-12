@@ -1,11 +1,11 @@
-"""Board roll-up models — split from ``schemas.warming`` for the file-size budget.
+"""Board roll-up, channel and warmed-pool models, split from ``schemas.warming`` for size.
 
 Re-exported there, so ``from schemas.warming import WarmingSummary`` keeps working.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WarmingSummary(BaseModel):
@@ -29,6 +29,18 @@ class WarmingMechanics(BaseModel):
     stories: bool = True
     # Needs the switch AND a text-LLM key: without a key the chat step never writes.
     dialogue: bool = False
+
+
+class AddChannelsRequest(BaseModel):
+    """Raw user input — one or many links/usernames, newline- or comma-separated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    raw: str = Field(min_length=1)
+
+
+class RemoveChannelRequest(BaseModel):
+    channel: str = Field(min_length=1)
 
 
 class WarmedAccount(BaseModel):

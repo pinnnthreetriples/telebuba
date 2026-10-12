@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import count_warmed_day
 from core.logging import log_event
+from core.repositories._warming_days import count_warmed_day
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingCycleResult

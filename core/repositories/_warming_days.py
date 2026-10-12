@@ -2,7 +2,7 @@
 
 Its own module for the file-size budget, like ``_warming_reservation``. Owns ONE
 statement: add a day to ``warmed_days`` the first time a local date earns it.
-``core.repositories.warming`` and ``core.db`` re-export it.
+Callers import it from here.
 """
 
 from __future__ import annotations

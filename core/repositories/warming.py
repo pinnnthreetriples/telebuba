@@ -33,7 +33,6 @@ from core.db import (
 # live in sibling modules for the file-size budget; re-exported here (and thence by
 # ``core.db``) so existing call sites keep importing them from
 # ``core.repositories.warming``.
-from core.repositories._warming_days import count_warmed_day  # noqa: F401
 from core.repositories._warming_reservation import (  # noqa: F401
     hand_back_warming_reservation,
 )

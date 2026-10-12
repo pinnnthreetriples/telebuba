@@ -12,11 +12,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 # Settings and board roll-up models live in sibling modules for the file-size budget;
 # re-exported here so ``from schemas.warming import WarmingSettings`` etc. keep working.
-from schemas._warming_board import (  # noqa: F401 - WarmedAccountList is a runtime re-export
+from schemas._warming_board import (  # noqa: F401 - runtime re-export
+    AddChannelsRequest,
+    RemoveChannelRequest,
     WarmedAccount,
     WarmedAccountList,
     WarmingMechanics,
@@ -81,18 +83,6 @@ def warming_health(state: WarmingState) -> WarmingHealth:
 def is_warming(state: WarmingState) -> bool:
     """True when the account belongs in the right-hand (warming) kanban column."""
     return state in _ACTIVE_STATES
-
-
-class AddChannelsRequest(BaseModel):
-    """Raw user input — one or many links/usernames, newline- or comma-separated."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    raw: str = Field(min_length=1)
-
-
-class RemoveChannelRequest(BaseModel):
-    channel: str = Field(min_length=1)
 
 
 class WarmingIntensity(BaseModel):
@@ -179,11 +169,9 @@ class WarmingStateRecord(BaseModel):
     # ramp and the DM block after a spam block count from it; ``None`` = never.
     recovered_at: str | None = None
     spam_unknown_streak: int = Field(default=0, ge=0)
-    # Days of real work in this stint: one per local date with a worked cycle or a
-    # planned quiet day. Days spent in error/quarantine never count, so the target
-    # gate compares this, not calendar days. Reset only by a start from idle.
+    # Worked days of the stint (a worked cycle or a quiet day; never error or
+    # quarantine) — what the target gate reads. ``last_warmed_date``: last counted.
     warmed_days: int = Field(default=0, ge=0)
-    # The local date (``YYYY-MM-DD``) last counted into ``warmed_days``.
     last_warmed_date: str | None = None
 
 
@@ -247,9 +235,8 @@ class WarmingStateWrite(BaseModel):
     # carry the token without every caller knowing it exists; the hand-back clears
     # it in its own statement.
     reservation_token: str | None = None
-    # See WarmingStateRecord.warmed_days. ``None`` leaves both worked-day columns
-    # alone (they move only through their own once-per-day write); a value writes
-    # it together with ``last_warmed_date`` — how a fresh stint resets them.
+    # ``None`` leaves both worked-day columns alone; a value (a fresh stint's 0)
+    # writes it with ``last_warmed_date``.
     warmed_days: int | None = Field(default=None, ge=0)
     last_warmed_date: str | None = None
 
@@ -332,10 +319,8 @@ class WarmingAccountState(BaseModel):
     # Whole days since warming was first started for this account (from
     # ``WarmingStateRecord.started_at``). ``None`` when warming never ran.
     warming_days: int | None = Field(default=None, ge=0)
-    # See WarmingStateRecord.warmed_days — the "X" of the card's "X / Y дней".
+    # The card's "X / Y дней" X, and the stint's calendar days that did not count.
     warmed_days: int = Field(default=0, ge=0)
-    # Calendar days of the stint that did not count (error, quarantine, stopped
-    # mid-day): ``warming_days - warmed_days``, never negative.
     idle_days: int = Field(default=0, ge=0)
     # Operator-chosen warming duration (days). Drives the card's "день X / Y"
     # progress + auto-complete state; ``None`` falls back to the 14-day default.

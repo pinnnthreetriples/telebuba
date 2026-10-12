@@ -8,12 +8,12 @@ import pytest
 
 from core.config import settings
 from core.db import (
-    count_warmed_day,
     create_account,
     fetch_warming_state,
     list_recent_logs,
     upsert_warming_state,
 )
+from core.repositories._warming_days import count_warmed_day
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, WarmingCycleResult, WarmingStateWrite
 from services import warming
