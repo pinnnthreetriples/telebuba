@@ -253,6 +253,9 @@ import type {
   GetNeuroshillingSettingsData,
   GetNeuroshillingSettingsErrors,
   GetNeuroshillingSettingsResponses,
+  GetNotificationSettingsData,
+  GetNotificationSettingsErrors,
+  GetNotificationSettingsResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -475,6 +478,9 @@ import type {
   SendBulkMessagesData,
   SendBulkMessagesErrors,
   SendBulkMessagesResponses,
+  SendTestNotificationData,
+  SendTestNotificationErrors,
+  SendTestNotificationResponses,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoErrors,
   SetAccountChannelPhotoResponses,
@@ -592,6 +598,9 @@ import type {
   UpdateNeuroshillingCampaignData,
   UpdateNeuroshillingCampaignErrors,
   UpdateNeuroshillingCampaignResponses,
+  UpdateNotificationSettingsData,
+  UpdateNotificationSettingsErrors,
+  UpdateNotificationSettingsResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -4020,3 +4029,56 @@ export const copyMasstaggingBase = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Get Notification Settings
+ */
+export const getNotificationSettings = <ThrowOnError extends boolean = false>(
+  options?: Options<GetNotificationSettingsData, ThrowOnError>,
+): RequestResult<GetNotificationSettingsResponses, GetNotificationSettingsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetNotificationSettingsResponses,
+    GetNotificationSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/notifications/settings', ...options });
+
+/**
+ * Update Notification Settings
+ */
+export const updateNotificationSettings = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateNotificationSettingsData, ThrowOnError>,
+): RequestResult<
+  UpdateNotificationSettingsResponses,
+  UpdateNotificationSettingsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateNotificationSettingsResponses,
+    UpdateNotificationSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/notifications/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Send Test Notification
+ *
+ * Send the test message with the stored token and chat.
+ *
+ * 409 ``notifications_not_configured``: no token or no chat id stored. 400
+ * ``telegram_rejected``: Telegram refused it (bad token, unknown chat, bot blocked).
+ * 503 ``telegram_unreachable``: the network or a timeout.
+ */
+export const sendTestNotification = <ThrowOnError extends boolean = false>(
+  options?: Options<SendTestNotificationData, ThrowOnError>,
+): RequestResult<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError> =>
+  (options?.client ?? client).post<
+    SendTestNotificationResponses,
+    SendTestNotificationErrors,
+    ThrowOnError
+  >({ url: '/api/v1/notifications/test', ...options });

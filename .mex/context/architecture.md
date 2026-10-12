@@ -37,3 +37,5 @@ Account chats use the same boundary: HTTP contracts and upload admission in `api
 Scheduled profile photos and stories exist because Telegram cannot schedule them itself: media waits in a content-addressed store under `runtime/`, and one in-process worker publishes one post at a time, paced fleet-wide. `dispatching` is written before the call, so a lost answer or a restart mid-call settles `ambiguous` and is never retried — repeating could post twice. The worker calls the gateway under its own domain, so its floods never write the sticky account status.
 
 The account lifecycle journal has no FK to `accounts` and outlives both the log purge and the account; its writes never raise into the path that produced the event.
+
+The operator bot is one more reader of the in-process log bus: it maps a few warming and spam-status events to Telegram messages, throttled in memory per account and kind, and a failed send is logged by status only, never breaking the pipeline. Its bot token is stored like the LLM keys and leaves the API only as a mask.

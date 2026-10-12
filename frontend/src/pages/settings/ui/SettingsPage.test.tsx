@@ -33,8 +33,16 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
+// The page also reads the operator-bot card's own settings row.
+const NOTIFY = { enabled: false, has_bot_token: false, chat_id: '' };
+
+function settingsFor(input: unknown): Response {
+  const isNotify = new URL((input as Request).url).pathname.startsWith('/api/v1/notifications/');
+  return jsonResponse(isNotify ? NOTIFY : SETTINGS);
+}
+
 function routeSettings() {
-  vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(SETTINGS)));
+  vi.mocked(fetch).mockImplementation((input) => Promise.resolve(settingsFor(input)));
 }
 
 const captchaGroup = () => screen.getByRole('radiogroup', { name: 'LLM для решения капчи' });
@@ -137,7 +145,7 @@ test('a failed save shows the error state instead of silently doing nothing', as
         }),
       );
     }
-    return Promise.resolve(jsonResponse(SETTINGS));
+    return Promise.resolve(settingsFor(input));
   });
   renderWithClient(<SettingsPage />);
   await waitFor(() => {

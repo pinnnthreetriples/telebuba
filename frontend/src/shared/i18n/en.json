@@ -1007,6 +1007,9 @@
     "mutationError": "Something went wrong. Please try again.",
     "toastClose": "Dismiss",
     "code": {
+      "notifications_not_configured": "Save the bot token and Chat ID first.",
+      "telegram_rejected": "Telegram refused the message: check the token, the Chat ID and that the bot was started in that chat.",
+      "telegram_unreachable": "The server could not reach Telegram. Check the network and try again.",
       "folder_name_taken": "A folder with this name already exists.",
       "upload_capacity_exceeded": "Too many uploads are running. Please try again shortly.",
       "untrusted_origin": "This request came from an untrusted site. Reload the app and try again.",
@@ -1155,6 +1158,27 @@
       "fallback": "No {{chosen}} key is set — Gemini will solve captchas.",
       "noKey": "No Gemini key is set — captchas will not be solved.",
       "noKeys": "Neither the {{chosen}} nor the Gemini key is set — captchas will not be solved."
+    },
+    "notify": {
+      "title": "Telegram notifications",
+      "subtitle": "A bot tells you about spam blocks, @SpamBot limits, errors and warmed accounts. The same event of one account is repeated at most once every few hours",
+      "enabled": "Send notifications",
+      "token": "Bot token",
+      "tokenSet": "Token set — leave blank to keep it",
+      "tokenSetHint": "Token set: {{hint}} — leave blank to keep it",
+      "tokenUnset": "No token set",
+      "clearToken": "Clear token",
+      "tokenCleared": "The token will be removed on save",
+      "toggleVisibility": "Show/hide token",
+      "chatId": "Chat ID",
+      "chatIdHint": "A numeric chat ID or @channel. Send the bot /start so it can message you",
+      "chatIdInvalid": "Use a numeric ID (e.g. 123456789 or -100…) or @channel_name",
+      "save": "Save notifications",
+      "saved": "Notifications saved",
+      "saveFailed": "Could not save notifications",
+      "test": "Send test",
+      "testSent": "Test message sent",
+      "testNeedsSave": "Save your changes before sending a test"
     }
   },
   "logTerminal": {
@@ -1320,6 +1344,9 @@
     "warming_quarantine_exhausted": "Quarantine exhausted",
     "warming_quarantine_unreadable": "Quarantine given up: spam status unreadable",
     "warming_settings_saved": "Warming settings saved",
+    "notifications_settings_saved": "Notification settings saved",
+    "notifications_test_failed": "Test notification not sent",
+    "notifications_send_failed": "Telegram notification not sent",
     "warming_start_blocked": "Warming start blocked",
     "warming_runtime_reconciled": "Warming reconciled",
     "warming_unpromoted_on_restart": "Returned to warming on restart",

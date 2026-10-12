@@ -7,6 +7,7 @@ import type { WarmingSettings } from '@/shared/api';
 import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
+import { NotificationsCard } from './NotificationsCard';
 
 const FIELD_LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
@@ -362,6 +363,9 @@ export function SettingsPage() {
       ) : (
         <SettingsForm settings={warming.data} />
       )}
+      <div className="mt-4">
+        <NotificationsCard />
+      </div>
     </div>
   );
 }

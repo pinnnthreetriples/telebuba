@@ -57,6 +57,7 @@ from services.neuroshilling import (
     reconcile_neuroshilling_on_startup,
     shutdown_neuroshilling_on_shutdown,
 )
+from services.notifications import shutdown_notifications, start_notifications
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
 from services.user_parser import (
     reconcile_user_parser_on_startup,
@@ -155,6 +156,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # (WAL checkpoint + optional backup) alongside — separate from the warming /
     # neurocomment / pool lifecycle, so their start/stop order is untouched.
     maintenance_task = asyncio.create_task(run_db_maintenance_loop())
+    # Before the runtimes: the operator bot reads the events their reconcile emits.
+    await start_notifications()
     await reconcile_warming_runtime()
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
@@ -178,6 +181,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("user_parser", shutdown_user_parser_on_shutdown)
         await _shutdown_step("inbox", shutdown_inbox_runtime)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
+        # After every runtime has drained, so their last events can still notify.
+        await _shutdown_step("notifications", shutdown_notifications)
         await _shutdown_step("web_login", shutdown_web_login)
         maintenance_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

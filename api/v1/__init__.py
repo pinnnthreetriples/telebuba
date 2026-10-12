@@ -18,6 +18,7 @@ from api.v1 import (
     masstagging,
     neurocomment,
     neuroshilling,
+    notifications,
     proxies,
     user_parser,
     warming,
@@ -47,5 +48,6 @@ router.include_router(chat_broadcast.router, dependencies=_protected, responses=
 router.include_router(account_folders.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(user_parser.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(masstagging.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(notifications.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 
 __all__ = ["router"]
