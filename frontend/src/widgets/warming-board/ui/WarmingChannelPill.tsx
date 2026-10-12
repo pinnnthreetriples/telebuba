@@ -34,7 +34,7 @@ export function WarmingChannelPill({
       <IconButton
         size="sm"
         shape="circle"
-        aria-label={t('warming.channels.remove')}
+        aria-label={t('warming.channels.removeNamed', { channel: channel.channel })}
         onClick={() => {
           onRemove(channel.channel);
         }}

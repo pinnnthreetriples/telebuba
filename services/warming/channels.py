@@ -97,12 +97,10 @@ async def label_channel(data: UpdateChannelRequest) -> WarmingChannelList:
 
     A read never overwrites a label that is already set, so this is how a wrong
     automatic guess is corrected — and ``None`` hands the language back to the next read.
+    A field the request leaves out keeps its stored value.
     """
-    if not await label_warming_channel(data.channel, data.language, data.country):
+    labels = data.model_dump(include={"language", "country"}, exclude_unset=True)
+    if not await label_warming_channel(data.channel, labels):
         raise UnknownChannelError(data.channel)
-    await log_event(
-        "INFO",
-        "warming_channel_labelled",
-        extra={"channel": data.channel, "language": data.language, "country": data.country},
-    )
+    await log_event("INFO", "warming_channel_labelled", extra={"channel": data.channel, **labels})
     return await list_warming_channels()

@@ -168,6 +168,57 @@ async def test_operator_label_wins_over_a_later_read(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_a_partial_label_keeps_the_field_it_leaves_out() -> None:
+    await warming.add_channels(AddChannelsRequest(raw="@alpha"))
+    await warming.label_channel(UpdateChannelRequest(channel="alpha", language="es", country="MX"))
+
+    await warming.label_channel(UpdateChannelRequest(channel="alpha", country="AR"))
+    after_country = (await list_warming_channels()).channels[0]
+    await warming.label_channel(UpdateChannelRequest(channel="alpha", language=None))
+    after_clear = (await list_warming_channels()).channels[0]
+    await warming.label_channel(UpdateChannelRequest(channel="alpha"))
+
+    assert (after_country.language, after_country.country) == ("es", "AR")
+    assert (after_clear.language, after_clear.country) == (None, "AR")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_label_write_does_not_stop_the_read_or_the_react(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[str] = []
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        sent.append(action.action_type)
+        return ActionResult(
+            status="ok",
+            action_type=action.action_type,
+            account_id=account_id,
+            message_id=1,
+            read_facts=ReadChannelFacts(text_sample="x"),
+        )
+
+    async def _broken(_channel: str, _facts: object) -> None:
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_seams, "execute", _execute)
+    monkeypatch.setattr(_steps, "record_read_facts", _broken)
+
+    out = await _steps._read_and_react(
+        "acc-1",
+        "alpha",
+        _steps._ChannelTally(),
+        reactions_enabled=True,
+        reaction_probability=1.0,
+        remaining_actions=None,
+    )
+
+    assert (out.reads, out.reactions) == (1, 1)
+    assert sent == ["read_channel", "react_to_post"]
+
+
+@pytest.mark.asyncio
 async def test_labelling_an_unknown_channel_is_refused() -> None:
     with pytest.raises(warming.UnknownChannelError):
         await warming.label_channel(UpdateChannelRequest(channel="ghost", language="es"))

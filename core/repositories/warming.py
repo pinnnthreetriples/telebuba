@@ -119,19 +119,23 @@ async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
 
 
-def _label_warming_channel(channel: str, language: str | None, country: str | None) -> bool:
-    statement = (
-        update(_warming_channels)
-        .where(_warming_channels.c.channel == channel)
-        .values(language=language, country=country)
-    )
+_LABEL_COLUMNS = frozenset({"language", "country"})
+
+
+def _label_warming_channel(channel: str, labels: Mapping[str, object]) -> bool:
+    row = _warming_channels.c.channel == channel
+    values = {name: value for name, value in labels.items() if name in _LABEL_COLUMNS}
     with _get_engine().begin() as connection:
-        return connection.execute(statement).rowcount > 0
+        if values:
+            result = connection.execute(update(_warming_channels).where(row).values(values))
+            return result.rowcount > 0
+        found = connection.execute(select(_warming_channels.c.id).where(row)).first()
+        return found is not None
 
 
-async def label_warming_channel(channel: str, language: str | None, country: str | None) -> bool:
-    """Set the operator's language/country on one channel; ``False`` when it is unknown."""
-    return await asyncio.to_thread(_label_warming_channel, channel, language, country)
+async def label_warming_channel(channel: str, labels: Mapping[str, object]) -> bool:
+    """Write only the given language/country labels; ``False`` when the channel is unknown."""
+    return await asyncio.to_thread(_label_warming_channel, channel, labels)
 
 
 def _observe_warming_channel(channel: str, observed: WarmingChannelObservation) -> None:

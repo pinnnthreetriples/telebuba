@@ -26,8 +26,9 @@ _STOP_TEXT: dict[str, str] = {
 }
 _STOP_WORDS = {lang: frozenset(words.split()) for lang, words in _STOP_TEXT.items()}
 _WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
-# Below this many stop-word hits the text says too little to pick a Latin language,
-# so it stays the script verdict ``en`` — discovery's behaviour for short titles.
+# Below this many stop-word hits the text says too little to pick a Latin language.
+# Warming stores the verdict as a label no later read overwrites, so a guess would
+# stick: too little evidence answers ``None`` and leaves the channel unlabelled.
 _MIN_STOP_HITS = 2
 
 
@@ -56,14 +57,18 @@ def detect_script_language(text: str) -> str | None:
     return "other"
 
 
-def _latin_language(text: str) -> str:
+def _latin_language(text: str) -> str | None:
     words = [word.casefold() for word in _WORD.findall(text)]
     hits = {lang: sum(word in stops for word in words) for lang, stops in _STOP_WORDS.items()}
     best = max(hits, key=lambda lang: hits[lang])
-    return best if hits[best] >= _MIN_STOP_HITS else "en"
+    return best if hits[best] >= _MIN_STOP_HITS else None
 
 
 def detect_language(text: str) -> str | None:
-    """The script verdict, with a Latin text narrowed to ``es``/``pt``/``fr``/``de``/``en``."""
+    """The script verdict, with a Latin text narrowed to ``es``/``pt``/``fr``/``de``/``en``.
+
+    ``None`` for a Latin text too short to tell which (the script vote would call it
+    ``en``), as well as for a text with no letters.
+    """
     script = detect_script_language(text)
     return _latin_language(text) if script == "en" else script

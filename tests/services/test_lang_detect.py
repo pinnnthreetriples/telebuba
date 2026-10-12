@@ -25,9 +25,10 @@ def test_detect_language_names_each_supported_language(text: str, expected: str 
     assert detect_language(text) == expected
 
 
-def test_a_short_latin_title_stays_english_when_the_words_say_too_little() -> None:
-    # One stop word is not a vote: a brand name with a single "el" is not Spanish.
-    assert detect_language("El Crypto Daily") == "en"
+def test_a_short_latin_text_stays_unknown_when_the_words_say_too_little() -> None:
+    # One stop word is not a vote, and a guess would become a label no read overwrites.
+    assert detect_language("El Crypto Daily") is None
+    assert detect_language("Hola gracias") is None
 
 
 def test_the_script_vote_never_splits_latin() -> None:

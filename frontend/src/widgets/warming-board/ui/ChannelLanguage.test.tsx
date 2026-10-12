@@ -46,7 +46,7 @@ test('an unlabelled pill shows no tag and still removes its channel', async () =
   render(<WarmingChannelPill channel={CHANNEL} onRemove={onRemove} />);
 
   expect(screen.queryByTitle('Язык и страна канала')).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить канал noticias' }));
 
   expect(onRemove).toHaveBeenCalledWith('noticias');
 });

@@ -274,7 +274,7 @@ test('removing a second channel does not swallow the first one s refresh', async
   });
 
   for (const index of [0, 1]) {
-    await userEvent.click(screen.getAllByLabelText('Удалить')[index]!);
+    await userEvent.click(screen.getAllByLabelText(/^Удалить канал /)[index]!);
     await userEvent.click(await screen.findByText('Удалить', { selector: 'button' }));
   }
   await waitFor(() => {
