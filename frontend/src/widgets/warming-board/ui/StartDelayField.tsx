@@ -46,7 +46,10 @@ export function StartDelayField({
       ? t('warming.delay.rangeZone', { from: zone.from, to: zone.to, zone: zone.timeZone })
       : zone.from === zone.to
         ? t(spread ? 'warming.delay.atPool' : 'warming.delay.at', { time: zone.from })
-        : t('warming.delay.range', { from: zone.from, to: zone.to }),
+        : t(spread ? 'warming.delay.range' : 'warming.delay.rangeOne', {
+            from: zone.from,
+            to: zone.to,
+          }),
   );
   const note = t(spread ? 'warming.delay.shiftedPool' : 'warming.delay.shifted');
 

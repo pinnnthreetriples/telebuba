@@ -382,7 +382,9 @@ function startBodies(): Promise<StartWarmingRequest[]> {
   );
 }
 
-test('the pool start opens the start dialog and spreads every idle account in its window', async () => {
+test('the pool start opens the start dialog and spreads every ready idle account in its window', async () => {
+  // idle-2 has no proxy: with the readiness check on, its own Start is blocked, so
+  // the pool leaves it out and says so.
   serveBoard({ ...BOARD, warming: [], default_target_days: 21 });
   renderWithClient(<WarmingPage />);
   await userEvent.click(await screen.findByRole('button', { name: 'Запустить пул' }));
@@ -390,18 +392,44 @@ test('the pool start opens the start dialog and spreads every idle account in it
   // Nothing starts until the operator confirms the dialog.
   const dialog = await screen.findByRole('dialog');
   expect(within(dialog).getByText('Запуск пула')).toBeInTheDocument();
+  expect(
+    within(dialog).getByText('1 аккаунт не готов к прогреву и не запустится'),
+  ).toBeInTheDocument();
   expect(await startBodies()).toHaveLength(0);
 
   await userEvent.click(within(dialog).getByRole('radio', { name: '12 ч' }));
   await userEvent.click(within(dialog).getByRole('button', { name: 'Запустить пул' }));
 
   await waitFor(async () => {
-    expect(await startBodies()).toHaveLength(2);
+    expect(await startBodies()).toHaveLength(1);
   });
-  for (const body of await startBodies()) {
-    expect(body).toMatchObject({ target_days: 21, start_delay_hours: 12, spread_start: true });
-  }
-  expect((await startBodies()).map((body) => body.account_id).sort()).toEqual(['idle-1', 'idle-2']);
+  expect((await startBodies())[0]).toMatchObject({
+    account_id: 'idle-1',
+    target_days: 21,
+    start_delay_hours: 12,
+    spread_start: true,
+  });
+});
+
+test('with the readiness check off the pool start takes every idle account', async () => {
+  serveBoard({
+    ...BOARD,
+    warming: [],
+    settings: { ...BOARD.settings, enforce_readiness: false },
+  });
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Запустить пул' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).queryByText(/не готов/)).toBeNull();
+
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Запустить пул' }));
+
+  await waitFor(async () => {
+    expect((await startBodies()).map((body) => body.account_id).sort()).toEqual([
+      'idle-1',
+      'idle-2',
+    ]);
+  });
 });
 
 test('removing a channel asks for confirmation, then calls the remove endpoint', async () => {

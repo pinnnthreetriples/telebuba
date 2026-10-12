@@ -250,6 +250,9 @@ export function WarmingPage() {
   // With the readiness check switched off the engine starts a not-ready account, so
   // the button does too; the reasons stay on the row as a warning, not a block.
   const enforceReadiness = data.settings.enforce_readiness ?? true;
+  // The pool starts what each card's own Start would: a not-ready account is left
+  // out while the readiness check is on, and the dialog says how many.
+  const poolIdle = idle.filter((a) => (a.readiness?.ready ?? false) || !enforceReadiness);
   const howtoSteps = HOWTO_STEPS.map(([step, mechanic]) => {
     const label = t(`warming.howto.steps.${step}`);
     const on = mechanic === null || (data.mechanics?.[mechanic] ?? true);
@@ -272,7 +275,9 @@ export function WarmingPage() {
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
-            disabled={bulkBusy || start.isPending || stop.isPending || (!poolOn && !idle.length)}
+            disabled={
+              bulkBusy || start.isPending || stop.isPending || (!poolOn && !poolIdle.length)
+            }
             onClick={() => {
               if (poolOn) runBatch(warming.map((a) => stopAccount(a.account_id)));
               else setPoolStartOpen(true);
@@ -640,7 +645,8 @@ export function WarmingPage() {
 
       {poolStartOpen ? (
         <WarmDaysModal
-          poolAccountIds={idle.map((a) => a.account_id)}
+          poolAccountIds={poolIdle.map((a) => a.account_id)}
+          poolSkipped={idle.length - poolIdle.length}
           defaultDays={data.default_target_days}
           onClose={() => {
             setPoolStartOpen(false);
@@ -654,7 +660,7 @@ export function WarmingPage() {
               start_delay_hours: delayHours,
               spread_start: true,
             };
-            runBatch(idle.map((a) => startAccount(a.account_id, choice)));
+            runBatch(poolIdle.map((a) => startAccount(a.account_id, choice)));
           }}
         />
       ) : null}

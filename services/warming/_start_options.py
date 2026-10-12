@@ -28,11 +28,20 @@ if TYPE_CHECKING:
     from schemas.warming import StartWarmingRequest
 
 
-class _CentredRandom(Random):
-    """Draws the daily wobble at its centre, so a preview shows the stable chronotype."""
+class _EdgeRandom(Random):
+    """Draws the daily wobble at one edge, so a preview spans every real wake time."""
+
+    def __init__(self, *, upper: bool) -> None:
+        super().__init__()
+        self._upper = upper
 
     def triangular(self, low: float = 0.0, high: float = 1.0, mode: float | None = None) -> float:
-        return (low + high) / 2 if mode is None else mode
+        del mode
+        return high if self._upper else low
+
+
+_LOWER = _EdgeRandom(upper=False)
+_UPPER = _EdgeRandom(upper=True)
 
 
 def _is_night(moment: datetime, tz_name: str | None) -> bool:
@@ -44,18 +53,21 @@ def _is_night(moment: datetime, tz_name: str | None) -> bool:
     return not _in_quiet_hours(local, warm.active_hours_start, warm.active_hours_end)
 
 
-def _window_touches_night(
-    start: datetime, hours: int, tz_name: str | None, *, spread: bool
-) -> bool:
-    """Whether any first-cycle moment the window allows would move to the morning.
+def _probes(start: datetime, end: datetime, tz_name: str | None) -> list[datetime]:
+    """Candidates whose shifted times bound every first cycle the window allows.
 
-    The night rule works in whole local hours, so one probe per hour plus the end
-    meets every hour the window crosses.
+    The night rule changes only on whole local hours: inside a daytime stretch a
+    candidate stays put (its extremes are the stretch's ends) and a whole night maps
+    to one morning. So the window's ends plus each local hour boundary, and the
+    instant before it, meet every extreme.
     """
-    if not spread:
-        return _is_night(start + timedelta(hours=hours), tz_name)
-    probes = [start + timedelta(hours=step) for step in range(hours + 1)]
-    return any(_is_night(probe, tz_name) for probe in probes)
+    probes = [start, end]
+    boundary = start.astimezone(_local_zone(tz_name)).replace(minute=0, second=0, microsecond=0)
+    boundary += timedelta(hours=1)
+    while boundary < end:
+        probes += [boundary - timedelta(microseconds=1), boundary]
+        boundary += timedelta(hours=1)
+    return [probe.astimezone(UTC) for probe in probes]
 
 
 def first_run_at(account: AccountRead, data: StartWarmingRequest) -> str | None:
@@ -82,20 +94,22 @@ async def preview_start(data: StartPreviewRequest) -> StartPreview:
     phones = {
         a.account_id: a.phone for a in (await list_accounts_by_ids(data.account_ids)).accounts
     }
-    rng = _CentredRandom()
     hours = data.start_delay_hours
-    first = now if data.spread_start else now + timedelta(hours=hours)
     last = now + timedelta(hours=hours)
+    first = now if data.spread_start else last
     items = []
     for account_id in data.account_ids:
         tz_name = timezone_for_phone(phones.get(account_id))
+        probes = _probes(first, last, tz_name)
+        lows = [_shift_to_active_hours(p, tz_name, _LOWER, account_id) for p in probes]
+        highs = [_shift_to_active_hours(p, tz_name, _UPPER, account_id) for p in probes]
         items.append(
             StartPreviewItem(
                 account_id=account_id,
                 time_zone=str(_local_zone(tz_name)),
-                earliest_at=_shift_to_active_hours(first, tz_name, rng, account_id).isoformat(),
-                latest_at=_shift_to_active_hours(last, tz_name, rng, account_id).isoformat(),
-                shifted=_window_touches_night(now, hours, tz_name, spread=data.spread_start),
+                earliest_at=min(lows).isoformat(),
+                latest_at=max(highs).isoformat(),
+                shifted=any(_is_night(probe, tz_name) for probe in probes),
             )
         )
     return StartPreview(items=items)

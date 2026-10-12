@@ -340,7 +340,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        stint = carry_or_restamp(existing, data)
+        stint = carry_or_restamp(existing, data, first_run_at(account, data))
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -356,7 +356,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 data.account_id,
                 "active",
                 last_event="queued",
-                next_run_at=first_run_at(account, data),
+                next_run_at=stint.first_run_at,
                 started_at=stint.started_at,
                 stopped_at=None,
                 last_error=None,

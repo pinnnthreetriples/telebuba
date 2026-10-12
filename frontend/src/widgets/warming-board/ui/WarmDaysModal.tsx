@@ -31,8 +31,9 @@ const DEFAULT_DELAY_HOURS = 3;
 // Who the dialog starts: one account (with its @SpamBot pre-check), or the whole idle
 // pool, where every account takes the same length, persona and delay window.
 type StartTarget =
-  | { accountId: string; phone: string; poolAccountIds?: undefined }
-  | { poolAccountIds: string[]; accountId?: undefined; phone?: undefined };
+  | { accountId: string; phone: string; poolAccountIds?: undefined; poolSkipped?: undefined }
+  // `poolSkipped`: idle accounts left out because they are not ready.
+  | { poolAccountIds: string[]; poolSkipped?: number; accountId?: undefined; phone?: undefined };
 
 // The design's "warm account" modal: a draggable day-length slider (1–30) that opens
 // on the length a start would run anyway (the board's `default_target_days`), quick
@@ -140,6 +141,11 @@ export function WarmDaysModal({
             {target.poolAccountIds === undefined
               ? t('warming.days.subtitle', { phone: target.phone })
               : t('warming.pool.subtitle', { count: target.poolAccountIds.length })}
+            {target.poolSkipped ? (
+              <div className="mt-1 text-warning-deep">
+                {t('warming.pool.skipped', { count: target.poolSkipped })}
+              </div>
+            ) : null}
           </div>
 
           <div className="mb-6 text-center">

@@ -14,8 +14,9 @@ from schemas._warming_start import StartPreviewRequest
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, WarmingStateRecord
 from services import warming
-from services.warming import _runtime, _seams, _start_options
+from services.warming import _runtime, _seams, _start_options, _transitions
 from services.warming._start_options import first_run_at, preview_start
+from services.warming.pacing import warming_days_since
 from tests.factories import AccountReadFactory
 from tests.services.warming._support import _fake_loop
 
@@ -28,13 +29,16 @@ _NEXT_MORNING = datetime(2026, 6, 14, 8, 0, tzinfo=UTC)
 
 
 class _Frozen(datetime):
+    at = _EVENING
+
     @classmethod
     def now(cls, tz: object = None) -> datetime:  # noqa: ARG003
-        return _EVENING
+        return cls.at
 
 
 @pytest.fixture
 def frozen_evening(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_Frozen, "at", _EVENING)
     monkeypatch.setattr(_start_options, "datetime", _Frozen)
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
@@ -113,7 +117,9 @@ async def test_initial_wait_honours_a_chosen_delay_past_the_cold_start_cap() -> 
     assert delay == pytest.approx(20 * 3600, abs=1)
 
 
-async def _start(monkeypatch: pytest.MonkeyPatch, request: StartWarmingRequest) -> str | None:
+async def _start(
+    monkeypatch: pytest.MonkeyPatch, request: StartWarmingRequest
+) -> WarmingStateRecord:
     monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
     await save_warming_settings(
         inter_account_chat=False,
@@ -125,7 +131,7 @@ async def _start(monkeypatch: pytest.MonkeyPatch, request: StartWarmingRequest) 
     await warming.start_warming(request)
     record = await fetch_warming_state(request.account_id)
     assert record is not None
-    return record.next_run_at
+    return record
 
 
 @pytest.mark.asyncio
@@ -133,7 +139,7 @@ async def test_start_persists_the_chosen_first_cycle(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     before = datetime.now(UTC)
 
-    stored = await _start(monkeypatch, _request(4))
+    stored = (await _start(monkeypatch, _request(4))).next_run_at
 
     assert stored is not None
     expected = before + timedelta(hours=4)
@@ -144,7 +150,28 @@ async def test_start_persists_the_chosen_first_cycle(monkeypatch: pytest.MonkeyP
 async def test_start_without_a_delay_keeps_the_schedule_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    assert await _start(monkeypatch, _request(None)) is None
+    assert (await _start(monkeypatch, _request(None))).next_run_at is None
+
+
+@pytest.mark.asyncio
+async def test_the_rest_before_the_first_cycle_does_not_count_toward_the_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
+    request = StartWarmingRequest(account_id="acc-1", target_days=1, start_delay_hours=24)
+
+    record = await _start(monkeypatch, request)
+
+    # The stint begins at the first cycle, so a 1-day target behind a 24-hour rest is
+    # still at day 0 when that cycle runs, not already complete.
+    assert record.next_run_at is not None
+    assert record.started_at == record.next_run_at
+    first_cycle = datetime.fromisoformat(record.next_run_at)
+    assert warming_days_since(record.started_at, first_cycle) == 0
+    assert (
+        await _transitions._gate_target_reached("acc-1", record, first_cycle, run_id=record.run_id)
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -210,8 +237,43 @@ async def test_preview_ignores_the_night_rule_when_it_is_off(
     assert preview.items[0].shifted is False
 
 
-def test_preview_draws_the_daily_wobble_at_its_centre() -> None:
-    rng = _start_options._CentredRandom()
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("frozen_evening")
+async def test_preview_of_a_window_into_the_morning_starts_at_the_morning_edge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 05:00-09:00 UTC: the night part wakes at 08:00 plus the chronotype, but a draw
+    # landing exactly on 08:00 is already daytime and stays put — that is the earliest.
+    monkeypatch.setattr(_Frozen, "at", datetime(2026, 6, 14, 5, 0, tzinfo=UTC))
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 90)
 
-    assert rng.triangular(-30.0, 30.0, 0.0) == 0.0
-    assert rng.triangular(2.0, 4.0) == 3.0
+    preview = await preview_start(
+        StartPreviewRequest(account_ids=["ghost"], start_delay_hours=4, spread_start=True)
+    )
+
+    (item,) = preview.items
+    assert item.earliest_at == _NEXT_MORNING.isoformat()
+    assert datetime.fromisoformat(item.latest_at) >= datetime(2026, 6, 14, 9, 0, tzinfo=UTC)
+    assert item.shifted is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("frozen_evening")
+async def test_preview_of_a_shifted_start_spans_the_daily_wobble(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 90)
+    monkeypatch.setattr(settings.warming, "chronotype_jitter_minutes", 10.0)
+
+    preview = await preview_start(StartPreviewRequest(account_ids=["ghost"], start_delay_hours=6))
+
+    (item,) = preview.items
+    earliest = datetime.fromisoformat(item.earliest_at)
+    latest = datetime.fromisoformat(item.latest_at)
+    assert _NEXT_MORNING <= earliest < latest <= _NEXT_MORNING + timedelta(minutes=90)
+    assert latest - earliest <= timedelta(minutes=20)
+
+
+def test_edge_draws_take_the_wobble_bounds() -> None:
+    assert _start_options._EdgeRandom(upper=False).triangular(-30.0, 30.0, 0.0) == -30.0
+    assert _start_options._EdgeRandom(upper=True).triangular(-30.0, 30.0, 0.0) == 30.0

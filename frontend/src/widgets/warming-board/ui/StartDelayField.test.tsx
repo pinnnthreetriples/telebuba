@@ -58,6 +58,17 @@ test('a single start shows its local time, and a night start says it moved to th
   ).toBeInTheDocument();
 });
 
+test("a single start moved to the morning shows the daily wobble's span", async () => {
+  servePreview([item({ latest_at: '2026-06-14T09:00:00+00:00', shifted: true })]);
+  renderWithClient(<Field ids={['a1']} spread={false} />);
+
+  expect(
+    await screen.findByText(
+      '≈ 08:40–09:00 по времени аккаунта (там в это время ночь, перенесено на утро)',
+    ),
+  ).toBeInTheDocument();
+});
+
 test('a daytime start shows only the time', async () => {
   servePreview([item({})]);
   renderWithClient(<Field ids={['a1']} spread={false} />);

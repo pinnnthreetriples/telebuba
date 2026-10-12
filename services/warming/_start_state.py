@@ -18,19 +18,28 @@ class CarriedStint(NamedTuple):
     started_at: str
     target_days: int
     activity_persona: ActivityPersona
+    # The chosen first cycle (``None`` → the loop's cold-start spread).
+    first_run_at: str | None
 
 
 def carry_or_restamp(
     existing: WarmingStateRecord | None,
     data: StartWarmingRequest,
+    first_run_at: str | None = None,
 ) -> CarriedStint:
-    """Carry an in-flight stint; restamp a genuine start from idle/stopped."""
+    """Carry an in-flight stint; restamp a genuine start from idle/stopped.
+
+    A genuine start with a chosen delay begins its stint at the first cycle, not at
+    the click: the rest before it must not count toward ``target_days``, or a 1-day
+    target behind a 24-hour delay would complete before warming did anything.
+    """
     continuing = existing is not None and is_warming(existing.state)
-    started_at = existing.started_at if continuing and existing.started_at else _now_iso()
+    restamp = first_run_at or _now_iso()
+    started_at = existing.started_at if continuing and existing.started_at else restamp
     target_days = (
         existing.target_days
         if continuing and existing.target_days
         else (data.target_days or settings.neurocomment.warmed_min_days)
     )
     persona = existing.activity_persona if continuing else data.activity_persona
-    return CarriedStint(started_at, target_days, persona)
+    return CarriedStint(started_at, target_days, persona, first_run_at)
