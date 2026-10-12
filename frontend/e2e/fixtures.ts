@@ -171,6 +171,15 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
   };
 }
 
+// The Settings page's Telegram-notification card: nothing configured yet.
+export const notificationSettings = {
+  enabled: false,
+  has_bot_token: false,
+  bot_token_hint: null,
+  chat_id: '',
+  updated_at: null,
+};
+
 export const warmingSettings = {
   inter_account_chat: true,
   reactions_enabled: true,

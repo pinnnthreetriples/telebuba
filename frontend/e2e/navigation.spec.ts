@@ -14,6 +14,7 @@ const routes: [RegExp, unknown][] = [
   [/\/proxies(\?|$)/, fx.proxies],
   [/\/warming\/board/, fx.warmingBoard],
   [/\/warming\/settings/, fx.warmingSettings],
+  [/\/notifications\/settings/, fx.notificationSettings],
   [/\/warming\/dialogues/, fx.warmingDialogues],
   [/\/warming\/(channels|warmed)/, {}],
   [/\/neurocomment\/campaigns\/[^/]+\/board/, fx.neurocommentBoard],
