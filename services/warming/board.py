@@ -208,6 +208,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             last_name=card.last_name,
             avatar_etag=card.avatar_etag,
             warming_days=card.warming_days or 0,
+            warmed_days=card.warmed_days,
             phone=card.phone,
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
@@ -219,7 +220,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
         for card in cards
         if card.promoted_to_nc
     ]
-    warmed.sort(key=lambda a: a.warming_days, reverse=True)
+    warmed.sort(key=lambda a: (a.warmed_days, a.warming_days), reverse=True)
     return warmed
 
 

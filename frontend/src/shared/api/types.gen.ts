@@ -6648,6 +6648,10 @@ export type WarmedAccount = {
    */
   warming_days: number;
   /**
+   * Warmed Days
+   */
+  warmed_days?: number;
+  /**
    * Phone
    */
   phone?: string | null;

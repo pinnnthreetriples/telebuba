@@ -49,6 +49,8 @@ class WarmedAccount(BaseModel):
     account_id: str = Field(min_length=1)
     label: str = Field(min_length=1)
     warming_days: int = Field(ge=0)
+    # Worked days the account graduated with — the "X / Y дней" X (stage 1.7).
+    warmed_days: int = Field(default=0, ge=0)
     # Card meta sourced from the warming board card (so the design's warmed card
     # shows the real phone / flag / proxy badge / trust instead of a mock).
     phone: str | None = None

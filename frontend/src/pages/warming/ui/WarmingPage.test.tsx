@@ -102,6 +102,30 @@ test('warming row actions meet the touch target size', async () => {
   expect(screen.getByLabelText('Обратно в прогрев')).toHaveClass('size-touch');
 });
 
+test('a warmed card counts worked days, not calendar days', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
+      {
+        account_id: 'warmed-one',
+        label: 'Warmed One',
+        warming_days: 12,
+        warmed_days: 9,
+        target_days: 14,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+
+  expect(await screen.findByText('9 / 14 дней')).toBeInTheDocument();
+  expect(screen.queryByText('12 / 14 дней')).not.toBeInTheDocument();
+});
+
 test('ready card: phone flag sits with the number, proxy flag with the proxy type', async () => {
   const board: WarmingBoardState = {
     ...BOARD,

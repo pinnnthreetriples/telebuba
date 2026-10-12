@@ -30314,6 +30314,12 @@
             "minimum": 0.0,
             "title": "Warming Days"
           },
+          "warmed_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warmed Days",
+            "default": 0
+          },
           "phone": {
             "anyOf": [
               {
