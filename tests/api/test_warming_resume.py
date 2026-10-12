@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from schemas.warming import StartWarmingRequest, WarmingAccountState
+from schemas.warming import StartWarmingRequest, WarmingAccountState, WarmingRefusalCode
 from services import warming as warming_service
 
 if TYPE_CHECKING:
@@ -44,9 +44,7 @@ async def test_resume_forwards_the_dialog_choice(
 
 
 @pytest.mark.asyncio
-async def test_start_carries_the_geo_consent(
-    app: FastAPI, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_start_carries_the_geo_consent(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[StartWarmingRequest] = []
 
     async def _fake(body: StartWarmingRequest) -> WarmingAccountState:
@@ -94,7 +92,8 @@ async def test_resume_reports_a_busy_account_by_its_code(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def _boom(body: StartWarmingRequest) -> WarmingAccountState:
-        raise warming_service.AccountUnavailableError("account_cooling", body.account_id)
+        code: WarmingRefusalCode = "account_cooling"
+        raise warming_service.AccountUnavailableError(code, body.account_id)
 
     monkeypatch.setattr("services.warming.resume_warming", _boom)
     async with _client(app) as client:
