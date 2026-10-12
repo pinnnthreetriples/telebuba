@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import fetch_warming_state, record_warming_flood_event
+from core.db import fetch_warming_state
 from core.logging import log_event
+from core.repositories.warming_floods import (
+    record_warming_flood_event,
+)
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from schemas.warming_flood import WarmingFloodEventWrite
 from services.warming import _seams

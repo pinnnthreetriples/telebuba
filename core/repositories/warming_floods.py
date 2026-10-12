@@ -10,7 +10,8 @@ import asyncio
 
 from sqlalchemy import func, insert, select
 
-from core.db import _get_engine, _warming_flood_events
+from core._schema_tables import _warming_flood_events
+from core.db import _get_engine
 from schemas.warming_flood import WarmingFloodEventWrite, WarmingFloodSummary
 
 

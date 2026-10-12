@@ -16,11 +16,13 @@ from core.config import settings
 from core.db import (
     fetch_account,
     fetch_device_fingerprint,
-    fetch_warming_flood_summary,
     fetch_warming_state,
     get_spam_status,
 )
 from core.phone_geo import evaluate_geo
+from core.repositories.warming_floods import (
+    fetch_warming_flood_summary,
+)
 from schemas.trust import TrustBand, TrustScore, TrustSignals
 
 if TYPE_CHECKING:

@@ -16,10 +16,12 @@ from core.db import (
     list_device_fingerprints,
     list_spam_statuses,
     list_warming_channels,
-    list_warming_flood_summaries,
     list_warming_states,
 )
 from core.phone_geo import country_for_phone
+from core.repositories.warming_floods import (
+    list_warming_flood_summaries,
+)
 from schemas.warming import (
     WarmedAccount,
     WarmedAccountList,

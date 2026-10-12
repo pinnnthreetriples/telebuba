@@ -10,12 +10,14 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
-    fetch_warming_flood_summary,
     fetch_warming_state,
-    list_warming_flood_summaries,
-    record_warming_flood_event,
     save_warming_settings,
     upsert_warming_state,
+)
+from core.repositories.warming_floods import (
+    fetch_warming_flood_summary,
+    list_warming_flood_summaries,
+    record_warming_flood_event,
 )
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
