@@ -24,6 +24,7 @@ from services.warming._transitions import (
     _matches_active_run,
     _resolve_phase_after_cycle,
 )
+from services.warming._worked_days import _count_worked_day
 from services.warming.daily_stats import record_cycle_stats
 from services.warming.pacing import (
     _account_tz,
@@ -94,6 +95,8 @@ async def _gate_quiet_day(
     )
     if run_id is not None and not write.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    # Resting is part of the plan, so the quiet day counts as a warming day.
+    await _count_worked_day(account_id, daily_date, run_id=run_id)
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet day")
 
 

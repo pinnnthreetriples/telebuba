@@ -192,6 +192,8 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         ),
         recovered_at=_optional_str(mapping.get("recovered_at")),
         spam_unknown_streak=_optional_int(mapping.get("spam_unknown_streak")) or 0,
+        warmed_days=_optional_int(mapping.get("warmed_days")) or 0,
+        last_warmed_date=_optional_str(mapping.get("last_warmed_date")),
     )
 
 
@@ -386,6 +388,9 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # unconditionally would have every unrelated write NULL out the token the
         # hand-back guards on, which is the stranded day all over again.
         insert_values["reservation_token"] = data.reservation_token
+    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
+        insert_values["warmed_days"] = data.warmed_days
+        insert_values["last_warmed_date"] = data.last_warmed_date
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1

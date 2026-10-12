@@ -122,7 +122,14 @@ async def test_reaching_the_target_is_journaled_once(monkeypatch: pytest.MonkeyP
     await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
     old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
     await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="sleeping", started_at=old_start, target_days=3)
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            started_at=old_start,
+            target_days=3,
+            # The target counts worked days, not calendar days (stage 1.7).
+            warmed_days=3,
+        )
     )
 
     await warming.run_loop_iteration("acc-1")
@@ -131,7 +138,7 @@ async def test_reaching_the_target_is_journaled_once(monkeypatch: pytest.MonkeyP
     [event] = await list_lifecycle_events("acc-1")
     assert (event.kind, event.extra, event.stint_started_at) == (
         "warmed",
-        {"warming_days": 5},
+        {"warming_days": 3},
         old_start,
     )
     assert event.tg_user_id == 111
@@ -265,7 +272,7 @@ async def test_a_start_journals_its_own_stint_not_a_later_restarts() -> None:
             account_id="acc-1", state="active", started_at="2026-10-02T00:00:00+00:00"
         )
     )
-    stint = _start_state.CarriedStint("2026-10-01T00:00:00+00:00", 7, "normal", None)
+    stint = _start_state.CarriedStint("2026-10-01T00:00:00+00:00", 7, "normal", None, fresh=True)
 
     await _start_state.journal_start("acc-1", None, stint, 4242)
 

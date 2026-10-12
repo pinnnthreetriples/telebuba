@@ -1294,6 +1294,7 @@
     "warming_stopped": "Warming stopped",
     "warming_complete": "Warming complete",
     "warming_target_reached": "Warming target reached",
+    "warming_day_counted": "Warming day counted",
     "warming_cycle_completed": "Warming cycle completed",
     "warming_cycle_not_ready": "Warming cycle not ready",
     "warming_no_channels": "No channels to warm",
@@ -2834,6 +2835,8 @@
     "card": {
       "dayProgress_one": "{{days}} / {{target}} day",
       "dayProgress_other": "{{days}} / {{target}} days",
+      "idleDays_one": "({{count}} idle day not counted)",
+      "idleDays_other": "({{count}} idle days not counted)",
       "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "logToggle": "Activity log",
       "storiesSeen": "stories viewed: {{count}}",

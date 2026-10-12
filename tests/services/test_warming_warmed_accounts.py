@@ -66,22 +66,22 @@ async def test_list_warmed_accounts_includes_every_promoted_account() -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_warmed_accounts_sorted_newest_warmed_first() -> None:
+async def test_list_warmed_accounts_sorted_by_worked_days_not_the_calendar() -> None:
     await create_account(AccountCreate(account_id="a", label="A"))
     await create_account(AccountCreate(account_id="b", label="B"))
+    # "a" has more calendar days but fewer worked ones (it idled in between).
     await upsert_warming_state(
-        WarmingStateWrite(account_id="a", state="active", started_at=_days_ago(30)),
+        WarmingStateWrite(account_id="a", state="active", started_at=_days_ago(30), warmed_days=4),
     )
     await upsert_warming_state(
-        WarmingStateWrite(account_id="b", state="active", started_at=_days_ago(15)),
+        WarmingStateWrite(account_id="b", state="active", started_at=_days_ago(15), warmed_days=9),
     )
     await mark_promoted_to_nc("a")
     await mark_promoted_to_nc("b")
 
     result = await list_warmed_accounts(14)
 
-    # Most-warmed first.
-    assert [a.account_id for a in result.accounts] == ["a", "b"]
+    assert [(a.account_id, a.warmed_days) for a in result.accounts] == [("b", 9), ("a", 4)]
 
 
 @pytest.mark.asyncio

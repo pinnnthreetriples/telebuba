@@ -39,7 +39,11 @@ async def test_loop_auto_completes_at_target_days(monkeypatch: pytest.MonkeyPatc
     old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
     await upsert_warming_state(
         WarmingStateWrite(
-            account_id="acc-1", state="sleeping", started_at=old_start, target_days=3
+            account_id="acc-1",
+            state="sleeping",
+            started_at=old_start,
+            target_days=3,
+            warmed_days=3,
         ),
     )
 
@@ -88,6 +92,7 @@ async def test_loop_target_complete_is_idempotent(monkeypatch: pytest.MonkeyPatc
             state="sleeping",
             started_at=old_start,
             target_days=3,
+            warmed_days=3,
             last_event="warming_complete",
         ),
     )
@@ -109,6 +114,7 @@ async def test_target_gate_bails_on_stale_run(monkeypatch: pytest.MonkeyPatch) -
         updated_at="2026-06-01T00:00:00+00:00",
         started_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
         target_days=3,
+        warmed_days=3,
     )
 
     async def _rejected(*_args: object, **_kwargs: object) -> WarmingStateWriteResult:
@@ -143,6 +149,7 @@ async def test_target_complete_reparks_future_next_run(monkeypatch: pytest.Monke
             state="sleeping",
             started_at=old_start,
             target_days=3,
+            warmed_days=3,
             last_event="warming_complete",
             next_run_at=stale_next,
         ),

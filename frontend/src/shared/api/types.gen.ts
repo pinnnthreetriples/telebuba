@@ -6648,6 +6648,10 @@ export type WarmedAccount = {
    */
   warming_days: number;
   /**
+   * Warmed Days
+   */
+  warmed_days?: number;
+  /**
    * Phone
    */
   phone?: string | null;
@@ -6867,6 +6871,14 @@ export type WarmingAccountState = {
    * Warming Days
    */
   warming_days?: number | null;
+  /**
+   * Warmed Days
+   */
+  warmed_days?: number;
+  /**
+   * Idle Days
+   */
+  idle_days?: number;
   /**
    * Target Days
    */

@@ -82,6 +82,7 @@ _RECORD_ONLY_FIELDS: Final[set[str]] = {
     "phase_entered_at",
     "spam_unknown_streak",
     "recovered_at",
+    "last_warmed_date",
 }
 
 
@@ -183,6 +184,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.flood_total = floods.flood_total if floods else 0
         card.dm_blocked_until = intensity.dm_blocked_until
         card.limit_factor = intensity.limit_factor
+        card.idle_days = max(0, (card.warming_days or 0) - card.warmed_days)
         cards.append(card)
     return cards, channels, masked
 
@@ -206,6 +208,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             last_name=card.last_name,
             avatar_etag=card.avatar_etag,
             warming_days=card.warming_days or 0,
+            warmed_days=card.warmed_days,
             phone=card.phone,
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
@@ -217,7 +220,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
         for card in cards
         if card.promoted_to_nc
     ]
-    warmed.sort(key=lambda a: a.warming_days, reverse=True)
+    warmed.sort(key=lambda a: (a.warmed_days, a.warming_days), reverse=True)
     return warmed
 
 

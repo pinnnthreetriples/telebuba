@@ -560,7 +560,7 @@ export function WarmingPage() {
                         <div className="type-small">{t('warming.warmed.days')}</div>
                         <div className="text-body font-medium">
                           {t('warming.warmed.daysValue', {
-                            days: acc.warming_days,
+                            days: acc.warmed_days ?? 0,
                             target: acc.target_days,
                           })}
                         </div>

@@ -29,7 +29,6 @@ from services.warming.pacing import (
     compute_intensity,
     evaluate_readiness,
     persona_next_run_seconds,
-    warming_days_since,
 )
 
 if TYPE_CHECKING:
@@ -141,11 +140,13 @@ async def _gate_target_reached(
     *,
     run_id: str | None,
 ) -> WarmingCycleResult | None:
-    """Stop warming once the operator-chosen ``target_days`` has elapsed.
+    """Stop warming once the account has worked the operator-chosen ``target_days``.
 
-    The account is parked in ``sleeping`` (still a warming state, so it stays in
+    Counted in ``warmed_days`` — local dates with a worked cycle or a planned quiet
+    day — not calendar days, so days lost to error or quarantine are made up. The
+    account is parked in ``sleeping`` (still a warming state, so it stays in
     the warming column) with ``last_event="warming_complete"`` — the card derives
-    its completion UI + hand-off button from ``warming_days >= target_days``, and
+    its completion UI + hand-off button from ``warmed_days >= target_days``, and
     the loop stops doing warming work. Manual ``stop_warming`` is unaffected.
     Idempotent: a row already flagged complete re-parks silently (no re-log).
 
@@ -157,8 +158,8 @@ async def _gate_target_reached(
     """
     if record is None or record.target_days is None or record.state in ("quarantine", "flood_wait"):
         return None
-    days = warming_days_since(record.started_at, now)
-    if days is None or days < record.target_days:
+    days = record.warmed_days
+    if days < record.target_days:
         return None
     if record.last_event == "warming_complete":
         # Idempotent re-park: rewrite a fresh future ``next_run_at`` so the loop
@@ -190,7 +191,7 @@ async def _gate_target_reached(
         "INFO",
         "warming_target_reached",
         account_id=account_id,
-        extra={"target_days": record.target_days, "warming_days": days},
+        extra={"target_days": record.target_days, "warmed_days": days},
     )
     await record_lifecycle_event(account_id, "warmed", {"warming_days": days})
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="target reached")

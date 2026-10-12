@@ -53,6 +53,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     target_days: int | None | _Sentinel = _SENTINEL,
     activity_persona: ActivityPersona | None | _Sentinel = _SENTINEL,
     recovered_at: str | None | _Sentinel = _SENTINEL,
+    warmed_days: int | None = None,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -116,6 +117,9 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
                 _resolve(activity_persona, "activity_persona"),
             ),
             recovered_at=cast("str | None", _resolve(recovered_at, "recovered_at")),
+            # Like the token: ``None`` leaves the worked days alone. A value (a fresh
+            # stint's 0) also clears the last counted date with it.
+            warmed_days=warmed_days,
         ),
     )
 
@@ -146,6 +150,7 @@ async def _current_card(account_id: str) -> WarmingAccountState:
                 "phase_entered_at",
                 "recovered_at",
                 "spam_unknown_streak",
+                "last_warmed_date",
             }
         )
         if record

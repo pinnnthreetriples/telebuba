@@ -21,6 +21,7 @@ from services.warming._transitions import (
     _gate_target_reached,
     _matches_active_run,
 )
+from services.warming._worked_days import _count_cycle_day
 from services.warming.pacing import _account_age_hours, _now_iso, _roll_daily, compute_intensity
 
 if TYPE_CHECKING:
@@ -203,7 +204,7 @@ async def _run_reserved_cycle(
             reserved.persona,
             reserved.effective_cap,
         )
-        return await _loop._finalize_after_cycle(  # noqa: SLF001 - patchable settle seam.
+        settled = await _loop._finalize_after_cycle(  # noqa: SLF001 - patchable settle seam.
             account_id,
             result,
             reserved.age_hours,
@@ -222,6 +223,10 @@ async def _run_reserved_cycle(
     except BaseException:
         await _release_reservation_on_exit(account_id, reserved.reservation, tally.attempts)
         raise
+    # After the settle, outside the reservation guard: the budget is already
+    # reconciled, and the count is fenced by the same generation as the settle.
+    await _count_cycle_day(account_id, settled, reserved.reservation.daily_date, run_id=run_id)
+    return settled
 
 
 async def run_loop_iteration(
