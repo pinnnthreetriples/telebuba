@@ -32,6 +32,7 @@ from core.emulator import (
     adb_serial,
     apply_account_proxy,
     assert_sdk,
+    bring_app_to_front,
     container_spec,
     create_instance,
     ensure_app,
@@ -137,50 +138,60 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
     spec = container_spec(fingerprint)
     name = _container_name(account.account_id)
     instance = await find_instance(name)
-    created = instance is None
-    if instance is None:
-        instance = await create_instance(name, spec)
-    serial = adb_serial(instance.index)
-    if instance.running:
+    if instance is not None and instance.running:
+        # Up already: not touched, only asked what its app shows right now.
+        serial = adb_serial(instance.index)
+        await bring_app_to_front(serial)
         screen, _nodes = await read_screen(serial)
-        if screen == "chats":
-            return OpenMobileResult(
-                account_id=account.account_id, status="already_running", signed_in=True
-            )
-    launched = not instance.running
+        return OpenMobileResult(
+            account_id=account.account_id,
+            status="already_running",
+            signed_in=screen == "chats",
+        )
+    created = instance is None
     try:
-        if launched:
-            await launch_instance(instance.index)
-            await wait_for_boot(serial)
+        if instance is None:
+            instance = await create_instance(name, spec, settings.emulator.templates.get(spec.sdk))
+        serial = adb_serial(instance.index)
+        await launch_instance(instance.index)
+        await wait_for_boot(serial)
         await assert_sdk(serial, spec.sdk)
-        if created:
-            await set_network(serial, enabled=False)
+        # Every boot this call makes goes offline until the app's own SOCKS5 setting
+        # names the account's CURRENT proxy: nothing about an existing container is
+        # trusted, not even that an earlier start got as far as setting it.
+        await set_network(serial, enabled=False)
         await ensure_app(serial)
-        if created:
-            await apply_account_proxy(serial, account.account_id)
-            await set_network(serial, enabled=True)
+        await apply_account_proxy(serial, account.account_id)
+        await set_network(serial, enabled=True)
         signed_in = await sign_in(account, serial)
     except BaseException:
-        await asyncio.shield(_undo(instance.index, name, launched=launched, created=created))
+        index = instance.index if instance is not None else None
+        await asyncio.shield(_undo(index, name, created=created))
         raise
     return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
 
 
-async def _undo(index: int, name: str, *, launched: bool, created: bool) -> None:
-    """Stop what this start began; remove a container it created (best effort)."""
+async def _undo(index: int | None, name: str, *, created: bool) -> None:
+    """Stop the container this start booted; remove it when this start created it."""
     try:
         if created:
             await remove_container(name)
-        elif launched:
+        elif index is not None:
             await quit_instance(index)
     except EmulatorError as exc:
         logger.warning("container cleanup for %s failed (%s)", name, exc.code)
 
 
 async def remove_account_container(account_id: str) -> None:
-    """Delete a removed account's container, if it has one; never blocks the deletion."""
+    """Delete a removed account's container, if it has one; never blocks the deletion.
+
+    Waits for a start of the same account in flight, so that start cannot create a
+    container after this one is gone.
+    """
+    lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     try:
-        removed = await remove_container(_container_name(account_id))
+        async with lock:
+            removed = await remove_container(_container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -189,5 +200,8 @@ async def remove_account_container(account_id: str) -> None:
             extra={"reason": exc.code},
         )
         return
+    finally:
+        if not lock.locked() and _LOCKS.get(account_id) is lock:
+            del _LOCKS[account_id]
     if removed:
         await log_event("INFO", "account_mobile_container_removed", account_id=account_id)

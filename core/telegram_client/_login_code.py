@@ -13,12 +13,17 @@ import asyncio
 import re
 from typing import TYPE_CHECKING, cast
 
-from core.telegram_client._pool import get_client
+from telethon import errors
+
+from core.telegram_client._pool import TelegramClientPoolError, get_client
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from telethon import TelegramClient
+
+# The existing session failing to read 777000 at all: transport or an RPC refusal.
+_SESSION_FAILURES = (ConnectionError, TimeoutError, errors.RPCError)
 
 SERVICE_USER_ID = 777000
 DEFAULT_CODE_LENGTH = 5
@@ -86,7 +91,10 @@ async def wait_for_login_code(
 
 async def login_code_cutoff(account_id: str) -> int:
     """The newest 777000 id the account's primary session sees, taken before a code is asked."""
-    return await last_service_message_id(await get_client(account_id))
+    try:
+        return await last_service_message_id(await get_client(account_id))
+    except _SESSION_FAILURES as exc:
+        raise TelegramClientPoolError(account_id, exc) from exc
 
 
 async def wait_account_login_code(
@@ -97,9 +105,12 @@ async def wait_account_login_code(
     poll_seconds: float,
 ) -> str | None:
     """A login code that reached the account's primary session after ``after_id``."""
-    return await wait_for_login_code(
-        await get_client(account_id),
-        after_id=after_id,
-        wait_seconds=wait_seconds,
-        poll_seconds=poll_seconds,
-    )
+    try:
+        return await wait_for_login_code(
+            await get_client(account_id),
+            after_id=after_id,
+            wait_seconds=wait_seconds,
+            poll_seconds=poll_seconds,
+        )
+    except _SESSION_FAILURES as exc:
+        raise TelegramClientPoolError(account_id, exc) from exc

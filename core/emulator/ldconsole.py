@@ -56,9 +56,16 @@ async def find_instance(name: str) -> Instance | None:
     return next((i for i in parse_list2(await _console("list2")) if i.name == name), None)
 
 
-async def create_instance(name: str, spec: ContainerSpec) -> Instance:
-    """A new container named ``name``, sized from settings, presenting ``spec``'s phone."""
-    await _console("add", "--name", name)
+async def create_instance(name: str, spec: ContainerSpec, template: str | None) -> Instance:
+    """A new container named ``name``, sized from settings, presenting ``spec``'s phone.
+
+    ``template`` is a clean container of ``spec``'s Android version to copy; without
+    one LDPlayer's default image is used and the boot-time SDK check decides.
+    """
+    if template:
+        await _console("copy", "--name", name, "--from", template)
+    else:
+        await _console("add", "--name", name)
     instance = await find_instance(name)
     if instance is None:
         raise EmulatorError(_EMULATOR_COMMAND_FAILED)

@@ -78,6 +78,10 @@ def _require(node: UiNode | None) -> UiNode:
     return node
 
 
+async def bring_app_to_front(serial: str) -> None:
+    await adb.start_app(serial, settings.emulator.telegram_package)
+
+
 async def ensure_app(serial: str) -> None:
     """Install Telegram when the container lacks it, then start it."""
     package = settings.emulator.telegram_package

@@ -72,7 +72,7 @@ async def test_a_new_container_presents_the_mobile_fingerprints_phone(console: C
     console.answer = answer
     spec = ContainerSpec("samsung", "SM-S918B", 34, "490154203237518")
 
-    instance = await create_instance("telebuba-new", spec)
+    instance = await create_instance("telebuba-new", spec, None)
 
     assert instance.index == 3
     modify = next(call for call in console.calls if call[1] == "modify")
@@ -219,3 +219,36 @@ async def test_a_missing_adb_is_not_waited_out_as_a_slow_boot(console: Console) 
 
     assert failed.value.code == "emulator_not_found"
     assert len(console.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_template_is_copied_instead_of_the_default_image(console: Console) -> None:
+    def answer(argv: list[str]) -> str:
+        return "4,telebuba-new,0,0,0,-1,-1,720,1280,320\n" if argv[1] == "list2" else ""
+
+    console.answer = answer
+
+    spec = ContainerSpec("Google", "Pixel 8", 34, "490154203237518")
+    await create_instance("telebuba-new", spec, "tpl")
+
+    assert console.calls[0][1:] == ["copy", "--name", "telebuba-new", "--from", "tpl"]
+
+
+@pytest.mark.asyncio
+async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
+    answers = iter(["", "ERROR: could not get idle state.", ""])
+    console.answer = lambda _argv: next(answers)
+
+    assert await adb.dump_ui("emulator-5554") == ""
+    assert console.shell_calls() == [
+        ["rm", "-f", "/sdcard/telebuba_ui.xml"],
+        ["uiautomator", "dump", "/sdcard/telebuba_ui.xml"],
+    ], "an old file is never read back"
+
+
+@pytest.mark.asyncio
+async def test_a_taken_dump_is_read_back(console: Console) -> None:
+    answers = iter(["", "UI hierchary dumped to: /sdcard/telebuba_ui.xml", "<hierarchy/>"])
+    console.answer = lambda _argv: next(answers)
+
+    assert await adb.dump_ui("emulator-5554") == "<hierarchy/>"

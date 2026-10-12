@@ -88,6 +88,8 @@ def _serve(console: Console, *screens: str) -> None:
     def answer(argv: list[str]) -> str:
         if argv[-2:-1] == ["cat"]:
             return queue.pop(0) if len(queue) > 1 else queue[0]
+        if "uiautomator" in argv:
+            return "UI hierchary dumped to: /sdcard/telebuba_ui.xml"
         return ""
 
     console.answer = answer

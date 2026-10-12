@@ -26,6 +26,9 @@ class EmulatorSettings(BaseSettings):
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
     # ``width,height,dpi`` as ldconsole takes it; CPU cores and RAM of a new container.
+    # Android SDK -> a clean template container of that version to copy (``{"34": "tpl-a14"}``);
+    # an SDK without one is created from LDPlayer's default image and checked after boot.
+    templates: dict[int, str] = Field(default_factory=dict)
     resolution: str = Field(default="720,1280,320", pattern=r"^\d{3,4},\d{3,4},\d{3}$")
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)

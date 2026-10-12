@@ -45,6 +45,9 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
         )
     except FileNotFoundError as exc:
         raise EmulatorError(_EMULATOR_NOT_FOUND) from exc
+    except OSError as exc:
+        logger.warning("emulator step %s could not start (%s)", step, type(exc).__name__)
+        raise EmulatorError(_EMULATOR_COMMAND_FAILED) from exc
     try:
         async with asyncio.timeout(seconds):
             stdout, _stderr = await process.communicate()

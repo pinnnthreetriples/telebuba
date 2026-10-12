@@ -18,6 +18,7 @@ from core.config import settings
 from core.emulator import EmulatorError
 from core.emulator.ldconsole import Instance
 from core.repositories.proxies import create_and_assign_proxy
+from core.telegram_client import TelegramClientPoolError
 from schemas.accounts import AccountCreate
 from schemas.proxy import ProxyCreateAssignment
 from services.accounts import _emulator_sign_in, add_account, remove_account
@@ -48,13 +49,16 @@ class _Container:
         self.screens: list[Screen] = ["chats"]
         self.steps: list[str] = []
         self.fail_at: str | None = None
+        self.fail_at_prefix: str | None = None
         self.launch_gate: asyncio.Event | None = None
         self.launched = asyncio.Event()
         self.code: str | None = "12345"
 
     def step(self, name: str) -> None:
         self.steps.append(name)
-        if name == self.fail_at:
+        if name == self.fail_at or (
+            self.fail_at_prefix is not None and name.startswith(self.fail_at_prefix)
+        ):
             code = "emulator_boot_timeout"
             raise EmulatorError(code)
 
@@ -69,10 +73,18 @@ class _Container:
         self.step(f"find:{name}")
         return self.instance
 
-    async def create_instance(self, name: str, spec: ContainerSpec) -> Instance:
-        self.step(f"create:{spec.manufacturer}{spec.model}:{spec.sdk}")
+    async def create_instance(
+        self,
+        name: str,
+        spec: ContainerSpec,
+        template: str | None,
+    ) -> Instance:
+        self.step(f"create:{spec.manufacturer}{spec.model}:{spec.sdk}:{template}")
         self.instance = Instance(1, name, running=False)
         return self.instance
+
+    async def bring_app_to_front(self, serial: str) -> None:
+        self.on_serial(serial, "front")
 
     async def launch_instance(self, index: int) -> None:
         self.step(f"launch:{index}")
@@ -122,6 +134,8 @@ class _Container:
         **_timing: float,
     ) -> str | None:
         self.step(f"code_after:{after_id}")
+        if self.code == "pool-down":
+            raise TelegramClientPoolError(_account_id, ConnectionError())
         return self.code
 
     async def fetch_account_twofa_password(self, _account_id: str) -> str | None:
@@ -143,6 +157,7 @@ _SERVICE_FAKES = (
     "set_network",
     "ensure_app",
     "apply_account_proxy",
+    "bring_app_to_front",
     "read_screen",
     "quit_instance",
     "remove_container",
@@ -252,7 +267,7 @@ async def test_a_new_container_starts_offline_until_the_apps_proxy_is_set(
     assert result.status == "started"
     assert result.signed_in is True
     created = next(step for step in container.steps if step.startswith("create:"))
-    assert created.endswith((":33", ":34"))
+    assert created.endswith((":33:None", ":34:None"))
     order = [s for s in container.steps if s.split(":")[0] in {"net", "app", "proxy", "launch"}]
     assert order == ["launch:1", "net:False", "app", "proxy:acc", "net:True"]
 
@@ -294,15 +309,82 @@ async def test_a_code_inside_the_cooldown_is_refused(container: _Container) -> N
     assert not any(step.startswith("phone:") for step in container.steps)
 
 
+@pytest.mark.parametrize(("screen", "signed_in"), [("chats", True), ("phone", False)])
 @pytest.mark.asyncio
-async def test_a_running_container_on_the_chat_list_is_left_alone(container: _Container) -> None:
+async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
+    container: _Container,
+    screen: Screen,
+    signed_in: bool,  # noqa: FBT001 - a parametrised expectation
+) -> None:
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
+    container.screens = [screen]
 
     result = await open_account_mobile("acc")
 
-    assert (result.status, result.signed_in) == ("already_running", True)
-    assert container.steps == ["find:telebuba-acc", "read"]
+    assert (result.status, result.signed_in) == ("already_running", signed_in)
+    assert container.steps == ["find:telebuba-acc", "front", "read"]
+
+
+@pytest.mark.asyncio
+async def test_every_boot_of_an_existing_container_reapplies_the_current_proxy_offline(
+    container: _Container,
+) -> None:
+    """Nothing about a stopped container is trusted — not even that its proxy was set."""
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=False)
+
+    await open_account_mobile("acc")
+
+    order = [s for s in container.steps if s.split(":")[0] in {"net", "app", "proxy", "launch"}]
+    assert order == ["launch:1", "net:False", "app", "proxy:acc", "net:True"]
+    assert not any(step.startswith("create:") for step in container.steps)
+
+
+@pytest.mark.asyncio
+async def test_a_configured_template_of_the_fingerprints_sdk_is_copied(
+    container: _Container,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account()
+    monkeypatch.setattr(settings.emulator, "templates", {33: "tpl-a13", 34: "tpl-a14"})
+
+    await open_account_mobile("acc")
+
+    created = next(step for step in container.steps if step.startswith("create:"))
+    assert created.endswith((":33:tpl-a13", ":34:tpl-a14"))
+
+
+@pytest.mark.asyncio
+async def test_a_failed_creation_still_removes_the_half_made_container(
+    container: _Container,
+) -> None:
+    await _account()
+    container.fail_at = "create:samsungSM-S918B:33:None"
+    container.fail_at_prefix = "create:"
+
+    with pytest.raises(EmulatorRefusedError):
+        await open_account_mobile("acc")
+
+    assert container.steps[-1] == "remove:telebuba-acc"
+
+
+@pytest.mark.asyncio
+async def test_deletion_waits_for_a_start_in_flight(container: _Container) -> None:
+    await _account()
+    container.launch_gate = asyncio.Event()
+    start = asyncio.create_task(open_account_mobile("acc"))
+    await container.launched.wait()
+
+    removal = asyncio.create_task(emulator_module.remove_account_container("acc"))
+    await asyncio.sleep(0)
+    assert not any(step.startswith("remove:") for step in container.steps)
+    container.launch_gate.set()
+    await start
+    await removal
+
+    assert container.steps[-1] == "remove:telebuba-acc"
+    assert emulator_module._LOCKS == {}
 
 
 @pytest.mark.asyncio
@@ -377,3 +459,18 @@ async def test_deleting_the_account_removes_its_container(container: _Container)
     await remove_account("acc")
 
     assert "remove:telebuba-acc" in container.steps
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_existing_session_while_waiting_is_a_refusal_not_a_500(
+    container: _Container,
+) -> None:
+    await _account()
+    container.code = "pool-down"
+    container.screens = ["phone", "code"]
+
+    with pytest.raises(DeviceRefusedError) as refused:
+        await open_account_mobile("acc")
+
+    assert refused.value.code == "device_primary_unavailable"
+    assert container.steps[-1] == "remove:telebuba-acc"

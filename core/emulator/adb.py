@@ -110,7 +110,14 @@ async def set_network(serial: str, *, enabled: bool) -> None:
 
 
 async def dump_ui(serial: str) -> str:
-    await shell(serial, "uiautomator", "dump", _DUMP_PATH)
+    """This moment's UI dump, or ``""`` when uiautomator could not take one.
+
+    The file is deleted first: a failed dump ("could not get idle state", common on
+    animated screens) still exits 0, and ``cat`` would then serve an older screen.
+    """
+    await shell(serial, "rm", "-f", _DUMP_PATH)
+    if "dumped to" not in (await shell(serial, "uiautomator", "dump", _DUMP_PATH)).lower():
+        return ""
     return await shell(serial, "cat", _DUMP_PATH)
 
 

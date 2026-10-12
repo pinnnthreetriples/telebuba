@@ -80,12 +80,15 @@ async def _submit_phone_and_code(
         screen, nodes = await wait_screen(serial, {"code", "password", "chats"})
     if screen != "code":
         raise EmulatorError(_EMULATOR_FIELD_MISSING)
-    code = await wait_account_login_code(
-        account.account_id,
-        after_id=cutoff,
-        wait_seconds=settings.emulator.code_wait_seconds,
-        poll_seconds=settings.emulator.poll_seconds,
-    )
+    try:
+        code = await wait_account_login_code(
+            account.account_id,
+            after_id=cutoff,
+            wait_seconds=settings.emulator.code_wait_seconds,
+            poll_seconds=settings.emulator.poll_seconds,
+        )
+    except TelegramClientPoolError as exc:
+        raise DeviceRefusedError(_DEVICE_PRIMARY_UNAVAILABLE) from exc
     if code is None:
         raise EmulatorError(_EMULATOR_CODE_TIMEOUT)
     await enter_code(serial, nodes, code)

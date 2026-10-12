@@ -23,6 +23,7 @@ from core.emulator.ldconsole import (
 )
 from core.emulator.telegram_app import (
     apply_account_proxy,
+    bring_app_to_front,
     confirm_number,
     ensure_app,
     enter_code,
@@ -40,6 +41,7 @@ __all__ = [
     "adb_serial",
     "apply_account_proxy",
     "assert_sdk",
+    "bring_app_to_front",
     "confirm_number",
     "container_spec",
     "create_instance",

@@ -89,3 +89,16 @@ async def test_a_cancelled_caller_kills_the_child(monkeypatch: pytest.MonkeyPatc
         await task
 
     assert started[0].returncode is not None, "an abandoned adb/ldconsole call must not linger"
+
+
+@pytest.mark.asyncio
+async def test_a_console_that_cannot_be_started_is_a_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def refuse(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError
+
+    monkeypatch.setattr(_process.asyncio, "create_subprocess_exec", refuse)
+
+    with pytest.raises(EmulatorError) as failed:
+        await run_command(["ldconsole.exe", "list2"], seconds=5, step="list2")
+
+    assert failed.value.code == "emulator_command_failed"
