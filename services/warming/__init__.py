@@ -47,6 +47,7 @@ from services.warming._runtime import (
 from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
+from services.warming.daily_stats import load_daily_stats
 from services.warming.pacing import (
     _in_quiet_hours,
     _proxy_snapshot,
@@ -85,6 +86,7 @@ __all__ = [
     "list_channels",
     "list_warmed_accounts",
     "load_board",
+    "load_daily_stats",
     "load_settings",
     "persona_next_run_seconds",
     "promote_to_neurocomment",

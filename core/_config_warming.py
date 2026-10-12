@@ -165,6 +165,8 @@ class WarmingSettings(BaseSettings):
     log_retention_days: float = Field(default=30.0, ge=0.0)
     dialogue_message_retention_days: float = Field(default=90.0, ge=0.0)
     sent_hash_retention_days: float = Field(default=14.0, ge=0.0)
+    # Per-day warming totals (``warming_daily_stats``) are kept a year for trend charts.
+    daily_stats_retention_days: float = Field(default=365.0, ge=0.0)
     # How often the retention sweep runs while the process is up (a background
     # task alongside the per-account loops); a one-shot sweep at startup alone
     # lets the append-only tables grow unbounded during long uptimes.

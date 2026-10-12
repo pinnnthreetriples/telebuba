@@ -25,6 +25,7 @@ from services.warming._transitions import (
     _matches_active_run,
     _resolve_phase_after_cycle,
 )
+from services.warming.daily_stats import record_cycle_stats
 from services.warming.pacing import (
     _account_tz,
     _now_iso,
@@ -209,6 +210,10 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
         current_phase=new_phase,
         phase_entered_at=phase_entered_iso,
     )
+    # Count the cycle on its day only when the write landed: a cycle a newer
+    # generation retired must leave no trace in the history either.
+    if write.applied:
+        await record_cycle_stats(result, new_phase)
     # Announce the phase transition only once the write actually landed: if the
     # CAS rejected it (a newer generation took the row between the read above and
     # this write), the transition never happened, so a logged event would be a

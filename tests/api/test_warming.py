@@ -20,6 +20,7 @@ from schemas.warming import (
     WarmingSettings,
     WarmingSettingsUpdate,
 )
+from schemas.warming_daily_stats import WarmingDailyStats, WarmingDailyStatsList
 from services import warming as warming_service
 
 if TYPE_CHECKING:
@@ -463,4 +464,41 @@ async def test_settings_save_the_text_llm_choice_and_refuse_an_unknown_one(app: 
         )
         # OpenAI solves captchas only; it is not a text provider.
         resp = await client.put("/api/v1/warming/settings", json={"text_llm_provider": "openai"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_daily_stats_returns_the_account_window(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    async def _fake(account_id: str, days: int) -> WarmingDailyStatsList:
+        calls.append((account_id, days))
+        return WarmingDailyStatsList(
+            items=[WarmingDailyStats(account_id=account_id, day="2026-10-11", cycles=2)],
+        )
+
+    monkeypatch.setattr("services.warming.load_daily_stats", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/warming/daily-stats", params={"account_id": "acc-1", "days": 90}
+        )
+        default = await client.get("/api/v1/warming/daily-stats", params={"account_id": "acc-1"})
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["cycles"] == 2
+    assert default.status_code == 200
+    assert calls == [("acc-1", 90), ("acc-1", 30)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [{}, {"account_id": "acc-1", "days": 0}, {"account_id": "acc-1", "days": 367}],
+)
+async def test_daily_stats_rejects_a_missing_account_or_out_of_range_days(
+    app: FastAPI, params: dict[str, str | int]
+) -> None:
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/daily-stats", params=params)
     assert resp.status_code == 422

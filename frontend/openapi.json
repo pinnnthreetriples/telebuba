@@ -9924,6 +9924,98 @@
         }
       }
     },
+    "/api/v1/warming/daily-stats": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "List Warming Daily Stats",
+        "description": "One account's per-day warming totals for the last ``days`` days, oldest first.",
+        "operationId": "listWarmingDailyStats",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 366,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingDailyStatsList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search": {
       "post": {
         "tags": [
@@ -30401,6 +30493,132 @@
         },
         "type": "object",
         "title": "WarmingChannelList"
+      },
+      "WarmingDailyStats": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "day": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Day"
+          },
+          "cycles": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cycles",
+            "default": 0
+          },
+          "reads": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads",
+            "default": 0
+          },
+          "reactions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reactions",
+            "default": 0
+          },
+          "joins": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Joins",
+            "default": 0
+          },
+          "dms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Dms",
+            "default": 0
+          },
+          "failures": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Failures",
+            "default": 0
+          },
+          "floods": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Floods",
+            "default": 0
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "intro",
+                  "settling",
+                  "warming",
+                  "active",
+                  "warmed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "trust_band": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "excellent",
+                  "good",
+                  "watch",
+                  "at_risk",
+                  "critical"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Band"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "day"
+        ],
+        "title": "WarmingDailyStats",
+        "description": "One account's warming totals for one day (also the increment one cycle adds)."
+      },
+      "WarmingDailyStatsList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WarmingDailyStats"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "WarmingDailyStatsList",
+        "description": "Daily rows of one account, oldest day first."
       },
       "WarmingMechanics": {
         "properties": {

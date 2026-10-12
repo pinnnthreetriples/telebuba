@@ -55,6 +55,7 @@ from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_tables,
 )
 from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
+from core.migration_steps_daily_stats import _add_warming_daily_stats
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
     _add_linked_group_about,
@@ -210,6 +211,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (71, "add_account_folders", _add_account_folders),
     (72, "add_user_parser_tables", _add_user_parser_tables),
     (73, "add_masstagging_tables", _add_masstagging_tables),
+    # 74 is reserved for the warming lifecycle journal, landing in a parallel change.
+    (75, "add_warming_daily_stats", _add_warming_daily_stats),
 )
 
 

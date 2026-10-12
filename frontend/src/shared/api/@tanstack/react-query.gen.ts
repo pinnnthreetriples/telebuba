@@ -124,6 +124,7 @@ import {
   listUserParserRunUsers,
   listWarmedAccounts,
   listWarmingChannels,
+  listWarmingDailyStats,
   listWarmingDialogues,
   login,
   logout,
@@ -549,6 +550,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
+  ListWarmingDailyStatsData,
+  ListWarmingDailyStatsError,
+  ListWarmingDailyStatsResponse,
   ListWarmingDialoguesData,
   ListWarmingDialoguesError,
   ListWarmingDialoguesResponse,
@@ -3611,6 +3615,33 @@ export const listWarmingDialoguesOptions = (options?: Options<ListWarmingDialogu
       return data;
     },
     queryKey: listWarmingDialoguesQueryKey(options),
+  });
+
+export const listWarmingDailyStatsQueryKey = (options: Options<ListWarmingDailyStatsData>) =>
+  createQueryKey('listWarmingDailyStats', options);
+
+/**
+ * List Warming Daily Stats
+ *
+ * One account's per-day warming totals for the last ``days`` days, oldest first.
+ */
+export const listWarmingDailyStatsOptions = (options: Options<ListWarmingDailyStatsData>) =>
+  queryOptions<
+    ListWarmingDailyStatsResponse,
+    ListWarmingDailyStatsError,
+    ListWarmingDailyStatsResponse,
+    ReturnType<typeof listWarmingDailyStatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingDailyStats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingDailyStatsQueryKey(options),
   });
 
 /**
