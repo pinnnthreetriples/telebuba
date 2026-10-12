@@ -417,7 +417,7 @@ export function WarmingPage() {
                               {flag}
                             </div>
                           ) : null}
-                          <div className="mt-1 flex items-center gap-2">
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
                             <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
                             <span className={`text-small font-medium ${tTone}`}>
                               {trust ?? '—'}
