@@ -266,3 +266,18 @@ async def test_the_read_covers_the_last_days_including_today() -> None:
     window = await load_daily_stats("acc-1", 3, now=now)
 
     assert [row.day for row in window.items] == ["2026-10-09", "2026-10-11"]
+
+
+@pytest.mark.asyncio
+async def test_the_read_window_counts_local_calendar_days_across_dst(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 04:30Z on Mar 9 is 00:30 EDT, the day after New York sprang forward; 24h earlier
+    # in UTC is still Mar 7 locally, so a UTC-span cutoff would admit one day too many.
+    _zone(monkeypatch, "America/New_York")
+    for day in ("2026-03-07", "2026-03-08", "2026-03-09"):
+        await add_warming_daily_stats(WarmingDailyStats(account_id="acc-1", day=day, cycles=1))
+
+    window = await load_daily_stats("acc-1", 2, now=datetime(2026, 3, 9, 4, 30, tzinfo=UTC))
+
+    assert [row.day for row in window.items] == ["2026-03-08", "2026-03-09"]

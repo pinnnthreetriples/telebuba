@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -115,5 +115,8 @@ async def load_daily_stats(
 ) -> WarmingDailyStatsList:
     """The last ``days`` days of one account (today included), oldest first."""
     moment = now if now is not None else datetime.now(UTC)
-    since = await stats_day(account_id, moment - timedelta(days=max(days, 1) - 1))
+    # Step back in calendar days from the local date, not in 24h spans from the UTC
+    # moment: across a DST change those land on a different local day.
+    today = date.fromisoformat(await stats_day(account_id, moment))
+    since = (today - timedelta(days=max(days, 1) - 1)).isoformat()
     return WarmingDailyStatsList(items=await list_warming_daily_stats(account_id, since))
