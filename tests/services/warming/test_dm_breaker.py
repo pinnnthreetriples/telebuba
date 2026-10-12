@@ -7,7 +7,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from core.config import settings
-from core.db import create_account, load_warming_settings
+from core.db import (
+    create_account,
+    load_warming_settings,
+    oldest_unreplied_for,
+    record_dialogue_message,
+)
 from core.repositories.warming_dm_pause import store_dm_paused_until
 from core.repositories.warming_floods import record_warming_flood_event
 from schemas.accounts import AccountCreate
@@ -250,3 +255,42 @@ async def test_a_dm_spam_block_in_the_loop_trips_the_breaker(
     stored = await _stored_pause()
     assert stored is not None
     assert datetime.fromisoformat(stored) > datetime.now(UTC) + timedelta(hours=71)
+
+
+async def _pause_while_writing(_request: object) -> GeminiResult:
+    # Another account's DM spam block trips the breaker while this one writes.
+    await store_dm_paused_until((datetime.now(UTC) + timedelta(hours=72)).isoformat())
+    return GeminiResult(status="ok", text="hi there")
+
+
+@pytest.mark.asyncio
+async def test_a_pause_that_starts_mid_cycle_stops_the_opener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    await _dm_ready_fleet(monkeypatch, recorder)
+    monkeypatch.setattr(_seams, "generate_text", _pause_while_writing)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert result.failures == 0
+    assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_a_pause_that_starts_mid_cycle_keeps_the_reply_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    await _dm_ready_fleet(monkeypatch, recorder)
+    monkeypatch.setattr(_seams, "generate_text", _pause_while_writing)
+    await record_dialogue_message("acc-2", "acc-1", "hello")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+    pending = await oldest_unreplied_for("acc-1")
+    assert pending is not None
+    assert pending.from_account == "acc-2"

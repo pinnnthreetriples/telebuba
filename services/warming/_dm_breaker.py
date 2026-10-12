@@ -33,6 +33,12 @@ def active_dm_pause(stamp: str | None, now: datetime) -> datetime | None:
     return until if until is not None and until > now else None
 
 
+async def fleet_dm_paused_now() -> bool:
+    """A fresh read of the pause (the cache is dropped on every write to it)."""
+    stamp = (await load_warming_settings()).dm_paused_until
+    return active_dm_pause(stamp, datetime.now(UTC)) is not None
+
+
 async def trip_dm_breaker(now: datetime) -> datetime | None:
     """Pause fleet DMs when the recent DM spam blocks reach the threshold.
 
