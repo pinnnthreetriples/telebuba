@@ -2847,13 +2847,6 @@
       "retry": "Retry",
       "close": "Close"
     },
-    "stage": {
-      "subscribe": "Subscribe",
-      "read": "Read",
-      "stories": "Stories",
-      "reactions": "Reactions",
-      "pause": "Pause"
-    },
     "state": {
       "idle": "Idle",
       "active": "Active",
@@ -2870,22 +2863,16 @@
       "dayProgress_other": "{{days}} / {{target}} days",
       "idleDays_one": "({{count}} idle day not counted)",
       "idleDays_other": "({{count}} idle days not counted)",
-      "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "logToggle": "Activity log",
       "storiesSeen": "stories viewed: {{count}}",
       "storiesNone": "no active stories",
       "logLoading": "Loading log…",
       "logEmpty": "No events yet",
       "logClear": "Clear",
-      "pauseCountdown": "{{time}} left",
       "completeTitle": "Warming complete",
       "spamUnknown": "@SpamBot has not answered several checks in a row — the account's status is unknown.",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
-      "cycleTip_one": "Cycle {{count}}",
-      "cycleTip_other": "Cycle {{count}}",
-      "dmAllowed": "DMs: allowed",
-      "dmClosed": "DMs: closed",
       "floodTotal": "Floods total: {{total}}",
       "dmBlockedUntil": "DMs closed until {{date}}",
       "limitShare": "limit {{percent}}",
@@ -2920,14 +2907,6 @@
       "flood_wait": "paused",
       "quarantine": "quarantine",
       "error": "error"
-    },
-    "activity": {
-      "hold": "Pre-start hold",
-      "subscribe": "Joining channels",
-      "read": "Reading the feed",
-      "stories": "Viewing stories",
-      "reactions": "Reactions placed",
-      "pause": "Pause for realism"
     },
     "stopModal": {
       "title": "Stop warming?",
