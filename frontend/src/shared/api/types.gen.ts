@@ -6820,6 +6820,18 @@ export type WarmingAccountState = {
    * Nc Handed Off
    */
   nc_handed_off?: boolean;
+  /**
+   * Flood Total
+   */
+  flood_total?: number;
+  /**
+   * Dm Blocked Until
+   */
+  dm_blocked_until?: string | null;
+  /**
+   * Limit Factor
+   */
+  limit_factor?: number;
 };
 
 /**

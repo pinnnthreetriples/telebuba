@@ -12,7 +12,7 @@ stays a leaf that ``pacing`` and the board/engine can both import.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
 from core.config import settings
@@ -186,17 +186,55 @@ def _phase_progress(
     return progress, days_to_next
 
 
+def _parse_utc(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def recovery_limits(recovered_at: str | None, now: datetime) -> tuple[float, datetime | None]:
+    """The post-quarantine ``(limit_factor, dm_blocked_until)`` at ``now``.
+
+    After a clean release the daily cap grows linearly from
+    ``release_ramp_start_fraction`` of the phase cap to the full cap over
+    ``release_ramp_days``, and DMs stay closed until ``release_dm_block_days``
+    after the release. ``dm_blocked_until`` is ``None`` once that instant passed.
+    A never-released account (or an unreadable stamp) is unrestricted.
+    """
+    released = _parse_utc(recovered_at)
+    if released is None:
+        return 1.0, None
+    warm = settings.warming
+    elapsed_days = max(0.0, (now - released).total_seconds() / 86400.0)
+    factor = 1.0
+    if warm.release_ramp_days > 0 and elapsed_days < warm.release_ramp_days:
+        start = warm.release_ramp_start_fraction
+        factor = start + (1.0 - start) * (elapsed_days / warm.release_ramp_days)
+    dm_until = released + timedelta(days=warm.release_dm_block_days)
+    # Quantised like phase progress, so a board poll does not flip the card each tick.
+    return round(factor, 2), (dm_until if dm_until > now else None)
+
+
 def compute_intensity(
     age_hours: float,
     trust_band: str | None = None,
+    *,
+    recovered_at: str | None = None,
+    now: datetime | None = None,
 ) -> WarmingIntensity:
     """Map an account's age + trust band to its safety ceiling for one cycle.
 
     Returns the lifecycle phase + daily action cap (from
     ``effective_phase(age, trust_band)``), the configured session size, and
     whether DMs are permitted (age ≥ ``dm_min_age_hours`` AND the trust band
-    allows it). Per-session *frequency* (reactions/DM) is the persona's job, not
-    this ceiling's — see ``persona_reaction_probability`` /
+    allows it AND no post-quarantine DM block is in force). A recent quarantine
+    release (``recovered_at``) also scales the daily cap down by the recovery
+    ramp — see ``recovery_limits``. Per-session *frequency* (reactions/DM) is the
+    persona's job, not this ceiling's — see ``persona_reaction_probability`` /
     ``persona_dm_probability``.
     """
     warm = settings.warming
@@ -212,13 +250,19 @@ def compute_intensity(
         progress, days_to_next = None, None
     # П11: DM is gated by trust band (when known) on top of the age gate.
     dm_band_ok = trust_band is None or trust_band in _DM_ALLOWED_BANDS
+    factor, dm_until = recovery_limits(recovered_at, now or datetime.now(UTC))
+    cap = warm.phase_daily_cap[phase]
+    # 0 means "no cap" and stays so; a real cap never ramps below one action.
+    daily_cap = max(1, round(cap * factor)) if cap > 0 else cap
     return WarmingIntensity(
         channels_min=warm.channels_per_cycle_min,
         channels_max=warm.channels_per_cycle_max,
         reaction_probability=warm.reaction_probability,
-        dm_allowed=(age_hours >= warm.dm_min_age_hours) and dm_band_ok,
-        daily_cap=warm.phase_daily_cap[phase],
+        dm_allowed=(age_hours >= warm.dm_min_age_hours) and dm_band_ok and dm_until is None,
+        daily_cap=daily_cap,
         phase=phase,
         progress_to_next=progress,
         days_to_next_phase=days_to_next,
+        limit_factor=factor,
+        dm_blocked_until=dm_until.isoformat() if dm_until is not None else None,
     )

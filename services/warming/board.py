@@ -16,6 +16,7 @@ from core.db import (
     list_device_fingerprints,
     list_spam_statuses,
     list_warming_channels,
+    list_warming_flood_summaries,
     list_warming_states,
 )
 from core.phone_geo import country_for_phone
@@ -83,7 +84,14 @@ def _to_card(
     # phase_entered_at are warming-loop internals, not card affordances).
     record_fields = (
         record.model_dump(
-            exclude={"account_id", "state", "run_id", "current_phase", "phase_entered_at"}
+            exclude={
+                "account_id",
+                "state",
+                "run_id",
+                "current_phase",
+                "phase_entered_at",
+                "recovered_at",
+            }
         )
         if record
         else {}
@@ -117,6 +125,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     # re-fetched account/state/spam/fingerprint via account_trust_score).
     spam_by_account = await list_spam_statuses()
     fingerprints = await list_device_fingerprints()
+    floods_by_account = await list_warming_flood_summaries()
     channel_count = len(channels.channels)
     now = datetime.now(UTC)
     cards: list[WarmingAccountState] = []
@@ -125,6 +134,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         spam = spam_by_account.get(account.account_id)
         fingerprint = fingerprints.get(account.account_id)
         lang_code = fingerprint.system_lang_code if fingerprint else None
+        floods = floods_by_account.get(account.account_id)
 
         trust = account_trust_score_from(
             account=account,
@@ -132,12 +142,18 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             spam=spam,
             lang_code=lang_code,
             now=now,
+            floods=floods,
         )
         readiness = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
         card = _to_card(account, record, readiness=readiness)
 
         age_hours = _account_age_hours(account, now)
-        intensity = compute_intensity(age_hours, trust_band=trust.band)
+        intensity = compute_intensity(
+            age_hours,
+            trust_band=trust.band,
+            recovered_at=record.recovered_at if record else None,
+            now=now,
+        )
         card.trust_score = trust.score
         card.trust_band = trust.band
         card.trust_reasons = trust.reasons
@@ -158,6 +174,9 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.progress_to_next = intensity.progress_to_next
         card.days_to_next_phase = intensity.days_to_next_phase
         card.warming_days = _warming_days_since(record, now)
+        card.flood_total = floods.flood_total if floods else 0
+        card.dm_blocked_until = intensity.dm_blocked_until
+        card.limit_factor = intensity.limit_factor
         cards.append(card)
     return cards, channels, masked
 

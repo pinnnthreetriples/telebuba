@@ -16,6 +16,7 @@ from core.config import settings
 from core.db import (
     fetch_account,
     fetch_device_fingerprint,
+    fetch_warming_flood_summary,
     fetch_warming_state,
     get_spam_status,
 )
@@ -26,8 +27,10 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
+    from schemas.warming_flood import WarmingFloodSummary
 
 _SECONDS_PER_HOUR = 3600
+_SECONDS_PER_DAY = 86400
 
 
 def _band(score: int) -> TrustBand:
@@ -43,8 +46,27 @@ def _band(score: int) -> TrustBand:
     return "critical"
 
 
-def compute_trust_score(signals: TrustSignals) -> TrustScore:
-    """Combine account signals into a 0-100 trust verdict (pure)."""
+def _flood_history_penalty(signals: TrustSignals, now: datetime) -> int:
+    """Lifetime spam blocks, fading linearly to zero since the latest one."""
+    trust = settings.trust
+    if signals.flood_total <= 0 or trust.flood_history_decay_days <= 0:
+        return 0
+    last = _parse_utc(signals.last_flood_at)
+    if last is None:
+        return 0
+    elapsed_days = max(0.0, (now - last).total_seconds() / _SECONDS_PER_DAY)
+    remaining = 1.0 - elapsed_days / trust.flood_history_decay_days
+    if remaining <= 0:
+        return 0
+    full = min(
+        trust.penalty_flood_history_max,
+        trust.penalty_flood_history_each * signals.flood_total,
+    )
+    return round(full * remaining)
+
+
+def compute_trust_score(signals: TrustSignals, now: datetime | None = None) -> TrustScore:
+    """Combine account signals into a 0-100 trust verdict (pure but for the clock)."""
     trust = settings.trust
     score = 100
     reasons: list[str] = []
@@ -64,6 +86,10 @@ def compute_trust_score(signals: TrustSignals) -> TrustScore:
     if signals.flood_active:
         score -= trust.penalty_flood_active
         reasons.append("recent flood")
+    flood_history = _flood_history_penalty(signals, now or datetime.now(UTC))
+    if flood_history > 0:
+        score -= flood_history
+        reasons.append(f"floods x{signals.flood_total}")
     if signals.geo_status == "mismatch":
         score -= trust.penalty_geo_mismatch
         reasons.append("geo mismatch")
@@ -87,6 +113,16 @@ def compute_trust_score(signals: TrustSignals) -> TrustScore:
         band=_band(score),
         reasons=reasons,
     )
+
+
+def _parse_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _age_hours(created_at: str, now: datetime) -> float:
@@ -116,13 +152,14 @@ def flood_active(flood_wait_until: str | None, now: datetime) -> bool:
     return until > now
 
 
-def account_trust_score_from(
+def account_trust_score_from(  # noqa: PLR0913 - already-loaded signals, one per source.
     *,
     account: AccountRead,
     record: WarmingStateRecord | None,
     spam: SpamStatusVerdict | None,
     lang_code: str | None,
     now: datetime,
+    floods: WarmingFloodSummary | None = None,
 ) -> TrustScore:
     """Compute a Trust Score from already-loaded signals — no DB I/O.
 
@@ -144,7 +181,10 @@ def account_trust_score_from(
             geo_status=geo.status,
             proxy_status=account.proxy_status,
             age_hours=_age_hours(account.created_at, now),
+            flood_total=floods.flood_total if floods else 0,
+            last_flood_at=floods.last_flood_at if floods else None,
         ),
+        now,
     )
 
 
@@ -167,4 +207,5 @@ async def account_trust_score(account_id: str) -> TrustScore:
         spam=spam,
         lang_code=fingerprint.system_lang_code if fingerprint else None,
         now=datetime.now(UTC),
+        floods=await fetch_warming_flood_summary(account_id),
     )

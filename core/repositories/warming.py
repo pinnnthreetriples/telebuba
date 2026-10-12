@@ -141,6 +141,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
             "ActivityPersona",
             _optional_str(mapping.get("activity_persona")) or "normal",
         ),
+        recovered_at=_optional_str(mapping.get("recovered_at")),
     )
 
 
@@ -327,6 +328,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # NOT NULL column — coalesce a carried/absent value to the balanced
         # persona so an explicit NULL write can never violate the constraint.
         "activity_persona": data.activity_persona or "normal",
+        "recovered_at": data.recovered_at,
     }
     if data.reservation_token is not None:
         # #10: the only writer is the ``cycle_started`` booking. Absent means "leave

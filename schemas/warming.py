@@ -115,6 +115,10 @@ class WarmingIntensity(BaseModel):
     phase: WarmingPhase = "intro"
     progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
     days_to_next_phase: int | None = Field(default=None, ge=0)
+    # Post-quarantine recovery: the share of the phase cap allowed today and the
+    # instant DMs reopen (``None`` when no block is in force).
+    limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
+    dm_blocked_until: str | None = None
 
 
 class WarmingReadiness(BaseModel):
@@ -177,6 +181,9 @@ class WarmingStateRecord(BaseModel):
     # Operator-chosen activity persona. Legacy rows / NULL column → "normal" (the
     # reader maps NULL up), so this is never None on a loaded record.
     activity_persona: ActivityPersona = "normal"
+    # When the last quarantine was released on a clean spam check. The daily-cap
+    # ramp and the DM block after a spam block count from it; ``None`` = never.
+    recovered_at: str | None = None
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -229,6 +236,8 @@ class WarmingStateWrite(BaseModel):
     target_days: int | None = None
     # See WarmingStateRecord.activity_persona. ``None`` = carry current.
     activity_persona: ActivityPersona | None = None
+    # See WarmingStateRecord.recovered_at.
+    recovered_at: str | None = None
     # #10: identifies ONE pre-cycle daily-budget booking. Written only by the
     # ``cycle_started`` write and read only by the hand-back's SQL guard, never by
     # a reader — so unlike every other field here, ``None`` means "leave the column
@@ -328,6 +337,12 @@ class WarmingAccountState(BaseModel):
     promoted_to_nc: bool = False
     # See WarmingStateRecord.nc_handed_off — handed to the neurocomment idle pool.
     nc_handed_off: bool = False
+    # Flood memory: lifetime spam blocks, the date DMs reopen after the last
+    # quarantine release (``None`` once open), and the share of the phase cap the
+    # post-release ramp allows today (1.0 = full cap).
+    flood_total: int = Field(default=0, ge=0)
+    dm_blocked_until: str | None = None
+    limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class WarmingBoardState(BaseModel):

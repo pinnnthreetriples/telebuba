@@ -206,6 +206,21 @@ _warming_account_state = Table(
     # Operator-chosen activity persona from the start modal. server_default keeps
     # existing/inserted rows on the balanced cadence; the reader maps NULL → normal.
     Column("activity_persona", String, nullable=False, server_default="normal"),
+    # When the last quarantine was released on a clean spam check; the daily-cap
+    # ramp and the DM block after a spam block count from it. NULL = never released.
+    Column("recovered_at", String, nullable=True),
+)
+# Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
+# purge on account deletion, so the lifetime count survives a delete + re-import.
+_warming_flood_events = Table(
+    "warming_flood_events",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("account_id", String, nullable=False),
+    Column("kind", String, nullable=False),
+    Column("action", String, nullable=True),
+    Column("created_at", String, nullable=False),
+    Index("ix_warming_flood_events_account", "account_id", "created_at"),
 )
 _account_spam_status = Table(
     "account_spam_status",

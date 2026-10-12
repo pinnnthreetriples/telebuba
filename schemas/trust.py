@@ -38,3 +38,7 @@ class TrustSignals(BaseModel):
     geo_status: str = Field(min_length=1)
     proxy_status: str | None = None
     age_hours: float = Field(ge=0)
+    # Flood memory: lifetime spam blocks and the latest one (ISO), whose penalty
+    # fades over ``settings.trust.flood_history_decay_days``.
+    flood_total: int = Field(default=0, ge=0)
+    last_flood_at: str | None = None

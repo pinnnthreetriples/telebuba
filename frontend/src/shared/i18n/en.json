@@ -2835,6 +2835,9 @@
       "cycleTip_other": "Cycle {{count}}",
       "dmAllowed": "DMs: allowed",
       "dmClosed": "DMs: closed",
+      "floodTotal": "Floods total: {{total}}",
+      "dmBlockedUntil": "DMs closed until {{date}}",
+      "limitShare": "limit {{percent}}",
       "mediaBytes": "downloaded {{kb}} KB"
     },
     "actions": {

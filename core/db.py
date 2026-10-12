@@ -39,6 +39,7 @@ from core._schema_tables import (  # noqa: F401 - re-exported for existing impor
     _users,
     _warming_account_state,
     _warming_channels,
+    _warming_flood_events,
     _warming_joined_channels,
     _warming_settings,
 )
@@ -427,6 +428,11 @@ from core.repositories.warming import (  # noqa: E402, F401
     save_warming_settings,
     unmark_promoted_to_nc,
     upsert_warming_state,
+)
+from core.repositories.warming_floods import (  # noqa: E402, F401
+    fetch_warming_flood_summary,
+    list_warming_flood_summaries,
+    record_warming_flood_event,
 )
 from core.repositories.warming_joined import (  # noqa: E402, F401
     count_joins_since,

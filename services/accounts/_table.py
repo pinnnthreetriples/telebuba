@@ -10,6 +10,7 @@ from core.db import (
     list_accounts,
     list_device_fingerprints,
     list_spam_statuses,
+    list_warming_flood_summaries,
     list_warming_states,
 )
 from core.phone_geo import calling_code_for_phone
@@ -137,6 +138,7 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     records = {record.account_id: record for record in await list_warming_states()}
     spam_by_account = await list_spam_statuses()
     fingerprints = await list_device_fingerprints()
+    floods = await list_warming_flood_summaries()
     now = datetime.now(UTC)
     for account in accounts:
         spam = spam_by_account.get(account.account_id)
@@ -147,6 +149,7 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
             spam=spam,
             lang_code=fingerprint.system_lang_code if fingerprint else None,
             now=now,
+            floods=floods.get(account.account_id),
         )
         account.trust_score = trust.score
         account.trust_band = trust.band

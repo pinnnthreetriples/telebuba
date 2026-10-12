@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import fetch_warming_state
+from core.db import fetch_warming_state, record_warming_flood_event
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
+from schemas.warming_flood import WarmingFloodEventWrite
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
@@ -156,6 +157,16 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     The CAS clause on the final write provides the same guarantee even when the
     run_id flips between this read and the write (Round-2 P1 + Round-4 P1.1).
     """
+    if result.status == "peer_flood":
+        # Flood memory: the spam block happened in Telegram whatever generation now
+        # owns the row, so it is recorded before the stale-run check below.
+        await record_warming_flood_event(
+            WarmingFloodEventWrite(
+                account_id=account_id,
+                created_at=_now_iso(),
+                action=result.last_failed_action,
+            ),
+        )
     daily_count, daily_date = reservation.daily_count, reservation.daily_date
     actions_done, next_run_dt, next_state = schedule
     new_daily = daily_count + actions_done
