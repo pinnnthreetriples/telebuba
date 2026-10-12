@@ -19,12 +19,11 @@ if TYPE_CHECKING:
     from schemas._warming_console import NcStartMode
 
 
-def _update(account_id: str, **values: object) -> None:
-    statement = (
-        update(_warming_account_state)
-        .where(_warming_account_state.c.account_id == account_id)
-        .values(**values)
-    )
+def _update(account_id: str, token: str | None = None, **values: object) -> None:
+    table = _warming_account_state
+    statement = update(table).where(table.c.account_id == account_id).values(**values)
+    if token is not None:
+        statement = statement.where(table.c.reservation_token == token)
     with _get_engine().begin() as connection:
         connection.execute(statement)
 
@@ -34,9 +33,13 @@ async def store_geo_ack(account_id: str, pair: str) -> None:
     await asyncio.to_thread(_update, account_id, geo_ack=pair)
 
 
-async def store_cycle_base(account_id: str, settled: int) -> None:
-    """Today's settled action count at the moment a cycle books its budget."""
-    await asyncio.to_thread(_update, account_id, cycle_base_actions=settled)
+async def store_cycle_base(account_id: str, settled: int, token: str) -> None:
+    """Today's settled count when a cycle booked its budget; only while ``token`` is the booking.
+
+    The booking's own token fences it: a newer cycle's booking replaced the token, so a
+    late write from an older cycle matches no row.
+    """
+    await asyncio.to_thread(_update, account_id, token, cycle_base_actions=settled)
 
 
 async def store_nc_start(account_id: str, mode: NcStartMode, at: str) -> None:

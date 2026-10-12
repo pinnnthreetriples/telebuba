@@ -126,8 +126,6 @@ async def _reserve_iteration(
 ) -> _ReservedIteration | WarmingCycleResult:
     """Reserve the full remaining daily budget before any Telegram action."""
     reservation = _Reservation.book(plan.daily, plan.remaining)
-    # What the card shows while the booking inflates ``daily_actions`` (``_console``).
-    await store_cycle_base(account_id, reservation.daily_count)
     started = await _loop._set_state(  # noqa: SLF001 - patchable state seam.
         account_id,
         "active",
@@ -143,6 +141,10 @@ async def _reserve_iteration(
     )
     if run_id is not None and not started.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    # What the card shows while the booking inflates ``daily_actions`` (``_console``).
+    # After the CAS and fenced by this booking's token, so an older cycle's late write
+    # can never land on a newer booking.
+    await store_cycle_base(account_id, reservation.daily_count, reservation.token)
     return _ReservedIteration(
         plan.age_hours,
         plan.effective_cap,

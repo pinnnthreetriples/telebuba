@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from core.db import create_account, fetch_warming_state, upsert_warming_state
+from core.repositories.warming_marks import store_cycle_base
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 from services import warming
@@ -40,3 +41,21 @@ async def test_the_booking_stores_the_settled_base_and_the_board_shows_it() -> N
     (card,) = (await warming.load_board()).warming
     # The whole reservation sits on the row, the card shows what was really spent.
     assert (card.daily_actions, card.daily_settled) == (15, 6)
+
+
+@pytest.mark.asyncio
+async def test_an_older_booking_cannot_write_its_base_over_a_newer_one() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", reservation_token="newer"),
+    )
+
+    await store_cycle_base("acc-1", 3, "older")
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.cycle_base_actions is None
+
+    await store_cycle_base("acc-1", 7, "newer")
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.cycle_base_actions == 7

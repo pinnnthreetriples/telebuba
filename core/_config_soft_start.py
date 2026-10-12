@@ -8,7 +8,7 @@ into a day of the soft period and these numbers into that day's caps, which
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,3 +29,14 @@ class SoftStartSettings(BaseSettings):
     # Rolling-24h comment cap per account, rising evenly from the first to the last day.
     first_day_comments: int = Field(default=5, ge=1)
     last_day_comments: int = Field(default=15, ge=1)
+
+    @model_validator(mode="after")
+    def _check_period(self) -> SoftStartSettings:
+        """Refuse a period whose late step can never come or whose day cap would fall."""
+        if self.early_days > self.days:
+            msg = "SOFT_START__EARLY_DAYS must not exceed SOFT_START__DAYS"
+            raise ValueError(msg)
+        if self.first_day_comments > self.last_day_comments:
+            msg = "SOFT_START__FIRST_DAY_COMMENTS must not exceed SOFT_START__LAST_DAY_COMMENTS"
+            raise ValueError(msg)
+        return self

@@ -10,7 +10,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 
+from core._config_soft_start import SoftStartSettings
 from core.config import settings
 from core.db import (
     assign_account_to_campaign,
@@ -266,3 +268,12 @@ async def test_the_board_card_names_the_soft_day_and_counts_against_its_cap() ->
     assert (cards["acc-1"].soft_start_day, cards["acc-1"].soft_start_days) == (2, 5)
     assert cards["acc-1"].max_comments_per_hour == 2
     assert (cards["acc-2"].soft_start_day, cards["acc-2"].soft_start_days) == (None, 0)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [{"days": 2, "early_days": 3}, {"first_day_comments": 9, "last_day_comments": 3}],
+)
+def test_a_soft_period_that_cannot_hold_is_refused_at_startup(fields: dict[str, int]) -> None:
+    with pytest.raises(ValidationError):
+        SoftStartSettings.model_validate(fields)
