@@ -44,20 +44,22 @@ export function DmPauseBanner({ pausedUntil }: { pausedUntil?: string | null }) 
   };
 
   return (
-    <Notice
-      tone="warning"
-      role="status"
-      className="mb-4 flex flex-wrap items-center justify-between gap-3"
-    >
-      <div className="min-w-0">
-        <p className="m-0 type-body-medium">
-          {t('warming.dmPause.banner', { date: format.format(until) })}
-        </p>
-        <p className="m-0 type-small">{t('warming.dmPause.detail')}</p>
-      </div>
-      <Button size="sm" loading={lift.isPending} onClick={onLift}>
-        {t('warming.dmPause.lift')}
-      </Button>
-    </Notice>
+    <div className="mb-4">
+      <Notice
+        tone="warning"
+        role="status"
+        className="flex flex-wrap items-center justify-between gap-3"
+      >
+        <div className="min-w-0">
+          <p className="m-0 type-body-medium">
+            {t('warming.dmPause.banner', { date: format.format(until) })}
+          </p>
+          <p className="m-0 type-small">{t('warming.dmPause.detail')}</p>
+        </div>
+        <Button size="sm" loading={lift.isPending} onClick={onLift}>
+          {t('warming.dmPause.lift')}
+        </Button>
+      </Notice>
+    </div>
   );
 }
