@@ -42,10 +42,15 @@ async def record_lifecycle_event(
     account_id: str,
     kind: LifecycleEventKind,
     extra: dict[str, object] | None = None,
+    snapshot: LifecycleSnapshot | None = None,
 ) -> None:
-    """Append one journal row; log and swallow any failure."""
+    """Append one journal row; log and swallow any failure.
+
+    ``snapshot`` pins the user id and stint to what the caller saw under its own lock,
+    instead of re-reading state that a concurrent restart may already have replaced.
+    """
     try:
-        await append_lifecycle_event(account_id, kind, extra)
+        await append_lifecycle_event(account_id, kind, extra, snapshot)
     except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
         logger.warning(
             "lifecycle journal write failed (kind=%s account=%s): %s",

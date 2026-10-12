@@ -27,7 +27,7 @@ from schemas.warming import (
 )
 from services import lifecycle_journal, spam_status, warming
 from services.accounts import check_account_session, remove_account
-from services.warming import _runtime, _seams, _transitions
+from services.warming import _runtime, _seams, _start_state, _transitions
 from tests.services.warming._support import _Recorder, _seed_ready_account, _set_settings
 
 if TYPE_CHECKING:
@@ -244,3 +244,22 @@ async def test_a_failed_delete_leaves_no_deleted_row(monkeypatch: pytest.MonkeyP
 
     assert await fetch_account("acc-1") is not None
     assert await _kinds() == []
+
+
+@pytest.mark.asyncio
+async def test_a_start_journals_its_own_stint_not_a_later_restarts() -> None:
+    # journal_start runs after the account lock is released; a concurrent restart may
+    # already have stamped a newer stint, which this row must not pick up.
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1", state="active", started_at="2026-10-02T00:00:00+00:00"
+        )
+    )
+    stint = _start_state.CarriedStint("2026-10-01T00:00:00+00:00", 7, "normal", None)
+
+    await _start_state.journal_start("acc-1", None, stint, 4242)
+
+    (event,) = await list_lifecycle_events("acc-1")
+    assert event.stint_started_at == "2026-10-01T00:00:00+00:00"
+    assert event.tg_user_id == 4242
