@@ -14,7 +14,7 @@ import {
   unpromoteFromNeurocommentMutation,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
-import type { WarmingAccountState } from '@/shared/api';
+import type { StartWarmingRequest, WarmingAccountState } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
 import {
   Badge,
@@ -66,6 +66,12 @@ function reasonKey(reason: string): string {
 
 // «Как работает» in cycle order. A key from the board's `mechanics` is a step the
 // settings can switch off; `null` is one the engine always runs.
+// What the start dialog hands back: one length, cadence and first-cycle delay.
+type StartChoice = Pick<
+  StartWarmingRequest,
+  'target_days' | 'activity_persona' | 'start_delay_hours' | 'spread_start'
+>;
+
 const HOWTO_STEPS = [
   ['join', 'join'],
   ['read', null],
@@ -92,6 +98,8 @@ export function WarmingPage() {
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
+  // "Запустить пул" opens the start dialog for every idle account instead of firing.
+  const [poolStartOpen, setPoolStartOpen] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
   const accountFeedback = useTransientFeedback();
   const channelFeedback = useTransientFeedback();
@@ -182,11 +190,13 @@ export function WarmingPage() {
   };
 
   // Returns a never-rejecting promise so the bulk path can await the whole batch
-  // (single-account callers ignore it). mutateAsync (not mutate) makes it awaitable.
-  const runOnAccount = (mutation: typeof start | typeof stop, accountId: string) => {
+  // (single-account callers ignore it). mutateAsync (not mutate): this shares the
+  // `start`/`stop` hooks across every card and the pool, and mutate+onSettled let a
+  // later call take an earlier one's ONE callback slot over — its busy mark was never
+  // cleared and its feedback mark never appeared.
+  const runOnAccount = (accountId: string, call: () => Promise<unknown>) => {
     markBusy(accountId, true);
-    return mutation
-      .mutateAsync({ body: { account_id: accountId } })
+    return call()
       .then(
         () => {
           accountFeedback.mark(accountId, true);
@@ -199,6 +209,20 @@ export function WarmingPage() {
         markBusy(accountId, false);
         invalidate();
       });
+  };
+  const stopAccount = (accountId: string) =>
+    runOnAccount(accountId, () => stop.mutateAsync({ body: { account_id: accountId } }));
+  const startAccount = (accountId: string, choice: StartChoice) =>
+    runOnAccount(accountId, () =>
+      start.mutateAsync({ body: { account_id: accountId, ...choice } }),
+    );
+  // A batch keeps the pool button disabled until its LAST call settles: isPending
+  // tracks only the last-fired call and would re-enable it mid-batch.
+  const runBatch = (calls: Promise<unknown>[]) => {
+    setBulkBusy(true);
+    void Promise.allSettled(calls).finally(() => {
+      setBulkBusy(false);
+    });
   };
 
   if (isPending) return <p className="text-content-muted">{t('warming.loading')}</p>;
@@ -248,15 +272,10 @@ export function WarmingPage() {
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
-            disabled={bulkBusy || start.isPending || stop.isPending}
+            disabled={bulkBusy || start.isPending || stop.isPending || (!poolOn && !idle.length)}
             onClick={() => {
-              const mutation = poolOn ? stop : start;
-              setBulkBusy(true);
-              void Promise.allSettled(
-                (poolOn ? warming : idle).map((a) => runOnAccount(mutation, a.account_id)),
-              ).finally(() => {
-                setBulkBusy(false);
-              });
+              if (poolOn) runBatch(warming.map((a) => stopAccount(a.account_id)));
+              else setPoolStartOpen(true);
             }}
             className="gap-2"
           >
@@ -578,7 +597,7 @@ export function WarmingPage() {
           <WarmingBoard
             warming={warming}
             onStop={(id) => {
-              runOnAccount(stop, id);
+              void stopAccount(id);
             }}
             onPromote={(id) => {
               runGraduation(promote, id);
@@ -609,30 +628,33 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={(days, persona) => {
-            const accountId = warmDaysFor.account_id;
-            markBusy(accountId, true);
-            // mutateAsync: this shares the `start` hook with the bulk pool button,
-            // which fires start.mutateAsync for every idle account. With
-            // mutate+onSettled a pool start took this call's ONE callback slot
-            // over, so busyId was never cleared — the account's Прогреть button
-            // stayed disabled for good — and its feedback mark never appeared.
-            void start
-              .mutateAsync({
-                body: {
-                  account_id: accountId,
-                  target_days: days,
-                  activity_persona: persona,
-                },
-              })
-              .then(
-                () => accountFeedback.mark(accountId, true),
-                () => accountFeedback.mark(accountId, false),
-              )
-              .finally(() => {
-                markBusy(accountId, false);
-                invalidate();
-              });
+          onConfirm={(days, persona, delayHours) => {
+            void startAccount(warmDaysFor.account_id, {
+              target_days: days,
+              activity_persona: persona,
+              start_delay_hours: delayHours,
+            });
+          }}
+        />
+      ) : null}
+
+      {poolStartOpen ? (
+        <WarmDaysModal
+          poolAccountIds={idle.map((a) => a.account_id)}
+          defaultDays={data.default_target_days}
+          onClose={() => {
+            setPoolStartOpen(false);
+          }}
+          onConfirm={(days, persona, delayHours) => {
+            // Same length, cadence and window for all; the backend draws each account
+            // its own moment inside the window.
+            const choice = {
+              target_days: days,
+              activity_persona: persona,
+              start_delay_hours: delayHours,
+              spread_start: true,
+            };
+            runBatch(idle.map((a) => startAccount(a.account_id, choice)));
           }}
         />
       ) : null}

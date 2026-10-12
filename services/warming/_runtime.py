@@ -37,6 +37,7 @@ from services.warming import _exclusion, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
+from services.warming._start_options import first_run_at
 from services.warming._start_state import carry_or_restamp
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
@@ -355,7 +356,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 data.account_id,
                 "active",
                 last_event="queued",
-                next_run_at=None,
+                next_run_at=first_run_at(account, data),
                 started_at=stint.started_at,
                 stopped_at=None,
                 last_error=None,

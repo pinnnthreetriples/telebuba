@@ -34,7 +34,7 @@ test('presets, keyboard arrows and confirm', async () => {
   );
   expect(screen.getByText('Прогрев аккаунта')).toBeInTheDocument();
 
-  const slider = screen.getByRole('slider');
+  const slider = screen.getByRole('slider', { name: 'Прогрев аккаунта' });
   expect(slider).toHaveAttribute('aria-valuenow', '14');
 
   // preset button sets the day count
@@ -50,7 +50,7 @@ test('presets, keyboard arrows and confirm', async () => {
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
   // defaults to the balanced persona when none is picked
-  expect(onConfirm).toHaveBeenCalledWith(8, 'normal');
+  expect(onConfirm).toHaveBeenCalledWith(8, 'normal', 3);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
@@ -65,7 +65,7 @@ test('opens on the board default and reaches thirty days, no further', async () 
       onConfirm={onConfirm}
     />,
   );
-  const slider = screen.getByRole('slider');
+  const slider = screen.getByRole('slider', { name: 'Прогрев аккаунта' });
   expect(slider).toHaveAttribute('aria-valuenow', '21');
   expect(slider).toHaveAttribute('aria-valuemax', '30');
 
@@ -81,7 +81,7 @@ test('opens on the board default and reaches thirty days, no further', async () 
   expect(slider).toHaveAttribute('aria-valuenow', '30');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  expect(onConfirm).toHaveBeenCalledWith(30, 'normal');
+  expect(onConfirm).toHaveBeenCalledWith(30, 'normal', 3);
 });
 
 test('a configured default past thirty days widens the slider instead of being cut', async () => {
@@ -95,19 +95,19 @@ test('a configured default past thirty days widens the slider instead of being c
       onConfirm={onConfirm}
     />,
   );
-  const slider = screen.getByRole('slider');
+  const slider = screen.getByRole('slider', { name: 'Прогрев аккаунта' });
   expect(slider).toHaveAttribute('aria-valuenow', '45');
   expect(slider).toHaveAttribute('aria-valuemax', '45');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  expect(onConfirm).toHaveBeenCalledWith(45, 'normal');
+  expect(onConfirm).toHaveBeenCalledWith(45, 'normal', 3);
 });
 
 test('handled slider keys do not also scroll the dialog', () => {
   renderWithClient(
     <WarmDaysModal accountId="a1" phone="+79991234567" onClose={vi.fn()} onConfirm={vi.fn()} />,
   );
-  const slider = screen.getByRole('slider');
+  const slider = screen.getByRole('slider', { name: 'Прогрев аккаунта' });
   for (const key of ['Home', 'End', 'ArrowLeft', 'ArrowRight']) {
     const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
     act(() => {
@@ -132,7 +132,7 @@ test('persona chip selection is forwarded on confirm', async () => {
   await userEvent.click(screen.getByText('Запустить прогрев'));
 
   // Without a board default the dialog opens on the two-week stint.
-  expect(onConfirm).toHaveBeenCalledWith(14, 'active');
+  expect(onConfirm).toHaveBeenCalledWith(14, 'active', 3);
 });
 
 test('cancel closes without confirming', async () => {
@@ -213,5 +213,37 @@ test('a picked length asks before Escape closes; an untouched dialog closes at o
   await userEvent.click(screen.getByRole('radio', { name: '7 дней' }));
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+});
+
+test('in pool mode it starts every idle account with the picked delay and no spam check', async () => {
+  const onConfirm = vi.fn();
+  renderWithClient(
+    <WarmDaysModal
+      poolAccountIds={['a1', 'a2', 'a3']}
+      defaultDays={14}
+      onClose={vi.fn()}
+      onConfirm={onConfirm}
+    />,
+  );
+  expect(screen.getByText('Запуск пула')).toBeInTheDocument();
+  expect(
+    screen.getByText('3 аккаунта — у каждого свой момент старта в выбранном окне'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('Спам-чек')).toBeNull();
+
+  await userEvent.click(screen.getByRole('radio', { name: '24 ч' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Запустить пул' }));
+  expect(onConfirm).toHaveBeenCalledWith(14, 'normal', 24);
+});
+
+test('a picked delay alone also asks before closing', async () => {
+  const onClose = vi.fn();
+  renderWithClient(
+    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={onClose} onConfirm={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByRole('radio', { name: '6 ч' }));
+  await userEvent.click(screen.getByText('Отмена'));
+  expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
 });

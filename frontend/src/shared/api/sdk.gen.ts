@@ -379,6 +379,9 @@ import type {
   PostAccountStoryData,
   PostAccountStoryErrors,
   PostAccountStoryResponses,
+  PreviewWarmingStartData,
+  PreviewWarmingStartErrors,
+  PreviewWarmingStartResponses,
   ProbeProxyData,
   ProbeProxyErrors,
   ProbeProxyResponses,
@@ -2051,6 +2054,27 @@ export const startWarming = <ThrowOnError extends boolean = false>(
 ): RequestResult<StartWarmingResponses, StartWarmingErrors, ThrowOnError> =>
   (options.client ?? client).post<StartWarmingResponses, StartWarmingErrors, ThrowOnError>({
     url: '/api/v1/warming/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Preview Warming Start
+ *
+ * When the chosen start delay lands in each account's own clock (read only).
+ */
+export const previewWarmingStart = <ThrowOnError extends boolean = false>(
+  options: Options<PreviewWarmingStartData, ThrowOnError>,
+): RequestResult<PreviewWarmingStartResponses, PreviewWarmingStartErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    PreviewWarmingStartResponses,
+    PreviewWarmingStartErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/start-preview',
     ...options,
     headers: {
       'Content-Type': 'application/json',

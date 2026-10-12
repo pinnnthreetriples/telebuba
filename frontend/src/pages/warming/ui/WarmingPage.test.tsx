@@ -1,10 +1,10 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { WarmingBoardState } from '@/shared/api';
+import type { StartWarmingRequest, WarmingBoardState } from '@/shared/api';
 
 import {
   account,
@@ -359,12 +359,49 @@ test('starts an idle account', async () => {
   await waitFor(() => {
     startCall = vi
       .mocked(fetch)
-      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/start'));
+      .mock.calls.find(
+        ([input]) => new URL((input as Request).url).pathname === '/api/v1/warming/start',
+      );
     expect(startCall).toBeDefined();
   });
   // The slider opens on the board's default, and its value must reach the backend.
-  const body = (await (startCall![0] as Request).clone().json()) as { target_days?: number };
+  const body = (await (startCall![0] as Request).clone().json()) as StartWarmingRequest;
   expect(body.target_days).toBe(21);
+  // A single start lands at the end of the chosen delay, not spread inside it.
+  expect(body.start_delay_hours).toBe(3);
+  expect(body.spread_start).toBeUndefined();
+});
+
+function startBodies(): Promise<StartWarmingRequest[]> {
+  return Promise.all(
+    vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) => input as Request)
+      .filter((request) => new URL(request.url).pathname === '/api/v1/warming/start')
+      .map((request) => request.clone().json() as Promise<StartWarmingRequest>),
+  );
+}
+
+test('the pool start opens the start dialog and spreads every idle account in its window', async () => {
+  serveBoard({ ...BOARD, warming: [], default_target_days: 21 });
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Запустить пул' }));
+
+  // Nothing starts until the operator confirms the dialog.
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('Запуск пула')).toBeInTheDocument();
+  expect(await startBodies()).toHaveLength(0);
+
+  await userEvent.click(within(dialog).getByRole('radio', { name: '12 ч' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Запустить пул' }));
+
+  await waitFor(async () => {
+    expect(await startBodies()).toHaveLength(2);
+  });
+  for (const body of await startBodies()) {
+    expect(body).toMatchObject({ target_days: 21, start_delay_hours: 12, spread_start: true });
+  }
+  expect((await startBodies()).map((body) => body.account_id).sort()).toEqual(['idle-1', 'idle-2']);
 });
 
 test('removing a channel asks for confirmation, then calls the remove endpoint', async () => {

@@ -5765,9 +5765,75 @@ export type StartPhoneLoginRequest = {
 };
 
 /**
+ * StartPreview
+ */
+export type StartPreview = {
+  /**
+   * Items
+   */
+  items: Array<StartPreviewItem>;
+};
+
+/**
+ * StartPreviewItem
+ *
+ * When one account's first cycle can land, as UTC instants plus its zone.
+ */
+export type StartPreviewItem = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Time Zone
+   */
+  time_zone: string;
+  /**
+   * Earliest At
+   */
+  earliest_at: string;
+  /**
+   * Latest At
+   */
+  latest_at: string;
+  /**
+   * Shifted
+   */
+  shifted: boolean;
+};
+
+/**
+ * StartPreviewRequest
+ *
+ * Body of ``POST /warming/start-preview``.
+ */
+export type StartPreviewRequest = {
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  /**
+   * Start Delay Hours
+   */
+  start_delay_hours: number;
+  /**
+   * Spread Start
+   */
+  spread_start?: boolean;
+};
+
+/**
  * StartWarmingRequest
  */
 export type StartWarmingRequest = {
+  /**
+   * Start Delay Hours
+   */
+  start_delay_hours?: number | null;
+  /**
+   * Spread Start
+   */
+  spread_start?: boolean;
   /**
    * Account Id
    */
@@ -11369,6 +11435,40 @@ export type StartWarmingResponses = {
 };
 
 export type StartWarmingResponse = StartWarmingResponses[keyof StartWarmingResponses];
+
+export type PreviewWarmingStartData = {
+  body: StartPreviewRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/start-preview';
+};
+
+export type PreviewWarmingStartErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type PreviewWarmingStartError = PreviewWarmingStartErrors[keyof PreviewWarmingStartErrors];
+
+export type PreviewWarmingStartResponses = {
+  /**
+   * Successful Response
+   */
+  200: StartPreview;
+};
+
+export type PreviewWarmingStartResponse =
+  PreviewWarmingStartResponses[keyof PreviewWarmingStartResponses];
 
 export type StopWarmingData = {
   body: StopWarmingRequest;

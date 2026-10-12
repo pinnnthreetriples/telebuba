@@ -26,6 +26,7 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsSecret,
     WarmingSettingsUpdate,
 )
+from schemas._warming_start import StartWindow
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
@@ -388,7 +389,7 @@ class WarmedAccountList(BaseModel):
     accounts: list[WarmedAccount] = Field(default_factory=list)
 
 
-class StartWarmingRequest(BaseModel):
+class StartWarmingRequest(StartWindow):
     account_id: str = Field(min_length=1)
     # Operator-chosen warming duration from the start modal's day slider. ``None``
     # (omitted) → the service falls back to ``settings.neurocomment.warmed_min_days``.
