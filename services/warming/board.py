@@ -37,6 +37,13 @@ from schemas.warming import (
 )
 from services.trust import account_trust_score_from
 from services.warming._channel_language import language_shortages
+from services.warming._console import (
+    account_geo,
+    attention,
+    dm_status,
+    geo_accepted,
+    settled_today,
+)
 from services.warming.pacing import (
     _account_age_hours,
     compute_intensity,
@@ -83,6 +90,10 @@ _RECORD_ONLY_FIELDS: Final[set[str]] = {
     "spam_unknown_streak",
     "recovered_at",
     "last_warmed_date",
+    "geo_ack",
+    "cycle_base_actions",
+    "nc_start_mode",
+    "nc_handoff_at",
 }
 
 
@@ -191,6 +202,12 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.dm_blocked_until = intensity.dm_blocked_until
         card.limit_factor = intensity.limit_factor
         card.idle_days = max(0, (card.warming_days or 0) - card.warmed_days)
+        geo = account_geo(account)
+        card.geo_status = geo.status
+        card.geo_accepted = geo_accepted(geo, record)
+        card.daily_settled = settled_today(record)
+        card.dm_status = dm_status(masked, intensity, readiness, card.started_at, now)
+        card.attention = attention(record, readiness)
         cards.append(card)
     return cards, channels, masked
 

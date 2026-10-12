@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import fetch_account, load_warming_settings
 from core.logging import log_event
+from core.repositories.warming_marks import store_cycle_base
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _loop, _seams
@@ -125,6 +126,8 @@ async def _reserve_iteration(
 ) -> _ReservedIteration | WarmingCycleResult:
     """Reserve the full remaining daily budget before any Telegram action."""
     reservation = _Reservation.book(plan.daily, plan.remaining)
+    # What the card shows while the booking inflates ``daily_actions`` (``_console``).
+    await store_cycle_base(account_id, reservation.daily_count)
     started = await _loop._set_state(  # noqa: SLF001 - patchable state seam.
         account_id,
         "active",

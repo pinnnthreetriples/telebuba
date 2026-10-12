@@ -53,6 +53,8 @@ class EffectiveAccountLimits(BaseModel):
     max_joins_per_day: int = Field(ge=0)
     max_comments_per_hour: int = Field(ge=1)
     max_comments_per_channel_per_day: int = Field(ge=0)
+    # Rolling-24h comments of the account; only a soft start sets it (``0`` = no cap).
+    max_comments_per_day: int = Field(default=0, ge=0)
 
 
 class LimitWindow(BaseModel):

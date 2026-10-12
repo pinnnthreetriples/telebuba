@@ -32,23 +32,31 @@ def carry_or_restamp(
     existing: WarmingStateRecord | None,
     data: StartWarmingRequest,
     first_run_at: str | None = None,
+    *,
+    resume: bool = False,
 ) -> CarriedStint:
     """Carry an in-flight stint; restamp a genuine start from idle/stopped.
 
     A genuine start with a chosen delay begins its stint at the first cycle, not at
     the click: the rest before it must not count toward ``target_days``, or a 1-day
     target behind a 24-hour delay would complete before warming did anything.
+
+    ``resume`` is «Вернуть в прогрев» on a graduated account: the stint goes on with
+    its clock and worked days, while the dialog's new length and persona apply — the
+    old length is the one the account just finished.
     """
     continuing = existing is not None and is_warming(existing.state)
+    resuming = resume and existing is not None and existing.promoted_to_nc
     restamp = first_run_at or _now_iso()
-    started_at = existing.started_at if continuing and existing.started_at else restamp
+    carried = continuing or resuming
+    started_at = existing.started_at if carried and existing and existing.started_at else restamp
     target_days = (
         existing.target_days
-        if continuing and existing.target_days
+        if continuing and existing and existing.target_days
         else (data.target_days or settings.neurocomment.warmed_min_days)
     )
-    persona = existing.activity_persona if continuing else data.activity_persona
-    return CarriedStint(started_at, target_days, persona, first_run_at, fresh=not continuing)
+    persona = existing.activity_persona if continuing and existing else data.activity_persona
+    return CarriedStint(started_at, target_days, persona, first_run_at, fresh=not carried)
 
 
 async def journal_start(

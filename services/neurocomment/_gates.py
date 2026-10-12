@@ -32,12 +32,15 @@ from core.db import (
 )
 from services import _account_owner
 from services._account_limits import account_limits, resolve_limits
+from services._soft_start import soft_day
 from services.neurocomment import _pair_status, _state
 from services.neurocomment._pins import serving_accounts
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.accounts import AccountRead
     from schemas.neurocomment import CommentRecord, NeurocommentCampaign, NeurocommentSettings
     from schemas.neurocomment_limits import EffectiveAccountLimits
@@ -54,6 +57,7 @@ def _quota_block_reason(
     caps: EffectiveAccountLimits,
     hourly: dict[str, int],
     daily: dict[str, int],
+    totals: Mapping[str, int] | None = None,
 ) -> str | None:
     """Which cap the account has reached, or ``None`` while under both.
 
@@ -72,6 +76,10 @@ def _quota_block_reason(
     day_cap = caps.max_comments_per_channel_per_day
     if day_cap > 0 and daily.get(account_id, 0) >= day_cap:
         return "quota_day"
+    # A soft start's per-day cap over all channels (``totals``: rolling 24h, per account).
+    soft_cap = caps.max_comments_per_day
+    if soft_cap > 0 and (totals or {}).get(account_id, 0) >= soft_cap:
+        return "quota_soft_day"
     return None
 
 
@@ -118,6 +126,11 @@ async def _account_quota_block_reason(
         daily = await count_account_channel_comments_since(account_id, channel, day_ago)
         if daily - _already_held(held_since, day_ago) >= day_cap:
             return "quota_day"
+    if caps.max_comments_per_day > 0:
+        day_ago = (now - timedelta(days=1)).isoformat()
+        total = await count_account_comments_since(account_id, day_ago)
+        if total - _already_held(held_since, day_ago) >= caps.max_comments_per_day:
+            return "quota_soft_day"
     return None
 
 
@@ -141,6 +154,7 @@ _BLOCK_PRIORITY = (
     "busy_masstagging",
     "quota_hour",
     "quota_day",
+    "quota_soft_day",
     "cooldown",
     "unhealthy",
     *_pair_status.REPORT_ORDER,
@@ -185,8 +199,10 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
         return "not_handed_off"
     if not _is_healthy(account, channel_count, now, pool):
         return "unhealthy"
-    caps = resolve_limits(pool.overrides.get(account_id), pool.limits)
-    return _quota_block_reason(account_id, caps, pool.hourly_counts, pool.daily_counts)
+    caps = resolve_limits(pool.overrides.get(account_id), pool.limits, soft_day(warming, now))
+    return _quota_block_reason(
+        account_id, caps, pool.hourly_counts, pool.daily_counts, pool.day_totals
+    )
 
 
 def _is_eligible(
@@ -278,7 +294,7 @@ async def resume_refusal(
         row.channel,
         channel_count,
         now,
-        pool._replace(hourly_counts={}, daily_counts={}),
+        pool._replace(hourly_counts={}, daily_counts={}, day_totals={}),
     ) or await _account_quota_block_reason(
         row.account_id, row.channel, limits, held_since=row.created_at
     )

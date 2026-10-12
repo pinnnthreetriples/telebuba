@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from schemas._warming_console import SoftStartProgress
 from schemas.neurocomment import (  # noqa: TC001 - Pydantic needs the runtime types.
     CampaignStatus,
     CommentRecord,
@@ -63,7 +64,7 @@ class AccountChannelReadiness(BaseModel):
     deleted: int = 0
 
 
-class NeurocommentAccountCard(BaseModel):
+class NeurocommentAccountCard(SoftStartProgress):
     """Per-account card in the work view: limits and last activity.
 
     Carries no trust/health/spam: the SPA reads those from ``AccountRead`` on the

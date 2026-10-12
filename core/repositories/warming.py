@@ -23,7 +23,6 @@ from core.db import (
     _now_iso,
     _optional_int,
     _optional_str,
-    _required_int,
     _warming_account_state,
     _warming_channels,
     _warming_joined_channels,
@@ -36,17 +35,15 @@ from core.db import (
 from core.repositories._warming_reservation import (  # noqa: F401
     hand_back_warming_reservation,
 )
+from core.repositories._warming_rows import _row_to_warming_state_record
 from core.repositories._warming_settings import (  # noqa: F401
     load_warming_settings,
     save_warming_settings,
 )
 from schemas.warming import (
-    ActivityPersona,
     WarmingChannel,
     WarmingChannelList,
     WarmingChannelObservation,
-    WarmingPhase,
-    WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
     WarmingStateWriteResult,
@@ -156,45 +153,6 @@ def _observe_warming_channel(channel: str, observed: WarmingChannelObservation) 
 async def observe_warming_channel(channel: str, observed: WarmingChannelObservation) -> None:
     """Record what a warming read learnt about a channel; fills only unknown labels."""
     await asyncio.to_thread(_observe_warming_channel, channel, observed)
-
-
-def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateRecord:
-    phase_raw = _optional_str(mapping.get("current_phase"))
-    return WarmingStateRecord(
-        account_id=str(mapping["account_id"]),
-        state=cast("WarmingState", mapping["state"]),
-        cycles_completed=_required_int(mapping["cycles_completed"]),
-        last_event=_optional_str(mapping.get("last_event")),
-        last_cycle_at=_optional_str(mapping.get("last_cycle_at")),
-        next_run_at=_optional_str(mapping.get("next_run_at")),
-        updated_at=str(mapping["updated_at"]),
-        last_error=_optional_str(mapping.get("last_error")),
-        last_action=_optional_str(mapping.get("last_action")),
-        last_channel=_optional_str(mapping.get("last_channel")),
-        heartbeat_at=_optional_str(mapping.get("heartbeat_at")),
-        started_at=_optional_str(mapping.get("started_at")),
-        stopped_at=_optional_str(mapping.get("stopped_at")),
-        flood_wait_seconds=_optional_int(mapping.get("flood_wait_seconds")),
-        flood_wait_until=_optional_str(mapping.get("flood_wait_until")),
-        proxy_snapshot=_optional_str(mapping.get("proxy_snapshot")),
-        daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
-        daily_count_date=_optional_str(mapping.get("daily_count_date")),
-        quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
-        run_id=_optional_str(mapping.get("run_id")),
-        current_phase=cast("WarmingPhase | None", phase_raw),
-        phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
-        promoted_to_nc=bool(mapping.get("promoted_to_nc") or 0),
-        nc_handed_off=bool(mapping.get("nc_handed_off") or 0),
-        target_days=_optional_int(mapping.get("target_days")),
-        activity_persona=cast(
-            "ActivityPersona",
-            _optional_str(mapping.get("activity_persona")) or "normal",
-        ),
-        recovered_at=_optional_str(mapping.get("recovered_at")),
-        spam_unknown_streak=_optional_int(mapping.get("spam_unknown_streak")) or 0,
-        warmed_days=_optional_int(mapping.get("warmed_days")) or 0,
-        last_warmed_date=_optional_str(mapping.get("last_warmed_date")),
-    )
 
 
 def _list_warming_states() -> list[WarmingStateRecord]:

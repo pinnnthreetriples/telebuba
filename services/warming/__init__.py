@@ -23,6 +23,7 @@ reach as ``services.warming._x``.
 from __future__ import annotations
 
 from services.warming._chat_text import _sanitize_chat_text
+from services.warming._console_start import resume_warming, start_warming_with_consent
 from services.warming._cycle import run_one_cycle
 from services.warming._exclusion import AccountUnavailableError
 from services.warming._handoff_spam import HandoffSpamRefusedError
@@ -105,11 +106,13 @@ __all__ = [
     "promote_to_neurocomment",
     "reconcile_warming_runtime",
     "remove_channel",
+    "resume_warming",
     "run_loop_iteration",
     "run_one_cycle",
     "save_settings",
     "shutdown_warming_runtime",
     "start_warming",
+    "start_warming_with_consent",
     "stop_warming",
     "unmark_neurocomment",
 ]

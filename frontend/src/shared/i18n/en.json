@@ -1562,7 +1562,9 @@
     "masstagging_account_rested": "Mass tagging: the account rests until tomorrow",
     "masstagging_account_halted": "Mass tagging: the account left — its session does not work",
     "masstagging_spamblock": "Mass tagging: spam block — the account left",
-    "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts"
+    "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
+    "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
+    "warming_resumed": "Account returned to warming, day count continued"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1687,7 +1689,8 @@
     "stories_limit": "no stories left for today",
     "volume": "«Stop after» was reached",
     "no_accounts": "no working account left",
-    "dead": "the session does not work"
+    "dead": "the session does not work",
+    "quota_soft_day": "soft-start daily limit reached"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",

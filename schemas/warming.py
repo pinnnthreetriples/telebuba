@@ -31,6 +31,7 @@ from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export
     WarmingChannelList,
     WarmingChannelObservation,
 )
+from schemas._warming_console import WarmingCardConsole, WarmingStateMarks
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -120,7 +121,7 @@ class WarmingReadiness(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
-class WarmingStateRecord(BaseModel):
+class WarmingStateRecord(WarmingStateMarks):
     """One row of the ``warming_account_state`` table (no account metadata)."""
 
     account_id: str = Field(min_length=1)
@@ -261,7 +262,7 @@ class WarmingStateWriteResult(BaseModel):
     applied: bool
 
 
-class WarmingAccountState(BaseModel):
+class WarmingAccountState(WarmingCardConsole):
     """One account's warming status, rendered as a kanban card."""
 
     account_id: str = Field(min_length=1)

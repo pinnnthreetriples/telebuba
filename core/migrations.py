@@ -55,6 +55,11 @@ from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_tables,
 )
 from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
+from core.migration_steps_console import (
+    _add_warming_state_cycle_base,
+    _add_warming_state_geo_ack,
+    _add_warming_state_nc_start,
+)
 from core.migration_steps_daily_stats import _add_warming_daily_stats
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
@@ -226,6 +231,9 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (79, "add_warming_state_spam_unknown_streak", _add_warming_state_spam_unknown_streak),
     (80, "add_warming_channel_labels", _add_warming_channel_labels),
     (81, "add_notification_settings", _add_notification_settings),
+    (82, "add_warming_state_geo_ack", _add_warming_state_geo_ack),
+    (83, "add_warming_state_cycle_base", _add_warming_state_cycle_base),
+    (84, "add_warming_state_nc_start", _add_warming_state_nc_start),
 )
 
 
