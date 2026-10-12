@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: Backend flow, stack, services, gateways and system design.
-last_updated: 2026-09-26
+last_updated: 2026-10-12
 edges:
   - target: context/conventions.md
     condition: backend implementation or review conventions
@@ -35,3 +35,5 @@ Single-process operation is deliberate while SQLite and in-process runtimes own 
 Account chats use the same boundary: HTTP contracts and upload admission in `api/`, read/send policy in `services/`, and pooled Telegram I/O plus inbound subscriptions in `core/`. The in-process inbox runtime follows all authorized accounts while the server runs; an authenticated SSE stream carries small invalidation events to the SPA. Chat history and media are read from Telegram on demand rather than mirrored to SQLite.
 
 Scheduled profile photos and stories exist because Telegram cannot schedule them itself: media waits in a content-addressed store under `runtime/`, and one in-process worker publishes one post at a time, paced fleet-wide. `dispatching` is written before the call, so a lost answer or a restart mid-call settles `ambiguous` and is never retried — repeating could post twice. The worker calls the gateway under its own domain, so its floods never write the sticky account status.
+
+The account lifecycle journal has no FK to `accounts` and outlives both the log purge and the account; its writes never raise into the path that produced the event.
