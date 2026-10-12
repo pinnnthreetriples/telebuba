@@ -48,7 +48,13 @@ from services.warming._runtime import (
 from services.warming._start_options import preview_start
 from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
-from services.warming.channels import add_channels, list_channels, remove_channel
+from services.warming.channels import (
+    UnknownChannelError,
+    add_channels,
+    label_channel,
+    list_channels,
+    remove_channel,
+)
 from services.warming.daily_stats import load_daily_stats
 from services.warming.pacing import (
     _in_quiet_hours,
@@ -69,6 +75,7 @@ __all__ = [
     "AccountUnavailableError",
     "HandoffSpamRefusedError",
     "UnknownAccountError",
+    "UnknownChannelError",
     "WarmingNotReadyError",
     "WarmingTaskNotQuiescentError",
     "_human_delay",
@@ -86,6 +93,7 @@ __all__ = [
     "compute_intensity",
     "evaluate_readiness",
     "handoff_to_neurocomment",
+    "label_channel",
     "list_channels",
     "list_warmed_accounts",
     "load_board",

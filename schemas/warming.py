@@ -22,6 +22,13 @@ from schemas._warming_board import (  # noqa: F401 - WarmedAccountList is a runt
     WarmingMechanics,
     WarmingSummary,
 )
+from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export, not type-only
+    ChannelLanguageShortage,
+    UpdateChannelRequest,
+    WarmingChannel,
+    WarmingChannelList,
+    WarmingChannelObservation,
+)
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -74,18 +81,6 @@ def warming_health(state: WarmingState) -> WarmingHealth:
 def is_warming(state: WarmingState) -> bool:
     """True when the account belongs in the right-hand (warming) kanban column."""
     return state in _ACTIVE_STATES
-
-
-class WarmingChannel(BaseModel):
-    """One channel the warming engine can join / read / react in."""
-
-    channel: str = Field(min_length=1)
-    label: str | None = None
-    created_at: str = Field(min_length=1)
-
-
-class WarmingChannelList(BaseModel):
-    channels: list[WarmingChannel] = Field(default_factory=list)
 
 
 class AddChannelsRequest(BaseModel):
@@ -372,6 +367,9 @@ class WarmingBoardState(BaseModel):
     # Which optional cycle steps the engine will actually run with the current
     # settings, so «Как работает» shows what is on instead of promising every step.
     mechanics: WarmingMechanics = Field(default_factory=WarmingMechanics)
+    # Phone languages whose board accounts have fewer own-language channels than the
+    # affinity floor, so the channels card can say which pool to grow.
+    language_shortages: list[ChannelLanguageShortage] = Field(default_factory=list)
 
 
 class StartWarmingRequest(StartWindow):

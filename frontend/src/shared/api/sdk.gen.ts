@@ -280,6 +280,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsErrors,
   ImportMasstaggingTargetsResponses,
+  LabelWarmingChannelData,
+  LabelWarmingChannelErrors,
+  LabelWarmingChannelResponses,
   LinkCampaignChannelData,
   LinkCampaignChannelErrors,
   LinkCampaignChannelResponses,
@@ -2134,6 +2137,27 @@ export const listWarmingChannels = <ThrowOnError extends boolean = false>(
     ListWarmingChannelsErrors,
     ThrowOnError
   >({ url: '/api/v1/warming/channels', ...options });
+
+/**
+ * Label Warming Channel
+ *
+ * Set a channel's language and country — what accounts match their phone against.
+ */
+export const labelWarmingChannel = <ThrowOnError extends boolean = false>(
+  options: Options<LabelWarmingChannelData, ThrowOnError>,
+): RequestResult<LabelWarmingChannelResponses, LabelWarmingChannelErrors, ThrowOnError> =>
+  (options.client ?? client).patch<
+    LabelWarmingChannelResponses,
+    LabelWarmingChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Add Warming Channels

@@ -823,6 +823,7 @@ export type ActionResult = {
   recent_media_kinds?: {
     [key: string]: 'poll' | 'video' | 'voice';
   } | null;
+  read_facts?: ReadChannelFacts | null;
   /**
    * Warm Skip
    */
@@ -1385,6 +1386,26 @@ export type ChannelDetailView = {
    * Pinned To Profile
    */
   pinned_to_profile?: boolean;
+};
+
+/**
+ * ChannelLanguageShortage
+ *
+ * A phone language whose accounts have fewer channels of their own than the floor.
+ */
+export type ChannelLanguageShortage = {
+  /**
+   * Language
+   */
+  language: string;
+  /**
+   * Channels
+   */
+  channels: number;
+  /**
+   * Accounts
+   */
+  accounts: number;
 };
 
 /**
@@ -5511,6 +5532,29 @@ export type ProxyRead = {
 };
 
 /**
+ * ReadChannelFacts
+ *
+ * What a ``read_channel`` page says about the channel itself (no extra RPC).
+ *
+ * ``text_sample`` is the page's post text, bounded, for a language vote; ``kind`` is
+ * ``channel`` when the posts are broadcast posts, ``group`` otherwise.
+ */
+export type ReadChannelFacts = {
+  /**
+   * Text Sample
+   */
+  text_sample?: string;
+  /**
+   * Kind
+   */
+  kind?: 'channel' | 'group' | null;
+  /**
+   * Last Post At
+   */
+  last_post_at?: string | null;
+};
+
+/**
  * ReadinessStatus
  *
  * Whether the process can actually SERVE, not merely that it is running.
@@ -6025,6 +6069,26 @@ export type TwoFactorStatusResult = {
    * Email Unconfirmed Pattern
    */
   email_unconfirmed_pattern?: string | null;
+};
+
+/**
+ * UpdateChannelRequest
+ *
+ * The operator's labels for one channel; ``None`` clears a label back to unknown.
+ */
+export type UpdateChannelRequest = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Country
+   */
+  country?: string | null;
 };
 
 /**
@@ -6940,12 +7004,20 @@ export type WarmingBoardState = {
    */
   default_target_days?: number;
   mechanics?: WarmingMechanics;
+  /**
+   * Language Shortages
+   */
+  language_shortages?: Array<ChannelLanguageShortage>;
 };
 
 /**
  * WarmingChannel
  *
  * One channel the warming engine can join / read / react in.
+ *
+ * ``language`` is what an account matches its own phone language against; ``None``
+ * means nobody has told yet (no read has labelled it, the operator has not set it),
+ * and such a channel stays a fallback for any account.
  */
 export type WarmingChannel = {
   /**
@@ -6960,6 +7032,34 @@ export type WarmingChannel = {
    * Created At
    */
   created_at: string;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Country
+   */
+  country?: string | null;
+  /**
+   * Kind
+   */
+  kind?: 'channel' | 'group' | null;
+  /**
+   * Subscribers
+   */
+  subscribers?: number | null;
+  /**
+   * Last Post At
+   */
+  last_post_at?: string | null;
+  /**
+   * Source
+   */
+  source?: 'manual' | 'discovery';
+  /**
+   * Status
+   */
+  status?: 'approved' | 'pending';
 };
 
 /**
@@ -11689,6 +11789,44 @@ export type ListWarmingChannelsResponses = {
 
 export type ListWarmingChannelsResponse =
   ListWarmingChannelsResponses[keyof ListWarmingChannelsResponses];
+
+export type LabelWarmingChannelData = {
+  body: UpdateChannelRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels';
+};
+
+export type LabelWarmingChannelErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type LabelWarmingChannelError = LabelWarmingChannelErrors[keyof LabelWarmingChannelErrors];
+
+export type LabelWarmingChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type LabelWarmingChannelResponse =
+  LabelWarmingChannelResponses[keyof LabelWarmingChannelResponses];
 
 export type AddWarmingChannelsData = {
   body: AddChannelsRequest;
