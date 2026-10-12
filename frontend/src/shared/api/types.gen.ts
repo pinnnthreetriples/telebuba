@@ -4903,6 +4903,70 @@ export type NeuroshillingVersionRequest = {
 };
 
 /**
+ * NotificationSettings
+ *
+ * What the Settings page reads: the token only as presence plus a hint.
+ */
+export type NotificationSettings = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
+  /**
+   * Has Bot Token
+   */
+  has_bot_token: boolean;
+  /**
+   * Bot Token Hint
+   */
+  bot_token_hint?: string | null;
+  /**
+   * Chat Id
+   */
+  chat_id: string;
+  /**
+   * Updated At
+   */
+  updated_at?: string | null;
+};
+
+/**
+ * NotificationSettingsUpdate
+ *
+ * Keep/clear/replace for the token, like the LLM keys; ``None`` keeps a field.
+ */
+export type NotificationSettingsUpdate = {
+  /**
+   * Enabled
+   */
+  enabled?: boolean | null;
+  /**
+   * Bot Token
+   */
+  bot_token?: string | null;
+  /**
+   * Clear Bot Token
+   */
+  clear_bot_token?: boolean;
+  /**
+   * Chat Id
+   */
+  chat_id?: string | null;
+};
+
+/**
+ * NotificationTestResult
+ *
+ * ``POST /notifications/test`` succeeded: the message was delivered.
+ */
+export type NotificationTestResult = {
+  /**
+   * Sent
+   */
+  sent?: boolean;
+};
+
+/**
  * OpenWebResult
  *
  * The outcome of opening a web.telegram.org window for the account.
@@ -16000,3 +16064,120 @@ export type CopyMasstaggingBaseResponses = {
 
 export type CopyMasstaggingBaseResponse =
   CopyMasstaggingBaseResponses[keyof CopyMasstaggingBaseResponses];
+
+export type GetNotificationSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/notifications/settings';
+};
+
+export type GetNotificationSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetNotificationSettingsError =
+  GetNotificationSettingsErrors[keyof GetNotificationSettingsErrors];
+
+export type GetNotificationSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NotificationSettings;
+};
+
+export type GetNotificationSettingsResponse =
+  GetNotificationSettingsResponses[keyof GetNotificationSettingsResponses];
+
+export type UpdateNotificationSettingsData = {
+  body: NotificationSettingsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/notifications/settings';
+};
+
+export type UpdateNotificationSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateNotificationSettingsError =
+  UpdateNotificationSettingsErrors[keyof UpdateNotificationSettingsErrors];
+
+export type UpdateNotificationSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NotificationSettings;
+};
+
+export type UpdateNotificationSettingsResponse =
+  UpdateNotificationSettingsResponses[keyof UpdateNotificationSettingsResponses];
+
+export type SendTestNotificationData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/notifications/test';
+};
+
+export type SendTestNotificationErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SendTestNotificationError =
+  SendTestNotificationErrors[keyof SendTestNotificationErrors];
+
+export type SendTestNotificationResponses = {
+  /**
+   * Successful Response
+   */
+  200: NotificationTestResult;
+};
+
+export type SendTestNotificationResponse =
+  SendTestNotificationResponses[keyof SendTestNotificationResponses];

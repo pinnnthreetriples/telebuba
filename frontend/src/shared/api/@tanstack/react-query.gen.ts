@@ -90,6 +90,7 @@ import {
   getNeuroshillingBoard,
   getNeuroshillingScenario,
   getNeuroshillingSettings,
+  getNotificationSettings,
   getReadiness,
   getUserParserRun,
   getWarmingBoard,
@@ -164,6 +165,7 @@ import {
   scheduleAccountStory,
   sendAccountChatMessage,
   sendBulkMessages,
+  sendTestNotification,
   setAccountChannelPhoto,
   setAccountPhoto,
   setAccountPhotoMain,
@@ -203,6 +205,7 @@ import {
   updateCampaignPrompt,
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
+  updateNotificationSettings,
   updateWarmingSettings,
   uploadChatBroadcastPhoto,
   uploadMasstaggingMedia,
@@ -450,6 +453,9 @@ import type {
   GetNeuroshillingSettingsData,
   GetNeuroshillingSettingsError,
   GetNeuroshillingSettingsResponse,
+  GetNotificationSettingsData,
+  GetNotificationSettingsError,
+  GetNotificationSettingsResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -669,6 +675,9 @@ import type {
   SendBulkMessagesData,
   SendBulkMessagesError,
   SendBulkMessagesResponse,
+  SendTestNotificationData,
+  SendTestNotificationError,
+  SendTestNotificationResponse,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoError,
   SetAccountChannelPhotoResponse,
@@ -786,6 +795,9 @@ import type {
   UpdateNeuroshillingCampaignData,
   UpdateNeuroshillingCampaignError,
   UpdateNeuroshillingCampaignResponse,
+  UpdateNotificationSettingsData,
+  UpdateNotificationSettingsError,
+  UpdateNotificationSettingsResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -6646,6 +6658,91 @@ export const copyMasstaggingBaseMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await copyMasstaggingBase({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNotificationSettingsQueryKey = (options?: Options<GetNotificationSettingsData>) =>
+  createQueryKey('getNotificationSettings', options);
+
+/**
+ * Get Notification Settings
+ */
+export const getNotificationSettingsOptions = (options?: Options<GetNotificationSettingsData>) =>
+  queryOptions<
+    GetNotificationSettingsResponse,
+    GetNotificationSettingsError,
+    GetNotificationSettingsResponse,
+    ReturnType<typeof getNotificationSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNotificationSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNotificationSettingsQueryKey(options),
+  });
+
+/**
+ * Update Notification Settings
+ */
+export const updateNotificationSettingsMutation = (
+  options?: Partial<Options<UpdateNotificationSettingsData>>,
+): UseMutationOptions<
+  UpdateNotificationSettingsResponse,
+  UpdateNotificationSettingsError,
+  Options<UpdateNotificationSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateNotificationSettingsResponse,
+    UpdateNotificationSettingsError,
+    Options<UpdateNotificationSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateNotificationSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Send Test Notification
+ *
+ * Send the test message with the stored token and chat.
+ *
+ * 409 ``notifications_not_configured``: no token or no chat id stored. 400
+ * ``telegram_rejected``: Telegram refused it (bad token, unknown chat, bot blocked).
+ * 503 ``telegram_unreachable``: the network or a timeout.
+ */
+export const sendTestNotificationMutation = (
+  options?: Partial<Options<SendTestNotificationData>>,
+): UseMutationOptions<
+  SendTestNotificationResponse,
+  SendTestNotificationError,
+  Options<SendTestNotificationData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SendTestNotificationResponse,
+    SendTestNotificationError,
+    Options<SendTestNotificationData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await sendTestNotification({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -1,0 +1,81 @@
+"""Operator-bot notification settings — the singleton ``notification_settings`` row.
+
+Keep/clear/replace like the LLM keys in ``_warming_settings``: ``None`` keeps a stored
+value, ``""`` clears it, anything else replaces it. The row is created on first save;
+before that a read answers the defaults (off, no token, no chat).
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, cast
+
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+from core._schema_notifications import _notification_settings
+from core.db import _get_engine, _now_iso
+from schemas.notifications import NotificationSettingsSecret
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+_SETTINGS_ID = 1
+
+
+def _row_to_secret(mapping: Mapping[str, object] | None) -> NotificationSettingsSecret:
+    if mapping is None:
+        return NotificationSettingsSecret()
+    return NotificationSettingsSecret(
+        enabled=bool(mapping["enabled"]),
+        bot_token=str(mapping["bot_token"] or ""),
+        chat_id=str(mapping["chat_id"] or ""),
+        updated_at=str(mapping["updated_at"]),
+    )
+
+
+def _read_row() -> Mapping[str, object] | None:
+    table = _notification_settings
+    with _get_engine().connect() as connection:
+        row = connection.execute(select(table).where(table.c.id == _SETTINGS_ID)).mappings().first()
+    return cast("Mapping[str, object] | None", row)
+
+
+async def load_notification_settings() -> NotificationSettingsSecret:
+    """The stored settings, token included; defaults when nothing was saved yet."""
+    return _row_to_secret(await asyncio.to_thread(_read_row))
+
+
+def _keep(new: str | None, current: object) -> str:
+    if new is None:
+        return "" if current is None else str(current)
+    return new
+
+
+def _save(enabled: bool | None, bot_token: str | None, chat_id: str | None) -> None:  # noqa: FBT001
+    current = _read_row() or {}
+    values = {
+        "id": _SETTINGS_ID,
+        "enabled": int(bool(current.get("enabled")) if enabled is None else enabled),
+        "bot_token": _keep(bot_token, current.get("bot_token")),
+        "chat_id": _keep(chat_id, current.get("chat_id")),
+        "updated_at": _now_iso(),
+    }
+    statement = sqlite_insert(_notification_settings).values(**values)
+    statement = statement.on_conflict_do_update(
+        index_elements=[_notification_settings.c.id],
+        set_={key: value for key, value in values.items() if key != "id"},
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def save_notification_settings(
+    *,
+    enabled: bool | None,
+    bot_token: str | None,
+    chat_id: str | None,
+) -> NotificationSettingsSecret:
+    """Upsert the row with keep/clear/replace semantics and return what is stored."""
+    await asyncio.to_thread(_save, enabled, bot_token, chat_id)
+    return await load_notification_settings()

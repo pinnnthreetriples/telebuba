@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 # Neuroshilling reconciles last: it TAKES accounts, so it has to see the picture the
 # other two have already restored.
 _RECONCILE = (
+    # The operator bot subscribes first, so it sees the events the reconciles emit.
+    "start_notifications",
     "reconcile_warming_runtime",
     "reconcile_neurocomment_on_startup",
     "reconcile_neuroshilling_on_startup",
@@ -56,6 +58,8 @@ _STEPS = (
     "shutdown_user_parser_on_shutdown",
     "shutdown_inbox_runtime",
     "shutdown_telegram_pool",
+    # After every runtime drained: their last events can still reach the bot.
+    "shutdown_notifications",
     "close_gemini_client",
     "close_openai_client",
 )

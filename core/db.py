@@ -29,6 +29,7 @@ from sqlalchemy import (
 # repositories that read these table objects keep working unchanged. The lifecycle
 # journal's module registers its table on the same ``_metadata`` (migration #74).
 import core._schema_lifecycle  # noqa: F401 - side effect: registers the journal table.
+import core._schema_notifications  # noqa: F401 - side effect: registers the bot settings.
 from core._schema_tables import (  # noqa: F401 - re-exported for existing import sites.
     _account_spam_status,
     _accounts,

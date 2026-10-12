@@ -85,6 +85,7 @@ from core.migration_steps_neurocomment import (
 )
 from core.migration_steps_neuroshilling import _add_neuroshilling_tables
 from core.migration_steps_neuroshilling_chat import _add_neuroshilling_chat_log
+from core.migration_steps_notifications import _add_notification_settings
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_geo_consensus,
@@ -218,6 +219,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (75, "add_warming_daily_stats", _add_warming_daily_stats),
     (76, "add_warming_flood_memory", _add_warming_flood_memory),
     (79, "add_warming_state_spam_unknown_streak", _add_warming_state_spam_unknown_streak),
+    (81, "add_notification_settings", _add_notification_settings),
 )
 
 
