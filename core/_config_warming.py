@@ -74,13 +74,13 @@ class WarmingSettings(BaseSettings):
     # catch-up cycles fan out. Kept to ~30 min: long enough to smear the burst,
     # short enough that resumed accounts don't idle noticeably after a restart.
     catch_up_spread_seconds: float = Field(default=1800.0, ge=0.0, le=86400.0)
-    # Fleet-wide ceiling on Telegram-heavy warming cycles running at once. Each
+    # Fleet-wide ceiling on warming Telegram requests in flight at once. Each
     # active account owns its own loop task, so without a cap a restart (or an
-    # aligned schedule) could drive dozens of concurrent cycles — a connection
-    # spike across the pool. Only the cycle itself is gated, never the long
-    # inter-cycle sleep, so a small bound throttles bursts without stalling the
-    # fleet's steady-state cadence.
-    cycle_concurrency: int = Field(default=8, ge=1, le=128)
+    # aligned schedule) could drive dozens of concurrent requests — a connection
+    # spike across the pool. A slot is held only for one request (connect
+    # included), never across a cycle's human pauses or the inter-cycle sleep,
+    # so a sleeping account never starves the rest of the fleet.
+    cycle_concurrency: int = Field(default=16, ge=1, le=128)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
     # Fraction of the global channel pool that forms one account's *stable*
