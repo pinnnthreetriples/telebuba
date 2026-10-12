@@ -55,6 +55,18 @@ export type AccountCheckRequest = {
 };
 
 /**
+ * AccountDeleteReasonGuess
+ *
+ * The reason the delete dialog pre-selects; the operator may change it.
+ */
+export type AccountDeleteReasonGuess = {
+  /**
+   * Reason
+   */
+  reason: 'dead' | 'retired';
+};
+
+/**
  * AccountFilterOptions
  *
  * What the Accounts page's filter pills can offer: only values present in data.
@@ -7977,7 +7989,7 @@ export type UpdateAccountProfileResponses = {
 export type UpdateAccountProfileResponse =
   UpdateAccountProfileResponses[keyof UpdateAccountProfileResponses];
 
-export type DeleteAccountData = {
+export type GetAccountDeleteReasonData = {
   body?: never;
   path: {
     /**
@@ -7986,6 +7998,63 @@ export type DeleteAccountData = {
     account_id: string;
   };
   query?: never;
+  url: '/api/v1/accounts/{account_id}/delete-reason';
+};
+
+export type GetAccountDeleteReasonErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountDeleteReasonError =
+  GetAccountDeleteReasonErrors[keyof GetAccountDeleteReasonErrors];
+
+export type GetAccountDeleteReasonResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountDeleteReasonGuess;
+};
+
+export type GetAccountDeleteReasonResponse =
+  GetAccountDeleteReasonResponses[keyof GetAccountDeleteReasonResponses];
+
+export type DeleteAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: {
+    /**
+     * Reason
+     */
+    reason?: 'dead' | 'retired' | null;
+  };
   url: '/api/v1/accounts/{account_id}';
 };
 

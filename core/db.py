@@ -24,9 +24,11 @@ from sqlalchemy import (
     event,
 )
 
-# Schema (MetaData + every table) lives in a sibling module for the file-size
+# Schema (MetaData + every table) lives in sibling modules for the file-size
 # budget; imported back here so ``from core.db import _accounts`` etc. and the
-# repositories that read these table objects keep working unchanged.
+# repositories that read these table objects keep working unchanged. The lifecycle
+# journal's module registers its table on the same ``_metadata`` (migration #74).
+import core._schema_lifecycle  # noqa: F401 - side effect: registers the journal table.
 from core._schema_tables import (  # noqa: F401 - re-exported for existing import sites.
     _account_spam_status,
     _accounts,

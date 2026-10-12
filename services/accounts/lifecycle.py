@@ -17,11 +17,18 @@ from core.logging import log_event
 from core.phone_geo import evaluate_geo
 from core.telegram_client import forget_post_listener, remove_account_session, removing_client
 from schemas.geo import GeoMatch
+from schemas.lifecycle import AccountDeleteReasonGuess
 from services.accounts._result import AccountNotFoundError
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
+from services.lifecycle_journal import (
+    guess_delete_reason,
+    prepare_account_deleted,
+    record_account_deleted,
+)
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
+    from schemas.lifecycle import DeleteReason
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
@@ -62,8 +69,17 @@ async def require_account(account_id: str) -> AccountRead:
     return account
 
 
-async def remove_account(account_id: str) -> None:
+async def get_account_delete_reason(account_id: str) -> AccountDeleteReasonGuess:
+    """The reason the delete dialog pre-selects for this account (404 when missing)."""
+    await require_account(account_id)
+    return AccountDeleteReasonGuess(reason=await guess_delete_reason(account_id))
+
+
+async def remove_account(account_id: str, reason: DeleteReason | None = None) -> None:
     """Public delete: stop warming + purge DB rows under one lifecycle lock.
+
+    ``reason`` is journaled with the deletion (``services.lifecycle_journal``); when
+    omitted, the guessed one is. The journal row survives the delete.
 
     The repo-level :func:`core.db.delete_account` only touches the DB; it has
     no knowledge of the in-process ``_RUNTIME`` task table that
@@ -149,7 +165,12 @@ async def remove_account(account_id: str) -> None:
                 # resolved to. Guard, never sanitise; the API maps this to 404.
                 raise AccountNotFoundError(account_id)
             await remove_account_session(account_id, account.session_name)
+            # Read before the cascade (it removes the spam verdict and warming state the
+            # journal row needs), write only after the delete succeeded — a failed delete
+            # must not leave a ``deleted`` row for a live account. Neither step raises.
+            pending = await prepare_account_deleted(account_id, reason)
             await delete_account(account_id)
+            await record_account_deleted(pending)
         # Only once the row is really gone: the listener registries are keyed by
         # account id and nothing else ever drops those keys, so an app that outlives
         # many deletes accumulates one dead generation and one dead lock per account.

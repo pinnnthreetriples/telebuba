@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
+from core.logging import log_event
+from schemas.lifecycle import LifecycleSnapshot
 from schemas.warming import is_warming
+from services.lifecycle_journal import record_lifecycle_event
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
@@ -43,3 +46,20 @@ def carry_or_restamp(
     )
     persona = existing.activity_persona if continuing else data.activity_persona
     return CarriedStint(started_at, target_days, persona, first_run_at)
+
+
+async def journal_start(
+    account_id: str,
+    existing: WarmingStateRecord | None,
+    stint: CarriedStint,
+    tg_user_id: int | None,
+) -> None:
+    """Log and journal a start; ``new_stint`` False = a restart that carried the stint's clock.
+
+    The row is pinned to this start's own stint, not re-read from state: it runs after the
+    account lock is released, when a concurrent stop/restart may have stamped a newer one.
+    """
+    await log_event("INFO", "warming_started", account_id=account_id)
+    new_stint = existing is None or existing.started_at != stint.started_at
+    snapshot = LifecycleSnapshot(tg_user_id=tg_user_id, stint_started_at=stint.started_at)
+    await record_lifecycle_event(account_id, "warming_started", {"new_stint": new_stint}, snapshot)

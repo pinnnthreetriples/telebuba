@@ -336,7 +336,13 @@
       "title": "Delete account {{phone}}?",
       "body": "The session, proxy and activity history will be deleted. This action is irreversible.",
       "cancel": "Cancel",
-      "confirm": "Delete"
+      "confirm": "Delete",
+      "reasonLabel": "Reason",
+      "reasonPending": "Working it out…",
+      "reason": {
+        "dead": "Dead",
+        "retired": "Retired"
+      }
     },
     "proxyDeleteModal": {
       "title": "Delete proxy {{endpoint}}?",
@@ -1521,6 +1527,7 @@
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts"
   },
   "logEventReason": {
+    "retired": "the account was retired",
     "account_cooling": "the account is waiting out a Telegram limit",
     "row_kept": "account row kept, session file left in place",
     "file_kept": "session file left on disk with no account",

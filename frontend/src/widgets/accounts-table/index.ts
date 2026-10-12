@@ -1,2 +1,2 @@
 export { AccountsTable } from './ui/AccountsTable';
-export { DeleteAccountModal } from './ui/DeleteAccountModal';
+export { DeleteAccountModal, type DeleteReason } from './ui/DeleteAccountModal';

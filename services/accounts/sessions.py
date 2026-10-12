@@ -35,6 +35,7 @@ from services.accounts._tdata import (
 from services.accounts._uploads import _session_filename, _write_session_file
 from services.accounts.lifecycle import add_account
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
+from services.lifecycle_journal import DEAD_SESSION_STATUSES, record_lifecycle_event
 
 __all__ = [
     "SessionAlreadyExistsError",
@@ -158,6 +159,13 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
         ),
     )
     saved = await update_account_from_session_check(result)
+    # Journal the death once, on the transition: a re-check of an already-dead session
+    # is not a second death, and a "new" import that never worked never lived.
+    if result.status in DEAD_SESSION_STATUSES and account.status not in {
+        *DEAD_SESSION_STATUSES,
+        "new",
+    }:
+        await record_lifecycle_event(account.account_id, "session_dead", {"status": result.status})
     if result.status in {"alive", "frozen"}:
         await start_account_inbox(saved.account_id)
     elif result.status in {"unauthorized", "session_error", "account_error"}:

@@ -38,6 +38,7 @@ from schemas.accounts import (
     OpenWebResult,
     WebWindowCount,
 )
+from schemas.lifecycle import AccountDeleteReasonGuess, DeleteReason
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
@@ -275,19 +276,35 @@ async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRe
         return await accounts.update_account_profile(body)
 
 
+@router.get(
+    "/accounts/{account_id}/delete-reason",
+    response_model=AccountDeleteReasonGuess,
+    operation_id="getAccountDeleteReason",
+    responses=SERVICE_ERRORS,
+)
+async def get_account_delete_reason(account_id: AccountIdPath) -> AccountDeleteReasonGuess:
+    """The reason the delete dialog pre-selects: ``dead`` or ``retired``."""
+    with service_errors_to_http():
+        return await accounts.get_account_delete_reason(account_id)
+
+
 @router.delete(
     "/accounts/{account_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,
     operation_id="deleteAccount",
     responses=SERVICE_ERRORS | error_responses(409),
 )
-async def delete_account(account_id: AccountIdPath) -> None:
+async def delete_account(
+    account_id: AccountIdPath,
+    reason: Annotated[DeleteReason | None, Query()] = None,
+) -> None:
     # 404 on a missing row instead of a 204 that deleted nothing (or, before the
-    # service-side guard, unlinked whatever the id resolved to).
+    # service-side guard, unlinked whatever the id resolved to). ``reason`` goes to the
+    # lifecycle journal; omitted, the service journals its own guess.
     try:
         with service_errors_to_http():
             try:
-                await accounts.remove_account(account_id)
+                await accounts.remove_account(account_id, reason=reason)
             except warming_service.AccountUnavailableError as exc:
                 # Caught inside: it is a ``ValueError``, which the block above would
                 # collapse to 400. Free-form rather than ``exc.code``: the SPA's text

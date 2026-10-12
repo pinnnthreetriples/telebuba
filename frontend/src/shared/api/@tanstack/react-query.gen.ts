@@ -66,6 +66,7 @@ import {
   generateNeuroshillingScenario,
   getAccountChannel,
   getAccountChatMedia,
+  getAccountDeleteReason,
   getAccountLimits,
   getAccountPrivacy,
   getAccountProfileSnapshot,
@@ -377,6 +378,9 @@ import type {
   GetAccountChannelResponse,
   GetAccountChatMediaData,
   GetAccountChatMediaError,
+  GetAccountDeleteReasonData,
+  GetAccountDeleteReasonError,
+  GetAccountDeleteReasonResponse,
   GetAccountLimitsData,
   GetAccountLimitsError,
   GetAccountLimitsResponse,
@@ -1427,6 +1431,33 @@ export const updateAccountProfileMutation = (
   };
   return mutationOptions;
 };
+
+export const getAccountDeleteReasonQueryKey = (options: Options<GetAccountDeleteReasonData>) =>
+  createQueryKey('getAccountDeleteReason', options);
+
+/**
+ * Get Account Delete Reason
+ *
+ * The reason the delete dialog pre-selects: ``dead`` or ``retired``.
+ */
+export const getAccountDeleteReasonOptions = (options: Options<GetAccountDeleteReasonData>) =>
+  queryOptions<
+    GetAccountDeleteReasonResponse,
+    GetAccountDeleteReasonError,
+    GetAccountDeleteReasonResponse,
+    ReturnType<typeof getAccountDeleteReasonQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountDeleteReason({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountDeleteReasonQueryKey(options),
+  });
 
 /**
  * Delete Account

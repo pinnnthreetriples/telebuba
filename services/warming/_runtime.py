@@ -38,7 +38,7 @@ from services.warming._exclusion import assert_no_discovery_run, assert_not_cool
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
 from services.warming._start_options import first_run_at
-from services.warming._start_state import carry_or_restamp
+from services.warming._start_state import carry_or_restamp, journal_start
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
     _now_iso,
@@ -395,7 +395,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # No await after the prepared generation and task registration: a request
         # cancellation can now only land after ownership is complete.
         _spawn_runtime_task(data.account_id, run_id)
-    await log_event("INFO", "warming_started", account_id=data.account_id)
+    await journal_start(data.account_id, existing, stint, account.user_id)
     return await _current_card(data.account_id)
 
 

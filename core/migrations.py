@@ -63,6 +63,7 @@ from core.migration_steps_discovery import (
     _add_warming_settings_telemetr_key,
 )
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
+from core.migration_steps_lifecycle import _add_account_lifecycle_events
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
     _add_warming_settings_text_llm_provider,
@@ -211,7 +212,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (71, "add_account_folders", _add_account_folders),
     (72, "add_user_parser_tables", _add_user_parser_tables),
     (73, "add_masstagging_tables", _add_masstagging_tables),
-    # 74 is reserved for the warming lifecycle journal, landing in a parallel change.
+    (74, "add_account_lifecycle_events", _add_account_lifecycle_events),
     (75, "add_warming_daily_stats", _add_warming_daily_stats),
 )
 
