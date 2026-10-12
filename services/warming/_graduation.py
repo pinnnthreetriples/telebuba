@@ -26,7 +26,7 @@ from core.db import (
 )
 from core.logging import log_event
 from services.lifecycle_journal import record_lifecycle_event
-from services.warming import _runtime
+from services.warming import _handoff_spam, _runtime
 from services.warming._runtime import _account_lock
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import _now_iso
@@ -119,11 +119,14 @@ async def handoff_to_neurocomment(account_id: str) -> WarmingAccountState:
 
     Only flips ``nc_handed_off`` — the account must already be graduated
     (``promoted_to_nc``); the repository raises ``ValueError`` (→ 400) otherwise.
+    Requires a ``clean`` @SpamBot answer first (``_handoff_spam``): an unreadable one
+    refuses, a ``limited`` one sends the account back into quarantine.
     The warming page hides the account, the neurocomment page starts counting
     and offering it. ``unmark_neurocomment`` reverses both flags at once.
     """
     async with _account_lock(account_id):
         _runtime.assert_runtime_quiescent(account_id)
+        await _handoff_spam.assert_spam_clean_for_handoff(account_id)
         await mark_nc_handed_off(account_id)
     await log_event("INFO", "warming_nc_handoff", account_id=account_id)
     await record_lifecycle_event(account_id, "handed_off")

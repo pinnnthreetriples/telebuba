@@ -26,6 +26,8 @@ from services import warming as warming_service
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+    from schemas.warming import WarmingRefusalCode
+
 
 def _client(app: FastAPI) -> httpx.AsyncClient:
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
@@ -369,6 +371,24 @@ async def test_handoff_refuses_an_account_whose_task_is_still_stopping(
         resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.parametrize("code", ["spam_check_unavailable", "spam_limited"])
+@pytest.mark.asyncio
+async def test_handoff_refused_on_spambot_answers_409_with_the_code(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    code: WarmingRefusalCode,
+) -> None:
+    async def _boom(account_id: str) -> WarmingAccountState:
+        raise warming_service.HandoffSpamRefusedError(code, account_id)
+
+    monkeypatch.setattr("services.warming.handoff_to_neurocomment", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+    assert resp.json()["error"]["message"] == code
 
 
 @pytest.mark.asyncio

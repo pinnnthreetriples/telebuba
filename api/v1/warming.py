@@ -77,6 +77,10 @@ async def handoff_account(body: PromoteRequest) -> WarmingAccountState:
             status_code=http_status.HTTP_409_CONFLICT,
             detail="warming task is still stopping",
         ) from exc
+    except warming_service.HandoffSpamRefusedError as exc:
+        # @SpamBot gave no answer, or answered "limited" (the account went back into
+        # quarantine). The detail is the stable code the SPA translates.
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=exc.code) from exc
     except ValueError as exc:
         # Not graduated / unknown account — a stale client racing an un-promote.
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

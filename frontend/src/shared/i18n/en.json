@@ -1013,6 +1013,8 @@
       "account_running_discovery": "A channel-discovery run is reading with this account. Wait for it to finish, then start warming.",
       "account_cooling": "Telegram is rate-limiting this account. Wait for the limit to pass, then try again.",
       "account_busy_neuroshilling": "A neuroshilling campaign is running with this account. Stop it, then start warming.",
+      "spam_check_unavailable": "@SpamBot did not answer, and the account cannot be handed off without its answer. Check again.",
+      "spam_limited": "@SpamBot reports limits on this account. It went back to warming, in quarantine.",
       "campaign_running": "The campaign is running. Stop it before changing or deleting it.",
       "campaign_changed": "Campaign settings changed in another window. Copy unsaved edits and reload the page.",
       "too_many_targets": "Too many targets for one campaign. Remove some and save again.",
@@ -1398,6 +1400,10 @@
     "warming_loop_crashed": "Warming loop crashed",
     "warming_progress_write_failed": "Failed to save warming progress",
     "warming_quarantine_extended": "Quarantine extended",
+    "warming_spam_check_limited": "@SpamBot: limited, account quarantined",
+    "warming_spam_check_unreadable": "@SpamBot did not answer",
+    "warming_handoff_spam_limited": "Hand-off cancelled: @SpamBot reports limits",
+    "warming_handoff_spam_unavailable": "Hand-off cancelled: @SpamBot did not answer",
     "warming_reconcile_not_ready": "Warming not ready to sync",
     "warming_reservation_reconciled": "Unused daily budget returned",
     "warming_reservation_stranded": "Unused daily budget could not be returned",
@@ -2799,6 +2805,12 @@
       "toNeuro": "To neurocomment",
       "backToWarm": "Back to warming"
     },
+    "spamRetry": {
+      "title": "@SpamBot did not answer",
+      "body": "Without an answer from @SpamBot the account cannot be handed off to neurocomment. Check again — the hand-off goes through if there are no limits.",
+      "retry": "Retry",
+      "close": "Close"
+    },
     "stage": {
       "subscribe": "Subscribe",
       "read": "Read",
@@ -2829,6 +2841,7 @@
       "logClear": "Clear",
       "pauseCountdown": "{{time}} left",
       "completeTitle": "Warming complete",
+      "spamUnknown": "@SpamBot has not answered several checks in a row — the account's status is unknown.",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
       "cycleTip_one": "Cycle {{count}}",

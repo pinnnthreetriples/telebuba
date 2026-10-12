@@ -30699,29 +30699,10 @@
             "title": "Nc Handed Off",
             "default": false
           },
-          "flood_total": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Flood Total",
-            "default": 0
-          },
-          "dm_blocked_until": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dm Blocked Until"
-          },
-          "limit_factor": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Limit Factor",
-            "default": 1.0
+          "spam_check_warning": {
+            "type": "boolean",
+            "title": "Spam Check Warning",
+            "default": false
           }
         },
         "type": "object",

@@ -146,6 +146,13 @@ class WarmingSettings(BaseSettings):
     # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
     # /start to @SpamBot is itself suspicious, so keep this generous.
     spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
+    # Scheduled @SpamBot check during warming: the first cycle of a stint asks, then
+    # roughly every ``interval`` hours, shifted by a per-account offset within
+    # ±``jitter`` so a fleet started together does not ask on the same day. After
+    # ``warn_streak`` unreadable checks in a row the card warns the operator.
+    spam_check_interval_hours: float = Field(default=72.0, gt=0.0)
+    spam_check_jitter_hours: float = Field(default=12.0, ge=0.0)
+    spam_unknown_warn_streak: int = Field(default=3, ge=1)
     # PEER_FLOOD quarantine: how long an account rests before its status is
     # re-checked, and how many consecutive still-limited re-checks are tolerated
     # before it is given up on (marked error + alerted).

@@ -32,11 +32,12 @@ from schemas._warming_start import StartWindow
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
-# Every start refusal that answers with a CODE, declared whole so the i18n parity test holds
-# ``shell.code.*`` to it. Two more (still-stopping task, listener conflict) answer in prose.
+# Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
+# test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
 _RUN_HOLDS = Literal[_CAMPAIGN_HOLDS, "account_busy_user_parser", "account_busy_masstagging"]
-WarmingRefusalCode = Literal["account_running_discovery", "account_cooling", _RUN_HOLDS]
+_SPAM = Literal["spam_check_unavailable", "spam_limited"]  # hand-off's @SpamBot refusals
+WarmingRefusalCode = Literal["account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and
@@ -160,17 +161,14 @@ class WarmingStateRecord(BaseModel):
     # value; the loop captures it and refuses to write through if the DB run_id
     # has changed underneath it (= a newer start replaced this generation).
     run_id: str | None = None
-    # Persisted lifecycle phase. Compared against the freshly computed phase
-    # after each cycle to detect transitions; ``None`` on a brand-new record
-    # (seeded on the first cycle, no event fired).
+    # Persisted lifecycle phase, diffed after each cycle to detect transitions;
+    # ``None`` on a brand-new record (seeded on the first cycle, no event fired).
     current_phase: WarmingPhase | None = None
     # ISO timestamp of when the account entered ``current_phase``. Drives the
     # "in phase: N days" hint on the card.
     phase_entered_at: str | None = None
-    # Operator graduation flag: True after the warming card's "переместить в
-    # нейрокомментинг" button is pressed. The neurocomment warmed-list filters by
-    # this so accounts only appear there after an explicit hand-off, not when they
-    # silently cross ``warmed_min_days``.
+    # Operator graduation flag (the card's "переместить в нейрокомментинг"): the
+    # warmed list shows only explicit hand-offs, never a silent ``warmed_min_days``.
     promoted_to_nc: bool = False
     # Second hand-off stage: True after the warmed card's «в нейрокомментинг»
     # button. Moves the account off the warming page's warmed card and into the
@@ -180,12 +178,12 @@ class WarmingStateRecord(BaseModel):
     # the day slider; the loop auto-completes the account once warming reaches it.
     # ``None`` on legacy rows / no explicit pick → falls back to warmed_min_days.
     target_days: int | None = Field(default=None, ge=1)
-    # Operator-chosen activity persona. Legacy rows / NULL column → "normal" (the
-    # reader maps NULL up), so this is never None on a loaded record.
+    # Operator-chosen persona; the reader maps a NULL column to "normal".
     activity_persona: ActivityPersona = "normal"
     # When the last quarantine was released on a clean spam check. The daily-cap
     # ramp and the DM block after a spam block count from it; ``None`` = never.
     recovered_at: str | None = None
+    spam_unknown_streak: int = Field(default=0, ge=0)
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -345,6 +343,7 @@ class WarmingAccountState(BaseModel):
     flood_total: int = Field(default=0, ge=0)
     dm_blocked_until: str | None = None
     limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
+    spam_check_warning: bool = False  # @SpamBot silent ``spam_unknown_warn_streak`` times
 
 
 class WarmingBoardState(BaseModel):

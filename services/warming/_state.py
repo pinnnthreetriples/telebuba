@@ -145,6 +145,7 @@ async def _current_card(account_id: str) -> WarmingAccountState:
                 "current_phase",
                 "phase_entered_at",
                 "recovered_at",
+                "spam_unknown_streak",
             }
         )
         if record

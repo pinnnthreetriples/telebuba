@@ -72,6 +72,18 @@ def _warming_days_since(
     )
 
 
+# Warming-loop internals with no card counterpart (the streak surfaces as a flag).
+_RECORD_ONLY_FIELDS: Final[set[str]] = {
+    "account_id",
+    "state",
+    "run_id",
+    "current_phase",
+    "phase_entered_at",
+    "spam_unknown_streak",
+    "recovered_at",
+}
+
+
 def _to_card(
     account: AccountRead,
     record: WarmingStateRecord | None,
@@ -84,20 +96,7 @@ def _to_card(
     # empty dict, the schema defaults fill in. Keeps cyclomatic complexity at 2.
     # Drop record-only fields that have no card counterpart (run_id / current_phase /
     # phase_entered_at are warming-loop internals, not card affordances).
-    record_fields = (
-        record.model_dump(
-            exclude={
-                "account_id",
-                "state",
-                "run_id",
-                "current_phase",
-                "phase_entered_at",
-                "recovered_at",
-            }
-        )
-        if record
-        else {}
-    )
+    record_fields = record.model_dump(exclude=_RECORD_ONLY_FIELDS) if record else {}
     return WarmingAccountState(
         account_id=account.account_id,
         label=account.label or account.account_id,
@@ -107,6 +106,10 @@ def _to_card(
         state=state,
         health=warming_health(state),
         readiness=readiness,
+        spam_check_warning=(
+            record is not None
+            and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak
+        ),
         **record_fields,
     )
 

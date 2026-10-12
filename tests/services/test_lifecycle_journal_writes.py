@@ -17,7 +17,7 @@ from core.db import (
 )
 from core.repositories.lifecycle import list_lifecycle_events
 from schemas.accounts import AccountCheckRequest, AccountCreate
-from schemas.spam_status import SpamStatusProbe
+from schemas.spam_status import SpamStatusProbe, SpamStatusVerdict
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import (
     StartWarmingRequest,
@@ -32,6 +32,13 @@ from tests.services.warming._support import _Recorder, _seed_ready_account, _set
 
 if TYPE_CHECKING:
     from schemas.telegram_session import SessionCheckStatus
+
+
+async def _clean_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
+    del force
+    return SpamStatusVerdict(
+        account_id=account_id, status="clean", checked_at=datetime.now(UTC).isoformat()
+    )
 
 
 async def _kinds(account_id: str = "acc-1") -> list[str]:
@@ -97,6 +104,8 @@ async def test_promote_and_handoff_are_journaled(monkeypatch: pytest.MonkeyPatch
         return None
 
     monkeypatch.setattr(_runtime, "_refresh_dialogue_pairs", refresh)
+    # The handoff now needs a clean @SpamBot answer; answer one without Telegram.
+    monkeypatch.setattr(_seams, "_refresh_spam_status", _clean_spam_status)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
 

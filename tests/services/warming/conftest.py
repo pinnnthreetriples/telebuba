@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -12,6 +13,7 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client._react import _whitelist_cache
+from schemas.spam_status import SpamStatusVerdict
 from services import warming
 from services.warming import _fleet, _runtime, _seams
 from tests.services.warming._support import _ZERO_DELAY_FIELDS
@@ -19,6 +21,15 @@ from tests.services.warming._support import _ZERO_DELAY_FIELDS
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
+
+
+async def _clean_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
+    del force
+    return SpamStatusVerdict(
+        account_id=account_id,
+        status="clean",
+        checked_at=datetime.now(UTC).isoformat(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -65,6 +76,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # default delay draw finite; pacing tests replace it with their own pinned
     # values when the distribution itself is under test.
     monkeypatch.setattr(test_rng, "lognormvariate", lambda _mu, _sigma: 0.5)
+    # The cycle's scheduled @SpamBot step (``_spam_check``) asks on every account
+    # without a reading. Answer ``clean`` by default so scenarios about other steps
+    # never reach Telegram; spam-check and quarantine tests patch their own answer.
+    monkeypatch.setattr(_seams, "_refresh_spam_status", _clean_spam_status)
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
