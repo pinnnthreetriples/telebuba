@@ -10,11 +10,14 @@ submodule binds its name onto the parent package).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.db import load_warming_settings, save_warming_settings
 from core.logging import log_event
+from core.repositories.warming_dm_pause import store_dm_paused_until
 from schemas.warming import WarmingSettings
+from services.warming._dm_breaker import active_dm_pause
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingSettingsSecret, WarmingSettingsUpdate
@@ -52,8 +55,14 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         has_deepseek_key=bool(secret.deepseek_api_key),
         deepseek_key_hint=_key_hint(secret.deepseek_api_key),
         extra_toggles=secret.extra_toggles,
+        dm_paused_until=_active_pause_iso(secret.dm_paused_until),
         updated_at=secret.updated_at,
     )
+
+
+def _active_pause_iso(stamp: str | None) -> str | None:
+    until = active_dm_pause(stamp, datetime.now(UTC))
+    return until.isoformat() if until is not None else None
 
 
 async def load_settings() -> WarmingSettings:
@@ -104,3 +113,15 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         },
     )
     return _mask_settings(secret)
+
+
+async def lift_dm_pause() -> WarmingSettings:
+    """«Снять паузу»: reopen fleet DMs now, spending the blocks that tripped the pause.
+
+    A no-op without a pause in force, so a stray call cannot wipe the running count.
+    """
+    now = datetime.now(UTC)
+    if active_dm_pause((await load_warming_settings()).dm_paused_until, now) is not None:
+        await store_dm_paused_until(now.isoformat())
+        await log_event("INFO", "warming_dm_fleet_pause_lifted")
+    return await load_settings()

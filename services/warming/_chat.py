@@ -29,6 +29,7 @@ from services.content import release_sent_text
 from services.dialogues import get_partners
 from services.warming import _seams
 from services.warming._chat_text import _opener_text, _reply_text
+from services.warming._dm_breaker import active_dm_pause, fleet_dm_paused_now
 from services.warming._fleet import _stable_fraction
 from services.warming.pacing import _HALT_STATUSES, _classify_flood, persona_dm_probability
 
@@ -104,14 +105,17 @@ def _should_chat(
     """All gates for an inter-account DM this cycle.
 
     П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
-    for direct callers). The persona roll is last so it draws only once every
-    prior gate passed — it decides *how often* to chat, not whether it may.
+    for direct callers); the fleet DM pause applies on top. The persona roll is
+    last so it draws only once every prior gate passed — it decides *how often*
+    to chat, not whether it may.
     """
     return (
         can_attempt
         and not tally.flooded
         and not tally.peer_flooded
         and dm_allowed
+        # Fleet DM breaker (1.5): two DM spam blocks in a day pause DMs for everyone.
+        and active_dm_pause(secret.dm_paused_until, datetime.now(UTC)) is None
         and secret.inter_account_chat
         # Either text provider can write the line (``_chat_text`` prefers DeepSeek).
         and bool(secret.gemini_api_key or secret.deepseek_api_key)
@@ -215,21 +219,14 @@ async def _reply_to_partner(  # noqa: PLR0911
     # answer the same incoming message. F6: if the send fails *transiently*
     # (flood / halt), we release the claim so the inbox keeps the message for
     # the next cycle instead of losing it forever.
-    if not await try_claim_message_reply(incoming.id):
+    # The fleet DM pause is re-read fresh here, just before the claim and the send:
+    # another account's spam block may have tripped it since ``_should_chat``.
+    if await fleet_dm_paused_now() or not await try_claim_message_reply(incoming.id):
         # The text reservation in _generate_chat_text would otherwise lock
         # this exact text out of the dedup window for nothing.
         await release_sent_text(text)
         return ChatResult()
-    # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
-    result = await _seams.execute(
-        sender_id,
-        SendDirectMessage(
-            user_id=target.user_id,
-            text=text,
-            typing_wpm=_account_typing_wpm(sender_id),
-            peer_phone=target.phone,
-        ),
-    )
+    result = await _send_dm(sender_id, target, target.user_id, text)
 
     if result.status in _HALT_STATUSES:
         await mark_message_unreplied(incoming.id)
@@ -260,6 +257,19 @@ async def _reply_to_partner(  # noqa: PLR0911
         extra={"to": incoming.from_account},
     )
     return ChatResult(messages_sent=1, attempted_actions=1)
+
+
+async def _send_dm(sender_id: str, target: AccountRead, user_id: int, text: str) -> ActionResult:
+    """Send one DM; the text was already reserved inside ``_generate_chat_text``."""
+    return await _seams.execute(
+        sender_id,
+        SendDirectMessage(
+            user_id=user_id,
+            text=text,
+            typing_wpm=_account_typing_wpm(sender_id),
+            peer_phone=target.phone,
+        ),
+    )
 
 
 async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult:
@@ -366,16 +376,11 @@ async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
-    # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
-    result = await _seams.execute(
-        sender_id,
-        SendDirectMessage(
-            user_id=target.user_id,
-            text=text,
-            typing_wpm=_account_typing_wpm(sender_id),
-            peer_phone=target.phone,
-        ),
-    )
+    if await fleet_dm_paused_now():
+        # Tripped by another account since ``_should_chat``: no send, text released.
+        await release_sent_text(text)
+        return ChatResult()
+    result = await _send_dm(sender_id, target, target.user_id, text)
 
     if result.status in _HALT_STATUSES:
         # P2.6: drop the reservation so the next opener retry isn't shadowed.

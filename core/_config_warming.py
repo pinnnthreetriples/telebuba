@@ -141,13 +141,10 @@ class WarmingSettings(WarmingSafetySettings, BaseSettings):
     # Jitter applied to the persona-derived inter-session gap: the even-spread gap
     # is multiplied by 1 ± this fraction so runs don't land on a rigid grid.
     next_run_jitter_fraction: float = Field(default=0.25, ge=0.0, le=1.0)
-    # Cold-start guard: no outbound DM until the account is at least this old.
-    # Age is measured from OUR row's ``created_at``, not the account's real
-    # Telegram age, so this is "hours since we imported it". Deliberately short
-    # (paired with ``cold_start_spread_hours``) so inter-account dialogue starts on
-    # day one instead of after a day and a half of silence — raise it if the fleet
-    # starts collecting DM-related restrictions.
-    dm_min_age_hours: float = Field(default=5.0, ge=0.0)
+    # Cold-start guard: no outbound DM until the account has been warming this long,
+    # counted from its warming ``started_at`` (a restart that continues the stint keeps
+    # it). Three days: on 16-17.09 DMs on day one collected spam blocks fleet-wide.
+    dm_min_age_hours: float = Field(default=72.0, ge=0.0)
     # Retention windows for append-only tables that would otherwise grow forever.
     # 0 means "never purge" — kept as escape hatch.
     log_retention_days: float = Field(default=30.0, ge=0.0)

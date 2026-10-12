@@ -10141,6 +10141,76 @@
         }
       }
     },
+    "/api/v1/warming/dm-pause/lift": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Lift Warming Dm Pause",
+        "description": "\u00ab\u0421\u043d\u044f\u0442\u044c \u043f\u0430\u0443\u0437\u0443\u00bb: reopen inter-account DMs the fleet breaker paused.",
+        "operationId": "liftWarmingDmPause",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/warming/dialogues": {
       "get": {
         "tags": [
@@ -31802,6 +31872,17 @@
           },
           "extra_toggles": {
             "$ref": "#/components/schemas/ExtraToggles"
+          },
+          "dm_paused_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dm Paused Until"
           },
           "updated_at": {
             "type": "string",

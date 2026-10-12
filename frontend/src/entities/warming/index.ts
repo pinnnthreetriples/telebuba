@@ -1,6 +1,7 @@
 export {
   addWarmingChannelsMutation,
   handoffToNeurocommentMutation,
+  liftWarmingDmPauseMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
   startWarmingMutation,

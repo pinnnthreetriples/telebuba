@@ -193,6 +193,7 @@ export const warmingSettings = {
   has_openai_key: false,
   openai_model: 'gpt-4o-mini',
   captcha_llm_provider: 'gemini',
+  dm_paused_until: null,
   updated_at: NOW,
 };
 

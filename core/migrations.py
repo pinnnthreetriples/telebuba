@@ -62,6 +62,7 @@ from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
 )
+from core.migration_steps_dm_pause import _add_warming_settings_dm_paused_until
 from core.migration_steps_flood_memory import _add_warming_flood_memory
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
@@ -221,6 +222,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (75, "add_warming_daily_stats", _add_warming_daily_stats),
     (76, "add_warming_flood_memory", _add_warming_flood_memory),
     (77, "add_warming_warmed_days", _add_warming_warmed_days),
+    (78, "add_warming_settings_dm_paused_until", _add_warming_settings_dm_paused_until),
     (79, "add_warming_state_spam_unknown_streak", _add_warming_state_spam_unknown_streak),
     (80, "add_warming_channel_labels", _add_warming_channel_labels),
     (81, "add_notification_settings", _add_notification_settings),

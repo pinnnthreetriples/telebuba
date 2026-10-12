@@ -210,6 +210,16 @@ async def update_warming_settings(body: WarmingSettingsUpdate) -> WarmingSetting
     return await warming_service.save_settings(body)
 
 
+@router.post(
+    "/dm-pause/lift",
+    response_model=WarmingSettings,
+    operation_id="liftWarmingDmPause",
+)
+async def lift_warming_dm_pause() -> WarmingSettings:
+    """«Снять паузу»: reopen inter-account DMs the fleet breaker paused."""
+    return await warming_service.lift_dm_pause()
+
+
 @router.get("/dialogues", response_model=DialogueFeed, operation_id="listWarmingDialogues")
 async def list_warming_dialogues(
     limit: Annotated[int, Query(ge=1, le=100)] = 30,

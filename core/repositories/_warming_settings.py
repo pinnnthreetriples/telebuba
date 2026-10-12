@@ -60,6 +60,10 @@ def _str_or(value: object, default: str) -> str:
     return text or default
 
 
+def _optional_text(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
 def _captcha_provider(value: object) -> CaptchaLlmProvider:
     text = "" if value is None else str(value)
     if text in ("gemini", "openai", "deepseek"):
@@ -112,6 +116,7 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         text_llm_provider=_text_provider(mapping.get("text_llm_provider")),
         deepseek_api_key=_str_or(mapping.get("deepseek_api_key"), settings.deepseek.api_key),
         extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
+        dm_paused_until=_optional_text(mapping.get("dm_paused_until")),
         updated_at=str(mapping["updated_at"]),
     )
 

@@ -60,3 +60,19 @@ async def fetch_warming_flood_summary(account_id: str) -> WarmingFloodSummary:
     """One account's flood count and latest flood; zero when it never met one."""
     found = await asyncio.to_thread(_list_warming_flood_summaries, account_id)
     return found.get(account_id, WarmingFloodSummary())
+
+
+def _count_warming_flood_events_since(action: str, since: str) -> int:
+    table = _warming_flood_events
+    statement = select(func.count()).where(
+        table.c.kind == "peer_flood",
+        table.c.action == action,
+        table.c.created_at > since,
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_warming_flood_events_since(action: str, since: str) -> int:
+    """Fleet-wide spam blocks met on ``action`` strictly after ``since`` (ISO-8601)."""
+    return await asyncio.to_thread(_count_warming_flood_events_since, action, since)

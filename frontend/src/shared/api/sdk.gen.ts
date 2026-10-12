@@ -283,6 +283,9 @@ import type {
   LabelWarmingChannelData,
   LabelWarmingChannelErrors,
   LabelWarmingChannelResponses,
+  LiftWarmingDmPauseData,
+  LiftWarmingDmPauseErrors,
+  LiftWarmingDmPauseResponses,
   LinkCampaignChannelData,
   LinkCampaignChannelErrors,
   LinkCampaignChannelResponses,
@@ -2227,6 +2230,20 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Lift Warming Dm Pause
+ *
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ */
+export const liftWarmingDmPause = <ThrowOnError extends boolean = false>(
+  options?: Options<LiftWarmingDmPauseData, ThrowOnError>,
+): RequestResult<LiftWarmingDmPauseResponses, LiftWarmingDmPauseErrors, ThrowOnError> =>
+  (options?.client ?? client).post<
+    LiftWarmingDmPauseResponses,
+    LiftWarmingDmPauseErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/dm-pause/lift', ...options });
 
 /**
  * List Warming Dialogues

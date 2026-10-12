@@ -36,6 +36,7 @@ import { DialogueFeed } from '@/widgets/dialogue-feed';
 import {
   ActionTuningCard,
   ChannelLanguageShortages,
+  DmPauseBanner,
   SpamRetryModal,
   WarmDaysModal,
   WarmingBoard,
@@ -326,6 +327,8 @@ export function WarmingPage() {
           </Button>
         </div>
       </div>
+
+      <DmPauseBanner pausedUntil={data.settings.dm_paused_until} />
 
       {/* `minmax(0,1fr)`, not a bare `1fr`: an `fr` track keeps an automatic minimum
           (index.css says the same of `.tb-subrow` in the row direction), so a track

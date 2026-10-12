@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -19,6 +20,8 @@ from tests.services.warming._support import (
     _affinity_pool,
     _configure_intensity,
 )
+
+_INTENSITY_NOW = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
 
 
 def test_channel_affinity_is_stable_per_account(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -270,26 +273,51 @@ def test_compute_intensity_ceiling_for_fresh_account(monkeypatch: pytest.MonkeyP
     assert fresh.dm_allowed is False
 
 
-def test_compute_intensity_dm_unlocks_at_min_age(monkeypatch: pytest.MonkeyPatch) -> None:
+def _started(hours_ago: float) -> str:
+    return (_INTENSITY_NOW - timedelta(hours=hours_ago)).isoformat()
+
+
+def test_compute_intensity_dm_unlocks_at_min_warming_time(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_intensity(monkeypatch)
-    # DM unlocks exactly at the cold-start threshold; channel range stays flat.
-    assert warming.compute_intensity(36.0).dm_allowed is True
-    assert warming.compute_intensity(35.0).dm_allowed is False
+
+    def dm(age_hours: float, started_at: str | None) -> bool:
+        return warming.compute_intensity(
+            age_hours, now=_INTENSITY_NOW, started_at=started_at
+        ).dm_allowed
+
+    # DM unlocks exactly at the cold-start threshold, counted from the warming start.
+    assert dm(36.0, _started(36.0)) is True
+    assert dm(500.0, _started(35.0)) is False
+    # An old upload does not open DMs before warming has run long enough, and an
+    # account that never started warming counts as just started.
+    assert dm(500.0, None) is False
+    assert dm(500.0, "garbage") is False
     assert warming.compute_intensity(500.0).channels_max == 3
+
+
+def test_dm_min_warming_time_defaults_to_three_days() -> None:
+    assert type(settings.warming).model_fields["dm_min_age_hours"].default == 72.0
 
 
 def test_compute_intensity_dm_gated_by_trust_band(monkeypatch: pytest.MonkeyPatch) -> None:
     # DM permission depends on trust band, not age alone (audit П11): only
     # excellent/good/watch may DM; at_risk/critical may not.
     _configure_intensity(monkeypatch)
-    assert warming.compute_intensity(500.0, trust_band="good").dm_allowed is True
-    assert warming.compute_intensity(500.0, trust_band="watch").dm_allowed is True
-    assert warming.compute_intensity(500.0, trust_band="at_risk").dm_allowed is False
-    assert warming.compute_intensity(500.0, trust_band="critical").dm_allowed is False
-    # A healthy band cannot un-block DM for a too-young account.
-    assert warming.compute_intensity(0.0, trust_band="good").dm_allowed is False
-    # No band passed → age-only, so direct callers (run_one_cycle) are unchanged.
-    assert warming.compute_intensity(500.0).dm_allowed is True
+    started = _started(500.0)
+
+    def dm(band: str | None, started_at: str = started) -> bool:
+        return warming.compute_intensity(
+            500.0, trust_band=band, now=_INTENSITY_NOW, started_at=started_at
+        ).dm_allowed
+
+    assert dm("good") is True
+    assert dm("watch") is True
+    assert dm("at_risk") is False
+    assert dm("critical") is False
+    # A healthy band cannot un-block DM for a too-recently started account.
+    assert dm("good", _started(0.0)) is False
+    # No band passed → warming-time only, so direct callers (run_one_cycle) are unchanged.
+    assert dm(None) is True
 
 
 def test_persona_presets_scale_reaction_and_dm() -> None:

@@ -152,12 +152,13 @@ def test_a_never_released_account_is_unrestricted() -> None:
 
 def test_dms_stay_closed_for_fourteen_days_after_release() -> None:
     released = _NOW - timedelta(days=13)
+    started = (_NOW - timedelta(days=60)).isoformat()
     blocked = compute_intensity(
-        _AGED_HOURS, "excellent", recovered_at=released.isoformat(), now=_NOW
+        _AGED_HOURS, "excellent", recovered_at=released.isoformat(), now=_NOW, started_at=started
     )
     later = _NOW + timedelta(days=1, seconds=1)
     reopened = compute_intensity(
-        _AGED_HOURS, "excellent", recovered_at=released.isoformat(), now=later
+        _AGED_HOURS, "excellent", recovered_at=released.isoformat(), now=later, started_at=started
     )
 
     assert blocked.dm_allowed is False

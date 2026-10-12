@@ -91,6 +91,7 @@ async def _plan_iteration(
         trust_band=trust.band,
         recovered_at=record.recovered_at if record is not None else None,
         now=now,
+        started_at=record.started_at if record is not None else None,
     )
     daily = _roll_daily(record, _local_date(await _loop._account_tz(account_id), now))  # noqa: SLF001
     quiet = await _loop._gate_quiet_day(account_id, daily, now, run_id=run_id)  # noqa: SLF001
