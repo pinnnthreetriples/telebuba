@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import list_recent_logs
+from core.repositories.notification_settings import (
+    load_notification_settings,
+    save_notification_settings,
+)
 from schemas.notifications import (
     BotMessage,
     BotSendResult,
@@ -115,3 +119,19 @@ async def test_a_failed_test_send_raises_its_status_and_logs_no_token(
     rows = [row for row in await list_recent_logs() if row.event == "notifications_test_failed"]
     assert rows[0].extra == {"status": status, "error_type": "http_401"}
     assert _TOKEN not in await _all_logs_text()
+
+
+@pytest.mark.asyncio
+async def test_an_enabled_only_save_keeps_a_token_saved_since_it_was_read() -> None:
+    await save_notification_settings(
+        enabled=None, bot_token="111111:old_token_value_abcdefghij", chat_id="42"
+    )
+    # Another save replaces the token; an enabled-only save that follows writes only
+    # ``enabled``, so it cannot put the old token back.
+    await save_notification_settings(enabled=None, bot_token=_TOKEN, chat_id=None)
+    await save_notification_settings(enabled=True, bot_token=None, chat_id=None)
+
+    stored = await load_notification_settings()
+    assert stored.enabled is True
+    assert stored.bot_token == _TOKEN
+    assert stored.chat_id == "42"

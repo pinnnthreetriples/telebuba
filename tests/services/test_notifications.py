@@ -266,3 +266,69 @@ async def test_the_runtime_follows_the_bus_and_survives_a_failing_row(
     assert len(bot.sent) == 1
     assert events.subscriber_count() == before
     await notifications.shutdown_notifications()  # stopping twice is harmless
+
+
+@pytest.mark.asyncio
+async def test_a_slow_send_does_not_stop_the_bus_from_draining(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = asyncio.Event()
+    started: list[str] = []
+
+    async def _slow(entry: LogEntry) -> None:
+        started.append(entry.event)
+        await release.wait()
+
+    monkeypatch.setattr(notifications, "handle_log_entry", _slow)
+    await notifications.start_notifications()
+    try:
+        await log_event("INFO", "warming_started", account_id="acc-1")
+        await log_event("INFO", "warming_target_reached", account_id="acc-2")
+        for _ in range(100):
+            if len(started) == 2:
+                break
+            await asyncio.sleep(0.01)
+        # Both rows are being handled although the first one never returned.
+        assert started == ["warming_started", "warming_target_reached"]
+    finally:
+        release.set()
+        await notifications.shutdown_notifications()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_lets_an_in_flight_send_finish(monkeypatch: pytest.MonkeyPatch) -> None:
+    finished: list[str] = []
+    entered = asyncio.Event()
+
+    async def _send(entry: LogEntry) -> None:
+        entered.set()
+        await asyncio.sleep(0.05)
+        finished.append(entry.event)
+
+    monkeypatch.setattr(notifications, "handle_log_entry", _send)
+    await notifications.start_notifications()
+    await log_event("INFO", "warming_target_reached", account_id="acc-1")
+    await asyncio.wait_for(entered.wait(), timeout=2)
+
+    await notifications.shutdown_notifications()
+
+    assert finished == ["warming_target_reached"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_a_send_past_the_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.notifications, "shutdown_grace_seconds", 0.01)
+    entered = asyncio.Event()
+
+    async def _stuck(_entry: LogEntry) -> None:
+        entered.set()
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(notifications, "handle_log_entry", _stuck)
+    await notifications.start_notifications()
+    await log_event("INFO", "warming_target_reached", account_id="acc-1")
+    await asyncio.wait_for(entered.wait(), timeout=2)
+
+    await asyncio.wait_for(notifications.shutdown_notifications(), timeout=2)
+
+    assert not notifications._runtime.pending

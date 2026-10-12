@@ -42,6 +42,8 @@ _ThrottleKey = tuple[str | None, NotificationKind]
 
 class _Runtime:
     task: asyncio.Task[None] | None = None
+    # Per-row handling tasks still running, so shutdown can let them finish.
+    pending: set[asyncio.Task[None]] = set()  # noqa: RUF012 - one process-wide set.
     # Monotonic time of the last attempted send per (account, kind).
     last_sent: dict[_ThrottleKey, float] = {}  # noqa: RUF012 - one process-wide map.
     clock = staticmethod(time.monotonic)
@@ -53,6 +55,7 @@ _runtime = _Runtime()
 def reset_for_tests() -> None:
     """Forget the throttle and any task reference (tests only)."""
     _runtime.task = None
+    _runtime.pending.clear()
     _runtime.last_sent.clear()
 
 
@@ -95,13 +98,21 @@ async def handle_log_entry(entry: LogEntry) -> None:
         )
 
 
+async def _handle_safely(entry: LogEntry) -> None:
+    try:
+        await handle_log_entry(entry)
+    except Exception as exc:  # noqa: BLE001 - one bad row must never stop the bot
+        logger.warning("notification handling failed: %s", type(exc).__name__)
+
+
 async def _consume(queue: asyncio.Queue[LogEntry]) -> None:
+    # Each row is handled in its own task: awaiting a slow sendMessage here would stop
+    # draining the bounded bus queue, and the bus drops rows for a full subscriber.
     while True:
         entry = await queue.get()
-        try:
-            await handle_log_entry(entry)
-        except Exception as exc:  # noqa: BLE001 - one bad row must never stop the bot
-            logger.warning("notification handling failed: %s", type(exc).__name__)
+        task = asyncio.create_task(_handle_safely(entry))
+        _runtime.pending.add(task)
+        task.add_done_callback(_runtime.pending.discard)
 
 
 async def _run(ready: asyncio.Event) -> None:
@@ -120,10 +131,16 @@ async def start_notifications() -> None:
 
 
 async def shutdown_notifications() -> None:
-    """Cancel the subscriber task and wait for it to leave the bus."""
+    """Leave the bus, then give in-flight sends a short grace before cancelling them."""
     task, _runtime.task = _runtime.task, None
-    if task is None:
+    if task is not None:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    pending = set(_runtime.pending)
+    if not pending:
         return
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
+    _done, late = await asyncio.wait(pending, timeout=settings.notifications.shutdown_grace_seconds)
+    for straggler in late:
+        straggler.cancel()
+    await asyncio.gather(*late, return_exceptions=True)

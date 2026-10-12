@@ -46,25 +46,22 @@ async def load_notification_settings() -> NotificationSettingsSecret:
     return _row_to_secret(await asyncio.to_thread(_read_row))
 
 
-def _keep(new: str | None, current: object) -> str:
-    if new is None:
-        return "" if current is None else str(current)
-    return new
-
-
 def _save(enabled: bool | None, bot_token: str | None, chat_id: str | None) -> None:  # noqa: FBT001
-    current = _read_row() or {}
-    values = {
-        "id": _SETTINGS_ID,
-        "enabled": int(bool(current.get("enabled")) if enabled is None else enabled),
-        "bot_token": _keep(bot_token, current.get("bot_token")),
-        "chat_id": _keep(chat_id, current.get("chat_id")),
-        "updated_at": _now_iso(),
-    }
-    statement = sqlite_insert(_notification_settings).values(**values)
+    # Only the fields the caller sent are written, in one statement: a read-then-write
+    # would let an enabled-only save put back a stale token another save just replaced.
+    provided: dict[str, object] = {"updated_at": _now_iso()}
+    if enabled is not None:
+        provided["enabled"] = int(enabled)
+    if bot_token is not None:
+        provided["bot_token"] = bot_token
+    if chat_id is not None:
+        provided["chat_id"] = chat_id
+    defaults = {"enabled": 0, "bot_token": "", "chat_id": ""}
+    statement = sqlite_insert(_notification_settings).values(
+        id=_SETTINGS_ID, **{**defaults, **provided}
+    )
     statement = statement.on_conflict_do_update(
-        index_elements=[_notification_settings.c.id],
-        set_={key: value for key, value in values.items() if key != "id"},
+        index_elements=[_notification_settings.c.id], set_=provided
     )
     with _get_engine().begin() as connection:
         connection.execute(statement)

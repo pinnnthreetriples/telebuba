@@ -151,3 +151,32 @@ test('a failed load says so', async () => {
   renderCard();
   expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить настройки');
 });
+
+test('the form is locked while a save is in flight', async () => {
+  let finish: (response: Response) => void = () => undefined;
+  // The PUT is held open so the test can look at the form mid-save.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (request.method === 'PUT') {
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    }
+    return Promise.resolve(json(STORED));
+  });
+  renderCard();
+  const chat = await screen.findByLabelText('Chat ID');
+  await userEvent.clear(chat);
+  await userEvent.type(chat, '@ops_room');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить уведомления' }));
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Chat ID')).toBeDisabled();
+  });
+  expect(screen.getByRole('switch', { name: 'Отправлять уведомления' })).toBeDisabled();
+
+  finish(json(STORED));
+  await waitFor(() => {
+    expect(screen.getByLabelText('Chat ID')).toBeEnabled();
+  });
+});

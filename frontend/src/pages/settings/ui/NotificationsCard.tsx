@@ -94,61 +94,65 @@ function NotificationsForm({ settings }: { settings: NotificationSettings }) {
           void onSave();
         }}
       >
-        <SettingRow first label={t('settings.notify.enabled')}>
-          <Switch checked={enabled} onChange={setEnabled} label={t('settings.notify.enabled')} />
-        </SettingRow>
-        <ApiKeyField
-          label={t('settings.notify.token')}
-          value={token}
-          show={showToken}
-          keySet={tokenSet}
-          placeholder={
-            clearToken
-              ? t('settings.notify.tokenCleared')
-              : !tokenSet
-                ? t('settings.notify.tokenUnset')
-                : // The eye reveals the stored token's hint — never the token itself.
-                  showToken
-                  ? t('settings.notify.tokenSetHint', { hint: settings.bot_token_hint ?? '••••' })
-                  : t('settings.notify.tokenSet')
-          }
-          toggleLabel={t('settings.notify.toggleVisibility')}
-          clearLabel={t('settings.notify.clearToken')}
-          onChange={(value) => {
-            setToken(value);
-            setClearToken(false);
-          }}
-          onToggleShow={() => {
-            setShowToken((shown) => !shown);
-          }}
-          onClear={() => {
-            setClearToken(true);
-            setToken('');
-          }}
-        />
-        <div>
-          <label htmlFor={chatInputId} className={FIELD_LABEL}>
-            {t('settings.notify.chatId')}
-          </label>
-          <Input
-            id={chatInputId}
-            className="font-mono"
-            inputMode="text"
-            autoComplete="off"
-            value={chatId}
-            aria-invalid={chatInvalid}
-            aria-describedby={chatHintId}
-            onChange={(event) => {
-              setChatId(event.target.value);
+        {/* Locked while a save is in flight: a draft edited then would be cleared by
+            that save's success without having been sent. */}
+        <fieldset disabled={save.isPending} className="contents">
+          <SettingRow first label={t('settings.notify.enabled')}>
+            <Switch checked={enabled} onChange={setEnabled} label={t('settings.notify.enabled')} />
+          </SettingRow>
+          <ApiKeyField
+            label={t('settings.notify.token')}
+            value={token}
+            show={showToken}
+            keySet={tokenSet}
+            placeholder={
+              clearToken
+                ? t('settings.notify.tokenCleared')
+                : !tokenSet
+                  ? t('settings.notify.tokenUnset')
+                  : // The eye reveals the stored token's hint — never the token itself.
+                    showToken
+                    ? t('settings.notify.tokenSetHint', { hint: settings.bot_token_hint ?? '••••' })
+                    : t('settings.notify.tokenSet')
+            }
+            toggleLabel={t('settings.notify.toggleVisibility')}
+            clearLabel={t('settings.notify.clearToken')}
+            onChange={(value) => {
+              setToken(value);
+              setClearToken(false);
+            }}
+            onToggleShow={() => {
+              setShowToken((shown) => !shown);
+            }}
+            onClear={() => {
+              setClearToken(true);
+              setToken('');
             }}
           />
-          <p
-            id={chatHintId}
-            className={chatInvalid ? 'mt-2 type-small text-danger-deep' : 'mt-2 type-small'}
-          >
-            {chatInvalid ? t('settings.notify.chatIdInvalid') : t('settings.notify.chatIdHint')}
-          </p>
-        </div>
+          <div>
+            <label htmlFor={chatInputId} className={FIELD_LABEL}>
+              {t('settings.notify.chatId')}
+            </label>
+            <Input
+              id={chatInputId}
+              className="font-mono"
+              inputMode="text"
+              autoComplete="off"
+              value={chatId}
+              aria-invalid={chatInvalid}
+              aria-describedby={chatHintId}
+              onChange={(event) => {
+                setChatId(event.target.value);
+              }}
+            />
+            <p
+              id={chatHintId}
+              className={chatInvalid ? 'mt-2 type-small text-danger-deep' : 'mt-2 type-small'}
+            >
+              {chatInvalid ? t('settings.notify.chatIdInvalid') : t('settings.notify.chatIdHint')}
+            </p>
+          </div>
+        </fieldset>
         {/* Says why "Send test" is disabled: it uses what is stored, not the drafts. */}
         {dirty ? <p className="type-small">{t('settings.notify.testNeedsSave')}</p> : null}
         {feedback ? (
@@ -170,7 +174,7 @@ function NotificationsForm({ settings }: { settings: NotificationSettings }) {
             variant="primary"
             type="submit"
             loading={save.isPending}
-            disabled={chatInvalid || !dirty}
+            disabled={chatInvalid || !dirty || sendTest.isPending}
           >
             {t('settings.notify.save')}
           </Button>

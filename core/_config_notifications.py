@@ -23,4 +23,6 @@ class NotificationsSettings(BaseSettings):
     throttle_hours: float = Field(default=6.0, ge=0.0)
     # Whole-request deadline for one ``sendMessage`` call.
     send_timeout_seconds: float = Field(default=10.0, gt=0.0)
+    # On shutdown, how long in-flight sends may finish before they are cancelled.
+    shutdown_grace_seconds: float = Field(default=5.0, ge=0.0)
     bot_api_base_url: str = Field(default="https://api.telegram.org", pattern=r"^https://")
