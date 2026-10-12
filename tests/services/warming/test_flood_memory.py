@@ -23,7 +23,7 @@ from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 from schemas.warming_flood import WarmingFloodEventWrite
 from services import warming
-from services.warming import _seams
+from services.warming import _flood_memory, _seams
 from services.warming._phases import compute_intensity, recovery_limits
 from tests.services.warming._support import (
     _no_quiet_days,
@@ -59,6 +59,25 @@ async def test_a_peer_flood_cycle_is_remembered(monkeypatch: pytest.MonkeyPatch)
     summary = await fetch_warming_flood_summary("acc-1")
     assert summary.flood_total == 1
     assert summary.last_flood_at is not None
+
+
+@pytest.mark.asyncio
+async def test_a_broken_flood_history_still_quarantines(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The history row is best-effort: a DB fault there must not turn the peer-flood
+    # quarantine into an error state.
+    async def explode(_write: WarmingFloodEventWrite) -> None:
+        msg = "history down"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_flood_memory, "record_warming_flood_event", explode)
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("join_channel")
+
+    await _run_cycle_with(recorder, monkeypatch)
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
 
 
 @pytest.mark.asyncio

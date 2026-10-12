@@ -11,14 +11,11 @@ from typing import TYPE_CHECKING
 
 from core.db import fetch_warming_state
 from core.logging import log_event
-from core.repositories.warming_floods import (
-    record_warming_flood_event,
-)
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
-from schemas.warming_flood import WarmingFloodEventWrite
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
+from services.warming._flood_memory import remember_flood
 from services.warming._local_day import _next_local_wake
 from services.warming._reservation import _reconcile_reservation, _Reservation
 from services.warming._state import _set_state
@@ -163,13 +160,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     if result.status == "peer_flood":
         # Flood memory: the spam block happened in Telegram whatever generation now
         # owns the row, so it is recorded before the stale-run check below.
-        await record_warming_flood_event(
-            WarmingFloodEventWrite(
-                account_id=account_id,
-                created_at=_now_iso(),
-                action=result.last_failed_action,
-            ),
-        )
+        await remember_flood(account_id, result.last_failed_action)
     daily_count, daily_date = reservation.daily_count, reservation.daily_date
     actions_done, next_run_dt, next_state = schedule
     new_daily = daily_count + actions_done
