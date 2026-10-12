@@ -27,10 +27,16 @@ from core.logging import log_event
 from schemas.telegram_actions import SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
+from services.warming._channel_language import account_language
 from services.warming._chat import _run_chat_step
 from services.warming._extras import run_extras_step
 from services.warming._extras_ctx import _ExtraContext
-from services.warming._fleet import _account_channel_affinity, _affinity_epoch, _maybe_explore
+from services.warming._fleet import (
+    _account_channel_affinity,
+    _affinity_epoch,
+    _language_pool,
+    _maybe_explore,
+)
 from services.warming._steps import (
     _ChannelTally,
     _emit_step,
@@ -47,7 +53,7 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from schemas._warming_extras import JoinedChannel
-    from schemas.warming import WarmingChannel
+    from schemas.warming import WarmingChannel, WarmingIntensity
     from services.warming._steps import _OnStep
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
@@ -157,6 +163,27 @@ async def _build_cycle_result(
     return result
 
 
+def _pick_channels(
+    account_id: str,
+    channels: list[WarmingChannel],
+    language: str | None,
+    intensity: WarmingIntensity,
+) -> list[WarmingChannel]:
+    """This session's channels: a draw from the account's own-language interest set.
+
+    Exploration stays inside the same language pool, so a stray pick never puts a
+    Mexican number on a Russian feed the pool had no reason to include.
+    """
+    affinity = _account_channel_affinity(
+        account_id, channels, _affinity_epoch(datetime.now(UTC)), language
+    )
+    upper = min(intensity.channels_max, len(affinity))
+    lower = min(intensity.channels_min, upper)
+    chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
+    pool, _tiers = _language_pool(channels, language)
+    return _maybe_explore(chosen, pool, affinity, account_id, _seams.rng)
+
+
 async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
@@ -225,13 +252,8 @@ async def run_one_cycle(
         await _emit_step(on_step, "set_online")
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
-        affinity = _account_channel_affinity(
-            account_id, channels, _affinity_epoch(datetime.now(UTC))
-        )
-        upper = min(intensity.channels_max, len(affinity))
-        lower = min(intensity.channels_min, upper)
-        chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
-        chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
+        language = account_language(account.phone if account else None)
+        chosen = _pick_channels(account_id, channels, language, intensity)
         joined = await list_joined_channels(account_id)
         chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
         recent_ids, recent_media = await _run_channel_loop(

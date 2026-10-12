@@ -36,6 +36,7 @@ from schemas.warming import (
     warming_health,
 )
 from services.trust import account_trust_score_from
+from services.warming._channel_language import language_shortages
 from services.warming.pacing import (
     _account_age_hours,
     compute_intensity,
@@ -241,6 +242,10 @@ async def load_board() -> WarmingBoardState:
         warmed=_warmed_from_cards(cards, settings.neurocomment.warmed_min_days),
         default_target_days=settings.neurocomment.warmed_min_days,
         mechanics=_derive_mechanics(masked),
+        language_shortages=language_shortages(
+            (card.phone for card in [*idle, *warming]),
+            channels.channels,
+        ),
     )
 
 

@@ -17,7 +17,7 @@ from core.telegram_client._util import event_name, id_strings
 from schemas.telegram_actions import ActionResult
 
 if TYPE_CHECKING:
-    from schemas.telegram_action_results import RecentMediaKind
+    from schemas.telegram_action_results import ReadChannelFacts, RecentMediaKind
     from schemas.telegram_actions import ActionStatus, TelegramAction
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
@@ -56,6 +56,8 @@ class _DispatchResult:
     recent_message_ids: list[int] | None = None
     # Which of those posts carry an actionable poll / video / voice (``read_channel``).
     recent_media_kinds: dict[int, RecentMediaKind] | None = None
+    # The read page's facts about the channel itself (``read_channel``).
+    read_facts: ReadChannelFacts | None = None
     # Length of the recovery-email confirmation code Telegram just mailed (set only
     # by ``manage_twofa_email`` in ``set`` mode). It exists nowhere else: the number
     # arrives inside the ``EMAIL_UNCONFIRMED_<N>`` the gateway swallows as a
@@ -339,6 +341,7 @@ def _ok_result(
         channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
         recent_message_ids=id_strings(outcome.recent_message_ids),
         recent_media_kinds={str(i): k for i, k in kinds.items()} if kinds is not None else None,
+        read_facts=outcome.read_facts,
         warm_skip=skip if isinstance(skip, str) else None,
         twofa_email_code_length=outcome.twofa_email_code_length,
         twofa_email_unconfirmed=outcome.twofa_email_unconfirmed,

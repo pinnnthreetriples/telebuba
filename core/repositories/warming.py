@@ -44,6 +44,7 @@ from schemas.warming import (
     ActivityPersona,
     WarmingChannel,
     WarmingChannelList,
+    WarmingChannelObservation,
     WarmingPhase,
     WarmingState,
     WarmingStateRecord,
@@ -57,10 +58,19 @@ if TYPE_CHECKING:
 
 
 def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
-    return WarmingChannel(
-        channel=str(mapping["channel"]),
-        label=_optional_str(mapping.get("label")),
-        created_at=str(mapping["created_at"]),
+    return WarmingChannel.model_validate(
+        {
+            "channel": str(mapping["channel"]),
+            "label": _optional_str(mapping.get("label")),
+            "created_at": str(mapping["created_at"]),
+            "language": _optional_str(mapping.get("language")),
+            "country": _optional_str(mapping.get("country")),
+            "kind": _optional_str(mapping.get("kind")),
+            "subscribers": _optional_int(mapping.get("subscribers")),
+            "last_post_at": _optional_str(mapping.get("last_post_at")),
+            "source": _optional_str(mapping.get("source")) or "manual",
+            "status": _optional_str(mapping.get("status")) or "approved",
+        },
     )
 
 
@@ -107,6 +117,41 @@ def _remove_warming_channel(channel: str) -> WarmingChannelList:
 
 async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
+
+
+def _label_warming_channel(channel: str, language: str | None, country: str | None) -> bool:
+    statement = (
+        update(_warming_channels)
+        .where(_warming_channels.c.channel == channel)
+        .values(language=language, country=country)
+    )
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount > 0
+
+
+async def label_warming_channel(channel: str, language: str | None, country: str | None) -> bool:
+    """Set the operator's language/country on one channel; ``False`` when it is unknown."""
+    return await asyncio.to_thread(_label_warming_channel, channel, language, country)
+
+
+def _observe_warming_channel(channel: str, observed: WarmingChannelObservation) -> None:
+    table = _warming_channels
+    row = table.c.channel == channel
+    with _get_engine().begin() as connection:
+        if observed.last_post_at is not None:
+            connection.execute(update(table).where(row).values(last_post_at=observed.last_post_at))
+        # A label the operator (or an earlier read) already set is never overwritten.
+        if observed.language is not None:
+            unset = table.c.language.is_(None)
+            connection.execute(update(table).where(row, unset).values(language=observed.language))
+        if observed.kind is not None:
+            unset = table.c.kind.is_(None)
+            connection.execute(update(table).where(row, unset).values(kind=observed.kind))
+
+
+async def observe_warming_channel(channel: str, observed: WarmingChannelObservation) -> None:
+    """Record what a warming read learnt about a channel; fills only unknown labels."""
+    await asyncio.to_thread(_observe_warming_channel, channel, observed)
 
 
 def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateRecord:

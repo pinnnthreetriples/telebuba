@@ -2866,7 +2866,13 @@
       "cancel": "Cancel",
       "removeTitle": "Delete channel {{channel}}?",
       "removeBody": "Warming accounts will stop reading and reacting in this channel. This cannot be undone.",
-      "removeConfirm": "Delete"
+      "removeConfirm": "Delete",
+      "languageTag": "Channel language and country",
+      "shortage": "for {{language}}: {{channels}} for {{accounts}}",
+      "channelCount_one": "{{count}} channel",
+      "channelCount_other": "{{count}} channels",
+      "accountCount_one": "{{count}} account",
+      "accountCount_other": "{{count}} accounts"
     },
     "warmStatus": {
       "active": "warming up",

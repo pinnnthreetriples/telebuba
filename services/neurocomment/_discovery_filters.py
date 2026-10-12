@@ -15,10 +15,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+# Discovery's language filter keeps the script-level vote; the detector itself is shared
+# with warming, which needs the finer Latin split for its channel labels.
+from services._lang_detect import (  # noqa: F401 - re-exported to the qualify step
+    detect_script_language as detect_language,
+)
+
 if TYPE_CHECKING:
     from schemas.neurocomment_discovery_request import DiscoverySearchRequest
-
-_UKRAINIAN_MARKERS = frozenset("іїєґІЇЄҐ")
 
 # Rows stored under ``id:<n>``: a channel with no public handle, which nothing can probe
 # and no campaign can comment in.
@@ -32,31 +36,6 @@ def private_ref(channel_id: int | None) -> str:
 
 def is_private_ref(ref: str) -> bool:
     return ref.startswith(PRIVATE_PREFIX)
-
-
-def _is_cyrillic(char: str) -> bool:
-    return "Ѐ" <= char <= "ӿ"
-
-
-def _is_latin(char: str) -> bool:
-    return char.isascii() or "À" <= char <= "ɏ"
-
-
-def detect_language(text: str) -> str | None:
-    """``ru`` / ``en`` / ``uk`` / ``other`` by letter script; ``None`` when no letters.
-
-    Majority vote over letters only, so hashtags, digits and emoji do not sway it.
-    Ukrainian is Cyrillic with any of the four letters Russian lacks (``іїєґ``).
-    """
-    letters = [char for char in text.strip() if char.isalpha()]
-    if not letters:
-        return None
-    half = len(letters) / 2
-    if sum(map(_is_cyrillic, letters)) > half:
-        return "uk" if _UKRAINIAN_MARKERS.intersection(letters) else "ru"
-    if sum(map(_is_latin, letters)) > half:
-        return "en"
-    return "other"
 
 
 def access_of(username: str | None, join_request: bool | None) -> str | None:  # noqa: FBT001

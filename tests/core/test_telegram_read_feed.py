@@ -7,6 +7,8 @@ the extras step only aims those at a post that has one. A skip (``warm_skip``) r
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -81,6 +83,50 @@ async def test_read_channel_reports_the_posts_an_extra_can_act_on(
     assert result.recent_message_ids == ["1", "2", "3", "4", "5", "6"]
     assert result.recent_media_kinds == {"1": "poll", "2": "video", "3": "voice", "4": "voice"}
     assert client.acks == [6]
+
+
+@pytest.mark.asyncio
+async def test_read_channel_reports_what_the_page_says_about_the_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plus_three = timezone(timedelta(hours=3))
+    posts: list[object] = [
+        SimpleNamespace(
+            id=1, media=None, post=True, message="Hola", date=datetime(2026, 10, 1, tzinfo=UTC)
+        ),
+        SimpleNamespace(
+            id=2,
+            media=None,
+            post=True,
+            message=None,
+            date=datetime(2026, 10, 2, 12, tzinfo=plus_three),
+        ),
+        SimpleNamespace(id=3, media=None, post=True, message="amigos", date=None),
+    ]
+    _patch_client(monkeypatch, _FeedClient(posts))
+
+    result = await execute("acc-f4", ReadChannel(channel="@feed", message_limit=20))
+
+    assert result.read_facts is not None
+    assert result.read_facts.text_sample == "Hola amigos"
+    assert result.read_facts.kind == "channel"
+    expected = datetime(2026, 10, 2, 9, tzinfo=UTC).isoformat()
+    assert result.read_facts.last_post_at == expected
+
+
+@pytest.mark.asyncio
+async def test_a_group_page_reads_as_a_group_and_an_empty_one_says_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_client(monkeypatch, _FeedClient([SimpleNamespace(id=1, media=None, post=False)]))
+    group = await execute("acc-f5", ReadChannel(channel="@chat", message_limit=20))
+    _patch_client(monkeypatch, _FeedClient([]))
+    empty = await execute("acc-f5", ReadChannel(channel="@quiet", message_limit=20))
+
+    assert group.read_facts is not None
+    assert group.read_facts.kind == "group"
+    assert group.read_facts.last_post_at is None
+    assert empty.read_facts is None
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,18 @@ from schemas.telegram_actions_comments import PostMediaKind  # noqa: TC001
 RecentMediaKind = Literal["poll", "video", "voice"]
 
 
+class ReadChannelFacts(BaseModel):
+    """What a ``read_channel`` page says about the channel itself (no extra RPC).
+
+    ``text_sample`` is the page's post text, bounded, for a language vote; ``kind`` is
+    ``channel`` when the posts are broadcast posts, ``group`` otherwise.
+    """
+
+    text_sample: str = ""
+    kind: Literal["channel", "group"] | None = None
+    last_post_at: str | None = None
+
+
 class LinkedDiscussionGroupResult(BaseModel):
     """Gateway output for ``GetLinkedDiscussionGroup``.
 
@@ -171,6 +183,8 @@ class ActionResult(BaseModel):
     # video, a voice note), keyed by the same decimal-string id — so the extras step
     # aims a vote or a playback at a post that has one instead of guessing.
     recent_media_kinds: dict[str, RecentMediaKind] | None = None
+    # The same read's facts about the channel itself, so warming can label it.
+    read_facts: ReadChannelFacts | None = None
     # Set when the action ran but found nothing to do (``no_poll``, ``post_gone``...):
     # status stays "ok", but the caller must not count it as an action performed.
     warm_skip: str | None = None

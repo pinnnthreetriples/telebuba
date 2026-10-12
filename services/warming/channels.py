@@ -11,11 +11,25 @@ from typing import TYPE_CHECKING
 from core.channel_tokens import dedup_key as _dedup_key
 from core.channel_tokens import normalize_channel, parse_channels
 from core.config import settings
-from core.db import add_warming_channel, list_warming_channels, remove_warming_channel
+from core.db import (
+    add_warming_channel,
+    label_warming_channel,
+    list_warming_channels,
+    remove_warming_channel,
+)
 from core.logging import log_event
 
 if TYPE_CHECKING:
-    from schemas.warming import AddChannelsRequest, RemoveChannelRequest, WarmingChannelList
+    from schemas.warming import (
+        AddChannelsRequest,
+        RemoveChannelRequest,
+        UpdateChannelRequest,
+        WarmingChannelList,
+    )
+
+
+class UnknownChannelError(LookupError):
+    """The labelled channel is not in the warming pool (removed, or never added)."""
 
 
 # Token parsing itself lives in core.channel_tokens (shared with neurocomment
@@ -76,3 +90,19 @@ async def remove_channel(data: RemoveChannelRequest) -> WarmingChannelList:
     channels = await remove_warming_channel(data.channel)
     await log_event("INFO", "warming_channel_removed", extra={"channel": data.channel})
     return channels
+
+
+async def label_channel(data: UpdateChannelRequest) -> WarmingChannelList:
+    """Set the operator's language/country on one channel; the operator's word wins.
+
+    A read never overwrites a label that is already set, so this is how a wrong
+    automatic guess is corrected — and ``None`` hands the language back to the next read.
+    """
+    if not await label_warming_channel(data.channel, data.language, data.country):
+        raise UnknownChannelError(data.channel)
+    await log_event(
+        "INFO",
+        "warming_channel_labelled",
+        extra={"channel": data.channel, "language": data.language, "country": data.country},
+    )
+    return await list_warming_channels()

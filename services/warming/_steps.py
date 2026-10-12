@@ -29,6 +29,7 @@ from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel
 from services.pacing import human_delay
 from services.warming import _seams
+from services.warming._channel_language import record_read_facts
 from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
 from services.warming.pacing import (
     _FAILURE_STATUSES,
@@ -148,6 +149,7 @@ async def _read_and_react(  # noqa: PLR0913
         out.recent_ids = [int(x) for x in read_result.recent_message_ids or []]
         kinds = read_result.recent_media_kinds or {}
         out.recent_media = {int(x): kind for x, kind in kinds.items()}
+        await record_read_facts(channel, read_result.read_facts)
     elif read_result.status in _FAILURE_STATUSES:
         out.failures += 1
     elif read_result.status in _HALT_STATUSES:

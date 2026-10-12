@@ -98,6 +98,7 @@ import {
   importAccountSession,
   importAccountTdata,
   importMasstaggingTargets,
+  labelWarmingChannel,
   linkCampaignChannel,
   listAccountChannelPosts,
   listAccountChannels,
@@ -474,6 +475,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsError,
   ImportMasstaggingTargetsResponse,
+  LabelWarmingChannelData,
+  LabelWarmingChannelError,
+  LabelWarmingChannelResponse,
   LinkCampaignChannelData,
   LinkCampaignChannelError,
   LinkCampaignChannelResponse,
@@ -3547,6 +3551,35 @@ export const listWarmingChannelsOptions = (options?: Options<ListWarmingChannels
     },
     queryKey: listWarmingChannelsQueryKey(options),
   });
+
+/**
+ * Label Warming Channel
+ *
+ * Set a channel's language and country — what accounts match their phone against.
+ */
+export const labelWarmingChannelMutation = (
+  options?: Partial<Options<LabelWarmingChannelData>>,
+): UseMutationOptions<
+  LabelWarmingChannelResponse,
+  LabelWarmingChannelError,
+  Options<LabelWarmingChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    LabelWarmingChannelResponse,
+    LabelWarmingChannelError,
+    Options<LabelWarmingChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await labelWarmingChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 /**
  * Add Warming Channels

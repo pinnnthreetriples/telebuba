@@ -92,6 +92,10 @@ class WarmingSettings(WarmingSafetySettings, BaseSettings):
     # #203): at 0.5 two accounts still shared ~a third of their subsets, and small
     # pools collapsed to near-identical slices.
     channel_affinity_ratio: float = Field(default=0.25, ge=0.0, le=1.0)
+    # The fewest channels an account's interest set holds: its own phone language
+    # first, unlabelled channels next, others only to reach this floor. The board
+    # warns per language when its own channels fall short of it.
+    channel_affinity_min: int = Field(default=3, ge=1)
     # Slow membership churn of the affinity subset: it is re-scored every this-many
     # days (an "epoch") so a human's followed set drifts over time instead of being
     # frozen forever. ``churn_strength`` (0=frozen, 1=fully reshuffled each epoch)
