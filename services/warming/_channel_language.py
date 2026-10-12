@@ -12,9 +12,9 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import observe_warming_channel
 from core.device_fingerprint_lang import language_pair
 from core.phone_geo import country_for_phone
+from core.repositories.warming import observe_warming_channel
 from schemas.warming import ChannelLanguageShortage, WarmingChannelObservation
 from services._lang_detect import detect_language
 

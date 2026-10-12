@@ -13,11 +13,11 @@ from core.channel_tokens import normalize_channel, parse_channels
 from core.config import settings
 from core.db import (
     add_warming_channel,
-    label_warming_channel,
     list_warming_channels,
     remove_warming_channel,
 )
 from core.logging import log_event
+from core.repositories.warming import label_warming_channel
 
 if TYPE_CHECKING:
     from schemas.warming import (
