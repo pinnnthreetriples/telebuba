@@ -373,9 +373,8 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 activity_persona=stint.activity_persona,
                 warmed_days=0 if stint.fresh else None,
             )
-            # Build dialogue ownership before the loop can run its first cycle.
-            # Cancellation in this awaited preparation is covered by the same
-            # rollback as cancellation during the state commit.
+            # Build dialogue ownership before the first cycle; cancellation here is
+            # covered by the same rollback as cancellation during the state commit.
             await _refresh_dialogue_pairs()
         except asyncio.CancelledError:
             # The write may already have committed when cancellation surfaced.
