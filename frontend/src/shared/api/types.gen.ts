@@ -6815,6 +6815,74 @@ export type WarmingChannelList = {
 };
 
 /**
+ * WarmingDailyStats
+ *
+ * One account's warming totals for one day (also the increment one cycle adds).
+ */
+export type WarmingDailyStats = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Day
+   */
+  day: string;
+  /**
+   * Cycles
+   */
+  cycles?: number;
+  /**
+   * Reads
+   */
+  reads?: number;
+  /**
+   * Reactions
+   */
+  reactions?: number;
+  /**
+   * Joins
+   */
+  joins?: number;
+  /**
+   * Dms
+   */
+  dms?: number;
+  /**
+   * Failures
+   */
+  failures?: number;
+  /**
+   * Floods
+   */
+  floods?: number;
+  /**
+   * Phase
+   */
+  phase?: 'intro' | 'settling' | 'warming' | 'active' | 'warmed' | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Trust Band
+   */
+  trust_band?: 'excellent' | 'good' | 'watch' | 'at_risk' | 'critical' | null;
+};
+
+/**
+ * WarmingDailyStatsList
+ *
+ * Daily rows of one account, oldest day first.
+ */
+export type WarmingDailyStatsList = {
+  /**
+   * Items
+   */
+  items?: Array<WarmingDailyStats>;
+};
+
+/**
  * WarmingMechanics
  *
  * Optional warming steps and whether the current settings let them run.
@@ -11554,6 +11622,50 @@ export type ListWarmingDialoguesResponses = {
 
 export type ListWarmingDialoguesResponse =
   ListWarmingDialoguesResponses[keyof ListWarmingDialoguesResponses];
+
+export type ListWarmingDailyStatsData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Days
+     */
+    days?: number;
+  };
+  url: '/api/v1/warming/daily-stats';
+};
+
+export type ListWarmingDailyStatsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListWarmingDailyStatsError =
+  ListWarmingDailyStatsErrors[keyof ListWarmingDailyStatsErrors];
+
+export type ListWarmingDailyStatsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingDailyStatsList;
+};
+
+export type ListWarmingDailyStatsResponse =
+  ListWarmingDailyStatsResponses[keyof ListWarmingDailyStatsResponses];
 
 export type StartCampaignDiscoveryData = {
   body: DiscoverySearchRequest;
