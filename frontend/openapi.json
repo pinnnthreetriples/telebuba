@@ -30854,6 +30854,18 @@
             ],
             "title": "Warming Days"
           },
+          "warmed_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warmed Days",
+            "default": 0
+          },
+          "idle_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Idle Days",
+            "default": 0
+          },
           "target_days": {
             "anyOf": [
               {

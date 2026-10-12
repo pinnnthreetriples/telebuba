@@ -178,8 +178,9 @@ def warming_days_since(
 ) -> int | None:
     """Whole days since ``started_at`` (ISO-8601); ``None`` when never started.
 
-    Shared by the board card (the "в прогреве N дн" hint) and the loop's
-    target-reached gate (auto-complete once N ≥ the operator's chosen duration).
+    The calendar length of the stint, read by the board card. The loop's
+    target-reached gate counts worked days instead (``warmed_days``); the card
+    shows the difference as idle days that did not count.
 
     When ``state`` is supplied and is *not* a warming state (the account was
     stopped/promoted), the interval is capped at ``stopped_at`` so the count is

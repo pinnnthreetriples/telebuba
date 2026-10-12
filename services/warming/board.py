@@ -82,6 +82,7 @@ _RECORD_ONLY_FIELDS: Final[set[str]] = {
     "phase_entered_at",
     "spam_unknown_streak",
     "recovered_at",
+    "last_warmed_date",
 }
 
 
@@ -183,6 +184,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.flood_total = floods.flood_total if floods else 0
         card.dm_blocked_until = intensity.dm_blocked_until
         card.limit_factor = intensity.limit_factor
+        card.idle_days = max(0, (card.warming_days or 0) - card.warmed_days)
         cards.append(card)
     return cards, channels, masked
 

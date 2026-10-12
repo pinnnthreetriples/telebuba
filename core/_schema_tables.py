@@ -221,6 +221,10 @@ _warming_account_state = Table(
     # Unreadable @SpamBot checks in a row during warming; a reading resets it. Written
     # only by ``core.repositories._warming_spam_streak`` (migration 79).
     Column("spam_unknown_streak", Integer, nullable=False, server_default="0"),
+    # Days of real work in the stint and the local date last counted into it; see
+    # schemas.warming.WarmingStateRecord.warmed_days. Migration #77.
+    Column("warmed_days", Integer, nullable=False, server_default="0"),
+    Column("last_warmed_date", String, nullable=True),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

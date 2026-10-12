@@ -21,6 +21,7 @@ import {
 } from '@/shared/ui';
 
 import { FloodMemoryLine } from './FloodMemoryLine';
+import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
 
 interface WarmingBoardProps {
@@ -245,10 +246,11 @@ function WarmingCard({
   const hold =
     account.state === 'active' && (account.cycles_completed ?? 0) === 0 && !account.last_action;
   const active = hold ? -1 : activeStage(account);
-  // Real elapsed warming days vs the operator-chosen target (the start slider);
-  // the card auto-flips to "complete" once the account reaches its own target.
+  // Worked warming days vs the operator-chosen target (the start slider); days in
+  // error or quarantine do not count. The card auto-flips to "complete" once the
+  // account reaches its own target — the same count the engine's gate reads.
   const target = account.target_days ?? defaultTargetDays;
-  const elapsed = account.warming_days ?? 0;
+  const elapsed = account.warmed_days ?? 0;
   const days = Math.min(elapsed, target);
   const complete = elapsed >= target;
   const dayTicks =
@@ -373,15 +375,18 @@ function WarmingCard({
           colour and have no edge at all. `primary-hairline` is the rung for exactly
           this — faint enough to double as a divider fill. */}
       <div className="rounded-md border border-info-hairline bg-info-tint px-4 pb-3 pt-3">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <span className="type-small-medium">{t('warming.inProgress.days')}</span>
-          <span className="type-small-medium text-content-primary">
-            {t('warming.card.dayProgress', { days, target, count: target })}
-          </span>
+          <WarmDayCount days={days} target={target} idle={account.idle_days ?? 0} />
         </div>
 
         {/* day bar: days done, the day in progress, days to come */}
-        <ProgressBar segments={DAY_SEGMENTS} value={days} max={target} />
+        <ProgressBar
+          segments={DAY_SEGMENTS}
+          value={days}
+          max={target}
+          label={t('warming.inProgress.days')}
+        />
         <div className="mt-2 flex justify-between type-small">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>

@@ -98,6 +98,7 @@ from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_str
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warming_channels import _add_warming_channel_labels
+from core.migration_steps_warmed_days import _add_warming_warmed_days
 from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
     _add_warming_settings_extra_toggles,
@@ -218,6 +219,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (74, "add_account_lifecycle_events", _add_account_lifecycle_events),
     (75, "add_warming_daily_stats", _add_warming_daily_stats),
     (76, "add_warming_flood_memory", _add_warming_flood_memory),
+    (77, "add_warming_warmed_days", _add_warming_warmed_days),
     (79, "add_warming_state_spam_unknown_streak", _add_warming_state_spam_unknown_streak),
     (80, "add_warming_channel_labels", _add_warming_channel_labels),
 )

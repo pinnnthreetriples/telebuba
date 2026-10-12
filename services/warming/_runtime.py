@@ -371,6 +371,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 run_id=run_id,
                 target_days=stint.target_days,
                 activity_persona=stint.activity_persona,
+                warmed_days=0 if stint.fresh else None,
             )
             # Build dialogue ownership before the loop can run its first cycle.
             # Cancellation in this awaited preparation is covered by the same

@@ -6868,6 +6868,14 @@ export type WarmingAccountState = {
    */
   warming_days?: number | null;
   /**
+   * Warmed Days
+   */
+  warmed_days?: number;
+  /**
+   * Idle Days
+   */
+  idle_days?: number;
+  /**
    * Target Days
    */
   target_days?: number | null;

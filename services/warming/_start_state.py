@@ -23,6 +23,9 @@ class CarriedStint(NamedTuple):
     activity_persona: ActivityPersona
     # The chosen first cycle (``None`` → the loop's cold-start spread).
     first_run_at: str | None
+    # A start from idle (or a first start) opens a new stint whose worked days
+    # begin at zero; a resume or restart of a running stint keeps them.
+    fresh: bool
 
 
 def carry_or_restamp(
@@ -45,7 +48,7 @@ def carry_or_restamp(
         else (data.target_days or settings.neurocomment.warmed_min_days)
     )
     persona = existing.activity_persona if continuing else data.activity_persona
-    return CarriedStint(started_at, target_days, persona, first_run_at)
+    return CarriedStint(started_at, target_days, persona, first_run_at, fresh=not continuing)
 
 
 async def journal_start(

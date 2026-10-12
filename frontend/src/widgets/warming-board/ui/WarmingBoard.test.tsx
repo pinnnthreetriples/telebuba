@@ -36,6 +36,7 @@ function warmed(id: string, days: number, target: number): WarmingAccountState {
     health: 'ok',
     cycles_completed: 4,
     warming_days: days,
+    warmed_days: days,
     target_days: target,
   };
 }
@@ -115,7 +116,7 @@ test('stops the clicked account', async () => {
 
 test('auto-completes at the per-account target and promotes via the finish button', async () => {
   const onPromote = vi.fn();
-  // 3 elapsed days against a chosen target of 3 → the card flips to complete
+  // 3 worked days against a chosen target of 3 → the card flips to complete
   // even though cycles_completed is well under the old hardcoded 14.
   const done = warmed('79051184490', 3, 3);
   renderWithClient(

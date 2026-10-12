@@ -179,6 +179,12 @@ class WarmingStateRecord(BaseModel):
     # ramp and the DM block after a spam block count from it; ``None`` = never.
     recovered_at: str | None = None
     spam_unknown_streak: int = Field(default=0, ge=0)
+    # Days of real work in this stint: one per local date with a worked cycle or a
+    # planned quiet day. Days spent in error/quarantine never count, so the target
+    # gate compares this, not calendar days. Reset only by a start from idle.
+    warmed_days: int = Field(default=0, ge=0)
+    # The local date (``YYYY-MM-DD``) last counted into ``warmed_days``.
+    last_warmed_date: str | None = None
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -241,6 +247,11 @@ class WarmingStateWrite(BaseModel):
     # carry the token without every caller knowing it exists; the hand-back clears
     # it in its own statement.
     reservation_token: str | None = None
+    # See WarmingStateRecord.warmed_days. ``None`` leaves both worked-day columns
+    # alone (they move only through their own once-per-day write); a value writes
+    # it together with ``last_warmed_date`` — how a fresh stint resets them.
+    warmed_days: int | None = Field(default=None, ge=0)
+    last_warmed_date: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -321,6 +332,11 @@ class WarmingAccountState(BaseModel):
     # Whole days since warming was first started for this account (from
     # ``WarmingStateRecord.started_at``). ``None`` when warming never ran.
     warming_days: int | None = Field(default=None, ge=0)
+    # See WarmingStateRecord.warmed_days — the "X" of the card's "X / Y дней".
+    warmed_days: int = Field(default=0, ge=0)
+    # Calendar days of the stint that did not count (error, quarantine, stopped
+    # mid-day): ``warming_days - warmed_days``, never negative.
+    idle_days: int = Field(default=0, ge=0)
     # Operator-chosen warming duration (days). Drives the card's "день X / Y"
     # progress + auto-complete state; ``None`` falls back to the 14-day default.
     target_days: int | None = Field(default=None, ge=1)

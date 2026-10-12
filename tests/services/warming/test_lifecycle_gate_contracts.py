@@ -123,6 +123,7 @@ async def test_target_completion_is_observable_at_the_exact_day_boundary(
             run_id="generation-a",
             started_at=started_at,
             target_days=3,
+            warmed_days=3,
             last_event="cycle_completed",
             next_run_at="2026-07-01T01:00:00+00:00",
             heartbeat_at=stale_heartbeat,
@@ -157,7 +158,7 @@ async def test_target_completion_is_observable_at_the_exact_day_boundary(
     first_event = first_events[0]
     assert first_event.level == "INFO"
     assert first_event.account_id == "acc-1"
-    assert first_event.extra == {"target_days": 3, "warming_days": 3}
+    assert first_event.extra == {"target_days": 3, "warmed_days": 3}
 
 
 @pytest.mark.asyncio
@@ -178,6 +179,7 @@ async def test_completed_target_is_reparked_without_duplicate_event(
             run_id="generation-a",
             started_at=started_at,
             target_days=3,
+            warmed_days=3,
             last_event="warming_complete",
             next_run_at="2026-07-01T01:00:00+00:00",
             heartbeat_at=stale_heartbeat,
