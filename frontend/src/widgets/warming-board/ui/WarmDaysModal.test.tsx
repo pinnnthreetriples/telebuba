@@ -20,6 +20,11 @@ function renderWithClient(ui: ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+// A confirm with no geo warning shown: nothing accepted, nobody left out.
+function choice(days: number, persona: string, delayHours: number) {
+  return { days, persona, delayHours, acceptGeo: false, onlyGeoMatching: false };
+}
+
 test('presets, keyboard arrows and confirm', async () => {
   const onClose = vi.fn();
   const onConfirm = vi.fn();
@@ -50,7 +55,7 @@ test('presets, keyboard arrows and confirm', async () => {
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
   // defaults to the balanced persona when none is picked
-  expect(onConfirm).toHaveBeenCalledWith(8, 'normal', 3);
+  expect(onConfirm).toHaveBeenCalledWith(choice(8, 'normal', 3));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
@@ -81,7 +86,7 @@ test('opens on the board default and reaches thirty days, no further', async () 
   expect(slider).toHaveAttribute('aria-valuenow', '30');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  expect(onConfirm).toHaveBeenCalledWith(30, 'normal', 3);
+  expect(onConfirm).toHaveBeenCalledWith(choice(30, 'normal', 3));
 });
 
 test('a configured default past thirty days widens the slider instead of being cut', async () => {
@@ -100,7 +105,7 @@ test('a configured default past thirty days widens the slider instead of being c
   expect(slider).toHaveAttribute('aria-valuemax', '45');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  expect(onConfirm).toHaveBeenCalledWith(45, 'normal', 3);
+  expect(onConfirm).toHaveBeenCalledWith(choice(45, 'normal', 3));
 });
 
 test('handled slider keys do not also scroll the dialog', () => {
@@ -132,7 +137,7 @@ test('persona chip selection is forwarded on confirm', async () => {
   await userEvent.click(screen.getByText('Запустить прогрев'));
 
   // Without a board default the dialog opens on the two-week stint.
-  expect(onConfirm).toHaveBeenCalledWith(14, 'active', 3);
+  expect(onConfirm).toHaveBeenCalledWith(choice(14, 'active', 3));
 });
 
 test('cancel closes without confirming', async () => {
@@ -234,7 +239,7 @@ test('in pool mode it starts every idle account with the picked delay and no spa
 
   await userEvent.click(screen.getByRole('radio', { name: '24 ч' }));
   await userEvent.click(screen.getByRole('button', { name: 'Запустить пул' }));
-  expect(onConfirm).toHaveBeenCalledWith(14, 'normal', 24);
+  expect(onConfirm).toHaveBeenCalledWith(choice(14, 'normal', 24));
 });
 
 test('a picked delay alone also asks before closing', async () => {

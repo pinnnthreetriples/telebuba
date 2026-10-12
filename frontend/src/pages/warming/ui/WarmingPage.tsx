@@ -9,12 +9,12 @@ import {
   handoffToNeurocommentMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
+  resumeWarmingMutation,
   startWarmingMutation,
   stopWarmingMutation,
-  unpromoteFromNeurocommentMutation,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
-import type { StartWarmingRequest, WarmingAccountState } from '@/shared/api';
+import type { StartWarmingRequest, WarmedAccount, WarmingAccountState } from '@/shared/api';
 import { errorMessage, mutationErrorText, useTransientFeedback } from '@/shared/lib';
 import {
   Badge,
@@ -37,7 +37,14 @@ import {
   ActionTuningCard,
   ChannelLanguageShortages,
   DmPauseBanner,
+  GeoMismatchBanner,
+  HandoffModal,
+  type HandoffMode,
+  needsGeoConsent,
+  readinessReasonKey,
   SpamRetryModal,
+  type StartDialogChoice,
+  trustTone,
   WarmDaysModal,
   WarmingBoard,
   WarmingChannelPill,
@@ -48,37 +55,36 @@ import { invalidateWarmingQueries, useWarmingLiveRefresh } from '../model/liveRe
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
 
-// Trust 3-tier tone (design): healthy / watch / risk. Tokens, not hexes, so the
-// tiers read the same as every other health signal in the dashboard.
-function trustTone(trust: number): string {
-  if (trust >= 70) return 'text-success-deep';
-  if (trust >= 45) return 'text-warning-deep';
-  return 'text-danger';
-}
-
-// Map a backend readiness reason (English, from evaluate_readiness) to its RU
-// i18n key: "session <status>" / "no proxy" / "proxy failed" / "no channels" /
-// "spam limited" / "trust critical".
-const READINESS_REASON_KEY: Record<string, string> = {
-  'no proxy': 'warming.notReady.noProxy',
-  'proxy failed': 'warming.notReady.proxyFailed',
-  'no channels': 'warming.notReady.noChannels',
-  'spam limited': 'warming.notReady.spamLimited',
-  'trust critical': 'warming.notReady.trustCritical',
-};
-function reasonKey(reason: string): string {
-  return reason.startsWith('session ')
-    ? 'warming.notReady.session'
-    : (READINESS_REASON_KEY[reason] ?? '');
-}
-
 // «Как работает» in cycle order. A key from the board's `mechanics` is a step the
 // settings can switch off; `null` is one the engine always runs.
 // What the start dialog hands back: one length, cadence and first-cycle delay.
 type StartChoice = Pick<
   StartWarmingRequest,
-  'target_days' | 'activity_persona' | 'start_delay_hours' | 'spread_start'
+  'target_days' | 'activity_persona' | 'start_delay_hours' | 'spread_start' | 'accept_geo_mismatch'
 >;
+
+// The dialog's answer as the start request's fields.
+function startChoice(choice: StartDialogChoice): StartChoice {
+  return {
+    target_days: choice.days,
+    activity_persona: choice.persona,
+    start_delay_hours: choice.delayHours,
+    accept_geo_mismatch: choice.acceptGeo,
+  };
+}
+
+// The start dialog's geo warning for one account, when its pair is not accepted yet.
+function geoOf(account: {
+  geo_status?: WarmingAccountState['geo_status'];
+  geo_accepted?: boolean;
+  phone_country?: string | null;
+  proxy_country?: string | null;
+}): { phoneCountry: string; proxyCountry: string } | undefined {
+  if (!needsGeoConsent(account) || !account.phone_country || !account.proxy_country) {
+    return undefined;
+  }
+  return { phoneCountry: account.phone_country, proxyCountry: account.proxy_country };
+}
 
 const HOWTO_STEPS = [
   ['join', 'join'],
@@ -108,6 +114,10 @@ export function WarmingPage() {
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
   // "Запустить пул" opens the start dialog for every idle account instead of firing.
   const [poolStartOpen, setPoolStartOpen] = useState(false);
+  // «Вернуть в прогрев» opens the start dialog and continues the stint (item 2.5).
+  const [resumeFor, setResumeFor] = useState<WarmedAccount | null>(null);
+  // «В нейрокомментинг» asks for the start mode first (item 2.4).
+  const [handoffFor, setHandoffFor] = useState<string | null>(null);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
   const accountFeedback = useTransientFeedback();
   const channelFeedback = useTransientFeedback();
@@ -127,11 +137,11 @@ export function WarmingPage() {
   const addChannels = useMutation(addWarmingChannelsMutation());
   const removeChannel = useMutation(removeWarmingChannelMutation());
   const promote = useMutation(promoteToNeurocommentMutation());
-  const unpromote = useMutation(unpromoteFromNeurocommentMutation());
+  const resume = useMutation(resumeWarmingMutation());
   // Inline: "@SpamBot did not answer" opens the retry dialog rather than a toast;
   // runHandoff toasts every other refusal itself.
   const handoff = useMutation({ ...handoffToNeurocommentMutation(), meta: { inlineError: true } });
-  const [spamRetryFor, setSpamRetryFor] = useState<string | null>(null);
+  const [spamRetryFor, setSpamRetryFor] = useState<{ id: string; mode: HandoffMode } | null>(null);
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -141,7 +151,7 @@ export function WarmingPage() {
       return next;
     });
   };
-  // promote (graduate) / unpromote (return to warming) share the {account_id} body.
+  // promote (graduate) takes the {account_id} body.
   // mutateAsync for the same reason as runOnAccount below: mutate's callbacks live
   // in ONE slot per hook, so graduating a second account dropped the first
   // account's feedback mark and invalidate. A promise per call also captures its
@@ -167,10 +177,10 @@ export function WarmingPage() {
   // The hand-off refuses without an answer from @SpamBot. That refusal opens (or keeps
   // open) the retry dialog — its promise rejects so the dialog stays — while every
   // other outcome resolves, closing it.
-  const runHandoff = (accountId: string) => {
+  const runHandoff = (accountId: string, mode: HandoffMode) => {
     markBusy(accountId, true);
     return handoff
-      .mutateAsync({ body: { account_id: accountId } })
+      .mutateAsync({ body: { account_id: accountId, start_mode: mode } })
       .then(
         () => {
           accountFeedback.mark(accountId, true);
@@ -181,7 +191,7 @@ export function WarmingPage() {
             toastError(mutationErrorText(error));
             return;
           }
-          setSpamRetryFor(accountId);
+          setSpamRetryFor({ id: accountId, mode });
           throw error;
         },
       )
@@ -254,6 +264,10 @@ export function WarmingPage() {
     runOnAccount(accountId, () =>
       start.mutateAsync({ body: { account_id: accountId, ...choice } }),
     );
+  const resumeAccount = (accountId: string, choice: StartChoice) =>
+    runOnAccount(accountId, () =>
+      resume.mutateAsync({ body: { account_id: accountId, ...choice } }),
+    );
   // A batch keeps the pool button disabled until its LAST call settles: isPending
   // tracks only the last-fired call and would re-enable it mid-batch.
   const runBatch = (calls: Promise<unknown>[]) => {
@@ -291,6 +305,9 @@ export function WarmingPage() {
   // The pool starts what each card's own Start would: a not-ready account is left
   // out while the readiness check is on, and the dialog says how many.
   const poolIdle = idle.filter((a) => (a.readiness?.ready ?? false) || !enforceReadiness);
+  const poolGeoMismatch = poolIdle.filter(needsGeoConsent).length;
+  // Every card on the page whose phone/proxy pair still waits for a consent.
+  const geoMismatches = [...idle, ...warming].filter(needsGeoConsent).length;
   const howtoSteps = HOWTO_STEPS.map(([step, mechanic]) => {
     const label = t(`warming.howto.steps.${step}`);
     const on = mechanic === null || (data.mechanics?.[mechanic] ?? true);
@@ -328,7 +345,10 @@ export function WarmingPage() {
         </div>
       </div>
 
+      {/* Page banners: the fleet DM pause and unaccepted geo mismatches. Stage 3's
+          survival stats take the slot under them. */}
       <DmPauseBanner pausedUntil={data.settings.dm_paused_until} />
+      <GeoMismatchBanner count={geoMismatches} />
 
       {/* `minmax(0,1fr)`, not a bare `1fr`: an `fr` track keeps an automatic minimum
           (index.css says the same of `.tb-subrow` in the row direction), so a track
@@ -359,7 +379,7 @@ export function WarmingPage() {
                   const startable = ready || !enforceReadiness;
                   const blockers = (account.readiness?.reasons ?? [])
                     .map((reason) => {
-                      const key = reasonKey(reason);
+                      const key = readinessReasonKey(reason);
                       return key ? t(key) : reason;
                     })
                     .join(', ');
@@ -412,6 +432,9 @@ export function WarmingPage() {
                                 ) : null}
                                 <span className="type-small">{proxyTypeLabel(ptype)}</span>
                               </>
+                            ) : null}
+                            {account.geo_accepted ? (
+                              <Badge>{t('warming.geo.accepted')}</Badge>
                             ) : null}
                           </div>
                         </div>
@@ -581,7 +604,7 @@ export function WarmingPage() {
                         variant="neutral"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
-                          runHandoff(acc.account_id).catch(() => undefined);
+                          setHandoffFor(acc.account_id);
                         }}
                         className="flex-1 shrink gap-2"
                       >
@@ -595,7 +618,7 @@ export function WarmingPage() {
                         aria-label={t('warming.warmed.backToWarm')}
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
-                          runGraduation(unpromote, acc.account_id);
+                          setResumeFor(acc);
                         }}
                         className="flex size-touch shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
@@ -662,12 +685,37 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={(days, persona, delayHours) => {
-            void startAccount(warmDaysFor.account_id, {
-              target_days: days,
-              activity_persona: persona,
-              start_delay_hours: delayHours,
-            });
+          geo={geoOf(warmDaysFor)}
+          onConfirm={(choice) => {
+            void startAccount(warmDaysFor.account_id, startChoice(choice));
+          }}
+        />
+      ) : null}
+
+      {resumeFor ? (
+        <WarmDaysModal
+          accountId={resumeFor.account_id}
+          phone={resumeFor.phone ?? resumeFor.label}
+          resumeDays={resumeFor.warmed_days ?? 0}
+          defaultDays={data.default_target_days}
+          geo={geoOf(resumeFor)}
+          onClose={() => {
+            setResumeFor(null);
+          }}
+          onConfirm={(choice) => {
+            void resumeAccount(resumeFor.account_id, startChoice(choice));
+          }}
+        />
+      ) : null}
+
+      {handoffFor ? (
+        <HandoffModal
+          plan={data.soft_start}
+          onClose={() => {
+            setHandoffFor(null);
+          }}
+          onConfirm={(mode) => {
+            runHandoff(handoffFor, mode).catch(() => undefined);
           }}
         />
       ) : null}
@@ -676,20 +724,20 @@ export function WarmingPage() {
         <WarmDaysModal
           poolAccountIds={poolIdle.map((a) => a.account_id)}
           poolSkipped={idle.length - poolIdle.length}
+          poolGeoMismatch={poolGeoMismatch}
           defaultDays={data.default_target_days}
           onClose={() => {
             setPoolStartOpen(false);
           }}
-          onConfirm={(days, persona, delayHours) => {
+          onConfirm={(choice) => {
             // Same length, cadence and window for all; the backend draws each account
-            // its own moment inside the window.
-            const choice = {
-              target_days: days,
-              activity_persona: persona,
-              start_delay_hours: delayHours,
-              spread_start: true,
-            };
-            runBatch(poolIdle.map((a) => startAccount(a.account_id, choice)));
+            // its own moment inside the window. «Только совпадающие» leaves out every
+            // account whose geo still waits for a consent.
+            const request = { ...startChoice(choice), spread_start: true };
+            const targets = choice.onlyGeoMatching
+              ? poolIdle.filter((a) => !needsGeoConsent(a))
+              : poolIdle;
+            runBatch(targets.map((a) => startAccount(a.account_id, request)));
           }}
         />
       ) : null}
@@ -699,7 +747,7 @@ export function WarmingPage() {
           onClose={() => {
             setSpamRetryFor(null);
           }}
-          onRetry={() => runHandoff(spamRetryFor)}
+          onRetry={() => runHandoff(spamRetryFor.id, spamRetryFor.mode)}
         />
       ) : null}
 

@@ -164,10 +164,16 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
     warming_days: 8,
     warmed_days: 6,
     target_days: 15,
-    activity_persona: 'reader',
+    activity_persona: 'normal',
     readiness: null,
     promoted_to_nc: false,
     nc_handed_off: false,
+    // Operator-console rows (Прогрев 2.0, item 2.3): settled actions, DM status, geo.
+    daily_settled: 12 + i,
+    dm_status: i === 0 ? 'on' : 'too_young',
+    attention: null,
+    geo_status: 'mismatch',
+    geo_accepted: i % 2 === 1,
     ...over,
   };
 }
@@ -202,7 +208,12 @@ export const warmingBoard = {
   warming: [
     warmingState(0),
     warmingState(1),
-    warmingState(2, { state: 'flood_wait', health: 'warn', flood_wait_seconds: 420 }),
+    warmingState(2, {
+      state: 'flood_wait',
+      health: 'warn',
+      flood_wait_seconds: 420,
+      attention: { code: 'flood_wait', until: '2026-08-28T14:30:00Z' },
+    }),
   ],
   channels: {},
   settings: warmingSettings,
@@ -376,6 +387,9 @@ export const neurocommentBoard = {
     last_comment_channel: '@crypto_daily',
     pinned_channels: ['@crypto_daily'],
     readiness: [],
+    // The soft neurocomment start's badge (item 2.4) on the first account.
+    soft_start_day: i === 0 ? 2 : null,
+    soft_start_days: i === 0 ? 5 : 0,
   })),
   channels: [
     {

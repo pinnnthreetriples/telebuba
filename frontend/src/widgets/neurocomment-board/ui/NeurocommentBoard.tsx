@@ -42,6 +42,9 @@ interface BoardRow {
   // the status cell animates this instead of the (misleading) static status.
   armedReady: number;
   armedTarget: number;
+  // A soft neurocomment start in progress: «Мягкий старт · день 2/5» (item 2.4).
+  softDay: number | null;
+  softDays: number;
 }
 
 // One work row per account, joined on the account's OWN channel: where it commented
@@ -129,6 +132,8 @@ function deriveRows(
       deletedHere: primary?.deleted ?? 0,
       armedReady,
       armedTarget,
+      softDay: account.soft_start_day ?? null,
+      softDays: account.soft_start_days ?? 0,
     };
   });
 }
@@ -248,7 +253,19 @@ export function NeurocommentBoard({
       {
         accessorKey: 'account',
         header: t('neurocomment.board.col.account'),
-        cell: (info) => info.getValue<string>(),
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-2">
+            {row.original.account}
+            {row.original.softDay != null ? (
+              <Badge tone="info">
+                {t('neurocomment.board.softStart', {
+                  day: row.original.softDay,
+                  days: row.original.softDays,
+                })}
+              </Badge>
+            ) : null}
+          </span>
+        ),
         meta: {
           cellClassName: 'whitespace-nowrap type-body-medium',
           cardSlot: 'title',

@@ -9245,7 +9245,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PromoteRequest"
+                "$ref": "#/components/schemas/HandoffRequest"
               }
             }
           }
@@ -9400,7 +9400,118 @@
           "warming"
         ],
         "summary": "Start Warming",
+        "description": "Start warming; a geo mismatch never refuses, ``accept_geo_mismatch`` records consent.",
         "operationId": "startWarming",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWarmingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/resume": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Resume Warming",
+        "description": "\u00ab\u0412\u0435\u0440\u043d\u0443\u0442\u044c \u0432 \u043f\u0440\u043e\u0433\u0440\u0435\u0432\u00bb: continue a graduated account's stint, keeping its worked days.",
+        "operationId": "resumeWarming",
         "parameters": [
           {
             "name": "tb_session",
@@ -25024,6 +25135,30 @@
         "title": "ExtraToggles",
         "description": "Which extras the operator allows. A missing key means \"keep the stored value\"."
       },
+      "HandoffRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "start_mode": {
+            "type": "string",
+            "enum": [
+              "soft",
+              "normal"
+            ],
+            "title": "Start Mode",
+            "default": "soft"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "HandoffRequest",
+        "description": "Body of ``POST /warming/handoff``: the account and how it enters neurocomment."
+      },
       "HealthStatus": {
         "properties": {
           "status": {
@@ -26129,6 +26264,24 @@
       },
       "NeurocommentAccountCard": {
         "properties": {
+          "soft_start_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft Start Day"
+          },
+          "soft_start_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Soft Start Days",
+            "default": 0
+          },
           "account_id": {
             "type": "string",
             "minLength": 1,
@@ -29267,6 +29420,73 @@
         "title": "SetCampaignStatusRequest",
         "description": "Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148)."
       },
+      "SoftStartPlan": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Days",
+            "default": 5
+          },
+          "early_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Early Days",
+            "default": 2
+          },
+          "early_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Early Comments Per Hour",
+            "default": 2
+          },
+          "early_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Early Comments Per Channel Per Day",
+            "default": 1
+          },
+          "early_joins_per_day": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Early Joins Per Day",
+            "default": 5
+          },
+          "late_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Late Comments Per Hour",
+            "default": 4
+          },
+          "late_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Late Comments Per Channel Per Day",
+            "default": 2
+          },
+          "late_joins_per_day": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Late Joins Per Day",
+            "default": 10
+          },
+          "first_day_comments": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "First Day Comments",
+            "default": 5
+          },
+          "last_day_comments": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Last Day Comments",
+            "default": 15
+          }
+        },
+        "type": "object",
+        "title": "SoftStartPlan",
+        "description": "The soft start's numbers (``settings.soft_start``), quoted by the hand-off dialog."
+      },
       "SolverToggleRequest": {
         "properties": {
           "enabled": {
@@ -29467,6 +29687,11 @@
           "spread_start": {
             "type": "boolean",
             "title": "Spread Start",
+            "default": false
+          },
+          "accept_geo_mismatch": {
+            "type": "boolean",
+            "title": "Accept Geo Mismatch",
             "default": false
           },
           "account_id": {
@@ -30841,6 +31066,21 @@
             "type": "boolean",
             "title": "Nc Handed Off",
             "default": false
+          },
+          "geo_status": {
+            "type": "string",
+            "enum": [
+              "match",
+              "mismatch",
+              "unknown"
+            ],
+            "title": "Geo Status",
+            "default": "unknown"
+          },
+          "geo_accepted": {
+            "type": "boolean",
+            "title": "Geo Accepted",
+            "default": false
           }
         },
         "type": "object",
@@ -30869,6 +31109,51 @@
       },
       "WarmingAccountState": {
         "properties": {
+          "daily_settled": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Daily Settled",
+            "default": 0
+          },
+          "dm_status": {
+            "type": "string",
+            "enum": [
+              "on",
+              "chat_off",
+              "no_llm_key",
+              "paused",
+              "not_ready",
+              "too_young",
+              "trust"
+            ],
+            "title": "Dm Status",
+            "default": "on"
+          },
+          "attention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingAttention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geo_status": {
+            "type": "string",
+            "enum": [
+              "match",
+              "mismatch",
+              "unknown"
+            ],
+            "title": "Geo Status",
+            "default": "unknown"
+          },
+          "geo_accepted": {
+            "type": "boolean",
+            "title": "Geo Accepted",
+            "default": false
+          },
           "account_id": {
             "type": "string",
             "minLength": 1,
@@ -31382,6 +31667,71 @@
         "title": "WarmingAccountState",
         "description": "One account's warming status, rendered as a kanban card."
       },
+      "WarmingAttention": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "quarantine",
+              "flood_wait",
+              "stopping",
+              "quarantine_exhausted",
+              "quarantine_unreadable",
+              "not_ready",
+              "error"
+            ],
+            "title": "Code"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "attempts": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempts"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "WarmingAttention",
+        "description": "What needs the operator on one card, as a code instead of prose."
+      },
       "WarmingBoardState": {
         "properties": {
           "idle": {
@@ -31445,6 +31795,9 @@
             },
             "type": "array",
             "title": "Language Shortages"
+          },
+          "soft_start": {
+            "$ref": "#/components/schemas/SoftStartPlan"
           }
         },
         "type": "object",

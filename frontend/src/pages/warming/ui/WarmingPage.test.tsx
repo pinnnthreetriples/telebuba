@@ -271,21 +271,36 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
   expect(phoneFlag?.parentElement?.textContent).toContain('+79261112233');
   expect(proxyFlag?.parentElement?.textContent).toContain('SOCKS5');
 
+  // «Вернуть в прогрев» opens the start dialog and continues the stint (item 2.5).
   await userEvent.click(screen.getByLabelText('Обратно в прогрев'));
-  await waitFor(() => {
-    const unpromoted = vi
+  const resumeDialog = await screen.findByRole('dialog', { name: 'Вернуть в прогрев' });
+  expect(resumeDialog).toHaveTextContent('отработано дней: 0');
+  await userEvent.click(screen.getByRole('button', { name: 'Продолжить прогрев' }));
+  const resumed = await waitFor(() => {
+    const call = vi
       .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/unpromote'));
-    expect(unpromoted).toBe(true);
+      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/resume'));
+    expect(call).toBeDefined();
+    return call?.[0] as Request;
   });
+  expect(await resumed.clone().json()).toMatchObject({ account_id: 'grad', target_days: 14 });
+  const unpromoted = vi
+    .mocked(fetch)
+    .mock.calls.some(([input]) => (input as Request).url.includes('/warming/unpromote'));
+  expect(unpromoted).toBe(false);
 
+  // «В нейрокомментинг» asks for the start mode first, the soft start preselected.
   await userEvent.click(screen.getByText('В нейрокомментинг'));
-  await waitFor(() => {
-    const handed = vi
+  await screen.findByRole('dialog', { name: 'В нейрокомментинг' });
+  await userEvent.click(screen.getByRole('button', { name: 'Передать' }));
+  const handed = await waitFor(() => {
+    const call = vi
       .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/handoff'));
-    expect(handed).toBe(true);
+      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/handoff'));
+    expect(call).toBeDefined();
+    return call?.[0] as Request;
   });
+  expect(await handed.clone().json()).toEqual({ account_id: 'grad', start_mode: 'soft' });
 });
 
 test('a hand-off @SpamBot did not answer offers only a retry', async () => {
@@ -308,6 +323,7 @@ test('a hand-off @SpamBot did not answer offers only a retry', async () => {
   });
   renderWithClient(<WarmingPage />);
   await userEvent.click(await screen.findByText('В нейрокомментинг'));
+  await userEvent.click(await screen.findByRole('button', { name: 'Передать' }));
 
   const dialog = await screen.findByRole('dialog', { name: '@SpamBot не ответил' });
   expect(dialog).toHaveTextContent('Повторить');

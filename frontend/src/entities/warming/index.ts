@@ -4,6 +4,7 @@ export {
   liftWarmingDmPauseMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
+  resumeWarmingMutation,
   startWarmingMutation,
   stopWarmingMutation,
   unpromoteFromNeurocommentMutation,

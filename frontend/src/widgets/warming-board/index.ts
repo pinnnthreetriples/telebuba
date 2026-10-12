@@ -1,7 +1,11 @@
 export { ActionTuningCard } from './ui/ActionTuningCard';
 export { ChannelLanguageShortages } from './ui/ChannelLanguageShortages';
 export { DmPauseBanner } from './ui/DmPauseBanner';
+export { GeoMismatchBanner } from './ui/GeoMismatchBanner';
+export { HandoffModal, type HandoffMode } from './ui/HandoffModal';
 export { SpamRetryModal } from './ui/SpamRetryModal';
 export { WarmingBoard } from './ui/WarmingBoard';
 export { WarmingChannelPill } from './ui/WarmingChannelPill';
-export { WarmDaysModal } from './ui/WarmDaysModal';
+export { WarmDaysModal, type StartDialogChoice } from './ui/WarmDaysModal';
+export { needsGeoConsent } from './lib/geo';
+export { readinessReasonKey, trustTone } from './lib/trust';

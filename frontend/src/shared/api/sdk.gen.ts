@@ -448,6 +448,9 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsErrors,
   ResolveChatBroadcastTargetsResponses,
+  ResumeWarmingData,
+  ResumeWarmingErrors,
+  ResumeWarmingResponses,
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
@@ -2080,12 +2083,31 @@ export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
 
 /**
  * Start Warming
+ *
+ * Start warming; a geo mismatch never refuses, ``accept_geo_mismatch`` records consent.
  */
 export const startWarming = <ThrowOnError extends boolean = false>(
   options: Options<StartWarmingData, ThrowOnError>,
 ): RequestResult<StartWarmingResponses, StartWarmingErrors, ThrowOnError> =>
   (options.client ?? client).post<StartWarmingResponses, StartWarmingErrors, ThrowOnError>({
     url: '/api/v1/warming/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Resume Warming
+ *
+ * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ */
+export const resumeWarming = <ThrowOnError extends boolean = false>(
+  options: Options<ResumeWarmingData, ThrowOnError>,
+): RequestResult<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError> =>
+  (options.client ?? client).post<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError>({
+    url: '/api/v1/warming/resume',
     ...options,
     headers: {
       'Content-Type': 'application/json',

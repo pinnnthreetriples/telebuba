@@ -116,8 +116,10 @@ test('handing off a second account does not swallow the first one s refresh', as
 
   const beforeClicks = boardFetches();
   await userEvent.click(screen.getAllByText('В нейрокомментинг')[0] as HTMLElement);
+  await userEvent.click(screen.getByRole('button', { name: 'Передать' }));
   // Re-query: the first click re-rendered the warmed card.
   await userEvent.click(screen.getAllByText('В нейрокомментинг')[1] as HTMLElement);
+  await userEvent.click(screen.getByRole('button', { name: 'Передать' }));
   await waitFor(() => {
     expect(handoffs).toBe(2);
   });

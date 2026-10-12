@@ -22,6 +22,7 @@ from core.phone_geo import country_for_phone
 from core.repositories.warming_floods import (
     list_warming_flood_summaries,
 )
+from schemas._warming_console import SoftStartPlan
 from schemas.warming import (
     WarmedAccount,
     WarmedAccountList,
@@ -239,6 +240,8 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             trust_score=card.trust_score,
             target_days=card.target_days or min_days,
             nc_handed_off=card.nc_handed_off,
+            geo_status=card.geo_status,
+            geo_accepted=card.geo_accepted,
         )
         for card in cards
         if card.promoted_to_nc
@@ -272,6 +275,7 @@ async def load_board() -> WarmingBoardState:
             (card.phone for card in [*idle, *warming]),
             channels.channels,
         ),
+        soft_start=SoftStartPlan.model_validate(settings.soft_start.model_dump()),
     )
 
 

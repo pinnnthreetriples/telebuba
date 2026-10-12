@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from core.config import settings
 from core.db import (
     create_account,
     fetch_warming_state,
@@ -218,3 +219,19 @@ async def test_resume_records_a_geo_consent_too() -> None:
     assert record is not None
     assert record.geo_ack == "MX>US"
     assert record.warmed_days == 5
+
+
+@pytest.mark.asyncio
+async def test_the_warmed_card_carries_the_geo_and_the_board_the_soft_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.soft_start, "days", 7)
+    await _account()
+    await _graduate(warmed_days=14)
+
+    board = await warming.load_board()
+
+    (warmed,) = board.warmed
+    assert (warmed.geo_status, warmed.geo_accepted) == ("mismatch", False)
+    assert board.soft_start.days == 7
+    assert board.soft_start.last_day_comments == settings.soft_start.last_day_comments

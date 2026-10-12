@@ -458,3 +458,25 @@ test('falls back to the label when the account is not in the full list', () => {
 
   expect(screen.getByText('+79261112233')).toBeInTheDocument();
 });
+
+test('an account in a soft start names its day; the others carry no badge', () => {
+  const [soft, plain] = BOARD.accounts ?? [];
+  if (!soft || !plain) throw new Error('fixture lost its accounts');
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    accounts: [
+      { ...soft, soft_start_day: 2, soft_start_days: 5 },
+      { ...plain, soft_start_day: null, soft_start_days: 0 },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={2}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getAllByText('Мягкий старт · день 2/5')).toHaveLength(1);
+  expect(screen.getByText('+15550000000')).toBeInTheDocument();
+});

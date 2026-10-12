@@ -1999,7 +1999,8 @@
         "channel": "Channel",
         "comment": "Comment",
         "status": "Status"
-      }
+      },
+      "softStart": "Soft start · day {{day}}/{{days}}"
     },
     "howto": {
       "title": "How it works",
@@ -3181,6 +3182,75 @@
       "shifted": "(night there then, moved to the morning)",
       "shiftedPool": "(night-time runs moved to the morning)",
       "rangeOne": "≈ {{from}}–{{to}} account time"
+    },
+    "geo": {
+      "single": "Proxy: {{proxy}}, phone: {{phone}}. Telegram may find the login suspicious",
+      "accept": "Start anyway",
+      "changeProxy": "Change proxy",
+      "pool_one": "Geo differs on {{count}} of {{total}}",
+      "pool_other": "Geo differs on {{count}} of {{total}}",
+      "poolDetail": "Phone and proxy are from different countries — Telegram may find the login suspicious.",
+      "startAll": "Start all",
+      "onlyMatching": "Only matching",
+      "accepted": "Geo ≠ (accepted)",
+      "banner_one": "Phone and proxy geo differ on {{count}} account",
+      "banner_other": "Phone and proxy geo differ on {{count}} accounts",
+      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
+    },
+    "resume": {
+      "title": "Back to warming",
+      "subtitle": "{{phone}} · {{count}} days worked so far, the count continues",
+      "start": "Continue warming"
+    },
+    "handoff": {
+      "title": "To neurocomment",
+      "subtitle": "How the account starts in neurocomment",
+      "softName": "Soft start (recommended)",
+      "softDetail": "{{days}} days of lowered limits: days 1–{{earlyDays}} up to {{earlyHour}} comments an hour, {{earlyChannel}} per channel a day, {{earlyJoins}} joins; days {{lateFrom}}–{{days}} {{lateHour}} / {{lateChannel}} / {{lateJoins}}. Comments per day: {{firstDay}} → {{lastDay}}.",
+      "normalName": "As usual",
+      "normalDetail": "The usual neurocomment limits right away.",
+      "confirm": "Hand off",
+      "cancel": "Cancel"
+    },
+    "console": {
+      "phase": {
+        "intro": "intro",
+        "settling": "settling in",
+        "warming": "warming",
+        "active": "active",
+        "warmed": "warmed"
+      },
+      "phaseLabel": "Phase: {{phase}}",
+      "toNext": "next phase in {{days}} d",
+      "trust": "Trust {{score}}",
+      "spam": {
+        "clean": "Spam: clean",
+        "limited": "Spam: limited",
+        "unknown": "Spam: not checked"
+      },
+      "today": "Today {{done}} of {{cap}} actions",
+      "todayNoCap": "Today {{done}} actions",
+      "next": "next visit in {{time}}",
+      "dmOn": "DMs: on",
+      "dmOff": "DMs: off, {{reason}}",
+      "dmReason": {
+        "chat_off": "chat switched off",
+        "no_llm_key": "no LLM key",
+        "paused": "paused for every account",
+        "not_ready": "account not ready",
+        "too_young": "warming just started",
+        "trust": "low trust"
+      },
+      "attention": {
+        "quarantine": "Quarantine {{attempt}}/{{attempts}}",
+        "flood_wait": "Flood until {{time}}",
+        "stopping": "Stopping…",
+        "quarantine_exhausted": "Quarantine exhausted — the spam block holds",
+        "quarantine_unreadable": "Quarantine exhausted — @SpamBot does not answer",
+        "not_ready": "Not ready: {{reasons}}",
+        "error": "Cycle error — see the log"
+      },
+      "until": "until {{time}}"
     }
   },
   "auth": {

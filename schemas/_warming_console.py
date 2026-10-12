@@ -77,6 +77,21 @@ class SoftStartProgress(BaseModel):
     soft_start_days: int = Field(default=0, ge=0)
 
 
+class SoftStartPlan(BaseModel):
+    """The soft start's numbers (``settings.soft_start``), quoted by the hand-off dialog."""
+
+    days: int = Field(default=5, ge=1)
+    early_days: int = Field(default=2, ge=0)
+    early_comments_per_hour: int = Field(default=2, ge=1)
+    early_comments_per_channel_per_day: int = Field(default=1, ge=1)
+    early_joins_per_day: int = Field(default=5, ge=1)
+    late_comments_per_hour: int = Field(default=4, ge=1)
+    late_comments_per_channel_per_day: int = Field(default=2, ge=1)
+    late_joins_per_day: int = Field(default=10, ge=1)
+    first_day_comments: int = Field(default=5, ge=1)
+    last_day_comments: int = Field(default=15, ge=1)
+
+
 class HandoffRequest(BaseModel):
     """Body of ``POST /warming/handoff``: the account and how it enters neurocomment."""
 

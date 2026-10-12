@@ -6,6 +6,7 @@ import { spamCheckAccountMutation } from '@/entities/account';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
 
+import { GeoConsentNotice, PoolGeoNotice } from './GeoNotice';
 import { RangeSlider } from './RangeSlider';
 import { StartDelayField } from './StartDelayField';
 
@@ -31,9 +32,38 @@ const DEFAULT_DELAY_HOURS = 3;
 // Who the dialog starts: one account (with its @SpamBot pre-check), or the whole idle
 // pool, where every account takes the same length, persona and delay window.
 type StartTarget =
-  | { accountId: string; phone: string; poolAccountIds?: undefined; poolSkipped?: undefined }
-  // `poolSkipped`: idle accounts left out because they are not ready.
-  | { poolAccountIds: string[]; poolSkipped?: number; accountId?: undefined; phone?: undefined };
+  | {
+      accountId: string;
+      phone: string;
+      // A phone/proxy country mismatch not yet accepted for this pair (item 2.2).
+      geo?: { phoneCountry: string; proxyCountry: string };
+      // «Вернуть в прогрев»: the worked days the continued stint keeps (item 2.5).
+      resumeDays?: number;
+      poolAccountIds?: undefined;
+      poolSkipped?: undefined;
+      poolGeoMismatch?: undefined;
+    }
+  | {
+      poolAccountIds: string[];
+      // Idle accounts left out because they are not ready.
+      poolSkipped?: number;
+      // How many of `poolAccountIds` still need a geo consent.
+      poolGeoMismatch?: number;
+      accountId?: undefined;
+      phone?: undefined;
+      geo?: undefined;
+      resumeDays?: undefined;
+    };
+
+// What the dialog hands back. `acceptGeo` is the consent to every mismatch it showed;
+// `onlyGeoMatching` is the pool's «Только совпадающие».
+export interface StartDialogChoice {
+  days: number;
+  persona: ActivityPersona;
+  delayHours: number;
+  acceptGeo: boolean;
+  onlyGeoMatching: boolean;
+}
 
 // The design's "warm account" modal: a draggable day-length slider (1–30) that opens
 // on the length a start would run anyway (the board's `default_target_days`), quick
@@ -47,17 +77,28 @@ export function WarmDaysModal({
 }: StartTarget & {
   defaultDays?: number;
   onClose: () => void;
-  onConfirm: (days: number, persona: ActivityPersona, delayHours: number) => void;
+  onConfirm: (choice: StartDialogChoice) => void;
 }) {
   const pool = target.poolAccountIds !== undefined;
+  const resume = target.resumeDays !== undefined;
   const { t } = useTranslation();
   // The configured default is never cut down: a 45-day `warmed_min_days` would
-  // otherwise start a 30-day stint just because the operator pressed Start.
-  const initialDays = Math.max(MIN, Math.round(defaultDays));
+  // otherwise start a 30-day stint just because the operator pressed Start. A resume
+  // opens one day past what the stint already worked, so it does not finish at once.
+  const initialDays = Math.max(MIN, Math.round(defaultDays), (target.resumeDays ?? 0) + 1);
   const max = Math.max(MAX, initialDays);
   const [days, setDays] = useState(initialDays);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
   const [delayHours, setDelayHours] = useState(DEFAULT_DELAY_HOURS);
+  const [geoAccepted, setGeoAccepted] = useState(false);
+  const poolMismatch = target.poolGeoMismatch ?? 0;
+  // Consent is given only to a warning the dialog actually showed: the ticked box of a
+  // single start, or the pool's «Запустить все».
+  const confirm = (onlyGeoMatching: boolean) => {
+    const acceptGeo = pool ? poolMismatch > 0 && !onlyGeoMatching : geoAccepted;
+    onConfirm({ days, persona, delayHours, acceptGeo, onlyGeoMatching });
+    onClose();
+  };
   // A length, cadence or delay picked and not yet started.
   const dirty =
     days !== initialDays || persona !== DEFAULT_PERSONA || delayHours !== DEFAULT_DELAY_HOURS;
@@ -65,7 +106,11 @@ export function WarmDaysModal({
   const spamMutation = useMutation(spamCheckAccountMutation());
   const spamTipId = useId();
   const personaTipId = useId();
-  const title = pool ? t('warming.pool.title') : t('warming.days.title');
+  const title = pool
+    ? t('warming.pool.title')
+    : resume
+      ? t('warming.resume.title')
+      : t('warming.days.title');
   const dayCount = (n: number) => `${String(n)} ${t('warming.days.label', { count: n })}`;
 
   // Real @SpamBot probe against this account; the result is shown on the pill.
@@ -138,9 +183,11 @@ export function WarmDaysModal({
             )}
           </div>
           <div className="mb-6 type-body text-content-muted">
-            {target.poolAccountIds === undefined
-              ? t('warming.days.subtitle', { phone: target.phone })
-              : t('warming.pool.subtitle', { count: target.poolAccountIds.length })}
+            {target.poolAccountIds !== undefined
+              ? t('warming.pool.subtitle', { count: target.poolAccountIds.length })
+              : resume
+                ? t('warming.resume.subtitle', { phone: target.phone, count: target.resumeDays })
+                : t('warming.days.subtitle', { phone: target.phone })}
             {target.poolSkipped ? (
               <div className="mt-1 text-warning-deep">
                 {t('warming.pool.skipped', { count: target.poolSkipped })}
@@ -224,18 +271,59 @@ export function WarmDaysModal({
             onChange={setDelayHours}
           />
 
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="primary"
-              onClick={() => {
-                onConfirm(days, persona, delayHours);
-                onClose();
-              }}
-            >
-              {pool ? t('warming.pool.start') : t('warming.days.start')}
-            </Button>
-            <Button onClick={close}>{t('warming.days.cancel')}</Button>
-          </div>
+          {target.geo ? (
+            <GeoConsentNotice
+              phoneCountry={target.geo.phoneCountry}
+              proxyCountry={target.geo.proxyCountry}
+              accepted={geoAccepted}
+              onAcceptedChange={setGeoAccepted}
+            />
+          ) : null}
+          {pool && poolMismatch > 0 ? (
+            <PoolGeoNotice count={poolMismatch} total={target.poolAccountIds.length} />
+          ) : null}
+
+          {pool && poolMismatch > 0 ? (
+            // The pool's one consent: start everyone (accepting each pair), only the
+            // accounts whose geo matches, or nothing.
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  confirm(false);
+                }}
+              >
+                {t('warming.geo.startAll')}
+              </Button>
+              <Button
+                disabled={poolMismatch >= target.poolAccountIds.length}
+                onClick={() => {
+                  confirm(true);
+                }}
+              >
+                {t('warming.geo.onlyMatching')}
+              </Button>
+              <Button onClick={close}>{t('warming.days.cancel')}</Button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="primary"
+                // A shown geo warning needs its tick; the server never refuses either way.
+                disabled={target.geo !== undefined && !geoAccepted}
+                onClick={() => {
+                  confirm(false);
+                }}
+              >
+                {pool
+                  ? t('warming.pool.start')
+                  : resume
+                    ? t('warming.resume.start')
+                    : t('warming.days.start')}
+              </Button>
+              <Button onClick={close}>{t('warming.days.cancel')}</Button>
+            </div>
+          )}
         </div>
       )}
     </Modal>

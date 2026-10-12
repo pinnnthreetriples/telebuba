@@ -31,7 +31,7 @@ from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export
     WarmingChannelList,
     WarmingChannelObservation,
 )
-from schemas._warming_console import WarmingCardConsole, WarmingStateMarks
+from schemas._warming_console import SoftStartPlan, WarmingCardConsole, WarmingStateMarks
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -372,6 +372,8 @@ class WarmingBoardState(BaseModel):
     # Phone languages whose board accounts have fewer own-language channels than the
     # affinity floor, so the channels card can say which pool to grow.
     language_shortages: list[ChannelLanguageShortage] = Field(default_factory=list)
+    # The soft neurocomment start's numbers, for the hand-off dialog to quote.
+    soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
 
 
 class StartWarmingRequest(StartWindow):
