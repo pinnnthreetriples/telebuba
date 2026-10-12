@@ -62,6 +62,7 @@ from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
 )
+from core.migration_steps_flood_memory import _add_warming_flood_memory
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
 from core.migration_steps_llm_keys import (
@@ -214,6 +215,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (73, "add_masstagging_tables", _add_masstagging_tables),
     (74, "add_account_lifecycle_events", _add_account_lifecycle_events),
     (75, "add_warming_daily_stats", _add_warming_daily_stats),
+    (76, "add_warming_flood_memory", _add_warming_flood_memory),
 )
 
 

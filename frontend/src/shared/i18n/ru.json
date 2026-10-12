@@ -2874,6 +2874,9 @@
       "cycleTip_many": "Цикл {{count}}",
       "dmAllowed": "ЛС: разрешены",
       "dmClosed": "ЛС: закрыты",
+      "floodTotal": "Флудов всего: {{total}}",
+      "dmBlockedUntil": "ЛС закрыты до {{date}}",
+      "limitShare": "лимит {{percent}}",
       "mediaBytes": "скачано {{kb}} КБ"
     },
     "actions": {

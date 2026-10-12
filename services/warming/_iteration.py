@@ -81,7 +81,12 @@ async def _plan_iteration(
     not_ready = await _gate_readiness(account, controls, record, trust, now, run_id=run_id)
     if not_ready is not None:
         return not_ready
-    intensity = compute_intensity(age_hours, trust_band=trust.band)
+    intensity = compute_intensity(
+        age_hours,
+        trust_band=trust.band,
+        recovered_at=record.recovered_at if record is not None else None,
+        now=now,
+    )
     daily = _roll_daily(record, _local_date(await _loop._account_tz(account_id), now))  # noqa: SLF001
     quiet = await _loop._gate_quiet_day(account_id, daily, now, run_id=run_id)  # noqa: SLF001
     if quiet is not None:

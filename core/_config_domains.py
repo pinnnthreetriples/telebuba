@@ -46,6 +46,12 @@ class TrustSettings(BaseSettings):
     penalty_spam_unknown: int = Field(default=0, ge=0, le=100)
     penalty_quarantine_each: int = Field(default=15, ge=0, le=100)
     penalty_flood_active: int = Field(default=15, ge=0, le=100)
+    # Flood memory: each recorded PeerFlood costs this much, capped at
+    # ``penalty_flood_history_max``; the whole penalty fades linearly to zero over
+    # ``flood_history_decay_days`` since the latest flood.
+    penalty_flood_history_each: int = Field(default=10, ge=0, le=100)
+    penalty_flood_history_max: int = Field(default=30, ge=0, le=100)
+    flood_history_decay_days: float = Field(default=30.0, ge=0.0)
     penalty_geo_mismatch: int = Field(default=10, ge=0, le=100)
     penalty_geo_unknown: int = Field(default=5, ge=0, le=100)
     penalty_proxy_failed: int = Field(default=20, ge=0, le=100)

@@ -151,6 +151,10 @@ class WarmingSettings(BaseSettings):
     # before it is given up on (marked error + alerted).
     quarantine_hours: float = Field(default=48.0, gt=0.0)
     quarantine_max_repeats: int = Field(default=3, ge=1)
+    # After a clean quarantine release: cap ramps from this share to full; DMs stay shut.
+    release_ramp_start_fraction: float = Field(default=0.3, ge=0.0, le=1.0)
+    release_ramp_days: float = Field(default=5.0, ge=0.0)
+    release_dm_block_days: float = Field(default=14.0, ge=0.0)
     # Content anti-repeat: refuse to send the same normalised text twice within
     # this window (identical content across accounts is a strong spam signal),
     # how many times to regenerate before giving up, plus an outbound filter.

@@ -16,7 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # Settings and board roll-up models live in sibling modules for the file-size budget;
 # re-exported here so ``from schemas.warming import WarmingSettings`` etc. keep working.
-from schemas._warming_board import (
+from schemas._warming_board import (  # noqa: F401 - WarmedAccountList is a runtime re-export
+    WarmedAccount,
+    WarmedAccountList,
     WarmingMechanics,
     WarmingSummary,
 )
@@ -115,6 +117,10 @@ class WarmingIntensity(BaseModel):
     phase: WarmingPhase = "intro"
     progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
     days_to_next_phase: int | None = Field(default=None, ge=0)
+    # Post-quarantine recovery: the share of the phase cap allowed today and the
+    # instant DMs reopen (``None`` when no block is in force).
+    limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
+    dm_blocked_until: str | None = None
 
 
 class WarmingReadiness(BaseModel):
@@ -177,6 +183,9 @@ class WarmingStateRecord(BaseModel):
     # Operator-chosen activity persona. Legacy rows / NULL column → "normal" (the
     # reader maps NULL up), so this is never None on a loaded record.
     activity_persona: ActivityPersona = "normal"
+    # When the last quarantine was released on a clean spam check. The daily-cap
+    # ramp and the DM block after a spam block count from it; ``None`` = never.
+    recovered_at: str | None = None
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -229,6 +238,8 @@ class WarmingStateWrite(BaseModel):
     target_days: int | None = None
     # See WarmingStateRecord.activity_persona. ``None`` = carry current.
     activity_persona: ActivityPersona | None = None
+    # See WarmingStateRecord.recovered_at.
+    recovered_at: str | None = None
     # #10: identifies ONE pre-cycle daily-budget booking. Written only by the
     # ``cycle_started`` write and read only by the hand-back's SQL guard, never by
     # a reader — so unlike every other field here, ``None`` means "leave the column
@@ -328,6 +339,12 @@ class WarmingAccountState(BaseModel):
     promoted_to_nc: bool = False
     # See WarmingStateRecord.nc_handed_off — handed to the neurocomment idle pool.
     nc_handed_off: bool = False
+    # Flood memory: lifetime spam blocks, the date DMs reopen after the last
+    # quarantine release (``None`` once open), and the share of the phase cap the
+    # post-release ramp allows today (1.0 = full cap).
+    flood_total: int = Field(default=0, ge=0)
+    dm_blocked_until: str | None = None
+    limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class WarmingBoardState(BaseModel):
@@ -356,37 +373,6 @@ class WarmingBoardState(BaseModel):
     # Which optional cycle steps the engine will actually run with the current
     # settings, so «Как работает» shows what is on instead of promising every step.
     mechanics: WarmingMechanics = Field(default_factory=WarmingMechanics)
-
-
-class WarmedAccount(BaseModel):
-    """A graduated (operator-promoted) account, for the warming page's warmed card."""
-
-    account_id: str = Field(min_length=1)
-    label: str = Field(min_length=1)
-    warming_days: int = Field(ge=0)
-    # Card meta sourced from the warming board card (so the design's warmed card
-    # shows the real phone / flag / proxy badge / trust instead of a mock).
-    phone: str | None = None
-    # Telegram display name parts, so cards/modal show the name like the accounts table.
-    first_name: str | None = None
-    last_name: str | None = None
-    # Cached Telegram avatar etag; the card renders /avatar?v={etag} when set, initials otherwise.
-    avatar_etag: str | None = None
-    phone_country: str | None = None
-    proxy_type: str | None = None
-    proxy_country: str | None = None
-    trust_score: int | None = Field(default=None, ge=0, le=100)
-    # The warming target (days) the account graduated against — the "X / Y дней" Y.
-    target_days: int = Field(ge=0)
-    # True once handed to the neurocomment idle pool: the warming page hides the
-    # account, the neurocomment page starts counting/offering it.
-    nc_handed_off: bool = False
-
-
-class WarmedAccountList(BaseModel):
-    """Wrapper for a bulk read of warmed accounts (non-negotiable #2)."""
-
-    accounts: list[WarmedAccount] = Field(default_factory=list)
 
 
 class StartWarmingRequest(StartWindow):

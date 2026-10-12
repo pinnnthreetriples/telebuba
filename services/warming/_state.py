@@ -52,6 +52,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     phase_entered_at: str | None | _Sentinel = _SENTINEL,
     target_days: int | None | _Sentinel = _SENTINEL,
     activity_persona: ActivityPersona | None | _Sentinel = _SENTINEL,
+    recovered_at: str | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -114,6 +115,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
                 "ActivityPersona | None",
                 _resolve(activity_persona, "activity_persona"),
             ),
+            recovered_at=cast("str | None", _resolve(recovered_at, "recovered_at")),
         ),
     )
 
@@ -136,7 +138,14 @@ async def _current_card(account_id: str) -> WarmingAccountState:
     # (incl. target_days) carries through without a per-field ternary wall.
     record_fields = (
         record.model_dump(
-            exclude={"account_id", "state", "run_id", "current_phase", "phase_entered_at"}
+            exclude={
+                "account_id",
+                "state",
+                "run_id",
+                "current_phase",
+                "phase_entered_at",
+                "recovered_at",
+            }
         )
         if record
         else {}

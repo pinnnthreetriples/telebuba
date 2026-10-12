@@ -18,6 +18,9 @@ from core.repositories.account_folders import (
     folder_ids_by_account,
     list_filtered_accounts,
 )
+from core.repositories.warming_floods import (
+    list_warming_flood_summaries,
+)
 from schemas.account_folders import NO_PROXY, AccountListFilters
 from schemas.accounts import (
     AccountList,
@@ -137,6 +140,7 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     records = {record.account_id: record for record in await list_warming_states()}
     spam_by_account = await list_spam_statuses()
     fingerprints = await list_device_fingerprints()
+    floods = await list_warming_flood_summaries()
     now = datetime.now(UTC)
     for account in accounts:
         spam = spam_by_account.get(account.account_id)
@@ -147,6 +151,7 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
             spam=spam,
             lang_code=fingerprint.system_lang_code if fingerprint else None,
             now=now,
+            floods=floods.get(account.account_id),
         )
         account.trust_score = trust.score
         account.trust_band = trust.band

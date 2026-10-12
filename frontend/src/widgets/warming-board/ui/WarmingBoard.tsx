@@ -20,6 +20,7 @@ import {
   TerminalPane,
 } from '@/shared/ui';
 
+import { FloodMemoryLine } from './FloodMemoryLine';
 import { WarmStopModal } from './WarmStopModal';
 
 interface WarmingBoardProps {
@@ -349,6 +350,8 @@ function WarmingCard({
           ) : null}
         </div>
       </div>
+
+      <FloodMemoryLine account={account} />
 
       {stopOpen ? (
         <WarmStopModal

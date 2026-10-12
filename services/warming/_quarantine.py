@@ -74,6 +74,8 @@ async def _recover_from_quarantine(  # noqa: PLR0911 - CAS-guarded terminal outc
             heartbeat_at=now.isoformat(),
             last_error=None,
             quarantine_count=0,
+            # Starts the post-release daily-cap ramp and DM block (``compute_intensity``).
+            recovered_at=now.isoformat(),
             expected_run_id=run_id,
         )
         if run_id is not None and not write.applied:
