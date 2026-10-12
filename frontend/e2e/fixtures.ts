@@ -162,6 +162,7 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
     progress_to_next: 0.6,
     days_to_next_phase: 4,
     warming_days: 8,
+    warmed_days: 6,
     target_days: 15,
     activity_persona: 'reader',
     readiness: null,
@@ -199,7 +200,7 @@ export const warmingBoard = {
   active_count: 3,
   summary: {},
   card_log_limit: 20,
-  warmed: [warmingState(4, { state: 'idle', promoted_to_nc: true })],
+  warmed: [warmingState(4, { state: 'idle', promoted_to_nc: true, warmed_days: 15 })],
 };
 
 // Переписка аккаунтов: СЕМЬ пар, и число здесь работающее, а не декоративное.
