@@ -22,6 +22,7 @@ from core.phone_geo import country_for_phone
 from core.repositories.warming_floods import (
     list_warming_flood_summaries,
 )
+from schemas._warming_console import SoftStartPlan
 from schemas.warming import (
     WarmedAccount,
     WarmedAccountList,
@@ -37,6 +38,13 @@ from schemas.warming import (
 )
 from services.trust import account_trust_score_from
 from services.warming._channel_language import language_shortages
+from services.warming._console import (
+    account_geo,
+    attention,
+    dm_status,
+    geo_accepted,
+    settled_today,
+)
 from services.warming.pacing import (
     _account_age_hours,
     compute_intensity,
@@ -83,6 +91,10 @@ _RECORD_ONLY_FIELDS: Final[set[str]] = {
     "spam_unknown_streak",
     "recovered_at",
     "last_warmed_date",
+    "geo_ack",
+    "cycle_base_actions",
+    "nc_start_mode",
+    "nc_handoff_at",
 }
 
 
@@ -191,6 +203,12 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.dm_blocked_until = intensity.dm_blocked_until
         card.limit_factor = intensity.limit_factor
         card.idle_days = max(0, (card.warming_days or 0) - card.warmed_days)
+        geo = account_geo(account)
+        card.geo_status = geo.status
+        card.geo_accepted = geo_accepted(geo, record)
+        card.daily_settled = settled_today(record)
+        card.dm_status = dm_status(masked, intensity, readiness, card.started_at, now)
+        card.attention = attention(record, readiness)
         cards.append(card)
     return cards, channels, masked
 
@@ -222,6 +240,8 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             trust_score=card.trust_score,
             target_days=card.target_days or min_days,
             nc_handed_off=card.nc_handed_off,
+            geo_status=card.geo_status,
+            geo_accepted=card.geo_accepted,
         )
         for card in cards
         if card.promoted_to_nc
@@ -255,6 +275,7 @@ async def load_board() -> WarmingBoardState:
             (card.phone for card in [*idle, *warming]),
             channels.channels,
         ),
+        soft_start=SoftStartPlan.model_validate(settings.soft_start.model_dump()),
     )
 
 

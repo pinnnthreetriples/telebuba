@@ -25,6 +25,7 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
+from core.repositories.warming_marks import store_nc_start
 from services.lifecycle_journal import record_lifecycle_event
 from services.warming import _handoff_spam, _runtime
 from services.warming._runtime import _account_lock
@@ -32,6 +33,7 @@ from services.warming._state import _current_card, _set_state
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
+    from schemas._warming_console import NcStartMode
     from schemas.warming import (
         StopWarmingRequest,
         WarmingAccountState,
@@ -114,7 +116,10 @@ async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
     return await _current_card(account_id)
 
 
-async def handoff_to_neurocomment(account_id: str) -> WarmingAccountState:
+async def handoff_to_neurocomment(
+    account_id: str,
+    start_mode: NcStartMode = "normal",
+) -> WarmingAccountState:
     """Second hand-off stage: move a warmed-card account into the neurocomment idle pool.
 
     Only flips ``nc_handed_off`` — the account must already be graduated
@@ -123,13 +128,18 @@ async def handoff_to_neurocomment(account_id: str) -> WarmingAccountState:
     refuses, a ``limited`` one sends the account back into quarantine.
     The warming page hides the account, the neurocomment page starts counting
     and offering it. ``unmark_neurocomment`` reverses both flags at once.
+    ``start_mode`` ``soft`` lowers its neurocomment caps for the first days
+    (``services._soft_start``); the hand-off time starts that clock.
     """
     async with _account_lock(account_id):
         _runtime.assert_runtime_quiescent(account_id)
         await _handoff_spam.assert_spam_clean_for_handoff(account_id)
         await mark_nc_handed_off(account_id)
-    await log_event("INFO", "warming_nc_handoff", account_id=account_id)
-    await record_lifecycle_event(account_id, "handed_off")
+        await store_nc_start(account_id, start_mode, _now_iso())
+    await log_event(
+        "INFO", "warming_nc_handoff", account_id=account_id, extra={"start_mode": start_mode}
+    )
+    await record_lifecycle_event(account_id, "handed_off", {"start_mode": start_mode})
     return await _current_card(account_id)
 
 

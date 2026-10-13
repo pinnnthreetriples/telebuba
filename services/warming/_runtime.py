@@ -310,8 +310,8 @@ async def _cancel_existing_task(account_id: str) -> None:
     raise WarmingTaskNotQuiescentError(account_id)
 
 
-async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
-    """Move an account into the warming column and kick off its loop task."""
+async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> WarmingAccountState:
+    """Start the warming loop; ``resume`` carries a graduated stint (``carry_or_restamp``)."""
     async with _account_lock(data.account_id):
         account = await fetch_account(data.account_id)
         if account is None:
@@ -340,10 +340,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        stint = carry_or_restamp(existing, data, first_run_at(account, data))
-        # Bug 2: a previously-promoted account dragged back into warming would
-        # otherwise live in both pools — clear the flag so neurocomment's
-        # warmed-account overview drops it on the next poll.
+        stint = carry_or_restamp(existing, data, first_run_at(account, data), resume=resume)
+        # Bug 2: a promoted account dragged back into warming would otherwise live in
+        # both pools — clear the flags so neurocomment's overview drops it.
         if existing is not None and existing.promoted_to_nc:
             await unmark_promoted_to_nc(data.account_id)
             await log_event(

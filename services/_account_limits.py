@@ -13,6 +13,11 @@ feature spent it. So the fleet default is passed in by the caller (each feature'
 while an override, when present, is the account's budget for both. That is the only
 reading of "this account may join N times a day" that is not self-contradictory.
 
+**A soft start lowers the fleet number, never an override.** For the first days after a
+«Мягкий старт» hand-off (``services._soft_start``) each fleet cap is cut to the soft one
+— a fleet "no cap" (``0``) included — and a per-day comment cap appears; an operator's
+own override for the account is a deliberate number and still applies as written.
+
 **Absence is not zero.** ``None`` means "follow the fleet"; ``0`` means "no cap" on the
 join and per-channel caps. An account with no row behaves exactly as it did before this
 shipped, which is what makes the feature safe to deploy against a live fleet.
@@ -20,11 +25,13 @@ shipped, which is what makes the feature safe to deploy against a live fleet.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import load_account_limit_override
+from core.db import fetch_warming_state, load_account_limit_override
 from schemas.neurocomment_limits import EffectiveAccountLimits
+from services._soft_start import soft_caps, soft_day
 
 if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentSettings
@@ -36,35 +43,58 @@ def _pick(override: int | None, fleet: int) -> int:
     return fleet if override is None else override
 
 
+def _lower(fleet: int, soft: int | None) -> int:
+    """The fleet cap cut down to the soft one; a fleet ``0`` ("no cap") becomes the soft cap."""
+    if soft is None:
+        return fleet
+    return soft if fleet == 0 else min(fleet, soft)
+
+
 def resolve_limits(
     override: AccountLimitOverride | None,
     fleet: NeurocommentSettings,
+    soft: int | None = None,
 ) -> EffectiveAccountLimits:
     """The caps to enforce for one account — each one its override, else the fleet's.
 
     The comment caps come from the operator-editable settings row the caller already
     holds; the join cap has no row of its own and comes from config, which is why it is
-    read here rather than threaded through every caller that never had it.
+    read here rather than threaded through every caller that never had it. ``soft`` is
+    the day of a soft start (``services._soft_start.soft_day``), ``None`` outside one.
     """
+    caps = soft_caps(soft) if soft is not None else None
     return EffectiveAccountLimits(
         max_joins_per_day=_pick(
             override.max_joins_per_day if override else None,
-            settings.neurocomment.max_joins_per_account_per_day,
+            _lower(
+                settings.neurocomment.max_joins_per_account_per_day,
+                caps.joins_per_day if caps else None,
+            ),
         ),
         max_comments_per_hour=_pick(
             override.max_comments_per_hour if override else None,
-            fleet.max_comments_per_hour,
+            _lower(fleet.max_comments_per_hour, caps.comments_per_hour if caps else None),
         ),
         max_comments_per_channel_per_day=_pick(
             override.max_comments_per_channel_per_day if override else None,
-            fleet.max_comments_per_channel_per_day,
+            _lower(
+                fleet.max_comments_per_channel_per_day,
+                caps.comments_per_channel_per_day if caps else None,
+            ),
         ),
+        max_comments_per_day=caps.comments_per_day if caps else 0,
     )
+
+
+async def account_soft_day(account_id: str) -> int | None:
+    """The day of this account's soft start, read off its warming row."""
+    return soft_day(await fetch_warming_state(account_id), datetime.now(UTC))
 
 
 async def account_limits(account_id: str, fleet: NeurocommentSettings) -> EffectiveAccountLimits:
     """One account's effective caps — a single-row read, for the per-account gate paths."""
-    return resolve_limits(await load_account_limit_override(account_id), fleet)
+    override = await load_account_limit_override(account_id)
+    return resolve_limits(override, fleet, await account_soft_day(account_id))
 
 
 async def account_join_cap(account_id: str, fleet_cap: int) -> int:
@@ -74,4 +104,7 @@ async def account_join_cap(account_id: str, fleet_cap: int) -> int:
     while the override, being about the shared join log, governs both.
     """
     override = await load_account_limit_override(account_id)
-    return fleet_cap if override.max_joins_per_day is None else override.max_joins_per_day
+    if override.max_joins_per_day is not None:
+        return override.max_joins_per_day
+    day = await account_soft_day(account_id)
+    return _lower(fleet_cap, soft_caps(day).joins_per_day if day is not None else None)

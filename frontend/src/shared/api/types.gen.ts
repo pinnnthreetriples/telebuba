@@ -3299,6 +3299,22 @@ export type ExtraToggles = {
 };
 
 /**
+ * HandoffRequest
+ *
+ * Body of ``POST /warming/handoff``: the account and how it enters neurocomment.
+ */
+export type HandoffRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Start Mode
+   */
+  start_mode?: 'soft' | 'normal';
+};
+
+/**
  * HealthStatus
  */
 export type HealthStatus = {
@@ -3976,6 +3992,14 @@ export type MusicRemoveRequest = {
  * accounts/warming surfaces, so deriving them per board poll was pure waste.
  */
 export type NeurocommentAccountCard = {
+  /**
+   * Soft Start Day
+   */
+  soft_start_day?: number | null;
+  /**
+   * Soft Start Days
+   */
+  soft_start_days?: number;
   /**
    * Account Id
    */
@@ -5821,6 +5845,54 @@ export type SetCampaignStatusRequest = {
 };
 
 /**
+ * SoftStartPlan
+ *
+ * The soft start's numbers (``settings.soft_start``), quoted by the hand-off dialog.
+ */
+export type SoftStartPlan = {
+  /**
+   * Days
+   */
+  days?: number;
+  /**
+   * Early Days
+   */
+  early_days?: number;
+  /**
+   * Early Comments Per Hour
+   */
+  early_comments_per_hour?: number;
+  /**
+   * Early Comments Per Channel Per Day
+   */
+  early_comments_per_channel_per_day?: number;
+  /**
+   * Early Joins Per Day
+   */
+  early_joins_per_day?: number;
+  /**
+   * Late Comments Per Hour
+   */
+  late_comments_per_hour?: number;
+  /**
+   * Late Comments Per Channel Per Day
+   */
+  late_comments_per_channel_per_day?: number;
+  /**
+   * Late Joins Per Day
+   */
+  late_joins_per_day?: number;
+  /**
+   * First Day Comments
+   */
+  first_day_comments?: number;
+  /**
+   * Last Day Comments
+   */
+  last_day_comments?: number;
+};
+
+/**
  * SolverToggleRequest
  *
  * Turn the per-campaign challenge (captcha) solver on/off.
@@ -5954,6 +6026,10 @@ export type StartWarmingRequest = {
    * Spread Start
    */
   spread_start?: boolean;
+  /**
+   * Accept Geo Mismatch
+   */
+  accept_geo_mismatch?: boolean;
   /**
    * Account Id
    */
@@ -6755,6 +6831,14 @@ export type WarmedAccount = {
    * Nc Handed Off
    */
   nc_handed_off?: boolean;
+  /**
+   * Geo Status
+   */
+  geo_status?: 'match' | 'mismatch' | 'unknown';
+  /**
+   * Geo Accepted
+   */
+  geo_accepted?: boolean;
 };
 
 /**
@@ -6775,6 +6859,23 @@ export type WarmedAccountList = {
  * One account's warming status, rendered as a kanban card.
  */
 export type WarmingAccountState = {
+  /**
+   * Daily Settled
+   */
+  daily_settled?: number;
+  /**
+   * Dm Status
+   */
+  dm_status?: 'on' | 'chat_off' | 'no_llm_key' | 'paused' | 'not_ready' | 'too_young' | 'trust';
+  attention?: WarmingAttention | null;
+  /**
+   * Geo Status
+   */
+  geo_status?: 'match' | 'mismatch' | 'unknown';
+  /**
+   * Geo Accepted
+   */
+  geo_accepted?: boolean;
   /**
    * Account Id
    */
@@ -6979,6 +7080,41 @@ export type WarmingAccountState = {
 };
 
 /**
+ * WarmingAttention
+ *
+ * What needs the operator on one card, as a code instead of prose.
+ */
+export type WarmingAttention = {
+  /**
+   * Code
+   */
+  code:
+    | 'quarantine'
+    | 'flood_wait'
+    | 'stopping'
+    | 'quarantine_exhausted'
+    | 'quarantine_unreadable'
+    | 'not_ready'
+    | 'error';
+  /**
+   * Until
+   */
+  until?: string | null;
+  /**
+   * Attempt
+   */
+  attempt?: number | null;
+  /**
+   * Attempts
+   */
+  attempts?: number | null;
+  /**
+   * Reasons
+   */
+  reasons?: Array<string>;
+};
+
+/**
  * WarmingBoardState
  *
  * Everything the warming page renders in one poll tick.
@@ -7020,6 +7156,7 @@ export type WarmingBoardState = {
    * Language Shortages
    */
   language_shortages?: Array<ChannelLanguageShortage>;
+  soft_start?: SoftStartPlan;
 };
 
 /**
@@ -11579,7 +11716,7 @@ export type PromoteToNeurocommentResponse =
   PromoteToNeurocommentResponses[keyof PromoteToNeurocommentResponses];
 
 export type HandoffToNeurocommentData = {
-  body: PromoteRequest;
+  body: HandoffRequest;
   path?: never;
   query?: never;
   url: '/api/v1/warming/handoff';
@@ -11700,6 +11837,51 @@ export type StartWarmingResponses = {
 };
 
 export type StartWarmingResponse = StartWarmingResponses[keyof StartWarmingResponses];
+
+export type ResumeWarmingData = {
+  body: StartWarmingRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/resume';
+};
+
+export type ResumeWarmingErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ResumeWarmingError = ResumeWarmingErrors[keyof ResumeWarmingErrors];
+
+export type ResumeWarmingResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type ResumeWarmingResponse = ResumeWarmingResponses[keyof ResumeWarmingResponses];
 
 export type PreviewWarmingStartData = {
   body: StartPreviewRequest;

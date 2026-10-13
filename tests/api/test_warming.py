@@ -66,7 +66,7 @@ async def test_start_returns_account_state(app: FastAPI, monkeypatch: pytest.Mon
     async def _fake(body: object) -> WarmingAccountState:  # noqa: ARG001
         return _account()
 
-    monkeypatch.setattr("services.warming.start_warming", _fake)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _fake)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 200
@@ -81,7 +81,7 @@ async def test_start_forwards_target_days(app: FastAPI, monkeypatch: pytest.Monk
         seen["target_days"] = body.target_days
         return _account()
 
-    monkeypatch.setattr("services.warming.start_warming", _fake)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/warming/start", json={"account_id": "acc-1", "target_days": 5}
@@ -100,7 +100,7 @@ async def test_start_forwards_activity_persona(
         seen["activity_persona"] = body.activity_persona
         return _account()
 
-    monkeypatch.setattr("services.warming.start_warming", _fake)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/warming/start",
@@ -115,7 +115,7 @@ async def test_start_unknown_account_is_404(app: FastAPI, monkeypatch: pytest.Mo
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.UnknownAccountError
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-x"})
     assert resp.status_code == 404
@@ -127,7 +127,7 @@ async def test_start_not_ready_is_400(app: FastAPI, monkeypatch: pytest.MonkeyPa
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.WarmingNotReadyError(["no proxy"])
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 400
@@ -150,7 +150,7 @@ async def test_start_still_stopping_is_409_not_a_readiness_reason(
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.WarmingTaskNotQuiescentError(account_id)
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 409
@@ -164,7 +164,7 @@ async def test_start_listener_account_is_409(app: FastAPI, monkeypatch: pytest.M
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.AccountIsListenerError(account_id)
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 409
@@ -186,7 +186,7 @@ async def test_start_account_held_by_neurocomment_is_409_with_its_code(
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.AccountUnavailableError(code, "acc-1")
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 409
@@ -358,7 +358,7 @@ async def test_promote_refuses_an_account_whose_task_is_still_stopping(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(account_id: str) -> WarmingAccountState:
+    async def _boom(account_id: str, _mode: str = "soft") -> WarmingAccountState:
         raise warming_service.WarmingTaskNotQuiescentError(account_id)
 
     monkeypatch.setattr("services.warming.promote_to_neurocomment", _boom)
@@ -372,7 +372,10 @@ async def test_promote_refuses_an_account_whose_task_is_still_stopping(
 async def test_handoff_moves_account_to_nc_pool(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake(account_id: str) -> WarmingAccountState:
+    modes: list[str] = []
+
+    async def _fake(account_id: str, start_mode: str) -> WarmingAccountState:
+        modes.append(start_mode)
         return WarmingAccountState(
             account_id=account_id,
             label="X",
@@ -385,8 +388,20 @@ async def test_handoff_moves_account_to_nc_pool(
     monkeypatch.setattr("services.warming.handoff_to_neurocomment", _fake)
     async with _client(app) as client:
         resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
+        normal = await client.post(
+            "/api/v1/warming/handoff",
+            json={"account_id": "acc-1", "start_mode": "normal"},
+        )
+        bogus = await client.post(
+            "/api/v1/warming/handoff",
+            json={"account_id": "acc-1", "start_mode": "turbo"},
+        )
     assert resp.status_code == 200
     assert resp.json()["nc_handed_off"] is True
+    assert normal.status_code == 200
+    assert bogus.status_code == 422
+    # The dialog preselects the soft start, so an omitted mode is a soft one.
+    assert modes == ["soft", "normal"]
 
 
 @pytest.mark.asyncio
@@ -394,7 +409,7 @@ async def test_handoff_refuses_an_account_whose_task_is_still_stopping(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(account_id: str) -> WarmingAccountState:
+    async def _boom(account_id: str, _mode: str = "soft") -> WarmingAccountState:
         raise warming_service.WarmingTaskNotQuiescentError(account_id)
 
     monkeypatch.setattr("services.warming.handoff_to_neurocomment", _boom)
@@ -411,7 +426,7 @@ async def test_handoff_refused_on_spambot_answers_409_with_the_code(
     monkeypatch: pytest.MonkeyPatch,
     code: WarmingRefusalCode,
 ) -> None:
-    async def _boom(account_id: str) -> WarmingAccountState:
+    async def _boom(account_id: str, _mode: str = "soft") -> WarmingAccountState:
         raise warming_service.HandoffSpamRefusedError(code, account_id)
 
     monkeypatch.setattr("services.warming.handoff_to_neurocomment", _boom)

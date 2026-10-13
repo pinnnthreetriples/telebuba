@@ -1562,7 +1562,9 @@
     "masstagging_account_rested": "Mass tagging: the account rests until tomorrow",
     "masstagging_account_halted": "Mass tagging: the account left — its session does not work",
     "masstagging_spamblock": "Mass tagging: spam block — the account left",
-    "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts"
+    "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
+    "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
+    "warming_resumed": "Account returned to warming, day count continued"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1687,7 +1689,8 @@
     "stories_limit": "no stories left for today",
     "volume": "«Stop after» was reached",
     "no_accounts": "no working account left",
-    "dead": "the session does not work"
+    "dead": "the session does not work",
+    "quota_soft_day": "soft-start daily limit reached"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -1996,7 +1999,8 @@
         "channel": "Channel",
         "comment": "Comment",
         "status": "Status"
-      }
+      },
+      "softStart": "Soft start · day {{day}}/{{days}}"
     },
     "howto": {
       "title": "How it works",
@@ -2843,13 +2847,6 @@
       "retry": "Retry",
       "close": "Close"
     },
-    "stage": {
-      "subscribe": "Subscribe",
-      "read": "Read",
-      "stories": "Stories",
-      "reactions": "Reactions",
-      "pause": "Pause"
-    },
     "state": {
       "idle": "Idle",
       "active": "Active",
@@ -2866,22 +2863,16 @@
       "dayProgress_other": "{{days}} / {{target}} days",
       "idleDays_one": "({{count}} idle day not counted)",
       "idleDays_other": "({{count}} idle days not counted)",
-      "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "logToggle": "Activity log",
       "storiesSeen": "stories viewed: {{count}}",
       "storiesNone": "no active stories",
       "logLoading": "Loading log…",
       "logEmpty": "No events yet",
       "logClear": "Clear",
-      "pauseCountdown": "{{time}} left",
       "completeTitle": "Warming complete",
       "spamUnknown": "@SpamBot has not answered several checks in a row — the account's status is unknown.",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
-      "cycleTip_one": "Cycle {{count}}",
-      "cycleTip_other": "Cycle {{count}}",
-      "dmAllowed": "DMs: allowed",
-      "dmClosed": "DMs: closed",
       "floodTotal": "Floods total: {{total}}",
       "dmBlockedUntil": "DMs closed until {{date}}",
       "limitShare": "limit {{percent}}",
@@ -2916,14 +2907,6 @@
       "flood_wait": "paused",
       "quarantine": "quarantine",
       "error": "error"
-    },
-    "activity": {
-      "hold": "Pre-start hold",
-      "subscribe": "Joining channels",
-      "read": "Reading the feed",
-      "stories": "Viewing stories",
-      "reactions": "Reactions placed",
-      "pause": "Pause for realism"
     },
     "stopModal": {
       "title": "Stop warming?",
@@ -3178,6 +3161,75 @@
       "shifted": "(night there then, moved to the morning)",
       "shiftedPool": "(night-time runs moved to the morning)",
       "rangeOne": "≈ {{from}}–{{to}} account time"
+    },
+    "geo": {
+      "single": "Proxy: {{proxy}}, phone: {{phone}}. Telegram may find the login suspicious",
+      "accept": "Start anyway",
+      "changeProxy": "Change proxy",
+      "pool_one": "Geo differs on {{count}} of {{total}}",
+      "pool_other": "Geo differs on {{count}} of {{total}}",
+      "poolDetail": "Phone and proxy are from different countries — Telegram may find the login suspicious.",
+      "startAll": "Start all",
+      "onlyMatching": "Only matching",
+      "accepted": "Geo ≠ (accepted)",
+      "banner_one": "Phone and proxy geo differ on {{count}} account",
+      "banner_other": "Phone and proxy geo differ on {{count}} accounts",
+      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
+    },
+    "resume": {
+      "title": "Back to warming",
+      "subtitle": "{{phone}} · {{count}} days worked so far, the count continues",
+      "start": "Continue warming"
+    },
+    "handoff": {
+      "title": "To neurocomment",
+      "subtitle": "How the account starts in neurocomment",
+      "softName": "Soft start (recommended)",
+      "softDetail": "{{days}} days of lowered limits: days 1–{{earlyDays}} up to {{earlyHour}} comments an hour, {{earlyChannel}} per channel a day, {{earlyJoins}} joins; days {{lateFrom}}–{{days}} {{lateHour}} / {{lateChannel}} / {{lateJoins}}. Comments per day: {{firstDay}} → {{lastDay}}.",
+      "normalName": "As usual",
+      "normalDetail": "The usual neurocomment limits right away.",
+      "confirm": "Hand off",
+      "cancel": "Cancel"
+    },
+    "console": {
+      "phase": {
+        "intro": "intro",
+        "settling": "settling in",
+        "warming": "warming",
+        "active": "active",
+        "warmed": "warmed"
+      },
+      "phaseLabel": "Phase: {{phase}}",
+      "toNext": "next phase in {{days}} d",
+      "trust": "Trust {{score}}",
+      "spam": {
+        "clean": "Spam: clean",
+        "limited": "Spam: limited",
+        "unknown": "Spam: not checked"
+      },
+      "today": "Today {{done}} of {{cap}} actions",
+      "todayNoCap": "Today {{done}} actions",
+      "next": "next visit in {{time}}",
+      "dmOn": "DMs: on",
+      "dmOff": "DMs: off, {{reason}}",
+      "dmReason": {
+        "chat_off": "chat switched off",
+        "no_llm_key": "no LLM key",
+        "paused": "paused for every account",
+        "not_ready": "account not ready",
+        "too_young": "warming just started",
+        "trust": "low trust"
+      },
+      "attention": {
+        "quarantine": "Quarantine {{attempt}}/{{attempts}}",
+        "flood_wait": "Flood until {{time}}",
+        "stopping": "Stopping…",
+        "quarantine_exhausted": "Quarantine exhausted — the spam block holds",
+        "quarantine_unreadable": "Quarantine exhausted — @SpamBot does not answer",
+        "not_ready": "Not ready: {{reasons}}",
+        "error": "Cycle error — see the log"
+      },
+      "until": "until {{time}}"
     }
   },
   "auth": {

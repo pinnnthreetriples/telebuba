@@ -25,6 +25,9 @@ class StartWindow(BaseModel):
     start_delay_hours: StartDelayHours | None = None
     # Pool start: each account lands at its own random moment inside the delay.
     spread_start: bool = False
+    # The operator saw the phone/proxy country mismatch and starts anyway; the start is
+    # never refused for geo, this only records the consent for that country pair.
+    accept_geo_mismatch: bool = False
 
 
 class StartPreviewRequest(BaseModel):

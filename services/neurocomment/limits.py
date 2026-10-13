@@ -39,7 +39,7 @@ from schemas.neurocomment_limits import (
     AccountLimitsView,
     LimitWindow,
 )
-from services._account_limits import resolve_limits
+from services._account_limits import account_soft_day, resolve_limits
 from services.neurocomment import settings_store
 
 _HOUR = timedelta(hours=1)
@@ -77,7 +77,7 @@ def _gauge(
 
 async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimitsView:
     fleet = await settings_store.load_settings()
-    caps = resolve_limits(override, fleet)
+    caps = resolve_limits(override, fleet, await account_soft_day(account_id))
     now = datetime.now(UTC)
     hour_ago = (now - _HOUR).isoformat()
     day_ago = (now - _DAY).isoformat()

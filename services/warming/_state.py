@@ -151,6 +151,10 @@ async def _current_card(account_id: str) -> WarmingAccountState:
                 "recovered_at",
                 "spam_unknown_streak",
                 "last_warmed_date",
+                "geo_ack",
+                "cycle_base_actions",
+                "nc_start_mode",
+                "nc_handoff_at",
             }
         )
         if record

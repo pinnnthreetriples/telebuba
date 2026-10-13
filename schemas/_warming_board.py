@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from schemas.geo import GeoMatchStatus  # noqa: TC001 - pydantic resolves it at runtime.
+
 
 class WarmingSummary(BaseModel):
     """Fleet-level roll-up shown at the top of the warming page."""
@@ -68,6 +70,9 @@ class WarmedAccount(BaseModel):
     # True once handed to the neurocomment idle pool: the warming page hides the
     # account, the neurocomment page starts counting/offering it.
     nc_handed_off: bool = False
+    # The geo verdict of the card, so «Вернуть в прогрев» can warn like a start does.
+    geo_status: GeoMatchStatus = "unknown"
+    geo_accepted: bool = False
 
 
 class WarmedAccountList(BaseModel):

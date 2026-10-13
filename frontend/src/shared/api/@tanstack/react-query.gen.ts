@@ -156,6 +156,7 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resolveChatBroadcastTargets,
+  resumeWarming,
   resyncAccountAvatar,
   saveChatBroadcastPace,
   saveChatBroadcastSettings,
@@ -650,6 +651,9 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsError,
   ResolveChatBroadcastTargetsResponse,
+  ResumeWarmingData,
+  ResumeWarmingError,
+  ResumeWarmingResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
@@ -3470,6 +3474,8 @@ export const unpromoteFromNeurocommentMutation = (
 
 /**
  * Start Warming
+ *
+ * Start warming; a geo mismatch never refuses, ``accept_geo_mismatch`` records consent.
  */
 export const startWarmingMutation = (
   options?: Partial<Options<StartWarmingData>>,
@@ -3481,6 +3487,31 @@ export const startWarmingMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await startWarming({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Resume Warming
+ *
+ * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ */
+export const resumeWarmingMutation = (
+  options?: Partial<Options<ResumeWarmingData>>,
+): UseMutationOptions<ResumeWarmingResponse, ResumeWarmingError, Options<ResumeWarmingData>> => {
+  const mutationOptions: UseMutationOptions<
+    ResumeWarmingResponse,
+    ResumeWarmingError,
+    Options<ResumeWarmingData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resumeWarming({
         ...options,
         ...fnOptions,
         throwOnError: true,

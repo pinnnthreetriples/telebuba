@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
-import { useEffect, useId, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
@@ -16,11 +16,11 @@ import {
   FeedbackMark,
   Icon,
   ProgressBar,
-  Stepper,
   TerminalPane,
 } from '@/shared/ui';
 
 import { FloodMemoryLine } from './FloodMemoryLine';
+import { AttentionRow, PhaseRow, TodayRow } from './WarmingCardRows';
 import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
 
@@ -43,15 +43,9 @@ interface WarmingBoardProps {
 
 type WarmingState = WarmingAccountState['state'];
 
-// Ordered to match the engine's real cycle: online/subscribe → read → react →
-// watch stories → sleep. The old decorative "report" step had no backend action
-// and has been dropped; the rail advances by index, so the order must not fight
-// the emission order in services/warming (else a completed step would un-fill).
-const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
 const DAY_SEGMENTS = 42;
-// Hand-placed ticks for the usual two-week stint; any other target gets 0 / half / end.
+// The target a card falls back to when the board has not answered yet.
 const TWO_WEEK_DAYS = 14;
-const TWO_WEEK_TICKS = [0, 4, 7, 11, 14];
 
 // Per-state warming-status pill tone. Sleeping and flood-wait/quarantine share amber
 // deliberately — throttled and recovering on its own is not an error.
@@ -107,33 +101,6 @@ function lineDetail(t: TFunction, line: LogEntry): string {
   return eventReason(t, line);
 }
 
-// The rail reflects the engine's real cycle progress: waiting states park on
-// "pause" (+countdown), a running cycle maps its last written action to the
-// matching step, idle sits at the start. Keys are the tokens the engine writes
-// to last_action (services/warming _PROGRESS_STEPS); values index into STAGES.
-const ACTION_STAGE: Record<string, number> = {
-  set_online: 0, // subscribe (cycle start)
-  join: 0,
-  read: 1,
-  react: 2, // reactions
-  stories: 3,
-  // No DM step on the rail; the brief, gated send_dm (runs after stories) folds
-  // onto its neighbour rather than adding a step dark for most accounts.
-  send_dm: 3,
-  // Same for the extras step (runs last): a sixth step would sit dark for accounts
-  // with every extra off and would move the rail geometry under the visual baselines.
-  extras: 3,
-};
-
-function activeStage(account: WarmingAccountState): number {
-  const { state } = account;
-  if (state === 'sleeping' || state === 'flood_wait' || state === 'quarantine') return 4; // pause
-  if (state === 'idle') return 0;
-  // active / error both show where the engine last was (core/warming _loop.py);
-  // an error is distinguished by the red header pill, not a separate rail step.
-  return ACTION_STAGE[account.last_action ?? ''] ?? 0;
-}
-
 // Real per-account activity log, coloured by the log row's status. Tokens, and the
 // SAME ones the log terminal uses: these shades are lighter than the light-theme
 // success/warning/danger because they sit on the dark surface.
@@ -144,36 +111,6 @@ const LOG_TONE: Record<LogEntry['status'], string> = {
 };
 // Fallback only — the board serves the real limit from config (card_log_limit).
 const DEFAULT_CARD_LOG_LIMIT = 20;
-
-// Live countdown to the next cycle (``next_run_at``), shown beside the pause
-// activity so the operator sees how long the "natural" pause lasts. Renders
-// nothing once the target passes or when there is no scheduled next run.
-function PauseCountdown({ nextRunAt }: { nextRunAt: string }) {
-  const { t } = useTranslation();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-    return () => {
-      clearInterval(id);
-    };
-  }, []);
-  const target = new Date(nextRunAt).getTime();
-  if (Number.isNaN(target)) return null;
-  const totalSec = Math.round((target - now) / 1000);
-  if (totalSec <= 0) return null;
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const time = h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
-  return (
-    <span className="ml-auto shrink-0 font-mono text-small tabular-nums text-info-strong">
-      {t('warming.card.pauseCountdown', { time })}
-    </span>
-  );
-}
 
 function WarmingCard({
   account,
@@ -197,11 +134,6 @@ function WarmingCard({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
-  // One card per account, so the two tooltip ids have to be per-INSTANCE: a literal
-  // would collide across the board's rows and `aria-describedby` would resolve every
-  // card's badge to the first card's bubble.
-  const actionsTipId = useId();
-  const cycleTipId = useId();
   // Real per-account activity log, fetched only while the terminal is expanded.
   // `warming_` alone now covers the engine's own gateway calls too: the gateway
   // stamps the calling domain onto its event names, so warming's actions arrive as
@@ -238,14 +170,6 @@ function WarmingCard({
     clearedAt == null
       ? logLines
       : logLines.filter((line) => new Date(line.created_at).getTime() > clearedAt);
-  // Pre-start hold: the account is queued (active) but its first cycle hasn't run
-  // yet, so the engine is idle-waiting up to cold_start_spread_hours (plus a snap
-  // into the account's morning window) before the first subscribe. Show that
-  // honestly with a countdown instead of a blinking "subscribe" step that implies
-  // work is happening (services/warming _runner.py).
-  const hold =
-    account.state === 'active' && (account.cycles_completed ?? 0) === 0 && !account.last_action;
-  const active = hold ? -1 : activeStage(account);
   // Worked warming days vs the operator-chosen target (the start slider); days in
   // error or quarantine do not count. The card auto-flips to "complete" once the
   // account reaches its own target — the same count the engine's gate reads.
@@ -253,13 +177,7 @@ function WarmingCard({
   const elapsed = account.warmed_days ?? 0;
   const days = Math.min(elapsed, target);
   const complete = elapsed >= target;
-  const dayTicks =
-    target === TWO_WEEK_DAYS ? TWO_WEEK_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const statusTone = badgeTone(WARM_STATUS[account.state]);
-  // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
-  const dailyActions = account.daily_actions ?? 0;
-  const dailyCap = account.daily_cap && account.daily_cap > 0 ? account.daily_cap : null;
-  const actions = dailyCap ? Math.min(dailyActions, dailyCap) : dailyActions;
   const primaryId = accountDisplayName(account);
 
   return (
@@ -281,60 +199,22 @@ function WarmingCard({
             <div className="truncate type-h3" title={primaryId}>
               {primaryId}
             </div>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               {/* Deliberately the dense variant, off the status pill's `3px 10px`/`tiny`
-                  rung: this is not a standalone state label but the second line inside a
-                  card, paired in one flex row with the `micro` daily-actions counter to
-                  its right. On the rung it would tower over the number it is paired
-                  with, which is a worse disagreement than differing from the twelve
-                  pills on other screens. Twelve on the rung, plus this documented pair. */}
+                  rung: this is the second line inside a card, not a standalone label. */}
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 text-small font-medium ${statusTone}`}
               >
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
               </span>
-              {/* The app's only two `.tb-tip` triggers that are plain <span>s — the
-                  counter here and the "?" below. See `.tb-tip-pop` in
-                  app/styles/index.css for what `tabIndex` buys them. */}
-              <span className="tb-tip inline-flex items-center">
-                <span
-                  tabIndex={0}
-                  aria-describedby={actionsTipId}
-                  className="cursor-help text-small font-medium text-content-subtle"
-                >
-                  {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
-                </span>
-                <span
-                  id={actionsTipId}
-                  role="tooltip"
-                  className="tb-tip-pop tb-tip-pop--wide max-sm:!right-0 max-sm:!left-auto max-sm:!transform-none"
-                >
-                  {t('warming.card.actionsTip')}
-                </span>
-              </span>
+              {account.geo_accepted ? <Badge>{t('warming.geo.accepted')}</Badge> : null}
             </div>
           </div>
         </div>
         {/* shrink-0: without it the truncating name above just pushes its cost onto
             the actions instead, and the "Стоп" button loses its label. */}
         <div className="flex shrink-0 items-center gap-2">
-          <span className="tb-tip inline-flex">
-            <span
-              tabIndex={0}
-              aria-describedby={cycleTipId}
-              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-info-line bg-surface-card text-small font-medium text-content-subtle"
-            >
-              ?
-            </span>
-            <span id={cycleTipId} role="tooltip" className="tb-tip-pop">
-              {t('warming.card.cycleTip', { count: account.cycles_completed ?? 0 })}
-              <br />
-              <span className={account.dm_allowed ? 'text-term-success' : 'text-term-error'}>
-                {t(account.dm_allowed ? 'warming.card.dmAllowed' : 'warming.card.dmClosed')}
-              </span>
-            </span>
-          </span>
           {!complete ? (
             <>
               <FeedbackMark result={result} />
@@ -353,6 +233,7 @@ function WarmingCard({
         </div>
       </div>
 
+      <PhaseRow account={account} />
       <FloodMemoryLine account={account} />
 
       {stopOpen ? (
@@ -387,23 +268,10 @@ function WarmingCard({
           max={target}
           label={t('warming.inProgress.days')}
         />
-        <div className="mt-2 flex justify-between type-small">
-          {dayTicks.map((tick) => (
-            <span key={tick}>{tick}</span>
-          ))}
-        </div>
       </div>
 
-      {/* Pre-start hold (`active` -1) leaves every stage upcoming. */}
-      <Stepper
-        className="px-1"
-        pulse
-        steps={STAGES.map((stage, index) => ({
-          id: stage,
-          label: t(`warming.stage.${stage}`),
-          state: index < active ? 'done' : index === active ? 'current' : 'upcoming',
-        }))}
-      />
+      {!complete ? <TodayRow account={account} /> : null}
+      <AttentionRow account={account} />
 
       {/* The backend decides when @SpamBot has been silent long enough to say so. */}
       {account.spam_check_warning ? (
@@ -418,17 +286,6 @@ function WarmingCard({
 
       {!complete ? (
         <>
-          {/* current activity */}
-          <div className="mt-3 flex items-center gap-3 rounded-sm border border-info-line bg-info-tint px-3 py-2">
-            <span className="tb-livedot size-dot shrink-0 rounded-full bg-action-primary" />
-            <span className="tb-pulse type-small-medium text-info-strong">
-              {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
-            </span>
-            {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
-              <PauseCountdown nextRunAt={account.next_run_at} />
-            ) : null}
-          </div>
-
           {/* activity log */}
           <button
             type="button"
@@ -567,7 +424,7 @@ function WarmingCard({
 }
 
 // The design's "Warming" panel: blue-tinted in-progress cards, each with the
-// day-bar histogram, six-stage pipeline stepper, live current-activity row,
+// phase/trust/spam row, worked-day bar, today/next-visit/DM row, the one problem row,
 // expandable terminal log, and completion state.
 export function WarmingBoard({
   warming,

@@ -228,6 +228,11 @@ _warming_account_state = Table(
     # schemas.warming.WarmingStateRecord.warmed_days. Migration #77.
     Column("warmed_days", Integer, nullable=False, server_default="0"),
     Column("last_warmed_date", String, nullable=True),
+    # Operator console; see schemas._warming_console.WarmingStateMarks. Migrations 82-84.
+    Column("geo_ack", String, nullable=True),
+    Column("cycle_base_actions", Integer, nullable=True),
+    Column("nc_start_mode", String, nullable=True),
+    Column("nc_handoff_at", String, nullable=True),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

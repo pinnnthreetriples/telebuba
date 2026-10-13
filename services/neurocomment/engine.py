@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio  # also re-exported so tests can patch engine.asyncio.sleep (used by _generate).
 import logging
 from datetime import UTC, datetime, timedelta
+from types import MappingProxyType
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import (
@@ -44,11 +45,14 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.neurocomment_pipeline import PipelineOutcome
+from services._soft_start import soft_day
 from services.neurocomment import _filters, _reply_wait, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.neurocomment import (
@@ -230,6 +234,8 @@ class _SelectionPool(NamedTuple):
     # Raw rather than pre-resolved: the loader below also has to ask WHETHER any candidate
     # overrides the per-channel day cap, which a resolved number can no longer answer.
     overrides: dict[str, AccountLimitOverride]
+    # Rolling-24h comments per account, read only when a candidate is in a soft start.
+    day_totals: Mapping[str, int] = MappingProxyType({})
 
 
 async def _load_selection_pool(
@@ -274,6 +280,11 @@ async def _load_selection_pool(
         day_ago = (now - timedelta(days=1)).isoformat()
         daily_rows = await count_channel_comments_per_account_since(channel, account_ids, day_ago)
         daily = {c.account_id: c.count for c in daily_rows.counts}
+    totals: dict[str, int] = {}
+    if any(soft_day(state, now) is not None for state in states.values()):
+        day_ago = (now - timedelta(days=1)).isoformat()
+        total_rows = (await count_comments_per_account_since(account_ids, day_ago)).counts
+        totals = {c.account_id: c.count for c in total_rows}
     return _SelectionPool(
         accounts=accounts,
         readiness=readiness,
@@ -284,6 +295,7 @@ async def _load_selection_pool(
         daily_counts=daily,
         limits=limits,
         overrides=overrides,
+        day_totals=totals,
     )
 
 

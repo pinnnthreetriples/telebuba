@@ -34,7 +34,7 @@ async def test_start_forwards_the_delay_and_the_pool_spread(
             account_id=body.account_id, label="Main", state="active", health="ok"
         )
 
-    monkeypatch.setattr("services.warming.start_warming", _fake)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/warming/start",

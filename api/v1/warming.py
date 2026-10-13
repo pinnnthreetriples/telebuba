@@ -9,6 +9,7 @@ from fastapi import status as http_status
 
 from api.errors import error_responses
 from core.config import settings
+from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
 from schemas.dialogues import DialogueFeed
 from schemas.warming import (
@@ -69,10 +70,10 @@ async def promote_account(body: PromoteRequest) -> WarmingAccountState:
     operation_id="handoffToNeurocomment",
     responses=error_responses(400, 409),
 )
-async def handoff_account(body: PromoteRequest) -> WarmingAccountState:
+async def handoff_account(body: HandoffRequest) -> WarmingAccountState:
     """Second stage: move a warmed-card account into the neurocomment idle pool."""
     try:
-        return await warming_service.handoff_to_neurocomment(body.account_id)
+        return await warming_service.handoff_to_neurocomment(body.account_id, body.start_mode)
     except warming_service.WarmingTaskNotQuiescentError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
@@ -97,15 +98,12 @@ async def unpromote_account(body: PromoteRequest) -> WarmingAccountState:
     return await warming_service.unmark_neurocomment(body.account_id)
 
 
-@router.post(
-    "/start",
-    response_model=WarmingAccountState,
-    operation_id="startWarming",
-    responses=error_responses(400, 404, 409),
-)
-async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
+async def _start_or_http(body: StartWarmingRequest, *, resume: bool) -> WarmingAccountState:
+    """Start (or resume) warming, mapping every refusal onto its HTTP status."""
     try:
-        return await warming_service.start_warming(body)
+        if resume:
+            return await warming_service.resume_warming(body)
+        return await warming_service.start_warming_with_consent(body)
     except warming_service.UnknownAccountError as exc:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except warming_service.WarmingTaskNotQuiescentError as exc:
@@ -131,6 +129,28 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
             status_code=http_status.HTTP_409_CONFLICT,
             detail=exc.code,
         ) from exc
+
+
+@router.post(
+    "/start",
+    response_model=WarmingAccountState,
+    operation_id="startWarming",
+    responses=error_responses(400, 404, 409),
+)
+async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
+    """Start warming; a geo mismatch never refuses, ``accept_geo_mismatch`` records consent."""
+    return await _start_or_http(body, resume=False)
+
+
+@router.post(
+    "/resume",
+    response_model=WarmingAccountState,
+    operation_id="resumeWarming",
+    responses=error_responses(400, 404, 409),
+)
+async def resume_warming(body: StartWarmingRequest) -> WarmingAccountState:
+    """«Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days."""
+    return await _start_or_http(body, resume=True)
 
 
 @router.post(

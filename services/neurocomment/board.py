@@ -28,6 +28,7 @@ from core.db import (
     list_linked_groups,
     list_posted_comments_since,
     list_waiting_comments,
+    list_warming_states_by_ids,
     load_account_limit_overrides,
 )
 from schemas.neurocomment_board import (
@@ -38,6 +39,7 @@ from schemas.neurocomment_board import (
     NeurocommentChannelRow,
 )
 from services._account_limits import resolve_limits
+from services._soft_start import soft_day
 from services.neurocomment import _pair_status, _state, settings_store
 
 if TYPE_CHECKING:
@@ -102,6 +104,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     # unscoped), narrowed to this campaign here and to the hour window per card.
     parked = [c for c in (await list_waiting_comments()).comments if c.campaign_id == campaign_id]
 
+    soft = await _soft_days(account_ids, now)
     cards = [
         _build_card(
             signals=_AccountSignals(
@@ -112,10 +115,10 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
             max_comments_per_hour=resolve_limits(
-                overrides.get(account_id), limits
+                overrides.get(account_id), limits, soft.get(account_id)
             ).max_comments_per_hour,
             now=now,
-        )
+        ).model_copy(update=_soft_progress(soft.get(account_id)))
         for account_id in account_ids
         if account_id in accounts
     ]
@@ -151,6 +154,23 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         channels=rows,
         comments=feed,
     )
+
+
+async def _soft_days(account_ids: list[str], now: datetime) -> dict[str, int | None]:
+    """The soft start's day per account (``None`` outside one).
+
+    Its caps are the ones the engine enforces, and the card names the day
+    («Мягкий старт · день 2/5»).
+    """
+    states = await list_warming_states_by_ids(account_ids)
+    return {state.account_id: soft_day(state, now) for state in states}
+
+
+def _soft_progress(day: int | None) -> dict[str, object]:
+    """The card's soft-start badge fields; empty outside a soft start."""
+    if day is None:
+        return {}
+    return {"soft_start_day": day, "soft_start_days": settings.soft_start.days}
 
 
 def _build_card(

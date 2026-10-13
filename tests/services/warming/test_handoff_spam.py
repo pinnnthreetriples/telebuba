@@ -13,6 +13,7 @@ from core.db import (
     upsert_spam_status,
     upsert_warming_state,
 )
+from schemas._warming_console import NcStartMode  # noqa: TC001 - parametrize annotation
 from schemas.accounts import AccountCreate
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.warming import WarmingStateWrite
@@ -173,3 +174,35 @@ async def test_an_ungraduated_account_is_refused_without_asking(
     with pytest.raises(ValueError, match="not in the warmed pool"):
         await warming.handoff_to_neurocomment("raw")
     assert probe.forces == []
+
+
+@pytest.mark.parametrize("mode", ["soft", "normal"])
+@pytest.mark.asyncio
+async def test_the_handoff_remembers_how_the_account_enters_neurocomment(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: NcStartMode,
+) -> None:
+    _probe(monkeypatch, "clean")
+    await _graduated()
+    before = datetime.now(UTC)
+
+    await warming.handoff_to_neurocomment("acc-1", mode)
+
+    stored = await fetch_warming_state("acc-1")
+    assert stored is not None
+    assert stored.nc_start_mode == mode
+    assert stored.nc_handoff_at is not None
+    assert datetime.fromisoformat(stored.nc_handoff_at) >= before
+
+
+@pytest.mark.asyncio
+async def test_a_refused_handoff_starts_no_soft_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    _probe(monkeypatch, "unknown")
+    await _graduated()
+
+    with pytest.raises(warming.HandoffSpamRefusedError):
+        await warming.handoff_to_neurocomment("acc-1", "soft")
+
+    stored = await fetch_warming_state("acc-1")
+    assert stored is not None
+    assert (stored.nc_start_mode, stored.nc_handoff_at) == (None, None)
