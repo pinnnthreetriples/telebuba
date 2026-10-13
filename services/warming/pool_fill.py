@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import dedup_key
 from core.config import settings
 from core.db import list_accounts, list_warming_channels, list_warming_states
 from core.logging import log_event
@@ -32,6 +33,8 @@ from core.repositories.warming_pool import (
 )
 from core.telegram_client import TelegramReadError
 from schemas._warming_pool import PoolFillResult
+from schemas.telegram_action_results import LinkedDiscussionGroupResult
+from schemas.telegram_actions import GetLinkedDiscussionGroup
 from schemas.telegram_actions_activity import GetLastPostAt, LastPostResult
 from schemas.telegram_actions_discovery import (
     GetSimilarChannels,
@@ -85,19 +88,53 @@ def _blocked(title: str) -> bool:
     return any(word.casefold() in lowered for word in settings.warming.pool_fill_blocked_words)
 
 
-def _fits(match: TelegramChannelMatch, language: str, known: set[str]) -> bool:
-    """The free checks, before any probe: a handle, size, title words, title language."""
+def _size_ok(size: int | None) -> bool:
     warm = settings.warming
-    if not match.username or f"@{match.username}".casefold() in known:
+    return (
+        size is not None
+        and warm.pool_fill_min_subscribers <= size <= warm.pool_fill_max_subscribers
+    )
+
+
+def _text_ok(text: str, language: str) -> bool:
+    """No blocked word, and not visibly written in another language."""
+    return not _blocked(text) and detect_language(text) in {None, language}
+
+
+def _fits(match: TelegramChannelMatch, language: str, known: set[str]) -> bool:
+    """The free checks, before any probe: a new handle, the title, a size if one came."""
+    if not match.username or dedup_key(match.username) in known:
         return False
     size = match.participants_count
-    if (
-        size is not None
-        and not warm.pool_fill_min_subscribers <= size <= warm.pool_fill_max_subscribers
-    ):
-        return False
-    title_language = detect_language(match.title)
-    return not _blocked(match.title) and title_language in {None, language}
+    return _text_ok(match.title, language) and (size is None or _size_ok(size))
+
+
+async def _probe(
+    account_id: str,
+    match: TelegramChannelMatch,
+    language: str,
+    now: datetime,
+) -> tuple[int, str] | None:
+    """``(subscribers, last post)`` of a channel that fits on its full info, else ``None``.
+
+    Search hits rarely carry a subscriber count, so ``getFullChannel`` answers it, with
+    the about text the words and the language are checked against too.
+    """
+    handle = f"@{match.username}"
+    try:
+        full = await _seams.execute_read(account_id, GetLinkedDiscussionGroup(channel=handle))
+    except TelegramReadError:
+        return None
+    if not isinstance(full, LinkedDiscussionGroupResult):
+        return None
+    size = (
+        full.participants_count if full.participants_count is not None else match.participants_count
+    )
+    text = " ".join(part for part in (match.title, full.about or "") if part)
+    if not _size_ok(size) or not _text_ok(text, language) or size is None:
+        return None
+    last_post = await _alive_since(account_id, handle, now)
+    return (size, last_post) if last_post is not None else None
 
 
 async def _alive_since(account_id: str, handle: str, now: datetime) -> str | None:
@@ -138,26 +175,26 @@ async def find_channels(request: PoolFillRequest) -> PoolFillResult:
     pool = (await list_warming_channels()).channels + (
         await list_pending_warming_channels()
     ).channels
-    known = {channel.channel.casefold() for channel in pool}
+    known = {dedup_key(channel.channel) for channel in pool}
     found = await _collect(account_id, request)
     fitting = [m for m in found if _fits(m, request.language, known)]
     now = datetime.now(UTC)
     proposals: list[WarmingChannel] = []
     checked = fitting[: settings.warming.pool_fill_max_probes]
     for match in checked:
-        handle = f"@{match.username}"
-        last_post = await _alive_since(account_id, handle, now)
-        if last_post is None:
+        probed = await _probe(account_id, match, request.language, now)
+        if probed is None:
             continue
+        subscribers, last_post = probed
         proposals.append(
             WarmingChannel(
-                channel=handle,
+                channel=dedup_key(match.username or ""),
                 label=match.title or None,
                 created_at=now.isoformat(),
                 language=request.language,
                 country=request.country,
                 kind=match.kind,
-                subscribers=match.participants_count,
+                subscribers=subscribers,
                 last_post_at=last_post,
                 source="discovery",
                 status="pending",

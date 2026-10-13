@@ -34,7 +34,7 @@ class _Client:
         self.requests: list[object] = []
         self.sent: list[tuple[str, object]] = []
         self.stickers = stickers or []
-        self.history = [
+        self.history: list[SimpleNamespace] = [
             SimpleNamespace(id=9, out=True),
             SimpleNamespace(id=8, out=False),
         ]
@@ -50,7 +50,7 @@ class _Client:
     async def get_input_entity(self, peer: object) -> object:
         return peer
 
-    async def get_messages(self, _peer: object, limit: int) -> list[object]:
+    async def get_messages(self, _peer: object, limit: int) -> list[SimpleNamespace]:
         assert limit >= 1
         return self.history
 

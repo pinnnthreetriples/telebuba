@@ -60,3 +60,8 @@ class WarmDmForward(_DmPeer):
     message_id: int = Field(ge=1)
     # «смотри» / «mira»: sent right after the forward; empty sends the forward alone.
     comment: str = Field(default="", max_length=40)
+
+
+# The four, as one member of ``TelegramAction`` (flattened by the union, discriminated
+# on ``action_type`` like every other action).
+WarmingSocialAction = WarmReadDiscussion | WarmDmReact | WarmDmSticker | WarmDmForward

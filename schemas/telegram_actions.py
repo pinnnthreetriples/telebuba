@@ -2,10 +2,7 @@
 
 Pydantic-described "do X on this account". Services and features never call
 ``client.send_message(...)`` directly — they build one of these classes and
-hand it to ``core.telegram_client.execute(account_id, action)``.
-
-Discriminator: ``action_type`` literal. First-cut set covers the actions
-warming will need.
+hand it to ``core.telegram_client.execute(account_id, action)``; ``action_type`` discriminates.
 """
 
 from __future__ import annotations
@@ -136,12 +133,7 @@ from schemas.telegram_actions_warming import (
     WarmViewProfile,
     WarmVoteInPoll,
 )
-from schemas.telegram_actions_warming_social import (
-    WarmDmForward,
-    WarmDmReact,
-    WarmDmSticker,
-    WarmReadDiscussion,
-)
+from schemas.telegram_actions_warming_social import WarmingSocialAction
 
 ActionResult = _telegram_results.ActionResult
 ActionStatus = _telegram_results.ActionStatus
@@ -402,10 +394,7 @@ TelegramAction = Annotated[
     | WarmMutePeer
     | WarmConsumeMedia
     | WarmEmojiStatus
-    | WarmDmForward
-    | WarmDmReact
-    | WarmDmSticker
-    | WarmReadDiscussion
+    | WarmingSocialAction
     | BroadcastSendMessage
     | BroadcastForwardPost
     | BroadcastJoinChatlist

@@ -18,6 +18,7 @@ import {
   addWarmingChannels,
   adoptCampaignDiscovery,
   approveNeuroshillingScenario,
+  approveWarmingChannelProposals,
   assignCampaignAccount,
   assignProxy,
   assignProxyByEndpoint,
@@ -62,6 +63,7 @@ import {
   editAccountChannelPost,
   expandDiscoveryKeywords,
   exportUserParserRun,
+  findWarmingChannels,
   generateBulkMessage,
   generateNeuroshillingScenario,
   getAccountChannel,
@@ -128,6 +130,7 @@ import {
   listUserParserPresets,
   listUserParserRunUsers,
   listWarmedAccounts,
+  listWarmingChannelProposals,
   listWarmingChannels,
   listWarmingDailyStats,
   listWarmingDialogues,
@@ -142,6 +145,7 @@ import {
   probeProxy,
   promoteToNeurocomment,
   publishAccountChannelPost,
+  rejectWarmingChannelProposals,
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountsFromFolder,
@@ -244,6 +248,9 @@ import type {
   ApproveNeuroshillingScenarioData,
   ApproveNeuroshillingScenarioError,
   ApproveNeuroshillingScenarioResponse,
+  ApproveWarmingChannelProposalsData,
+  ApproveWarmingChannelProposalsError,
+  ApproveWarmingChannelProposalsResponse,
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
@@ -375,6 +382,9 @@ import type {
   ExpandDiscoveryKeywordsResponse,
   ExportUserParserRunData,
   ExportUserParserRunError,
+  FindWarmingChannelsData,
+  FindWarmingChannelsError,
+  FindWarmingChannelsResponse,
   GenerateBulkMessageData,
   GenerateBulkMessageError,
   GenerateBulkMessageResponse,
@@ -572,6 +582,9 @@ import type {
   ListWarmedAccountsData,
   ListWarmedAccountsError,
   ListWarmedAccountsResponse,
+  ListWarmingChannelProposalsData,
+  ListWarmingChannelProposalsError,
+  ListWarmingChannelProposalsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -611,6 +624,9 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostError,
   PublishAccountChannelPostResponse,
+  RejectWarmingChannelProposalsData,
+  RejectWarmingChannelProposalsError,
+  RejectWarmingChannelProposalsResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -3880,6 +3896,121 @@ export const getWarmingSurvivalOptions = (options?: Options<GetWarmingSurvivalDa
     },
     queryKey: getWarmingSurvivalQueryKey(options),
   });
+
+/**
+ * Find Warming Channels
+ *
+ * Search channels for the pool with an account outside warming; propose the fits.
+ */
+export const findWarmingChannelsMutation = (
+  options?: Partial<Options<FindWarmingChannelsData>>,
+): UseMutationOptions<
+  FindWarmingChannelsResponse,
+  FindWarmingChannelsError,
+  Options<FindWarmingChannelsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    FindWarmingChannelsResponse,
+    FindWarmingChannelsError,
+    Options<FindWarmingChannelsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await findWarmingChannels({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listWarmingChannelProposalsQueryKey = (
+  options?: Options<ListWarmingChannelProposalsData>,
+) => createQueryKey('listWarmingChannelProposals', options);
+
+/**
+ * List Warming Channel Proposals
+ */
+export const listWarmingChannelProposalsOptions = (
+  options?: Options<ListWarmingChannelProposalsData>,
+) =>
+  queryOptions<
+    ListWarmingChannelProposalsResponse,
+    ListWarmingChannelProposalsError,
+    ListWarmingChannelProposalsResponse,
+    ReturnType<typeof listWarmingChannelProposalsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingChannelProposals({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingChannelProposalsQueryKey(options),
+  });
+
+/**
+ * Approve Warming Channel Proposals
+ *
+ * Move the ticked proposals into the pool; returns the proposals still waiting.
+ */
+export const approveWarmingChannelProposalsMutation = (
+  options?: Partial<Options<ApproveWarmingChannelProposalsData>>,
+): UseMutationOptions<
+  ApproveWarmingChannelProposalsResponse,
+  ApproveWarmingChannelProposalsError,
+  Options<ApproveWarmingChannelProposalsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ApproveWarmingChannelProposalsResponse,
+    ApproveWarmingChannelProposalsError,
+    Options<ApproveWarmingChannelProposalsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await approveWarmingChannelProposals({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Reject Warming Channel Proposals
+ *
+ * Drop the ticked proposals; returns the proposals still waiting.
+ */
+export const rejectWarmingChannelProposalsMutation = (
+  options?: Partial<Options<RejectWarmingChannelProposalsData>>,
+): UseMutationOptions<
+  RejectWarmingChannelProposalsResponse,
+  RejectWarmingChannelProposalsError,
+  Options<RejectWarmingChannelProposalsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RejectWarmingChannelProposalsResponse,
+    RejectWarmingChannelProposalsError,
+    Options<RejectWarmingChannelProposalsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await rejectWarmingChannelProposals({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 /**
  * Start Discovery
