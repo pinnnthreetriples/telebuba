@@ -262,6 +262,9 @@ import type {
   GetNotificationSettingsData,
   GetNotificationSettingsErrors,
   GetNotificationSettingsResponses,
+  GetOutreachLimitsData,
+  GetOutreachLimitsErrors,
+  GetOutreachLimitsResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -622,6 +625,9 @@ import type {
   UpdateNotificationSettingsData,
   UpdateNotificationSettingsErrors,
   UpdateNotificationSettingsResponses,
+  UpdateOutreachLimitsData,
+  UpdateOutreachLimitsErrors,
+  UpdateOutreachLimitsResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -1807,6 +1813,37 @@ export const cancelContactLookupJob = <ThrowOnError extends boolean = false>(
     CancelContactLookupJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/contact-lookup/{job_id}/cancel', ...options });
+
+/**
+ * Get Outreach Limits
+ */
+export const getOutreachLimits = <ThrowOnError extends boolean = false>(
+  options?: Options<GetOutreachLimitsData, ThrowOnError>,
+): RequestResult<GetOutreachLimitsResponses, GetOutreachLimitsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetOutreachLimitsResponses,
+    GetOutreachLimitsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/outreach-limits', ...options });
+
+/**
+ * Update Outreach Limits
+ */
+export const updateOutreachLimits = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateOutreachLimitsData, ThrowOnError>,
+): RequestResult<UpdateOutreachLimitsResponses, UpdateOutreachLimitsErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateOutreachLimitsResponses,
+    UpdateOutreachLimitsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/outreach-limits',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Upload Scheduled Media

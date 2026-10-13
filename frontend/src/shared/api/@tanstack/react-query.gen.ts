@@ -93,6 +93,7 @@ import {
   getNeuroshillingScenario,
   getNeuroshillingSettings,
   getNotificationSettings,
+  getOutreachLimits,
   getReadiness,
   getUserParserRun,
   getWarmingBoard,
@@ -214,6 +215,7 @@ import {
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
   updateNotificationSettings,
+  updateOutreachLimits,
   updateWarmingSettings,
   uploadChatBroadcastPhoto,
   uploadMasstaggingMedia,
@@ -470,6 +472,9 @@ import type {
   GetNotificationSettingsData,
   GetNotificationSettingsError,
   GetNotificationSettingsResponse,
+  GetOutreachLimitsData,
+  GetOutreachLimitsError,
+  GetOutreachLimitsResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -830,6 +835,9 @@ import type {
   UpdateNotificationSettingsData,
   UpdateNotificationSettingsError,
   UpdateNotificationSettingsResponse,
+  UpdateOutreachLimitsData,
+  UpdateOutreachLimitsError,
+  UpdateOutreachLimitsResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -3021,6 +3029,58 @@ export const cancelContactLookupJobMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await cancelContactLookupJob({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getOutreachLimitsQueryKey = (options?: Options<GetOutreachLimitsData>) =>
+  createQueryKey('getOutreachLimits', options);
+
+/**
+ * Get Outreach Limits
+ */
+export const getOutreachLimitsOptions = (options?: Options<GetOutreachLimitsData>) =>
+  queryOptions<
+    GetOutreachLimitsResponse,
+    GetOutreachLimitsError,
+    GetOutreachLimitsResponse,
+    ReturnType<typeof getOutreachLimitsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getOutreachLimits({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getOutreachLimitsQueryKey(options),
+  });
+
+/**
+ * Update Outreach Limits
+ */
+export const updateOutreachLimitsMutation = (
+  options?: Partial<Options<UpdateOutreachLimitsData>>,
+): UseMutationOptions<
+  UpdateOutreachLimitsResponse,
+  UpdateOutreachLimitsError,
+  Options<UpdateOutreachLimitsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateOutreachLimitsResponse,
+    UpdateOutreachLimitsError,
+    Options<UpdateOutreachLimitsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateOutreachLimits({
         ...options,
         ...fnOptions,
         throwOnError: true,
