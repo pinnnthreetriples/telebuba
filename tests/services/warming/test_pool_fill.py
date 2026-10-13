@@ -176,3 +176,31 @@ async def test_a_case_variant_approves_the_proposal_without_a_duplicate(
     await pool_fill.find_channels(PoolFillRequest(language="es", topics=["fútbol"]))
     await warming.add_channels(AddChannelsRequest(raw="@Futbol_MX"))
     assert [c.channel for c in (await list_warming_channels()).channels] == ["futbol_mx"]
+
+
+@pytest.mark.asyncio
+async def test_an_account_claimed_before_the_lock_is_not_searched_with(
+    reads: list[tuple[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account("searcher")
+    answers = iter(
+        [
+            DiscoveryAccountList(items=[DiscoveryAccountOption(account_id="searcher", name="s")]),
+            DiscoveryAccountList(
+                items=[
+                    DiscoveryAccountOption(
+                        account_id="searcher", name="s", busy_reason="account_busy"
+                    )
+                ]
+            ),
+        ]
+    )
+
+    async def options() -> DiscoveryAccountList:
+        return next(answers)
+
+    monkeypatch.setattr(pool_fill, "list_search_accounts", options)
+    result = await pool_fill.find_channels(PoolFillRequest(language="es", topics=["fútbol"]))
+    assert result.status == "no_search_account"
+    assert reads == []

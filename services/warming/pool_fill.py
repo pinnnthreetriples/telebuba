@@ -46,6 +46,7 @@ from schemas.warming import WarmingChannel
 from services._lang_detect import detect_language
 from services.neurocomment._discovery_pool import list_search_accounts
 from services.warming import _seams
+from services.warming._runtime import account_lock
 
 if TYPE_CHECKING:
     from schemas._warming_pool import ChannelBatchRequest, PoolFillRequest
@@ -55,8 +56,8 @@ if TYPE_CHECKING:
 _SIMILAR_SEEDS = 2
 
 
-async def _search_account() -> str | None:
-    """An idle, alive account outside warming; one handed to neurocomment first."""
+async def _search_accounts() -> list[str]:
+    """Idle, alive accounts outside warming, those handed to neurocomment first."""
     free = {
         item.account_id for item in (await list_search_accounts()).items if not item.busy_reason
     }
@@ -64,7 +65,7 @@ async def _search_account() -> str | None:
     states = {record.account_id: record for record in await list_warming_states()}
     picks = sorted(free & alive)
     handed = [a for a in picks if (r := states.get(a)) is not None and r.nc_handed_off]
-    return (handed or picks or [None])[0]
+    return handed + [a for a in picks if a not in handed]
 
 
 async def _matches(
@@ -168,10 +169,20 @@ async def _collect(account_id: str, request: PoolFillRequest) -> list[TelegramCh
 
 
 async def find_channels(request: PoolFillRequest) -> PoolFillResult:
-    """Search, check and propose channels for the pool; the operator approves them later."""
-    account_id = await _search_account()
-    if account_id is None:
-        return PoolFillResult(status="no_search_account")
+    """Search, check and propose channels for the pool; the operator approves them later.
+
+    The searching account's lifecycle lock is held for the whole read sequence, and the
+    account is checked again once it is held: warming starts take the same lock, so it
+    cannot claim the account while the search still reads with it.
+    """
+    for account_id in await _search_accounts():
+        async with account_lock(account_id):
+            if account_id in await _search_accounts():
+                return await _search_with(account_id, request)
+    return PoolFillResult(status="no_search_account")
+
+
+async def _search_with(account_id: str, request: PoolFillRequest) -> PoolFillResult:
     pool = (await list_warming_channels()).channels + (
         await list_pending_warming_channels()
     ).channels
