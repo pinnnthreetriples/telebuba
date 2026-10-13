@@ -127,7 +127,7 @@ async def test_warming_on_a_missing_device_answers_the_code(
         code = "device_missing"
         raise warming_service.WarmingDeviceUnavailableError(code, body.account_id)
 
-    monkeypatch.setattr("services.warming.start_warming", _boom)
+    monkeypatch.setattr("services.warming.start_warming_with_consent", _boom)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/warming/start",
