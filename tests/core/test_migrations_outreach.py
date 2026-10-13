@@ -1,4 +1,4 @@
-"""Migration 89 — outreach tables, and their parity with ``create_all``."""
+"""Migrations 89 and 90 — outreach tables, and their parity with ``create_all``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import _metadata
-from core.migration_steps_outreach import _add_outreach_tables
+from core.migration_steps_outreach import _add_outreach_presets, _add_outreach_tables
 from core.migrations import MIGRATIONS
 from tests.core.test_migrations_scheduled_posts import _shape
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     _EngineFactory = Callable[[str], Engine]
 
-_TABLES = ("outreach_limits", "outreach_daily_usage")
+_TABLES = ("outreach_limits", "outreach_daily_usage", "outreach_presets")
 
 
 @pytest.fixture
@@ -33,12 +33,15 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     engine = legacy_engine("migrated.db")
     with engine.begin() as connection:
         _add_outreach_tables(connection)
+        _add_outreach_presets(connection)
     return engine
 
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_outreach_tables]
     assert entries == [(89, "add_outreach_tables", _add_outreach_tables)]
+    presets = [entry for entry in MIGRATIONS if entry[2] is _add_outreach_presets]
+    assert presets == [(90, "add_outreach_presets", _add_outreach_presets)]
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -54,4 +57,5 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
     before = [_shape(migrated_engine, table) for table in _TABLES]
     with migrated_engine.begin() as connection:
         _add_outreach_tables(connection)
+        _add_outreach_presets(connection)
     assert [_shape(migrated_engine, table) for table in _TABLES] == before

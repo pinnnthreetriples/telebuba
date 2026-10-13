@@ -174,7 +174,7 @@ async def _load_budget(data: BulkMessageRequest) -> _Budget:
         delays = (limits.bulk_min_delay_seconds, limits.bulk_max_delay_seconds)
     else:
         delays = (data.min_delay_seconds, data.max_delay_seconds)
-    cap = limits.first_messages_per_day
+    cap = data.daily_cap or limits.first_messages_per_day
     left = None
     if cap is not None:
         usage = await list_outreach_usage(data.account_ids, _utc_day())

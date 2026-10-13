@@ -5,13 +5,19 @@ from __future__ import annotations
 import pytest
 
 from core.repositories.outreach import (
+    PresetNameTakenError,
     add_outreach_usage,
+    create_outreach_preset,
+    delete_outreach_preset,
     list_accounts_with_contact_matches,
+    list_outreach_presets,
     list_outreach_usage,
     load_outreach_limits,
     save_outreach_limits,
+    update_outreach_preset,
 )
 from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits, OutreachLimitsUpdate
+from schemas.outreach_presets import OutreachPresetWrite
 
 
 @pytest.mark.asyncio
@@ -86,3 +92,54 @@ async def test_accounts_with_contact_matches_look_across_every_day() -> None:
     )
 
     assert await list_accounts_with_contact_matches(["a1", "a2", "a3"]) == {"a1"}
+
+
+def _preset(name: str = "Branch", **values: int) -> OutreachPresetWrite:
+    fields = {
+        "pause_seconds": 150,
+        "first_messages_per_day": 22,
+        "contact_imports_per_day": 14,
+        "lookup_batch_size": 3,
+        **values,
+    }
+    return OutreachPresetWrite(name=name, **fields)
+
+
+@pytest.mark.asyncio
+async def test_presets_are_created_listed_by_name_updated_and_deleted() -> None:
+    zeta = await create_outreach_preset(_preset("zeta"))
+    alpha = await create_outreach_preset(_preset("  Alpha ", pause_seconds=60))
+
+    assert [p.name for p in await list_outreach_presets()] == ["Alpha", "zeta"]
+    assert alpha.pause_seconds == 60
+
+    renamed = await update_outreach_preset(zeta.id, _preset("Центр", lookup_batch_size=5))
+    assert renamed is not None
+    assert (renamed.id, renamed.name, renamed.lookup_batch_size) == (zeta.id, "Центр", 5)
+    assert await update_outreach_preset("missing", _preset("x")) is None
+
+    assert await delete_outreach_preset(alpha.id) is True
+    assert await delete_outreach_preset(alpha.id) is False
+    assert [p.name for p in await list_outreach_presets()] == ["Центр"]
+
+
+@pytest.mark.asyncio
+async def test_preset_names_are_unique_regardless_of_case() -> None:
+    first = await create_outreach_preset(_preset("Branch"))
+    other = await create_outreach_preset(_preset("Other"))
+
+    with pytest.raises(PresetNameTakenError):
+        await create_outreach_preset(_preset("branch"))
+    with pytest.raises(PresetNameTakenError):
+        await update_outreach_preset(other.id, _preset("BRANCH"))
+    # Keeping its own name is not a clash.
+    assert await update_outreach_preset(first.id, _preset("Branch", pause_seconds=90))
+
+
+def test_preset_values_stay_inside_the_slider_ranges() -> None:
+    with pytest.raises(ValueError, match="greater than or equal to 10"):
+        _preset(pause_seconds=9)
+    with pytest.raises(ValueError, match="less than or equal to 20"):
+        _preset(lookup_batch_size=21)
+    with pytest.raises(ValueError, match="empty"):
+        _preset("   ")

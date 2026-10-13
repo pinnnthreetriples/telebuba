@@ -1,4 +1,6 @@
-"""Migration 89 — outreach pacing: the limits singleton and the per-day usage counters.
+"""Migrations 89 and 90 — outreach pacing tables.
+
+89: the limits singleton and the per-day usage counters. 90: saved slider presets.
 
 ``CREATE ... IF NOT EXISTS``: ``create_all`` runs BEFORE ``apply_migrations``, so on a
 fresh database the schema comes from ``core._schema_outreach`` and this is a no-op.
@@ -42,3 +44,22 @@ _USAGE = (
 def _add_outreach_tables(connection: Connection) -> None:
     connection.exec_driver_sql(_LIMITS)
     connection.exec_driver_sql(_USAGE)
+
+
+_PRESETS = (
+    "CREATE TABLE IF NOT EXISTS outreach_presets ("
+    " id VARCHAR NOT NULL,"
+    " name VARCHAR NOT NULL,"
+    " name_key VARCHAR NOT NULL,"
+    " pause_seconds INTEGER NOT NULL,"
+    " first_messages_per_day INTEGER NOT NULL,"
+    " contact_imports_per_day INTEGER NOT NULL,"
+    " lookup_batch_size INTEGER NOT NULL,"
+    " updated_at VARCHAR NOT NULL,"
+    " PRIMARY KEY (id),"
+    " UNIQUE (name_key))"
+)
+
+
+def _add_outreach_presets(connection: Connection) -> None:
+    connection.exec_driver_sql(_PRESETS)

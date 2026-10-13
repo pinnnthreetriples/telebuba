@@ -1,4 +1,4 @@
-"""Outreach pacing — the limits singleton and the per-account, per-day usage counters.
+"""Outreach pacing — the limits singleton, per-day usage counters and saved presets.
 
 Limits: with no saved row the schema defaults are in effect (not persisted), and a
 save upserts the single row. Usage counters only grow through one atomic UPSERT, so
@@ -9,18 +9,22 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING, cast
+from uuid import uuid4
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 
-from core._schema_outreach import _outreach_daily_usage, _outreach_limits
+from core._schema_outreach import _outreach_daily_usage, _outreach_limits, _outreach_presets
 from core.db import _get_engine, _now_iso
 from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits
+from schemas.outreach_presets import OutreachPreset
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from schemas.outreach_limits import OutreachLimitsUpdate
+    from schemas.outreach_presets import OutreachPresetWrite
 
 _LIMITS_ID = 1
 _COUNTERS = ("contact_imports", "contact_matches", "first_messages")
@@ -118,3 +122,72 @@ def _list_accounts_with_contact_matches(account_ids: Sequence[str]) -> set[str]:
 async def list_accounts_with_contact_matches(account_ids: Sequence[str]) -> set[str]:
     """The accounts whose lookups ever found someone, across every stored day."""
     return await asyncio.to_thread(_list_accounts_with_contact_matches, account_ids)
+
+
+class PresetNameTakenError(ValueError):
+    """Another preset already has this name (case-insensitive)."""
+
+
+def _list_outreach_presets() -> list[OutreachPreset]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(select(_outreach_presets)).mappings().all()
+    presets = [OutreachPreset.model_validate(dict(row)) for row in rows]
+    return sorted(presets, key=lambda preset: preset.name.casefold())
+
+
+async def list_outreach_presets() -> list[OutreachPreset]:
+    """Every saved preset, by name."""
+    return await asyncio.to_thread(_list_outreach_presets)
+
+
+def _fetch_preset(preset_id: str) -> OutreachPreset | None:
+    statement = select(_outreach_presets).where(_outreach_presets.c.id == preset_id)
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    return None if row is None else OutreachPreset.model_validate(dict(row))
+
+
+def _save_outreach_preset(
+    preset_id: str | None, data: OutreachPresetWrite
+) -> OutreachPreset | None:
+    values = {**data.model_dump(), "name_key": data.name.casefold(), "updated_at": _now_iso()}
+    try:
+        with _get_engine().begin() as connection:
+            if preset_id is None:
+                preset_id = uuid4().hex
+                connection.execute(insert(_outreach_presets).values(id=preset_id, **values))
+            else:
+                updated = connection.execute(
+                    update(_outreach_presets)
+                    .where(_outreach_presets.c.id == preset_id)
+                    .values(**values),
+                )
+                if updated.rowcount == 0:
+                    return None
+    except IntegrityError as exc:
+        raise PresetNameTakenError(data.name) from exc
+    return _fetch_preset(preset_id)
+
+
+async def create_outreach_preset(data: OutreachPresetWrite) -> OutreachPreset:
+    """Store a new preset; a taken name raises :class:`PresetNameTakenError`."""
+    preset = await asyncio.to_thread(_save_outreach_preset, None, data)
+    return cast("OutreachPreset", preset)
+
+
+async def update_outreach_preset(
+    preset_id: str, data: OutreachPresetWrite
+) -> OutreachPreset | None:
+    """Rename and/or re-value a preset; ``None`` when it does not exist."""
+    return await asyncio.to_thread(_save_outreach_preset, preset_id, data)
+
+
+def _delete_outreach_preset(preset_id: str) -> bool:
+    statement = delete(_outreach_presets).where(_outreach_presets.c.id == preset_id)
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount > 0
+
+
+async def delete_outreach_preset(preset_id: str) -> bool:
+    """Remove a preset; False when it did not exist."""
+    return await asyncio.to_thread(_delete_outreach_preset, preset_id)

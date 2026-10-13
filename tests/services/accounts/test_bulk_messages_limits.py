@@ -207,3 +207,17 @@ async def test_no_cap_lets_every_send_through(monkeypatch: pytest.MonkeyPatch) -
     job, _calls = await _run(monkeypatch, account_ids=["a1"], recipients=["@rcpt1", "@rcpt2"])
 
     assert [row.status for row in job.results] == ["ok", "ok"]
+
+
+@pytest.mark.asyncio
+async def test_a_run_cap_applies_even_when_the_saved_cap_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await save_outreach_limits(OutreachLimitsUpdate(first_messages_per_day=None))
+
+    job, calls = await _run(
+        monkeypatch, account_ids=["a1"], recipients=["@rcpt1", "@rcpt2"], daily_cap=1
+    )
+
+    assert calls == [("a1", "rcpt1")]
+    assert [row.status for row in job.results] == ["ok", "skipped"]

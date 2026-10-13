@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.accounts import _ACCOUNT_ID_PATTERN
-from schemas.outreach_limits import MAX_PAUSE_SECONDS
+from schemas.outreach_limits import MAX_FIRST_MESSAGES_PER_DAY, MAX_PAUSE_SECONDS
 
 _MAX_SENDS = 500
 _MAX_EACH_RECIPIENTS = 50
@@ -22,6 +22,8 @@ class BulkMessageRequest(BaseModel):
     # Left out, the pause comes from the saved outreach limits.
     min_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
     max_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
+    # First messages per account per UTC day for this run; left out, the saved limit.
+    daily_cap: int | None = Field(default=None, ge=1, le=MAX_FIRST_MESSAGES_PER_DAY)
     # "each": every account messages every recipient; "split": one message per
     # recipient, round-robin over the accounts.
     mode: Literal["each", "split"] = "each"

@@ -11,6 +11,7 @@ import {
   generateBulkMessageMutation,
   getBulkMessageJobQueryOptions,
   outreachLimitsQueryOptions,
+  outreachUsageTodayQueryOptions,
   sendBulkMessagesMutation,
 } from '@/entities/account';
 import {
@@ -22,11 +23,14 @@ import {
   Input,
   Modal,
   ModalFooter,
+  Odometer,
   SegmentedControl,
   Textarea,
 } from '@/shared/ui';
 
+import { forecastSends, pacingFromLimits, type PacingValues, pauseRange } from '../model/pacing';
 import { ContactLookupPanel } from './ContactLookupPanel';
+import { PacingBlock } from './PacingBlock';
 
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;
@@ -41,9 +45,11 @@ export type BulkMessageDraft = {
   recipients: string;
   pins: Record<string, string[]>;
   message: string;
-  // null: the saved outreach limit applies, and the run is started without the field.
+  // null: the pause range follows the pause slider (±50%).
   minDelay: string | null;
   maxDelay: string | null;
+  // null: the sliders still show the saved outreach limits.
+  pacing: PacingValues | null;
   generatorOpen: boolean;
   prompt: string;
   provider: 'deepseek' | 'gemini' | null;
@@ -99,6 +105,7 @@ export function BulkMessageModal({
   const [message, setMessage] = useState(initialDraft?.message ?? '');
   const [minDelay, setMinDelay] = useState<string | null>(initialDraft?.minDelay ?? null);
   const [maxDelay, setMaxDelay] = useState<string | null>(initialDraft?.maxDelay ?? null);
+  const [pacingEdit, setPacing] = useState<PacingValues | null>(initialDraft?.pacing ?? null);
   const [generatorOpen, setGeneratorOpen] = useState(initialDraft?.generatorOpen ?? false);
   const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [provider, setProvider] = useState<'deepseek' | 'gemini' | null>(
@@ -109,6 +116,12 @@ export function BulkMessageModal({
 
   const fleet = useQuery(allAccountsQueryOptions());
   const limits = useQuery(outreachLimitsQueryOptions());
+  const pacing = pacingEdit ?? pacingFromLimits(limits.data);
+  const usageToday = useQuery({
+    ...outreachUsageTodayQueryOptions({ query: { account_ids: ids } }),
+    enabled: ids.length > 0 && jobId === null,
+  });
+  const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
   const send = useMutation(sendBulkMessagesMutation());
   const generate = useMutation(generateBulkMessageMutation());
   const cancel = useMutation(cancelBulkMessageJobMutation());
@@ -128,8 +141,9 @@ export function BulkMessageModal({
   const recipientList = recipientsFrom(recipients);
   const maxRecipients = mode === 'each' ? MAX_EACH_RECIPIENTS : MAX_SENDS;
   const sendCount = mode === 'each' ? ids.length * recipientList.length : recipientList.length;
-  const minShown = minDelay ?? String(limits.data?.bulk_min_delay_seconds ?? '');
-  const maxShown = maxDelay ?? String(limits.data?.bulk_max_delay_seconds ?? '');
+  const [sliderMin, sliderMax] = pauseRange(pacing.pause);
+  const minShown = minDelay ?? String(sliderMin);
+  const maxShown = maxDelay ?? String(sliderMax);
   const delayEdited = minDelay !== null || maxDelay !== null;
   const minSeconds = Number(minShown);
   const maxSeconds = Number(maxShown);
@@ -155,6 +169,40 @@ export function BulkMessageModal({
   const attention = results.filter((result) => result.status !== 'ok' && !result.handed_over);
   const handedOver = results.filter((result) => result.handed_over);
 
+  const averagePause = delayEdited ? (minSeconds + maxSeconds) / 2 : pacing.pause;
+  const forecast = forecastSends({
+    mode,
+    recipients: recipientList.length,
+    left: ids.map((id) => pacing.messages - (usage.get(id)?.first_messages ?? 0)),
+    pause: averagePause,
+  });
+  const minutes = Math.round(forecast.seconds / 60);
+  const duration =
+    minutes < 1
+      ? t('accounts.messages.pacing.duration.underMinute')
+      : minutes < 60
+        ? t('accounts.messages.pacing.duration.m', { m: minutes })
+        : t('accounts.messages.pacing.duration.hm', {
+            h: Math.floor(minutes / 60),
+            m: minutes % 60,
+          });
+  const forecastText =
+    ids.length === 0 || recipientList.length === 0 ? (
+      t('accounts.messages.pacing.forecastEmpty')
+    ) : (
+      <>
+        <span className="inline-flex items-baseline gap-1">
+          <Odometer value={forecast.fitting} className="type-small-medium" />
+          {t('accounts.messages.pacing.forecastSends', { count: forecast.fitting, duration })}
+        </span>
+        {forecast.over > 0 && (
+          <span className="block">
+            {t('accounts.messages.pacing.forecastOver', { count: forecast.over })}
+          </span>
+        )}
+      </>
+    );
+
   const onSend = () => {
     if (!batchReady) return;
     void send
@@ -163,7 +211,9 @@ export function BulkMessageModal({
           account_ids: ids,
           recipients: recipientList,
           text: message.trim(),
-          ...(delayEdited && { min_delay_seconds: minSeconds, max_delay_seconds: maxSeconds }),
+          min_delay_seconds: minSeconds,
+          max_delay_seconds: maxSeconds,
+          daily_cap: pacing.messages,
           mode,
           ...(mode === 'split' && {
             recipient_accounts: Object.fromEntries(
@@ -261,6 +311,7 @@ export function BulkMessageModal({
         message,
         minDelay,
         maxDelay,
+        pacing: pacingEdit,
         generatorOpen,
         prompt,
         provider,
@@ -492,7 +543,12 @@ export function BulkMessageModal({
                       setRecipients(event.target.value);
                     }}
                   />
-                  <ContactLookupPanel accountIds={ids} onAppendRecipients={appendRecipients} />
+                  <ContactLookupPanel
+                    accountIds={ids}
+                    onAppendRecipients={appendRecipients}
+                    pacing={pacing}
+                    onPacingChange={setPacing}
+                  />
                 </section>
 
                 <section className="space-y-2">
@@ -572,50 +628,63 @@ export function BulkMessageModal({
                 <section className="space-y-2">
                   <div className="flex items-center gap-2">
                     <h3 className="type-body-medium text-content-secondary">
-                      {t('accounts.messages.delay')}
+                      {t('accounts.messages.pacing.title')}
                     </h3>
-                    <HelpHint text={t('accounts.messages.delayHint')} />
+                    <HelpHint text={t('accounts.messages.pacing.hint')} />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(
-                      [
-                        ['delayFrom', 'minDelay', minShown, setMinDelay, setMaxDelay, maxShown],
-                        ['delayTo', 'maxDelay', maxShown, setMaxDelay, setMinDelay, minShown],
-                      ] as const
-                    ).map(([labelKey, ariaKey, value, setValue, setOther, other]) => (
-                      <label key={labelKey} className="flex items-center gap-2 type-small">
-                        <span>{t(`accounts.messages.${labelKey}`)}</span>
-                        <Input
-                          type="number"
-                          size="sm"
-                          min={0}
-                          max={MAX_DELAY_SECONDS}
-                          step={1}
-                          aria-label={t(`accounts.messages.${ariaKey}`)}
-                          value={value}
-                          onChange={(event) => {
-                            setValue(event.target.value);
-                            setOther(other);
-                          }}
-                        />
-                        <span>{t('accounts.messages.secondsShort')}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {!delayReady && (
-                    <p role="alert" className="type-small text-danger">
-                      {t('accounts.messages.delayInvalid')}
-                    </p>
-                  )}
-                  {limits.data && (
-                    <p className="type-small">
-                      {limits.data.first_messages_per_day == null
-                        ? t('accounts.messages.dailyCapOff')
-                        : t('accounts.messages.dailyCap', {
-                            count: limits.data.first_messages_per_day,
-                          })}
-                    </p>
-                  )}
+                  <PacingBlock
+                    presets
+                    keys={['pause', 'messages', 'contacts', 'batch']}
+                    values={pacing}
+                    onChange={setPacing}
+                    accountIds={ids}
+                    usage={usage}
+                    leftKind="messages"
+                    forecast={forecastText}
+                    advanced={
+                      <div className="space-y-2">
+                        <p className="type-small">{t('accounts.messages.delayHint')}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(
+                            [
+                              [
+                                'delayFrom',
+                                'minDelay',
+                                minShown,
+                                setMinDelay,
+                                setMaxDelay,
+                                maxShown,
+                              ],
+                              ['delayTo', 'maxDelay', maxShown, setMaxDelay, setMinDelay, minShown],
+                            ] as const
+                          ).map(([labelKey, ariaKey, value, setValue, setOther, other]) => (
+                            <label key={labelKey} className="flex items-center gap-2 type-small">
+                              <span>{t(`accounts.messages.${labelKey}`)}</span>
+                              <Input
+                                type="number"
+                                size="sm"
+                                min={0}
+                                max={MAX_DELAY_SECONDS}
+                                step={1}
+                                aria-label={t(`accounts.messages.${ariaKey}`)}
+                                value={value}
+                                onChange={(event) => {
+                                  setValue(event.target.value);
+                                  setOther(other);
+                                }}
+                              />
+                              <span>{t('accounts.messages.secondsShort')}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {!delayReady && (
+                          <p role="alert" className="type-small text-danger">
+                            {t('accounts.messages.delayInvalid')}
+                          </p>
+                        )}
+                      </div>
+                    }
+                  />
                 </section>
               </>
             )}

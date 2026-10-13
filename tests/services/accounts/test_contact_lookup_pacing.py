@@ -276,3 +276,15 @@ async def test_matches_are_counted_for_the_history(monkeypatch: pytest.MonkeyPat
 
     usage = await list_outreach_usage(["a1"], _today())
     assert (usage["a1"].contact_imports, usage["a1"].contact_matches) == (2, 1)
+
+
+@pytest.mark.asyncio
+async def test_a_run_may_set_its_own_daily_allowance(monkeypatch: pytest.MonkeyPatch) -> None:
+    await add_outreach_usage(OutreachDailyUsage(account_id="a1", day=_today(), contact_imports=10))
+    telegram = _Telegram()
+
+    # The saved limit is 15, so 5 would fit; the run's own 12 leaves room for 2.
+    job = await _run(monkeypatch, telegram, account_ids=["a1"], phones=_phones(5), daily_cap=12)
+
+    assert sum(len(phones) for _a, phones in telegram.batches) == 2
+    assert sum(status == "skipped" for _a, status, _c in _final(job).values()) == 3

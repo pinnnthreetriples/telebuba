@@ -46,6 +46,7 @@ import {
   createChatCollection,
   createMasstaggingCampaign,
   createNeuroshillingCampaign,
+  createOutreachPreset,
   createProxy,
   createUserParserPreset,
   deleteAccount,
@@ -57,6 +58,7 @@ import {
   deleteChatCollection,
   deleteMasstaggingCampaign,
   deleteNeuroshillingCampaign,
+  deleteOutreachPreset,
   deleteProxy,
   deleteUserParserBase,
   deleteUserParserPreset,
@@ -94,6 +96,7 @@ import {
   getNeuroshillingSettings,
   getNotificationSettings,
   getOutreachLimits,
+  getOutreachUsageToday,
   getReadiness,
   getUserParserRun,
   getWarmingBoard,
@@ -124,6 +127,7 @@ import {
   listMasstaggingCampaigns,
   listNeurocommentComments,
   listNeuroshillingCampaigns,
+  listOutreachPresets,
   listProxies,
   listUserParserAccounts,
   listUserParserBases,
@@ -216,6 +220,7 @@ import {
   updateNeuroshillingCampaign,
   updateNotificationSettings,
   updateOutreachLimits,
+  updateOutreachPreset,
   updateWarmingSettings,
   uploadChatBroadcastPhoto,
   uploadMasstaggingMedia,
@@ -333,6 +338,9 @@ import type {
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignError,
   CreateNeuroshillingCampaignResponse,
+  CreateOutreachPresetData,
+  CreateOutreachPresetError,
+  CreateOutreachPresetResponse,
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
@@ -366,6 +374,9 @@ import type {
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignError,
   DeleteNeuroshillingCampaignResponse,
+  DeleteOutreachPresetData,
+  DeleteOutreachPresetError,
+  DeleteOutreachPresetResponse,
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
@@ -475,6 +486,9 @@ import type {
   GetOutreachLimitsData,
   GetOutreachLimitsError,
   GetOutreachLimitsResponse,
+  GetOutreachUsageTodayData,
+  GetOutreachUsageTodayError,
+  GetOutreachUsageTodayResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -565,6 +579,9 @@ import type {
   ListNeuroshillingCampaignsData,
   ListNeuroshillingCampaignsError,
   ListNeuroshillingCampaignsResponse,
+  ListOutreachPresetsData,
+  ListOutreachPresetsError,
+  ListOutreachPresetsResponse,
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
@@ -838,6 +855,9 @@ import type {
   UpdateOutreachLimitsData,
   UpdateOutreachLimitsError,
   UpdateOutreachLimitsResponse,
+  UpdateOutreachPresetData,
+  UpdateOutreachPresetError,
+  UpdateOutreachPresetResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -3081,6 +3101,137 @@ export const updateOutreachLimitsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateOutreachLimits({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getOutreachUsageTodayQueryKey = (options: Options<GetOutreachUsageTodayData>) =>
+  createQueryKey('getOutreachUsageToday', options);
+
+/**
+ * Get Outreach Usage Today
+ */
+export const getOutreachUsageTodayOptions = (options: Options<GetOutreachUsageTodayData>) =>
+  queryOptions<
+    GetOutreachUsageTodayResponse,
+    GetOutreachUsageTodayError,
+    GetOutreachUsageTodayResponse,
+    ReturnType<typeof getOutreachUsageTodayQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getOutreachUsageToday({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getOutreachUsageTodayQueryKey(options),
+  });
+
+export const listOutreachPresetsQueryKey = (options?: Options<ListOutreachPresetsData>) =>
+  createQueryKey('listOutreachPresets', options);
+
+/**
+ * List Outreach Presets
+ */
+export const listOutreachPresetsOptions = (options?: Options<ListOutreachPresetsData>) =>
+  queryOptions<
+    ListOutreachPresetsResponse,
+    ListOutreachPresetsError,
+    ListOutreachPresetsResponse,
+    ReturnType<typeof listOutreachPresetsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listOutreachPresets({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listOutreachPresetsQueryKey(options),
+  });
+
+/**
+ * Create Outreach Preset
+ */
+export const createOutreachPresetMutation = (
+  options?: Partial<Options<CreateOutreachPresetData>>,
+): UseMutationOptions<
+  CreateOutreachPresetResponse,
+  CreateOutreachPresetError,
+  Options<CreateOutreachPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateOutreachPresetResponse,
+    CreateOutreachPresetError,
+    Options<CreateOutreachPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createOutreachPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Outreach Preset
+ */
+export const deleteOutreachPresetMutation = (
+  options?: Partial<Options<DeleteOutreachPresetData>>,
+): UseMutationOptions<
+  DeleteOutreachPresetResponse,
+  DeleteOutreachPresetError,
+  Options<DeleteOutreachPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteOutreachPresetResponse,
+    DeleteOutreachPresetError,
+    Options<DeleteOutreachPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteOutreachPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Outreach Preset
+ */
+export const updateOutreachPresetMutation = (
+  options?: Partial<Options<UpdateOutreachPresetData>>,
+): UseMutationOptions<
+  UpdateOutreachPresetResponse,
+  UpdateOutreachPresetError,
+  Options<UpdateOutreachPresetData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateOutreachPresetResponse,
+    UpdateOutreachPresetError,
+    Options<UpdateOutreachPresetData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateOutreachPreset({
         ...options,
         ...fnOptions,
         throwOnError: true,

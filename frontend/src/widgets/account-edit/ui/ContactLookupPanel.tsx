@@ -7,13 +7,16 @@ import {
   cancelContactLookupJobMutation,
   getContactLookupJobQueryOptions,
   outreachLimitsQueryOptions,
+  outreachUsageTodayQueryOptions,
   startContactLookupMutation,
 } from '@/entities/account';
 import { Button, HelpHint, Icon, IconButton, Input, Textarea } from '@/shared/ui';
 
+import { lookupOverflow, type PacingValues } from '../model/pacing';
+import { PacingBlock } from './PacingBlock';
+
 const MAX_PHONES = 1000;
 const MAX_DELAY_SECONDS = 3600;
-const MAX_BATCH = 20;
 // Never checked because of the account's state: re-run these later, not as "not on Telegram".
 const RETRY_LATER = new Set(['daily_limit', 'silent_limit']);
 
@@ -54,9 +57,14 @@ function recipientToken(username: string | null | undefined, userId: number | nu
 export function ContactLookupPanel({
   accountIds,
   onAppendRecipients,
+  pacing,
+  onPacingChange,
 }: {
   accountIds: string[];
   onAppendRecipients: (lines: string[], pins: Record<string, string>) => void;
+  // Shared with the send form's block: one preset sets both.
+  pacing: PacingValues;
+  onPacingChange: (pacing: PacingValues) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -64,12 +72,16 @@ export function ContactLookupPanel({
   // null: the saved outreach limit applies, and the run is started without the field.
   const [minDelay, setMinDelay] = useState<string | null>(null);
   const [maxDelay, setMaxDelay] = useState<string | null>(null);
-  const [batchSize, setBatchSize] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [added, setAdded] = useState<number | null>(null);
   const [resumeActive, setResumeActive] = useState(true);
 
   const limits = useQuery({ ...outreachLimitsQueryOptions(), enabled: open });
+  const usageToday = useQuery({
+    ...outreachUsageTodayQueryOptions({ query: { account_ids: accountIds } }),
+    enabled: open && accountIds.length > 0,
+  });
+  const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
   const start = useMutation(startContactLookupMutation());
   const cancel = useMutation(cancelContactLookupJobMutation());
   const active = useQuery({
@@ -100,7 +112,6 @@ export function ContactLookupPanel({
   const phoneList = phonesFrom(phones);
   const minShown = minDelay ?? String(limits.data?.lookup_min_delay_seconds ?? '');
   const maxShown = maxDelay ?? String(limits.data?.lookup_max_delay_seconds ?? '');
-  const batchShown = batchSize ?? String(limits.data?.lookup_batch_size ?? '');
   const delayEdited = minDelay !== null || maxDelay !== null;
   const minSeconds = Number(minShown);
   const maxSeconds = Number(maxShown);
@@ -110,15 +121,12 @@ export function ContactLookupPanel({
       /^\d+$/.test(maxShown) &&
       minSeconds <= maxSeconds &&
       maxSeconds <= MAX_DELAY_SECONDS);
-  const batchReady =
-    batchSize === null ||
-    (/^\d+$/.test(batchSize) && Number(batchSize) >= 1 && Number(batchSize) <= MAX_BATCH);
   const canFind =
-    accountIds.length > 0 &&
-    phoneList.length > 0 &&
-    phoneList.length <= MAX_PHONES &&
-    delayReady &&
-    batchReady;
+    accountIds.length > 0 && phoneList.length > 0 && phoneList.length <= MAX_PHONES && delayReady;
+  const overflow = lookupOverflow(
+    phoneList.length,
+    accountIds.map((id) => pacing.contacts - (usage.get(id)?.contact_imports ?? 0)),
+  );
 
   const started = jobId !== null;
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
@@ -169,7 +177,8 @@ export function ContactLookupPanel({
           account_ids: accountIds,
           phones: phoneList,
           ...(delayEdited && { min_delay_seconds: minSeconds, max_delay_seconds: maxSeconds }),
-          ...(batchSize !== null && { batch_size: Number(batchSize) }),
+          batch_size: pacing.batch,
+          daily_cap: pacing.contacts,
         },
       })
       .then((result) => {
@@ -257,78 +266,70 @@ export function ContactLookupPanel({
                 />
               </section>
 
-              <section className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <h4 className="type-body-medium text-content-secondary">
-                    {t('accounts.messages.lookup.delay')}
-                  </h4>
-                  <HelpHint text={t('accounts.messages.lookup.delayHint')} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex items-center gap-2 type-small">
-                    <span>{t('accounts.messages.delayFrom')}</span>
-                    <Input
-                      type="number"
-                      size="sm"
-                      aria-label={t('accounts.messages.minDelay')}
-                      min={0}
-                      max={MAX_DELAY_SECONDS}
-                      step={1}
-                      value={minShown}
-                      onChange={(event) => {
-                        setMinDelay(event.target.value);
-                        setMaxDelay(maxShown);
-                      }}
-                    />
-                    <span>{t('accounts.messages.secondsShort')}</span>
-                  </label>
-                  <label className="flex items-center gap-2 type-small">
-                    <span>{t('accounts.messages.delayTo')}</span>
-                    <Input
-                      type="number"
-                      size="sm"
-                      aria-label={t('accounts.messages.maxDelay')}
-                      min={0}
-                      max={MAX_DELAY_SECONDS}
-                      step={1}
-                      value={maxShown}
-                      onChange={(event) => {
-                        setMaxDelay(event.target.value);
-                        setMinDelay(minShown);
-                      }}
-                    />
-                    <span>{t('accounts.messages.secondsShort')}</span>
-                  </label>
-                </div>
-                <label className="flex items-center gap-2 type-small">
-                  <span>{t('accounts.messages.lookup.batch')}</span>
-                  <Input
-                    type="number"
-                    size="sm"
-                    aria-label={t('accounts.messages.lookup.batch')}
-                    min={1}
-                    max={MAX_BATCH}
-                    step={1}
-                    value={batchShown}
-                    onChange={(event) => {
-                      setBatchSize(event.target.value);
-                    }}
-                  />
-                  <HelpHint text={t('accounts.messages.lookup.batchHint')} />
-                </label>
-                {limits.data && (
-                  <p className="type-small">
-                    {t('accounts.messages.lookup.dailyCap', {
-                      count: limits.data.contact_imports_per_day,
-                    })}
-                  </p>
-                )}
-                {(!delayReady || !batchReady) && (
-                  <p role="alert" className="type-small text-danger-deep">
-                    {t('accounts.messages.lookup.pacingInvalid')}
-                  </p>
-                )}
-              </section>
+              <PacingBlock
+                keys={['contacts', 'batch']}
+                values={pacing}
+                onChange={onPacingChange}
+                accountIds={accountIds}
+                usage={usage}
+                leftKind="contacts"
+                forecast={
+                  overflow > 0
+                    ? t('accounts.messages.lookup.overflow', { count: overflow })
+                    : undefined
+                }
+                advanced={
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="type-body-medium text-content-secondary">
+                        {t('accounts.messages.lookup.delay')}
+                      </h4>
+                      <HelpHint text={t('accounts.messages.lookup.delayHint')} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 type-small">
+                        <span>{t('accounts.messages.delayFrom')}</span>
+                        <Input
+                          type="number"
+                          size="sm"
+                          aria-label={t('accounts.messages.minDelay')}
+                          min={0}
+                          max={MAX_DELAY_SECONDS}
+                          step={1}
+                          value={minShown}
+                          onChange={(event) => {
+                            setMinDelay(event.target.value);
+                            setMaxDelay(maxShown);
+                          }}
+                        />
+                        <span>{t('accounts.messages.secondsShort')}</span>
+                      </label>
+                      <label className="flex items-center gap-2 type-small">
+                        <span>{t('accounts.messages.delayTo')}</span>
+                        <Input
+                          type="number"
+                          size="sm"
+                          aria-label={t('accounts.messages.maxDelay')}
+                          min={0}
+                          max={MAX_DELAY_SECONDS}
+                          step={1}
+                          value={maxShown}
+                          onChange={(event) => {
+                            setMaxDelay(event.target.value);
+                            setMinDelay(minShown);
+                          }}
+                        />
+                        <span>{t('accounts.messages.secondsShort')}</span>
+                      </label>
+                    </div>
+                  </section>
+                }
+              />
+              {!delayReady && (
+                <p role="alert" className="type-small text-danger-deep">
+                  {t('accounts.messages.lookup.pacingInvalid')}
+                </p>
+              )}
 
               {accountIds.length === 0 && (
                 <p className="type-small text-danger-deep">

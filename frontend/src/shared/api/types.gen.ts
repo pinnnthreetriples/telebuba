@@ -1239,6 +1239,10 @@ export type BulkMessageRequest = {
    */
   max_delay_seconds?: number | null;
   /**
+   * Daily Cap
+   */
+  daily_cap?: number | null;
+  /**
    * Mode
    */
   mode?: 'each' | 'split';
@@ -2665,6 +2669,10 @@ export type ContactLookupRequest = {
    * Batch Size
    */
   batch_size?: number | null;
+  /**
+   * Daily Cap
+   */
+  daily_cap?: number | null;
   /**
    * Min Delay Seconds
    */
@@ -5235,6 +5243,34 @@ export type OpenWebResult = {
 };
 
 /**
+ * OutreachDailyUsage
+ *
+ * One account's outreach totals for one UTC day; also the shape of an increment.
+ */
+export type OutreachDailyUsage = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Day
+   */
+  day: string;
+  /**
+   * Contact Imports
+   */
+  contact_imports?: number;
+  /**
+   * Contact Matches
+   */
+  contact_matches?: number;
+  /**
+   * First Messages
+   */
+  first_messages?: number;
+};
+
+/**
  * OutreachLimits
  */
 export type OutreachLimits = {
@@ -5314,6 +5350,92 @@ export type OutreachLimitsUpdate = {
    * Bulk Max Delay Seconds
    */
   bulk_max_delay_seconds?: number;
+};
+
+/**
+ * OutreachPreset
+ */
+export type OutreachPreset = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Pause Seconds
+   */
+  pause_seconds: number;
+  /**
+   * First Messages Per Day
+   */
+  first_messages_per_day: number;
+  /**
+   * Contact Imports Per Day
+   */
+  contact_imports_per_day: number;
+  /**
+   * Lookup Batch Size
+   */
+  lookup_batch_size: number;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * OutreachPresetList
+ */
+export type OutreachPresetList = {
+  /**
+   * Items
+   */
+  items: Array<OutreachPreset>;
+};
+
+/**
+ * OutreachPresetWrite
+ */
+export type OutreachPresetWrite = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Pause Seconds
+   */
+  pause_seconds: number;
+  /**
+   * First Messages Per Day
+   */
+  first_messages_per_day: number;
+  /**
+   * Contact Imports Per Day
+   */
+  contact_imports_per_day: number;
+  /**
+   * Lookup Batch Size
+   */
+  lookup_batch_size: number;
+};
+
+/**
+ * OutreachUsageList
+ *
+ * Today's (UTC) totals for the requested accounts, zeros where nothing was spent.
+ */
+export type OutreachUsageList = {
+  /**
+   * Day
+   */
+  day: string;
+  /**
+   * Items
+   */
+  items: Array<OutreachDailyUsage>;
 };
 
 /**
@@ -11564,6 +11686,223 @@ export type UpdateOutreachLimitsResponses = {
 
 export type UpdateOutreachLimitsResponse =
   UpdateOutreachLimitsResponses[keyof UpdateOutreachLimitsResponses];
+
+export type GetOutreachUsageTodayData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Account Ids
+     */
+    account_ids: Array<string>;
+  };
+  url: '/api/v1/accounts/outreach-usage';
+};
+
+export type GetOutreachUsageTodayErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetOutreachUsageTodayError =
+  GetOutreachUsageTodayErrors[keyof GetOutreachUsageTodayErrors];
+
+export type GetOutreachUsageTodayResponses = {
+  /**
+   * Successful Response
+   */
+  200: OutreachUsageList;
+};
+
+export type GetOutreachUsageTodayResponse =
+  GetOutreachUsageTodayResponses[keyof GetOutreachUsageTodayResponses];
+
+export type ListOutreachPresetsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/outreach-presets';
+};
+
+export type ListOutreachPresetsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListOutreachPresetsError = ListOutreachPresetsErrors[keyof ListOutreachPresetsErrors];
+
+export type ListOutreachPresetsResponses = {
+  /**
+   * Successful Response
+   */
+  200: OutreachPresetList;
+};
+
+export type ListOutreachPresetsResponse =
+  ListOutreachPresetsResponses[keyof ListOutreachPresetsResponses];
+
+export type CreateOutreachPresetData = {
+  body: OutreachPresetWrite;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/outreach-presets';
+};
+
+export type CreateOutreachPresetErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CreateOutreachPresetError =
+  CreateOutreachPresetErrors[keyof CreateOutreachPresetErrors];
+
+export type CreateOutreachPresetResponses = {
+  /**
+   * Successful Response
+   */
+  201: OutreachPreset;
+};
+
+export type CreateOutreachPresetResponse =
+  CreateOutreachPresetResponses[keyof CreateOutreachPresetResponses];
+
+export type DeleteOutreachPresetData = {
+  body?: never;
+  path: {
+    /**
+     * Preset Id
+     */
+    preset_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/outreach-presets/{preset_id}';
+};
+
+export type DeleteOutreachPresetErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteOutreachPresetError =
+  DeleteOutreachPresetErrors[keyof DeleteOutreachPresetErrors];
+
+export type DeleteOutreachPresetResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteOutreachPresetResponse =
+  DeleteOutreachPresetResponses[keyof DeleteOutreachPresetResponses];
+
+export type UpdateOutreachPresetData = {
+  body: OutreachPresetWrite;
+  path: {
+    /**
+     * Preset Id
+     */
+    preset_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/outreach-presets/{preset_id}';
+};
+
+export type UpdateOutreachPresetErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type UpdateOutreachPresetError =
+  UpdateOutreachPresetErrors[keyof UpdateOutreachPresetErrors];
+
+export type UpdateOutreachPresetResponses = {
+  /**
+   * Successful Response
+   */
+  200: OutreachPreset;
+};
+
+export type UpdateOutreachPresetResponse =
+  UpdateOutreachPresetResponses[keyof UpdateOutreachPresetResponses];
 
 export type UploadScheduledMediaData = {
   body: BodyUploadScheduledMedia;

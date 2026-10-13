@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -62,7 +62,8 @@ function mockApi(
     stoppable?: boolean;
     accountsError?: boolean;
     results?: BulkMessageOutcome[];
-    firstMessagesPerDay?: number | null;
+    usedToday?: Record<string, number>;
+    savedPresets?: unknown[];
   } = {},
 ) {
   let cancelled = false;
@@ -86,12 +87,32 @@ function mockApi(
         lookup_min_delay_seconds: 180,
         lookup_max_delay_seconds: 480,
         silent_limit_streak: 8,
-        first_messages_per_day:
-          options.firstMessagesPerDay === undefined ? 25 : options.firstMessagesPerDay,
+        first_messages_per_day: 25,
         bulk_min_delay_seconds: 60,
         bulk_max_delay_seconds: 180,
         updated_at: null,
       });
+    }
+    if (path === '/api/v1/accounts/outreach-usage' && request.method === 'GET') {
+      const ids = new URL(request.url).searchParams.getAll('account_ids');
+      return respond({
+        day: '2026-10-13',
+        items: ids.map((id) => ({
+          account_id: id,
+          day: '2026-10-13',
+          contact_imports: 0,
+          contact_matches: 0,
+          first_messages: options.usedToday?.[id] ?? 0,
+        })),
+      });
+    }
+    if (path === '/api/v1/accounts/outreach-presets' && request.method === 'GET') {
+      return respond({ items: options.savedPresets ?? [] });
+    }
+    if (path === '/api/v1/accounts/outreach-presets' && request.method === 'POST') {
+      const body = (await request.clone().json()) as Record<string, unknown>;
+      options.savedPresets?.push({ ...body, id: 'p1', updated_at: 'now' });
+      return respond({ ...body, id: 'p1', updated_at: 'now' }, 201);
     }
     if (path === '/api/v1/accounts/contact-lookup/active') return respond(null);
     if (path === '/api/v1/accounts/contact-lookup' && request.method === 'POST') {
@@ -190,6 +211,7 @@ test('sends every selected account to every distinct recipient and shows progres
     text: 'Hello',
     min_delay_seconds: 3,
     max_delay_seconds: 8,
+    daily_cap: 25,
     mode: 'each',
   });
   expect(await screen.findByText('4 из 4 отправок')).toBeInTheDocument();
@@ -460,40 +482,43 @@ test('distribute pins id-only recipients to the account that found them', async 
   expect(body.recipient_accounts).toEqual({ '222': 'a1' });
 });
 
-test('shows the saved pause and daily cap and leaves the pause to the server', async () => {
+test('starts on the saved limits and sends the slider pace as a jittered range', async () => {
   mockApi();
   renderModal();
   await pickBothAccounts();
   await userEvent.type(screen.getByLabelText('Получатели'), '@first');
   await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
 
-  expect(await screen.findByDisplayValue('60')).toBeInTheDocument();
-  expect(screen.getByLabelText('До, секунд')).toHaveValue(180);
-  expect(
-    screen.getByText('Лимит первых сообщений с аккаунта в сутки (UTC): 25.'),
-  ).toBeInTheDocument();
+  // The saved 60–180 s and 25 a day are the "normal" preset.
+  expect(await screen.findByRole('radio', { name: 'Обычно' })).toBeChecked();
+  expect(screen.getByLabelText('Пауза между сообщениями')).toHaveValue('120');
+  await userEvent.click(screen.getByRole('radio', { name: 'Бережно' }));
+  expect(screen.getByLabelText('Пауза между сообщениями')).toHaveValue('180');
+  expect(screen.getByText('≈ 1,5–4,5 мин')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
 
   expect(await sentBody()).toEqual({
     account_ids: ['a1', 'a2'],
     recipients: ['@first'],
     text: 'Hello',
+    min_delay_seconds: 90,
+    max_delay_seconds: 270,
+    daily_cap: 20,
     mode: 'each',
   });
 });
 
-test('accepts an hour-long pause and says when there is no daily cap', async () => {
-  mockApi({ firstMessagesPerDay: null });
+test('an exact pause range under "Advanced" overrides the slider', async () => {
+  mockApi();
   renderModal();
   await pickBothAccounts();
   await userEvent.type(screen.getByLabelText('Получатели'), '@first');
   await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
-  await screen.findByDisplayValue('180');
+  await userEvent.click(screen.getByText('Дополнительно'));
   await userEvent.clear(screen.getByLabelText('До, секунд'));
   await userEvent.type(screen.getByLabelText('До, секунд'), '3600');
-
-  expect(screen.getByText('Дневного лимита первых сообщений нет.')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+
   expect(await sentBody()).toEqual(
     expect.objectContaining({ min_delay_seconds: 60, max_delay_seconds: 3600 }),
   );
@@ -514,4 +539,62 @@ test('explains a recipient skipped by the daily first-message cap', async () => 
   expect(
     await screen.findByText(/Пропущено: исчерпан дневной лимит первых сообщений\./),
   ).toBeInTheDocument();
+});
+
+test('shows what each account has left today and forecasts the run', async () => {
+  mockApi({ usedToday: { a1: 24 } });
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first{enter}@second');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+
+  expect(await screen.findByText(/· 1 из 25$/)).toBeInTheDocument();
+  expect(screen.getByText(/· 25 из 25$/)).toBeInTheDocument();
+  // Each mode: a1 fits one of its two, a2 both; three sends with ≈ 2 min between them.
+  expect(await screen.findByText('сообщения · ≈ 4 мин')).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      '1 сообщение не уместится в дневной лимит и будет пропущено — добавьте аккаунтов или поднимите лимит.',
+    ),
+  ).toBeInTheDocument();
+});
+
+test('a risky slider turns its hint and the forecast red', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await screen.findByRole('radio', { name: 'Обычно' });
+
+  fireEvent.change(screen.getByLabelText('Пауза между сообщениями'), { target: { value: '20' } });
+
+  expect(screen.getByText(/^Высокий риск/)).toHaveClass('text-danger-deep');
+  expect(screen.getByText('Вручную')).toBeInTheDocument();
+  expect(screen.getByText('сообщения · меньше минуты').closest('[role="status"]')).toHaveClass(
+    'bg-danger-tint',
+  );
+});
+
+test('saves the current sliders as a named preset', async () => {
+  const savedPresets: unknown[] = [];
+  mockApi({ savedPresets });
+  renderModal();
+  await screen.findByRole('radio', { name: 'Обычно' });
+  fireEvent.change(screen.getByLabelText('Номеров за один запрос'), { target: { value: '4' } });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+  await userEvent.type(screen.getByLabelText('Название пресета'), 'Центр');
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить пресет' }));
+
+  expect(await screen.findByRole('radio', { name: 'Центр' })).toBeChecked();
+  expect(savedPresets).toEqual([
+    expect.objectContaining({
+      name: 'Центр',
+      pause_seconds: 120,
+      first_messages_per_day: 25,
+      contact_imports_per_day: 15,
+      lookup_batch_size: 4,
+    }),
+  ]);
 });

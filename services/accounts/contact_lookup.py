@@ -296,10 +296,8 @@ async def run_contact_lookup_job(job_id: str) -> None:
     try:
         limits = await load_outreach_limits()
         usage = await list_outreach_usage(data.account_ids, _utc_day())
-        allowances = {
-            account_id: limits.contact_imports_per_day - row.contact_imports
-            for account_id, row in usage.items()
-        }
+        cap = data.daily_cap or limits.contact_imports_per_day
+        allowances = {account_id: cap - row.contact_imports for account_id, row in usage.items()}
         found_before = await list_accounts_with_contact_matches(data.account_ids)
         lanes, overflow = plan_lanes(phones, data.account_ids, allowances, found_before)
         for account_id, phone in overflow:

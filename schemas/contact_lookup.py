@@ -13,7 +13,11 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.accounts import _ACCOUNT_ID_PATTERN
-from schemas.outreach_limits import MAX_LOOKUP_BATCH, MAX_PAUSE_SECONDS
+from schemas.outreach_limits import (
+    MAX_CONTACT_IMPORTS_PER_DAY,
+    MAX_LOOKUP_BATCH,
+    MAX_PAUSE_SECONDS,
+)
 
 MAX_PHONES = 1000
 MAX_LOOKUP_ACCOUNTS = 20
@@ -26,6 +30,8 @@ class ContactLookupRequest(BaseModel):
     # Numbers per ``ImportContacts`` call and the pause between one account's calls.
     # Left out, they come from the saved outreach limits.
     batch_size: int | None = Field(default=None, ge=1, le=MAX_LOOKUP_BATCH)
+    # New numbers per account per UTC day for this run; left out, the saved limit.
+    daily_cap: int | None = Field(default=None, ge=1, le=MAX_CONTACT_IMPORTS_PER_DAY)
     min_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
     max_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
 

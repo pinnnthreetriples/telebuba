@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
 import type { ContactLookupOutcome } from '@/shared/api';
 
+import type { PacingValues } from '../model/pacing';
 import { ContactLookupPanel } from './ContactLookupPanel';
 
 function respond(body: unknown, status = 200): Response {
@@ -19,14 +21,27 @@ function respond(body: unknown, status = 200): Response {
 function renderPanel(accountIds: string[]) {
   const appended: [string[], Record<string, string>][] = [];
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={queryClient}>
+  function Harness() {
+    const [pacing, setPacing] = useState<PacingValues>({
+      pause: 120,
+      messages: 25,
+      contacts: 15,
+      batch: 3,
+    });
+    return (
       <ContactLookupPanel
         accountIds={accountIds}
         onAppendRecipients={(lines, pins) => {
           appended.push([lines, pins]);
         }}
+        pacing={pacing}
+        onPacingChange={setPacing}
       />
+    );
+  }
+  render(
+    <QueryClientProvider client={queryClient}>
+      <Harness />
     </QueryClientProvider>,
   );
   return appended;
@@ -51,6 +66,7 @@ function mockApi(
     active?: boolean;
     running?: boolean;
     sent?: unknown[];
+    importedToday?: number;
   } = {},
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -58,6 +74,19 @@ function mockApi(
     const path = new URL(request.url).pathname;
     if (path === '/api/v1/accounts/outreach-limits' && request.method === 'GET') {
       return respond(LIMITS);
+    }
+    if (path === '/api/v1/accounts/outreach-usage' && request.method === 'GET') {
+      const ids = new URL(request.url).searchParams.getAll('account_ids');
+      return respond({
+        day: '2026-10-13',
+        items: ids.map((id) => ({
+          account_id: id,
+          day: '2026-10-13',
+          contact_imports: options.importedToday ?? 0,
+          contact_matches: 0,
+          first_messages: 0,
+        })),
+      });
     }
     if (path === '/api/v1/accounts/contact-lookup/active' && request.method === 'GET') {
       return respond(
@@ -217,7 +246,7 @@ test('a running search offers Stop, not a close that would orphan it', async () 
   expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument();
 });
 
-test('shows the saved pacing and leaves it to the server until edited', async () => {
+test('runs the lookup with the shared batch size and daily cap', async () => {
   const sent: unknown[] = [];
   mockApi({ sent });
   renderPanel(['a1']);
@@ -225,31 +254,28 @@ test('shows the saved pacing and leaves it to the server until edited', async ()
   await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
   await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
 
-  expect(
-    await screen.findByText(/Новых номеров на аккаунт в сутки \(UTC\): 15\./),
-  ).toBeInTheDocument();
-  expect(screen.getByLabelText('От, секунд')).toHaveValue(180);
-  expect(screen.getByLabelText('До, секунд')).toHaveValue(480);
-  expect(screen.getByLabelText('Номеров за запрос')).toHaveValue(3);
+  expect(await screen.findByText(/· 15 из 15$/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Номеров за один запрос')).toHaveValue('3');
   await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
 
   expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
-  expect(sent).toEqual([{ account_ids: ['a1'], phones: ['+15551110000'] }]);
+  expect(sent).toEqual([
+    { account_ids: ['a1'], phones: ['+15551110000'], batch_size: 3, daily_cap: 15 },
+  ]);
 });
 
-test('sends the pacing the operator typed for this run', async () => {
+test('sends the batch and the exact pause the operator set for this run', async () => {
   const sent: unknown[] = [];
   mockApi({ sent });
   renderPanel(['a1']);
 
   await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
   await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
-  const max = await screen.findByLabelText('До, секунд');
+  fireEvent.change(screen.getByLabelText('Номеров за один запрос'), { target: { value: '5' } });
+  await userEvent.click(screen.getByText('Дополнительно'));
   await screen.findByDisplayValue('480');
-  await userEvent.clear(max);
-  await userEvent.type(max, '3600');
-  await userEvent.clear(screen.getByLabelText('Номеров за запрос'));
-  await userEvent.type(screen.getByLabelText('Номеров за запрос'), '5');
+  await userEvent.clear(screen.getByLabelText('До, секунд'));
+  await userEvent.type(screen.getByLabelText('До, секунд'), '3600');
   await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
 
   expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
@@ -258,17 +284,20 @@ test('sends the pacing the operator typed for this run', async () => {
   ]);
 });
 
-test('rejects a batch size above 20', async () => {
-  mockApi();
+test('warns before the run when the accounts cannot check every number today', async () => {
+  mockApi({ importedToday: 14 });
   renderPanel(['a1']);
 
   await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
-  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
-  await userEvent.clear(screen.getByLabelText('Номеров за запрос'));
-  await userEvent.type(screen.getByLabelText('Номеров за запрос'), '21');
+  await userEvent.type(
+    screen.getByLabelText('Номера телефонов'),
+    '+15550000001{enter}+15550000002{enter}+15550000003',
+  );
 
-  expect(screen.getByText('Проверьте паузу и размер порции.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Найти' })).toBeDisabled();
+  expect(
+    await screen.findByText('2 номера не проверим сегодня — не хватит дневных лимитов аккаунтов.'),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/· 1 из 15$/)).toBeInTheDocument();
 });
 
 test('separates daily-limit and re-check numbers and puts them back for later', async () => {
