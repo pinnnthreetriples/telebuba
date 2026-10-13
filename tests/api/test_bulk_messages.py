@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from api.deps import get_current_user
+from core.repositories import bulk_runs as repo
 from schemas.auth import UserRead
-from schemas.bulk_messages import BulkMessageGenerated
+from schemas.bulk_messages import BulkMessageGenerated, BulkMessageRequest
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services.accounts import bulk_messages
 from tests.api.accounts_helpers import client as _client
@@ -19,17 +20,27 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 
+_ALWAYS_OPEN = {
+    "work_start": "00:00",
+    "work_end": "24:00",
+    "work_days": [0, 1, 2, 3, 4, 5, 6],
+    "series_size": 0,
+}
+
+
 @pytest.fixture(autouse=True)
 def _empty_jobs() -> Iterator[None]:
-    bulk_messages._jobs.clear()
-    bulk_messages._job_owners.clear()
-    bulk_messages._pending.clear()
-    bulk_messages._cancel_events.clear()
+    bulk_messages._RUNS.clear()
+    bulk_messages._TASKS.clear()
     yield
-    bulk_messages._jobs.clear()
-    bulk_messages._job_owners.clear()
-    bulk_messages._pending.clear()
-    bulk_messages._cancel_events.clear()
+    bulk_messages._RUNS.clear()
+    bulk_messages._TASKS.clear()
+
+
+def _no_launch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    launched: list[str] = []
+    monkeypatch.setattr(bulk_messages, "launch_bulk_message_job", launched.append)
+    return launched
 
 
 @pytest.mark.asyncio
@@ -37,10 +48,7 @@ async def test_split_mode_and_pins_reach_the_service(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_run(job_id: str) -> None:  # noqa: ARG001 - dispatch is not under test
-        return None
-
-    monkeypatch.setattr(bulk_messages, "run_bulk_message_job", fake_run)
+    _no_launch(monkeypatch)
     async with _client(app) as client:
         response = await client.post(
             "/api/v1/accounts/bulk-messages",
@@ -55,7 +63,9 @@ async def test_split_mode_and_pins_reach_the_service(
     assert response.status_code == 202
     job = response.json()
     assert job["total"] == 2
-    data, _ = bulk_messages._pending[job["job_id"]]
+    record = await repo.get_bulk_run(job["job_id"])
+    assert record is not None
+    data = BulkMessageRequest.model_validate_json(record.request_json)
     assert data.mode == "split"
     assert data.recipient_accounts == {"123456": "a2"}
 
@@ -65,16 +75,12 @@ async def test_bulk_message_routes_start_poll_and_generate(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    dispatched: list[str] = []
-
-    async def fake_run(job_id: str) -> None:
-        dispatched.append(job_id)
+    dispatched = _no_launch(monkeypatch)
 
     async def fake_generate(prompt: str) -> BulkMessageGenerated:
         assert prompt == "Write a greeting"
         return BulkMessageGenerated(text="Hello", provider="gemini")
 
-    monkeypatch.setattr(bulk_messages, "run_bulk_message_job", fake_run)
     monkeypatch.setattr(bulk_messages, "generate_bulk_message", fake_generate)
     async with _client(app) as client:
         response = await client.post(
@@ -128,17 +134,14 @@ async def test_bulk_message_invalid_recipient_is_rejected_without_job(app: FastA
         )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "bad_request"
-    assert bulk_messages._jobs == {}
+    assert await repo.list_live_bulk_runs() == []
 
 
 @pytest.mark.asyncio
 async def test_bulk_message_job_is_private_to_its_owner(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake_run(_job_id: str) -> None:
-        return None
-
-    monkeypatch.setattr(bulk_messages, "run_bulk_message_job", fake_run)
+    _no_launch(monkeypatch)
     async with _client(app) as client:
         started = await client.post(
             "/api/v1/accounts/bulk-messages",
@@ -160,7 +163,9 @@ async def test_bulk_message_job_is_private_to_its_owner(
         assert other_get.status_code == 404
         other_cancel = await client.post(f"/api/v1/accounts/bulk-messages/{job_id}/cancel")
         assert other_cancel.status_code == 404
-        assert not bulk_messages._cancel_events[job_id].is_set()
+    record = await repo.get_bulk_run(job_id)
+    assert record is not None
+    assert not record.cancel_requested
 
 
 @pytest.mark.asyncio
@@ -181,9 +186,19 @@ async def test_latest_route_returns_completed_job(
 
         started = await client.post(
             "/api/v1/accounts/bulk-messages",
-            json={"account_ids": ["a1"], "recipients": ["@public_chat"], "text": "Hello"},
+            json={
+                "account_ids": ["a1"],
+                "recipients": ["@public_chat"],
+                "text": "Hello",
+                "min_delay_seconds": 0,
+                "max_delay_seconds": 0,
+                "schedule": _ALWAYS_OPEN,
+            },
         )
         assert started.status_code == 202
+        task = bulk_messages._TASKS.get(started.json()["job_id"])
+        if task is not None:
+            await task
         latest = await client.get("/api/v1/accounts/bulk-messages/latest")
         assert latest.status_code == 200
         assert latest.json()["job_id"] == started.json()["job_id"]

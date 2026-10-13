@@ -38,7 +38,12 @@ from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
-from services.accounts import close_orphaned_web_windows, shutdown_web_login
+from services.accounts import (
+    close_orphaned_web_windows,
+    reconcile_bulk_messages_on_startup,
+    shutdown_bulk_messages_on_shutdown,
+    shutdown_web_login,
+)
 from services.auth import seed_admin_if_empty
 from services.chat_broadcast import (
     reconcile_chat_broadcast_on_startup,
@@ -165,6 +170,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
     await reconcile_chat_broadcast_on_startup()
+    await reconcile_bulk_messages_on_startup()
     await reconcile_masstagging_on_startup()
     await reconcile_user_parser_on_startup()
     await reconcile_inboxes_on_startup()
@@ -183,6 +189,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("chat_broadcast", shutdown_chat_broadcast_on_shutdown)
+        # Before the pool: a send in flight uses a pooled client; the run stays live.
+        await _shutdown_step("bulk_messages", shutdown_bulk_messages_on_shutdown)
         await _shutdown_step("masstagging", shutdown_masstagging_on_shutdown)
         # Before the pool: a run saves what it collected as it is cancelled.
         await _shutdown_step("user_parser", shutdown_user_parser_on_shutdown)

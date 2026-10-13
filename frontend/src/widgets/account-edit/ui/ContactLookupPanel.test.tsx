@@ -19,7 +19,7 @@ function respond(body: unknown, status = 200): Response {
 }
 
 function renderPanel(accountIds: string[]) {
-  const appended: [string[], Record<string, string>][] = [];
+  const appended: [string[], Record<string, string>, Record<string, string>][] = [];
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Harness() {
     const [pacing, setPacing] = useState<PacingValues>({
@@ -31,8 +31,8 @@ function renderPanel(accountIds: string[]) {
     return (
       <ContactLookupPanel
         accountIds={accountIds}
-        onAppendRecipients={(lines, pins) => {
-          appended.push([lines, pins]);
+        onAppendRecipients={(lines, pins, phones) => {
+          appended.push([lines, pins, phones]);
         }}
         pacing={pacing}
         onPacingChange={setPacing}
@@ -144,7 +144,10 @@ test('finds phones and appends found users (username first, id fallback)', async
 
   await userEvent.click(screen.getByRole('button', { name: 'Добавить 2 в получатели' }));
   // The id-only user is pinned to the account that found it; @alice is not.
-  expect(appended).toEqual([[['@alice', '222'], { '222': 'a1' }]]);
+  // Each phone travels with its recipient, so the send can follow the client's zone.
+  expect(appended).toEqual([
+    [['@alice', '222'], { '222': 'a1' }, { '@alice': '+15551110000', '222': '+15552220000' }],
+  ]);
   expect(screen.getByText('Добавлено 2 получателя')).toBeInTheDocument();
 });
 

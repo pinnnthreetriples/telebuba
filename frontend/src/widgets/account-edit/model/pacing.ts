@@ -69,10 +69,10 @@ export function samePacing(a: PacingValues, b: PacingValues): boolean {
 }
 
 export type SendForecast = {
-  // Messages that fit today's per-account caps, and the rest.
-  fitting: number;
-  over: number;
-  // Sends go one after another with the average pause between them.
+  sends: number;
+  // Working days the run spans, today included.
+  days: number;
+  // Within one day: roughly how long the sends take.
   seconds: number;
 };
 
@@ -80,23 +80,50 @@ export function forecastSends({
   mode,
   recipients,
   left,
+  cap,
   pause,
+  concurrency,
+  windowMinutes,
 }: {
   mode: 'each' | 'split';
   recipients: number;
   // First messages each selected account may still send today.
   left: number[];
+  // The daily cap per account; null when there is none.
+  cap: number | null;
   pause: number;
+  concurrency: number;
+  windowMinutes: number;
 }): SendForecast {
-  const total = mode === 'each' ? recipients * left.length : recipients;
-  const fitting =
+  const accounts = left.length;
+  const sends = mode === 'each' ? recipients * accounts : recipients;
+  if (accounts === 0 || sends === 0) return { sends, days: 0, seconds: 0 };
+  // An account sends at most this many a day: its cap, or as many pauses as fit the window.
+  const byWindow = Math.max(Math.floor((windowMinutes * 60) / Math.max(pause, 1)), 1);
+  const perDay = cap === null ? byWindow : Math.min(cap, byWindow);
+  const shares = left.map((_, index) =>
     mode === 'each'
-      ? left.reduce((sum, room) => sum + Math.min(recipients, Math.max(room, 0)), 0)
-      : Math.min(
-          recipients,
-          left.reduce((sum, room) => sum + Math.max(room, 0), 0),
-        );
-  return { fitting, over: total - fitting, seconds: Math.max(fitting - 1, 0) * pause };
+      ? recipients
+      : Math.floor(recipients / accounts) + (index < recipients % accounts ? 1 : 0),
+  );
+  const days = Math.max(
+    ...shares.map((share, index) => {
+      const today = Math.min(Math.max(left[index] ?? 0, 0), perDay);
+      return share <= today ? 1 : 1 + Math.ceil((share - today) / Math.max(perDay, 1));
+    }),
+  );
+  const longest = Math.max(...shares) * pause;
+  const parallel = (sends * pause) / Math.max(Math.min(concurrency, accounts), 1);
+  return { sends, days, seconds: Math.max(longest, parallel) - pause };
+}
+
+// Minutes the working window stays open a day ("09:00"–"20:00" → 660).
+export function windowMinutes(start: string, end: string): number {
+  const minutes = (clock: string) => {
+    const [hours = 0, mins = 0] = clock.split(':').map(Number);
+    return hours * 60 + mins;
+  };
+  return Math.max(minutes(end) - minutes(start), 1);
 }
 
 // Numbers no selected account has room for today.

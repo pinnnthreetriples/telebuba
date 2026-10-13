@@ -1182,6 +1182,14 @@ export type BulkMessageJob = {
    * Results
    */
   results: Array<BulkMessageOutcome>;
+  /**
+   * Wait Reason
+   */
+  wait_reason?: 'schedule' | 'hours' | 'daily_cap' | 'pause' | 'series_break' | null;
+  /**
+   * Next Send At
+   */
+  next_send_at?: string | null;
 };
 
 /**
@@ -1212,6 +1220,10 @@ export type BulkMessageOutcome = {
    * Handed Over
    */
   handed_over?: boolean;
+  /**
+   * Time Basis
+   */
+  time_basis?: 'client' | 'operator' | null;
 };
 
 /**
@@ -1250,6 +1262,17 @@ export type BulkMessageRequest = {
    * Recipient Accounts
    */
   recipient_accounts?: {
+    [key: string]: string;
+  };
+  schedule?: RunSchedule | null;
+  /**
+   * Start At
+   */
+  start_at?: string | null;
+  /**
+   * Recipient Phones
+   */
+  recipient_phones?: {
     [key: string]: string;
   };
 };
@@ -5306,6 +5329,7 @@ export type OutreachLimits = {
    * Bulk Max Delay Seconds
    */
   bulk_max_delay_seconds?: number;
+  schedule?: RunSchedule;
   /**
    * Updated At
    */
@@ -5350,6 +5374,7 @@ export type OutreachLimitsUpdate = {
    * Bulk Max Delay Seconds
    */
   bulk_max_delay_seconds?: number;
+  schedule?: RunSchedule;
 };
 
 /**
@@ -6020,6 +6045,48 @@ export type RetryPairRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * RunSchedule
+ */
+export type RunSchedule = {
+  /**
+   * Work Start
+   */
+  work_start?: string;
+  /**
+   * Work End
+   */
+  work_end?: string;
+  /**
+   * Work Days
+   */
+  work_days?: Array<number>;
+  /**
+   * Operator Timezone
+   */
+  operator_timezone?: string;
+  /**
+   * Client Timezone
+   */
+  client_timezone?: boolean;
+  /**
+   * Series Size
+   */
+  series_size?: number;
+  /**
+   * Series Break Min Seconds
+   */
+  series_break_min_seconds?: number;
+  /**
+   * Series Break Max Seconds
+   */
+  series_break_max_seconds?: number;
+  /**
+   * Concurrency
+   */
+  concurrency?: number;
 };
 
 /**

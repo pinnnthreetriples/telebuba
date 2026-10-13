@@ -1,27 +1,29 @@
 """Operator-started message runs across selected accounts and recipients.
 
+A run is stored (``core.repositories.bulk_runs``) and driven by
+:class:`services.accounts._bulk_runner.BulkRun`, so it may span days: it sends only
+inside the working window, waits out each account's daily cap instead of dropping
+recipients, and resumes after a restart. One run is live at a time.
+
 Every send that may have reached Telegram counts as one first message of the
-account's UTC day (``outreach_daily_usage``): the tool cannot tell an answered
-chat from a cold one, and its recipients are mostly fresh lookup finds. With a
-daily cap set in the outreach limits, an account that reaches it stops for the
-run (code ``daily_limit``) and split mode hands its recipients on.
+account's UTC day (``outreach_daily_usage``): the tool cannot tell an answered chat
+from a cold one, and its recipients are mostly fresh lookup finds.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import random
-from contextlib import suppress
-from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import uuid4
 
 from core.channel_tokens import normalize_channel
 from core.db import load_warming_settings
 from core.gemini import generate_text
 from core.openai import generate_text_deepseek
-from core.repositories.outreach import add_outreach_usage, list_outreach_usage, load_outreach_limits
+from core.repositories import bulk_runs as repo
+from core.repositories.outreach import load_outreach_limits
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute
 from schemas.bulk_messages import (
     BulkMessageGenerated,
@@ -29,29 +31,25 @@ from schemas.bulk_messages import (
     BulkMessageOutcome,
     BulkMessageRequest,
 )
-from schemas.outreach_limits import OutreachDailyUsage
+from schemas.bulk_runs import BulkRunAccount, BulkRunRecord
+from schemas.run_schedule import RunSchedule
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services._text_llm import text_llm
+from services.accounts._bulk_plan import plan_items
+from services.accounts._bulk_runner import BulkRun, Lane
 from services.accounts._result import AccountActionError, raise_for_result
 
-_jobs: dict[str, BulkMessageJob] = {}
-_job_owners: dict[str, str] = {}
-_pending: dict[str, tuple[BulkMessageRequest, list[tuple[str, str]]]] = {}
-_cancel_events: dict[str, asyncio.Event] = {}
 _MAX_RETAINED_JOBS = 20
-_ACCOUNT_LIMIT_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
-# Codes where the account provably sent nothing and cannot send for the rest of the
-# run: stop using it (split hands the recipient on). "unconfirmed" never lands here.
-_STOP_CODES = _ACCOUNT_LIMIT_STATUSES | {
-    "account_not_found",
-    "session_dead",
-    "account_deactivated",
-    "account_frozen",
-    "unavailable",
-    "daily_limit",
+_OUTCOME_STATUS: dict[str, Literal["ok", "failed", "skipped", "unconfirmed"]] = {
+    "ok": "ok",
+    "failed": "failed",
+    "skipped": "skipped",
+    "unconfirmed": "unconfirmed",
 }
-# Statuses where the message may have left the account.
-_SENT_STATUSES = frozenset({"ok", "unconfirmed"})
+_FINAL = frozenset(_OUTCOME_STATUS)
+# Live runs of this process, so a cancel reaches the loop and shutdown can stop it.
+_RUNS: dict[str, BulkRun] = {}
+_TASKS: dict[str, asyncio.Task[None]] = {}
 logger = logging.getLogger(__name__)
 
 
@@ -67,67 +65,111 @@ def _recipient_peer(recipient: str) -> str:
     return peer
 
 
-def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -> BulkMessageJob:
-    """Validate all targets before accepting a run; one active run prevents duplicates."""
-    if any(job.status == "running" for job in _jobs.values()):
+async def _resolve(data: BulkMessageRequest) -> tuple[BulkMessageRequest, RunSchedule]:
+    """Fill every left-out default from the saved limits, so a resume needs no lookup."""
+    limits = await load_outreach_limits()
+    schedule = data.schedule or limits.schedule
+    delays_missing = data.min_delay_seconds is None or data.max_delay_seconds is None
+    resolved = data.model_copy(
+        update={
+            "min_delay_seconds": (
+                limits.bulk_min_delay_seconds if delays_missing else data.min_delay_seconds
+            ),
+            "max_delay_seconds": (
+                limits.bulk_max_delay_seconds if delays_missing else data.max_delay_seconds
+            ),
+            "daily_cap": data.daily_cap or limits.first_messages_per_day,
+            "schedule": schedule,
+        }
+    )
+    return resolved, schedule
+
+
+async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -> BulkMessageJob:
+    """Validate all targets and store the run; one live run prevents duplicates."""
+    if await repo.list_live_bulk_runs():
         msg = "bulk_message_run_active"
         raise ValueError(msg)
     recipients = [(recipient, _recipient_peer(recipient)) for recipient in data.recipients]
     if len({peer.casefold() for _, peer in recipients}) != len(recipients):
         msg = "duplicate recipients"
         raise ValueError(msg)
-    for old_id, old_job in list(_jobs.items()):
-        if len(_jobs) < _MAX_RETAINED_JOBS:
-            break
-        if old_job.status != "running":
-            del _jobs[old_id]
-            del _job_owners[old_id]
-    job = BulkMessageJob(
-        job_id=uuid4().hex,
+    resolved, schedule = await _resolve(data)
+    run_id = uuid4().hex
+    record = BulkRunRecord(
+        id=run_id,
+        owner_user_id=owner_user_id,
         status="running",
-        total=len(recipients) * (1 if data.mode == "split" else len(data.account_ids)),
-        completed=0,
-        results=[],
+        request_json=resolved.model_dump_json(),
+        created_at=datetime.now(UTC).isoformat(),
     )
-    _jobs[job.job_id] = job
-    _job_owners[job.job_id] = owner_user_id
-    _pending[job.job_id] = (data, recipients)
-    _cancel_events[job.job_id] = asyncio.Event()
-    return job.model_copy(deep=True)
+    await repo.create_bulk_run(
+        record,
+        plan_items(run_id, resolved, schedule, recipients),
+        [BulkRunAccount(run_id=run_id, account_id=a) for a in resolved.account_ids],
+    )
+    await repo.prune_bulk_runs(_MAX_RETAINED_JOBS)
+    return await _job_view(record)
 
 
-def get_bulk_message_job(job_id: str, owner_user_id: str) -> BulkMessageJob | None:
-    if _job_owners.get(job_id) != owner_user_id:
+async def _job_view(record: BulkRunRecord) -> BulkMessageJob:
+    items = await repo.list_bulk_run_items(record.id)
+    final = sorted(
+        (item for item in items if item.status in _FINAL),
+        key=lambda item: (item.finished_seq or 0, item.id or 0),
+    )
+    counted = [item for item in items if not item.handed_over]
+    return BulkMessageJob(
+        job_id=record.id,
+        status=record.status,
+        total=len(counted),
+        completed=sum(item.status in _FINAL for item in counted),
+        results=[
+            BulkMessageOutcome(
+                account_id=item.account_id,
+                recipient=item.recipient,
+                status=_OUTCOME_STATUS[item.status],
+                error_code=item.error_code,
+                retry_after_seconds=item.retry_after_seconds,
+                handed_over=item.handed_over,
+                time_basis=item.time_basis,
+            )
+            for item in final
+        ],
+        wait_reason=record.wait_reason if record.status == "running" else None,
+        next_send_at=record.next_send_at if record.status == "running" else None,
+    )
+
+
+async def get_bulk_message_job(job_id: str, owner_user_id: str) -> BulkMessageJob | None:
+    record = await repo.get_bulk_run(job_id)
+    if record is None or record.owner_user_id != owner_user_id:
         return None
-    job = _jobs.get(job_id)
-    return job.model_copy(deep=True) if job is not None else None
+    return await _job_view(record)
 
 
-def get_active_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
-    for job_id, job in _jobs.items():
-        if _job_owners[job_id] == owner_user_id and job.status == "running":
-            return job.model_copy(deep=True)
-    return None
+async def get_active_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
+    record = await repo.latest_bulk_run(owner_user_id, live_only=True)
+    return None if record is None else await _job_view(record)
 
 
-def get_latest_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
-    for job_id in reversed(_jobs):
-        if _job_owners[job_id] == owner_user_id:
-            return _jobs[job_id].model_copy(deep=True)
-    return None
+async def get_latest_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
+    record = await repo.latest_bulk_run(owner_user_id, live_only=False)
+    return None if record is None else await _job_view(record)
 
 
-def cancel_bulk_message_job(job_id: str, owner_user_id: str) -> BulkMessageJob | None:
-    """Stop after the current Telegram call; a pacing wait is interrupted at once."""
-    if _job_owners.get(job_id) != owner_user_id:
+async def cancel_bulk_message_job(job_id: str, owner_user_id: str) -> BulkMessageJob | None:
+    """Stop after the sends in flight; any wait (pause, hours, next day) ends at once."""
+    record = await repo.get_bulk_run(job_id)
+    if record is None or record.owner_user_id != owner_user_id:
         return None
-    job = _jobs.get(job_id)
-    if job is None:
-        return None
-    event = _cancel_events.get(job_id)
-    if event is not None:
-        event.set()
-    return job.model_copy(deep=True)
+    if record.status == "running":
+        await repo.update_bulk_run(job_id, cancel_requested=1)
+        run = _RUNS.get(job_id)
+        if run is not None:
+            run.cancel.set()
+            run.wakeup.set()
+    return await _job_view(record)
 
 
 def _failure_code(result: ActionResult) -> str | None:
@@ -140,63 +182,6 @@ def _failure_code(result: ActionResult) -> str | None:
     except AccountActionError as exc:
         return exc.code
     return "failed"
-
-
-def _utc_day() -> str:
-    return datetime.now(UTC).date().isoformat()
-
-
-@dataclass
-class _Budget:
-    """The run's text and pause, and each account's first messages left today (``None``: no cap)."""
-
-    text: str
-    min_delay_seconds: float
-    max_delay_seconds: float
-    left: dict[str, int] | None
-
-    def exhausted(self, account_id: str) -> bool:
-        return self.left is not None and self.left[account_id] <= 0
-
-    async def spend(self, outcome: BulkMessageOutcome) -> None:
-        if outcome.status not in _SENT_STATUSES:
-            return
-        if self.left is not None:
-            self.left[outcome.account_id] -= 1
-        await add_outreach_usage(
-            OutreachDailyUsage(account_id=outcome.account_id, day=_utc_day(), first_messages=1)
-        )
-
-
-async def _load_budget(data: BulkMessageRequest) -> _Budget:
-    limits = await load_outreach_limits()
-    if data.min_delay_seconds is None or data.max_delay_seconds is None:
-        delays = (limits.bulk_min_delay_seconds, limits.bulk_max_delay_seconds)
-    else:
-        delays = (data.min_delay_seconds, data.max_delay_seconds)
-    cap = data.daily_cap or limits.first_messages_per_day
-    left = None
-    if cap is not None:
-        usage = await list_outreach_usage(data.account_ids, _utc_day())
-        left = {account_id: cap - row.first_messages for account_id, row in usage.items()}
-    return _Budget(data.text, delays[0], delays[1], left)
-
-
-def _daily_limit(account_id: str, recipient: str) -> BulkMessageOutcome:
-    return BulkMessageOutcome(
-        account_id=account_id, recipient=recipient, status="skipped", error_code="daily_limit"
-    )
-
-
-async def _pace(budget: _Budget, cancel_event: asyncio.Event) -> bool:
-    """Wait the jittered delay; False once the run is cancelled."""
-    delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
-        budget.min_delay_seconds, budget.max_delay_seconds
-    )
-    if delay:
-        with suppress(TimeoutError):
-            await asyncio.wait_for(cancel_event.wait(), timeout=delay)
-    return not cancel_event.is_set()
 
 
 async def _send_one(account_id: str, recipient: str, peer: str, text: str) -> BulkMessageOutcome:
@@ -225,132 +210,79 @@ async def _send_one(account_id: str, recipient: str, peer: str, text: str) -> Bu
     )
 
 
-def _skipped(account_id: str, recipient: str, stop: BulkMessageOutcome) -> BulkMessageOutcome:
-    return BulkMessageOutcome(
-        account_id=account_id,
-        recipient=recipient,
-        status="skipped",
-        error_code=stop.error_code,
-        retry_after_seconds=stop.retry_after_seconds,
+async def _send(account_id: str, recipient: str, peer: str, text: str) -> BulkMessageOutcome:
+    # Looked up at call time, so tests can patch ``execute`` on this module.
+    return await _send_one(account_id, recipient, peer, text)
+
+
+async def _load_run(record: BulkRunRecord) -> BulkRun:
+    data = BulkMessageRequest.model_validate_json(record.request_json)
+    # Stored requests are resolved, so the fallback only guards a hand-edited row.
+    schedule = data.schedule or RunSchedule()
+    accounts = {a.account_id: a for a in await repo.list_bulk_run_accounts(record.id)}
+    cancel = asyncio.Event()
+    if record.cancel_requested:
+        cancel.set()
+    return BulkRun(
+        run_id=record.id,
+        data=data,
+        schedule=schedule,
+        items=await repo.list_bulk_run_items(record.id),
+        lanes={
+            account_id: Lane(
+                row=accounts.get(account_id)
+                or BulkRunAccount(run_id=record.id, account_id=account_id)
+            )
+            for account_id in data.account_ids
+        },
+        send=_send,
+        cancel=cancel,
+        start_at=data.start_at,
+        seq=await repo.max_finished_seq(record.id),
     )
 
 
-async def _run_account_messages(
-    account_id: str,
-    budget: _Budget,
-    recipients: list[tuple[str, str]],
-    job: BulkMessageJob,
-    cancel_event: asyncio.Event,
-) -> None:
-    blocked: BulkMessageOutcome | None = None
-    for recipient, peer in recipients:
-        if cancel_event.is_set():
-            break
-        if blocked is None and budget.exhausted(account_id):
-            blocked = _daily_limit(account_id, recipient)
-        if blocked is not None:
-            job.results.append(_skipped(account_id, recipient, blocked))
-            job.completed += 1
-            continue
-        if job.completed and not await _pace(budget, cancel_event):
-            break
-        outcome = await _send_one(account_id, recipient, peer, budget.text)
-        await budget.spend(outcome)
-        if outcome.error_code in _STOP_CODES:
-            blocked = outcome
-        job.results.append(outcome)
-        job.completed += 1
-
-
-async def _run_split_messages(
-    data: BulkMessageRequest,
-    budget: _Budget,
-    recipients: list[tuple[str, str]],
-    job: BulkMessageJob,
-    cancel_event: asyncio.Event,
-) -> None:
-    """One message per recipient, round-robin; a stopped account hands its turn on."""
-    live, stops = _rotation(data.account_ids, budget)
-    cursor = 0
-    attempted = False
-    for index, (recipient, peer) in enumerate(recipients):
-        pinned = data.recipient_accounts.get(recipient)
-        last: BulkMessageOutcome | None = None
-        refused: list[BulkMessageOutcome] = []
-        while live and (pinned is None or pinned in live):
-            if cancel_event.is_set() or (attempted and not await _pace(budget, cancel_event)):
-                # A refusal awaiting hand-over was never handed on: it is final.
-                job.results.extend(refused)
-                job.completed += len(refused)
-                return
-            job.results.extend(r.model_copy(update={"handed_over": True}) for r in refused)
-            refused = []
-            account_id = pinned or live[cursor % len(live)]
-            attempted = True
-            last = await _send_one(account_id, recipient, peer, budget.text)
-            await budget.spend(last)
-            if last.error_code not in _STOP_CODES:
-                if pinned is None:
-                    cursor += 1
-                if budget.exhausted(account_id):
-                    stops[account_id] = _daily_limit(account_id, "")
-                    cursor = _retire(live, account_id, cursor)
-                break
-            stops[account_id] = last
-            live.remove(account_id)
-            if pinned is not None or not live:
-                break
-            refused = [last]
-            last = None
-        if last is None:
-            planned = pinned or data.account_ids[index % len(data.account_ids)]
-            stop = stops.get(planned) or list(stops.values())[-1]
-            last = _skipped(planned, recipient, stop)
-        job.results.append(last)
-        job.completed += 1
-
-
-def _rotation(
-    account_ids: list[str], budget: _Budget
-) -> tuple[list[str], dict[str, BulkMessageOutcome]]:
-    """The accounts that may still send today, and a daily-limit stop for the rest."""
-    live = [account_id for account_id in account_ids if not budget.exhausted(account_id)]
-    stops = {
-        account_id: _daily_limit(account_id, "")
-        for account_id in account_ids
-        if account_id not in live
-    }
-    return live, stops
-
-
-def _retire(live: list[str], account_id: str, cursor: int) -> int:
-    """Drop an account from the rotation; return the cursor that keeps the next turn."""
-    cursor %= len(live)
-    index = live.index(account_id)
-    live.remove(account_id)
-    return cursor - 1 if index < cursor else cursor
-
-
 async def run_bulk_message_job(job_id: str) -> None:
-    """Send sequentially; each pair gets its own outcome even after a refusal."""
-    data, recipients = _pending[job_id]
-    job = _jobs[job_id]
-    cancel_event = _cancel_events[job_id]
+    """Drive a stored run to its end; the row's final status says how it ended."""
+    record = await repo.get_bulk_run(job_id)
+    if record is None or record.status != "running":
+        return
+    run = await _load_run(record)
+    _RUNS[job_id] = run
     try:
-        budget = await _load_budget(data)
-        if data.mode == "split":
-            await _run_split_messages(data, budget, recipients, job, cancel_event)
-        else:
-            for account_id in data.account_ids:
-                if cancel_event.is_set():
-                    break
-                await _run_account_messages(account_id, budget, recipients, job, cancel_event)
+        cancelled = await run.run()
     finally:
-        job.status = (
-            "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"
-        )
-        _pending.pop(job_id, None)
-        _cancel_events.pop(job_id, None)
+        _RUNS.pop(job_id, None)
+    await repo.update_bulk_run(
+        job_id,
+        status="cancelled" if cancelled else "completed",
+        finished_at=datetime.now(UTC).isoformat(),
+        next_send_at=None,
+        wait_reason=None,
+    )
+
+
+def launch_bulk_message_job(job_id: str) -> None:
+    """Run in the background, tracked so shutdown can stop it and a restart resume it."""
+    task = asyncio.create_task(run_bulk_message_job(job_id))
+    _TASKS[job_id] = task
+    task.add_done_callback(lambda _: _TASKS.pop(job_id, None))
+
+
+async def reconcile_bulk_messages_on_startup() -> None:
+    """Resume every live run; a send a restart cut short is marked unconfirmed, never redone."""
+    for record in await repo.list_live_bulk_runs():
+        await repo.unconfirm_sending_items(record.id)
+        launch_bulk_message_job(record.id)
+
+
+async def shutdown_bulk_messages_on_shutdown() -> None:
+    """Stop the loops but leave the runs live, so the next start resumes them."""
+    tasks = list(_TASKS.values())
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def generate_bulk_message(prompt: str) -> BulkMessageGenerated:

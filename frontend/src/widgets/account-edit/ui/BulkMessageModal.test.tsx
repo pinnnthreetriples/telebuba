@@ -64,6 +64,7 @@ function mockApi(
     results?: BulkMessageOutcome[];
     usedToday?: Record<string, number>;
     savedPresets?: unknown[];
+    waiting?: { wait_reason: string; next_send_at: string };
   } = {},
 ) {
   let cancelled = false;
@@ -156,10 +157,16 @@ function mockApi(
     if (path === '/api/v1/accounts/bulk-messages/job-1' && request.method === 'GET') {
       return respond({
         job_id: 'job-1',
-        status: options.stoppable ? (cancelled ? 'cancelled' : 'running') : 'completed',
+        status:
+          options.stoppable || options.waiting
+            ? cancelled
+              ? 'cancelled'
+              : 'running'
+            : 'completed',
         total: 4,
-        completed: options.stoppable ? 0 : 4,
+        completed: options.stoppable || options.waiting ? 0 : 4,
         results: options.results ?? [],
+        ...options.waiting,
       });
     }
     throw new Error(`Unexpected request: ${request.method} ${path}`);
@@ -212,6 +219,18 @@ test('sends every selected account to every distinct recipient and shows progres
     min_delay_seconds: 3,
     max_delay_seconds: 8,
     daily_cap: 25,
+    schedule: {
+      work_start: '09:00',
+      work_end: '20:00',
+      work_days: [0, 1, 2, 3, 4, 5],
+      operator_timezone: 'Europe/Moscow',
+      client_timezone: true,
+      series_size: 10,
+      series_break_min_seconds: 900,
+      series_break_max_seconds: 1800,
+      concurrency: 2,
+    },
+    recipient_phones: {},
     mode: 'each',
   });
   expect(await screen.findByText('4 из 4 отправок')).toBeInTheDocument();
@@ -504,6 +523,18 @@ test('starts on the saved limits and sends the slider pace as a jittered range',
     min_delay_seconds: 90,
     max_delay_seconds: 270,
     daily_cap: 20,
+    schedule: {
+      work_start: '09:00',
+      work_end: '20:00',
+      work_days: [0, 1, 2, 3, 4, 5],
+      operator_timezone: 'Europe/Moscow',
+      client_timezone: true,
+      series_size: 10,
+      series_break_min_seconds: 900,
+      series_break_max_seconds: 1800,
+      concurrency: 2,
+    },
+    recipient_phones: {},
     mode: 'each',
   });
 });
@@ -524,12 +555,8 @@ test('an exact pause range under "Advanced" overrides the slider', async () => {
   );
 });
 
-test('explains a recipient skipped by the daily first-message cap', async () => {
-  mockApi({
-    results: [
-      { account_id: 'a1', recipient: '@first', status: 'skipped', error_code: 'daily_limit' },
-    ],
-  });
+test('says why a running run is idle and when it sends next', async () => {
+  mockApi({ waiting: { wait_reason: 'hours', next_send_at: '2026-10-13T06:00:00Z' } });
   renderModal();
   await pickBothAccounts();
   await userEvent.type(screen.getByLabelText('Получатели'), '@first');
@@ -537,8 +564,33 @@ test('explains a recipient skipped by the daily first-message cap', async () => 
   await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
 
   expect(
-    await screen.findByText(/Пропущено: исчерпан дневной лимит первых сообщений\./),
+    await screen.findByText(/^Нерабочее время — следующая отправка в .+\.$/),
   ).toBeInTheDocument();
+});
+
+test('sends the schedule and the phones a lookup found', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await screen.findByDisplayValue('120');
+  await userEvent.click(screen.getByText('Дополнительно'));
+  await userEvent.click(screen.getByRole('button', { name: 'Сб' }));
+  await userEvent.clear(screen.getByLabelText('Шлют одновременно, аккаунтов'));
+  await userEvent.type(screen.getByLabelText('Шлют одновременно, аккаунтов'), '3');
+  await userEvent.click(screen.getByRole('switch', { name: /По времени клиента/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+
+  expect(await sentBody()).toEqual(
+    expect.objectContaining({
+      schedule: expect.objectContaining({
+        work_days: [0, 1, 2, 3, 4],
+        concurrency: 3,
+        client_timezone: false,
+      }),
+    }),
+  );
 });
 
 test('shows what each account has left today and forecasts the run', async () => {
@@ -551,12 +603,9 @@ test('shows what each account has left today and forecasts the run', async () =>
   expect(await screen.findByText(/· 1 из 25$/)).toBeInTheDocument();
   expect(screen.getByText(/· 25 из 25$/)).toBeInTheDocument();
   // Each mode: a1 fits one of its two, a2 both; three sends with ≈ 2 min between them.
-  expect(await screen.findByText('сообщения · ≈ 4 мин')).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      '1 сообщение не уместится в дневной лимит и будет пропущено — добавьте аккаунтов или поднимите лимит.',
-    ),
-  ).toBeInTheDocument();
+  // a1 has one message left today, so its second waits for tomorrow.
+  expect(await screen.findByText('сообщения · ≈ 2 дня')).toBeInTheDocument();
+  expect(screen.getByText(/отправка растянется на несколько дней/)).toBeInTheDocument();
 });
 
 test('a risky slider turns its hint and the forecast red', async () => {

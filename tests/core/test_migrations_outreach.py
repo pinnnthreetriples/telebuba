@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import _metadata
+from core.migration_steps_bulk_runs import _add_bulk_runs
 from core.migration_steps_outreach import _add_outreach_presets, _add_outreach_tables
 from core.migrations import MIGRATIONS
 from tests.core.test_migrations_scheduled_posts import _shape
@@ -34,6 +35,8 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     with engine.begin() as connection:
         _add_outreach_tables(connection)
         _add_outreach_presets(connection)
+        # 91 adds the limits row's schedule column.
+        _add_bulk_runs(connection)
     return engine
 
 

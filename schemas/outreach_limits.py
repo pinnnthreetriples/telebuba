@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from schemas.run_schedule import RunSchedule
+
 # Both run forms and these settings share one ceiling for a pause between calls.
 MAX_PAUSE_SECONDS = 3600
 MAX_LOOKUP_BATCH = 20
@@ -32,6 +34,8 @@ class OutreachLimitsUpdate(BaseModel):
     first_messages_per_day: int | None = Field(default=25, ge=1, le=MAX_FIRST_MESSAGES_PER_DAY)
     bulk_min_delay_seconds: float = Field(default=60, ge=0, le=MAX_PAUSE_SECONDS)
     bulk_max_delay_seconds: float = Field(default=180, ge=0, le=MAX_PAUSE_SECONDS)
+    # Default sending window and spreading of a bulk-message run.
+    schedule: RunSchedule = Field(default_factory=RunSchedule)
 
     @model_validator(mode="after")
     def validate_pauses(self) -> OutreachLimitsUpdate:

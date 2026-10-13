@@ -61,7 +61,12 @@ export function ContactLookupPanel({
   onPacingChange,
 }: {
   accountIds: string[];
-  onAppendRecipients: (lines: string[], pins: Record<string, string>) => void;
+  // ``phones``: the number each recipient was found by, for the client's time zone.
+  onAppendRecipients: (
+    lines: string[],
+    pins: Record<string, string>,
+    phones: Record<string, string>,
+  ) => void;
   // Shared with the send form's block: one preset sets both.
   pacing: PacingValues;
   onPacingChange: (pacing: PacingValues) => void;
@@ -197,7 +202,16 @@ export function ContactLookupPanel({
 
   const onAdd = () => {
     if (addable.length === 0) return;
-    onAppendRecipients(addable, pins);
+    onAppendRecipients(
+      addable,
+      pins,
+      Object.fromEntries(
+        found.flatMap((row) => {
+          const token = recipientToken(row.username, row.user_id);
+          return token === null ? [] : [[token, row.phone]];
+        }),
+      ),
+    );
     setAdded(addable.length);
   };
 

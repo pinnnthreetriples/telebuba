@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,13 +14,30 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from services import warming
-from services.accounts import bulk_messages
+from services.accounts import _bulk_runner, bulk_messages
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+# Always open, one sender at a time, no series breaks: the order of sends is the plan's.
+ALWAYS_OPEN = {
+    "work_start": "00:00",
+    "work_end": "24:00",
+    "work_days": [0, 1, 2, 3, 4, 5, 6],
+    "series_size": 0,
+    "concurrency": 1,
+}
+
+
+@dataclass
+class FakeClock:
+    now: datetime
+    # Every runner sleep, ``None`` for "until something wakes it".
+    sleeps: list[float | None] = field(default_factory=list)
+
 
 # The real sessions directory, relative to the repo root. Tests in this package
 # import ``.session`` credentials, so an isolation failure writes one HERE.
@@ -121,15 +140,31 @@ def avatar_refresh_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 @pytest.fixture
 def empty_bulk_jobs() -> Iterator[None]:
-    """Bulk-message jobs live in module-level dicts; start and end each test empty."""
-    tables = (
-        bulk_messages._jobs,
-        bulk_messages._job_owners,
-        bulk_messages._pending,
-        bulk_messages._cancel_events,
-    )
+    """Live bulk runs are tracked in module-level dicts; start and end each test empty."""
+    tables = (bulk_messages._RUNS, bulk_messages._TASKS)
     for table in tables:
         table.clear()
     yield
     for table in tables:
         table.clear()
+
+
+@pytest.fixture
+def bulk_clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
+    """Drive the bulk runner's clock by hand: a timed sleep jumps the clock forward.
+
+    It starts on Monday 2026-10-12 at 10:00 Moscow time, inside the default window.
+    """
+    clock = FakeClock(now=datetime(2026, 10, 12, 7, 0, tzinfo=UTC))
+
+    async def fake_sleep(wakeup: asyncio.Event, seconds: float | None) -> None:
+        clock.sleeps.append(seconds)
+        if seconds is None:
+            await wakeup.wait()
+            return
+        clock.now += timedelta(seconds=seconds)
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(_bulk_runner, "_now", lambda: clock.now)
+    monkeypatch.setattr(_bulk_runner, "_sleep", fake_sleep)
+    return clock

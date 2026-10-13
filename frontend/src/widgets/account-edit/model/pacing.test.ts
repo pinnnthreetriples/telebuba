@@ -6,6 +6,7 @@ import {
   lookupOverflow,
   pacingFromLimits,
   pauseRange,
+  windowMinutes,
   worstZone,
   zoneOf,
 } from './pacing';
@@ -52,19 +53,32 @@ test('the pause is jittered within ±50% of the slider', () => {
   expect(pauseRange(15)).toEqual([8, 23]);
 });
 
-test('the forecast counts what fits today and the average wait between sends', () => {
-  expect(forecastSends({ mode: 'split', recipients: 10, left: [3, 4], pause: 60 })).toEqual({
-    fitting: 7,
-    over: 3,
-    seconds: 360,
-  });
-  // Each mode: every account writes to every recipient, within its own cap.
-  expect(forecastSends({ mode: 'each', recipients: 2, left: [1, 25], pause: 120 })).toEqual({
-    fitting: 3,
-    over: 1,
-    seconds: 240,
-  });
-  expect(forecastSends({ mode: 'split', recipients: 0, left: [5], pause: 60 }).seconds).toBe(0);
+test('the forecast spreads sends that do not fit today over working days', () => {
+  const base = { cap: 4, pause: 60, concurrency: 2, windowMinutes: 660 } as const;
+  // Five each; the first account has 3 left today, the second 4: both need a second day.
+  expect(forecastSends({ ...base, mode: 'split', recipients: 10, left: [3, 4] }).days).toBe(2);
+  // Each mode: every account writes to every recipient within its own cap.
+  expect(forecastSends({ ...base, cap: 25, mode: 'each', recipients: 2, left: [1, 25] }).days).toBe(
+    2,
+  );
+  // Fits today: two accounts in parallel, four sends a minute apart.
+  expect(forecastSends({ ...base, cap: 25, mode: 'split', recipients: 4, left: [25, 25] })).toEqual(
+    { sends: 4, days: 1, seconds: 60 },
+  );
+  // No cap, but a 10-minute pause fits only 6 sends into a one-hour window.
+  expect(
+    forecastSends({
+      mode: 'split',
+      recipients: 13,
+      left: [1000],
+      cap: null,
+      pause: 600,
+      concurrency: 1,
+      windowMinutes: 60,
+    }).days,
+  ).toBe(3);
+  expect(forecastSends({ ...base, mode: 'split', recipients: 0, left: [5] }).days).toBe(0);
+  expect(windowMinutes('09:00', '20:00')).toBe(660);
   expect(lookupOverflow(10, [3, -2, 4])).toBe(3);
   expect(lookupOverflow(2, [5])).toBe(0);
 });

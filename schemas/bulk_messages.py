@@ -5,10 +5,12 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from schemas.accounts import _ACCOUNT_ID_PATTERN
+from schemas.bulk_runs import TimeBasis, WaitReason  # noqa: TC001
 from schemas.outreach_limits import MAX_FIRST_MESSAGES_PER_DAY, MAX_PAUSE_SECONDS
+from schemas.run_schedule import RunSchedule  # noqa: TC001
 
 _MAX_SENDS = 500
 _MAX_EACH_RECIPIENTS = 50
@@ -30,6 +32,13 @@ class BulkMessageRequest(BaseModel):
     # Split only: a recipient that only one account can address (a raw user_id it
     # found) is pinned to that account instead of taking its round-robin turn.
     recipient_accounts: dict[str, str] = Field(default_factory=dict, max_length=_MAX_SENDS)
+    # When and how the run spreads its sends; left out, the saved default schedule.
+    schedule: RunSchedule | None = None
+    # No send before this moment; left out, the run starts at once.
+    start_at: AwareDatetime | None = None
+    # The phone a lookup found each recipient by, so the window can follow the
+    # client's own time zone. Recipients typed by hand have none.
+    recipient_phones: dict[str, str] = Field(default_factory=dict, max_length=_MAX_SENDS)
 
     @model_validator(mode="after")
     def validate_batch(self) -> BulkMessageRequest:
@@ -48,11 +57,6 @@ class BulkMessageRequest(BaseModel):
             raise ValueError(msg)
         if self.mode == "each" and len(self.account_ids) * len(self.recipients) > _MAX_SENDS:
             msg = "bulk message batch exceeds 500 sends"
-            raise ValueError(msg)
-        if not set(self.recipient_accounts) <= set(self.recipients) or not set(
-            self.recipient_accounts.values()
-        ) <= set(self.account_ids):
-            msg = "recipient_accounts must map listed recipients to listed accounts"
             raise ValueError(msg)
         if len(self.account_ids) != len(set(self.account_ids)):
             msg = "duplicate account_ids"
@@ -73,6 +77,18 @@ class BulkMessageRequest(BaseModel):
             raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_recipient_maps(self) -> BulkMessageRequest:
+        if not set(self.recipient_accounts) <= set(self.recipients) or not set(
+            self.recipient_accounts.values()
+        ) <= set(self.account_ids):
+            msg = "recipient_accounts must map listed recipients to listed accounts"
+            raise ValueError(msg)
+        if not set(self.recipient_phones) <= set(self.recipients):
+            msg = "recipient_phones must key listed recipients"
+            raise ValueError(msg)
+        return self
+
 
 class BulkMessageOutcome(BaseModel):
     account_id: str
@@ -82,6 +98,8 @@ class BulkMessageOutcome(BaseModel):
     retry_after_seconds: int | None = None
     # Split only: this account could not send, so the recipient went to the next one.
     handed_over: bool = False
+    # Whose clock the sending window followed: the client's zone or the operator's.
+    time_basis: TimeBasis | None = None
 
 
 class BulkMessageJob(BaseModel):
@@ -90,6 +108,9 @@ class BulkMessageJob(BaseModel):
     total: int
     completed: int
     results: list[BulkMessageOutcome]
+    # While running but idle: why, and when the next send may go out.
+    wait_reason: WaitReason | None = None
+    next_send_at: str | None = None
 
 
 class BulkMessageGenerateRequest(BaseModel):

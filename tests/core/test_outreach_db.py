@@ -18,6 +18,7 @@ from core.repositories.outreach import (
 )
 from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits, OutreachLimitsUpdate
 from schemas.outreach_presets import OutreachPresetWrite
+from schemas.run_schedule import RunSchedule
 
 
 @pytest.mark.asyncio
@@ -143,3 +144,22 @@ def test_preset_values_stay_inside_the_slider_ranges() -> None:
         _preset(lookup_batch_size=21)
     with pytest.raises(ValueError, match="empty"):
         _preset("   ")
+
+
+@pytest.mark.asyncio
+async def test_the_default_run_schedule_is_saved_with_the_limits() -> None:
+    assert (await load_outreach_limits()).schedule == RunSchedule()
+
+    await save_outreach_limits(
+        OutreachLimitsUpdate(
+            schedule=RunSchedule(work_start="10:00", work_days=[0, 1, 2], concurrency=3)
+        )
+    )
+
+    schedule = (await load_outreach_limits()).schedule
+    assert (schedule.work_start, schedule.work_days, schedule.concurrency) == (
+        "10:00",
+        [0, 1, 2],
+        3,
+    )
+    assert schedule.operator_timezone == "Europe/Moscow"

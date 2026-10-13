@@ -8,6 +8,7 @@ the lookup and the bulk-message run, which may overlap, never lose an increment.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
@@ -38,6 +39,9 @@ def _load_outreach_limits() -> OutreachLimits:
         return OutreachLimits()
     values = dict(cast("Mapping[str, object]", row))
     values.pop("id")
+    schedule = values.pop("schedule_json")
+    if schedule is not None:
+        values["schedule"] = json.loads(str(schedule))
     return OutreachLimits.model_validate(values)
 
 
@@ -47,7 +51,11 @@ async def load_outreach_limits() -> OutreachLimits:
 
 
 def _save_outreach_limits(data: OutreachLimitsUpdate) -> OutreachLimits:
-    values = {**data.model_dump(), "updated_at": _now_iso()}
+    values = {
+        **data.model_dump(exclude={"schedule"}),
+        "schedule_json": data.schedule.model_dump_json(),
+        "updated_at": _now_iso(),
+    }
     with _get_engine().begin() as connection:
         updated = connection.execute(
             update(_outreach_limits).where(_outreach_limits.c.id == _LIMITS_ID).values(**values),

@@ -548,8 +548,7 @@
         "premium_wait": "temporarily limited by Telegram",
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
-        "failed": "Telegram rejected the message",
-        "daily_limit": "daily first-message limit reached"
+        "failed": "Telegram rejected the message"
       },
       "pacing": {
         "title": "Pace and limits",
@@ -602,14 +601,49 @@
         "forecastEmpty": "Pick accounts and recipients to see a forecast.",
         "forecastSends_one": "message · {{duration}}",
         "forecastSends_other": "messages · {{duration}}",
-        "forecastOver_one": "{{count}} message does not fit today's limits and will be skipped — add accounts or raise the limit.",
-        "forecastOver_other": "{{count}} messages do not fit today's limits and will be skipped — add accounts or raise the limit.",
         "duration": {
           "underMinute": "under a minute",
           "m": "≈ {{m}} min",
-          "hm": "≈ {{h}} h {{m}} min"
-        }
-      }
+          "hm": "≈ {{h}} h {{m}} min",
+          "days_one": "≈ {{count}} day",
+          "days_other": "≈ {{count}} days"
+        },
+        "forecastSpread": "Today's limits do not fit them all — the run spreads over several days. Add accounts to finish sooner."
+      },
+      "schedule": {
+        "title": "When to send",
+        "hours": "Working hours",
+        "from": "From",
+        "to": "To",
+        "days": "Working days",
+        "day": {
+          "0": "Mon",
+          "1": "Tue",
+          "2": "Wed",
+          "3": "Thu",
+          "4": "Fri",
+          "5": "Sat",
+          "6": "Sun"
+        },
+        "clientTime": "By the client's time (zone from the phone number)",
+        "breakAfter": "Break after",
+        "seriesSize": "Messages before a break",
+        "breakFor": "messages for",
+        "breakMin": "Break from, minutes",
+        "breakMax": "Break to, minutes",
+        "minutes": "min",
+        "startAt": "Scheduled start",
+        "concurrency": "Accounts sending at once",
+        "invalidHours": "The working day must end after it starts."
+      },
+      "waiting": {
+        "schedule": "Starts at {{time}}.",
+        "hours": "Outside working hours — next send at {{time}}.",
+        "daily_cap": "Today's limits are used up — next send at {{time}}.",
+        "pause": "Pausing — next send at {{time}}.",
+        "series_break": "Break after a series — next send at {{time}}."
+      },
+      "timeBasis": "By the client's time: {{client}} · by the operator's (client's zone unknown): {{operator}}"
     },
     "bulk": {
       "open": "Bulk edit",

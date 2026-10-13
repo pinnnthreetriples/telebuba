@@ -1218,6 +1218,7 @@ export type {
   ResyncAccountAvatarResponse,
   ResyncAccountAvatarResponses,
   RetryPairRequest,
+  RunSchedule,
   SaveChatBroadcastPaceData,
   SaveChatBroadcastPaceError,
   SaveChatBroadcastPaceErrors,

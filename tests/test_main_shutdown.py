@@ -37,6 +37,8 @@ _RECONCILE = (
     "reconcile_neuroshilling_on_startup",
     # The chat broadcast takes accounts too, after neuroshilling restored its own.
     "reconcile_chat_broadcast_on_startup",
+    # Bulk-message runs resume from their rows; they claim no accounts.
+    "reconcile_bulk_messages_on_startup",
     # Masstagging takes accounts the same way, right after the broadcast.
     "reconcile_masstagging_on_startup",
     # A parser run never resumes: its reconcile only marks orphaned runs interrupted.
@@ -58,6 +60,8 @@ _STEPS = (
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
     "shutdown_chat_broadcast_on_shutdown",
+    # A send in flight uses a pooled client; the run stays live for the next start.
+    "shutdown_bulk_messages_on_shutdown",
     "shutdown_masstagging_on_shutdown",
     # A parser run saves what it collected as it is cancelled — before the pool goes.
     "shutdown_user_parser_on_shutdown",

@@ -22808,6 +22808,35 @@
             },
             "type": "array",
             "title": "Results"
+          },
+          "wait_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "schedule",
+                  "hours",
+                  "daily_cap",
+                  "pause",
+                  "series_break"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Reason"
+          },
+          "next_send_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Send At"
           }
         },
         "type": "object",
@@ -22866,6 +22895,21 @@
             "type": "boolean",
             "title": "Handed Over",
             "default": false
+          },
+          "time_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "client",
+                  "operator"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Basis"
           }
         },
         "type": "object",
@@ -22957,6 +23001,36 @@
             "type": "object",
             "maxProperties": 500,
             "title": "Recipient Accounts"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "recipient_phones": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 500,
+            "title": "Recipient Phones"
           }
         },
         "type": "object",
@@ -29558,6 +29632,9 @@
             "title": "Bulk Max Delay Seconds",
             "default": 180
           },
+          "schedule": {
+            "$ref": "#/components/schemas/RunSchedule"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -29637,6 +29714,9 @@
             "minimum": 0.0,
             "title": "Bulk Max Delay Seconds",
             "default": 180
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/RunSchedule"
           }
         },
         "type": "object",
@@ -30822,6 +30902,68 @@
         ],
         "title": "RetryPairRequest",
         "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
+      },
+      "RunSchedule": {
+        "properties": {
+          "work_start": {
+            "type": "string",
+            "title": "Work Start",
+            "default": "09:00"
+          },
+          "work_end": {
+            "type": "string",
+            "title": "Work End",
+            "default": "20:00"
+          },
+          "work_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Work Days"
+          },
+          "operator_timezone": {
+            "type": "string",
+            "title": "Operator Timezone",
+            "default": "Europe/Moscow"
+          },
+          "client_timezone": {
+            "type": "boolean",
+            "title": "Client Timezone",
+            "default": true
+          },
+          "series_size": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Series Size",
+            "default": 10
+          },
+          "series_break_min_seconds": {
+            "type": "integer",
+            "maximum": 7200.0,
+            "minimum": 0.0,
+            "title": "Series Break Min Seconds",
+            "default": 900
+          },
+          "series_break_max_seconds": {
+            "type": "integer",
+            "maximum": 7200.0,
+            "minimum": 0.0,
+            "title": "Series Break Max Seconds",
+            "default": 1800
+          },
+          "concurrency": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "default": 2
+          }
+        },
+        "type": "object",
+        "title": "RunSchedule"
       },
       "SchedulePhotoRequest": {
         "properties": {

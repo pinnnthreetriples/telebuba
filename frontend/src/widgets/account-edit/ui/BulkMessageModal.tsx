@@ -23,14 +23,21 @@ import {
   Input,
   Modal,
   ModalFooter,
-  Odometer,
   SegmentedControl,
   Textarea,
 } from '@/shared/ui';
 
-import { forecastSends, pacingFromLimits, type PacingValues, pauseRange } from '../model/pacing';
+import {
+  forecastSends,
+  pacingFromLimits,
+  type PacingValues,
+  pauseRange,
+  windowMinutes,
+} from '../model/pacing';
 import { ContactLookupPanel } from './ContactLookupPanel';
 import { PacingBlock } from './PacingBlock';
+import { RunForecast } from './RunForecast';
+import { type FullSchedule, fullSchedule, ScheduleSection } from './ScheduleSection';
 
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;
@@ -50,6 +57,12 @@ export type BulkMessageDraft = {
   maxDelay: string | null;
   // null: the sliders still show the saved outreach limits.
   pacing: PacingValues | null;
+  // null: the saved default schedule.
+  schedule: FullSchedule | null;
+  // A `datetime-local` value; empty starts at once.
+  startAt: string;
+  // The phone each looked-up recipient was found by (for the client's time zone).
+  phones: Record<string, string>;
   generatorOpen: boolean;
   prompt: string;
   provider: 'deepseek' | 'gemini' | null;
@@ -95,7 +108,7 @@ export function BulkMessageModal({
   onDraftSaved?: (draft: BulkMessageDraft) => void;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [ids, setIds] = useState<string[]>(initialDraft?.ids ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mode, setMode] = useState<SendMode>(initialDraft?.mode ?? 'each');
@@ -106,6 +119,9 @@ export function BulkMessageModal({
   const [minDelay, setMinDelay] = useState<string | null>(initialDraft?.minDelay ?? null);
   const [maxDelay, setMaxDelay] = useState<string | null>(initialDraft?.maxDelay ?? null);
   const [pacingEdit, setPacing] = useState<PacingValues | null>(initialDraft?.pacing ?? null);
+  const [scheduleEdit, setSchedule] = useState<FullSchedule | null>(initialDraft?.schedule ?? null);
+  const [startAt, setStartAt] = useState(initialDraft?.startAt ?? '');
+  const [phones, setPhones] = useState<Record<string, string>>(initialDraft?.phones ?? {});
   const [generatorOpen, setGeneratorOpen] = useState(initialDraft?.generatorOpen ?? false);
   const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [provider, setProvider] = useState<'deepseek' | 'gemini' | null>(
@@ -117,6 +133,7 @@ export function BulkMessageModal({
   const fleet = useQuery(allAccountsQueryOptions());
   const limits = useQuery(outreachLimitsQueryOptions());
   const pacing = pacingEdit ?? pacingFromLimits(limits.data);
+  const schedule = scheduleEdit ?? fullSchedule(limits.data?.schedule);
   const usageToday = useQuery({
     ...outreachUsageTodayQueryOptions({ query: { account_ids: ids } }),
     enabled: ids.length > 0 && jobId === null,
@@ -161,47 +178,27 @@ export function BulkMessageModal({
     sendCount <= MAX_SENDS &&
     message.trim() !== '' &&
     message.length <= 4096 &&
-    delayReady;
+    delayReady &&
+    schedule.work_start < schedule.work_end;
   const started = jobId !== null;
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
   const stale = job.isError && errorCode(job.error) === 'not_found';
   const results = job.data?.results ?? [];
   const attention = results.filter((result) => result.status !== 'ok' && !result.handed_over);
   const handedOver = results.filter((result) => result.handed_over);
+  // Sends whose window followed the client's own zone; the rest used the operator's clock.
+  const clientTimed = results.filter((result) => result.time_basis === 'client').length;
 
   const averagePause = delayEdited ? (minSeconds + maxSeconds) / 2 : pacing.pause;
   const forecast = forecastSends({
     mode,
     recipients: recipientList.length,
     left: ids.map((id) => pacing.messages - (usage.get(id)?.first_messages ?? 0)),
+    cap: pacing.messages,
     pause: averagePause,
+    concurrency: schedule.concurrency,
+    windowMinutes: windowMinutes(schedule.work_start, schedule.work_end),
   });
-  const minutes = Math.round(forecast.seconds / 60);
-  const duration =
-    minutes < 1
-      ? t('accounts.messages.pacing.duration.underMinute')
-      : minutes < 60
-        ? t('accounts.messages.pacing.duration.m', { m: minutes })
-        : t('accounts.messages.pacing.duration.hm', {
-            h: Math.floor(minutes / 60),
-            m: minutes % 60,
-          });
-  const forecastText =
-    ids.length === 0 || recipientList.length === 0 ? (
-      t('accounts.messages.pacing.forecastEmpty')
-    ) : (
-      <>
-        <span className="inline-flex items-baseline gap-1">
-          <Odometer value={forecast.fitting} className="type-small-medium" />
-          {t('accounts.messages.pacing.forecastSends', { count: forecast.fitting, duration })}
-        </span>
-        {forecast.over > 0 && (
-          <span className="block">
-            {t('accounts.messages.pacing.forecastOver', { count: forecast.over })}
-          </span>
-        )}
-      </>
-    );
 
   const onSend = () => {
     if (!batchReady) return;
@@ -214,6 +211,11 @@ export function BulkMessageModal({
           min_delay_seconds: minSeconds,
           max_delay_seconds: maxSeconds,
           daily_cap: pacing.messages,
+          schedule,
+          ...(startAt !== '' && { start_at: new Date(startAt).toISOString() }),
+          recipient_phones: Object.fromEntries(
+            Object.entries(phones).filter(([recipient]) => recipientList.includes(recipient)),
+          ),
           mode,
           ...(mode === 'split' && {
             recipient_accounts: Object.fromEntries(
@@ -233,7 +235,12 @@ export function BulkMessageModal({
       .catch(() => undefined);
   };
 
-  const appendRecipients = (lines: string[], found: Record<string, string>) => {
+  const appendRecipients = (
+    lines: string[],
+    found: Record<string, string>,
+    foundPhones: Record<string, string>,
+  ) => {
+    setPhones((prev) => ({ ...prev, ...foundPhones }));
     setRecipients((prev) => [...new Set([...recipientsFrom(prev), ...lines])].join('\n'));
     setPins((prev) => {
       const next = { ...prev };
@@ -294,7 +301,6 @@ export function BulkMessageModal({
       case 'premium_wait':
       case 'peer_flood':
       case 'unavailable':
-      case 'daily_limit':
         return t(`accounts.messages.code.${code}`);
       default:
         return t('accounts.messages.code.failed');
@@ -312,6 +318,9 @@ export function BulkMessageModal({
         minDelay,
         maxDelay,
         pacing: pacingEdit,
+        schedule: scheduleEdit,
+        startAt,
+        phones,
         generatorOpen,
         prompt,
         provider,
@@ -361,6 +370,24 @@ export function BulkMessageModal({
                         total: job.data?.total ?? sendCount,
                       })}
                     </p>
+                    {!complete && job.data?.wait_reason && job.data.next_send_at && (
+                      <p className="mt-1 type-small">
+                        {t(`accounts.messages.waiting.${job.data.wait_reason}`, {
+                          time: new Date(job.data.next_send_at).toLocaleString(i18n.language, {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          }),
+                        })}
+                      </p>
+                    )}
+                    {clientTimed > 0 && (
+                      <p className="mt-1 type-small">
+                        {t('accounts.messages.timeBasis', {
+                          client: clientTimed,
+                          operator: results.length - clientTimed,
+                        })}
+                      </p>
+                    )}
                   </div>
                   {job.isError && (
                     <p role="alert" className="text-danger">
@@ -640,9 +667,20 @@ export function BulkMessageModal({
                     accountIds={ids}
                     usage={usage}
                     leftKind="messages"
-                    forecast={forecastText}
+                    forecast={<RunForecast forecast={forecast} />}
                     advanced={
-                      <div className="space-y-2">
+                      <div className="space-y-4">
+                        <ScheduleSection
+                          schedule={schedule}
+                          onChange={setSchedule}
+                          startAt={startAt}
+                          onStartAtChange={setStartAt}
+                        />
+                        {schedule.work_start >= schedule.work_end && (
+                          <p role="alert" className="type-small text-danger">
+                            {t('accounts.messages.schedule.invalidHours')}
+                          </p>
+                        )}
                         <p className="type-small">{t('accounts.messages.delayHint')}</p>
                         <div className="grid grid-cols-2 gap-3">
                           {(
