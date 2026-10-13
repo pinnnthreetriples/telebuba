@@ -34,10 +34,11 @@ import {
   pauseRange,
   windowMinutes,
 } from '../model/pacing';
+import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
 import { PacingBlock } from './PacingBlock';
 import { RunForecast } from './RunForecast';
-import { type FullSchedule, fullSchedule, ScheduleSection } from './ScheduleSection';
+import { ScheduleSection } from './ScheduleSection';
 
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;

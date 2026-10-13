@@ -1,28 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { RunSchedule } from '@/shared/api';
-import { Input, Switch } from '@/shared/ui';
-import { cn } from '@/shared/lib/cn';
+import { Button, Input, Switch } from '@/shared/ui';
 
-export type FullSchedule = Required<RunSchedule>;
-
-// The server's defaults, for the moment before the saved limits load.
-export const DEFAULT_SCHEDULE: FullSchedule = {
-  work_start: '09:00',
-  work_end: '20:00',
-  work_days: [0, 1, 2, 3, 4, 5],
-  operator_timezone: 'Europe/Moscow',
-  client_timezone: true,
-  series_size: 10,
-  series_break_min_seconds: 900,
-  series_break_max_seconds: 1800,
-  concurrency: 2,
-};
-
-export function fullSchedule(schedule: RunSchedule | undefined): FullSchedule {
-  return { ...DEFAULT_SCHEDULE, ...schedule };
-}
+import type { FullSchedule } from '../model/schedule';
 
 const DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -61,7 +42,7 @@ function NumberField({
       onBlur={() => {
         setText(String(value));
       }}
-      className="w-20"
+      className="w-number"
     />
   );
 }
@@ -101,7 +82,7 @@ export function ScheduleSection({
           onChange={(event) => {
             set({ work_start: event.target.value });
           }}
-          className="w-28"
+          className="w-stamp"
         />
         <span>–</span>
         <Input
@@ -112,7 +93,7 @@ export function ScheduleSection({
           onChange={(event) => {
             set({ work_end: event.target.value });
           }}
-          className="w-28"
+          className="w-stamp"
         />
         <span className="text-content-muted">{schedule.operator_timezone}</span>
       </div>
@@ -124,9 +105,10 @@ export function ScheduleSection({
         {DAYS.map((day) => {
           const on = schedule.work_days.includes(day);
           return (
-            <button
+            <Button
               key={day}
-              type="button"
+              size="sm"
+              variant={on ? 'primary' : 'secondary'}
               aria-pressed={on}
               onClick={() => {
                 const next = on
@@ -134,13 +116,9 @@ export function ScheduleSection({
                   : [...schedule.work_days, day].sort();
                 if (next.length > 0) set({ work_days: next });
               }}
-              className={cn(
-                'rounded-full px-3 py-1 type-small transition-colors duration-state',
-                on ? 'bg-info-tint text-info-strong' : 'bg-canvas text-content-muted',
-              )}
             >
               {t(`accounts.messages.schedule.day.${String(day)}`)}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -203,7 +181,7 @@ export function ScheduleSection({
           onChange={(event) => {
             onStartAtChange(event.target.value);
           }}
-          className="w-56"
+          className="w-tip"
         />
       </div>
       <div className="flex flex-wrap items-center gap-2 type-small">
