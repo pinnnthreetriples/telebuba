@@ -1667,7 +1667,13 @@
     "account_mobile_opened": "Opened on phone",
     "account_mobile_open_failed": "Could not open on phone",
     "account_mobile_container_removed": "Container removed",
-    "account_mobile_container_remove_failed": "Container not removed"
+    "account_mobile_container_remove_failed": "Container not removed",
+    "warming_dialogue_live_reply": "Answered with a reaction or a sticker",
+    "warming_dialogue_live_opener": "Forwarded a post to a partner",
+    "warming_pool_fill_done": "Channel search finished",
+    "warming_pool_fill_read_failed": "Channel search: a read failed",
+    "warming_pool_fill_approved": "Found channels approved",
+    "warming_pool_fill_rejected": "Found channels rejected"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1825,7 +1831,10 @@
     "emulator_field_missing": "the expected field is not on screen",
     "emulator_phone_invalid": "the phone number could not be read",
     "emulator_code_timeout": "the login code never arrived",
-    "emulator_twofa_missing": "the cloud password is not stored"
+    "emulator_twofa_missing": "the cloud password is not stored",
+    "no_discussion": "the post has no comments",
+    "no_message": "no message from the partner",
+    "no_sticker": "no matching sticker installed"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -1960,7 +1969,11 @@
       "check_chatlist": "Check folder",
       "masstag_toggle_ttl": "Auto-delete on → off",
       "resolve_masstag_target": "Masstagging target lookup",
-      "list_masstag_contacts": "Reading contacts"
+      "list_masstag_contacts": "Reading contacts",
+      "warm_read_discussion": "Post comments read",
+      "warm_dm_react": "DM reaction",
+      "warm_dm_sticker": "DM sticker",
+      "warm_dm_forward": "Post forwarded in DM"
     },
     "status": {
       "failed": "failed",
@@ -3450,6 +3463,25 @@
     "device": {
       "label": "Device",
       "missing": "The account has no such device"
+    },
+    "poolFill": {
+      "open": "Find channels",
+      "title": "Find channels for warming",
+      "hint": "Searches with an account that is not being warmed. Fits are 2k–500k subscribers, alive, in the right language, no casinos, 18+ or signals. Found channels wait for your approval.",
+      "language": "Language (code, e.g. es)",
+      "country": "Country (optional, e.g. MX)",
+      "topics": "Topics, comma-separated (up to 5)",
+      "search": "Search",
+      "close": "Close",
+      "result": "Found {{found}}, {{proposed}} added for approval.",
+      "noAccount": "No idle account outside warming to search with.",
+      "error": "The search failed.",
+      "waiting_one": "{{count}} found channel awaits approval",
+      "waiting_other": "{{count}} found channels await approval",
+      "pick": "Pick {{channel}}",
+      "subscribers": "{{count}} subs",
+      "approve": "Approve",
+      "reject": "Reject"
     }
   },
   "auth": {

@@ -40,6 +40,9 @@ import type {
   ApproveNeuroshillingScenarioData,
   ApproveNeuroshillingScenarioErrors,
   ApproveNeuroshillingScenarioResponses,
+  ApproveWarmingChannelProposalsData,
+  ApproveWarmingChannelProposalsErrors,
+  ApproveWarmingChannelProposalsResponses,
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
@@ -175,6 +178,9 @@ import type {
   ExportUserParserRunData,
   ExportUserParserRunErrors,
   ExportUserParserRunResponses,
+  FindWarmingChannelsData,
+  FindWarmingChannelsErrors,
+  FindWarmingChannelsResponses,
   GenerateBulkMessageData,
   GenerateBulkMessageErrors,
   GenerateBulkMessageResponses,
@@ -376,6 +382,9 @@ import type {
   ListWarmedAccountsData,
   ListWarmedAccountsErrors,
   ListWarmedAccountsResponses,
+  ListWarmingChannelProposalsData,
+  ListWarmingChannelProposalsErrors,
+  ListWarmingChannelProposalsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -418,6 +427,9 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostErrors,
   PublishAccountChannelPostResponses,
+  RejectWarmingChannelProposalsData,
+  RejectWarmingChannelProposalsErrors,
+  RejectWarmingChannelProposalsResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -2430,6 +2442,93 @@ export const getWarmingSurvival = <ThrowOnError extends boolean = false>(
     GetWarmingSurvivalErrors,
     ThrowOnError
   >({ url: '/api/v1/warming/survival', ...options });
+
+/**
+ * Find Warming Channels
+ *
+ * Search channels for the pool with an account outside warming; propose the fits.
+ */
+export const findWarmingChannels = <ThrowOnError extends boolean = false>(
+  options: Options<FindWarmingChannelsData, ThrowOnError>,
+): RequestResult<FindWarmingChannelsResponses, FindWarmingChannelsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    FindWarmingChannelsResponses,
+    FindWarmingChannelsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels/find',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Warming Channel Proposals
+ */
+export const listWarmingChannelProposals = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmingChannelProposalsData, ThrowOnError>,
+): RequestResult<
+  ListWarmingChannelProposalsResponses,
+  ListWarmingChannelProposalsErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListWarmingChannelProposalsResponses,
+    ListWarmingChannelProposalsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/channels/proposals', ...options });
+
+/**
+ * Approve Warming Channel Proposals
+ *
+ * Move the ticked proposals into the pool; returns the proposals still waiting.
+ */
+export const approveWarmingChannelProposals = <ThrowOnError extends boolean = false>(
+  options: Options<ApproveWarmingChannelProposalsData, ThrowOnError>,
+): RequestResult<
+  ApproveWarmingChannelProposalsResponses,
+  ApproveWarmingChannelProposalsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ApproveWarmingChannelProposalsResponses,
+    ApproveWarmingChannelProposalsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels/proposals/approve',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Reject Warming Channel Proposals
+ *
+ * Drop the ticked proposals; returns the proposals still waiting.
+ */
+export const rejectWarmingChannelProposals = <ThrowOnError extends boolean = false>(
+  options: Options<RejectWarmingChannelProposalsData, ThrowOnError>,
+): RequestResult<
+  RejectWarmingChannelProposalsResponses,
+  RejectWarmingChannelProposalsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RejectWarmingChannelProposalsResponses,
+    RejectWarmingChannelProposalsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels/proposals/reject',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Start Discovery

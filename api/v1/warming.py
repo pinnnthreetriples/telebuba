@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
 from api.errors import error_responses
+from api.v1._warming_pool import pool_router
 from core.config import settings
 from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
@@ -270,3 +271,7 @@ async def list_warming_daily_stats(
 async def get_warming_survival(cohort: SurvivalCohortKind = "week") -> SurvivalReport:
     """How many warmed accounts are alive during warming and 7 and 30 days after release."""
     return await survival_service.load_survival(cohort)
+
+
+# «Найти каналы» and the approval of its proposals (Прогрев 2.0, item 4.5).
+router.include_router(pool_router)
