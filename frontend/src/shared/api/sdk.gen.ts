@@ -268,6 +268,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsErrors,
   GetWarmingSettingsResponses,
+  GetWarmingSurvivalData,
+  GetWarmingSurvivalErrors,
+  GetWarmingSurvivalResponses,
   HandoffToNeurocommentData,
   HandoffToNeurocommentErrors,
   HandoffToNeurocommentResponses,
@@ -2294,6 +2297,20 @@ export const listWarmingDailyStats = <ThrowOnError extends boolean = false>(
     ListWarmingDailyStatsErrors,
     ThrowOnError
   >({ url: '/api/v1/warming/daily-stats', ...options });
+
+/**
+ * Get Warming Survival
+ *
+ * How many warmed accounts are alive during warming and 7 and 30 days after release.
+ */
+export const getWarmingSurvival = <ThrowOnError extends boolean = false>(
+  options?: Options<GetWarmingSurvivalData, ThrowOnError>,
+): RequestResult<GetWarmingSurvivalResponses, GetWarmingSurvivalErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetWarmingSurvivalResponses,
+    GetWarmingSurvivalErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/survival', ...options });
 
 /**
  * Start Discovery

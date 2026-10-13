@@ -12,6 +12,7 @@ import {
   resumeWarmingMutation,
   startWarmingMutation,
   stopWarmingMutation,
+  SurvivalBadge,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { StartWarmingRequest, WarmedAccount, WarmingAccountState } from '@/shared/api';
@@ -49,6 +50,7 @@ import {
   WarmingBoard,
   WarmingChannelPill,
 } from '@/widgets/warming-board';
+import { SurvivalPanel, SurvivalTile } from '@/widgets/warming-survival';
 
 import { invalidateWarmingQueries, useWarmingLiveRefresh } from '../model/liveRefresh';
 
@@ -86,6 +88,8 @@ function geoOf(account: {
   return { phoneCountry: account.phone_country, proxyCountry: account.proxy_country };
 }
 
+const SURVIVAL_PANEL_ID = 'warming-survival-panel';
+
 const HOWTO_STEPS = [
   ['join', 'join'],
   ['read', null],
@@ -118,6 +122,8 @@ export function WarmingPage() {
   const [resumeFor, setResumeFor] = useState<WarmedAccount | null>(null);
   // «В нейрокомментинг» asks for the start mode first (item 2.4).
   const [handoffFor, setHandoffFor] = useState<string | null>(null);
+  // The survival tile in the header opens its panel under the banners (stage 3).
+  const [survivalOpen, setSurvivalOpen] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
   const accountFeedback = useTransientFeedback();
   const channelFeedback = useTransientFeedback();
@@ -318,7 +324,7 @@ export function WarmingPage() {
     <div className="tb-fadeup">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 type-h1">{t('warming.titleFull')}</h1>
-        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap sm:gap-4">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:gap-4 lg:flex-nowrap">
           <StatGrid
             className="w-full sm:w-auto"
             stats={[
@@ -326,6 +332,14 @@ export function WarmingPage() {
               { value: idle.length, label: t('warming.counter.ready') },
               { value: errors, label: t('warming.counter.errors'), tone: 'danger' },
             ]}
+          />
+          <SurvivalTile
+            className="w-full sm:w-auto"
+            expanded={survivalOpen}
+            controls={SURVIVAL_PANEL_ID}
+            onToggle={() => {
+              setSurvivalOpen((open) => !open);
+            }}
           />
           <Button
             variant={poolOn ? 'neutral' : 'primary'}
@@ -345,10 +359,15 @@ export function WarmingPage() {
         </div>
       </div>
 
-      {/* Page banners: the fleet DM pause and unaccepted geo mismatches. Stage 3's
-          survival stats take the slot under them. */}
+      {/* Page banners: the fleet DM pause and unaccepted geo mismatches, then the
+          survival panel the header tile opens. */}
       <DmPauseBanner pausedUntil={data.settings.dm_paused_until} />
       <GeoMismatchBanner count={geoMismatches} />
+      {survivalOpen ? (
+        <div className="mb-4">
+          <SurvivalPanel id={SURVIVAL_PANEL_ID} />
+        </div>
+      ) : null}
 
       {/* `minmax(0,1fr)`, not a bare `1fr`: an `fr` track keeps an automatic minimum
           (index.css says the same of `.tb-subrow` in the row direction), so a track
@@ -560,6 +579,11 @@ export function WarmingPage() {
                           <div className="flex items-center gap-1">
                             <span className="truncate type-small">{acc.phone}</span>
                             {flag}
+                          </div>
+                        ) : null}
+                        {acc.survival ? (
+                          <div className="mt-2">
+                            <SurvivalBadge survival={acc.survival} />
                           </div>
                         ) : null}
                         <div className="mt-2 flex items-center gap-2">

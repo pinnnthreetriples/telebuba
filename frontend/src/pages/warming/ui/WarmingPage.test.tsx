@@ -126,6 +126,38 @@ test('a warmed card counts worked days, not calendar days', async () => {
   expect(screen.queryByText('12 / 14 дней')).not.toBeInTheDocument();
 });
 
+test('a warmed card wears its survival badge and the header tile opens the panel', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
+      {
+        account_id: 'warmed-one',
+        label: 'Warmed One',
+        warming_days: 14,
+        target_days: 14,
+        survival: { days_since_release: 12, status: 'alive' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname === '/api/v1/warming/survival') {
+      return Promise.resolve(
+        jsonResponse({ cohort: 'week', windows: [{ window: 'd7', alive: 3, dead: 1 }] }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+
+  expect(await screen.findByText('День 12 после выпуска · жив')).toBeInTheDocument();
+  const tile = await screen.findByRole('button', { name: /3 из 4/ });
+  expect(screen.queryByText('Выживаемость прогретых')).not.toBeInTheDocument();
+  await userEvent.click(tile);
+  expect(await screen.findByText('Выживаемость прогретых')).toBeInTheDocument();
+});
+
 test('ready card: phone flag sits with the number, proxy flag with the proxy type', async () => {
   const board: WarmingBoardState = {
     ...BOARD,

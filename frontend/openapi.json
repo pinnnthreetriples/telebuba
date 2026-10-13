@@ -10496,6 +10496,92 @@
         }
       }
     },
+    "/api/v1/warming/survival": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warming Survival",
+        "description": "How many warmed accounts are alive during warming and 7 and 30 days after release.",
+        "operationId": "getWarmingSurvival",
+        "parameters": [
+          {
+            "name": "cohort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "week",
+                "persona",
+                "length",
+                "proxy_country"
+              ],
+              "type": "string",
+              "default": "week",
+              "title": "Cohort"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurvivalReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search": {
       "post": {
         "tags": [
@@ -20753,6 +20839,56 @@
         "title": "AccountStats",
         "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / frozen / errors)."
       },
+      "AccountSurvival": {
+        "properties": {
+          "days_since_release": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Days Since Release"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "warming",
+              "alive",
+              "wounded",
+              "unchecked",
+              "dead",
+              "censored"
+            ],
+            "title": "Status"
+          },
+          "cause": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "spam_limited",
+                  "session_dead",
+                  "deleted_dead"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause"
+          },
+          "wounds": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Wounds",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "days_since_release",
+          "status"
+        ],
+        "title": "AccountSurvival",
+        "description": "The card badge \u00ab\u0414\u0435\u043d\u044c 12 \u043f\u043e\u0441\u043b\u0435 \u0432\u044b\u043f\u0443\u0441\u043a\u0430 \u00b7 \u0436\u0438\u0432\u00bb for a released account."
+      },
       "AccountTwoFactorCreated": {
         "properties": {
           "password": {
@@ -25134,6 +25270,69 @@
         "type": "object",
         "title": "ExtraToggles",
         "description": "Which extras the operator allows. A missing key means \"keep the stored value\"."
+      },
+      "FleetDailyStats": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Day"
+          },
+          "accounts": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Accounts",
+            "default": 0
+          },
+          "cycles": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cycles",
+            "default": 0
+          },
+          "reads": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads",
+            "default": 0
+          },
+          "reactions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reactions",
+            "default": 0
+          },
+          "joins": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Joins",
+            "default": 0
+          },
+          "dms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Dms",
+            "default": 0
+          },
+          "failures": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Failures",
+            "default": 0
+          },
+          "floods": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Floods",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "day"
+        ],
+        "title": "FleetDailyStats",
+        "description": "Every account's totals of one day added up \u2014 the fleet's daily history."
       },
       "HandoffRequest": {
         "properties": {
@@ -29802,6 +30001,275 @@
         "title": "SubmitCodeRequest",
         "description": "API body for ``POST /accounts/{id}/submit-code``."
       },
+      "SurvivalCause": {
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "spam_limited",
+              "session_dead",
+              "deleted_dead"
+            ],
+            "title": "Cause"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cause",
+          "count"
+        ],
+        "title": "SurvivalCause",
+        "description": "How many stints died of one cause."
+      },
+      "SurvivalCohort": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCounter"
+            },
+            "type": "array",
+            "title": "Windows"
+          }
+        },
+        "type": "object",
+        "title": "SurvivalCohort",
+        "description": "One cohort row: its key (ISO week ``2026-W37``, persona, days, country) and windows.\n\n``key`` is ``None`` for stints the journal cannot place (e.g. no proxy country)."
+      },
+      "SurvivalCounter": {
+        "properties": {
+          "window": {
+            "type": "string",
+            "enum": [
+              "warming",
+              "d7",
+              "d30"
+            ],
+            "title": "Window"
+          },
+          "alive": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Alive",
+            "default": 0
+          },
+          "wounded": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Wounded",
+            "default": 0
+          },
+          "dead": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Dead",
+            "default": 0
+          },
+          "unchecked": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unchecked",
+            "default": 0
+          },
+          "censored": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Censored",
+            "default": 0
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pending",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "window"
+        ],
+        "title": "SurvivalCounter",
+        "description": "Stints of one window by outcome; ``wounded`` is the part of ``alive`` with a wound."
+      },
+      "SurvivalReport": {
+        "properties": {
+          "cohort": {
+            "type": "string",
+            "enum": [
+              "week",
+              "persona",
+              "length",
+              "proxy_country"
+            ],
+            "title": "Cohort"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCounter"
+            },
+            "type": "array",
+            "title": "Windows"
+          },
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCohort"
+            },
+            "type": "array",
+            "title": "Cohorts"
+          },
+          "causes": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCause"
+            },
+            "type": "array",
+            "title": "Causes"
+          },
+          "stints": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalStint"
+            },
+            "type": "array",
+            "title": "Stints"
+          },
+          "releases": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Releases",
+            "default": 0
+          },
+          "full_data_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Data Since"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/FleetDailyStats"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cohort"
+        ],
+        "title": "SurvivalReport",
+        "description": "The survival panel: totals, one cohort cut, causes, stints and fleet history."
+      },
+      "SurvivalStint": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "warming",
+              "alive",
+              "wounded",
+              "unchecked",
+              "dead",
+              "censored"
+            ],
+            "title": "Status"
+          },
+          "end_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "End Day"
+          },
+          "release_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Day"
+          },
+          "death_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Death Day"
+          },
+          "cause": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "spam_limited",
+                  "session_dead",
+                  "deleted_dead"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cause"
+          },
+          "wound_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Wound Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "started_at",
+          "status",
+          "end_day"
+        ],
+        "title": "SurvivalStint",
+        "description": "One swimmer-plot row; every ``*_day`` counts whole days from the stint's start."
+      },
       "TdataImportResult": {
         "properties": {
           "accounts": {
@@ -31081,6 +31549,16 @@
             "type": "boolean",
             "title": "Geo Accepted",
             "default": false
+          },
+          "survival": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountSurvival"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -31153,6 +31631,16 @@
             "type": "boolean",
             "title": "Geo Accepted",
             "default": false
+          },
+          "survival": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountSurvival"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "account_id": {
             "type": "string",

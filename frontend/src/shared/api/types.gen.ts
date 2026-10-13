@@ -629,6 +629,30 @@ export type AccountStats = {
 };
 
 /**
+ * AccountSurvival
+ *
+ * The card badge «День 12 после выпуска · жив» for a released account.
+ */
+export type AccountSurvival = {
+  /**
+   * Days Since Release
+   */
+  days_since_release: number;
+  /**
+   * Status
+   */
+  status: 'warming' | 'alive' | 'wounded' | 'unchecked' | 'dead' | 'censored';
+  /**
+   * Cause
+   */
+  cause?: 'spam_limited' | 'session_dead' | 'deleted_dead' | null;
+  /**
+   * Wounds
+   */
+  wounds?: number;
+};
+
+/**
  * AccountTwoFactorCreated
  *
  * The POST response — the ONLY model in this codebase carrying the plaintext.
@@ -3296,6 +3320,50 @@ export type ExtraToggles = {
    * Drafts
    */
   drafts?: boolean;
+};
+
+/**
+ * FleetDailyStats
+ *
+ * Every account's totals of one day added up — the fleet's daily history.
+ */
+export type FleetDailyStats = {
+  /**
+   * Day
+   */
+  day: string;
+  /**
+   * Accounts
+   */
+  accounts?: number;
+  /**
+   * Cycles
+   */
+  cycles?: number;
+  /**
+   * Reads
+   */
+  reads?: number;
+  /**
+   * Reactions
+   */
+  reactions?: number;
+  /**
+   * Joins
+   */
+  joins?: number;
+  /**
+   * Dms
+   */
+  dms?: number;
+  /**
+   * Failures
+   */
+  failures?: number;
+  /**
+   * Floods
+   */
+  floods?: number;
 };
 
 /**
@@ -6095,6 +6163,160 @@ export type SubmitCodeRequest = {
 };
 
 /**
+ * SurvivalCause
+ *
+ * How many stints died of one cause.
+ */
+export type SurvivalCause = {
+  /**
+   * Cause
+   */
+  cause: 'spam_limited' | 'session_dead' | 'deleted_dead';
+  /**
+   * Count
+   */
+  count: number;
+};
+
+/**
+ * SurvivalCohort
+ *
+ * One cohort row: its key (ISO week ``2026-W37``, persona, days, country) and windows.
+ *
+ * ``key`` is ``None`` for stints the journal cannot place (e.g. no proxy country).
+ */
+export type SurvivalCohort = {
+  /**
+   * Key
+   */
+  key?: string | null;
+  /**
+   * Windows
+   */
+  windows?: Array<SurvivalCounter>;
+};
+
+/**
+ * SurvivalCounter
+ *
+ * Stints of one window by outcome; ``wounded`` is the part of ``alive`` with a wound.
+ */
+export type SurvivalCounter = {
+  /**
+   * Window
+   */
+  window: 'warming' | 'd7' | 'd30';
+  /**
+   * Alive
+   */
+  alive?: number;
+  /**
+   * Wounded
+   */
+  wounded?: number;
+  /**
+   * Dead
+   */
+  dead?: number;
+  /**
+   * Unchecked
+   */
+  unchecked?: number;
+  /**
+   * Censored
+   */
+  censored?: number;
+  /**
+   * Pending
+   */
+  pending?: number;
+};
+
+/**
+ * SurvivalReport
+ *
+ * The survival panel: totals, one cohort cut, causes, stints and fleet history.
+ */
+export type SurvivalReport = {
+  /**
+   * Cohort
+   */
+  cohort: 'week' | 'persona' | 'length' | 'proxy_country';
+  /**
+   * Windows
+   */
+  windows?: Array<SurvivalCounter>;
+  /**
+   * Cohorts
+   */
+  cohorts?: Array<SurvivalCohort>;
+  /**
+   * Causes
+   */
+  causes?: Array<SurvivalCause>;
+  /**
+   * Stints
+   */
+  stints?: Array<SurvivalStint>;
+  /**
+   * Releases
+   */
+  releases?: number;
+  /**
+   * Full Data Since
+   */
+  full_data_since?: string | null;
+  /**
+   * Daily
+   */
+  daily?: Array<FleetDailyStats>;
+};
+
+/**
+ * SurvivalStint
+ *
+ * One swimmer-plot row; every ``*_day`` counts whole days from the stint's start.
+ */
+export type SurvivalStint = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * Started At
+   */
+  started_at: string;
+  /**
+   * Status
+   */
+  status: 'warming' | 'alive' | 'wounded' | 'unchecked' | 'dead' | 'censored';
+  /**
+   * End Day
+   */
+  end_day: number;
+  /**
+   * Release Day
+   */
+  release_day?: number | null;
+  /**
+   * Death Day
+   */
+  death_day?: number | null;
+  /**
+   * Cause
+   */
+  cause?: 'spam_limited' | 'session_dead' | 'deleted_dead' | null;
+  /**
+   * Wound Days
+   */
+  wound_days?: Array<number>;
+};
+
+/**
  * TdataImportResult
  *
  * Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.
@@ -6839,6 +7061,7 @@ export type WarmedAccount = {
    * Geo Accepted
    */
   geo_accepted?: boolean;
+  survival?: AccountSurvival | null;
 };
 
 /**
@@ -6876,6 +7099,7 @@ export type WarmingAccountState = {
    * Geo Accepted
    */
   geo_accepted?: boolean;
+  survival?: AccountSurvival | null;
   /**
    * Account Id
    */
@@ -12285,6 +12509,45 @@ export type ListWarmingDailyStatsResponses = {
 
 export type ListWarmingDailyStatsResponse =
   ListWarmingDailyStatsResponses[keyof ListWarmingDailyStatsResponses];
+
+export type GetWarmingSurvivalData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Cohort
+     */
+    cohort?: 'week' | 'persona' | 'length' | 'proxy_country';
+  };
+  url: '/api/v1/warming/survival';
+};
+
+export type GetWarmingSurvivalErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetWarmingSurvivalError = GetWarmingSurvivalErrors[keyof GetWarmingSurvivalErrors];
+
+export type GetWarmingSurvivalResponses = {
+  /**
+   * Successful Response
+   */
+  200: SurvivalReport;
+};
+
+export type GetWarmingSurvivalResponse =
+  GetWarmingSurvivalResponses[keyof GetWarmingSurvivalResponses];
 
 export type StartCampaignDiscoveryData = {
   body: DiscoverySearchRequest;
