@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from schemas._warming_console import NcStartMode
+    from schemas._warming_visits import VisitKind, VisitStep
     from schemas.warming import ActivityPersona, WarmingPhase, WarmingState
 
 
@@ -58,4 +59,11 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         cycle_base_actions=_optional_int(mapping.get("cycle_base_actions")),
         nc_start_mode=cast("NcStartMode | None", _optional_str(mapping.get("nc_start_mode"))),
         nc_handoff_at=_optional_str(mapping.get("nc_handoff_at")),
+        visit_kind=cast("VisitKind | None", _optional_str(mapping.get("visit_kind"))),
+        cycle_plan=cast("list[VisitStep]", _split_plan(mapping.get("cycle_plan"))),
     )
+
+
+def _split_plan(raw: object) -> list[str]:
+    text = _optional_str(raw)
+    return [step for step in text.split(",") if step] if text else []

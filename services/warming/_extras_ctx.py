@@ -67,6 +67,8 @@ class _ExtraContext:
     # Second budget beside ``tally.attempts``: bytes the media extras may still pull this
     # cycle. Debited before dispatch like attempts; ``0`` (the default) disables them.
     media_bytes_left: int = 0
+    # Extras this visit already ran (a free read may come before the channels, 4.4).
+    done: set[str] = field(default_factory=set)
 
     def can_attempt(self) -> bool:
         """The cycle's own daily-budget predicate (``_cycle._can_attempt``), verbatim."""

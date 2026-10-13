@@ -16,6 +16,8 @@ from sqlalchemy import update
 from core.db import _get_engine, _warming_account_state
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from schemas._warming_console import NcStartMode
 
 
@@ -45,3 +47,8 @@ async def store_cycle_base(account_id: str, settled: int, token: str) -> None:
 async def store_nc_start(account_id: str, mode: NcStartMode, at: str) -> None:
     """How (and when) the account was handed to neurocomment."""
     await asyncio.to_thread(_update, account_id, nc_start_mode=mode, nc_handoff_at=at)
+
+
+async def store_visit_plan(account_id: str, kind: str, steps: Sequence[str], token: str) -> None:
+    """The visit the booked cycle runs and its step order; only while ``token`` books it."""
+    await asyncio.to_thread(_update, account_id, token, visit_kind=kind, cycle_plan=",".join(steps))

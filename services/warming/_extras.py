@@ -82,6 +82,7 @@ def _pick_extras(
         s
         for s in EXTRAS
         if toggles.get(s.key, False)
+        and s.key not in ctx.done
         and (s.kind == "read" or ctx.can_attempt())
         and _is_eligible(s, ctx)
     ]
@@ -110,13 +111,29 @@ def _fold_extra(tally: _ChannelTally, result: ActionResult) -> bool:
     return False
 
 
-async def run_extras_step(ctx: _ExtraContext) -> bool:
-    """Run this cycle's drawn extras. True iff at least one landed (advances the rail)."""
+def _pick_first(ctx: _ExtraContext, toggles: Mapping[str, object], rng: Random) -> list[_ExtraSpec]:
+    """One free read extra that needs nothing the channels give: what a visit opens with."""
+    eligible = [
+        s
+        for s in EXTRAS
+        if toggles.get(s.key, False) and s.kind == "read" and not s.needs and s.key not in ctx.done
+    ]
+    return rng.sample(eligible, min(1, len(eligible)))
+
+
+async def run_extras_step(ctx: _ExtraContext, *, before_channels: bool = False) -> bool:
+    """Run this cycle's drawn extras. True iff at least one landed (advances the rail).
+
+    ``before_channels`` runs the one free read a visit may open with (4.4); the later
+    pass skips whatever already ran, so each extra stays at most once per visit.
+    """
     if ctx.tally.flooded or ctx.tally.peer_flooded:
         return False
     warm = settings.warming
     before = ctx.tally.extras
-    for spec in _pick_extras(ctx, ctx.secret.extra_toggles, _seams.rng):
+    pick = _pick_first if before_channels else _pick_extras
+    for spec in pick(ctx, ctx.secret.extra_toggles, _seams.rng):
+        ctx.done.add(spec.key)
         # Reads are free and always go; a write past the daily budget is skipped, never
         # queued — the same rule the channel loop applies to a react.
         if spec.kind == "write" and not ctx.can_attempt():

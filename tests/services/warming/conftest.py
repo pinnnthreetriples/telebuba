@@ -65,6 +65,11 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # model's line goes out as written and no profile request consumes a fake reply.
     monkeypatch.setattr(settings.warming, "character_enabled", False)
     monkeypatch.setattr(settings.warming, "chat_style_enabled", False)
+    # Visit order (4.4) is a per-visit draw too: keep the classic order (stories and
+    # extras after the channels) and no binge linger; ``test_visits.py`` varies them.
+    monkeypatch.setattr(settings.warming, "visit_stories_first_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "visit_read_extra_first_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "visit_binge_linger_seconds", (0.0, 0.0))
     # The per-visit budget split (4.3) caps a cycle below the day's remainder; the
     # scenarios here count a whole cycle's actions, so they keep the full remainder.
     # ``test_cadence.py`` exercises the split itself.

@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from schemas._warming_visits import VisitKind, VisitStep  # noqa: TC001 - pydantic resolves them.
 from schemas.geo import GeoMatchStatus  # noqa: TC001 - pydantic resolves it at runtime.
 from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves it at runtime.
 
@@ -58,6 +59,9 @@ class WarmingStateMarks(BaseModel):
     cycle_base_actions: int | None = Field(default=None, ge=0)
     nc_start_mode: NcStartMode | None = None
     nc_handoff_at: str | None = None
+    # The visit the booked cycle runs and its step order (4.4, migration 87).
+    visit_kind: VisitKind | None = None
+    cycle_plan: list[VisitStep] = Field(default_factory=list)
 
 
 class WarmingCardConsole(BaseModel):
@@ -71,6 +75,9 @@ class WarmingCardConsole(BaseModel):
     geo_accepted: bool = False
     # Days since release and whether the account is alive (stage 3); ``None`` = not released.
     survival: AccountSurvival | None = None
+    # The current (or last) visit and its steps; the card's progress follows this order.
+    visit_kind: VisitKind | None = None
+    cycle_plan: list[VisitStep] = Field(default_factory=list)
 
 
 class SoftStartProgress(BaseModel):
