@@ -26,7 +26,7 @@ from core.telegram_client._warm_browse import (
 from core.telegram_client._warm_chats import mute_peer, toggle_archive
 from core.telegram_client._warm_media import consume_media, vote_in_poll
 from core.telegram_client._warm_saved import forward_to_saved, save_draft, self_note
-from core.telegram_client._warm_social import dm_forward, dm_react, dm_sticker, read_discussion
+from core.telegram_client._warm_social import dispatch_social
 from schemas.telegram_actions import (
     WarmBrowseStickers,
     WarmCheckSettings,
@@ -102,14 +102,8 @@ async def dispatch_warming_action(  # noqa: C901, PLR0911, PLR0912 - one arm per
             return await consume_media(client, action)
         case WarmEmojiStatus():
             return await emoji_status(client, action)
-        case WarmReadDiscussion():
-            return await read_discussion(client, action)
-        case WarmDmReact():
-            return await dm_react(client, action)
-        case WarmDmSticker():
-            return await dm_sticker(client, action)
-        case WarmDmForward():
-            return await dm_forward(client, action)
+        case WarmReadDiscussion() | WarmDmReact() | WarmDmSticker() | WarmDmForward():
+            return await dispatch_social(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)

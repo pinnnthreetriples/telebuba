@@ -24,16 +24,17 @@ from telethon.tl.types import ReactionEmoji
 from core.telegram_client._action_results import _DispatchResult
 from core.telegram_client._dm import _resolve_dm_peer
 from core.telegram_client._read_comments import _resolve_linked_group_entity
+from schemas.telegram_actions_warming_social import (
+    WarmDmForward,
+    WarmDmReact,
+    WarmDmSticker,
+    WarmReadDiscussion,
+)
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-    from schemas.telegram_actions_warming_social import (
-        WarmDmForward,
-        WarmDmReact,
-        WarmDmSticker,
-        WarmReadDiscussion,
-    )
+    from schemas.telegram_actions_warming_social import WarmingSocialAction
 
 # The partner's newest message is among this many of the dialog's last ones.
 _DM_LOOKBACK = 10
@@ -123,3 +124,16 @@ async def dm_forward(client: TelegramClient, action: WarmDmForward) -> _Dispatch
         message_id=int(getattr(first, "id", 0)) or None,
         log_extra={"channel": action.channel, "source_id": action.message_id},
     )
+
+
+async def dispatch_social(client: TelegramClient, action: WarmingSocialAction) -> _DispatchResult:
+    """The partner-facing arm of ``dispatch_warming_action``, one model per case."""
+    match action:
+        case WarmReadDiscussion():
+            return await read_discussion(client, action)
+        case WarmDmReact():
+            return await dm_react(client, action)
+        case WarmDmSticker():
+            return await dm_sticker(client, action)
+        case WarmDmForward():
+            return await dm_forward(client, action)

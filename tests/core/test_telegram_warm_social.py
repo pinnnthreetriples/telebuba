@@ -17,7 +17,7 @@ from telethon.tl.functions.messages import (
 )
 
 from core.telegram_client import _warm_social
-from core.telegram_client._warm_dispatch import warm_log_extra
+from core.telegram_client._warm_dispatch import dispatch_warming_action, warm_log_extra
 from schemas.telegram_actions_warming_social import (
     WarmDmForward,
     WarmDmReact,
@@ -154,3 +154,17 @@ async def test_the_forward_sends_only_the_post_and_logs_no_text() -> None:
     assert result.message_id == 52
     assert warm_log_extra(action) == {"channel": "@news", "source_id": 4}
     assert warm_log_extra(WarmDmReact(user_id=5, emoji="😂")) == {}
+
+
+@pytest.mark.asyncio
+async def test_the_warming_dispatcher_routes_every_social_model() -> None:
+    client = _Client(stickers=["s1"])
+    actions = [
+        WarmReadDiscussion(channel="@news", message_id=7),
+        WarmDmReact(user_id=5, emoji="👍"),
+        WarmDmSticker(user_id=5, emoticon="😂"),
+        WarmDmForward(user_id=5, channel="@news", message_id=4),
+    ]
+    for action in actions:
+        result = await dispatch_warming_action(_as_client(client), action)
+        assert result.log_extra is not None
