@@ -72,7 +72,9 @@ def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
 
 
 def _list_warming_channels() -> WarmingChannelList:
-    statement = select(_warming_channels).order_by(_warming_channels.c.id.asc())
+    # Proposals awaiting the operator (``status='pending'``, 4.5) live in warming_pool.
+    approved = _warming_channels.c.status != "pending"
+    statement = select(_warming_channels).where(approved).order_by(_warming_channels.c.id.asc())
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
     return WarmingChannelList(

@@ -8,7 +8,7 @@ keeps the error classification; everything DM-shaped lives here.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from telethon import errors, utils
 from telethon.tl.functions.contacts import ResolvePhoneRequest
@@ -19,7 +19,17 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.tl.types import TypeInputPeer
 
-    from schemas.telegram_actions import MarkDirectMessageRead, SendDirectMessage
+    from schemas.telegram_actions import SendDirectMessage
+
+
+class _DmTarget(Protocol):
+    """Anything addressed to a DM partner: the send, the read-ack, the live DM writes."""
+
+    @property
+    def user_id(self) -> int: ...
+
+    @property
+    def peer_phone(self) -> str | None: ...
 
 
 class DmPeerUnresolvedError(Exception):
@@ -44,7 +54,7 @@ def _typing_seconds(text: str, wpm: int | None = None) -> float:
 
 async def _resolve_dm_peer(
     client: TelegramClient,
-    action: SendDirectMessage | MarkDirectMessageRead,
+    action: _DmTarget,
 ) -> TypeInputPeer:
     """Resolve the DM partner to an input peer, looking them up by phone if unknown.
 

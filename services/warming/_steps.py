@@ -31,6 +31,7 @@ from services.pacing import human_delay
 from services.warming import _seams
 from services.warming._channel_language import record_read_facts
 from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
+from services.warming._social_reads import maybe_read_discussion, reaction_chance
 from services.warming.pacing import (
     _FAILURE_STATUSES,
     _HALT_STATUSES,
@@ -301,6 +302,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     warm = settings.warming
     account_id = data.account_id
     remaining_actions = data.remaining_actions
+    visit_kind = data.visit.kind if data.visit is not None else "normal"
     recent_ids: dict[str, list[int]] = {}
     recent_media: dict[str, dict[int, RecentMediaKind]] = {}
     # Counted once per cycle, then spent locally per dispatched join (a failed join
@@ -334,7 +336,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             channel.channel,
             tally,
             reactions_enabled=secret.reactions_enabled,
-            reaction_probability=persona_reaction_probability(data.activity_persona),
+            reaction_probability=reaction_chance(
+                persona_reaction_probability(data.activity_persona), channel
+            ),
             remaining_actions=remaining_actions,
         )
         recent_ids[channel.channel] = outcome.recent_ids
@@ -344,6 +348,11 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if outcome.reactions:
             await _emit_step(on_step, "react")
         if _apply_read_result(tally, outcome, channel.channel):
+            break
+        # Sometimes the comments under a post just read (4.6); never past the budget.
+        if _can_attempt() and await maybe_read_discussion(
+            account_id, channel, outcome.recent_ids, tally, visit_kind
+        ):
             break
         await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
     return recent_ids, recent_media

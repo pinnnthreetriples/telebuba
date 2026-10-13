@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.web_login._cdp import CdpError
+from core.web_login._countries import COUNTRY
 from core.web_login._devices import BY_NAME, CATALOGUE, _Device
 from core.web_login._scripts import PAGE_TEMPLATE, WORKER_TEMPLATE, fill
 
@@ -47,29 +48,6 @@ if TYPE_CHECKING:
     from core.web_login._cdp import CdpSession
 
 
-# country_code -> (IANA timezone, primary BCP-47 language). Small on purpose; the
-# fallback keeps an unknown or absent country deterministic and consistent.
-_COUNTRY: dict[str, tuple[str, str]] = {
-    "US": ("America/New_York", "en-US"),
-    "GB": ("Europe/London", "en-GB"),
-    "NL": ("Europe/Amsterdam", "nl-NL"),
-    "DE": ("Europe/Berlin", "de-DE"),
-    "FR": ("Europe/Paris", "fr-FR"),
-    "ES": ("Europe/Madrid", "es-ES"),
-    "IT": ("Europe/Rome", "it-IT"),
-    "PL": ("Europe/Warsaw", "pl-PL"),
-    "FI": ("Europe/Helsinki", "fi-FI"),
-    "SE": ("Europe/Stockholm", "sv-SE"),
-    "TR": ("Europe/Istanbul", "tr-TR"),
-    "RU": ("Europe/Moscow", "ru-RU"),
-    "UA": ("Europe/Kyiv", "uk-UA"),
-    "CA": ("America/Toronto", "en-CA"),
-    "BR": ("America/Sao_Paulo", "pt-BR"),
-    "IN": ("Asia/Kolkata", "en-IN"),
-    "SG": ("Asia/Singapore", "en-SG"),
-    "JP": ("Asia/Tokyo", "ja-JP"),
-    "AE": ("Asia/Dubai", "ar-AE"),
-}
 # Unmapped country, or one no proxy check could resolve. See the module docstring: a
 # zero offset claims no place, so nothing here can contradict the exit IP.
 _DEFAULT_LOCALE = ("Etc/UTC", "en-US")
@@ -238,7 +216,7 @@ def fingerprint_for(
     """
     build, is_edge = _installed()
     device = _device_for(account_id, is_edge=is_edge, platform=_HOST_PLATFORM)
-    timezone, country_locale = _COUNTRY.get((country_code or "").upper(), _DEFAULT_LOCALE)
+    timezone, country_locale = COUNTRY.get((country_code or "").upper(), _DEFAULT_LOCALE)
     locale = language or country_locale
     primary = locale.split("-")[0]
     languages: tuple[str, ...] = (locale, primary) if primary != locale else (locale,)
