@@ -2,6 +2,11 @@
 // via shared/api). The board is one poll tick (idle/warming + channels + settings).
 export {
   addWarmingChannelsMutation,
+  approveWarmingChannelProposalsMutation,
+  findWarmingChannelsMutation,
+  listWarmingChannelProposalsOptions as warmingChannelProposalsQueryOptions,
+  listWarmingChannelProposalsQueryKey as warmingChannelProposalsQueryKey,
+  rejectWarmingChannelProposalsMutation,
   getWarmingBoardOptions as warmingBoardQueryOptions,
   getWarmingSettingsOptions as warmingSettingsQueryOptions,
   getWarmingSurvivalOptions as warmingSurvivalQueryOptions,

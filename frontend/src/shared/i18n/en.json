@@ -3339,6 +3339,25 @@
         "binge": "long stay",
         "reply": "reply only"
       }
+    },
+    "poolFill": {
+      "open": "Find channels",
+      "title": "Find channels for warming",
+      "hint": "Searches with an account that is not being warmed. Fits are 2k–500k subscribers, alive, in the right language, no casinos, 18+ or signals. Found channels wait for your approval.",
+      "language": "Language (code, e.g. es)",
+      "country": "Country (optional, e.g. MX)",
+      "topics": "Topics, comma-separated (up to 5)",
+      "search": "Search",
+      "close": "Close",
+      "result": "Found {{found}}, {{proposed}} added for approval.",
+      "noAccount": "No idle account outside warming to search with.",
+      "error": "The search failed.",
+      "waiting_one": "{{count}} found channel awaits approval",
+      "waiting_other": "{{count}} found channels await approval",
+      "pick": "Pick {{channel}}",
+      "subscribers": "{{count}} subs",
+      "approve": "Approve",
+      "reject": "Reject"
     }
   },
   "auth": {
