@@ -62,6 +62,7 @@ function mockApi(
     stoppable?: boolean;
     accountsError?: boolean;
     results?: BulkMessageOutcome[];
+    firstMessagesPerDay?: number | null;
   } = {},
 ) {
   let cancelled = false;
@@ -76,6 +77,20 @@ function mockApi(
           { account_id: 'a2', status: 'alive', created_at: 'now', updated_at: 'now' },
         ],
         next_cursor: null,
+      });
+    }
+    if (path === '/api/v1/accounts/outreach-limits' && request.method === 'GET') {
+      return respond({
+        contact_imports_per_day: 15,
+        lookup_batch_size: 3,
+        lookup_min_delay_seconds: 180,
+        lookup_max_delay_seconds: 480,
+        silent_limit_streak: 8,
+        first_messages_per_day:
+          options.firstMessagesPerDay === undefined ? 25 : options.firstMessagesPerDay,
+        bulk_min_delay_seconds: 60,
+        bulk_max_delay_seconds: 180,
+        updated_at: null,
       });
     }
     if (path === '/api/v1/accounts/contact-lookup/active') return respond(null);
@@ -149,6 +164,7 @@ test('sends every selected account to every distinct recipient and shows progres
   await pickBothAccounts();
   await userEvent.type(screen.getByLabelText('Получатели'), '@first{enter}@second{enter}@first');
   await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await screen.findByDisplayValue('60');
   await userEvent.clear(screen.getByLabelText('От, секунд'));
   await userEvent.type(screen.getByLabelText('От, секунд'), '3');
   await userEvent.clear(screen.getByLabelText('До, секунд'));
@@ -244,11 +260,15 @@ test('requires a valid delay range before sending', async () => {
   await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
   const start = screen.getByRole('button', { name: 'Начать отправку' });
   expect(start).toBeEnabled();
+  await screen.findByDisplayValue('180');
   await userEvent.clear(screen.getByLabelText('От, секунд'));
-  await userEvent.type(screen.getByLabelText('От, секунд'), '10');
+  await userEvent.type(screen.getByLabelText('От, секунд'), '200');
   expect(start).toBeDisabled();
   await userEvent.clear(screen.getByLabelText('До, секунд'));
-  await userEvent.type(screen.getByLabelText('До, секунд'), '12');
+  await userEvent.type(screen.getByLabelText('До, секунд'), '3601');
+  expect(start).toBeDisabled();
+  await userEvent.clear(screen.getByLabelText('До, секунд'));
+  await userEvent.type(screen.getByLabelText('До, секунд'), '250');
   expect(start).toBeEnabled();
 });
 
@@ -438,4 +458,60 @@ test('distribute pins id-only recipients to the account that found them', async 
   const body = await sentBody();
   expect(body.account_ids).toEqual(['a1']);
   expect(body.recipient_accounts).toEqual({ '222': 'a1' });
+});
+
+test('shows the saved pause and daily cap and leaves the pause to the server', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+
+  expect(await screen.findByDisplayValue('60')).toBeInTheDocument();
+  expect(screen.getByLabelText('До, секунд')).toHaveValue(180);
+  expect(
+    screen.getByText('Лимит первых сообщений с аккаунта в сутки (UTC): 25.'),
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+
+  expect(await sentBody()).toEqual({
+    account_ids: ['a1', 'a2'],
+    recipients: ['@first'],
+    text: 'Hello',
+    mode: 'each',
+  });
+});
+
+test('accepts an hour-long pause and says when there is no daily cap', async () => {
+  mockApi({ firstMessagesPerDay: null });
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await screen.findByDisplayValue('180');
+  await userEvent.clear(screen.getByLabelText('До, секунд'));
+  await userEvent.type(screen.getByLabelText('До, секунд'), '3600');
+
+  expect(screen.getByText('Дневного лимита первых сообщений нет.')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+  expect(await sentBody()).toEqual(
+    expect.objectContaining({ min_delay_seconds: 60, max_delay_seconds: 3600 }),
+  );
+});
+
+test('explains a recipient skipped by the daily first-message cap', async () => {
+  mockApi({
+    results: [
+      { account_id: 'a1', recipient: '@first', status: 'skipped', error_code: 'daily_limit' },
+    ],
+  });
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+
+  expect(
+    await screen.findByText(/Пропущено: исчерпан дневной лимит первых сообщений\./),
+  ).toBeInTheDocument();
 });

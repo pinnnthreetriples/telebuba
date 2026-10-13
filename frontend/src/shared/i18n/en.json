@@ -455,7 +455,7 @@
       "delay": "Delay between sends",
       "minDelay": "From, seconds",
       "maxDelay": "To, seconds",
-      "delayHint": "From 0 to 300 seconds; the minimum cannot exceed the maximum. The delay is random within the range.",
+      "delayHint": "From 0 to 3600 seconds; the minimum cannot exceed the maximum. The delay is random within the range. Left untouched, the saved outreach limits apply.",
       "delayFrom": "From",
       "delayTo": "To",
       "secondsShort": "sec",
@@ -525,7 +525,19 @@
         "newSearch": "New search",
         "startError": "Could not start the search. Check the numbers and try again.",
         "startActive": "A search is already running.",
-        "startNoValid": "No valid numbers."
+        "startNoValid": "No valid numbers.",
+        "delay": "Pause between one account's requests",
+        "delayHint": "From 0 to 3600 seconds, random within the range. Each account waits out its own pause; the others keep working.",
+        "batch": "Numbers per request",
+        "batchHint": "From 1 to 20. Small batches spread over the day are safer for the account.",
+        "dailyCap": "New numbers per account per UTC day: {{count}}. Whatever does not fit waits for the next day.",
+        "pacingInvalid": "Check the pause and the batch size.",
+        "recheck_one": "{{count}} needs a re-check",
+        "recheck_other": "{{count}} need a re-check",
+        "dailyLimit_one": "{{count}} not checked — daily limit",
+        "dailyLimit_other": "{{count}} not checked — daily limit",
+        "retryLater_one": "Put {{count}} unchecked number back",
+        "retryLater_other": "Put {{count}} unchecked numbers back"
       },
       "code": {
         "account_not_found": "account not found",
@@ -537,8 +549,11 @@
         "premium_wait": "temporarily limited by Telegram",
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
-        "failed": "Telegram rejected the message"
-      }
+        "failed": "Telegram rejected the message",
+        "daily_limit": "daily first-message limit reached"
+      },
+      "dailyCap": "First-message limit per account per UTC day: {{count}}.",
+      "dailyCapOff": "No daily limit on first messages."
     },
     "bulk": {
       "open": "Bulk edit",

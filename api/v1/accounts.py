@@ -23,6 +23,7 @@ from api.v1._accounts_contact_lookup import contact_lookup_router
 from api.v1._accounts_devices import devices_router
 from api.v1._accounts_emulator import emulator_router
 from api.v1._accounts_media import media_router
+from api.v1._accounts_outreach_limits import outreach_limits_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_registered import registered_router
 from api.v1._accounts_scheduled import scheduled_router
@@ -412,6 +413,7 @@ router.include_router(twofa_router)
 router.include_router(registered_router)
 router.include_router(bulk_messages_router)
 router.include_router(contact_lookup_router)
+router.include_router(outreach_limits_router)
 # Timed profile photos / stories (media upload + per-account schedule).
 router.include_router(scheduled_router)
 # The account's second device (a separate sign-in of the other device type).

@@ -82,6 +82,7 @@ export {
   getActiveContactLookupJobOptions as activeContactLookupJobQueryOptions,
   getLatestContactLookupJobOptions as latestContactLookupJobQueryOptions,
   getContactLookupJobOptions as getContactLookupJobQueryOptions,
+  getOutreachLimitsOptions as outreachLimitsQueryOptions,
   accountStatsOptions as accountStatsQueryOptions,
   accountStatsQueryKey,
   checkAccountChannelUsernameOptions as accountChannelUsernameCheckQueryOptions,

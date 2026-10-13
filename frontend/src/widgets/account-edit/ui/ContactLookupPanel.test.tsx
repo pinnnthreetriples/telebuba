@@ -32,6 +32,18 @@ function renderPanel(accountIds: string[]) {
   return appended;
 }
 
+const LIMITS = {
+  contact_imports_per_day: 15,
+  lookup_batch_size: 3,
+  lookup_min_delay_seconds: 180,
+  lookup_max_delay_seconds: 480,
+  silent_limit_streak: 8,
+  first_messages_per_day: 25,
+  bulk_min_delay_seconds: 60,
+  bulk_max_delay_seconds: 180,
+  updated_at: null,
+};
+
 function mockApi(
   options: {
     startError?: string;
@@ -44,6 +56,9 @@ function mockApi(
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const path = new URL(request.url).pathname;
+    if (path === '/api/v1/accounts/outreach-limits' && request.method === 'GET') {
+      return respond(LIMITS);
+    }
     if (path === '/api/v1/accounts/contact-lookup/active' && request.method === 'GET') {
       return respond(
         options.active
@@ -200,4 +215,95 @@ test('a running search offers Stop, not a close that would orphan it', async () 
 
   expect(await screen.findByRole('button', { name: 'Остановить' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument();
+});
+
+test('shows the saved pacing and leaves it to the server until edited', async () => {
+  const sent: unknown[] = [];
+  mockApi({ sent });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+
+  expect(
+    await screen.findByText(/Новых номеров на аккаунт в сутки \(UTC\): 15\./),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText('От, секунд')).toHaveValue(180);
+  expect(screen.getByLabelText('До, секунд')).toHaveValue(480);
+  expect(screen.getByLabelText('Номеров за запрос')).toHaveValue(3);
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
+  expect(sent).toEqual([{ account_ids: ['a1'], phones: ['+15551110000'] }]);
+});
+
+test('sends the pacing the operator typed for this run', async () => {
+  const sent: unknown[] = [];
+  mockApi({ sent });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+  const max = await screen.findByLabelText('До, секунд');
+  await screen.findByDisplayValue('480');
+  await userEvent.clear(max);
+  await userEvent.type(max, '3600');
+  await userEvent.clear(screen.getByLabelText('Номеров за запрос'));
+  await userEvent.type(screen.getByLabelText('Номеров за запрос'), '5');
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
+  expect(sent).toEqual([
+    expect.objectContaining({ min_delay_seconds: 180, max_delay_seconds: 3600, batch_size: 5 }),
+  ]);
+});
+
+test('rejects a batch size above 20', async () => {
+  mockApi();
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+  await userEvent.clear(screen.getByLabelText('Номеров за запрос'));
+  await userEvent.type(screen.getByLabelText('Номеров за запрос'), '21');
+
+  expect(screen.getByText('Проверьте паузу и размер порции.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Найти' })).toBeDisabled();
+});
+
+test('separates daily-limit and re-check numbers and puts them back for later', async () => {
+  mockApi({
+    results: [
+      { phone: '+15550000001', account_id: 'a1', status: 'not_found' },
+      {
+        phone: '+15550000002',
+        account_id: 'a1',
+        status: 'recheck',
+        error_code: 'silent_limit',
+        handed_over: true,
+      },
+      { phone: '+15550000002', account_id: 'a2', status: 'not_found' },
+      { phone: '+15550000003', account_id: 'a1', status: 'recheck', error_code: 'silent_limit' },
+      { phone: '+15550000004', account_id: 'a2', status: 'skipped', error_code: 'daily_limit' },
+      { phone: '+15550000005', account_id: 'a2', status: 'skipped', error_code: 'flood_wait' },
+    ],
+  });
+  renderPanel(['a1', 'a2']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15550000001');
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  // The handed-over row is history: +15550000002 counts once, as a2's "not found".
+  expect(
+    await screen.findByText(
+      '0 найдено · 2 не найдено · 1 на перепроверку · 1 не проверен — дневной лимит · 1 пропущен',
+    ),
+  ).toBeInTheDocument();
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Вернуть 2 непроверенных номера в поле' }),
+  );
+
+  expect(screen.getByLabelText('Номера телефонов')).toHaveValue('+15550000003\n+15550000004');
+  expect(screen.getByRole('button', { name: 'Найти' })).toBeEnabled();
 });

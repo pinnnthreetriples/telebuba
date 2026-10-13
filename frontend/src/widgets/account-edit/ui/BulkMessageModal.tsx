@@ -10,6 +10,7 @@ import {
   cancelBulkMessageJobMutation,
   generateBulkMessageMutation,
   getBulkMessageJobQueryOptions,
+  outreachLimitsQueryOptions,
   sendBulkMessagesMutation,
 } from '@/entities/account';
 import {
@@ -30,7 +31,7 @@ import { ContactLookupPanel } from './ContactLookupPanel';
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;
 const MAX_SENDS = 500;
-const MAX_DELAY_SECONDS = 300;
+const MAX_DELAY_SECONDS = 3600;
 
 type SendMode = 'each' | 'split';
 
@@ -40,8 +41,9 @@ export type BulkMessageDraft = {
   recipients: string;
   pins: Record<string, string[]>;
   message: string;
-  minDelay: string;
-  maxDelay: string;
+  // null: the saved outreach limit applies, and the run is started without the field.
+  minDelay: string | null;
+  maxDelay: string | null;
   generatorOpen: boolean;
   prompt: string;
   provider: 'deepseek' | 'gemini' | null;
@@ -95,8 +97,8 @@ export function BulkMessageModal({
   // A raw user_id found by phone lookup is addressable only by the accounts that found it.
   const [pins, setPins] = useState<Record<string, string[]>>(initialDraft?.pins ?? {});
   const [message, setMessage] = useState(initialDraft?.message ?? '');
-  const [minDelay, setMinDelay] = useState(initialDraft?.minDelay ?? '0');
-  const [maxDelay, setMaxDelay] = useState(initialDraft?.maxDelay ?? '0');
+  const [minDelay, setMinDelay] = useState<string | null>(initialDraft?.minDelay ?? null);
+  const [maxDelay, setMaxDelay] = useState<string | null>(initialDraft?.maxDelay ?? null);
   const [generatorOpen, setGeneratorOpen] = useState(initialDraft?.generatorOpen ?? false);
   const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [provider, setProvider] = useState<'deepseek' | 'gemini' | null>(
@@ -106,6 +108,7 @@ export function BulkMessageModal({
   const generationRevision = useRef(0);
 
   const fleet = useQuery(allAccountsQueryOptions());
+  const limits = useQuery(outreachLimitsQueryOptions());
   const send = useMutation(sendBulkMessagesMutation());
   const generate = useMutation(generateBulkMessageMutation());
   const cancel = useMutation(cancelBulkMessageJobMutation());
@@ -125,13 +128,17 @@ export function BulkMessageModal({
   const recipientList = recipientsFrom(recipients);
   const maxRecipients = mode === 'each' ? MAX_EACH_RECIPIENTS : MAX_SENDS;
   const sendCount = mode === 'each' ? ids.length * recipientList.length : recipientList.length;
-  const minSeconds = Number(minDelay);
-  const maxSeconds = Number(maxDelay);
+  const minShown = minDelay ?? String(limits.data?.bulk_min_delay_seconds ?? '');
+  const maxShown = maxDelay ?? String(limits.data?.bulk_max_delay_seconds ?? '');
+  const delayEdited = minDelay !== null || maxDelay !== null;
+  const minSeconds = Number(minShown);
+  const maxSeconds = Number(maxShown);
   const delayReady =
-    /^\d+$/.test(minDelay) &&
-    /^\d+$/.test(maxDelay) &&
-    minSeconds <= maxSeconds &&
-    maxSeconds <= MAX_DELAY_SECONDS;
+    !delayEdited ||
+    (/^\d+$/.test(minShown) &&
+      /^\d+$/.test(maxShown) &&
+      minSeconds <= maxSeconds &&
+      maxSeconds <= MAX_DELAY_SECONDS);
   const batchReady =
     ids.length > 0 &&
     ids.length <= MAX_ACCOUNTS &&
@@ -156,8 +163,7 @@ export function BulkMessageModal({
           account_ids: ids,
           recipients: recipientList,
           text: message.trim(),
-          min_delay_seconds: minSeconds,
-          max_delay_seconds: maxSeconds,
+          ...(delayEdited && { min_delay_seconds: minSeconds, max_delay_seconds: maxSeconds }),
           mode,
           ...(mode === 'split' && {
             recipient_accounts: Object.fromEntries(
@@ -238,6 +244,7 @@ export function BulkMessageModal({
       case 'premium_wait':
       case 'peer_flood':
       case 'unavailable':
+      case 'daily_limit':
         return t(`accounts.messages.code.${code}`);
       default:
         return t('accounts.messages.code.failed');
@@ -572,10 +579,10 @@ export function BulkMessageModal({
                   <div className="grid grid-cols-2 gap-3">
                     {(
                       [
-                        ['delayFrom', 'minDelay', minDelay, setMinDelay],
-                        ['delayTo', 'maxDelay', maxDelay, setMaxDelay],
+                        ['delayFrom', 'minDelay', minShown, setMinDelay, setMaxDelay, maxShown],
+                        ['delayTo', 'maxDelay', maxShown, setMaxDelay, setMinDelay, minShown],
                       ] as const
-                    ).map(([labelKey, ariaKey, value, setValue]) => (
+                    ).map(([labelKey, ariaKey, value, setValue, setOther, other]) => (
                       <label key={labelKey} className="flex items-center gap-2 type-small">
                         <span>{t(`accounts.messages.${labelKey}`)}</span>
                         <Input
@@ -588,6 +595,7 @@ export function BulkMessageModal({
                           value={value}
                           onChange={(event) => {
                             setValue(event.target.value);
+                            setOther(other);
                           }}
                         />
                         <span>{t('accounts.messages.secondsShort')}</span>
@@ -597,6 +605,15 @@ export function BulkMessageModal({
                   {!delayReady && (
                     <p role="alert" className="type-small text-danger">
                       {t('accounts.messages.delayInvalid')}
+                    </p>
+                  )}
+                  {limits.data && (
+                    <p className="type-small">
+                      {limits.data.first_messages_per_day == null
+                        ? t('accounts.messages.dailyCapOff')
+                        : t('accounts.messages.dailyCap', {
+                            count: limits.data.first_messages_per_day,
+                          })}
                     </p>
                   )}
                 </section>

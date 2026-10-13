@@ -23,6 +23,7 @@ export {
   activeContactLookupJobQueryOptions,
   latestContactLookupJobQueryOptions,
   getContactLookupJobQueryOptions,
+  outreachLimitsQueryOptions,
   accountTwofaQueryKey,
   accountTwofaQueryOptions,
   accountWebWindowsQueryOptions,

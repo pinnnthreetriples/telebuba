@@ -98,6 +98,7 @@ from core.migration_steps_neurocomment import (
 from core.migration_steps_neuroshilling import _add_neuroshilling_tables
 from core.migration_steps_neuroshilling_chat import _add_neuroshilling_chat_log
 from core.migration_steps_notifications import _add_notification_settings
+from core.migration_steps_outreach import _add_outreach_tables
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_geo_consensus,
@@ -244,6 +245,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (86, "add_warming_account_character", _add_warming_account_character),
     (87, "add_warming_state_visit", _add_warming_state_visit),
     (88, "add_account_devices", _add_account_devices),
+    (89, "add_outreach_tables", _add_outreach_tables),
 )
 
 

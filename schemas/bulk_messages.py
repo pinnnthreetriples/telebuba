@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.accounts import _ACCOUNT_ID_PATTERN
+from schemas.outreach_limits import MAX_PAUSE_SECONDS
 
 _MAX_SENDS = 500
 _MAX_EACH_RECIPIENTS = 50
@@ -18,8 +19,9 @@ class BulkMessageRequest(BaseModel):
     account_ids: list[str] = Field(min_length=1, max_length=50)
     recipients: list[str] = Field(min_length=1, max_length=_MAX_SENDS)
     text: str = Field(min_length=1, max_length=4096)
-    min_delay_seconds: float = Field(default=0, ge=0, le=300)
-    max_delay_seconds: float = Field(default=0, ge=0, le=300)
+    # Left out, the pause comes from the saved outreach limits.
+    min_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
+    max_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
     # "each": every account messages every recipient; "split": one message per
     # recipient, round-robin over the accounts.
     mode: Literal["each", "split"] = "each"
@@ -29,7 +31,14 @@ class BulkMessageRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_batch(self) -> BulkMessageRequest:
-        if self.max_delay_seconds < self.min_delay_seconds:
+        if (self.min_delay_seconds is None) != (self.max_delay_seconds is None):
+            msg = "send both delays or neither"
+            raise ValueError(msg)
+        if (
+            self.min_delay_seconds is not None
+            and self.max_delay_seconds is not None
+            and self.max_delay_seconds < self.min_delay_seconds
+        ):
             msg = "max_delay_seconds must be at least min_delay_seconds"
             raise ValueError(msg)
         if self.mode == "each" and len(self.recipients) > _MAX_EACH_RECIPIENTS:

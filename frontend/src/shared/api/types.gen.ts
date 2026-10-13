@@ -1233,11 +1233,11 @@ export type BulkMessageRequest = {
   /**
    * Min Delay Seconds
    */
-  min_delay_seconds?: number;
+  min_delay_seconds?: number | null;
   /**
    * Max Delay Seconds
    */
-  max_delay_seconds?: number;
+  max_delay_seconds?: number | null;
   /**
    * Mode
    */
@@ -2622,7 +2622,7 @@ export type ContactLookupOutcome = {
   /**
    * Status
    */
-  status: 'found' | 'not_found' | 'skipped';
+  status: 'found' | 'not_found' | 'skipped' | 'recheck';
   /**
    * User Id
    */
@@ -2643,6 +2643,10 @@ export type ContactLookupOutcome = {
    * Retry After Seconds
    */
   retry_after_seconds?: number | null;
+  /**
+   * Handed Over
+   */
+  handed_over?: boolean;
 };
 
 /**
@@ -2658,13 +2662,17 @@ export type ContactLookupRequest = {
    */
   phones: Array<string>;
   /**
+   * Batch Size
+   */
+  batch_size?: number | null;
+  /**
    * Min Delay Seconds
    */
-  min_delay_seconds?: number;
+  min_delay_seconds?: number | null;
   /**
    * Max Delay Seconds
    */
-  max_delay_seconds?: number;
+  max_delay_seconds?: number | null;
 };
 
 /**
@@ -5224,6 +5232,88 @@ export type OpenWebResult = {
     | 'web_login_page_not_loaded'
     | 'web_login_qr_timeout'
     | null;
+};
+
+/**
+ * OutreachLimits
+ */
+export type OutreachLimits = {
+  /**
+   * Contact Imports Per Day
+   */
+  contact_imports_per_day?: number;
+  /**
+   * Lookup Batch Size
+   */
+  lookup_batch_size?: number;
+  /**
+   * Lookup Min Delay Seconds
+   */
+  lookup_min_delay_seconds?: number;
+  /**
+   * Lookup Max Delay Seconds
+   */
+  lookup_max_delay_seconds?: number;
+  /**
+   * Silent Limit Streak
+   */
+  silent_limit_streak?: number;
+  /**
+   * First Messages Per Day
+   */
+  first_messages_per_day?: number | null;
+  /**
+   * Bulk Min Delay Seconds
+   */
+  bulk_min_delay_seconds?: number;
+  /**
+   * Bulk Max Delay Seconds
+   */
+  bulk_max_delay_seconds?: number;
+  /**
+   * Updated At
+   */
+  updated_at?: string | null;
+};
+
+/**
+ * OutreachLimitsUpdate
+ *
+ * The whole settings object; a save replaces every field.
+ */
+export type OutreachLimitsUpdate = {
+  /**
+   * Contact Imports Per Day
+   */
+  contact_imports_per_day?: number;
+  /**
+   * Lookup Batch Size
+   */
+  lookup_batch_size?: number;
+  /**
+   * Lookup Min Delay Seconds
+   */
+  lookup_min_delay_seconds?: number;
+  /**
+   * Lookup Max Delay Seconds
+   */
+  lookup_max_delay_seconds?: number;
+  /**
+   * Silent Limit Streak
+   */
+  silent_limit_streak?: number;
+  /**
+   * First Messages Per Day
+   */
+  first_messages_per_day?: number | null;
+  /**
+   * Bulk Min Delay Seconds
+   */
+  bulk_min_delay_seconds?: number;
+  /**
+   * Bulk Max Delay Seconds
+   */
+  bulk_max_delay_seconds?: number;
 };
 
 /**
@@ -11405,6 +11495,75 @@ export type CancelContactLookupJobResponses = {
 
 export type CancelContactLookupJobResponse =
   CancelContactLookupJobResponses[keyof CancelContactLookupJobResponses];
+
+export type GetOutreachLimitsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/outreach-limits';
+};
+
+export type GetOutreachLimitsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetOutreachLimitsError = GetOutreachLimitsErrors[keyof GetOutreachLimitsErrors];
+
+export type GetOutreachLimitsResponses = {
+  /**
+   * Successful Response
+   */
+  200: OutreachLimits;
+};
+
+export type GetOutreachLimitsResponse =
+  GetOutreachLimitsResponses[keyof GetOutreachLimitsResponses];
+
+export type UpdateOutreachLimitsData = {
+  body: OutreachLimitsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/outreach-limits';
+};
+
+export type UpdateOutreachLimitsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateOutreachLimitsError =
+  UpdateOutreachLimitsErrors[keyof UpdateOutreachLimitsErrors];
+
+export type UpdateOutreachLimitsResponses = {
+  /**
+   * Successful Response
+   */
+  200: OutreachLimits;
+};
+
+export type UpdateOutreachLimitsResponse =
+  UpdateOutreachLimitsResponses[keyof UpdateOutreachLimitsResponses];
 
 export type UploadScheduledMediaData = {
   body: BodyUploadScheduledMedia;

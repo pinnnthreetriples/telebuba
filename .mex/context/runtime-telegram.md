@@ -34,5 +34,6 @@ grounds_to:
 - Web-login dresses the page AND every paused worker (WebK reads it in a worker) over a held-open CDP socket — Chrome strips overrides on detach; Chrome dies with the backend. Language: the primary device's; timezone: the proxy's. A relative profile dir hands the argv to a running Chrome (operator's IP).
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
+- Phone lookup (`contacts.ImportContacts`) and bulk first messages are paced by the DB-backed outreach limits and counted per account and UTC day in `outreach_daily_usage`. A number counts when submitted, a message when it may have left; neither table has an account foreign key, so a re-import never resets an allowance. After an import ban Telegram answers "not on Telegram" instead of an error, so a miss streak from an account that found people before (or while others still find) is treated as a silent limit, not as data.
 
 API/frontend contain no Telegram runtime policy. Code, gateway tests and migrations are the detailed source of truth.

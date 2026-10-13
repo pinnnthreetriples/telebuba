@@ -7728,6 +7728,152 @@
         }
       }
     },
+    "/api/v1/accounts/outreach-limits": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Outreach Limits",
+        "operationId": "getOutreachLimits",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Update Outreach Limits",
+        "operationId": "updateOutreachLimits",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutreachLimitsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scheduled/media": {
       "post": {
         "tags": [
@@ -22302,18 +22448,30 @@
             "title": "Text"
           },
           "min_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Min Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Delay Seconds"
           },
           "max_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Max Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Delay Seconds"
           },
           "mode": {
             "type": "string",
@@ -24619,7 +24777,8 @@
             "enum": [
               "found",
               "not_found",
-              "skipped"
+              "skipped",
+              "recheck"
             ],
             "title": "Status"
           },
@@ -24677,6 +24836,11 @@
               }
             ],
             "title": "Retry After Seconds"
+          },
+          "handed_over": {
+            "type": "boolean",
+            "title": "Handed Over",
+            "default": false
           }
         },
         "type": "object",
@@ -24707,19 +24871,44 @@
             "minItems": 1,
             "title": "Phones"
           },
+          "batch_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size"
+          },
           "min_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Min Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Delay Seconds"
           },
           "max_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Max Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Delay Seconds"
           }
         },
         "type": "object",
@@ -28788,6 +28977,156 @@
         ],
         "title": "OpenWebResult",
         "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand.\n``reason`` says which of those it was, and is ``None`` once signed in."
+      },
+      "OutreachLimits": {
+        "properties": {
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Contact Imports Per Day",
+            "default": 15
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size",
+            "default": 3
+          },
+          "lookup_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Min Delay Seconds",
+            "default": 180
+          },
+          "lookup_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Max Delay Seconds",
+            "default": 480
+          },
+          "silent_limit_streak": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Silent Limit Streak",
+            "default": 8
+          },
+          "first_messages_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Messages Per Day",
+            "default": 25
+          },
+          "bulk_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Min Delay Seconds",
+            "default": 60
+          },
+          "bulk_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Max Delay Seconds",
+            "default": 180
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "title": "OutreachLimits"
+      },
+      "OutreachLimitsUpdate": {
+        "properties": {
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Contact Imports Per Day",
+            "default": 15
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size",
+            "default": 3
+          },
+          "lookup_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Min Delay Seconds",
+            "default": 180
+          },
+          "lookup_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Max Delay Seconds",
+            "default": 480
+          },
+          "silent_limit_streak": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Silent Limit Streak",
+            "default": 8
+          },
+          "first_messages_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Messages Per Day",
+            "default": 25
+          },
+          "bulk_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Min Delay Seconds",
+            "default": 60
+          },
+          "bulk_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Max Delay Seconds",
+            "default": 180
+          }
+        },
+        "type": "object",
+        "title": "OutreachLimitsUpdate",
+        "description": "The whole settings object; a save replaces every field."
       },
       "Page_ChannelPostView_": {
         "properties": {

@@ -1,4 +1,11 @@
-"""Operator-started message runs across selected accounts and recipients."""
+"""Operator-started message runs across selected accounts and recipients.
+
+Every send that may have reached Telegram counts as one first message of the
+account's UTC day (``outreach_daily_usage``): the tool cannot tell an answered
+chat from a cold one, and its recipients are mostly fresh lookup finds. With a
+daily cap set in the outreach limits, an account that reaches it stops for the
+run (code ``daily_limit``) and split mode hands its recipients on.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +13,15 @@ import asyncio
 import logging
 import random
 from contextlib import suppress
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from core.channel_tokens import normalize_channel
 from core.db import load_warming_settings
 from core.gemini import generate_text
 from core.openai import generate_text_deepseek
+from core.repositories.outreach import add_outreach_usage, list_outreach_usage, load_outreach_limits
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute
 from schemas.bulk_messages import (
     BulkMessageGenerated,
@@ -19,6 +29,7 @@ from schemas.bulk_messages import (
     BulkMessageOutcome,
     BulkMessageRequest,
 )
+from schemas.outreach_limits import OutreachDailyUsage
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services._text_llm import text_llm
 from services.accounts._result import AccountActionError, raise_for_result
@@ -37,7 +48,10 @@ _STOP_CODES = _ACCOUNT_LIMIT_STATUSES | {
     "account_deactivated",
     "account_frozen",
     "unavailable",
+    "daily_limit",
 }
+# Statuses where the message may have left the account.
+_SENT_STATUSES = frozenset({"ok", "unconfirmed"})
 logger = logging.getLogger(__name__)
 
 
@@ -128,10 +142,56 @@ def _failure_code(result: ActionResult) -> str | None:
     return "failed"
 
 
-async def _pace(data: BulkMessageRequest, cancel_event: asyncio.Event) -> bool:
+def _utc_day() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+@dataclass
+class _Budget:
+    """The run's text and pause, and each account's first messages left today (``None``: no cap)."""
+
+    text: str
+    min_delay_seconds: float
+    max_delay_seconds: float
+    left: dict[str, int] | None
+
+    def exhausted(self, account_id: str) -> bool:
+        return self.left is not None and self.left[account_id] <= 0
+
+    async def spend(self, outcome: BulkMessageOutcome) -> None:
+        if outcome.status not in _SENT_STATUSES:
+            return
+        if self.left is not None:
+            self.left[outcome.account_id] -= 1
+        await add_outreach_usage(
+            OutreachDailyUsage(account_id=outcome.account_id, day=_utc_day(), first_messages=1)
+        )
+
+
+async def _load_budget(data: BulkMessageRequest) -> _Budget:
+    limits = await load_outreach_limits()
+    if data.min_delay_seconds is None or data.max_delay_seconds is None:
+        delays = (limits.bulk_min_delay_seconds, limits.bulk_max_delay_seconds)
+    else:
+        delays = (data.min_delay_seconds, data.max_delay_seconds)
+    cap = limits.first_messages_per_day
+    left = None
+    if cap is not None:
+        usage = await list_outreach_usage(data.account_ids, _utc_day())
+        left = {account_id: cap - row.first_messages for account_id, row in usage.items()}
+    return _Budget(data.text, delays[0], delays[1], left)
+
+
+def _daily_limit(account_id: str, recipient: str) -> BulkMessageOutcome:
+    return BulkMessageOutcome(
+        account_id=account_id, recipient=recipient, status="skipped", error_code="daily_limit"
+    )
+
+
+async def _pace(budget: _Budget, cancel_event: asyncio.Event) -> bool:
     """Wait the jittered delay; False once the run is cancelled."""
     delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
-        data.min_delay_seconds, data.max_delay_seconds
+        budget.min_delay_seconds, budget.max_delay_seconds
     )
     if delay:
         with suppress(TimeoutError):
@@ -177,7 +237,7 @@ def _skipped(account_id: str, recipient: str, stop: BulkMessageOutcome) -> BulkM
 
 async def _run_account_messages(
     account_id: str,
-    data: BulkMessageRequest,
+    budget: _Budget,
     recipients: list[tuple[str, str]],
     job: BulkMessageJob,
     cancel_event: asyncio.Event,
@@ -186,13 +246,16 @@ async def _run_account_messages(
     for recipient, peer in recipients:
         if cancel_event.is_set():
             break
+        if blocked is None and budget.exhausted(account_id):
+            blocked = _daily_limit(account_id, recipient)
         if blocked is not None:
             job.results.append(_skipped(account_id, recipient, blocked))
             job.completed += 1
             continue
-        if job.completed and not await _pace(data, cancel_event):
+        if job.completed and not await _pace(budget, cancel_event):
             break
-        outcome = await _send_one(account_id, recipient, peer, data.text)
+        outcome = await _send_one(account_id, recipient, peer, budget.text)
+        await budget.spend(outcome)
         if outcome.error_code in _STOP_CODES:
             blocked = outcome
         job.results.append(outcome)
@@ -201,13 +264,13 @@ async def _run_account_messages(
 
 async def _run_split_messages(
     data: BulkMessageRequest,
+    budget: _Budget,
     recipients: list[tuple[str, str]],
     job: BulkMessageJob,
     cancel_event: asyncio.Event,
 ) -> None:
     """One message per recipient, round-robin; a stopped account hands its turn on."""
-    live = list(data.account_ids)
-    stops: dict[str, BulkMessageOutcome] = {}
+    live, stops = _rotation(data.account_ids, budget)
     cursor = 0
     attempted = False
     for index, (recipient, peer) in enumerate(recipients):
@@ -215,7 +278,7 @@ async def _run_split_messages(
         last: BulkMessageOutcome | None = None
         refused: list[BulkMessageOutcome] = []
         while live and (pinned is None or pinned in live):
-            if cancel_event.is_set() or (attempted and not await _pace(data, cancel_event)):
+            if cancel_event.is_set() or (attempted and not await _pace(budget, cancel_event)):
                 # A refusal awaiting hand-over was never handed on: it is final.
                 job.results.extend(refused)
                 job.completed += len(refused)
@@ -224,10 +287,14 @@ async def _run_split_messages(
             refused = []
             account_id = pinned or live[cursor % len(live)]
             attempted = True
-            last = await _send_one(account_id, recipient, peer, data.text)
+            last = await _send_one(account_id, recipient, peer, budget.text)
+            await budget.spend(last)
             if last.error_code not in _STOP_CODES:
                 if pinned is None:
                     cursor += 1
+                if budget.exhausted(account_id):
+                    stops[account_id] = _daily_limit(account_id, "")
+                    cursor = _retire(live, account_id, cursor)
                 break
             stops[account_id] = last
             live.remove(account_id)
@@ -243,19 +310,41 @@ async def _run_split_messages(
         job.completed += 1
 
 
+def _rotation(
+    account_ids: list[str], budget: _Budget
+) -> tuple[list[str], dict[str, BulkMessageOutcome]]:
+    """The accounts that may still send today, and a daily-limit stop for the rest."""
+    live = [account_id for account_id in account_ids if not budget.exhausted(account_id)]
+    stops = {
+        account_id: _daily_limit(account_id, "")
+        for account_id in account_ids
+        if account_id not in live
+    }
+    return live, stops
+
+
+def _retire(live: list[str], account_id: str, cursor: int) -> int:
+    """Drop an account from the rotation; return the cursor that keeps the next turn."""
+    cursor %= len(live)
+    index = live.index(account_id)
+    live.remove(account_id)
+    return cursor - 1 if index < cursor else cursor
+
+
 async def run_bulk_message_job(job_id: str) -> None:
     """Send sequentially; each pair gets its own outcome even after a refusal."""
     data, recipients = _pending[job_id]
     job = _jobs[job_id]
     cancel_event = _cancel_events[job_id]
     try:
+        budget = await _load_budget(data)
         if data.mode == "split":
-            await _run_split_messages(data, recipients, job, cancel_event)
+            await _run_split_messages(data, budget, recipients, job, cancel_event)
         else:
             for account_id in data.account_ids:
                 if cancel_event.is_set():
                     break
-                await _run_account_messages(account_id, data, recipients, job, cancel_event)
+                await _run_account_messages(account_id, budget, recipients, job, cancel_event)
     finally:
         job.status = (
             "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"

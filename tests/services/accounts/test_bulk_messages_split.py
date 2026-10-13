@@ -21,6 +21,8 @@ def _request(**overrides: object) -> BulkMessageRequest:
         "recipients": _RECIPIENTS,
         "text": "Hello",
         "mode": "split",
+        "min_delay_seconds": 0,
+        "max_delay_seconds": 0,
     }
     values.update(overrides)
     return BulkMessageRequest.model_validate(values)
