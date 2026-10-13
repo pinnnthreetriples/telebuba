@@ -506,6 +506,14 @@ export type AccountRead = {
    */
   updated_at: string;
   /**
+   * Telegram Registered At
+   */
+  telegram_registered_at?: string | null;
+  /**
+   * Registered Source
+   */
+  registered_source?: 'operator' | null;
+  /**
    * Device Platform
    */
   device_platform?: string | null;
@@ -589,6 +597,18 @@ export type AccountRead = {
    * Folder Ids
    */
   folder_ids?: Array<string>;
+};
+
+/**
+ * AccountRegisteredUpdate
+ *
+ * Body of ``PUT /accounts/{id}/registered-at``; ``None`` clears the date.
+ */
+export type AccountRegisteredUpdate = {
+  /**
+   * Registered At
+   */
+  registered_at?: string | null;
 };
 
 /**
@@ -936,6 +956,10 @@ export type BodyImportAccountSession = {
    * Label
    */
   label?: string | null;
+  /**
+   * Registered At
+   */
+  registered_at?: string | null;
 };
 
 /**
@@ -950,6 +974,10 @@ export type BodyImportAccountTdata = {
    * Label
    */
   label?: string | null;
+  /**
+   * Registered At
+   */
+  registered_at?: string | null;
 };
 
 /**
@@ -1216,6 +1244,34 @@ export type BulkPrivacyResult = {
    * Skipped
    */
   skipped: number;
+};
+
+/**
+ * CadencePreview
+ *
+ * Real visit numbers for one persona in one phase, for the start dialog's hint.
+ */
+export type CadencePreview = {
+  /**
+   * Persona
+   */
+  persona: 'calm' | 'normal' | 'active';
+  /**
+   * Phase
+   */
+  phase: 'intro' | 'settling' | 'warming' | 'active' | 'warmed';
+  /**
+   * Visits Min
+   */
+  visits_min: number;
+  /**
+   * Visits Max
+   */
+  visits_max: number;
+  /**
+   * Actions Per Visit
+   */
+  actions_per_visit: number;
 };
 
 /**
@@ -7101,6 +7157,14 @@ export type WarmingAccountState = {
   geo_accepted?: boolean;
   survival?: AccountSurvival | null;
   /**
+   * Visit Kind
+   */
+  visit_kind?: 'normal' | 'glance' | 'binge' | 'reply' | null;
+  /**
+   * Cycle Plan
+   */
+  cycle_plan?: Array<'set_online' | 'join' | 'read' | 'react' | 'stories' | 'send_dm' | 'extras'>;
+  /**
    * Account Id
    */
   account_id: string;
@@ -7381,6 +7445,10 @@ export type WarmingBoardState = {
    */
   language_shortages?: Array<ChannelLanguageShortage>;
   soft_start?: SoftStartPlan;
+  /**
+   * Cadence Preview
+   */
+  cadence_preview?: Array<CadencePreview>;
 };
 
 /**
@@ -10750,6 +10818,58 @@ export type ClearAccountTwofaEmailResponses = {
 
 export type ClearAccountTwofaEmailResponse =
   ClearAccountTwofaEmailResponses[keyof ClearAccountTwofaEmailResponses];
+
+export type SetAccountRegisteredAtData = {
+  body: AccountRegisteredUpdate;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/registered-at';
+};
+
+export type SetAccountRegisteredAtErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SetAccountRegisteredAtError =
+  SetAccountRegisteredAtErrors[keyof SetAccountRegisteredAtErrors];
+
+export type SetAccountRegisteredAtResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type SetAccountRegisteredAtResponse =
+  SetAccountRegisteredAtResponses[keyof SetAccountRegisteredAtResponses];
 
 export type SendBulkMessagesData = {
   body: BulkMessageRequest;

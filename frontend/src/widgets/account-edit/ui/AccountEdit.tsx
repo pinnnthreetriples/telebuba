@@ -9,6 +9,7 @@ import { ActionsSection } from './ActionsSection';
 import { AccountChats } from './AccountChats';
 import { DeviceSection } from './DeviceSection';
 import { ProxySection } from './ProxySection';
+import { RegisteredSection } from './RegisteredSection';
 import { SessionSection } from './SessionSection';
 import { SignalsSection } from './SignalsSection';
 import { TwoFactorSection } from './TwoFactorSection';
@@ -41,6 +42,10 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <RegisteredSection account={account} />
       </div>
 
       {/* The security cards sit together: the cloud password is the other half of

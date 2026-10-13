@@ -91,6 +91,23 @@ export function TodayRow({ account }: { account: WarmingAccountState }) {
   return <p className="m-0 mt-3 type-small text-content-muted">{parts.join(' · ')}</p>;
 }
 
+// While a cycle runs: which kind of visit it is and how far along its own step order
+// (`cycle_plan`, item 4.4). The engine only ever moves `last_action` forward along
+// that order, so the bar never jumps back.
+export function VisitRow({ account }: { account: WarmingAccountState }) {
+  const { t } = useTranslation();
+  const plan = account.cycle_plan ?? [];
+  if (account.state !== 'active' || !account.visit_kind || plan.length === 0) return null;
+  const at = plan.findIndex((step) => step === account.last_action);
+  const label = t('warming.visit.label', { kind: t(`warming.visit.kind.${account.visit_kind}`) });
+  return (
+    <div className="mt-3">
+      <p className="m-0 mb-1 type-small text-content-muted">{label}</p>
+      <ProgressBar value={Math.max(1, at + 1)} max={plan.length} label={label} />
+    </div>
+  );
+}
+
 function attentionText(t: TFunction, account: WarmingAccountState): string | null {
   const item = account.attention;
   if (!item) return null;

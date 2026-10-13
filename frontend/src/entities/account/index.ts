@@ -92,6 +92,7 @@ export {
   setAccountPhotoMainMutation,
   setAccountPhotoMutation,
   setAccountPrivacyMutation,
+  setAccountRegisteredAtMutation,
   setAccountStoryPinnedMutation,
   setAccountTwofaEmailMutation,
   setAccountTwofaMutation,
@@ -116,3 +117,4 @@ export {
   type AccountStatus,
   type DesignStatus,
 } from './model/status';
+export { estimateRegistrationYear } from './model/registrationEstimate';

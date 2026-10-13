@@ -174,6 +174,7 @@ import {
   setAccountPhoto,
   setAccountPhotoMain,
   setAccountPrivacy,
+  setAccountRegisteredAt,
   setAccountStoryPinned,
   setAccountTwofa,
   setAccountTwofaEmail,
@@ -706,6 +707,9 @@ import type {
   SetAccountPrivacyData,
   SetAccountPrivacyError,
   SetAccountPrivacyResponse,
+  SetAccountRegisteredAtData,
+  SetAccountRegisteredAtError,
+  SetAccountRegisteredAtResponse,
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedError,
   SetAccountStoryPinnedResponse,
@@ -2685,6 +2689,35 @@ export const clearAccountTwofaEmailMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await clearAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Registered At
+ *
+ * Set (or clear, with ``null``) when the account was registered in Telegram.
+ */
+export const setAccountRegisteredAtMutation = (
+  options?: Partial<Options<SetAccountRegisteredAtData>>,
+): UseMutationOptions<
+  SetAccountRegisteredAtResponse,
+  SetAccountRegisteredAtError,
+  Options<SetAccountRegisteredAtData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountRegisteredAtResponse,
+    SetAccountRegisteredAtError,
+    Options<SetAccountRegisteredAtData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountRegisteredAt({
         ...options,
         ...fnOptions,
         throwOnError: true,

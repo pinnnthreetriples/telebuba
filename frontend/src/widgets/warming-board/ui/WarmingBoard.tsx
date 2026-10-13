@@ -21,7 +21,7 @@ import {
 } from '@/shared/ui';
 
 import { FloodMemoryLine } from './FloodMemoryLine';
-import { AttentionRow, PhaseRow, TodayRow } from './WarmingCardRows';
+import { AttentionRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
 import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
 
@@ -274,6 +274,7 @@ function WarmingCard({
       </div>
 
       {!complete ? <TodayRow account={account} /> : null}
+      <VisitRow account={account} />
       <AttentionRow account={account} />
 
       {/* The backend decides when @SpamBot has been silent long enough to say so. */}

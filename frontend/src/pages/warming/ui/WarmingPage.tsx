@@ -706,6 +706,7 @@ export function WarmingPage() {
           accountId={warmDaysFor.account_id}
           phone={warmDaysFor.phone ?? warmDaysFor.label ?? warmDaysFor.account_id}
           defaultDays={data.default_target_days}
+          cadence={data.cadence_preview}
           onClose={() => {
             setWarmDaysFor(null);
           }}
@@ -722,6 +723,7 @@ export function WarmingPage() {
           phone={resumeFor.phone ?? resumeFor.label}
           resumeDays={resumeFor.warmed_days ?? 0}
           defaultDays={data.default_target_days}
+          cadence={data.cadence_preview}
           geo={geoOf(resumeFor)}
           onClose={() => {
             setResumeFor(null);
@@ -750,6 +752,7 @@ export function WarmingPage() {
           poolSkipped={idle.length - poolIdle.length}
           poolGeoMismatch={poolGeoMismatch}
           defaultDays={data.default_target_days}
+          cadence={data.cadence_preview}
           onClose={() => {
             setPoolStartOpen(false);
           }}

@@ -502,6 +502,9 @@ import type {
   SetAccountPrivacyData,
   SetAccountPrivacyErrors,
   SetAccountPrivacyResponses,
+  SetAccountRegisteredAtData,
+  SetAccountRegisteredAtErrors,
+  SetAccountRegisteredAtResponses,
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedErrors,
   SetAccountStoryPinnedResponses,
@@ -1619,6 +1622,27 @@ export const clearAccountTwofaEmail = <ThrowOnError extends boolean = false>(
     ClearAccountTwofaEmailErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/2fa/email/recovery', ...options });
+
+/**
+ * Set Account Registered At
+ *
+ * Set (or clear, with ``null``) when the account was registered in Telegram.
+ */
+export const setAccountRegisteredAt = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountRegisteredAtData, ThrowOnError>,
+): RequestResult<SetAccountRegisteredAtResponses, SetAccountRegisteredAtErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SetAccountRegisteredAtResponses,
+    SetAccountRegisteredAtErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/registered-at',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Send Bulk Messages

@@ -3,8 +3,11 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
+import type { CadencePreview } from '@/shared/api';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
+
+import { cadenceHint } from '../lib/cadence';
 
 import { GeoConsentNotice, PoolGeoNotice } from './GeoNotice';
 import { RangeSlider } from './RangeSlider';
@@ -71,11 +74,13 @@ export interface StartDialogChoice {
 // @SpamBot pre-check. "Запустить пул" opens the same dialog for every idle account.
 export function WarmDaysModal({
   defaultDays = FALLBACK_DAYS,
+  cadence,
   onClose,
   onConfirm,
   ...target
 }: StartTarget & {
   defaultDays?: number;
+  cadence?: CadencePreview[];
   onClose: () => void;
   onConfirm: (choice: StartDialogChoice) => void;
 }) {
@@ -250,15 +255,20 @@ export function WarmDaysModal({
             className="mb-6"
             value={persona}
             ariaLabel={t('warming.persona.label')}
-            options={PERSONAS.map((p) => ({
-              value: p,
-              label: (
-                <>
-                  <div className="type-body-medium">{t(`warming.persona.${p}.name`)}</div>
-                  <div className="mt-1 type-small">{t(`warming.persona.${p}.hint`)}</div>
-                </>
-              ),
-            }))}
+            options={PERSONAS.map((p) => {
+              const hint = cadenceHint(cadence, p);
+              return {
+                value: p,
+                label: (
+                  <>
+                    <div className="type-body-medium">{t(`warming.persona.${p}.name`)}</div>
+                    <div className="mt-1 type-small">
+                      {hint ? t('warming.persona.cadence', hint) : t(`warming.persona.${p}.hint`)}
+                    </div>
+                  </>
+                ),
+              };
+            })}
             onChange={(p) => {
               setPersona(p);
             }}

@@ -17,3 +17,4 @@ edges:
 | [add-telegram-task.md](add-telegram-task.md) | Add a Telegram gateway action |
 | [add-warming-job.md](add-warming-job.md) | Change warming runtime work |
 | [change-survival-counter.md](change-survival-counter.md) | Change the survival counter or its @SpamBot probes |
+| [change-warming-humanlike.md](change-warming-humanlike.md) | Change visit cadence/kinds, account character, chat language or real account age |

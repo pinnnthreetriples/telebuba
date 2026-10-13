@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Modal, Stepper } from '@/shared/ui';
+import { Button, CloseButton, Icon, Input, Modal, Stepper } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
@@ -95,7 +95,9 @@ export function AddAccountModal({
   // because the title belongs to this component, which owns the chrome.
   const [twofaResult, setTwofaResult] = useState(false);
 
-  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported);
+  // Optional: when the uploaded accounts were registered in Telegram (item 4.8).
+  const [registeredAt, setRegisteredAt] = useState('');
+  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported, registeredAt);
   const startLogin = useMutation(startPhoneLoginMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
@@ -354,6 +356,22 @@ export function AddAccountModal({
 
                 {method && method !== 'phone' && (
                   <>
+                    <label className="flex flex-col gap-1">
+                      <span className="type-small-medium text-content-primary">
+                        {t('accounts.addWizard.registeredAt')}
+                      </span>
+                      <Input
+                        type="date"
+                        value={registeredAt}
+                        max={new Date().toISOString().slice(0, 10)}
+                        onChange={(event) => {
+                          setRegisteredAt(event.target.value);
+                        }}
+                      />
+                      <span className="type-small text-content-subtle">
+                        {t('accounts.addWizard.registeredAtHint')}
+                      </span>
+                    </label>
                     <input
                       ref={fileInput}
                       type="file"

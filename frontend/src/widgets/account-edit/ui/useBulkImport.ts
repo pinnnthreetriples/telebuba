@@ -42,7 +42,12 @@ const MAX_IN_FLIGHT = 2;
 // only name + verdict are rendered. Each row reports its own failure, so the
 // mutations opt out of the global error toast. `mutateAsync`, never `.mutate` in a loop: one
 // useMutation observer is a single callback slot.
-export function useBulkImport(method: Method, onSettledOne: () => void) {
+export function useBulkImport(
+  method: Method,
+  onSettledOne: () => void,
+  // Optional registration date (YYYY-MM-DD) sent with every file of the batch (4.8).
+  registeredAt = '',
+) {
   const [files, setFiles] = useState<BulkFile[]>([]);
   const raw = useRef<(File | undefined)[]>([]);
   const queue = useRef<number[]>([]);
@@ -73,12 +78,13 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
 
   const runOne = async (id: number, file: File, gen: number) => {
     try {
+      const body = registeredAt ? { file, registered_at: registeredAt } : { file };
       const accountIds =
         method === 'tdata'
-          ? ((await importTdata.mutateAsync({ body: { file } })).accounts?.map(
+          ? ((await importTdata.mutateAsync({ body })).accounts?.map(
               (account) => account.account_id,
             ) ?? [])
-          : [(await importSession.mutateAsync({ body: { file } })).account_id];
+          : [(await importSession.mutateAsync({ body })).account_id];
       patch(id, gen, { state: 'ok', accountIds });
     } catch (error) {
       patch(id, gen, {

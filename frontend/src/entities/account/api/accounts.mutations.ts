@@ -37,6 +37,7 @@ export {
   setAccountPhotoMainMutation,
   setAccountPhotoMutation,
   setAccountPrivacyMutation,
+  setAccountRegisteredAtMutation,
   setAccountStoryPinnedMutation,
   setAccountTwofaEmailMutation,
   setAccountTwofaMutation,
