@@ -321,7 +321,10 @@
       "check": "Check",
       "delete": "Delete",
       "profile": "Edit profile",
-      "web": "Open in Telegram Web"
+      "web": "Open in Telegram Web",
+      "mobile": "Open on phone",
+      "mobileDisabled": "The emulator is switched off (EMULATOR__ENABLED)",
+      "mobileMissing": "The account has no mobile device"
     },
     "openWeb": {
       "notSignedIn": "The window opened but the account is not signed in — finish the login in that window.",
@@ -1019,6 +1022,9 @@
         "mobile": "Add a mobile device"
       },
       "adding": "Signing the second device in: waiting for the code in the existing session — up to a minute."
+    },
+    "openMobile": {
+      "notSignedIn": "The container is open but not signed in — finish in its window."
     }
   },
   "nav": {
@@ -1151,7 +1157,24 @@
       "device_flood_wait": "Telegram is limiting sign-ins. Try again in {{s}} s.",
       "device_lang_pack_invalid": "Telegram refused the mobile app parameters.",
       "device_primary_unavailable": "The existing session is unavailable — nothing can read the login code.",
-      "device_auth_failed": "Could not sign the second device in."
+      "device_auth_failed": "Could not sign the second device in.",
+      "mobile_emulator_disabled": "The emulator is switched off: set EMULATOR__ENABLED.",
+      "emulator_busy": "This account's container is already starting — wait for it to finish.",
+      "emulator_not_found": "LDPlayer was not found: check EMULATOR__LDCONSOLE_PATH and EMULATOR__ADB_PATH.",
+      "emulator_command_failed": "An LDPlayer command failed.",
+      "emulator_command_timeout": "An LDPlayer command timed out.",
+      "emulator_boot_timeout": "The container did not boot in time.",
+      "emulator_sdk_mismatch": "The container's Android version does not match the account's mobile profile.",
+      "emulator_device_unknown": "The container cannot present the mobile profile's phone model.",
+      "emulator_apk_missing": "No Telegram APK: put the file at EMULATOR__TELEGRAM_APK_PATH.",
+      "emulator_install_failed": "Could not install Telegram in the container.",
+      "emulator_proxy_missing": "The account has no proxy — assign a SOCKS5 proxy.",
+      "emulator_proxy_unsupported": "The container's Telegram app supports SOCKS5 only; this account's proxy is HTTPS.",
+      "emulator_text_unsupported": "The cloud password has characters the container cannot type (% or non-ASCII).",
+      "emulator_field_missing": "The expected field is not on Telegram's screen — finish the sign-in in the container window.",
+      "emulator_phone_invalid": "The account's phone number could not be read.",
+      "emulator_code_timeout": "The login code did not reach the existing session in time.",
+      "emulator_twofa_missing": "The account has a cloud password that is not stored."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1623,7 +1646,11 @@
     "warming_resumed": "Account returned to warming, day count continued",
     "account_device_added": "Device added",
     "account_device_refused": "Device not added",
-    "account_second_device_remove_failed": "Second device not removed"
+    "account_second_device_remove_failed": "Second device not removed",
+    "account_mobile_opened": "Opened on phone",
+    "account_mobile_open_failed": "Could not open on phone",
+    "account_mobile_container_removed": "Container removed",
+    "account_mobile_container_remove_failed": "Container not removed"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1764,7 +1791,24 @@
     "device_flood_wait": "Telegram is limiting sign-ins",
     "device_lang_pack_invalid": "the app parameters were refused",
     "device_primary_unavailable": "the existing session is unavailable",
-    "device_auth_failed": "the sign-in failed"
+    "device_auth_failed": "the sign-in failed",
+    "mobile_emulator_disabled": "the emulator is switched off",
+    "emulator_busy": "the container is already starting",
+    "emulator_not_found": "LDPlayer not found",
+    "emulator_command_failed": "an LDPlayer command failed",
+    "emulator_command_timeout": "an LDPlayer command timed out",
+    "emulator_boot_timeout": "the container did not boot",
+    "emulator_sdk_mismatch": "the Android version does not match the profile",
+    "emulator_device_unknown": "the phone model is not supported",
+    "emulator_apk_missing": "no Telegram APK",
+    "emulator_install_failed": "Telegram did not install",
+    "emulator_proxy_missing": "no proxy",
+    "emulator_proxy_unsupported": "the proxy is not SOCKS5",
+    "emulator_text_unsupported": "the password cannot be typed in the container",
+    "emulator_field_missing": "the expected field is not on screen",
+    "emulator_phone_invalid": "the phone number could not be read",
+    "emulator_code_timeout": "the login code never arrived",
+    "emulator_twofa_missing": "the cloud password is not stored"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",

@@ -33,6 +33,7 @@ from core._config_domains import (
     OpenAISettings,
     TrustSettings,
 )
+from core._config_emulator import EmulatorSettings
 from core._config_masstagging import MasstaggingSettings
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
@@ -363,6 +364,7 @@ class Settings(BaseSettings):
     notifications: NotificationsSettings = Field(default_factory=NotificationsSettings)
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
+    emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
 
 
 def load_settings() -> Settings:

@@ -222,6 +222,11 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
             type(exc).__name__,
             exc_info=exc,
         )
+    # The account's Android container, if it ever had one: LDPlayer keeps it otherwise.
+    # Imported here for the import cycle (mobile_emulator needs require_account).
+    from services.accounts.mobile_emulator import remove_account_container  # noqa: PLC0415
+
+    await remove_account_container(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

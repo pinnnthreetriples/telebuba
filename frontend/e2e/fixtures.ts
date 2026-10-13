@@ -73,6 +73,9 @@ export const accountStats = { total: 5, active: 2, idle: 1, needs_code: 1, probl
 // None open: the close-all action stays hidden, so the baselines are unchanged.
 export const accountWebWindows = { count: 0 };
 
+// The mobile container is off by default, so the phone action renders disabled.
+export const accountEmulator = { enabled: false };
+
 export const accountFolders = {
   items: [
     { folder_id: 'f-main', name: 'Основные', account_count: 3, created_at: NOW },

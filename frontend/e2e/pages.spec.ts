@@ -31,6 +31,7 @@ const ROUTES: [RegExp, unknown][] = [
   [/\/accounts\/bulk-messages\/(active|latest)$/, null],
   [/\/accounts\/stats$/, fx.accountStats],
   [/\/accounts\/web-windows$/, fx.accountWebWindows],
+  [/\/accounts\/emulator$/, fx.accountEmulator],
   [/\/accounts\/filter-options$/, fx.accountFilterOptions],
   [/\/account-folders$/, fx.accountFolders],
   [/\/accounts(\?|$)/, fx.accounts],

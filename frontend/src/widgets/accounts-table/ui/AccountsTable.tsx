@@ -30,6 +30,11 @@ interface AccountsTableProps {
   onOpen?: (account: AccountRead) => void;
   onProfile?: (account: AccountRead) => void;
   onOpenWeb?: (accountId: string) => void;
+  // The mobile account's Android container. Without it the phone button is not drawn;
+  // with the feature switched off it is drawn disabled, its tooltip saying why.
+  onOpenMobile?: (accountId: string) => void;
+  emulatorEnabled?: boolean;
+  openMobileBusyIds?: ReadonlySet<string>;
   // A set, not one id: two rows can have a check or a delete in flight at once.
   busyIds: ReadonlySet<string>;
   // Its own set, kept apart from busyIds: opening web must not disable the row's
@@ -125,6 +130,9 @@ export function AccountsTable({
   onOpen,
   onProfile,
   onOpenWeb,
+  onOpenMobile,
+  emulatorEnabled = false,
+  openMobileBusyIds,
   busyIds,
   openWebBusyIds,
   checkResults,
@@ -234,8 +242,43 @@ export function AccountsTable({
         // check. One expression, because three of them drifted apart once already.
         const verdict = busy ? undefined : checkResults[account.account_id];
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
+        const openingMobile = openMobileBusyIds?.has(account.account_id) ?? false;
+        const hasMobile = (account.devices ?? []).includes('mobile');
+        // Why the phone action is off, if it is; the action's own name otherwise.
+        const mobileReason = !emulatorEnabled
+          ? t('accounts.actions.mobileDisabled')
+          : hasMobile
+            ? undefined
+            : t('accounts.actions.mobileMissing');
+        const mobileReasonId = `mobile-reason-${account.account_id}`;
         return (
           <div className="flex items-center justify-end gap-2">
+            {onOpenMobile ? (
+              // A disabled button takes no pointer events, so the hover reason hangs on
+              // this wrapper; assistive technology gets it as the button's description.
+              <span title={mobileReason ?? t('accounts.actions.mobile')} className="inline-flex">
+                <IconButton
+                  size="touch"
+                  shape="circle"
+                  tone="primary"
+                  aria-label={t('accounts.actions.mobile')}
+                  aria-describedby={mobileReason ? mobileReasonId : undefined}
+                  className="md:size-icon"
+                  disabled={!emulatorEnabled || !hasMobile || openingMobile}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenMobile(account.account_id);
+                  }}
+                >
+                  {openingMobile ? <Spinner /> : <Icon name="smartphone" size={14} />}
+                </IconButton>
+                {mobileReason ? (
+                  <span id={mobileReasonId} className="sr-only">
+                    {mobileReason}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
             <IconButton
               size="touch"
               shape="circle"
