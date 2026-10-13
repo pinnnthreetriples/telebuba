@@ -24,10 +24,12 @@ from core.db import (
     count_pair_messages_since,
     mark_message_unreplied,
     pair_key,
+    recent_pair_messages,
     record_dialogue_message,
     try_claim_message_reply,
 )
 from core.logging import log_event
+from schemas.telegram_actions import SendDirectMessage
 from schemas.telegram_actions_warming_social import WarmDmForward, WarmDmReact, WarmDmSticker
 from services._account_language import account_language
 from services.warming import _seams
@@ -51,6 +53,10 @@ _READ_POSTS: ContextVar[dict[str, list[int]] | None] = ContextVar(
 def remember_read_posts(recent_ids: dict[str, list[int]]) -> None:
     """Hand the visit's read posts to the dialogue turn that follows."""
     _READ_POSTS.set({channel: ids for channel, ids in recent_ids.items() if ids})
+
+
+# What the transcript shows for a forward whose word did not go out.
+_FORWARD_MARK = "📎"
 
 
 class LiveTurn:
@@ -88,6 +94,16 @@ async def _media_unlocked(sender_id: str, partner_id: str) -> bool:
     return exchanged >= warm.dm_media_min_exchanges
 
 
+async def _is_newest(sender_id: str, incoming: DialogueMessage) -> bool:
+    """Whether ``incoming`` is the pair's newest message.
+
+    Only then is the partner's newest Telegram message — the one ``WarmDmReact`` reacts
+    to — this very one, so the claimed row and the reaction cannot drift apart.
+    """
+    latest = await recent_pair_messages(pair_key(sender_id, incoming.from_account), 1)
+    return bool(latest) and latest[-1].id == incoming.id
+
+
 async def live_reply(
     sender_id: str,
     incoming: DialogueMessage,
@@ -98,14 +114,17 @@ async def live_reply(
         return None
     warm = settings.warming
     roll = _seams.rng.random()
-    if roll < warm.dm_reaction_probability:
-        action: WarmDmReact | WarmDmSticker = WarmDmReact(
+    if roll < warm.dm_reaction_probability and await _is_newest(sender_id, incoming):
+        action: WarmDmReact | WarmDmSticker | None = WarmDmReact(
             user_id=target.user_id,
             peer_phone=target.phone,
             emoji=_seams.rng.choice(warm.dm_reaction_emoji),
         )
-    elif roll < warm.dm_reaction_probability + warm.dm_sticker_probability and (
-        await _media_unlocked(sender_id, incoming.from_account)
+    elif (
+        warm.dm_reaction_probability
+        <= roll
+        < warm.dm_reaction_probability + warm.dm_sticker_probability
+        and await _media_unlocked(sender_id, incoming.from_account)
     ):
         action = WarmDmSticker(
             user_id=target.user_id,
@@ -114,6 +133,8 @@ async def live_reply(
             pick=_seams.rng.randint(0, 99),
         )
     else:
+        action = None
+    if action is None:
         return None
     if await fleet_dm_paused_now() or not await try_claim_message_reply(incoming.id):
         return LiveTurn(attempted=0)
@@ -159,18 +180,32 @@ async def live_opener(sender: AccountRead | None, target: AccountRead) -> LiveTu
         peer_phone=target.phone,
         channel=channel,
         message_id=_seams.rng.choice(posts[channel]),
-        comment=comment,
     )
     result = await _seams.execute(sender.account_id, action)
     if result.status in _HALT_STATUSES:
         return LiveTurn(flood=result, failed_action=action.action_type)
     if result.status != "ok" or result.warm_skip is not None:
         return LiveTurn()
-    await record_dialogue_message(sender.account_id, target.account_id, comment)
+    # The forward landed: the pair has a message whatever the word does next, so it is
+    # recorded now and an opener never repeats a delivered forward.
+    word = await _seams.execute(
+        sender.account_id,
+        SendDirectMessage(user_id=target.user_id, text=comment, peer_phone=target.phone),
+    )
+    said = word.status == "ok"
+    await record_dialogue_message(
+        sender.account_id, target.account_id, comment if said else _FORWARD_MARK
+    )
     await log_event(
         "INFO",
         "warming_dialogue_live_opener",
         account_id=sender.account_id,
         extra={"to": target.account_id, "channel": channel},
     )
-    return LiveTurn(messages_sent=1)
+    flood = word if word.status in _HALT_STATUSES else None
+    return LiveTurn(
+        messages_sent=1,
+        attempted=2,
+        flood=flood,
+        failed_action="send_dm" if flood is not None else None,
+    )

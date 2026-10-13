@@ -53,13 +53,15 @@ class WarmDmSticker(_DmPeer):
 
 
 class WarmDmForward(_DmPeer):
-    """Write: forward a post the account just read to the partner, with a short word."""
+    """Write: forward a post the account just read to the partner.
+
+    The short word that goes with it («смотри» / «mira») is its own ``SendDirectMessage``,
+    so a forward that landed is never mistaken for one that did not.
+    """
 
     action_type: Literal["warm_dm_forward"] = "warm_dm_forward"
     channel: str = Field(min_length=1)
     message_id: int = Field(ge=1)
-    # «смотри» / «mira»: sent right after the forward; empty sends the forward alone.
-    comment: str = Field(default="", max_length=40)
 
 
 # The four, as one member of ``TelegramAction`` (flattened by the union, discriminated

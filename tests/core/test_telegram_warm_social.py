@@ -146,11 +146,11 @@ async def test_a_sticker_comes_from_the_installed_sets_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_forward_carries_its_word_and_logs_no_text() -> None:
+async def test_the_forward_sends_only_the_post_and_logs_no_text() -> None:
     client = _Client()
-    action = WarmDmForward(user_id=5, channel="@news", message_id=4, comment="mira")
+    action = WarmDmForward(user_id=5, channel="@news", message_id=4)
     result = await _warm_social.dm_forward(_as_client(client), action)
-    assert client.sent == [("forward", ("@news", 4)), ("text", "mira")]
+    assert client.sent == [("forward", ("@news", 4))]
     assert result.message_id == 52
     assert warm_log_extra(action) == {"channel": "@news", "source_id": 4}
     assert warm_log_extra(WarmDmReact(user_id=5, emoji="😂")) == {}

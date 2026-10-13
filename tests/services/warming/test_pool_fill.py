@@ -165,3 +165,14 @@ async def test_no_idle_account_outside_warming_means_no_search(
     monkeypatch.setattr(pool_fill, "list_search_accounts", options)
     result = await pool_fill.find_channels(PoolFillRequest(language="es", topics=["fútbol"]))
     assert result.status == "no_search_account"
+
+
+@pytest.mark.asyncio
+async def test_a_case_variant_approves_the_proposal_without_a_duplicate(
+    reads: list[tuple[str, str]],
+) -> None:
+    del reads
+    await _account("searcher")
+    await pool_fill.find_channels(PoolFillRequest(language="es", topics=["fútbol"]))
+    await warming.add_channels(AddChannelsRequest(raw="@Futbol_MX"))
+    assert [c.channel for c in (await list_warming_channels()).channels] == ["futbol_mx"]

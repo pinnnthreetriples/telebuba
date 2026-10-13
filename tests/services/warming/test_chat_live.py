@@ -88,9 +88,49 @@ async def test_an_opener_may_forward_a_post_just_read(monkeypatch: pytest.Monkey
 
     forward = next(a for _id, a in recorder.actions if a.action_type == "warm_dm_forward")
     assert getattr(forward, "message_id", None) in {101, 102}
+    word = recorder.types().index("warm_dm_forward") + 1
+    assert recorder.actions[word][1].action_type == "send_dm"
+    assert getattr(recorder.actions[word][1], "text", None) == "смотри"
     assert result.messages_sent == 1
     history = await recent_pair_messages(pair_key("acc-1", "acc-2"), 10)
     assert history[-1].text == "смотри"
+
+
+@pytest.mark.asyncio
+async def test_a_forward_whose_word_fails_is_still_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "dm_forward_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "dm_media_min_exchanges", 0)
+    recorder = await _setup(monkeypatch)
+    recorder.flood_on.add("send_dm")
+
+    result = await warming.run_one_cycle(_request("acc-1"))
+
+    assert result.status == "flood_wait"
+    history = await recent_pair_messages(pair_key("acc-1", "acc-2"), 10)
+    assert [m.text for m in history] == ["📎"]
+
+
+@pytest.mark.asyncio
+async def test_a_reaction_only_answers_the_newest_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "dm_reaction_probability", 1.0)
+
+    async def gen(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="todo bien")
+
+    monkeypatch.setattr(_seams, "generate_text", gen)
+    recorder = await _setup(monkeypatch)
+    await record_dialogue_message("acc-2", "acc-1", "hola!", replied=False)
+    await record_dialogue_message("acc-2", "acc-1", "estás?", replied=False)
+
+    await warming.run_one_cycle(_request("acc-1"))
+
+    # The oldest message is not the pair's newest: it gets a text answer, no reaction.
+    assert "warm_dm_react" not in recorder.types()
+    assert "send_dm" in recorder.types()
 
 
 @pytest.mark.asyncio

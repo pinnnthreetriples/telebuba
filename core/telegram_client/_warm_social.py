@@ -112,14 +112,12 @@ async def dm_sticker(client: TelegramClient, action: WarmDmSticker) -> _Dispatch
 
 
 async def dm_forward(client: TelegramClient, action: WarmDmForward) -> _DispatchResult:
-    """Forward a post just read to the partner, then the short word that goes with it."""
+    """Forward a post just read to the partner (its word is a separate send)."""
     peer = await _resolve_dm_peer(client, action)
     try:
         forwarded = await client.forward_messages(peer, action.message_id, from_peer=action.channel)
     except tuple(_FORWARD_SKIPS) as exc:
         return _DispatchResult(log_extra={"warm_skip": _FORWARD_SKIPS[type(exc)]})
-    if action.comment:
-        await client.send_message(peer, action.comment)
     first = forwarded[0] if isinstance(forwarded, list) and forwarded else forwarded
     return _DispatchResult(
         message_id=int(getattr(first, "id", 0)) or None,
