@@ -100,13 +100,14 @@ class BulkRun:
     async def run(self) -> bool:
         """Send until nothing is pending or the run is cancelled; True when cancelled.
 
-        A failed send task stops the run with its error. If this loop itself is
-        cancelled (shutdown), the sends in flight are cancelled and awaited first: their
-        items stay ``sending`` in the database, and a restart marks them unconfirmed.
+        A failed send task stops the run with its error, and so does cancelling this
+        loop (shutdown). Either way the other sends in flight are cancelled and awaited
+        first, so none of them writes after the run has settled; their items stay
+        ``sending``, which the caller or a restart marks unconfirmed.
         """
         try:
             return await self._run()
-        except asyncio.CancelledError:
+        except BaseException:
             for task in self.tasks:
                 task.cancel()
             await asyncio.gather(*self.tasks, return_exceptions=True)

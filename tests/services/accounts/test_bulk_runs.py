@@ -445,3 +445,56 @@ async def test_a_send_that_could_not_be_claimed_stays_pending(
     assert record.status == "cancelled"
     [item] = await repo.list_bulk_run_items(job.job_id)
     assert item.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_send_stops_the_other_sends_in_flight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hold = asyncio.Event()
+    stopped: list[str] = []
+
+    async def fake_execute(
+        account_id: str,
+        action: SendChatMessage,
+        *,
+        domain: str,  # noqa: ARG001
+    ) -> ActionResult:
+        if action.recipient == "slow":
+            try:
+                await hold.wait()
+            except asyncio.CancelledError:
+                stopped.append(action.recipient)
+                raise
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(bulk_messages, "execute", fake_execute)
+    request = BulkMessageRequest.model_validate(
+        {
+            "account_ids": ["a1", "a2"],
+            "recipients": ["@slow", "@fast"],
+            "text": "Hello",
+            "mode": "split",
+            "min_delay_seconds": 0,
+            "max_delay_seconds": 0,
+            "schedule": _schedule(concurrency=2),
+        }
+    )
+    job = await bulk_messages.start_bulk_message_job(request, "owner-1")
+    finish = _bulk_runner.BulkRun._finish
+
+    async def failing_finish(
+        self: _bulk_runner.BulkRun, item: BulkRunItem, **fields: object
+    ) -> None:
+        if item.recipient == "@fast":
+            msg = "database is locked"
+            raise RuntimeError(msg)
+        await finish(self, item, **fields)
+
+    monkeypatch.setattr(_bulk_runner.BulkRun, "_finish", failing_finish)
+    await asyncio.wait_for(bulk_messages.run_bulk_message_job(job.job_id), timeout=5)
+
+    # The slow send was stopped with the run, not left to write after it settled.
+    assert stopped == ["slow"]
+    items = {i.recipient: i.status for i in await repo.list_bulk_run_items(job.job_id)}
+    assert items == {"@slow": "unconfirmed", "@fast": "unconfirmed"}
