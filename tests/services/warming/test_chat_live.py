@@ -91,7 +91,7 @@ async def test_an_opener_may_forward_a_post_just_read(monkeypatch: pytest.Monkey
     word = recorder.types().index("warm_dm_forward") + 1
     assert recorder.actions[word][1].action_type == "send_dm"
     assert getattr(recorder.actions[word][1], "text", None) == "смотри"
-    assert result.messages_sent == 1
+    assert result.messages_sent == 2
     history = await recent_pair_messages(pair_key("acc-1", "acc-2"), 10)
     assert history[-1].text == "смотри"
 
@@ -159,3 +159,25 @@ async def test_no_live_dm_while_dms_are_paused_fleet_wide(monkeypatch: pytest.Mo
 
     await warming.run_one_cycle(_request("acc-1"))
     assert not [t for t in recorder.types() if t.startswith("warm_dm_")]
+
+
+@pytest.mark.asyncio
+async def test_a_pause_tripped_during_the_forward_holds_the_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "dm_forward_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "dm_media_min_exchanges", 0)
+    recorder = await _setup(monkeypatch)
+    answers = iter([False, True])
+
+    async def paused() -> bool:
+        return next(answers, True)
+
+    monkeypatch.setattr(_chat_live, "fleet_dm_paused_now", paused)
+    result = await warming.run_one_cycle(_request("acc-1"))
+
+    assert "warm_dm_forward" in recorder.types()
+    assert "send_dm" not in recorder.types()
+    assert result.messages_sent == 1
+    history = await recent_pair_messages(pair_key("acc-1", "acc-2"), 10)
+    assert [m.text for m in history] == ["📎"]

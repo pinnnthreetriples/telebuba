@@ -187,12 +187,15 @@ async def live_opener(sender: AccountRead | None, target: AccountRead) -> LiveTu
     if result.status != "ok" or result.warm_skip is not None:
         return LiveTurn()
     # The forward landed: the pair has a message whatever the word does next, so it is
-    # recorded now and an opener never repeats a delivered forward.
-    word = await _seams.execute(
-        sender.account_id,
-        SendDirectMessage(user_id=target.user_id, text=comment, peer_phone=target.phone),
-    )
-    said = word.status == "ok"
+    # recorded now and an opener never repeats a delivered forward. The fleet pause is
+    # read again first: it may have tripped while the forward was in flight.
+    word = None
+    if not await fleet_dm_paused_now():
+        word = await _seams.execute(
+            sender.account_id,
+            SendDirectMessage(user_id=target.user_id, text=comment, peer_phone=target.phone),
+        )
+    said = word is not None and word.status == "ok"
     await record_dialogue_message(
         sender.account_id, target.account_id, comment if said else _FORWARD_MARK
     )
@@ -202,10 +205,10 @@ async def live_opener(sender: AccountRead | None, target: AccountRead) -> LiveTu
         account_id=sender.account_id,
         extra={"to": target.account_id, "channel": channel},
     )
-    flood = word if word.status in _HALT_STATUSES else None
+    flood = word if word is not None and word.status in _HALT_STATUSES else None
     return LiveTurn(
-        messages_sent=1,
-        attempted=2,
+        messages_sent=2 if said else 1,
+        attempted=1 if word is None else 2,
         flood=flood,
         failed_action="send_dm" if flood is not None else None,
     )
