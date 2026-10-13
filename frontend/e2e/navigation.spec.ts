@@ -16,6 +16,7 @@ const routes: [RegExp, unknown][] = [
   [/\/warming\/settings/, fx.warmingSettings],
   [/\/notifications\/settings/, fx.notificationSettings],
   [/\/warming\/dialogues/, fx.warmingDialogues],
+  [/\/warming\/survival/, fx.warmingSurvival],
   [/\/warming\/(channels|warmed)/, {}],
   [/\/neurocomment\/campaigns\/[^/]+\/board/, fx.neurocommentBoard],
   [/\/neurocomment\/campaigns\/[^/]+\/(challenges|comments|discovery)/, fx.challenges],

@@ -4,6 +4,7 @@ export {
   addWarmingChannelsMutation,
   getWarmingBoardOptions as warmingBoardQueryOptions,
   getWarmingSettingsOptions as warmingSettingsQueryOptions,
+  getWarmingSurvivalOptions as warmingSurvivalQueryOptions,
   listWarmedAccountsOptions as warmedAccountsQueryOptions,
   listWarmingChannelsOptions as warmingChannelsQueryOptions,
   listWarmingDialoguesOptions as warmingDialoguesQueryOptions,

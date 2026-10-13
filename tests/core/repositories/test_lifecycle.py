@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from core.db import _get_engine, create_account, delete_account, upsert_warming_state
-from core.repositories.lifecycle import append_lifecycle_event, list_lifecycle_events
+from core.repositories.lifecycle import (
+    append_lifecycle_event,
+    list_all_lifecycle_events,
+    list_lifecycle_events,
+)
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 
@@ -59,3 +63,14 @@ async def test_an_unreadable_extra_reads_back_empty(raw: str) -> None:
     [read] = await list_lifecycle_events("a1")
 
     assert read.extra == {}
+
+
+@pytest.mark.asyncio
+async def test_the_whole_journal_reads_in_one_go_or_for_some_ids() -> None:
+    first = await append_lifecycle_event("a1", "warming_started")
+    second = await append_lifecycle_event("a2", "warmed")
+    third = await append_lifecycle_event("a1", "deleted", {"reason": "retired"})
+
+    assert await list_all_lifecycle_events() == [first, second, third]
+    assert await list_all_lifecycle_events(["a1"]) == [first, third]
+    assert await list_all_lifecycle_events([]) == []

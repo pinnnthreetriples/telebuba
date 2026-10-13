@@ -129,3 +129,20 @@ def _list_lifecycle_events(account_id: str) -> list[LifecycleEvent]:
 async def list_lifecycle_events(account_id: str) -> list[LifecycleEvent]:
     """Every journal row for one account id, oldest first — including deleted accounts."""
     return await asyncio.to_thread(_list_lifecycle_events, account_id)
+
+
+def _list_all_lifecycle_events(account_ids: list[str] | None) -> list[LifecycleEvent]:
+    table = _account_lifecycle_events
+    statement = select(table).order_by(table.c.id)
+    if account_ids is not None:
+        statement = statement.where(table.c.account_id.in_(account_ids))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_event(cast("Mapping[str, object]", row)) for row in rows]
+
+
+async def list_all_lifecycle_events(account_ids: list[str] | None = None) -> list[LifecycleEvent]:
+    """The whole journal oldest first, or only these account ids' rows (one query)."""
+    if account_ids is not None and not account_ids:
+        return []
+    return await asyncio.to_thread(_list_all_lifecycle_events, account_ids)

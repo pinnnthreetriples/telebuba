@@ -14,5 +14,7 @@ export {
   warmingChannelsQueryOptions,
   warmingDialoguesQueryOptions,
   warmingSettingsQueryOptions,
+  warmingSurvivalQueryOptions,
 } from './api/warming.queries';
 export { warmingStartPreviewQueryOptions } from './api/startPreview.queries';
+export { SurvivalBadge } from './ui/SurvivalBadge';

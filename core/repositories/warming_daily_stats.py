@@ -15,6 +15,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core._schema_warming_daily_stats import _warming_daily_stats
 from core.db import _get_engine, _now_iso
+from schemas.survival import FleetDailyStats
 from schemas.warming_daily_stats import WarmingDailyStats
 
 if TYPE_CHECKING:
@@ -68,6 +69,25 @@ def _list_warming_daily_stats(account_id: str, since_day: str) -> list[WarmingDa
 async def list_warming_daily_stats(account_id: str, since_day: str) -> list[WarmingDailyStats]:
     """Rows of one account from ``since_day`` (``YYYY-MM-DD``, inclusive), oldest first."""
     return await asyncio.to_thread(_list_warming_daily_stats, account_id, since_day)
+
+
+def _sum_warming_daily_stats_by_day(since_day: str) -> list[FleetDailyStats]:
+    table = _warming_daily_stats
+    sums = [func.sum(table.c[name]).label(name) for name in _COUNTERS]
+    statement = (
+        select(table.c.day, func.count(table.c.account_id).label("accounts"), *sums)
+        .where(table.c.day >= since_day)
+        .group_by(table.c.day)
+        .order_by(table.c.day)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [FleetDailyStats.model_validate(dict(row)) for row in rows]
+
+
+async def sum_warming_daily_stats_by_day(since_day: str) -> list[FleetDailyStats]:
+    """Every account's rows from ``since_day`` (inclusive) added up per day, oldest first."""
+    return await asyncio.to_thread(_sum_warming_daily_stats_by_day, since_day)
 
 
 def _purge_warming_daily_stats_older_than(cutoff_iso: str) -> int:

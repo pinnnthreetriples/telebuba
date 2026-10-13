@@ -221,7 +221,31 @@ export const warmingBoard = {
   active_count: 3,
   summary: {},
   card_log_limit: 20,
-  warmed: [warmingState(4, { state: 'idle', promoted_to_nc: true, warmed_days: 15 })],
+  warmed: [
+    warmingState(4, {
+      state: 'idle',
+      promoted_to_nc: true,
+      warmed_days: 15,
+      survival: { days_since_release: 12, status: 'alive', wounds: 0 },
+    }),
+  ],
+};
+
+// Выживаемость: девять решённых через 7 дней — меньше порога процента, поэтому
+// плитка в шапке печатает «7 из 9 · 2 без проверки» без процента.
+export const warmingSurvival = {
+  cohort: 'week',
+  windows: [
+    { window: 'warming', alive: 11, wounded: 0, dead: 1, unchecked: 0, censored: 1, pending: 3 },
+    { window: 'd7', alive: 7, wounded: 1, dead: 2, unchecked: 2, censored: 0, pending: 1 },
+    { window: 'd30', alive: 3, wounded: 0, dead: 1, unchecked: 0, censored: 0, pending: 8 },
+  ],
+  cohorts: [],
+  causes: [{ cause: 'spam_limited', count: 2 }],
+  stints: [],
+  releases: 12,
+  full_data_since: '2026-09-11',
+  daily: [],
 };
 
 // Переписка аккаунтов: СЕМЬ пар, и число здесь работающее, а не декоративное.

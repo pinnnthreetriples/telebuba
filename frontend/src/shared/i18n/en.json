@@ -1354,6 +1354,8 @@
     "warming_unpromoted_on_restart": "Returned to warming on restart",
     "warming_phase_advanced": "Advanced to next phase",
     "spam_status_refreshed": "Spam status refreshed",
+    "survival_probe": "@SpamBot asked for the survival counter",
+    "survival_probe_failed": "Survival check pass failed",
     "telegram_spam_status_probe_failed": "Spam-status probe failed",
     "telegram_pool_connect_failed": "Telegram connection failed",
     "telegram_pool_connect_retry": "Retrying Telegram connection",
@@ -3230,6 +3232,77 @@
         "error": "Cycle error — see the log"
       },
       "until": "until {{time}}"
+    },
+    "survival": {
+      "tile": {
+        "label": "Alive after {{days}} d",
+        "unchecked": "{{count}} unchecked",
+        "none": "none yet",
+        "show": "Show survival",
+        "hide": "Hide survival"
+      },
+      "title": "Survival of warmed accounts",
+      "fullDataSince": "Full data since {{date}}",
+      "loading": "Counting survival…",
+      "error": "Could not load survival",
+      "ofTotal": "{{alive}} of {{total}}",
+      "percent": "{{value}}%",
+      "window": {
+        "warming": "During warming",
+        "d7": "After 7 days",
+        "d30": "After 30 days"
+      },
+      "detail": {
+        "unchecked": "{{count}} unchecked",
+        "pending": "waiting: {{count}}",
+        "wounded": "wounded: {{count}}",
+        "censored": "dropped out: {{count}}"
+      },
+      "cohort": {
+        "title": "Cohorts",
+        "label": "Group by",
+        "week": "Start week",
+        "persona": "Persona",
+        "length": "Length",
+        "proxy_country": "Proxy country",
+        "column": "Cohort",
+        "weekKey": "wk {{week}}",
+        "lengthKey": "{{days}} d",
+        "unknown": "unknown",
+        "empty": "No cohorts yet"
+      },
+      "causes": {
+        "title": "Causes of death",
+        "none": "No deaths",
+        "item": "{{cause}} {{count}}",
+        "spam_limited": "spam limit",
+        "session_dead": "session died",
+        "deleted_dead": "deleted as dead"
+      },
+      "swimmer": {
+        "title": "Each account's life",
+        "empty": "No account has warmed yet",
+        "legend": "Blue is warming, green is after release, a dot is a spam block, a cross is a death",
+        "row": "{{label}}: {{status}}, {{days}} d",
+        "death": "Died on day {{day}}: {{cause}}",
+        "wound": "Spam block on day {{day}}"
+      },
+      "status": {
+        "warming": "warming",
+        "alive": "alive",
+        "wounded": "alive, wounded",
+        "unchecked": "unchecked",
+        "dead": "dead",
+        "censored": "dropped out"
+      },
+      "badge": "Day {{days}} after release · {{status}}",
+      "daily": {
+        "title": "Daily history",
+        "cycles": "Cycles",
+        "floods": "Floods",
+        "empty": "No history yet",
+        "bar": "{{day}}: {{value}}"
+      }
     }
   },
   "auth": {

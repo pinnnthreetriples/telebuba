@@ -59,6 +59,7 @@ from services.neuroshilling import (
 )
 from services.notifications import shutdown_notifications, start_notifications
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
+from services.survival import shutdown_survival_probes, start_survival_probes
 from services.user_parser import (
     reconcile_user_parser_on_startup,
     shutdown_user_parser_on_shutdown,
@@ -166,12 +167,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_user_parser_on_startup()
     await reconcile_inboxes_on_startup()
     await start_scheduled_posts()
+    # Day-7/day-30 @SpamBot checks for the survival counter; it only reads the journal.
+    await start_survival_probes()
     try:
         yield
     finally:
         # First: it would otherwise keep claiming and publishing while warming drains,
         # then lose an in-flight upload to the pool teardown (an ambiguous post).
         await _shutdown_step("scheduled_posts", shutdown_scheduled_posts)
+        # Before the pool: a probe in flight asks @SpamBot through a pooled client.
+        await _shutdown_step("survival_probes", shutdown_survival_probes)
         await _shutdown_step("warming", shutdown_warming_runtime)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)

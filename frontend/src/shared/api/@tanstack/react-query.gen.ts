@@ -95,6 +95,7 @@ import {
   getUserParserRun,
   getWarmingBoard,
   getWarmingSettings,
+  getWarmingSurvival,
   handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
@@ -471,6 +472,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsError,
   GetWarmingSettingsResponse,
+  GetWarmingSurvivalData,
+  GetWarmingSurvivalError,
+  GetWarmingSurvivalResponse,
   HandoffToNeurocommentData,
   HandoffToNeurocommentError,
   HandoffToNeurocommentResponse,
@@ -3815,6 +3819,33 @@ export const listWarmingDailyStatsOptions = (options: Options<ListWarmingDailySt
       return data;
     },
     queryKey: listWarmingDailyStatsQueryKey(options),
+  });
+
+export const getWarmingSurvivalQueryKey = (options?: Options<GetWarmingSurvivalData>) =>
+  createQueryKey('getWarmingSurvival', options);
+
+/**
+ * Get Warming Survival
+ *
+ * How many warmed accounts are alive during warming and 7 and 30 days after release.
+ */
+export const getWarmingSurvivalOptions = (options?: Options<GetWarmingSurvivalData>) =>
+  queryOptions<
+    GetWarmingSurvivalResponse,
+    GetWarmingSurvivalError,
+    GetWarmingSurvivalResponse,
+    ReturnType<typeof getWarmingSurvivalQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getWarmingSurvival({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getWarmingSurvivalQueryKey(options),
   });
 
 /**

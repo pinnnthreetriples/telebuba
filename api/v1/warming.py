@@ -12,6 +12,7 @@ from core.config import settings
 from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
 from schemas.dialogues import DialogueFeed
+from schemas.survival import SurvivalCohortKind, SurvivalReport
 from schemas.warming import (
     AddChannelsRequest,
     PromoteRequest,
@@ -28,6 +29,7 @@ from schemas.warming import (
 )
 from schemas.warming_daily_stats import WarmingDailyStatsList
 from services import dialogues as dialogues_service
+from services import survival as survival_service
 from services import warming as warming_service
 
 router = APIRouter(prefix="/warming", tags=["warming"])
@@ -259,3 +261,9 @@ async def list_warming_daily_stats(
 ) -> WarmingDailyStatsList:
     """One account's per-day warming totals for the last ``days`` days, oldest first."""
     return await warming_service.load_daily_stats(account_id, days)
+
+
+@router.get("/survival", response_model=SurvivalReport, operation_id="getWarmingSurvival")
+async def get_warming_survival(cohort: SurvivalCohortKind = "week") -> SurvivalReport:
+    """How many warmed accounts are alive during warming and 7 and 30 days after release."""
+    return await survival_service.load_survival(cohort)

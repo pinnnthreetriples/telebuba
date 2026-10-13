@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
+import { SurvivalBadge } from '@/entities/warming';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
@@ -209,6 +210,8 @@ function WarmingCard({
                 {t(`warming.warmStatus.${account.state}`)}
               </span>
               {account.geo_accepted ? <Badge>{t('warming.geo.accepted')}</Badge> : null}
+              {/* A resumed account was released before: its life after release goes on. */}
+              {account.survival ? <SurvivalBadge survival={account.survival} /> : null}
             </div>
           </div>
         </div>
