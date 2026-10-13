@@ -27,7 +27,11 @@ from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.web_login._cdp import CdpError
-from core.web_login.fingerprint import apply_page_fingerprint, worker_init_script
+from core.web_login.fingerprint import (
+    LocaleRejectedError,
+    apply_page_fingerprint,
+    worker_init_script,
+)
 
 if TYPE_CHECKING:
     from core.web_login._cdp import CdpSession
@@ -81,9 +85,15 @@ class TargetDriver:
         self._page_scripts = page_scripts
         self._worker_script = worker_init_script(fingerprint)
         self._task: asyncio.Task[None] | None = None
+        self._locale_rejected: LocaleRejectedError | None = None
 
     async def first_page_session(self) -> str:
-        """Turn on auto-attach and return the session id of the first page target."""
+        """Turn on auto-attach and return the session id of the first page target.
+
+        A locale the browser refuses ends the wait at once as :class:`LocaleRejectedError`:
+        every page of this window would be refused the same way, so waiting out the
+        timeout would only delay the caller's retry in another locale.
+        """
         await self._session.send_command("Target.setAutoAttach", _AUTO_ATTACH)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _FIRST_PAGE_TIMEOUT
@@ -94,6 +104,8 @@ class TargetDriver:
             page = await self._handle(event)
             if page is not None:
                 return page
+            if self._locale_rejected is not None:
+                raise self._locale_rejected
         msg = "Browser never attached a page target."
         raise CdpError(msg)
 
@@ -141,6 +153,8 @@ class TargetDriver:
             # Logged, not swallowed silently: a stall here is invisible from the page,
             # and the last one was only ever found because it was in the log.
             logger.warning("Dressing a %s target failed (%r); it is resumed undressed.", kind, exc)
+            if isinstance(exc, LocaleRejectedError):
+                self._locale_rejected = exc
             # Fail CLOSED: an undressed page is NOT handed back, so the launch waits
             # and then refuses rather than navigating to Telegram wearing the
             # operator's real machine. It is still resumed below — a paused target is

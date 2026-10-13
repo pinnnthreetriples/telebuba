@@ -58,7 +58,7 @@ from services.accounts._web_errors import (
     WebLoginLaunchError,
     WebLoginServiceError,
 )
-from services.accounts._web_identity import web_fingerprint
+from services.accounts._web_identity import launch_dressed
 from services.accounts._web_watch import cancel_watchers, watch_window
 
 if TYPE_CHECKING:
@@ -326,12 +326,12 @@ async def _spawn(
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
         # launch itself raises rather than as a bare 500.
-        fingerprint = await web_fingerprint(account_id, country)
-        window = await launch_account_web(
-            relay_port,
-            profile_dir=profile,
-            fingerprint=fingerprint,
-            capture_tokens=capture,
+        window = await launch_dressed(
+            account_id,
+            country,
+            lambda fingerprint: launch_account_web(
+                relay_port, profile_dir=profile, fingerprint=fingerprint, capture_tokens=capture
+            ),
         )
     except NotImplementedError as exc:
         refusal = _RELOAD_LOOP_REFUSAL if _loop_cannot_spawn() else _LAUNCH_REFUSAL

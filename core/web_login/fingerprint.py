@@ -37,6 +37,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core.web_login._cdp import CdpError
 from core.web_login._devices import BY_NAME, CATALOGUE, _Device
 from core.web_login._scripts import PAGE_TEMPLATE, WORKER_TEMPLATE, fill
 
@@ -141,6 +142,15 @@ def _installed() -> tuple[str, bool]:
     if "build" not in _observed:
         _discover_installed()
     return _observed["build"], bool(_observed.get("edge"))
+
+
+class LocaleRejectedError(CdpError):
+    """The browser refused the identity's locale (``Emulation.setLocaleOverride``).
+
+    A device language comes from the phone number's country, and the browser's ICU
+    build may not know every one of those. Raised as itself so the caller can retry
+    the window in a locale it does know rather than fail the open.
+    """
 
 
 @dataclass(frozen=True)
@@ -373,9 +383,12 @@ async def apply_page_fingerprint(
     await session.send_command(
         "Emulation.setTimezoneOverride", {"timezoneId": fp.timezone}, session_id=session_id
     )
-    await session.send_command(
-        "Emulation.setLocaleOverride", {"locale": fp.locale}, session_id=session_id
-    )
+    try:
+        await session.send_command(
+            "Emulation.setLocaleOverride", {"locale": fp.locale}, session_id=session_id
+        )
+    except CdpError as exc:
+        raise LocaleRejectedError(fp.locale) from exc
     await session.send_command("Page.enable", session_id=session_id)
     await session.send_command(
         "Page.addScriptToEvaluateOnNewDocument",
