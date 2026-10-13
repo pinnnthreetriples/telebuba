@@ -23,6 +23,15 @@ from services.content import (
     try_reserve_sent,
 )
 from services.warming import _seams
+from services.warming._chat_prompt import (
+    FRIEND,
+    ME,
+    Voice,
+    account_voice,
+    opener_prompt,
+    reply_prompt,
+)
+from services.warming._chat_style import apply_style
 
 if TYPE_CHECKING:
     from schemas.dialogues import DialogueMessage
@@ -30,38 +39,6 @@ if TYPE_CHECKING:
 
 # Control characters: strip from Gemini output before sending it as a DM.
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-
-_CHAT_PROMPTS = (
-    "Напиши одно короткое дружелюбное сообщение для чата в Telegram (1-2 предложения), "
-    "без хэштегов и без кавычек.",
-    "Сгенерируй одну живую неформальную реплику для переписки в Telegram, "
-    "максимум два предложения, без эмодзи-спама.",
-    "Придумай короткое сообщение, как будто пишешь приятелю в Telegram. "
-    "Только текст, без пояснений.",
-)
-
-_REPLY_PROMPT = (
-    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
-    "«{incoming}». Только текст ответа, без кавычек."
-)
-
-# History-aware prompt: given the recent transcript («Я» = this account) the
-# model continues THIS conversation instead of emitting a generic greeting. Only
-# the instruction line differs — replying to the last message vs. reopening.
-_HISTORY_PROMPT = (
-    "Ты и твой друг переписываетесь в Telegram. Вот последние сообщения "
-    "(«Я» — это ты):\n{transcript}\n\n{instruction}"
-)
-_REPLY_INSTRUCTION = (
-    "Продолжи разговор естественно: коротко ответь по-дружески на последнюю "
-    "реплику собеседника. 1-2 предложения, без кавычек, без хэштегов, без "
-    "эмодзи-спама. Только текст ответа."
-)
-_OPENER_INSTRUCTION = (
-    "Напиши короткое сообщение, чтобы естественно возобновить разговор, учитывая "
-    "то, что вы обсуждали ранее. 1-2 предложения, без кавычек, без хэштегов. "
-    "Только текст."
-)
 
 
 @dataclasses.dataclass
@@ -73,7 +50,7 @@ class GenerateResult:
 async def _build_transcript(sender_id: str, partner_id: str) -> tuple[str, list[str]]:
     """Recent pair transcript from ``sender_id``'s POV, plus the raw message texts.
 
-    Labels each line "Я:" when the sender wrote it, else "Собеседник:". Returns
+    Labels each line "Me:" when the sender wrote it, else "Friend:". Returns
     ``("", [])`` when context is disabled or the pair has no history — the caller
     then falls back to the context-free opener/reply prompt. The texts are reused
     as the near-duplicate corpus (Task D) so no extra DB query is issued.
@@ -85,7 +62,7 @@ async def _build_transcript(sender_id: str, partner_id: str) -> tuple[str, list[
     if not history:
         return "", []
     lines = [
-        f"{'Я' if message.from_account == sender_id else 'Собеседник'}: {message.text}"
+        f"{ME if message.from_account == sender_id else FRIEND}: {message.text}"
         for message in history
     ]
     return "\n".join(lines), [message.text for message in history]
@@ -118,12 +95,9 @@ async def _reply_text(
 ) -> GenerateResult:
     """Answer ``incoming``, continuing the thread with context when there is any."""
     transcript, recent_texts = await _build_transcript(sender_id, incoming.from_account)
-    prompt = (
-        _HISTORY_PROMPT.format(transcript=transcript, instruction=_REPLY_INSTRUCTION)
-        if transcript
-        else _REPLY_PROMPT.format(incoming=incoming.text)
-    )
-    return await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
+    voice = await account_voice(sender_id, secret)
+    prompt = reply_prompt(voice, incoming.text, transcript)
+    return await _generate_chat_text(sender_id, secret, prompt, voice, recent_texts)
 
 
 async def _opener_text(
@@ -131,32 +105,29 @@ async def _opener_text(
     secret: WarmingSettingsSecret,
     partner_id: str,
 ) -> GenerateResult:
-    """Open with ``partner_id``: resume prior history, else a random cold opener."""
+    """Open with ``partner_id``: resume prior history, else a fresh opener."""
     transcript, recent_texts = await _build_transcript(sender_id, partner_id)
-    prompt = (
-        _HISTORY_PROMPT.format(transcript=transcript, instruction=_OPENER_INSTRUCTION)
-        if transcript
-        else None
-    )
-    return await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
+    voice = await account_voice(sender_id, secret)
+    prompt = opener_prompt(voice, transcript, _seams.rng)
+    return await _generate_chat_text(sender_id, secret, prompt, voice, recent_texts)
 
 
 async def _generate_chat_text(
     sender_id: str,
     secret: WarmingSettingsSecret,
-    *,
-    prompt: str | None = None,
-    recent_texts: list[str] | None = None,
+    prompt: str,
+    voice: Voice,
+    recent_texts: list[str],
 ) -> GenerateResult:
     """Generate a chat line, retrying until it passes the filter and dedup.
 
-    ``prompt`` overrides the random opener (used for context-aware replies).
+    The account's manner (``voice.style``) is applied to the sanitised line before the
+    filter and the dedup see it, so what is checked is what is sent.
     ``recent_texts`` is this conversation's recent lines: a candidate too similar
     to any of them (Task D near-duplicate gate) is rejected and regenerated.
     Returns ``GenerateResult`` with text if successful, or the specific
     failure reason.
     """
-    recent_texts = recent_texts or []
     threshold = settings.warming.dialogue_similarity_max
     failure = "generate_chat_text"
     # The Settings page's text LLM, resolved once so a provider cannot change between
@@ -164,7 +135,7 @@ async def _generate_chat_text(
     llm = text_llm(secret)
     generate = _seams.generate_text_deepseek if llm.use_deepseek else _seams.generate_text
     for _ in range(settings.warming.content_max_attempts):
-        generated = await generate(llm.request(prompt or _seams.rng.choice(_CHAT_PROMPTS)))
+        generated = await generate(llm.request(prompt))
         if generated.status != "ok" or not generated.text:
             await log_event(
                 "WARNING",
@@ -176,6 +147,8 @@ async def _generate_chat_text(
         candidate = _sanitize_chat_text(generated.text)
         if candidate is None:
             continue
+        if voice.style is not None:
+            candidate = apply_style(candidate, voice.style, voice.language, _seams.rng)
         if not is_acceptable(candidate):
             await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
             failure = "chat_content_filtered"

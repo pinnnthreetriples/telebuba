@@ -86,4 +86,3 @@ def test_the_preview_shows_real_numbers_per_phase() -> None:
     warmed = rows[("active", "warmed")]
     assert (warmed.visits_min, warmed.visits_max) == (20, 28)
     assert all(row.visits_min <= row.visits_max for row in rows.values())
-

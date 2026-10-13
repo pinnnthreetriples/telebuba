@@ -1361,6 +1361,8 @@
     "warming_dialogue_reply": "Ответ в диалоге",
     "warming_dialogue_read_ack_skipped": "Отметка о прочтении пропущена",
     "warming_dialogue_peer_unresolved": "Собеседник недоступен по номеру телефона",
+    "warming_character_created": "Характер аккаунта создан",
+    "warming_character_failed": "Не удалось создать характер аккаунта",
     "warming_dialogue_faded": "Диалог завершён",
     "warming_dm_fleet_paused": "ЛС приостановлены для всего парка",
     "warming_dm_fleet_pause_lifted": "Пауза ЛС снята",

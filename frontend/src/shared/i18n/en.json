@@ -1336,6 +1336,8 @@
     "warming_dialogue_reply": "Dialogue reply",
     "warming_dialogue_read_ack_skipped": "Read receipt skipped",
     "warming_dialogue_peer_unresolved": "Partner unreachable by phone lookup",
+    "warming_character_created": "Account character created",
+    "warming_character_failed": "Account character not created",
     "warming_dialogue_faded": "Dialogue faded",
     "warming_dm_fleet_paused": "DMs paused for the whole fleet",
     "warming_dm_fleet_pause_lifted": "Fleet DM pause lifted",

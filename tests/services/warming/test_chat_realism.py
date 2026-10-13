@@ -29,6 +29,7 @@ from services.warming._chat import (
     _maybe_inter_account_chat,
     _reply_to_partner,
 )
+from services.warming._chat_prompt import Voice
 from services.warming._chat_text import _generate_chat_text
 from tests.services.warming._support import (
     _seed_channel,
@@ -123,9 +124,9 @@ async def test_history_is_injected_into_reply_prompt(monkeypatch: pytest.MonkeyP
     assert prompts
     prompt = prompts[0]
     # Transcript labelled from the sender's point of view.
-    assert "Собеседник: привет!" in prompt
-    assert "Я: о, здорово" in prompt
-    assert "Собеседник: как дела?" in prompt
+    assert "Friend: привет!" in prompt
+    assert "Me: о, здорово" in prompt
+    assert "Friend: как дела?" in prompt
 
 
 @pytest.mark.asyncio
@@ -234,9 +235,7 @@ async def test_similarity_gate_rejects_near_duplicate_then_accepts(
     monkeypatch.setattr(_seams, "generate_text", gen)
 
     result = await _generate_chat_text(
-        "acc-x",
-        secret,
-        recent_texts=["привет как дела"],
+        "acc-x", secret, "p", Voice(language="ru"), ["привет как дела"]
     )
 
     assert result.text == "слушай, а ты видел ту новость сегодня"
@@ -254,9 +253,7 @@ async def test_similarity_gate_exhausts_when_all_near_duplicates(
     monkeypatch.setattr(_seams, "generate_text", gen)
 
     result = await _generate_chat_text(
-        "acc-y",
-        secret,
-        recent_texts=["привет как дела"],
+        "acc-y", secret, "p", Voice(language="ru"), ["привет как дела"]
     )
 
     assert result.text is None

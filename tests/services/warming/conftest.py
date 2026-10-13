@@ -61,6 +61,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # other scenarios so the same behavioral path is exercised every date.
     monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
     monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
+    # The account character and chat manner (4.2) are their own tests: elsewhere the
+    # model's line goes out as written and no profile request consumes a fake reply.
+    monkeypatch.setattr(settings.warming, "character_enabled", False)
+    monkeypatch.setattr(settings.warming, "chat_style_enabled", False)
     # The per-visit budget split (4.3) caps a cycle below the day's remainder; the
     # scenarios here count a whole cycle's actions, so they keep the full remainder.
     # ``test_cadence.py`` exercises the split itself.
