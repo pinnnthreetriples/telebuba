@@ -25,9 +25,12 @@ from schemas.warming import (
     WarmingStateWriteResult,
 )
 from services.warming import _iteration, _loop, _transitions
+from services.warming._snapshot import _CycleSnapshot
 from tests.services.warming._support import _account, _seed_channel
 
 if TYPE_CHECKING:
+    from schemas.spam_status import SpamStatusVerdict
+    from schemas.warming import WarmingSettingsSecret
     from services.warming._reservation import _Reservation
 
 
@@ -49,12 +52,31 @@ def _write(record: WarmingStateRecord, *, applied: bool = True) -> WarmingStateW
     return WarmingStateWriteResult(record=record, applied=applied)
 
 
+async def _loaded(
+    account_id: str,
+    controls: WarmingSettingsSecret,
+    record: WarmingStateRecord | None,
+    spam: SpamStatusVerdict | None,
+) -> _CycleSnapshot:
+    """The snapshot loader, handing the iteration a fixed account and no channels."""
+    return _CycleSnapshot(
+        account_id=account_id,
+        controls=controls,
+        record=record,
+        account=_account(),
+        spam=spam,
+        lang_code=None,
+        floods=None,
+        channels=(),
+        joined=(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_iteration_propagates_budget_trust_and_persona_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     record = _record()
-    trust = TrustScore(account_id="acc-1", score=85, band="good")
     intensity = WarmingIntensity(
         channels_min=1,
         channels_max=2,
@@ -70,12 +92,6 @@ async def test_iteration_propagates_budget_trust_and_persona_policy(
 
     async def fetch_state(_account_id: str) -> WarmingStateRecord:
         return record
-
-    async def fetch_account(_account_id: str):  # type: ignore[no-untyped-def]
-        return _account()
-
-    async def trust_score(_account_id: str) -> TrustScore:
-        return trust
 
     async def no_gate(*_args: object, **_kwargs: object) -> None:
         return None
@@ -101,14 +117,19 @@ async def test_iteration_propagates_budget_trust_and_persona_policy(
         finalizations.append((args, kwargs))
         return cast("WarmingCycleResult", args[1])
 
+    bands: list[str] = []
+
+    def intensity_for(*_args: object, trust_band: str, **_kwargs: object) -> WarmingIntensity:
+        bands.append(trust_band)
+        return intensity
+
     monkeypatch.setattr(_loop, "fetch_warming_state", fetch_state)
-    monkeypatch.setattr(_iteration, "fetch_account", fetch_account)
-    monkeypatch.setattr(_iteration, "account_trust_score", trust_score)
+    monkeypatch.setattr(_iteration, "load_cycle_snapshot", _loaded)
     monkeypatch.setattr(_iteration, "_gate_target_reached", no_gate)
     monkeypatch.setattr(_iteration, "_gate_readiness", no_gate)
     monkeypatch.setattr(_loop, "_gate_quiet_day", no_gate)
     monkeypatch.setattr(_loop, "_gate_daily_limit", no_gate)
-    monkeypatch.setattr(_iteration, "compute_intensity", lambda *_args, **_kwargs: intensity)
+    monkeypatch.setattr(_iteration, "compute_intensity", intensity_for)
     monkeypatch.setattr(_loop, "_set_state", set_state)
     monkeypatch.setattr(_loop, "_execute_cycle", cycle)
     monkeypatch.setattr(_loop, "_schedule_next_run", schedule)
@@ -126,9 +147,7 @@ async def test_iteration_propagates_budget_trust_and_persona_policy(
     assert writes[0]["last_event"] == "cycle_started"
     assert writes[0]["daily_actions"] == 12
     assert writes[0]["daily_count_date"] == record.daily_count_date
-    assert len(schedules) == 1
-    scheduled = schedules[0]
-    assert scheduled[2:] == ("active", 12)
+    assert [scheduled[2:] for scheduled in schedules] == [("active", 12)]
     assert len(finalizations) == 1
     finalize_args, finalize_kwargs = finalizations[0]
     reservation = cast("_Reservation", finalize_args[3])
@@ -138,10 +157,13 @@ async def test_iteration_propagates_budget_trust_and_persona_policy(
         12,
     )
     assert finalize_kwargs == {"run_id": "generation-a"}
+    # The ceiling saw the trust scored from the snapshot, not a fresh query.
+    loaded = await _loaded("acc-1", await load_warming_settings(), record, None)
+    assert bands == [loaded.trust(datetime.now(UTC)).band]
 
 
 @pytest.mark.asyncio
-async def test_progress_events_are_monotonic_and_duplicate_safe(  # noqa: C901
+async def test_progress_events_are_monotonic_and_duplicate_safe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     record = _record(daily_actions=0)
@@ -157,6 +179,9 @@ async def test_progress_events_are_monotonic_and_duplicate_safe(  # noqa: C901
         if state == "active":
             progress.append(cast("str | None", kwargs.get("last_action")))
         return _write(record)
+
+    async def store_progress(_account_id: str, step: str, *_args: object) -> None:
+        progress.append(step)
 
     async def cycle(
         data: WarmingCycleRequest,
@@ -175,18 +200,12 @@ async def test_progress_events_are_monotonic_and_duplicate_safe(  # noqa: C901
     ) -> WarmingCycleResult:
         return result
 
-    async def trust_score(_account_id: str) -> TrustScore:
-        return TrustScore(account_id="acc-1", score=80, band="good")
-
-    async def fetch_account(_account_id: str):  # type: ignore[no-untyped-def]
-        return _account()
-
     async def schedule(*_args: object, **_kwargs: object) -> tuple[int, datetime, str]:
         return 0, datetime.now(UTC), "sleeping"
 
     monkeypatch.setattr(_loop, "fetch_warming_state", fetch_state)
-    monkeypatch.setattr(_iteration, "fetch_account", fetch_account)
-    monkeypatch.setattr(_iteration, "account_trust_score", trust_score)
+    monkeypatch.setattr(_iteration, "load_cycle_snapshot", _loaded)
+    monkeypatch.setattr(_iteration, "store_cycle_progress", store_progress)
     monkeypatch.setattr(_iteration, "_gate_target_reached", no_gate)
     monkeypatch.setattr(_iteration, "_gate_readiness", no_gate)
     monkeypatch.setattr(_loop, "_gate_quiet_day", no_gate)
@@ -320,8 +339,8 @@ async def test_missing_row_with_generation_is_rejected_before_other_io(
         raise AssertionError(message)
 
     monkeypatch.setattr(_loop, "fetch_warming_state", no_state)
-    monkeypatch.setattr(_iteration, "fetch_account", forbidden)
-    monkeypatch.setattr(_iteration, "account_trust_score", forbidden)
+    # The snapshot holds the account and the trust inputs: never loaded for a stale run.
+    monkeypatch.setattr(_iteration, "load_cycle_snapshot", forbidden)
 
     result = await _loop.run_loop_iteration("acc-1", run_id="generation-a")
 

@@ -24,7 +24,7 @@ from schemas.warming import (
     WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _runtime, _seams
+from services.warming import _iteration, _loop, _runtime, _seams
 from tests.services.warming._support import (
     _no_quiet_days,
     _Recorder,
@@ -77,13 +77,22 @@ async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyP
 
     active_actions: list[str | None] = []
     real_set_state = _loop._set_state
+    real_progress = _iteration.store_cycle_progress
 
     async def _spy(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
         if state == "active":
             active_actions.append(cast("str | None", kwargs.get("last_action")))
         return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
 
+    async def _progress_spy(
+        account_id: str, step: str, heartbeat_at: str, expected_run_id: str | None
+    ) -> None:
+        active_actions.append(step)
+        await real_progress(account_id, step, heartbeat_at, expected_run_id)
+
     monkeypatch.setattr(_loop, "_set_state", _spy)
+    # The rail's ticks are narrow writes of their own (5.1), not state upserts.
+    monkeypatch.setattr(_iteration, "store_cycle_progress", _progress_spy)
 
     await warming.run_loop_iteration("acc-1")
 
@@ -108,17 +117,13 @@ async def test_loop_iteration_survives_progress_write_failure(
     await _set_settings(chat=False, reactions=False, key="")
     await create_account(AccountCreate(account_id="acc-1"))
 
-    real_set_state = _loop._set_state
+    async def _flaky(*_args: object) -> None:
+        # Only the mid-cycle progress writes blow up; the cycle_started / finalize
+        # boundary writes go through untouched.
+        msg = "database is locked"
+        raise RuntimeError(msg)
 
-    async def _flaky(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
-        # Only the mid-cycle progress writes blow up (state=active, no last_event);
-        # the cycle_started / finalize boundary writes go through untouched.
-        if state == "active" and kwargs.get("last_event") is None:
-            msg = "database is locked"
-            raise RuntimeError(msg)
-        return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
-
-    monkeypatch.setattr(_loop, "_set_state", _flaky)
+    monkeypatch.setattr(_iteration, "store_cycle_progress", _flaky)
 
     result = await warming.run_loop_iteration("acc-1")
 

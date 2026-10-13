@@ -22,6 +22,7 @@ from services.warming._local_day import _local_date
 from services.warming.pacing import _account_tz
 
 if TYPE_CHECKING:
+    from schemas.trust import TrustScore
     from schemas.warming import WarmingCycleResult, WarmingPhase
 
 # Stdlib sink for the traceback; the persisted event carries only the error type.
@@ -69,6 +70,8 @@ async def record_cycle_stats(
     result: WarmingCycleResult,
     phase: WarmingPhase | None,
     now: datetime | None = None,
+    *,
+    trust: TrustScore | None = None,
 ) -> None:
     """Add a settled cycle to its day's row. Best-effort: never fails the cycle.
 
@@ -76,9 +79,12 @@ async def record_cycle_stats(
     retired is never counted. The write is shielded: a Stop that cancels the loop
     right after that state write still lets the increment finish, so the state
     never counts a cycle its day's row is missing. The caller's cancellation still
-    propagates at once.
+    propagates at once. ``trust`` is the score the settle already computed from the
+    cycle's snapshot; without it the score is read here.
     """
-    task = asyncio.ensure_future(_record_cycle_stats(result, phase, now or datetime.now(UTC)))
+    task = asyncio.ensure_future(
+        _record_cycle_stats(result, phase, now or datetime.now(UTC), trust),
+    )
     _DETACHED.add(task)
     task.add_done_callback(_DETACHED.discard)
     await asyncio.shield(task)
@@ -88,10 +94,12 @@ async def _record_cycle_stats(
     result: WarmingCycleResult,
     phase: WarmingPhase | None,
     now: datetime,
+    trust: TrustScore | None,
 ) -> None:
     account_id = result.account_id
     try:
-        trust = await account_trust_score(account_id)
+        if trust is None:
+            trust = await account_trust_score(account_id)
         day = await stats_day(account_id, now)
         increment = cycle_increment(result, day=day, phase=phase).model_copy(
             update={"trust_score": trust.score, "trust_band": trust.band},

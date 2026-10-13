@@ -39,6 +39,7 @@ from services.warming._fleet import (
     _language_pool,
     _maybe_explore,
 )
+from services.warming._snapshot import current_snapshot
 from services.warming._social_reads import walkable_channels
 from services.warming._steps import (
     _ChannelTally,
@@ -279,15 +280,18 @@ async def run_one_cycle(
     daily-budget reservation from that (#208).
     """
     account_id = data.account_id
-    secret = await load_warming_settings()
-    account = await fetch_account(account_id)
+    # Inside an iteration the gates already read all of it (5.1); a direct call reads.
+    snapshot = current_snapshot(account_id)
+    secret = snapshot.controls if snapshot else await load_warming_settings()
+    account = snapshot.account if snapshot else await fetch_account(account_id)
     # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
     # depend on it and those are enforced by the loop (remaining_actions), not
     # read in this cycle. Pass it in if channel/reaction/DM intensity ever
     # becomes trust-dependent (#100).
     intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     # Approved rows only, and public groups only from their phase on (4.5/4.6).
-    channels = walkable_channels((await list_warming_channels()).channels, intensity.phase)
+    approved = list(snapshot.channels) if snapshot else (await list_warming_channels()).channels
+    channels = walkable_channels(approved, intensity.phase)
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)
         return WarmingCycleResult(
@@ -314,7 +318,7 @@ async def run_one_cycle(
         visit = data.visit or VisitPlan()
         language = account_language(account.phone if account else None)
         chosen = _pick_channels(account_id, channels, language, intensity, visit.channels)
-        joined = await list_joined_channels(account_id)
+        joined = list(snapshot.joined) if snapshot else await list_joined_channels(account_id)
         chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
         ctx = _ExtraContext(
             account_id=account_id,
