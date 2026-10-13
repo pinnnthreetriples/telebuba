@@ -7,7 +7,7 @@ edges:
     condition: layer boundaries, gateways or system design
   - target: patterns/add-warming-job.md
     condition: changing warming runtime work
-  - target: context/runtime-survival.md
+  - target: patterns/change-survival-counter.md
     condition: survival of released accounts or the day-7/day-30 @SpamBot probes
 grounds_to:
   - node: "function:9fc992dfe456039570a9fd819ef7f3c9"

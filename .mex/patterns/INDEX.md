@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-28
+last_updated: 2026-10-13
 edges:
   - target: context/architecture.md
     condition: the task needs system design context first
@@ -16,3 +16,4 @@ edges:
 | [add-service.md](add-service.md) | Add business logic |
 | [add-telegram-task.md](add-telegram-task.md) | Add a Telegram gateway action |
 | [add-warming-job.md](add-warming-job.md) | Change warming runtime work |
+| [change-survival-counter.md](change-survival-counter.md) | Change the survival counter or its @SpamBot probes |

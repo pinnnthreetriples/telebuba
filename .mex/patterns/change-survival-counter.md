@@ -1,6 +1,6 @@
 ---
-name: runtime-survival
-description: Survival counter of warmed accounts, its outcome rules and the day-7/day-30 @SpamBot probes.
+name: change-survival-counter
+description: Change the survival counter of warmed accounts, its outcome rules or the day-7/day-30 @SpamBot probes.
 last_updated: 2026-10-13
 edges:
   - target: context/runtime-warming.md
@@ -9,7 +9,7 @@ edges:
     condition: layer boundaries, gateways or system design
 ---
 
-# Survival Counter
+# Change Survival Counter
 
 - Reads only the lifecycle journal: a stint is one warming run of one account life. Lives split at each `deleted` row, and the board also drops rows older than the live account row, because the deletion row is best-effort and a re-imported id must not wear a past life. A stint opens on a new stint start, never on a resume that carried the clock.
 - Release is the first graduation (target reached or the operator's promotion). Windows: during warming, then 7 and 30 days after release.
@@ -18,4 +18,4 @@ edges:
 - Probes: one lifespan task, one pass per interval, at most one account per pass, through the same cached `refresh_spam_status` the cycle uses — no second Telegram path. Only the latest closed window asks, so a life asks at most twice; an unanswered probe waits out a retry period, and two accounts behind one proxy (no proxy = the host's address) are never asked within the spacing. Pacing memory is in-process: one uvicorn worker.
 - The SPA shows counts as «N из M»; a percentage only from ten decided accounts, and the 30-day count heads the tile only once it has that many. Pure stint/outcome/cohort functions stay free of I/O and the clock.
 
-Exact thresholds and intervals belong to config, tests and code, not memory.
+Verify: change the pure functions with synthetic-journal tests (unknown, written-off, repeated id, stint without an end); exact thresholds and intervals belong to config, tests and code, not memory.

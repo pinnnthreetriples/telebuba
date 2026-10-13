@@ -12,8 +12,6 @@ edges:
     condition: Telegram client, sessions, proxies, profile, privacy, or account removal
   - target: context/runtime-warming.md
     condition: warming scheduling, budget, dialogue, recovery, or board runtime
-  - target: context/runtime-survival.md
-    condition: survival counter of warmed accounts, lifecycle-journal outcomes, or day-7/day-30 @SpamBot probes
   - target: context/runtime-neurocomment.md
     condition: neurocomment listener, comments, captcha, joins, cooldowns, or retention
   - target: context/runtime-discovery.md
@@ -30,7 +28,7 @@ edges:
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-10-13
+last_updated: 2026-10-11
 ---
 
 # Telebuba Router
