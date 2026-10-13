@@ -144,6 +144,35 @@ test('custom limits are edited in the table and refused while they drop', async 
   expect(screen.queryByRole('spinbutton')).toBeNull();
 });
 
+test('a failed save keeps the draft, and editing it clears the stale error', async () => {
+  let release: (() => void) | undefined;
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    if (request.method !== 'PUT') return jsonResponse(NORMAL);
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return jsonResponse({ error: { code: 'internal_error', message: 'tuning_row_locked' } }, 500);
+  });
+  await renderOpen();
+  await userEvent.click(screen.getByRole('radio', { name: 'Свой' }));
+  const warmed = screen.getByRole('spinbutton', { name: 'Лимит в день, фаза «прогрет»' });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Сохранить свои лимиты' }));
+  // While the PUT is out the draft it carries cannot change under it.
+  await waitFor(() => {
+    expect(warmed).toBeDisabled();
+  });
+  release?.();
+  await screen.findByRole('alert');
+  expect(warmed).toBeEnabled();
+
+  await userEvent.clear(warmed);
+  await userEvent.type(warmed, '70');
+
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
 test('a reply without the cadence leaves the card waiting rather than broken', async () => {
   vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse({})));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

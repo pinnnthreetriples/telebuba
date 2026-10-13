@@ -37,7 +37,12 @@ import {
 type Caps = ReturnType<typeof draftCaps>;
 // A table row while «Свой» is open: the limit being typed rides the row, so the column
 // definitions stay put and the field keeps its focus from one keystroke to the next.
-type Row = PaceRow & { draft?: number };
+type Row = PaceRow & {
+  draft?: number;
+  // A save in flight freezes the draft it sent, so a later keystroke cannot be lost.
+  locked: boolean;
+  onEdit: (phase: PaceRow['phase'], value: number) => void;
+};
 
 // «Темп прогрева» (Прогрев 2.0, 5.2): the pace of the whole fleet is a click, not an
 // `.env` edit. «Осторожно», «Обычно» and «Быстро» apply at once; «Свой» opens the limits
@@ -78,8 +83,18 @@ export function PaceCard() {
     );
   };
 
+  // A finished save's mark or error belongs to what it sent, not to a draft edited since.
+  const clearFeedback = () => {
+    if (!save.isPending) save.reset();
+  };
+  const edit = (phase: PaceRow['phase'], value: number) => {
+    clearFeedback();
+    setDraft((prev) => (prev ? { ...prev, [phase]: value } : prev));
+  };
+
   const pick = (preset: TuningPreset) => {
     if (preset === 'custom') {
+      clearFeedback();
       if (tuning) setDraft(draftCaps(tuning));
       setEditing(true);
       return;
@@ -87,16 +102,14 @@ export function PaceCard() {
     apply({ preset });
   };
 
-  const rows = useMemo<Row[]>(
-    () =>
-      tuning
-        ? paceRows(tuning).map((row) => ({
-            ...row,
-            draft: editing ? draft?.[row.phase] : undefined,
-          }))
-        : [],
-    [tuning, editing, draft],
-  );
+  const rows: Row[] = tuning
+    ? paceRows(tuning).map((row) => ({
+        ...row,
+        draft: editing ? draft?.[row.phase] : undefined,
+        locked: save.isPending,
+        onEdit: edit,
+      }))
+    : [];
   const columns = useMemo<ColumnDef<Row>[]>(
     () => [
       {
@@ -109,7 +122,7 @@ export function PaceCard() {
         id: 'cap',
         header: () => t('warming.pace.col.limit'),
         cell: ({ row }) => {
-          const { phase, draft: typed } = row.original;
+          const { phase, draft: typed, locked, onEdit } = row.original;
           if (typed === undefined) return row.original.cap;
           return (
             <Input
@@ -118,12 +131,12 @@ export function PaceCard() {
               min={CAP_MIN}
               max={CAP_MAX}
               value={typed}
+              disabled={locked}
               aria-label={t('warming.pace.limitLabel', {
                 phase: t(`warming.console.phase.${phase}`),
               })}
               onChange={(event) => {
-                const value = Number(event.target.value);
-                setDraft((prev) => (prev ? { ...prev, [phase]: value } : prev));
+                onEdit(phase, Number(event.target.value));
               }}
             />
           );
