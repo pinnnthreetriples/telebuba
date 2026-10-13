@@ -9,12 +9,15 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
+    mark_promoted_to_nc,
     update_account_from_session_check,
     upsert_spam_status,
     upsert_warming_state,
 )
+from core.repositories.lifecycle import append_lifecycle_event
 from core.repositories.warming_dm_pause import store_dm_paused_until
 from schemas.accounts import AccountCreate
+from schemas.lifecycle import LifecycleSnapshot
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.trust import TrustScore
@@ -195,3 +198,24 @@ async def test_load_board_mechanics_mirror_cycle_gates(
 
     on = (await warming.load_board()).mechanics
     assert (on.reactions, on.stories, on.dialogue) == (True, True, True)
+
+
+@pytest.mark.asyncio
+async def test_released_cards_carry_their_survival_badge() -> None:
+    await create_account(AccountCreate(account_id="released"))
+    await create_account(AccountCreate(account_id="fresh"))
+    await upsert_warming_state(WarmingStateWrite(account_id="released", state="sleeping"))
+    stint = LifecycleSnapshot(stint_started_at=(datetime.now(UTC) - timedelta(days=14)).isoformat())
+    await append_lifecycle_event("released", "warming_started", snapshot=stint)
+    await append_lifecycle_event("released", "warmed", snapshot=stint)
+    await append_lifecycle_event("released", "spambot_verdict", {"status": "clean"}, stint)
+    await append_lifecycle_event("fresh", "warming_started", snapshot=stint)
+    await mark_promoted_to_nc("released")
+
+    board = await warming.load_board()
+
+    [warmed] = board.warmed
+    assert warmed.survival is not None
+    assert (warmed.survival.days_since_release, warmed.survival.status) == (0, "alive")
+    [fresh] = board.idle
+    assert fresh.survival is None
