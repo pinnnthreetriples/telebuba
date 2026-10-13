@@ -160,15 +160,19 @@ test('the button is disabled, with the reason, while the emulator is switched of
   await renderPage();
 
   expect(phone()).toBeDisabled();
-  expect(phone()).toHaveAttribute('title', 'Эмулятор выключен (EMULATOR__ENABLED)');
+  // The disabled button takes no pointer events: the hover reason sits on its wrapper,
+  // and a screen reader hears it as the button's description.
+  expect(phone().parentElement).toHaveAttribute('title', 'Эмулятор выключен (EMULATOR__ENABLED)');
+  expect(phone()).toHaveAccessibleDescription('Эмулятор выключен (EMULATOR__ENABLED)');
 });
 
 test('an account without a mobile device cannot be opened on a phone', async () => {
   routeApi({ account: { ...MOBILE, devices: ['desktop'] } });
   await renderPage();
   await waitFor(() => {
-    expect(phone()).toHaveAttribute('title', 'У аккаунта нет мобильного устройства');
+    expect(phone()).toHaveAccessibleDescription('У аккаунта нет мобильного устройства');
   });
+  expect(phone().parentElement).toHaveAttribute('title', 'У аккаунта нет мобильного устройства');
 
   expect(phone()).toBeDisabled();
 });

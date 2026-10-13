@@ -244,29 +244,40 @@ export function AccountsTable({
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         const openingMobile = openMobileBusyIds?.has(account.account_id) ?? false;
         const hasMobile = (account.devices ?? []).includes('mobile');
-        const mobileTitle = !emulatorEnabled
+        // Why the phone action is off, if it is; the action's own name otherwise.
+        const mobileReason = !emulatorEnabled
           ? t('accounts.actions.mobileDisabled')
           : hasMobile
-            ? t('accounts.actions.mobile')
+            ? undefined
             : t('accounts.actions.mobileMissing');
+        const mobileReasonId = `mobile-reason-${account.account_id}`;
         return (
           <div className="flex items-center justify-end gap-2">
             {onOpenMobile ? (
-              <IconButton
-                size="touch"
-                shape="circle"
-                tone="primary"
-                title={mobileTitle}
-                aria-label={t('accounts.actions.mobile')}
-                className="md:size-icon"
-                disabled={!emulatorEnabled || !hasMobile || openingMobile}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenMobile(account.account_id);
-                }}
-              >
-                {openingMobile ? <Spinner /> : <Icon name="smartphone" size={14} />}
-              </IconButton>
+              // A disabled button takes no pointer events, so the hover reason hangs on
+              // this wrapper; assistive technology gets it as the button's description.
+              <span title={mobileReason ?? t('accounts.actions.mobile')} className="inline-flex">
+                <IconButton
+                  size="touch"
+                  shape="circle"
+                  tone="primary"
+                  aria-label={t('accounts.actions.mobile')}
+                  aria-describedby={mobileReason ? mobileReasonId : undefined}
+                  className="md:size-icon"
+                  disabled={!emulatorEnabled || !hasMobile || openingMobile}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenMobile(account.account_id);
+                  }}
+                >
+                  {openingMobile ? <Spinner /> : <Icon name="smartphone" size={14} />}
+                </IconButton>
+                {mobileReason ? (
+                  <span id={mobileReasonId} className="sr-only">
+                    {mobileReason}
+                  </span>
+                ) : null}
+              </span>
             ) : null}
             <IconButton
               size="touch"
