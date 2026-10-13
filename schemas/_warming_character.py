@@ -42,5 +42,5 @@ class ChatStyle(BaseModel):
     laughs: bool = False
     # Drops the final period, as most people do in chats.
     no_final_period: bool = True
-    # Starts lines with a small letter.
+    # Starts lines in lowercase, the way people type fast on a phone.
     lowercase: bool = False
