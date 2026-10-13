@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import sys
 from contextlib import suppress
 from typing import TYPE_CHECKING
@@ -94,6 +95,10 @@ _ACTIVE_PORT_FILE = "DevToolsActivePort"
 _ACTIVE_PORT_LINES = 2
 # Loopback: a live endpoint answers at once and a dead one is refused at once.
 _SWEEP_HTTP_TIMEOUT = 2.0
+# A just-killed Chrome's helpers can hold profile files open for a moment on Windows,
+# so a profile removal retries briefly before it gives up.
+_REMOVE_TRIES = 3
+_REMOVE_RETRY_DELAY = 0.5
 
 
 def browser_env() -> dict[str, str]:
@@ -264,3 +269,22 @@ async def _close_browser(ws_url: str) -> None:
     finally:
         with suppress(Exception):
             await session.aclose()
+
+
+async def remove_profile_dir(profile_dir: Path) -> None:
+    """Delete an account's browser profile, Telegram Web login included.
+
+    A profile already gone is nothing to do. Its browser must be ended first; the last
+    attempt's ``OSError`` is raised for the caller to report.
+    """
+    for attempt in range(_REMOVE_TRIES):
+        try:
+            await asyncio.to_thread(shutil.rmtree, profile_dir)
+        except FileNotFoundError:
+            return
+        except OSError:
+            if attempt == _REMOVE_TRIES - 1:
+                raise
+            await asyncio.sleep(_REMOVE_RETRY_DELAY)
+        else:
+            return

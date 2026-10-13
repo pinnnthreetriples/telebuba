@@ -26,6 +26,7 @@ from schemas.geo import GeoMatch
 from schemas.lifecycle import AccountDeleteReasonGuess
 from services.accounts._result import AccountNotFoundError
 from services.accounts.devices import forget_device_cooldown
+from services.accounts.web_windows import forget_account_web
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import (
     guess_delete_reason,
@@ -227,6 +228,8 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
     from services.accounts.mobile_emulator import remove_account_container  # noqa: PLC0415
 
     await remove_account_container(account_id)
+    # Its web window and signed-in profile, if it ever opened one. Never raises.
+    await forget_account_web(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

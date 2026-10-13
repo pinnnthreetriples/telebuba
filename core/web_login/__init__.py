@@ -8,7 +8,7 @@ alias for them was one more name to keep in sync for nobody.
 
 from __future__ import annotations
 
-from core.web_login._lifetime import close_orphaned_browsers
+from core.web_login._lifetime import close_orphaned_browsers, remove_profile_dir
 from core.web_login._page import (
     latest_login_token,
     page_state,
@@ -35,6 +35,7 @@ __all__ = [
     "launch_account_web",
     "page_state",
     "release_capture",
+    "remove_profile_dir",
     "token_bytes",
     "type_2fa_password",
     "web_profiles_root",

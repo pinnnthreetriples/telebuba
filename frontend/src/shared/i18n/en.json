@@ -1297,6 +1297,7 @@
     }
   },
   "logEvent": {
+    "account_remove_web_cleanup_failed": "Could not close the deleted account's web window or remove its browser profile",
     "web_login_locale_rejected": "Chrome rejected the account's device language; the web window opened in the proxy country's language instead",
     "inbox_listener_health_check_failed": "Inbox connection check failed",
     "inbox_listener_retry_failed": "Inbox listener retry failed",
