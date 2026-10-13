@@ -144,15 +144,19 @@ async def account_character(
     """The account's character, made on first need; ``None`` when off or not made yet.
 
     A profile the model could not make distinct is not stored, so the next line asks
-    again; until then the account writes in its language without a persona.
+    again; until then the account writes in its language without a persona. A stored
+    character whose language no longer matches the phone (the session check learnt a
+    new number) is made again, so the account never chats in its old language.
     """
     if not settings.warming.character_enabled:
         return None
     stored = await fetch_account_character(account_id)
-    if stored is not None:
-        return stored
     account = await fetch_account(account_id)
-    base = base_character(account_id, account.phone if account else None)
+    phone = account.phone if account else None
+    current = account_language(phone)
+    if stored is not None and (current is None or stored.language == current):
+        return stored
+    base = base_character(account_id, phone)
     others = [c for c in await list_account_characters() if c.account_id != account_id]
     for _ in range(settings.warming.character_max_attempts):
         profile = await _ask_profile(base, others, secret)
@@ -160,7 +164,7 @@ async def account_character(
             continue
         candidate = base.model_copy(update={"occupation": profile[0], "interests": profile[1]})
         if is_distinct(candidate, others):
-            await store_account_character(candidate)
+            await store_account_character(candidate, replace=stored is not None)
             await log_event("INFO", "warming_character_created", account_id=account_id)
             return candidate
     await log_event("WARNING", "warming_character_failed", account_id=account_id)

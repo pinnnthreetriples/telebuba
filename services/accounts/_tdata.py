@@ -207,6 +207,7 @@ async def _run_tdata_import(
                         account_id=plan.account_id,
                         label=data.label or plan.account_id,
                         session_name=plan.session_name,
+                        registered_at=data.registered_at,
                     ),
                 )
                 added_account_ids.append(plan.account_id)

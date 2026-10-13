@@ -174,6 +174,10 @@ def _create_account(data: AccountCreate) -> AccountRead:
         "label": data.label,
         "session_name": data.session_name,
         "phone": data.phone,
+        "telegram_registered_at": (
+            data.registered_at.isoformat() if data.registered_at is not None else None
+        ),
+        "registered_source": "operator" if data.registered_at is not None else None,
         "status": "new",
         "created_at": now,
         "updated_at": now,

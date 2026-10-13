@@ -76,6 +76,9 @@ class AccountCreate(BaseModel):
     # invariant that every generator derives one from the other.
     session_name: str | None = Field(default=None, min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     phone: str | None = Field(default=None, min_length=1)
+    # The operator's registration date given at upload (item 4.8), written in the same
+    # insert so an import never lands half-done.
+    registered_at: RegisteredDate | None = None
 
 
 class AccountSessionFileImport(BaseModel):

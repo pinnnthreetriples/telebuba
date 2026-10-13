@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -76,3 +76,12 @@ async def test_the_session_upload_forwards_the_optional_date(
         )
     assert resp.status_code == 200
     assert str(seen[0]) == "2020-05-06"
+
+
+@pytest.mark.asyncio
+async def test_the_date_is_written_with_the_account_itself() -> None:
+    created = await create_account(
+        AccountCreate(account_id="acc-2", registered_at=date(2020, 5, 6))
+    )
+    assert created.telegram_registered_at == "2020-05-06"
+    assert created.registered_source == "operator"

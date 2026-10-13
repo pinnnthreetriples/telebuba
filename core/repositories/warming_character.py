@@ -48,21 +48,22 @@ async def list_account_characters() -> list[AccountCharacter]:
     return await asyncio.to_thread(_list)
 
 
-def _insert(character: AccountCharacter) -> None:
+def _insert(character: AccountCharacter, *, replace: bool) -> None:
     values = character.model_dump()
     values["interests"] = json.dumps(character.interests, ensure_ascii=False)
-    statement = (
-        sqlite_insert(_warming_account_character)
-        .values(**values, created_at=_now_iso())
-        .on_conflict_do_nothing(index_elements=[_warming_account_character.c.account_id])
-    )
+    statement = sqlite_insert(_warming_account_character).values(**values, created_at=_now_iso())
+    key = [_warming_account_character.c.account_id]
+    if replace:
+        statement = statement.on_conflict_do_update(index_elements=key, set_=values)
+    else:
+        statement = statement.on_conflict_do_nothing(index_elements=key)
     with _get_engine().begin() as connection:
         connection.execute(statement)
 
 
-async def store_account_character(character: AccountCharacter) -> None:
-    """Keep the account's first character; a later one for the same account is dropped."""
-    await asyncio.to_thread(_insert, character)
+async def store_account_character(character: AccountCharacter, *, replace: bool = False) -> None:
+    """Keep the account's first character; ``replace`` overwrites a stale one instead."""
+    await asyncio.to_thread(_insert, character, replace=replace)
 
 
 def _fetch(account_id: str) -> AccountCharacter | None:

@@ -182,3 +182,25 @@ async def test_deleting_the_account_drops_its_character() -> None:
     await store_account_character(character)
     await delete_account("acc-1")
     assert await fetch_account_character("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_character_from_an_old_number_is_made_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_account(AccountCreate(account_id="acc-1", phone=_MX))
+    old = base_character("acc-1", _RU).model_copy(
+        update={"occupation": "Повар", "interests": ["кино", "футбол", "чай"]}
+    )
+    await store_account_character(old)
+
+    async def gen(_request: object) -> GeminiResult:
+        return _profile("Diseñadora", ["fútbol", "cine", "cocina"])
+
+    monkeypatch.setattr(_seams, "generate_text", gen)
+    made = await account_character("acc-1", await load_warming_settings())
+    assert made is not None
+    assert made.language == "es"
+    stored = await fetch_account_character("acc-1")
+    assert stored is not None
+    assert stored.occupation == "Diseñadora"
