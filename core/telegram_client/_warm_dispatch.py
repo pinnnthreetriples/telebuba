@@ -26,6 +26,7 @@ from core.telegram_client._warm_browse import (
 from core.telegram_client._warm_chats import mute_peer, toggle_archive
 from core.telegram_client._warm_media import consume_media, vote_in_poll
 from core.telegram_client._warm_saved import forward_to_saved, save_draft, self_note
+from core.telegram_client._warm_social import dm_forward, dm_react, dm_sticker, read_discussion
 from schemas.telegram_actions import (
     WarmBrowseStickers,
     WarmCheckSettings,
@@ -45,6 +46,12 @@ from schemas.telegram_actions import (
     WarmToggleArchive,
     WarmViewProfile,
     WarmVoteInPoll,
+)
+from schemas.telegram_actions_warming_social import (
+    WarmDmForward,
+    WarmDmReact,
+    WarmDmSticker,
+    WarmReadDiscussion,
 )
 
 if TYPE_CHECKING:
@@ -95,6 +102,14 @@ async def dispatch_warming_action(  # noqa: C901, PLR0911, PLR0912 - one arm per
             return await consume_media(client, action)
         case WarmEmojiStatus():
             return await emoji_status(client, action)
+        case WarmReadDiscussion():
+            return await read_discussion(client, action)
+        case WarmDmReact():
+            return await dm_react(client, action)
+        case WarmDmSticker():
+            return await dm_sticker(client, action)
+        case WarmDmForward():
+            return await dm_forward(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)
@@ -129,5 +144,9 @@ def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, 
             return {"channel": action.channel, "kind": action.kind, "max_bytes": action.max_bytes}
         case WarmEmojiStatus():
             return {"clear": action.clear}
+        case WarmReadDiscussion():
+            return {"channel": action.channel, "source_id": action.message_id}
+        case WarmDmForward():
+            return {"channel": action.channel, "source_id": action.message_id}
         case _:
             return {}

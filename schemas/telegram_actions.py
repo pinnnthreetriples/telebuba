@@ -136,6 +136,12 @@ from schemas.telegram_actions_warming import (
     WarmViewProfile,
     WarmVoteInPoll,
 )
+from schemas.telegram_actions_warming_social import (
+    WarmDmForward,
+    WarmDmReact,
+    WarmDmSticker,
+    WarmReadDiscussion,
+)
 
 ActionResult = _telegram_results.ActionResult
 ActionStatus = _telegram_results.ActionStatus
@@ -396,6 +402,10 @@ TelegramAction = Annotated[
     | WarmMutePeer
     | WarmConsumeMedia
     | WarmEmojiStatus
+    | WarmDmForward
+    | WarmDmReact
+    | WarmDmSticker
+    | WarmReadDiscussion
     | BroadcastSendMessage
     | BroadcastForwardPost
     | BroadcastJoinChatlist

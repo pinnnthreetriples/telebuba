@@ -35,6 +35,12 @@ from schemas.telegram_actions_warming import (
     WarmViewProfile,
     WarmVoteInPoll,
 )
+from schemas.telegram_actions_warming_social import (
+    WarmDmForward,
+    WarmDmReact,
+    WarmDmSticker,
+    WarmReadDiscussion,
+)
 
 _GATEWAY_DIR = Path(__file__).resolve().parents[2] / "core" / "telegram_client"
 # Writes the plan rules out for warming: contact import (operator's decision), the
@@ -71,6 +77,10 @@ _REQUIRED_FIELDS: dict[type[BaseModel], dict[str, object]] = {
     WarmToggleArchive: {"channel": "@c", "archived": True},
     WarmMutePeer: {"channel": "@c", "mute_hours": 8},
     WarmConsumeMedia: {"channel": "@c", "message_ids": [1], "kind": "video", "max_bytes": 65_536},
+    WarmReadDiscussion: {"channel": "@c", "message_id": 1},
+    WarmDmReact: {"user_id": 1, "emoji": "👍"},
+    WarmDmSticker: {"user_id": 1, "emoticon": "👍"},
+    WarmDmForward: {"user_id": 1, "channel": "@c", "message_id": 1},
 }
 _WRITE_ACTION_TYPES = (
     "warm_self_note",
@@ -81,6 +91,9 @@ _WRITE_ACTION_TYPES = (
     "warm_mute_peer",
     "warm_consume_media",
     "warm_emoji_status",
+    "warm_dm_react",
+    "warm_dm_sticker",
+    "warm_dm_forward",
 )
 
 

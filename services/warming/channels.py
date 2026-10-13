@@ -18,6 +18,7 @@ from core.db import (
 )
 from core.logging import log_event
 from core.repositories.warming import label_warming_channel
+from core.repositories.warming_pool import approve_warming_channels
 
 if TYPE_CHECKING:
     from schemas.warming import (
@@ -75,6 +76,8 @@ async def add_channels(data: AddChannelsRequest) -> WarmingChannelList:
             break
         if _dedup_key(channel) in existing_keys:
             continue
+        # The operator typing a channel a search had proposed is its approval (4.5).
+        await approve_warming_channels([channel])
         channels = await add_warming_channel(channel)
         existing_keys.add(_dedup_key(channel))
         added += 1
