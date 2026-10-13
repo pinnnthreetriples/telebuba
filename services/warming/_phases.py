@@ -21,6 +21,8 @@ from schemas.warming import (
     WarmingIntensity,
     WarmingPhase,
 )
+from services.warming._cadence import persona_visits
+from services.warming._real_age import dm_open_after_hours, shifted_age_hours
 
 if TYPE_CHECKING:
     from random import Random
@@ -35,6 +37,8 @@ def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
 
     A missing/unparseable ``created_at`` degrades to full intensity so an
     anomalous record never silently freezes an account at day-one behaviour.
+    A registration date older than a year moves the age into «warming» from day 2
+    (``_real_age.shifted_age_hours``); day one is never moved.
     """
     fallback = settings.warming.unknown_age_fallback_hours
     if account is None:
@@ -45,7 +49,8 @@ def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
         return fallback
     if created.tzinfo is None:
         created = created.replace(tzinfo=UTC)
-    return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
+    age = max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
+    return shifted_age_hours(age, account, now)
 
 
 # Five-phase lifecycle order — drives the per-account daily action cap and the
@@ -105,20 +110,17 @@ def persona_next_run_seconds(
     daily_cap: int,
     rng: Random,
 ) -> float:
-    """Seconds until the next session, spreading the persona's sessions evenly.
+    """Seconds until the next visit, spreading the persona's visits evenly.
 
-    The active window is split into ``effective_sessions`` equal gaps, where
-    ``effective_sessions = min(persona draw, sessions the phase cap affords)`` —
-    so the phase ceiling throttles the cadence for young accounts. The gap gets
+    The active window is split into as many equal gaps as the persona visits today
+    (``_cadence.persona_visits``): the persona's draw, bounded only by how many of
+    the smallest worthwhile visits the phase cap affords — the cap itself is split
+    between the visits, not divided by a fixed session size. The gap gets
     ±``next_run_jitter_fraction`` so runs don't land on a rigid grid. No front-
     loading: one gap is returned per finished cycle.
     """
     warm = settings.warming
-    low, high = warm.persona_sessions[persona]
-    draw = rng.randint(low, high)
-    affordable = max(1, daily_cap // warm.expected_actions_per_session) if daily_cap > 0 else draw
-    sessions = max(1, min(draw, affordable))
-    gap_hours = _active_window_hours() / sessions
+    gap_hours = _active_window_hours() / persona_visits(persona, daily_cap, rng)
     jitter = 1.0 + rng.uniform(-warm.next_run_jitter_fraction, warm.next_run_jitter_fraction)
     return max(0.0, gap_hours * jitter) * _SECONDS_PER_HOUR
 
@@ -219,13 +221,14 @@ def recovery_limits(recovered_at: str | None, now: datetime) -> tuple[float, dat
     return round(factor, 2), (dm_until if dm_until > now else None)
 
 
-def compute_intensity(
+def compute_intensity(  # noqa: PLR0913 - keyword-only stamps of one account row.
     age_hours: float,
     trust_band: str | None = None,
     *,
     recovered_at: str | None = None,
     now: datetime | None = None,
     started_at: str | None = None,
+    registered_at: str | None = None,
 ) -> WarmingIntensity:
     """Map an account's age + trust band to its safety ceiling for one cycle.
 
@@ -237,7 +240,8 @@ def compute_intensity(
     release (``recovered_at``) also scales the daily cap down by the recovery
     ramp — see ``recovery_limits``. Per-session *frequency* (reactions/DM) is the
     persona's job, not this ceiling's — see ``persona_reaction_probability`` /
-    ``persona_dm_probability``.
+    ``persona_dm_probability``. ``registered_at`` (the real Telegram registration
+    date) opens DMs a day earlier for an account older than half a year.
     """
     warm = settings.warming
     phase = effective_phase(age_hours, trust_band)
@@ -263,7 +267,11 @@ def compute_intensity(
         channels_min=warm.channels_per_cycle_min,
         channels_max=warm.channels_per_cycle_max,
         reaction_probability=warm.reaction_probability,
-        dm_allowed=warming_hours >= warm.dm_min_age_hours and dm_band_ok and dm_until is None,
+        dm_allowed=(
+            warming_hours >= dm_open_after_hours(registered_at, now)
+            and dm_band_ok
+            and dm_until is None
+        ),
         daily_cap=daily_cap,
         phase=phase,
         progress_to_next=progress,

@@ -8,6 +8,7 @@ drives: session check, profile update, delete, and the two multipart uploads
 
 from __future__ import annotations
 
+from datetime import date  # noqa: TC003 - FastAPI resolves the Form type at runtime.
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile
@@ -21,6 +22,7 @@ from api.v1._accounts_chats import chats_router
 from api.v1._accounts_contact_lookup import contact_lookup_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
+from api.v1._accounts_registered import registered_router
 from api.v1._accounts_scheduled import scheduled_router
 from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
@@ -330,6 +332,7 @@ async def delete_account(
 async def import_account_tdata(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
+    registered_at: Annotated[date | None, Form()] = None,
 ) -> TdataImportResult:
     async with staged_upload(
         file,
@@ -345,6 +348,7 @@ async def import_account_tdata(
                 # Preserve the normal Pydantic 422 for an explicitly empty part.
                 content_path=content_path if file.size != 0 else None,
                 label=label,
+                registered_at=registered_at,
             )
             return await accounts.import_account_tdata(request)
 
@@ -358,6 +362,7 @@ async def import_account_tdata(
 async def import_account_session(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
+    registered_at: Annotated[date | None, Form()] = None,
 ) -> AccountRead:
     reject_oversized_upload(
         file,
@@ -369,6 +374,7 @@ async def import_account_session(
         filename=file.filename or "account.session",
         content=content,
         label=label,
+        registered_at=registered_at,
     )
     # ``service_errors_to_http`` owns the residual ValueError: the request model is
     # assembled here from Form/File params, so a refused ``account_id`` reaches this
@@ -398,6 +404,7 @@ router.include_router(chats_router)
 router.include_router(privacy_router)
 # The account's Telegram cloud password (2FA).
 router.include_router(twofa_router)
+router.include_router(registered_router)
 router.include_router(bulk_messages_router)
 router.include_router(contact_lookup_router)
 # Timed profile photos / stories (media upload + per-account schedule).

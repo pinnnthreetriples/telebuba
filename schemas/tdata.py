@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from schemas.accounts import (
     AccountRead,  # noqa: TC001 - Pydantic needs the runtime class for field schema.
+    RegisteredDate,  # noqa: TC001 - Pydantic needs the runtime class for field schema.
 )
 
 TdataConvertStatus = Literal[
@@ -42,6 +43,8 @@ class TdataConvertRequest(BaseModel):
     content: bytes = Field(default=b"")
     content_path: Path | None = None
     label: str | None = Field(default=None, min_length=1)
+    # Optional at upload: when the accounts were registered in Telegram (item 4.8).
+    registered_at: RegisteredDate | None = None
 
     @model_validator(mode="after")
     def _exactly_one_payload(self) -> TdataConvertRequest:

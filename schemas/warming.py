@@ -39,6 +39,7 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
+from schemas._warming_visits import CadencePreview  # noqa: TC001 - pydantic resolves it at runtime.
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
@@ -374,6 +375,8 @@ class WarmingBoardState(BaseModel):
     language_shortages: list[ChannelLanguageShortage] = Field(default_factory=list)
     # The soft neurocomment start's numbers, for the hand-off dialog to quote.
     soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
+    # Real visits a day per persona and phase, for the start dialog's persona hint.
+    cadence_preview: list[CadencePreview] = Field(default_factory=list)
 
 
 class StartWarmingRequest(StartWindow):

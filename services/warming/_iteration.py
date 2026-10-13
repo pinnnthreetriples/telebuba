@@ -12,6 +12,7 @@ from core.repositories.warming_marks import store_cycle_base
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _loop, _seams
+from services.warming._cadence import visit_budget
 from services.warming._local_day import _local_date
 from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import _release_reservation_on_exit, _Reservation
@@ -93,6 +94,7 @@ async def _plan_iteration(
         recovered_at=record.recovered_at if record is not None else None,
         now=now,
         started_at=record.started_at if record is not None else None,
+        registered_at=account.telegram_registered_at if account is not None else None,
     )
     daily = _roll_daily(record, _local_date(await _loop._account_tz(account_id), now))  # noqa: SLF001
     quiet = await _loop._gate_quiet_day(account_id, daily, now, run_id=run_id)  # noqa: SLF001
@@ -197,7 +199,11 @@ async def _run_reserved_cycle(
         result = await _loop._execute_cycle(  # noqa: SLF001 - patchable cycle seam.
             WarmingCycleRequest(
                 account_id=account_id,
-                remaining_actions=reserved.remaining,
+                # The day's remainder split over the visits left (4.3); what this
+                # visit leaves unspent goes back through the reconcile (#208).
+                remaining_actions=visit_budget(
+                    reserved.persona, reserved.effective_cap, reserved.remaining
+                ),
                 dm_allowed=reserved.dm_allowed,
                 activity_persona=reserved.persona,
             ),

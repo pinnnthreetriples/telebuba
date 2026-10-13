@@ -66,6 +66,10 @@ _accounts = Table(
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # When the account was registered in Telegram, as the operator gave it (migration
+    # 85); ``registered_source`` says who did. NULL = unknown, the app age counts.
+    Column("telegram_registered_at", String, nullable=True),
+    Column("registered_source", String, nullable=True),
     # Proxy pool: the one pool proxy this account uses (nullable = unassigned →
     # "—" in the UI). Many accounts → one proxy; SET NULL on proxy delete is
     # done in the repo (SQLite needs the constraint declared at create time).
@@ -233,6 +237,9 @@ _warming_account_state = Table(
     Column("cycle_base_actions", Integer, nullable=True),
     Column("nc_start_mode", String, nullable=True),
     Column("nc_handoff_at", String, nullable=True),
+    # The visit the cycle in flight runs and its step order (migration 87).
+    Column("visit_kind", String, nullable=True),
+    Column("cycle_plan", String, nullable=True),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

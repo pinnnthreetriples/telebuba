@@ -38,6 +38,7 @@ from schemas.warming import (
 )
 from services.survival import load_account_survivals
 from services.trust import account_trust_score_from
+from services.warming._cadence import cadence_preview
 from services.warming._channel_language import language_shortages
 from services.warming._console import (
     account_geo,
@@ -180,6 +181,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             recovered_at=record.recovered_at if record else None,
             now=now,
             started_at=record.started_at if record else None,
+            registered_at=account.telegram_registered_at,
         )
         card.trust_score = trust.score
         card.trust_band = trust.band
@@ -214,7 +216,9 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.geo_status = geo.status
         card.geo_accepted = geo_accepted(geo, record)
         card.daily_settled = settled_today(record)
-        card.dm_status = dm_status(masked, intensity, readiness, card.started_at, now)
+        card.dm_status = dm_status(
+            masked, intensity, readiness, card.started_at, now, account.telegram_registered_at
+        )
         card.attention = attention(record, readiness)
         cards.append(card)
     return cards, channels, masked
@@ -284,6 +288,7 @@ async def load_board() -> WarmingBoardState:
             channels.channels,
         ),
         soft_start=SoftStartPlan.model_validate(settings.soft_start.model_dump()),
+        cadence_preview=cadence_preview(),
     )
 
 

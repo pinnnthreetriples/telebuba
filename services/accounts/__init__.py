@@ -106,6 +106,7 @@ from services.accounts.profile_read import (
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
+from services.accounts.registered import set_registered_at
 from services.accounts.sessions import (
     SessionAlreadyExistsError,
     check_account_session,
@@ -193,6 +194,7 @@ __all__ = [
     "set_account_story_pinned",
     "set_account_twofa",
     "set_account_twofa_email",
+    "set_registered_at",
     "shutdown_web_login",
     "start_phone_login",
     "submit_login_code",

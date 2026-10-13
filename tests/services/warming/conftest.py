@@ -15,7 +15,7 @@ from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client._react import _whitelist_cache
 from schemas.spam_status import SpamStatusVerdict
 from services import warming
-from services.warming import _fleet, _runtime, _seams
+from services.warming import _fleet, _iteration, _runtime, _seams
 from tests.services.warming._support import _ZERO_DELAY_FIELDS
 
 if TYPE_CHECKING:
@@ -61,6 +61,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # other scenarios so the same behavioral path is exercised every date.
     monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
     monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
+    # The per-visit budget split (4.3) caps a cycle below the day's remainder; the
+    # scenarios here count a whole cycle's actions, so they keep the full remainder.
+    # ``test_cadence.py`` exercises the split itself.
+    monkeypatch.setattr(_iteration, "visit_budget", lambda _persona, _cap, remaining: remaining)
     # Isolate every random operation per test.  Patching only SystemRandom.random
     # leaves choice/sample/randrange backed by OS entropy, which can make the same
     # behavioural scenario select a different channel or action across mutation

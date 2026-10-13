@@ -13,6 +13,7 @@ from core.db import fetch_warming_state
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
+from services.warming._cadence import MIN_VISIT_ACTIONS
 from services.warming._cycle import run_one_cycle
 from services.warming._dm_breaker import note_dm_flood
 from services.warming._fleet import _is_quiet_day
@@ -43,8 +44,9 @@ if TYPE_CHECKING:
 
 # A cycle always spends one action on the SetOnline presence flip; require room
 # for at least one real action (join/read/react) beyond it before starting, or
-# the cycle would burn a 12-30h sleep doing nothing useful.
-_MIN_CYCLE_ACTIONS = 2
+# the cycle would burn a 12-30h sleep doing nothing useful. Shared with the visit
+# budget split (``_cadence``), so a visit is never planned below the gate's floor.
+_MIN_CYCLE_ACTIONS = MIN_VISIT_ACTIONS
 
 # Canonical order of the live-progress tokens ``run_one_cycle`` emits. The loop
 # maps a token to its position here to keep the rail advancing forward only —

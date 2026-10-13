@@ -34,6 +34,7 @@ from services.accounts._tdata import (
 )
 from services.accounts._uploads import _session_filename, _write_session_file
 from services.accounts.lifecycle import add_account
+from services.accounts.registered import set_registered_at
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import DEAD_SESSION_STATUSES, record_lifecycle_event
 
@@ -96,10 +97,13 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
         )
         await asyncio.to_thread(_write_session_file, session_path, data.content)
         try:
-            return await add_account(create)
+            account = await add_account(create)
         except Exception as exc:
             await _discard_orphaned_session(session_path, session_name, exc)
             raise
+    if data.registered_at is None:
+        return account
+    return await set_registered_at(account.account_id, data.registered_at)
 
 
 async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:
@@ -181,4 +185,6 @@ async def import_account_tdata(data: TdataConvertRequest) -> TdataImportResult:
         add_account=add_account,
         check_account_session=check_account_session,
     )
+    if data.registered_at is not None:
+        accounts = [await set_registered_at(a.account_id, data.registered_at) for a in accounts]
     return TdataImportResult(accounts=accounts)

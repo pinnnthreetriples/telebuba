@@ -43,6 +43,7 @@ from schemas.accounts import (
     AccountProfileUpdateRequest,
     AccountRead,
     AccountStatus,
+    RegisteredSource,
 )
 
 if TYPE_CHECKING:
@@ -72,6 +73,8 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
         created_at=str(mapping["created_at"]),
         updated_at=str(mapping["updated_at"]),
+        telegram_registered_at=_optional_str(mapping.get("telegram_registered_at")),
+        registered_source=cast("RegisteredSource | None", mapping.get("registered_source")),
         proxy_id=_optional_str(mapping.get("proxy_id")),
         device_platform=_optional_str(mapping.get("device_platform")),
         device_model=_optional_str(mapping.get("device_model")),
@@ -108,6 +111,8 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.last_checked_at,
         _accounts.c.created_at,
         _accounts.c.updated_at,
+        _accounts.c.telegram_registered_at,
+        _accounts.c.registered_source,
         _accounts.c.proxy_id,
         _device_fingerprints.c.platform.label("device_platform"),
         _device_fingerprints.c.device_model.label("device_model"),
