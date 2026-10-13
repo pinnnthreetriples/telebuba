@@ -38,7 +38,7 @@ from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
-from services.accounts import shutdown_web_login
+from services.accounts import close_orphaned_web_windows, shutdown_web_login
 from services.auth import seed_admin_if_empty
 from services.chat_broadcast import (
     reconcile_chat_broadcast_on_startup,
@@ -151,6 +151,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     setup_logging()
     await cleanup_stale_uploads()
+    # Before any window of this run can open: whatever answers now is a leftover.
+    await close_orphaned_web_windows()
     await _log_app_started()
     await seed_admin_if_empty()
     # DB is initialised by the seed above; start the periodic SQLite maintenance

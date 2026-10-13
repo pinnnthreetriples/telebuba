@@ -42,6 +42,7 @@ class _GatewayProbe:
         action: TelegramAction,
         *,
         domain: str = "warming",  # noqa: ARG002 - signature parity
+        device_type: str | None = None,  # noqa: ARG002 - signature parity
     ) -> ActionResult:
         self.current += 1
         self.peak = max(self.peak, self.current)
@@ -130,7 +131,13 @@ async def test_a_cycle_fleet_shares_the_configured_slots(monkeypatch: pytest.Mon
 
 @pytest.mark.asyncio
 async def test_slot_is_released_when_the_gateway_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def boom(_account_id: str, _action: TelegramAction, *, domain: str) -> ActionResult:
+    async def boom(
+        _account_id: str,
+        _action: TelegramAction,
+        *,
+        domain: str,
+        device_type: str | None = None,  # noqa: ARG001 - signature parity
+    ) -> ActionResult:
         raise RuntimeError(domain)
 
     monkeypatch.setattr(_seams, "_gateway_execute", boom)
@@ -148,7 +155,13 @@ async def test_slot_is_released_when_the_dispatch_is_cancelled(
 ) -> None:
     entered = asyncio.Event()
 
-    async def hang(_account_id: str, _action: TelegramAction, *, domain: str) -> ActionResult:
+    async def hang(
+        _account_id: str,
+        _action: TelegramAction,
+        *,
+        domain: str,
+        device_type: str | None = None,  # noqa: ARG001 - signature parity
+    ) -> ActionResult:
         entered.set()
         await asyncio.Event().wait()
         raise AssertionError(domain)  # pragma: no cover - cancelled above
@@ -180,6 +193,7 @@ async def test_a_generation_retired_while_queued_never_dispatches(
         action: TelegramAction,
         *,
         domain: str = "warming",  # noqa: ARG001 - signature parity
+        device_type: str | None = None,  # noqa: ARG001 - signature parity
     ) -> ActionResult:
         calls.append(account_id)
         await release.wait()

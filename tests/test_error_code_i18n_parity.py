@@ -48,6 +48,8 @@ from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ER
 from core.telegram_client._twofa import _TWOFA_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.chat_broadcast import ChatBroadcastRefusalCode
+from schemas.devices import DeviceRefusalCode
+from schemas.emulator import EmulatorRefusalCode
 from schemas.masstagging import MasstaggingRefusalCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
@@ -122,6 +124,10 @@ def _expected_codes() -> set[str]:
     # ``ScheduledPostRefusalCode`` is the scheduling policy's own refusals, and
     # ``StoryLimitErrorCode`` the story quota codes ``_media`` matches by message
     # prefix (Telethon has no class for them), so neither is a ladder entry.
+    #
+    # ``DeviceRefusalCode`` is the account-device vocabulary: the second-device sign-in,
+    # the device choice at import/login, and warming's refusal of a device the account
+    # lacks all answer with it. ``EmulatorRefusalCode`` is the mobile container's own.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
@@ -130,6 +136,8 @@ def _expected_codes() -> set[str]:
         | set(get_args(ChatBroadcastRefusalCode))
         | set(get_args(MasstaggingRefusalCode))
         | set(get_args(WarmingRefusalCode))
+        | set(get_args(DeviceRefusalCode))
+        | set(get_args(EmulatorRefusalCode))
         | set(get_args(TwoFactorRefusalCode))
         | set(get_args(ScheduledPostRefusalCode))
         | set(get_args(StoryLimitErrorCode))

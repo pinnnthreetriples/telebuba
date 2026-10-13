@@ -63,7 +63,12 @@ const FALLBACK_POLL_MS = 30000;
 // What the start dialog hands back: one length, cadence and first-cycle delay.
 type StartChoice = Pick<
   StartWarmingRequest,
-  'target_days' | 'activity_persona' | 'start_delay_hours' | 'spread_start' | 'accept_geo_mismatch'
+  | 'target_days'
+  | 'activity_persona'
+  | 'start_delay_hours'
+  | 'spread_start'
+  | 'accept_geo_mismatch'
+  | 'device_mode'
 >;
 
 // The dialog's answer as the start request's fields.
@@ -73,6 +78,7 @@ function startChoice(choice: StartDialogChoice): StartChoice {
     activity_persona: choice.persona,
     start_delay_hours: choice.delayHours,
     accept_geo_mismatch: choice.acceptGeo,
+    device_mode: choice.device,
   };
 }
 
@@ -712,6 +718,7 @@ export function WarmingPage() {
           phone={warmDaysFor.phone ?? warmDaysFor.label ?? warmDaysFor.account_id}
           defaultDays={data.default_target_days}
           cadence={data.cadence_preview}
+          devices={warmDaysFor.devices}
           onClose={() => {
             setWarmDaysFor(null);
           }}
@@ -730,6 +737,7 @@ export function WarmingPage() {
           defaultDays={data.default_target_days}
           cadence={data.cadence_preview}
           geo={geoOf(resumeFor)}
+          devices={resumeFor.devices}
           onClose={() => {
             setResumeFor(null);
           }}
@@ -769,7 +777,13 @@ export function WarmingPage() {
             const targets = choice.onlyGeoMatching
               ? poolIdle.filter((a) => !needsGeoConsent(a))
               : poolIdle;
-            runBatch(targets.map((a) => startAccount(a.account_id, request)));
+            // Each account warms through its primary device: a phone-only account has no
+            // desktop sign-in to fall back on.
+            runBatch(
+              targets.map((a) =>
+                startAccount(a.account_id, { ...request, device_mode: a.devices?.[0] }),
+              ),
+            );
           }}
         />
       ) : null}

@@ -15,10 +15,18 @@ from core.db import (
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.phone_geo import evaluate_geo
-from core.telegram_client import forget_post_listener, remove_account_session, removing_client
+from core.telegram_client import (
+    account_auth_lock,
+    forget_post_listener,
+    forget_primary_device,
+    remove_account_session,
+    removing_client,
+)
 from schemas.geo import GeoMatch
 from schemas.lifecycle import AccountDeleteReasonGuess
 from services.accounts._result import AccountNotFoundError
+from services.accounts.devices import forget_device_cooldown
+from services.accounts.web_windows import forget_account_web
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import (
     guess_delete_reason,
@@ -36,7 +44,10 @@ logger = logging.getLogger(__name__)
 
 async def add_account(data: AccountCreate) -> AccountRead:
     account = await create_account(data)
-    await get_or_create_device_fingerprint(account.account_id)
+    # An id can come back as a different account (deleted, then re-imported as a
+    # phone): whatever the pool resolved for the old one must not outlive it.
+    forget_primary_device(account.account_id)
+    await get_or_create_device_fingerprint(account.account_id, data.session_device)
     saved = await list_accounts()
     persisted = next(
         (item for item in saved.accounts if item.account_id == account.account_id),
@@ -155,7 +166,9 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
         # ``removing_client`` also has to refuse rebuilds until the row is gone —
         # otherwise a borrower waking mid-removal re-opens the ``.session`` file
         # and the unlink aborts the delete with PermissionError.
-        async with removing_client(account_id):
+        # The auth lock first: a second-device sign-in in flight finishes (recorded or
+        # undone) before the read below, so its session cannot outlive the delete.
+        async with account_auth_lock(account_id), removing_client(account_id):
             account = await fetch_account(account_id)
             if account is None:
                 # The only lifecycle entry point that used to tolerate a missing
@@ -165,6 +178,10 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
                 # resolved to. Guard, never sanitise; the API maps this to 404.
                 raise AccountNotFoundError(account_id)
             await remove_account_session(account_id, account.session_name)
+            # The account's second authorization is its own ``.session``; its
+            # fingerprint row goes with the rest of the account's rows below.
+            if account.second_session_name is not None:
+                await remove_account_session(account_id, account.second_session_name)
             # Read before the cascade (it removes the spam verdict and warming state the
             # journal row needs), write only after the delete succeeded — a failed delete
             # must not leave a ``deleted`` row for a live account. Neither step raises.
@@ -180,6 +197,7 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
         # ``neurocomment_cooldowns`` rows so a re-imported id is not born parked, but the
         # live map those rows only back up is a service global core cannot reach.
         forget_account_cooldowns(account_id)
+        forget_device_cooldown(account_id)
         # Third registry, same reason, and the one this function had not been told
         # about: the 2FA writes serialise per account through a module-level table
         # that nothing else ever drops keys from. A re-imported id reusing the key
@@ -205,6 +223,13 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
             type(exc).__name__,
             exc_info=exc,
         )
+    # The account's Android container, if it ever had one: LDPlayer keeps it otherwise.
+    # Imported here for the import cycle (mobile_emulator needs require_account).
+    from services.accounts.mobile_emulator import remove_account_container  # noqa: PLC0415
+
+    await remove_account_container(account_id)
+    # Its web window and signed-in profile, if it ever opened one. Never raises.
+    await forget_account_web(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

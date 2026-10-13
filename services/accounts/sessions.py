@@ -33,6 +33,7 @@ from services.accounts._tdata import (
     import_account_tdata as _tdata_import,
 )
 from services.accounts._uploads import _session_filename, _write_session_file
+from services.accounts.devices import assert_device_configured
 from services.accounts.lifecycle import add_account
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import DEAD_SESSION_STATUSES, record_lifecycle_event
@@ -56,6 +57,7 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     if len(data.content) > max_bytes:
         msg = f"Session file is too large (>{max_bytes} bytes)"
         raise ValueError(msg)
+    assert_device_configured(data.session_device)
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
     session_path = settings.telegram.session_dir / filename
@@ -94,6 +96,7 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
             label=data.label,
             session_name=session_name,
             registered_at=data.registered_at,
+            session_device=data.session_device,
         )
         await asyncio.to_thread(_write_session_file, session_path, data.content)
         try:

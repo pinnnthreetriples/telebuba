@@ -517,7 +517,7 @@ async def test_channel_unavailable_maps_to_503(
 def _patch_read_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     """Route the REAL read gateway at a fake Telethon client (integration path)."""
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     async def fake_fetch(account_id: str):

@@ -656,7 +656,7 @@ async def test_start_login_returns_the_account(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake(phone: str, label: str | None = None) -> AccountRead:  # noqa: ARG001
+    async def _fake(phone: str, label: str | None = None, _device: str = "desktop") -> AccountRead:  # noqa: ARG001
         return _account("79990001122")
 
     monkeypatch.setattr("services.accounts.start_phone_login", _fake)
@@ -674,7 +674,7 @@ async def test_start_login_duplicate_is_409(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(phone: str, label: str | None = None) -> AccountRead:  # noqa: ARG001
+    async def _boom(phone: str, label: str | None = None, _device: str = "desktop") -> AccountRead:  # noqa: ARG001
         msg = "already exists"
         raise SessionAlreadyExistsError(msg)
 

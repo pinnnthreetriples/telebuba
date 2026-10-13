@@ -300,6 +300,7 @@ async def test_lease_fences_before_and_after_gateway_dispatch(
         action: TelegramAction,
         *,
         domain: str,
+        device_type: str | None = None,  # noqa: ARG001 - mirrors the real signature
     ) -> ActionResult:
         from schemas.telegram_actions import ActionResult  # noqa: PLC0415
 
@@ -390,6 +391,7 @@ async def test_a_stopped_cycle_still_takes_the_account_offline(
         action: TelegramAction,
         *,
         domain: str,
+        device_type: str | None = None,  # noqa: ARG001 - mirrors the real signature
     ) -> ActionResult:
         from tests.services.warming._support import _ok  # noqa: PLC0415
 
@@ -444,6 +446,7 @@ async def test_uncertain_dispatched_rpc_keeps_full_budget_reserved(
         action: TelegramAction,
         *,
         domain: str,
+        device_type: str | None = None,  # noqa: ARG001 - mirrors the real signature
     ) -> ActionResult:
         from schemas.telegram_actions import ActionResult  # noqa: PLC0415
 

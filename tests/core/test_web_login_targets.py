@@ -18,7 +18,7 @@ import pytest
 from core.web_login import _cdp, _targets
 from core.web_login._cdp import CdpError
 from core.web_login._targets import TargetDriver
-from core.web_login.fingerprint import fingerprint_for, worker_init_script
+from core.web_login.fingerprint import LocaleRejectedError, fingerprint_for, worker_init_script
 
 _FINGERPRINT = fingerprint_for("acct-1", "DE")
 _RESUME = "Runtime.runIfWaitingForDebugger"
@@ -91,6 +91,26 @@ async def test_first_page_session_arms_auto_attach_and_returns_the_page() -> Non
     assert auto[0][1] is None
     assert auto[1][1] == "P1"
     assert all(params["waitForDebuggerOnStart"] is True for params, _s in auto)
+    assert session.sent(_RESUME)[0][1] == "P1"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_locale_ends_the_wait_at_once_and_says_so() -> None:
+    """Every page of the window would be refused alike; the caller retries elsewhere.
+
+    Reported as ``LocaleRejectedError``, not the generic "never attached a page"
+    after the whole first-page timeout, and the paused page is still resumed.
+    """
+    session = _Session(
+        events=[attached("P1", "page")],
+        fail_methods=frozenset({"Emulation.setLocaleOverride"}),
+    )
+    started = time.monotonic()
+
+    with pytest.raises(LocaleRejectedError):
+        await _driver(session).first_page_session()
+
+    assert time.monotonic() - started < _targets._FIRST_PAGE_TIMEOUT / 4
     assert session.sent(_RESUME)[0][1] == "P1"
 
 

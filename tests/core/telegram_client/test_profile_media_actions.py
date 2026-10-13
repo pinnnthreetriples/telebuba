@@ -581,7 +581,7 @@ async def test_execute_set_main_photo_fails_when_download_returns_nothing(
 
 
 def _patch_avatar_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     monkeypatch.setattr("core.telegram_client._media.get_client", fake_get_client)
@@ -675,7 +675,7 @@ async def test_refresh_account_avatar_swallows_pool_failures(
     """The refresh is cosmetic — a dead pool must not fail the mutation."""
     await _seeded_account("acc-avatar-dead")
 
-    async def broken_get_client(_account_id: str) -> object:
+    async def broken_get_client(_account_id: str, _device_type: str | None = None) -> object:
         msg = "pool down"
         raise ConnectionError(msg)
 

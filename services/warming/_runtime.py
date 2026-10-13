@@ -37,7 +37,6 @@ from services.warming import _exclusion, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
-from services.warming._start_options import first_run_at
 from services.warming._start_state import carry_or_restamp, journal_start
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
@@ -336,11 +335,11 @@ async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> W
         # per-booking reservation token still lets normal cancellation hand unused
         # budget back before this new generation is minted.
         existing = await fetch_warming_state(data.account_id)
+        stint = carry_or_restamp(existing, data, account, resume=resume)
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        stint = carry_or_restamp(existing, data, first_run_at(account, data), resume=resume)
         # Bug 2: a promoted account dragged back into warming would otherwise live in
         # both pools — clear the flags so neurocomment's overview drops it.
         if existing is not None and existing.promoted_to_nc:
@@ -371,6 +370,7 @@ async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> W
                 target_days=stint.target_days,
                 activity_persona=stint.activity_persona,
                 warmed_days=0 if stint.fresh else None,
+                device_mode=stint.device_mode,
             )
             # Build dialogue ownership before the first cycle; cancellation here is
             # covered by the same rollback as cancellation during the state commit.

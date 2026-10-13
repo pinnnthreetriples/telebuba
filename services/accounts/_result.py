@@ -76,6 +76,8 @@ _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
         # belongs to a campaign — but the class is one of ours and is constructed
         # with its code, so it belongs on the allowlist rather than in the prose half.
         "CopyMediaError",
+        # A device the account lacks or that is not set up (``schemas.devices``).
+        "DeviceUnavailableError",
         "ProfileGatewayError",
         "StoryCollageLayoutError",
         "StoryImageNormalisationError",

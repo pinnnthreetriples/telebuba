@@ -121,6 +121,7 @@ def _to_card(
         first_name=account.first_name,
         last_name=account.last_name,
         avatar_etag=account.avatar_etag,
+        devices=account.devices,
         state=state,
         health=warming_health(state),
         readiness=readiness,
@@ -254,6 +255,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             geo_status=card.geo_status,
             geo_accepted=card.geo_accepted,
             survival=card.survival,
+            devices=card.devices,
         )
         for card in cards
         if card.promoted_to_nc

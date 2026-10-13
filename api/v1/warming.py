@@ -119,6 +119,9 @@ async def _start_or_http(body: StartWarmingRequest, *, resume: bool) -> WarmingA
         ) from exc
     except warming_service.WarmingNotReadyError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except warming_service.WarmingDeviceUnavailableError as exc:
+        # The chosen device is missing or not set up: its stable code, never a fallback.
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc
     except warming_service.AccountIsListenerError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,

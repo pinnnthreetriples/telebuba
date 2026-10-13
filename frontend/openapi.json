@@ -8443,6 +8443,318 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/devices": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Add Account Device",
+        "description": "Sign the other device in beside the account's existing one.\n\nA refusal answers 400 with a stable device code; a flood wait carries its seconds.",
+        "operationId": "addAccountDevice",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/emulator": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Emulator Status",
+        "description": "Whether opening accounts in the Android container is switched on.",
+        "operationId": "emulatorStatus",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmulatorStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/open-mobile": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Open Account Mobile",
+        "description": "Start the account's container and sign its Telegram app in.\n\nA refusal answers 400 with a stable code; a start already running for the same\naccount answers 409 ``emulator_busy``.",
+        "operationId": "openAccountMobile",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenMobileResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -20869,6 +21181,37 @@
             ],
             "title": "Session Name"
           },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
+          },
+          "second_session_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Session Name"
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -21734,6 +22077,24 @@
         "title": "AddChannelsRequest",
         "description": "Raw user input \u2014 one or many links/usernames, newline- or comma-separated."
       },
+      "AddDeviceRequest": {
+        "properties": {
+          "device_type": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_type"
+        ],
+        "title": "AddDeviceRequest",
+        "description": "API body for ``POST /accounts/{id}/devices``."
+      },
       "AssignAccountRequest": {
         "properties": {
           "account_id": {
@@ -21815,6 +22176,15 @@
               }
             ],
             "title": "Registered At"
+          },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -25699,6 +26069,20 @@
         "title": "DiscoveryWork",
         "description": "Progress of the stage that is running (or just ran)."
       },
+      "EmulatorStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "EmulatorStatus",
+        "description": "Whether the container feature is switched on (the SPA disables the button if not)."
+      },
       "ErrorDetail": {
         "properties": {
           "code": {
@@ -28668,6 +29052,35 @@
         "title": "NotificationTestResult",
         "description": "``POST /notifications/test`` succeeded: the message was delivered."
       },
+      "OpenMobileResult": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "started",
+              "already_running"
+            ],
+            "title": "Status"
+          },
+          "signed_in": {
+            "type": "boolean",
+            "title": "Signed In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "status",
+          "signed_in"
+        ],
+        "title": "OpenMobileResult",
+        "description": "What opening the container did; ``signed_in`` is read off the screen, never cached."
+      },
       "OpenWebResult": {
         "properties": {
           "launched": {
@@ -30416,6 +30829,15 @@
               }
             ],
             "title": "Label"
+          },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -30559,6 +30981,15 @@
             ],
             "title": "Activity Persona",
             "default": "normal"
+          },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -32198,6 +32629,17 @@
                 "type": "null"
               }
             ]
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
           }
         },
         "type": "object",
@@ -32766,6 +33208,17 @@
               }
             ],
             "title": "Activity Persona"
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
           },
           "readiness": {
             "anyOf": [

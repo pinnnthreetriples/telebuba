@@ -33,6 +33,7 @@ import httpx
 from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
+from core.web_login._lifetime import browser_env, tie_to_backend
 from core.web_login._scripts import QR_CAPTURE_HOOK
 from core.web_login._targets import TargetDriver
 from core.web_login.fingerprint import note_browser_version
@@ -215,6 +216,11 @@ def build_launch_args(
     ]
 
 
+def web_profiles_root() -> Path:
+    """The absolute directory holding every account's profile (see below for why absolute)."""
+    return settings.telegram.session_dir.with_name(_PROFILE_SUBDIR).resolve()
+
+
 def account_profile_dir(account_id: str) -> Path:
     """Per-account persistent profile dir, sibling to the sessions dir. Persists between clicks.
 
@@ -223,7 +229,7 @@ def account_profile_dir(account_id: str) -> Path:
     its command line to whatever Chrome is already running and exits 0, so the account's
     window would appear in the OPERATOR's own browser, on the operator's own IP.
     """
-    return (settings.telegram.session_dir.with_name(_PROFILE_SUBDIR) / account_id).resolve()
+    return (web_profiles_root() / account_id).resolve()
 
 
 def token_bytes(b64url: str) -> bytes:
@@ -363,6 +369,7 @@ async def launch_account_web(
             *args,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
+            env=browser_env(),
         )
     except BaseException:
         # The reservation is released by the wait below, which a spawn that never
@@ -373,6 +380,8 @@ async def launch_account_web(
         _ports_in_flight.discard(debug_port)
         raise
     try:
+        # First, so a browser the backend cannot take down with it is never used.
+        tie_to_backend(proc.pid)
         ws_url = await _browser_ws(debug_port, proc, profile_dir)
     except BaseException:
         await _end_process(proc)

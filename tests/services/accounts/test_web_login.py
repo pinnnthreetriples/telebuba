@@ -33,6 +33,9 @@ from tests.services.accounts._web_login_support import FakeRelay as _FakeRelay
 from tests.services.accounts._web_login_support import browser_filled as _browser_filled
 from tests.services.accounts._web_login_support import counted_states as _counted_states
 from tests.services.accounts._web_login_support import fresh_registry, relay
+from tests.services.accounts._web_login_support import (
+    patch_device_language as _patch_device_language,
+)
 from tests.services.accounts._web_login_support import patch_profile as _patch_profile
 from tests.services.accounts._web_login_support import patch_proxy as _patch_proxy
 from tests.services.accounts._web_login_support import seeded as _seeded
@@ -240,6 +243,30 @@ async def test_the_fingerprint_follows_the_proxy_country(
     fingerprint = calls["fingerprint"]
     assert fingerprint.timezone == "Europe/Berlin"
     assert fingerprint.locale == "de-DE"
+
+
+@pytest.mark.asyncio
+async def test_the_window_speaks_the_language_its_telethon_device_announces(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """One account, one language: the device's, not the proxy country's.
+
+    The timezone still follows the proxy, which is what the exit IP is checked against.
+    """
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY)  # country "DE"
+    _patch_device_language(monkeypatch, "ru-RU")
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    monkeypatch.setattr(web_login, "LocalProxyRelay", _FakeRelay)
+    _FakeRelay.created = []
+    _wire(monkeypatch, calls, states=["logged_in"])
+
+    await open_account_web("acct")
+
+    fingerprint = calls["fingerprint"]
+    assert fingerprint.locale == "ru-RU"
+    assert fingerprint.timezone == "Europe/Berlin"
 
 
 @pytest.mark.usefixtures("relay")

@@ -1,8 +1,10 @@
 ---
 name: runtime-telegram
 description: Telegram client, sessions, proxies, profile, privacy and account removal.
-last_updated: 2026-09-28
+last_updated: 2026-10-12
 edges:
+  - target: patterns/account-devices.md
+    condition: account devices, the second sign-in or the mobile container
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
   - target: patterns/add-telegram-task.md
@@ -10,7 +12,7 @@ edges:
 grounds_to:
   - node: "function:813f0983baf0e31765832591c2d9c5c0"
     fingerprint: "mh:64:7b226d696e68617368223a5b39393739303337342c38353030383030312c33303636333333382c35373132303635362c35303638303138302c36323237363334322c38393831353430342c3139303432353632312c31323732353739302c3131363436373231312c31373931303839362c3132353037333139332c34323234323235342c3132323137353830362c38333638393339322c32373732313037342c3131383537303232312c3232363536353031302c35303631363336382c3133313830343636332c31333738353638352c3230303739313239372c383334323334362c3133343232353733372c3134353437393235372c3132343138343835332c3334383434343538322c3231333137393432312c39303431353236382c313634363838322c33313736313835342c36343137353738312c343431393134332c37313239353839382c38363738393535342c3132393431373436342c3131303731353836362c36303238383134312c35363936323936392c3133393435343737312c3131363238393239392c32333037353938312c3130343430343034352c37343832333037332c3333323033363332382c36393231383631362c38373439393237342c3131363631323932362c3239323130343332332c3132303632313938342c3134303032363031342c39363630383032352c3339363934353835372c3230383337353737342c3138343033393938312c37383932363934362c3131343632323437362c39333638363137342c34343930383434392c3337353130373430382c323035363330362c32393939383334352c32333032383630312c31313732363932355d2c226e65696768626f7273223a5b2266756e6374696f6e3a3133343761393930343366633165633336396438623631316138336462613366222c2266756e6374696f6e3a3362623239663561353737653162626630613337353166663433663831323636222c2266756e6374696f6e3a6532316564396266666536646333326331616566656539393439366535333130225d2c22746f6b656e436f756e74223a35367d"
-    bodyHash: "f0ab0094d15cba142870a1ecb3c818565d1b32051ab369a5ee55e571ff810e86"
+    bodyHash: "43cb993fae8b67d7f0e068cdad8ac9356b90d5fec29fd0ee36c871afa5ba2c10"
   - node: "function:74413e28324f62d9d4f0bd48fdfadb79"
     fingerprint: "mh:64:7b226d696e68617368223a5b383939303735392c3130373232303930392c373839313932342c32343538303339302c3132343331303137302c34373634303830332c38393836333034372c31333530393139342c3836303337332c3130333834383538322c31353537343536322c31313236353438362c31373431353239352c31383537323237312c31323238353831372c32373732313037342c323934373739342c3133353138353636372c34353839353537392c38303934333634362c33383137363739372c32363739393939392c33313633363030342c34313330373131372c3136373231303336322c32343337323535302c31353436373239372c31363631333034382c3132393938373839302c313634363838322c31353735333834312c33363239383230382c343431393134332c32333430313839382c38383736343531392c32333234313035322c32373230343131352c36303238383134312c33373336313533342c36343531303332342c32393637313335342c3133343437373035312c3832363536312c36363539393130392c31383434303833372c31313730363934332c35383039323536372c3131363631323932362c31333331333037392c32323934333537332c34363132333235322c39363630383032352c34313638303530332c33313933363034332c32353330383530382c37383932363934362c35343139343937332c313830313638392c34343930383434392c37333335383338332c323035363330362c32393939383334352c32333032383630312c31313732363932355d2c226e65696768626f7273223a5b2266756e6374696f6e3a3837343861646466353136636231386563613462356638366262306131356362225d2c22746f6b656e436f756e74223a3137337d"
     bodyHash: "66b65fa352fc343a08f3d3c79aaaf315a0968a1ee37206fc01b5826f526d5b18"
@@ -19,7 +21,7 @@ grounds_to:
 # Telegram, Sessions and Proxies
 
 - Only `core/telegram_client/` imports Telethon and owns pooled clients/listeners; services choose policy and persist outcomes. Never expose Telethon/session/tdata objects across the boundary.
-- The client pool is the sole owner of an account connection that may be in service. Probes borrow from it; login/logout flows that must build directly are serialized separately. Account removal tombstones pool access for the full evict/unlink/delete sequence.
+- The client pool is the sole owner of an account device's connection (see `patterns/account-devices.md`). Probes borrow from it; login/logout flows that must build directly are serialized separately. Account removal tombstones pool access for the full evict/unlink/delete sequence.
 - Session filenames are one plain child of the session directory. Stored `session_name` overrides `account_id`; migration 7 enforces uniqueness. The lexical path guard is authoritative before filesystem resolution.
 - Frozen accounts can remain authorized, so health classification uses Telegram freeze signals rather than `get_me()` alone. Rate-limit/frozen errors are converted to stable outcomes; services decide what state is durable. The Premium flag is a point-in-time snapshot taken from `get_me()` at session check and login only; None means never observed.
 - Device fingerprints are immutable except the language pair, which any session check that learns a mapped phone may correct while it is still the fallback — established rows included, deliberately. Proxy credentials are resolved inside `core/` from the shared pool; capacity is config-driven. Proxy checks discover the exit IP over TLS and persist geolocation consensus without exposing credentials.
@@ -29,7 +31,7 @@ grounds_to:
 - `edit_2fa` also writes an empty new-password hash whenever `new_password` is falsy, and a present-but-empty hash REMOVES the cloud password — so an email-only change must omit the password fields from the flags entirely. `EMAIL_UNCONFIRMED_<N>` there is a success signal, not a failure: the setting applied and N is the mailed code's length, which the operator types back in a second request.
 - The gateway's "was this dispatched" verdict keys off whether a client was borrowed, not off which RPC failed, so a dispatcher's FIRST call must be one it owns: a convenience method that reads before it writes turns a lost read into a reported "may have been applied", which the service then persists as an unconfirmed credential.
 - A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied — unless the live read shows no password at all, which makes the stored value stale rather than the previous one in force.
-- Web-login dresses the page AND every paused worker (Telegram reads it in WebK's MTProto worker; page overrides never cross), holding its CDP socket open — Chrome strips overrides on detach. The profile dir must be absolute, or Chrome hands its argv to a running Chrome and exits 0, on the operator's IP.
+- Web-login dresses the page AND every paused worker (WebK reads it in a worker) over a held-open CDP socket — Chrome strips overrides on detach; Chrome dies with the backend. Language: the primary device's; timezone: the proxy's. A relative profile dir hands the argv to a running Chrome (operator's IP).
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
 

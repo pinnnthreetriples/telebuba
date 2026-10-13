@@ -66,7 +66,7 @@ async def test_assign_and_unassign_evict_client(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("services.proxies.evict_client", fake_evict)
@@ -91,7 +91,7 @@ async def test_remove_proxy_evicts_all_assigned_clients(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("services.proxies.evict_client", fake_evict)
@@ -116,7 +116,7 @@ async def test_add_proxy_credential_rotation_evicts_clients(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("services.proxies.evict_client", fake_evict)
@@ -139,7 +139,7 @@ async def test_add_proxy_fresh_insert_evicts_nothing(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("services.proxies.evict_client", fake_evict)

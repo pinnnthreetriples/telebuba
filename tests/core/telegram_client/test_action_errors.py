@@ -296,7 +296,7 @@ async def test_execute_classifies_infrastructure_failures_unavailable(
 ) -> None:
     """Internal connection failures are unavailable, not client failures."""
 
-    async def failing_get_client(_account_id: str) -> object:
+    async def failing_get_client(_account_id: str, _device_type: str | None = None) -> object:
         raise exc
 
     async def fake_fetch(account_id: str) -> object:

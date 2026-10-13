@@ -22,6 +22,9 @@ import type {
   ActOnMasstaggingTargetData,
   ActOnMasstaggingTargetErrors,
   ActOnMasstaggingTargetResponses,
+  AddAccountDeviceData,
+  AddAccountDeviceErrors,
+  AddAccountDeviceResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
@@ -166,6 +169,9 @@ import type {
   EditAccountChannelPostData,
   EditAccountChannelPostErrors,
   EditAccountChannelPostResponses,
+  EmulatorStatusData,
+  EmulatorStatusErrors,
+  EmulatorStatusResponses,
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponses,
@@ -397,6 +403,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadErrors,
   MarkAccountChatReadResponses,
+  OpenAccountMobileData,
+  OpenAccountMobileErrors,
+  OpenAccountMobileResponses,
   OpenAccountWebData,
   OpenAccountWebErrors,
   OpenAccountWebResponses,
@@ -1915,6 +1924,55 @@ export const rescheduleScheduledPost = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Add Account Device
+ *
+ * Sign the other device in beside the account's existing one.
+ *
+ * A refusal answers 400 with a stable device code; a flood wait carries its seconds.
+ */
+export const addAccountDevice = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountDeviceData, ThrowOnError>,
+): RequestResult<AddAccountDeviceResponses, AddAccountDeviceErrors, ThrowOnError> =>
+  (options.client ?? client).post<AddAccountDeviceResponses, AddAccountDeviceErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/devices',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Emulator Status
+ *
+ * Whether opening accounts in the Android container is switched on.
+ */
+export const emulatorStatus = <ThrowOnError extends boolean = false>(
+  options?: Options<EmulatorStatusData, ThrowOnError>,
+): RequestResult<EmulatorStatusResponses, EmulatorStatusErrors, ThrowOnError> =>
+  (options?.client ?? client).get<EmulatorStatusResponses, EmulatorStatusErrors, ThrowOnError>({
+    url: '/api/v1/accounts/emulator',
+    ...options,
+  });
+
+/**
+ * Open Account Mobile
+ *
+ * Start the account's container and sign its Telegram app in.
+ *
+ * A refusal answers 400 with a stable code; a start already running for the same
+ * account answers 409 ``emulator_busy``.
+ */
+export const openAccountMobile = <ThrowOnError extends boolean = false>(
+  options: Options<OpenAccountMobileData, ThrowOnError>,
+): RequestResult<OpenAccountMobileResponses, OpenAccountMobileErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    OpenAccountMobileResponses,
+    OpenAccountMobileErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/open-mobile', ...options });
 
 /**
  * List Proxies

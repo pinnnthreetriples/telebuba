@@ -20,6 +20,8 @@ from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_chats import chats_router
 from api.v1._accounts_contact_lookup import contact_lookup_router
+from api.v1._accounts_devices import devices_router
+from api.v1._accounts_emulator import emulator_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_registered import registered_router
@@ -40,6 +42,7 @@ from schemas.accounts import (
     OpenWebResult,
     WebWindowCount,
 )
+from schemas.device_fingerprint import DeviceType  # noqa: TC001 - FastAPI form at runtime
 from schemas.lifecycle import AccountDeleteReasonGuess, DeleteReason
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
@@ -204,7 +207,7 @@ async def close_account_web_windows() -> WebWindowCount:
 async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     """Create a new account from a bare phone number, ready for request-code."""
     try:
-        return await accounts.start_phone_login(body.phone, body.label)
+        return await accounts.start_phone_login(body.phone, body.label, body.session_device)
     except accounts.SessionAlreadyExistsError as exc:
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except accounts.PhoneLoginError as exc:
@@ -363,6 +366,7 @@ async def import_account_session(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
     registered_at: Annotated[date | None, Form()] = None,
+    session_device: Annotated[DeviceType, Form()] = "desktop",
 ) -> AccountRead:
     reject_oversized_upload(
         file,
@@ -375,6 +379,7 @@ async def import_account_session(
         content=content,
         label=label,
         registered_at=registered_at,
+        session_device=session_device,
     )
     # ``service_errors_to_http`` owns the residual ValueError: the request model is
     # assembled here from Form/File params, so a refused ``account_id`` reaches this
@@ -409,3 +414,7 @@ router.include_router(bulk_messages_router)
 router.include_router(contact_lookup_router)
 # Timed profile photos / stories (media upload + per-account schedule).
 router.include_router(scheduled_router)
+# The account's second device (a separate sign-in of the other device type).
+router.include_router(devices_router)
+# The mobile account's local Android container (LDPlayer 9).
+router.include_router(emulator_router)

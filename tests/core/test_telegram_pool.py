@@ -16,12 +16,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.config import settings
-from core.db import configure_database
+from core.db import _get_engine, configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import TelegramClientPoolError
 from core.telegram_client._pool import (
     _CLIENTS,
-    _REBUILD_HOOKS,
     _REMOVING,
     _connect_lock,
     _reset_for_tests,
@@ -31,6 +30,7 @@ from core.telegram_client._pool import (
     removing_client,
     shutdown_telegram_pool,
 )
+from core.telegram_client._pool_hooks import _REBUILD_HOOKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -43,6 +43,9 @@ def _isolate_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
+    # Concurrent borrowers resolve the primary device on worker threads; build the
+    # schema first so they cannot race the lazy ``create_all``.
+    _get_engine()
     monkeypatch.setattr(settings.telegram, "session_dir", tmp_path / "sessions")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
@@ -128,7 +131,7 @@ def _install_gated_build(
     """
     built: list[_FakeClient] = []
 
-    async def gated_build(_account_id: str) -> _FakeClient:
+    async def gated_build(_account_id: str, _device: str) -> _FakeClient:
         client = _FakeClient()
         built.append(client)
         started.set()
@@ -295,12 +298,12 @@ async def test_evict_client_disconnects_and_drops_from_pool(
     """
     built = _install_fake_factory(monkeypatch)
     client = await get_client("acc-evict")
-    assert "acc-evict" in _CLIENTS
+    assert ("acc-evict", "desktop") in _CLIENTS
 
     await evict_client("acc-evict")
 
     assert built[0].disconnect_calls == 1, "the cached client must be disconnected"
-    assert "acc-evict" not in _CLIENTS, "the pool must no longer hold the client"
+    assert ("acc-evict", "desktop") not in _CLIENTS, "the pool must no longer hold the client"
     assert built == [client], "no rebuild — eviction must not create a new client"
 
 
@@ -309,7 +312,7 @@ async def test_evict_client_is_noop_when_absent(monkeypatch: pytest.MonkeyPatch)
     _install_fake_factory(monkeypatch)
     # No prior get_client — nothing cached. Must not raise or build anything.
     await evict_client("never-borrowed")
-    assert "never-borrowed" not in _CLIENTS
+    assert ("never-borrowed", "desktop") not in _CLIENTS
 
 
 @pytest.mark.asyncio
@@ -359,7 +362,9 @@ async def test_removing_client_evicts_then_refuses_rebuilds(
     await get_client("acc-gone")
 
     async with removing_client("acc-gone"):
-        assert "acc-gone" not in _CLIENTS, "entering the block must evict the cached client"
+        assert ("acc-gone", "desktop") not in _CLIENTS, (
+            "entering the block must evict the cached client"
+        )
         with pytest.raises(TelegramClientPoolError):
             await get_client("acc-gone")
 
@@ -395,7 +400,7 @@ async def test_get_client_discards_a_client_built_after_the_mark_appeared(
     await remover
 
     assert built[0].disconnect_calls == 1, "the orphaned client must be disconnected"
-    assert "acc-slow" not in _CLIENTS, "nothing may be published under a tombstone"
+    assert ("acc-slow", "desktop") not in _CLIENTS, "nothing may be published under a tombstone"
 
 
 @pytest.mark.asyncio
@@ -443,7 +448,7 @@ async def test_get_client_refuses_a_cached_client_while_the_mark_is_set(
     built = _install_fake_factory(monkeypatch)
     cached = await get_client("acc-cached")
 
-    async with _connect_lock("acc-cached"):
+    async with _connect_lock(("acc-cached", "desktop")):
         remover = await _mark_removal("acc-cached")
         with pytest.raises(TelegramClientPoolError):
             await get_client("acc-cached")

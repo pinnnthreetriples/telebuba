@@ -29,7 +29,7 @@ from telethon.errors import (
 from telethon.tl.types import MessageMediaPhoto
 
 from core.logging import log_event
-from core.telegram_client._pool import _CLIENTS, get_client, register_rebuild_hook
+from core.telegram_client._pool import get_client, register_rebuild_hook
 from schemas.telegram_actions import NewPostEvent
 
 if TYPE_CHECKING:
@@ -60,6 +60,10 @@ _HANDLERS: dict[str, _EventHandler] = {}
 # The channel-filter each handler was registered with, so a pool rebuild can
 # re-attach the same subscription on the replacement client.
 _FILTERS: dict[str, object] = {}
+# The client each handler sits on. Remembered rather than looked up in the pool: the
+# pool keys clients by device, and adding a desktop to a mobile-only account moves the
+# primary — the handler must still come off the client it was put on.
+_HANDLER_CLIENTS: dict[str, TelegramClient] = {}
 # One lock + monotonically increasing generation per account make subscribe, stop and
 # pool-rebuild reattach linearizable. Without them a slow subscribe could register after
 # a later stop, or an old callback could keep delivering after a subscription switch.
@@ -133,9 +137,16 @@ async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
         event_filter = _FILTERS.get(account_id)
         if handler is None or event_filter is None:
             return
+        # The previous client may still be connected — the account's other device
+        # after a desktop was added to a mobile-only account — so the handler comes off
+        # it first, or every post would be delivered twice.
+        previous = _HANDLER_CLIENTS.get(account_id)
+        if previous is not None and previous is not client:
+            previous.remove_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
         # ``_FILTERS`` stores the ``events.NewMessage`` instance as ``object``; the
         # stub types the param as ``EventBuilder``.
         client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
+        _HANDLER_CLIENTS[account_id] = client
 
 
 register_rebuild_hook(_reattach_on_rebuild)
@@ -221,6 +232,7 @@ async def subscribe_posts(  # noqa: C901, PLR0911 - generation-fenced I/O state 
         event_filter = events.NewMessage(chats=resolved)
         client.add_event_handler(handler, event_filter)
         _HANDLERS[account_id] = handler
+        _HANDLER_CLIENTS[account_id] = client
         _FILTERS[account_id] = event_filter
         return resolved
 
@@ -278,9 +290,9 @@ def _detach_locked(account_id: str) -> None:
     # switch and shutdown path, so a previous listener's undrained losses must not be handed
     # to whatever runs next. Dropped before the early return, which only skips the detach.
     _LOST_ACCESS.pop(account_id, None)
+    client = _HANDLER_CLIENTS.pop(account_id, None)
     if handler is None:
         return
-    client = _CLIENTS.get(account_id)
     if client is None:
         return
     # Telethon accepts the EventBuilder *class* here to drop all NewMessage
@@ -390,6 +402,7 @@ def _reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     _HANDLERS.clear()
     _FILTERS.clear()
+    _HANDLER_CLIENTS.clear()
     _PEER_IDS.clear()
     _LOST_ACCESS.clear()
     _GENERATIONS.clear()

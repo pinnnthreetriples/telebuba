@@ -324,7 +324,10 @@
       "check": "Проверить",
       "delete": "Удалить",
       "profile": "Редактировать профиль",
-      "web": "Открыть в Telegram Web"
+      "web": "Открыть в Telegram Web",
+      "mobile": "Открыть на телефоне",
+      "mobileDisabled": "Эмулятор выключен (EMULATOR__ENABLED)",
+      "mobileMissing": "У аккаунта нет мобильного устройства"
     },
     "openWeb": {
       "notSignedIn": "Окно открыто, но аккаунт не вошёл — завершите вход в этом окне.",
@@ -945,7 +948,23 @@
       "twofaDownload": "Скачать .csv",
       "twofaNotRun": "не включали — пачку остановили",
       "registeredAt": "Дата регистрации в Telegram (необязательно)",
-      "registeredAtHint": "Для всех файлов этой загрузки. Старше полугода — ЛС в прогреве на день раньше, старше года — фаза «прогрев» со 2-го дня."
+      "registeredAtHint": "Для всех файлов этой загрузки. Старше полугода — ЛС в прогреве на день раньше, старше года — фаза «прогрев» со 2-го дня.",
+      "deviceLabel": "Устройство",
+      "deviceChoice": {
+        "desktop": "ПК",
+        "mobile": "Телефон",
+        "both": "Оба"
+      },
+      "deviceTdataDesktop": "tdata — это данные ПК-клиента: доступны только «ПК» и «Оба».",
+      "deviceFileLabel": "Файл .session — с устройства",
+      "stepDeviceLabel": "Шаг {{n}} · второе устройство",
+      "deviceStepHint": "Каждый аккаунт войдёт ещё и как «{{device}}» — отдельной сессией, через назначенный прокси. Код входа Telegram пришлёт в уже открытую сессию.",
+      "deviceStart": "Войти как «{{device}}»",
+      "deviceState": {
+        "pending": "ожидает",
+        "working": "входим…",
+        "ok": "устройство добавлено"
+      }
     },
     "schedule": {
       "mode": "Когда публиковать",
@@ -1018,6 +1037,19 @@
         "error": "Не удалось"
       },
       "waitOutlasted": "Лимит Telegram продлился дольше 6 часов — перенесите публикацию, чтобы повторить"
+    },
+    "devices": {
+      "label": "Устройства",
+      "desktop": "ПК",
+      "mobile": "Телефон",
+      "add": {
+        "desktop": "Добавить ПК",
+        "mobile": "Добавить мобильное устройство"
+      },
+      "adding": "Входим вторым устройством: ждём код в основной сессии — до минуты."
+    },
+    "openMobile": {
+      "notSignedIn": "Контейнер открыт, но вход не завершён — закончите его в окне контейнера."
     }
   },
   "nav": {
@@ -1135,7 +1167,39 @@
       "masstagging_media_invalid": "Это не фото и не видео: подходят JPG, PNG, WEBP, MP4 и MOV.",
       "masstagging_media_too_large": "Файл слишком большой.",
       "masstagging_import_invalid": "Не получилось прочитать файл: нужен текст или CSV в UTF-8.",
-      "masstagging_base_not_found": "Этой базы парсера уже нет. Обновите список баз."
+      "masstagging_base_not_found": "Этой базы парсера уже нет. Обновите список баз.",
+      "device_missing": "У аккаунта нет этого устройства. Сначала добавьте его.",
+      "mobile_api_not_configured": "Мобильное устройство не настроено: заполните TELEGRAM__MOBILE_API_ID и TELEGRAM__MOBILE_API_HASH.",
+      "device_already_present": "Это устройство у аккаунта уже есть.",
+      "device_phone_unknown": "У аккаунта нет номера телефона — сначала проверьте сессию.",
+      "device_session_conflict": "В папке сессий уже лежит файл второго устройства. Уберите его и повторите.",
+      "device_code_cooldown": "Код недавно запрашивался. Повторите через {{s}} с.",
+      "device_code_timeout": "Код входа не пришёл в основную сессию вовремя.",
+      "device_code_invalid": "Telegram отклонил код входа.",
+      "device_twofa_missing": "Аккаунт защищён облачным паролем, а он не сохранён. Задайте пароль в разделе 2FA.",
+      "device_twofa_invalid": "Сохранённый облачный пароль не подошёл.",
+      "device_user_mismatch": "Вход произошёл в другой аккаунт Telegram — устройство не добавлено.",
+      "device_flood_wait": "Telegram ограничил вход. Повторите через {{s}} с.",
+      "device_lang_pack_invalid": "Telegram не принял параметры мобильного приложения.",
+      "device_primary_unavailable": "Основная сессия недоступна — прочитать код входа нечем.",
+      "device_auth_failed": "Не удалось войти вторым устройством.",
+      "mobile_emulator_disabled": "Эмулятор выключен: включите EMULATOR__ENABLED.",
+      "emulator_busy": "Контейнер этого аккаунта уже запускается — дождитесь окончания.",
+      "emulator_not_found": "LDPlayer не найден: проверьте EMULATOR__LDCONSOLE_PATH и EMULATOR__ADB_PATH.",
+      "emulator_command_failed": "Команда LDPlayer завершилась с ошибкой.",
+      "emulator_command_timeout": "Команда LDPlayer не уложилась во время.",
+      "emulator_boot_timeout": "Контейнер не загрузился вовремя.",
+      "emulator_sdk_mismatch": "Версия Android в контейнере не совпадает с мобильным профилем аккаунта.",
+      "emulator_device_unknown": "Контейнер не может изображать модель телефона из мобильного профиля.",
+      "emulator_apk_missing": "Нет APK Telegram: положите файл по пути EMULATOR__TELEGRAM_APK_PATH.",
+      "emulator_install_failed": "Не удалось установить Telegram в контейнер.",
+      "emulator_proxy_missing": "У аккаунта нет прокси — назначьте SOCKS5-прокси.",
+      "emulator_proxy_unsupported": "Telegram в контейнере работает только через SOCKS5, а у аккаунта HTTPS-прокси.",
+      "emulator_text_unsupported": "Облачный пароль содержит символы, которые нельзя ввести в контейнере (% или не латиница).",
+      "emulator_field_missing": "На экране Telegram нет нужного поля — завершите вход в окне контейнера.",
+      "emulator_phone_invalid": "Номер телефона аккаунта не распознан.",
+      "emulator_code_timeout": "Код входа не пришёл в основную сессию вовремя.",
+      "emulator_twofa_missing": "Аккаунт защищён облачным паролем, а он не сохранён."
     },
     "sessionError": "Не удалось проверить сессию. Проверьте соединение и попробуйте снова.",
     "sessionRetry": "Повторить",
@@ -1258,6 +1322,8 @@
     }
   },
   "logEvent": {
+    "account_remove_web_cleanup_failed": "Не удалось закрыть веб-окно удалённого аккаунта или удалить его профиль браузера",
+    "web_login_locale_rejected": "Chrome не принял язык устройства аккаунта; веб-окно открыто на языке страны прокси",
     "inbox_listener_health_check_failed": "Не удалось проверить соединение входящих сообщений",
     "inbox_listener_retry_failed": "Не удалось повторно запустить обработчик входящих сообщений",
     "inbox_listener_start_failed": "Не удалось запустить обработчик входящих сообщений",
@@ -1605,6 +1671,13 @@
     "masstagging_contacts_unavailable": "Масстегинг: не удалось прочитать контакты аккаунта",
     "warming_geo_mismatch_accepted": "Оператор принял несовпадение гео номера и прокси",
     "warming_resumed": "Аккаунт возвращён в прогрев, счёт дней продолжен",
+    "account_device_added": "Устройство добавлено",
+    "account_device_refused": "Устройство не добавлено",
+    "account_second_device_remove_failed": "Второе устройство не удалось отключить",
+    "account_mobile_opened": "Открыт на телефоне",
+    "account_mobile_open_failed": "Не открылся на телефоне",
+    "account_mobile_container_removed": "Контейнер удалён",
+    "account_mobile_container_remove_failed": "Контейнер не удалён",
     "warming_dialogue_live_reply": "Ответ реакцией или стикером",
     "warming_dialogue_live_opener": "Переслал пост собеседнику",
     "warming_pool_fill_done": "Поиск каналов завершён",
@@ -1737,6 +1810,38 @@
     "no_accounts": "не осталось рабочих аккаунтов",
     "dead": "сессия не работает",
     "quota_soft_day": "дневной лимит мягкого старта исчерпан",
+    "device_missing": "у аккаунта нет этого устройства",
+    "mobile_api_not_configured": "мобильное устройство не настроено",
+    "device_already_present": "устройство уже есть",
+    "device_phone_unknown": "нет номера телефона",
+    "device_session_conflict": "файл сессии второго устройства уже существует",
+    "device_code_cooldown": "код недавно запрашивался",
+    "device_code_timeout": "код входа не пришёл",
+    "device_code_invalid": "код входа отклонён",
+    "device_twofa_missing": "облачный пароль не сохранён",
+    "device_twofa_invalid": "облачный пароль не подошёл",
+    "device_user_mismatch": "вход в другой аккаунт",
+    "device_flood_wait": "Telegram ограничил вход",
+    "device_lang_pack_invalid": "параметры приложения не приняты",
+    "device_primary_unavailable": "основная сессия недоступна",
+    "device_auth_failed": "вход не удался",
+    "mobile_emulator_disabled": "эмулятор выключен",
+    "emulator_busy": "контейнер уже запускается",
+    "emulator_not_found": "LDPlayer не найден",
+    "emulator_command_failed": "команда LDPlayer не выполнилась",
+    "emulator_command_timeout": "команда LDPlayer не уложилась во время",
+    "emulator_boot_timeout": "контейнер не загрузился",
+    "emulator_sdk_mismatch": "версия Android не совпадает с профилем",
+    "emulator_device_unknown": "модель телефона не поддерживается",
+    "emulator_apk_missing": "нет APK Telegram",
+    "emulator_install_failed": "Telegram не установился",
+    "emulator_proxy_missing": "нет прокси",
+    "emulator_proxy_unsupported": "прокси не SOCKS5",
+    "emulator_text_unsupported": "пароль нельзя ввести в контейнере",
+    "emulator_field_missing": "на экране нет нужного поля",
+    "emulator_phone_invalid": "номер телефона не распознан",
+    "emulator_code_timeout": "код входа не пришёл",
+    "emulator_twofa_missing": "облачный пароль не сохранён",
     "no_discussion": "у поста нет комментариев",
     "no_message": "нет сообщения собеседника",
     "no_sticker": "нет подходящего стикера"
@@ -3388,6 +3493,10 @@
         "binge": "залип",
         "reply": "только ответить"
       }
+    },
+    "device": {
+      "label": "Устройство",
+      "missing": "У аккаунта нет этого устройства"
     },
     "poolFill": {
       "open": "Найти каналы",

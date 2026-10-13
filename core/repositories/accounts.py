@@ -37,6 +37,7 @@ from core.repositories._accounts_delete import _delete_account, delete_account  
 from core.repositories._accounts_session_check import (  # noqa: F401
     update_account_from_session_check,
 )
+from core.repositories._primary_device import joins_primary_fingerprint
 from schemas.accounts import (
     AccountCreate,
     AccountList,
@@ -45,6 +46,7 @@ from schemas.accounts import (
     AccountStatus,
     RegisteredSource,
 )
+from schemas.device_fingerprint import DeviceType, account_devices
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -57,10 +59,15 @@ class DuplicateSessionNameError(ValueError):
 
 
 def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
+    session_device = cast("DeviceType", mapping.get("session_device") or "desktop")
+    second_session_name = _optional_str(mapping.get("second_session_name"))
     return AccountRead(
         account_id=str(mapping["account_id"]),
         label=_optional_str(mapping.get("label")),
         session_name=_optional_str(mapping.get("session_name")),
+        session_device=session_device,
+        second_session_name=second_session_name,
+        devices=account_devices(session_device, second_session_name),
         status=cast("AccountStatus", mapping["status"]),
         user_id=_optional_int(mapping.get("user_id")),
         phone=_optional_str(mapping.get("phone")),
@@ -97,6 +104,8 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.account_id,
         _accounts.c.label,
         _accounts.c.session_name,
+        _accounts.c.session_device,
+        _accounts.c.second_session_name,
         _accounts.c.status,
         _accounts.c.user_id,
         _accounts.c.phone,
@@ -128,10 +137,9 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _proxies.c.country_code.label("proxy_country_code"),
         _proxies.c.country_name.label("proxy_country_name"),
     ).select_from(
-        _accounts.outerjoin(
-            _device_fingerprints,
-            _accounts.c.account_id == _device_fingerprints.c.account_id,
-        ).outerjoin(
+        # The primary device's row only: a second authorization must neither
+        # duplicate the account nor change which fingerprint the read model shows.
+        _accounts.outerjoin(_device_fingerprints, joins_primary_fingerprint()).outerjoin(
             _proxies,
             _accounts.c.proxy_id == _proxies.c.id,
         ),
@@ -178,6 +186,7 @@ def _create_account(data: AccountCreate) -> AccountRead:
             data.registered_at.isoformat() if data.registered_at is not None else None
         ),
         "registered_source": "operator" if data.registered_at is not None else None,
+        "session_device": data.session_device,
         "status": "new",
         "created_at": now,
         "updated_at": now,

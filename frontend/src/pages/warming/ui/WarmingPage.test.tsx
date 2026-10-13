@@ -556,3 +556,29 @@ test('removing a channel asks for confirmation, then calls the remove endpoint',
     expect(removed).toBe(true);
   });
 });
+
+test('the pool start warms each account through its primary device', async () => {
+  serveBoard({
+    ...BOARD,
+    idle: [
+      { ...account('desk', 'idle'), devices: ['desktop', 'mobile'] },
+      { ...account('phone', 'idle'), devices: ['mobile'] },
+    ],
+    warming: [],
+    settings: { ...BOARD.settings, enforce_readiness: false },
+  });
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Запустить пул' }));
+  const dialog = await screen.findByRole('dialog');
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Запустить пул' }));
+
+  await waitFor(async () => {
+    expect(await startBodies()).toHaveLength(2);
+  });
+  expect(await startBodies()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ account_id: 'desk', device_mode: 'desktop' }),
+      expect.objectContaining({ account_id: 'phone', device_mode: 'mobile' }),
+    ]),
+  );
+});

@@ -11,7 +11,7 @@ def patch_action_client(
     monkeypatch: pytest.MonkeyPatch,
     client: object,
 ) -> None:
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     async def fake_fetch(account_id: str) -> MagicMock:
@@ -25,7 +25,7 @@ def patch_read_client(
     monkeypatch: pytest.MonkeyPatch,
     client: object,
 ) -> None:
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     async def fake_fetch(account_id: str) -> MagicMock:

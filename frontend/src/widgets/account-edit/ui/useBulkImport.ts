@@ -1,7 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import { importAccountSessionMutation, importAccountTdataMutation } from '@/entities/account';
+import {
+  importAccountSessionMutation,
+  importAccountTdataMutation,
+  type DeviceType,
+} from '@/entities/account';
 import { errorCode } from '@/shared/lib';
 
 // Why a file failed, in the operator's terms rather than the envelope's.
@@ -42,9 +46,12 @@ const MAX_IN_FLIGHT = 2;
 // only name + verdict are rendered. Each row reports its own failure, so the
 // mutations opt out of the global error toast. `mutateAsync`, never `.mutate` in a loop: one
 // useMutation observer is a single callback slot.
+// `sessionDevice` is the device an uploaded .session belongs to (a tdata archive is
+// always a desktop client's); the wizard locks it once the first file is sent.
 export function useBulkImport(
   method: Method,
   onSettledOne: () => void,
+  sessionDevice: DeviceType = 'desktop',
   // Optional registration date (YYYY-MM-DD) sent with every file of the batch (4.8).
   registeredAt = '',
 ) {
@@ -84,7 +91,13 @@ export function useBulkImport(
           ? ((await importTdata.mutateAsync({ body })).accounts?.map(
               (account) => account.account_id,
             ) ?? [])
-          : [(await importSession.mutateAsync({ body })).account_id];
+          : [
+              (
+                await importSession.mutateAsync({
+                  body: { ...body, session_device: sessionDevice },
+                })
+              ).account_id,
+            ];
       patch(id, gen, { state: 'ok', accountIds });
     } catch (error) {
       patch(id, gen, {

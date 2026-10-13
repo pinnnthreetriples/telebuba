@@ -61,6 +61,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         nc_handoff_at=_optional_str(mapping.get("nc_handoff_at")),
         visit_kind=cast("VisitKind | None", _optional_str(mapping.get("visit_kind"))),
         cycle_plan=cast("list[VisitStep]", _split_plan(mapping.get("cycle_plan"))),
+        device_mode="mobile" if mapping.get("device_mode") == "mobile" else "desktop",
     )
 
 

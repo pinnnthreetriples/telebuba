@@ -47,7 +47,7 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     async def fake_fetch(account_id: str):

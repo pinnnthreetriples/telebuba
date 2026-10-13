@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
+    from schemas.device_fingerprint import DeviceType
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult, TelegramAction, TelegramReadAction
 
@@ -38,6 +39,9 @@ if TYPE_CHECKING:
 # keeps issuing Telegram requests after the operator has stopped it.
 _LEASE: ContextVar[tuple[str, str] | None] = ContextVar("warming_lease", default=None)
 _ACTIVE_LEASES: dict[str, str] = {}
+# The device the loop task warms through, bound once from its own generation's row.
+# ``None`` (a direct ``run_one_cycle`` call) borrows the account's primary device.
+_DEVICE: ContextVar[DeviceType | None] = ContextVar("warming_device", default=None)
 
 # Fleet-wide ceiling on warming Telegram requests in flight (``warming.cycle_concurrency``).
 # Held only around one gateway call (lazy connect included), never across a cycle's
@@ -90,6 +94,16 @@ def lease_scope(account_id: str, run_id: str | None) -> Iterator[None]:
         _LEASE.reset(token)
 
 
+def bind_device(device_type: DeviceType) -> None:
+    """Make every Telegram action of the calling loop task go through ``device_type``.
+
+    Set in the task's own context, so it ends with the task and never leaks into
+    another account's loop. The pool refuses a device the account lacks rather than
+    serve the other one.
+    """
+    _DEVICE.set(device_type)
+
+
 def _assert_live_lease(account_id: str, error: type[WarmingLeaseRevokedError]) -> None:
     lease = _LEASE.get()
     # Direct/test calls to ``run_one_cycle`` do not own a long-running runtime
@@ -135,7 +149,9 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     """
     async with _dispatch_slots:
         _assert_live_lease(account_id, WarmingLeaseRevokedError)
-        result = await _gateway_execute(account_id, action, domain="warming")
+        result = await _gateway_execute(
+            account_id, action, domain="warming", device_type=_DEVICE.get()
+        )
     _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 

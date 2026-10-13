@@ -275,7 +275,9 @@ async def test_a_start_journals_its_own_stint_not_a_later_restarts() -> None:
             account_id="acc-1", state="active", started_at="2026-10-02T00:00:00+00:00"
         )
     )
-    stint = _start_state.CarriedStint("2026-10-01T00:00:00+00:00", 7, "normal", None, fresh=True)
+    stint = _start_state.CarriedStint(
+        "2026-10-01T00:00:00+00:00", 7, "normal", "desktop", None, fresh=True
+    )
 
     account = await fetch_account("acc-1")
     assert account is not None

@@ -1,4 +1,4 @@
-"""Long-lived Telethon client pool — one connected client per account.
+"""Long-lived Telethon client pool — one connected client per account device.
 
 Measured before this module existed: every UI action (dialog refresh, music
 delete, etc.) opened a fresh ``TelegramClient`` via ``telegram_client(request)``,
@@ -6,9 +6,15 @@ paid ~7 s for connect + MTProto handshake + auth-key load, ran one request,
 disconnected. Concurrent ownership by the warming runtime on the same
 ``.session`` SQLite file caused "seq_num too low" risk and lock contention.
 
-This module keeps **exactly one** ``TelegramClient`` per ``account_id`` alive
-for the lifetime of the process. The first borrower pays the connect cost;
-every subsequent call reuses the open socket. The warming runtime and the
+This module keeps **exactly one** ``TelegramClient`` per ``(account_id, device)``
+alive for the lifetime of the process. An account with a desktop AND a mobile
+device holds two separate authorizations — two ``.session`` files, two
+fingerprints — so its two clients live side by side and never evict each other,
+and one ``.session`` is never opened by two clients. A borrower that names no
+device gets the account's PRIMARY one (desktop when it has one): that is every
+pre-device caller — listener, inbox, chats, reads, media, profile, neurocomment.
+The first borrower pays the connect cost; every subsequent call reuses the open
+socket. The warming runtime and the
 profile-edit dialog both call into the same client through ``execute(...)``
 / ``execute_read_many(...)``.
 
@@ -41,18 +47,31 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
+from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
-from schemas.device_fingerprint import TelegramClientRequest
+from core.telegram_client._client import (
+    DeviceUnavailableError,
+    create_telegram_client,
+    prepare_telegram_client_profile,
+    resolve_device,
+)
+from core.telegram_client._pool_errors import (
+    TelegramClientPoolError,
+    TelegramClientUnavailableError,
+    TelegramDeviceUnavailableError,
+)
+from core.telegram_client._pool_hooks import fire_rebuild_hooks, register_rebuild_hook
+from schemas.device_fingerprint import DeviceType, TelegramClientRequest
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncIterator
 
     from telethon import TelegramClient
 
-    _RebuildHook = Callable[[str, TelegramClient], Awaitable[None]]
+_Key = tuple[str, DeviceType]
+_DEVICE_TYPES: tuple[DeviceType, ...] = get_args(DeviceType)
 
 # Stdlib logging on purpose (mirrors ``core.proxy_check._failed_result``): a connect
 # failure stringifies with the proxy endpoint — ``user:pass@host:port`` — and a session
@@ -66,7 +85,9 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "TelegramClientPoolError",
     "TelegramClientUnavailableError",
+    "TelegramDeviceUnavailableError",
     "evict_client",
+    "forget_primary_device",
     "get_client",
     "register_rebuild_hook",
     "removing_client",
@@ -74,37 +95,13 @@ __all__ = [
 ]
 
 
-class TelegramClientPoolError(RuntimeError):
-    """Raised when the pool fails to (re)connect a client.
-
-    Transport failures (``OSError``) raise after Telethon's own connect ladder;
-    other faults get one fresh attempt first.
-    """
-
-    def __init__(self, account_id: str, cause: Exception) -> None:
-        super().__init__(f"telegram pool connect failed for {account_id}: {cause}")
-        self.account_id = account_id
-        self.cause = cause
-
-
-class TelegramClientUnavailableError(TelegramClientPoolError):
-    """The POOL refused to serve the account — shutdown, or a live tombstone.
-
-    Distinct from its parent because nothing was learned about Telegram or the
-    session here: no connect was attempted, and ``cause`` is the pool's own
-    ``RuntimeError`` rather than a Telethon / transport failure. The probe paths
-    have to tell the two apart — ``_session._probe_client`` unwraps ``cause`` so
-    the real error reaches its classification ladder, and a bare ``RuntimeError``
-    matched no arm there, so a login in flight wrote a sticky ``unknown_error``
-    onto a row whose session was fine.
-
-    A subclass, so every ``except TelegramClientPoolError`` borrower
-    (``_actions``, ``_read``) keeps classifying it as an unavailable account.
-    """
-
-
-_CLIENTS: dict[str, TelegramClient] = {}
-_CONNECT_LOCKS: dict[str, asyncio.Lock] = {}
+_CLIENTS: dict[_Key, TelegramClient] = {}
+_CONNECT_LOCKS: dict[_Key, asyncio.Lock] = {}
+# The device a borrower naming none is served: cached because every action borrows,
+# dropped whenever the account's devices can change (a device added, a removal).
+_PRIMARY: dict[str, DeviceType] = {}
+# Bumped by every forget, so a read that started before it cannot cache after it.
+_PRIMARY_EPOCH: dict[str, int] = {}
 _SHUTTING_DOWN = False
 
 # Accounts whose removal is in flight — the per-account twin of ``_SHUTTING_DOWN``.
@@ -113,27 +110,17 @@ _SHUTTING_DOWN = False
 # account (a session-reset wipe racing a removal): an inner holder's exit must
 # not lift the outer holder's tombstone.
 _REMOVING: dict[str, int] = {}
-
-# Callbacks invoked after a fresh client is built for an account, so standing
-# subscriptions (the post listener) can re-register their handlers on the new
-# connection. ``_listener`` sets this at import time — the dependency points
-# core→core, never into services.
-_REBUILD_HOOKS: list[_RebuildHook] = []
+# The same for ONE device: a sign-in rebuilding that device's session must not take
+# the account's other device down with it (the second-device sign-in reads its code
+# through the primary one).
+_REMOVING_DEVICES: dict[_Key, int] = {}
 
 
-def register_rebuild_hook(hook: _RebuildHook) -> None:
-    """Register a callback fired with ``(account_id, client)`` after a rebuild.
-
-    Idempotent per callable so a re-import can't stack duplicate hooks. Used by
-    ``_listener`` to re-attach its ``NewMessage`` handler when the pool replaces
-    a dropped connection.
-    """
-    if hook not in _REBUILD_HOOKS:
-        _REBUILD_HOOKS.append(hook)
-
-
-def _is_removing(account_id: str) -> bool:
+def _is_removing(account_id: str, device_type: DeviceType | None = None) -> bool:
     """Is a removal in flight for ``account_id``? (see :func:`removing_client`).
+
+    With ``device_type``: for the whole account or for that device. Without: for the
+    whole account or any of its devices.
 
     ``get_client`` asks this at three points on the way to a client and all
     three are load-bearing complements, not alternatives:
@@ -150,7 +137,10 @@ def _is_removing(account_id: str) -> bool:
     Drop any one of them and a borrower re-opens (or re-creates) the ``.session``
     file the removal is about to unlink.
     """
-    return account_id in _REMOVING
+    if account_id in _REMOVING:
+        return True
+    devices = _DEVICE_TYPES if device_type is None else (device_type,)
+    return any((account_id, device) in _REMOVING_DEVICES for device in devices)
 
 
 def _removing_error(account_id: str) -> TelegramClientUnavailableError:
@@ -158,16 +148,43 @@ def _removing_error(account_id: str) -> TelegramClientUnavailableError:
     return TelegramClientUnavailableError(account_id, RuntimeError(msg))
 
 
-def _connect_lock(account_id: str) -> asyncio.Lock:
-    lock = _CONNECT_LOCKS.get(account_id)
+def _connect_lock(key: _Key) -> asyncio.Lock:
+    lock = _CONNECT_LOCKS.get(key)
     if lock is None:
         lock = asyncio.Lock()
-        _CONNECT_LOCKS[account_id] = lock
+        _CONNECT_LOCKS[key] = lock
     return lock
 
 
-async def get_client(account_id: str) -> TelegramClient:
-    """Return a connected Telethon client for ``account_id`` (cached or freshly built).
+async def _primary_device(account_id: str) -> DeviceType:
+    primary = _PRIMARY.get(account_id)
+    if primary is None:
+        epoch = _PRIMARY_EPOCH.get(account_id, 0)
+        primary = resolve_device(await fetch_account(account_id), None)
+        # A forget that landed while the row was being read means the answer may
+        # predate the change: use it for this borrow, but do not keep it.
+        if _PRIMARY_EPOCH.get(account_id, 0) == epoch:
+            _PRIMARY[account_id] = primary
+    return primary
+
+
+def forget_primary_device(account_id: str) -> None:
+    """Re-resolve the primary device on the next borrow (the account's devices changed).
+
+    Clients already open stay open: adding a desktop to a mobile-only account makes
+    desktop the primary for NEW borrows, while the mobile client keeps serving
+    whoever asks for mobile by name.
+    """
+    _PRIMARY.pop(account_id, None)
+    _PRIMARY_EPOCH[account_id] = _PRIMARY_EPOCH.get(account_id, 0) + 1
+
+
+async def get_client(account_id: str, device_type: DeviceType | None = None) -> TelegramClient:
+    """Return a connected Telethon client for one account device (cached or freshly built).
+
+    ``device_type=None`` serves the account's primary device. A named device the
+    account does not have raises :class:`TelegramDeviceUnavailableError` — the other
+    device is never handed out in its place.
 
     Fast path: cached client whose ``is_connected()`` is True is returned
     directly without acquiring the per-account lock. Slow path: under the
@@ -180,43 +197,52 @@ async def get_client(account_id: str) -> TelegramClient:
     if _SHUTTING_DOWN:
         msg = "telegram pool is shutting down"
         raise TelegramClientUnavailableError(account_id, RuntimeError(msg))
-    if _is_removing(account_id):
+    device = device_type or await _primary_device(account_id)
+    if _is_removing(account_id, device):
         raise _removing_error(account_id)
+    key = (account_id, device)
 
-    cached = _CLIENTS.get(account_id)
+    cached = _CLIENTS.get(key)
     if cached is not None and cached.is_connected():
         return cached
 
-    async with _connect_lock(account_id):
-        if _is_removing(account_id):
+    async with _connect_lock(key):
+        if _is_removing(account_id, device):
             raise _removing_error(account_id)
         # Re-check under the lock — a peer may have connected while we waited.
-        cached = _CLIENTS.get(account_id)
+        cached = _CLIENTS.get(key)
         if cached is not None and cached.is_connected():
             return cached
         if cached is not None:
             # Stale entry: drop the lost connection before rebuilding.
             await _safe_disconnect(cached)
-            _CLIENTS.pop(account_id, None)
+            _CLIENTS.pop(key, None)
 
-        client = await _connect_with_retry(account_id)
+        client = await _connect_with_retry(account_id, device)
 
         # Covers both build attempts: connecting awaits, so a removal may have
         # marked the account while we held the lock. Throw the fresh client away
         # instead of publishing it — the removal's own unlink follows our lock
         # release and cleans up the session file this build just touched.
-        if _is_removing(account_id):
+        if _is_removing(account_id, device):
             await _safe_disconnect(client)
             raise _removing_error(account_id)
-        _CLIENTS[account_id] = client
-    await _fire_rebuild_hooks(account_id, client)
+        _CLIENTS[key] = client
+    # Standing subscriptions (post listener, inbox) live on the primary device only;
+    # re-attaching them to the other device's client would deliver every update twice.
+    if device == await _primary_device(account_id):
+        await fire_rebuild_hooks(account_id, client)
     return client
 
 
-async def _connect_with_retry(account_id: str) -> TelegramClient:
+async def _connect_with_retry(account_id: str, device: DeviceType) -> TelegramClient:
     """Build + connect under the caller's lock; one retry for non-transport faults."""
     try:
-        return await _build_and_connect(account_id)
+        return await _build_and_connect(account_id, device)
+    except DeviceUnavailableError as exc:
+        # Nothing was attempted against Telegram, so nothing to retry or to log as a
+        # connect failure: the account has no such device to serve.
+        raise TelegramDeviceUnavailableError(account_id, exc) from exc
     except Exception as exc:  # second-attempt classifier sits below
         if isinstance(exc, OSError):
             # Transport failure: Telethon's connect() already ran its own retry ladder.
@@ -230,7 +256,7 @@ async def _connect_with_retry(account_id: str) -> TelegramClient:
             extra={"first_error": type(exc).__name__},
         )
         try:
-            return await _build_and_connect(account_id)
+            return await _build_and_connect(account_id, device)
         except Exception as second_exc:
             raise await _connect_failed(account_id, second_exc) from second_exc
 
@@ -247,28 +273,11 @@ async def _connect_failed(account_id: str, exc: Exception) -> TelegramClientPool
     return TelegramClientPoolError(account_id, exc)
 
 
-async def _fire_rebuild_hooks(account_id: str, client: TelegramClient) -> None:
-    """Let standing subscriptions re-register on a freshly built client.
+async def evict_client(account_id: str, device_type: DeviceType | None = None) -> None:
+    """Disconnect and drop the account's cached client(s); no-op if absent.
 
-    Runs outside the connect lock so a hook can safely re-enter the pool. A
-    hook fault is logged and swallowed — a listener that can't re-attach must
-    not break the borrower that triggered the rebuild.
-    """
-    for hook in _REBUILD_HOOKS:
-        try:
-            await hook(account_id, client)
-        except Exception as exc:  # a hook fault must not break get_client.
-            logger.exception("pool rebuild hook failed for %s", account_id)
-            await log_event(
-                "WARNING",
-                "telegram_pool_rebuild_hook_failed",
-                account_id=account_id,
-                extra={"error_type": type(exc).__name__},
-            )
-
-
-async def evict_client(account_id: str) -> None:
-    """Disconnect and drop the cached client for ``account_id``; no-op if absent.
+    ``device_type=None`` evicts every device of the account: a proxy change moves
+    both authorizations, a removal deletes both.
 
     Callers that are about to touch the account's ``.session`` file on disk
     (logout/reset wipe, account removal) MUST evict first: on Windows the
@@ -278,15 +287,26 @@ async def evict_client(account_id: str) -> None:
     """
     if _SHUTTING_DOWN:
         return
-    async with _connect_lock(account_id):
-        client = _CLIENTS.pop(account_id, None)
-        if client is not None:
-            await _safe_disconnect(client)
+    if device_type is None:
+        forget_primary_device(account_id)
+    for device in _DEVICE_TYPES if device_type is None else (device_type,):
+        key = (account_id, device)
+        async with _connect_lock(key):
+            client = _CLIENTS.pop(key, None)
+            if client is not None:
+                await _safe_disconnect(client)
 
 
 @asynccontextmanager
-async def removing_client(account_id: str) -> AsyncIterator[None]:
-    """Evict ``account_id``'s client and refuse rebuilds until the block exits.
+async def removing_client(
+    account_id: str,
+    device_type: DeviceType | None = None,
+) -> AsyncIterator[None]:
+    """Evict ``account_id``'s client(s) and refuse rebuilds until the block exits.
+
+    ``device_type=None`` covers every device of the account (removal, rollback); a
+    device scopes it to that one authorization (its login/logout, a second-device
+    sign-in) and leaves the account's other device in service.
 
     The eviction is skipped while the pool is shutting down (see
     :func:`evict_client`), which disconnects everything anyway; the tombstone is
@@ -312,22 +332,28 @@ async def removing_client(account_id: str) -> AsyncIterator[None]:
     ``SQLiteSession`` on the same file; ``_auth``'s per-account lock covers that.
     Safe to nest inside that lock: this manager holds none across its ``yield``.
     """
-    _REMOVING[account_id] = _REMOVING.get(account_id, 0) + 1
+    marks: dict = _REMOVING if device_type is None else _REMOVING_DEVICES
+    mark = account_id if device_type is None else (account_id, device_type)
+    marks[mark] = marks.get(mark, 0) + 1
     try:
         # Marked before the eviction so a rebuild cannot slip into the gap.
-        await evict_client(account_id)
+        await evict_client(account_id, device_type)
         yield
     finally:
-        holders = _REMOVING[account_id] - 1
+        holders = marks[mark] - 1
         if holders:
-            _REMOVING[account_id] = holders
+            marks[mark] = holders
         else:
-            del _REMOVING[account_id]
+            del marks[mark]
+        if device_type is None:
+            # Whatever a borrow cached while the account was being removed or rolled
+            # back is about a row that may be gone; resolve it afresh next time.
+            forget_primary_device(account_id)
 
 
-async def _build_and_connect(account_id: str) -> TelegramClient:
+async def _build_and_connect(account_id: str, device: DeviceType) -> TelegramClient:
     profile = await prepare_telegram_client_profile(
-        TelegramClientRequest(account_id=account_id),
+        TelegramClientRequest(account_id=account_id, device_type=device),
     )
     client = create_telegram_client(profile)
     await client.connect()
@@ -368,6 +394,7 @@ async def shutdown_telegram_pool() -> None:
     clients = list(_CLIENTS.values())
     _CLIENTS.clear()
     _CONNECT_LOCKS.clear()
+    _PRIMARY.clear()
     if clients:
         await asyncio.gather(
             *(_safe_disconnect(client) for client in clients),
@@ -381,5 +408,8 @@ def _reset_for_tests() -> None:
     global _SHUTTING_DOWN  # noqa: PLW0603
     _CLIENTS.clear()
     _CONNECT_LOCKS.clear()
+    _PRIMARY.clear()
+    _PRIMARY_EPOCH.clear()
     _REMOVING.clear()
+    _REMOVING_DEVICES.clear()
     _SHUTTING_DOWN = False

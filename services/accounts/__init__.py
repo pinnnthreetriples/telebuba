@@ -66,6 +66,7 @@ from services.accounts.chats import (
     mark_chat_read,
     send_chat_message,
 )
+from services.accounts.devices import DeviceRefusedError, add_account_device
 from services.accounts.lifecycle import (
     add_account,
     evaluate_account_geo,
@@ -91,6 +92,11 @@ from services.accounts.media import (
     set_account_main_profile_photo,
     set_account_profile_photo,
     set_account_story_pinned,
+)
+from services.accounts.mobile_emulator import (
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    open_account_mobile,
 )
 from services.accounts.privacy import (
     apply_account_privacy,
@@ -123,13 +129,20 @@ from services.accounts.web_login import (
     open_account_web,
     shutdown_web_login,
 )
-from services.accounts.web_windows import close_all_web_windows, count_open_web_windows
+from services.accounts.web_windows import (
+    close_all_web_windows,
+    close_orphaned_web_windows,
+    count_open_web_windows,
+)
 
 __all__ = [
     "AccountActionError",
     "AccountNotFoundError",
     "ChatMediaDownload",
     "ChatServiceError",
+    "DeviceRefusedError",
+    "EmulatorBusyError",
+    "EmulatorRefusedError",
     "InvalidCursorError",
     "OpenWebResult",
     "PhoneLoginError",
@@ -141,6 +154,7 @@ __all__ = [
     "account_stats",
     "account_story_media",
     "add_account",
+    "add_account_device",
     "add_account_profile_music",
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",
@@ -149,6 +163,7 @@ __all__ = [
     "check_account_session",
     "clear_account_twofa_email",
     "close_all_web_windows",
+    "close_orphaned_web_windows",
     "confirm_account_twofa_email",
     "count_open_web_windows",
     "create_account_channel",
@@ -172,6 +187,7 @@ __all__ = [
     "list_listener_accounts",
     "logout_account",
     "mark_chat_read",
+    "open_account_mobile",
     "open_account_web",
     "post_account_story",
     "publish_account_channel_post",

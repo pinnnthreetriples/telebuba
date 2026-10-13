@@ -452,6 +452,18 @@ export type AccountRead = {
    */
   session_name?: string | null;
   /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
+  /**
+   * Second Session Name
+   */
+  second_session_name?: string | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
+  /**
    * Status
    */
   status:
@@ -915,6 +927,18 @@ export type AddChannelsRequest = {
 };
 
 /**
+ * AddDeviceRequest
+ *
+ * API body for ``POST /accounts/{id}/devices``.
+ */
+export type AddDeviceRequest = {
+  /**
+   * Device Type
+   */
+  device_type: 'desktop' | 'mobile';
+};
+
+/**
  * AssignAccountRequest
  *
  * Assign an account to a campaign (the campaign id is the route path param).
@@ -960,6 +984,10 @@ export type BodyImportAccountSession = {
    * Registered At
    */
   registered_at?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
 };
 
 /**
@@ -3272,6 +3300,18 @@ export type DiscoveryWork = {
 };
 
 /**
+ * EmulatorStatus
+ *
+ * Whether the container feature is switched on (the SPA disables the button if not).
+ */
+export type EmulatorStatus = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
+};
+
+/**
  * ErrorDetail
  */
 export type ErrorDetail = {
@@ -5148,6 +5188,26 @@ export type NotificationTestResult = {
 };
 
 /**
+ * OpenMobileResult
+ *
+ * What opening the container did; ``signed_in`` is read off the screen, never cached.
+ */
+export type OpenMobileResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'started' | 'already_running';
+  /**
+   * Signed In
+   */
+  signed_in: boolean;
+};
+
+/**
  * OpenWebResult
  *
  * The outcome of opening a web.telegram.org window for the account.
@@ -6134,6 +6194,10 @@ export type StartPhoneLoginRequest = {
    * Label
    */
   label?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
 };
 
 /**
@@ -6222,6 +6286,10 @@ export type StartWarmingRequest = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active';
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
 };
 
 /**
@@ -7174,6 +7242,10 @@ export type WarmedAccount = {
    */
   geo_accepted?: boolean;
   survival?: AccountSurvival | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
 };
 
 /**
@@ -7396,6 +7468,10 @@ export type WarmingAccountState = {
    * Activity Persona
    */
   activity_persona?: 'calm' | 'normal' | 'active' | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -11707,6 +11783,144 @@ export type RescheduleScheduledPostResponses = {
 
 export type RescheduleScheduledPostResponse =
   RescheduleScheduledPostResponses[keyof RescheduleScheduledPostResponses];
+
+export type AddAccountDeviceData = {
+  body: AddDeviceRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/devices';
+};
+
+export type AddAccountDeviceErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type AddAccountDeviceError = AddAccountDeviceErrors[keyof AddAccountDeviceErrors];
+
+export type AddAccountDeviceResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type AddAccountDeviceResponse = AddAccountDeviceResponses[keyof AddAccountDeviceResponses];
+
+export type EmulatorStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/emulator';
+};
+
+export type EmulatorStatusErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type EmulatorStatusError = EmulatorStatusErrors[keyof EmulatorStatusErrors];
+
+export type EmulatorStatusResponses = {
+  /**
+   * Successful Response
+   */
+  200: EmulatorStatus;
+};
+
+export type EmulatorStatusResponse = EmulatorStatusResponses[keyof EmulatorStatusResponses];
+
+export type OpenAccountMobileData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-mobile';
+};
+
+export type OpenAccountMobileErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenAccountMobileError = OpenAccountMobileErrors[keyof OpenAccountMobileErrors];
+
+export type OpenAccountMobileResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenMobileResult;
+};
+
+export type OpenAccountMobileResponse =
+  OpenAccountMobileResponses[keyof OpenAccountMobileResponses];
 
 export type ListProxiesData = {
   body?: never;

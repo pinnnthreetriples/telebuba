@@ -13,9 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from services.accounts import web_login
+from services.accounts import web_login, web_windows
 from services.accounts.web_login import open_account_web
-from services.accounts.web_windows import close_all_web_windows, count_open_web_windows
+from services.accounts.web_windows import (
+    close_all_web_windows,
+    close_orphaned_web_windows,
+    count_open_web_windows,
+)
 from tests.services.accounts._web_login_support import PROXY as _PROXY
 from tests.services.accounts._web_login_support import SIGNED_IN_MARKER as _MARKER
 from tests.services.accounts._web_login_support import FakeRelay as _FakeRelay
@@ -163,3 +167,19 @@ async def test_close_all_closes_the_window_an_open_in_flight_replaced_it_with() 
     assert await closing == 1
     assert fresh.killed is True
     assert web_login._windows == {}
+
+
+@pytest.mark.asyncio
+async def test_the_startup_sweep_covers_the_profile_root_every_window_opens_under(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swept: list[Path] = []
+
+    async def _sweep(root: Path) -> int:
+        swept.append(root)
+        return 2
+
+    monkeypatch.setattr(web_windows, "close_orphaned_browsers", _sweep)
+
+    assert await close_orphaned_web_windows() == 2
+    assert swept == [web_login.account_profile_dir("acct").parent]

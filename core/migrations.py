@@ -61,6 +61,7 @@ from core.migration_steps_console import (
     _add_warming_state_nc_start,
 )
 from core.migration_steps_daily_stats import _add_warming_daily_stats
+from core.migration_steps_devices import _add_account_devices
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
     _add_linked_group_about,
@@ -242,6 +243,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (85, "add_account_registered_at", _add_account_registered_at),
     (86, "add_warming_account_character", _add_warming_account_character),
     (87, "add_warming_state_visit", _add_warming_state_visit),
+    (88, "add_account_devices", _add_account_devices),
 )
 
 

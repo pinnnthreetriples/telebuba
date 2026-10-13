@@ -34,7 +34,6 @@ class _Client:
 @pytest.fixture(autouse=True)
 def _reset() -> None:
     _listener._reset_for_tests()
-    _listener._CLIENTS.clear()
 
 
 @pytest.mark.asyncio
@@ -44,10 +43,9 @@ async def test_stop_wins_against_subscribe_stalled_while_connecting(
     client = _Client()
     started, release = asyncio.Event(), asyncio.Event()
 
-    async def _get(_account_id: str) -> _Client:
+    async def _get(_account_id: str, _device_type: str | None = None) -> _Client:
         started.set()
         await release.wait()
-        _listener._CLIENTS["acc"] = client  # ty: ignore[invalid-assignment]
         return client
 
     monkeypatch.setattr(_listener, "get_client", _get)
@@ -72,8 +70,7 @@ async def test_stop_does_not_wait_for_slow_peer_resolution(
         await release.wait()
         return -100
 
-    async def _get(_account_id: str) -> _Client:
-        _listener._CLIENTS["acc"] = client  # ty: ignore[invalid-assignment]
+    async def _get(_account_id: str, _device_type: str | None = None) -> _Client:
         return client
 
     monkeypatch.setattr(client, "get_peer_id", _slow_peer)
@@ -93,8 +90,7 @@ async def test_stale_handler_generation_drops_event_after_switch(
 ) -> None:
     client = _Client()
 
-    async def _get(_account_id: str) -> _Client:
-        _listener._CLIENTS["acc"] = client  # ty: ignore[invalid-assignment]
+    async def _get(_account_id: str, _device_type: str | None = None) -> _Client:
         return client
 
     monkeypatch.setattr(_listener, "get_client", _get)
@@ -135,8 +131,7 @@ async def test_forgetting_a_deleted_account_drops_its_per_account_registry_entri
     """
     client = _Client()
 
-    async def _get(_account_id: str) -> _Client:
-        _listener._CLIENTS["gone"] = client  # ty: ignore[invalid-assignment]
+    async def _get(_account_id: str, _device_type: str | None = None) -> _Client:
         return client
 
     monkeypatch.setattr(_listener, "get_client", _get)
@@ -166,11 +161,10 @@ async def test_a_subscribe_from_before_a_forget_cannot_register_over_the_new_one
     started, release = asyncio.Event(), asyncio.Event()
     stall = True
 
-    async def _get(_account_id: str) -> _Client:
+    async def _get(_account_id: str, _device_type: str | None = None) -> _Client:
         if stall:
             started.set()
             await release.wait()
-        _listener._CLIENTS["reused"] = client  # ty: ignore[invalid-assignment]
         return client
 
     monkeypatch.setattr(_listener, "get_client", _get)

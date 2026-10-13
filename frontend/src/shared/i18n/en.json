@@ -321,7 +321,10 @@
       "check": "Check",
       "delete": "Delete",
       "profile": "Edit profile",
-      "web": "Open in Telegram Web"
+      "web": "Open in Telegram Web",
+      "mobile": "Open on phone",
+      "mobileDisabled": "The emulator is switched off (EMULATOR__ENABLED)",
+      "mobileMissing": "The account has no mobile device"
     },
     "openWeb": {
       "notSignedIn": "The window opened but the account is not signed in — finish the login in that window.",
@@ -924,7 +927,23 @@
       "twofaDownload": "Download .csv",
       "twofaNotRun": "not attempted — the batch was stopped",
       "registeredAt": "Telegram registration date (optional)",
-      "registeredAtHint": "Applies to every file in this upload. Older than half a year opens DMs a day earlier in warming; older than a year starts the «warming» phase on day 2."
+      "registeredAtHint": "Applies to every file in this upload. Older than half a year opens DMs a day earlier in warming; older than a year starts the «warming» phase on day 2.",
+      "deviceLabel": "Device",
+      "deviceChoice": {
+        "desktop": "Desktop",
+        "mobile": "Phone",
+        "both": "Both"
+      },
+      "deviceTdataDesktop": "tdata is a desktop client's data: only Desktop or Both.",
+      "deviceFileLabel": "The .session file is from",
+      "stepDeviceLabel": "Step {{n}} · second device",
+      "deviceStepHint": "Each account also signs in as “{{device}}” — a separate session, through its assigned proxy. Telegram sends the login code to the session already open.",
+      "deviceStart": "Sign in as “{{device}}”",
+      "deviceState": {
+        "pending": "waiting",
+        "working": "signing in…",
+        "ok": "device added"
+      }
     },
     "schedule": {
       "mode": "When to publish",
@@ -993,6 +1012,19 @@
         "error": "Failed"
       },
       "waitOutlasted": "A Telegram limit outlasted the 6-hour window — move the post to retry"
+    },
+    "devices": {
+      "label": "Devices",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "add": {
+        "desktop": "Add a desktop",
+        "mobile": "Add a mobile device"
+      },
+      "adding": "Signing the second device in: waiting for the code in the existing session — up to a minute."
+    },
+    "openMobile": {
+      "notSignedIn": "The container is open but not signed in — finish in its window."
     }
   },
   "nav": {
@@ -1110,7 +1142,39 @@
       "masstagging_media_invalid": "Not a photo or a video: JPG, PNG, WEBP, MP4 and MOV work.",
       "masstagging_media_too_large": "The file is too large.",
       "masstagging_import_invalid": "Could not read the file: plain text or CSV in UTF-8 is needed.",
-      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases."
+      "masstagging_base_not_found": "This parser base is gone. Refresh the list of bases.",
+      "device_missing": "The account has no such device. Add it first.",
+      "mobile_api_not_configured": "Mobile devices are not set up: fill in TELEGRAM__MOBILE_API_ID and TELEGRAM__MOBILE_API_HASH.",
+      "device_already_present": "The account already has this device.",
+      "device_phone_unknown": "The account has no phone number — check its session first.",
+      "device_session_conflict": "A second-device session file is already in the sessions folder. Remove it and try again.",
+      "device_code_cooldown": "A code was requested recently. Try again in {{s}} s.",
+      "device_code_timeout": "The login code did not reach the existing session in time.",
+      "device_code_invalid": "Telegram rejected the login code.",
+      "device_twofa_missing": "The account has a cloud password that is not stored. Set it in the 2FA section.",
+      "device_twofa_invalid": "The stored cloud password was rejected.",
+      "device_user_mismatch": "The sign-in landed on a different Telegram account — the device was not added.",
+      "device_flood_wait": "Telegram is limiting sign-ins. Try again in {{s}} s.",
+      "device_lang_pack_invalid": "Telegram refused the mobile app parameters.",
+      "device_primary_unavailable": "The existing session is unavailable — nothing can read the login code.",
+      "device_auth_failed": "Could not sign the second device in.",
+      "mobile_emulator_disabled": "The emulator is switched off: set EMULATOR__ENABLED.",
+      "emulator_busy": "This account's container is already starting — wait for it to finish.",
+      "emulator_not_found": "LDPlayer was not found: check EMULATOR__LDCONSOLE_PATH and EMULATOR__ADB_PATH.",
+      "emulator_command_failed": "An LDPlayer command failed.",
+      "emulator_command_timeout": "An LDPlayer command timed out.",
+      "emulator_boot_timeout": "The container did not boot in time.",
+      "emulator_sdk_mismatch": "The container's Android version does not match the account's mobile profile.",
+      "emulator_device_unknown": "The container cannot present the mobile profile's phone model.",
+      "emulator_apk_missing": "No Telegram APK: put the file at EMULATOR__TELEGRAM_APK_PATH.",
+      "emulator_install_failed": "Could not install Telegram in the container.",
+      "emulator_proxy_missing": "The account has no proxy — assign a SOCKS5 proxy.",
+      "emulator_proxy_unsupported": "The container's Telegram app supports SOCKS5 only; this account's proxy is HTTPS.",
+      "emulator_text_unsupported": "The cloud password has characters the container cannot type (% or non-ASCII).",
+      "emulator_field_missing": "The expected field is not on Telegram's screen — finish the sign-in in the container window.",
+      "emulator_phone_invalid": "The account's phone number could not be read.",
+      "emulator_code_timeout": "The login code did not reach the existing session in time.",
+      "emulator_twofa_missing": "The account has a cloud password that is not stored."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1233,6 +1297,8 @@
     }
   },
   "logEvent": {
+    "account_remove_web_cleanup_failed": "Could not close the deleted account's web window or remove its browser profile",
+    "web_login_locale_rejected": "Chrome rejected the account's device language; the web window opened in the proxy country's language instead",
     "inbox_listener_health_check_failed": "Inbox connection check failed",
     "inbox_listener_retry_failed": "Inbox listener retry failed",
     "inbox_listener_start_failed": "Inbox listener failed to start",
@@ -1580,6 +1646,13 @@
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
     "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
     "warming_resumed": "Account returned to warming, day count continued",
+    "account_device_added": "Device added",
+    "account_device_refused": "Device not added",
+    "account_second_device_remove_failed": "Second device not removed",
+    "account_mobile_opened": "Opened on phone",
+    "account_mobile_open_failed": "Could not open on phone",
+    "account_mobile_container_removed": "Container removed",
+    "account_mobile_container_remove_failed": "Container not removed",
     "warming_dialogue_live_reply": "Answered with a reaction or a sticker",
     "warming_dialogue_live_opener": "Forwarded a post to a partner",
     "warming_pool_fill_done": "Channel search finished",
@@ -1712,6 +1785,38 @@
     "no_accounts": "no working account left",
     "dead": "the session does not work",
     "quota_soft_day": "soft-start daily limit reached",
+    "device_missing": "the account has no such device",
+    "mobile_api_not_configured": "mobile devices are not set up",
+    "device_already_present": "the device is already there",
+    "device_phone_unknown": "no phone number",
+    "device_session_conflict": "the second device's session file already exists",
+    "device_code_cooldown": "a code was requested recently",
+    "device_code_timeout": "the login code never arrived",
+    "device_code_invalid": "the login code was rejected",
+    "device_twofa_missing": "the cloud password is not stored",
+    "device_twofa_invalid": "the cloud password was rejected",
+    "device_user_mismatch": "signed in to a different account",
+    "device_flood_wait": "Telegram is limiting sign-ins",
+    "device_lang_pack_invalid": "the app parameters were refused",
+    "device_primary_unavailable": "the existing session is unavailable",
+    "device_auth_failed": "the sign-in failed",
+    "mobile_emulator_disabled": "the emulator is switched off",
+    "emulator_busy": "the container is already starting",
+    "emulator_not_found": "LDPlayer not found",
+    "emulator_command_failed": "an LDPlayer command failed",
+    "emulator_command_timeout": "an LDPlayer command timed out",
+    "emulator_boot_timeout": "the container did not boot",
+    "emulator_sdk_mismatch": "the Android version does not match the profile",
+    "emulator_device_unknown": "the phone model is not supported",
+    "emulator_apk_missing": "no Telegram APK",
+    "emulator_install_failed": "Telegram did not install",
+    "emulator_proxy_missing": "no proxy",
+    "emulator_proxy_unsupported": "the proxy is not SOCKS5",
+    "emulator_text_unsupported": "the password cannot be typed in the container",
+    "emulator_field_missing": "the expected field is not on screen",
+    "emulator_phone_invalid": "the phone number could not be read",
+    "emulator_code_timeout": "the login code never arrived",
+    "emulator_twofa_missing": "the cloud password is not stored",
     "no_discussion": "the post has no comments",
     "no_message": "no message from the partner",
     "no_sticker": "no matching sticker installed"
@@ -3339,6 +3444,10 @@
         "binge": "long stay",
         "reply": "reply only"
       }
+    },
+    "device": {
+      "label": "Device",
+      "missing": "The account has no such device"
     },
     "poolFill": {
       "open": "Find channels",

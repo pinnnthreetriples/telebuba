@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
+from core.telegram_client._pool_errors import TelegramDeviceUnavailableError
 from core.telegram_client._util import event_name, id_strings
 from schemas.telegram_actions import ActionResult
 
@@ -165,6 +166,9 @@ async def _unavailable_result(
     stderr with its full traceback just below.
     """
     error_type = UNCONFIRMED_ERROR_TYPE if dispatched else type(exc).__name__
+    if isinstance(exc, TelegramDeviceUnavailableError):
+        # The warming device the operator chose is gone or not set up: its stable code.
+        error_type = exc.code
     logger.warning(
         "action %s unavailable for %s",
         action.action_type,

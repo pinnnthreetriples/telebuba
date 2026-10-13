@@ -48,7 +48,7 @@ from core._schema_warming_daily_stats import (  # noqa: F401 - registers the tab
 from core.config import settings
 from core.migrations import apply_migrations
 from core.secure_paths import make_private_dir, make_private_file
-from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
+from schemas.device_fingerprint import DeviceFingerprint
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -154,15 +154,8 @@ def _build_engine() -> Engine:
 # Generic row/value helpers shared by the repositories below.
 # --------------------------------------------------------------------------- #
 def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerprint:
-    return DeviceFingerprint(
-        account_id=str(mapping["account_id"]),
-        platform=cast("DevicePlatform", mapping["platform"]),
-        device_model=str(mapping["device_model"]),
-        system_version=str(mapping["system_version"]),
-        app_version=str(mapping["app_version"]),
-        lang_code=str(mapping["lang_code"]),
-        system_lang_code=str(mapping["system_lang_code"]),
-    )
+    # The columns are the model's fields one to one; validation checks the literals.
+    return DeviceFingerprint.model_validate(dict(mapping))
 
 
 def _now_iso() -> str:

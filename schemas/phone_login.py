@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from schemas.device_fingerprint import DeviceType  # noqa: TC001 - Pydantic field type
+
 
 class PhoneCodeRequest(BaseModel):
     """Gateway input: send a login code to an account's phone."""
@@ -57,6 +59,8 @@ class StartPhoneLoginRequest(BaseModel):
 
     phone: str = Field(min_length=1)
     label: str | None = Field(default=None, min_length=1)
+    # The device the login signs in as; mobile only by the operator's explicit pick.
+    session_device: DeviceType = "desktop"
 
 
 class SubmitCodeRequest(BaseModel):

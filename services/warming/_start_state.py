@@ -6,14 +6,33 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.logging import log_event
+from core.telegram_client import mobile_api_configured
 from schemas.lifecycle import LifecycleSnapshot
 from schemas.warming import is_warming
 from services.lifecycle_journal import record_lifecycle_event
+from services.warming._start_options import first_run_at
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.device_fingerprint import DeviceType
+    from schemas.devices import DeviceRefusalCode
     from schemas.warming import ActivityPersona, StartWarmingRequest, WarmingStateRecord
+
+
+_DEVICE_MISSING: DeviceRefusalCode = "device_missing"
+_NO_MOBILE_API: DeviceRefusalCode = "mobile_api_not_configured"
+
+
+class WarmingDeviceUnavailableError(ValueError):
+    """The stint's device cannot warm: the account lacks it, or mobile is not set up.
+
+    Never answered by warming the account's other device instead.
+    """
+
+    def __init__(self, code: DeviceRefusalCode, account_id: str) -> None:
+        self.code: DeviceRefusalCode = code
+        super().__init__(f"{code}: {account_id}")
 
 
 class CarriedStint(NamedTuple):
@@ -22,6 +41,7 @@ class CarriedStint(NamedTuple):
     started_at: str
     target_days: int
     activity_persona: ActivityPersona
+    device_mode: DeviceType
     # The chosen first cycle (``None`` → the loop's cold-start spread).
     first_run_at: str | None
     # A start from idle (or a first start) opens a new stint whose worked days
@@ -32,7 +52,7 @@ class CarriedStint(NamedTuple):
 def carry_or_restamp(
     existing: WarmingStateRecord | None,
     data: StartWarmingRequest,
-    first_run_at: str | None = None,
+    account: AccountRead,
     *,
     resume: bool = False,
 ) -> CarriedStint:
@@ -41,14 +61,17 @@ def carry_or_restamp(
     A genuine start with a chosen delay begins its stint at the first cycle, not at
     the click: the rest before it must not count toward ``target_days``, or a 1-day
     target behind a 24-hour delay would complete before warming did anything.
+    Refuses (``WarmingDeviceUnavailableError``) a stint whose device ``account``
+    cannot warm through, before anything about the running stint changes.
 
     ``resume`` is «Вернуть в прогрев» on a graduated account: the stint goes on with
-    its clock and worked days, while the dialog's new length and persona apply — the
-    old length is the one the account just finished.
+    its clock and worked days, while the dialog's new length, persona and device apply —
+    the old length is the one the account just finished.
     """
     continuing = existing is not None and is_warming(existing.state)
     resuming = resume and existing is not None and existing.promoted_to_nc
-    restamp = first_run_at or _now_iso()
+    first_run = first_run_at(account, data)
+    restamp = first_run or _now_iso()
     carried = continuing or resuming
     started_at = existing.started_at if carried and existing and existing.started_at else restamp
     target_days = (
@@ -57,7 +80,12 @@ def carry_or_restamp(
         else (data.target_days or settings.neurocomment.warmed_min_days)
     )
     persona = existing.activity_persona if continuing and existing else data.activity_persona
-    return CarriedStint(started_at, target_days, persona, first_run_at, fresh=not carried)
+    device_mode = existing.device_mode if continuing and existing else data.device_mode
+    if device_mode not in account.devices:
+        raise WarmingDeviceUnavailableError(_DEVICE_MISSING, account.account_id)
+    if device_mode == "mobile" and not mobile_api_configured():
+        raise WarmingDeviceUnavailableError(_NO_MOBILE_API, account.account_id)
+    return CarriedStint(started_at, target_days, persona, device_mode, first_run, fresh=not carried)
 
 
 async def journal_start(

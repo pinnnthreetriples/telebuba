@@ -86,6 +86,7 @@ export {
   accountStatsQueryKey,
   checkAccountChannelUsernameOptions as accountChannelUsernameCheckQueryOptions,
   countAccountWebWindowsOptions as accountWebWindowsQueryOptions,
+  emulatorStatusOptions as emulatorStatusQueryOptions,
   checkAccountChannelUsernameQueryKey as accountChannelUsernameCheckQueryKey,
   getAccountChannelOptions as accountChannelQueryOptions,
   getAccountChannelQueryKey as accountChannelQueryKey,

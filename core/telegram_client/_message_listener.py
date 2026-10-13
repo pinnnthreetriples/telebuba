@@ -45,6 +45,24 @@ def _next_generation(account_id: str) -> int:
     return _GENERATION_SEQUENCE
 
 
+def _move_handler(
+    account_id: str,
+    client: TelegramClient,
+    handler: object,
+    event_filter: object,
+) -> None:
+    """Put the handler on ``client``, taking it off the client it sat on before.
+
+    That client may still be connected — the account's other device after a desktop
+    was added to a mobile-only account — and would deliver every message twice.
+    """
+    previous = _HANDLER_CLIENTS.get(account_id)
+    if previous is not None and previous is not client:
+        previous.remove_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
+    client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
+    _HANDLER_CLIENTS[account_id] = client
+
+
 async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
     """Restore the subscription after the account pool replaces its client."""
     async with _lock(account_id):
@@ -52,8 +70,7 @@ async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
         event_filter = _FILTERS.get(account_id)
         generation = _GENERATIONS.get(account_id)
         if handler is not None and event_filter is not None:
-            client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
-            _HANDLER_CLIENTS[account_id] = client
+            _move_handler(account_id, client, handler, event_filter)
     if (
         handler is not None
         and event_filter is not None
@@ -138,8 +155,7 @@ async def ensure_incoming_message_connection(account_id: str) -> bool:
         if handler is None or event_filter is None:
             return False
         if _HANDLER_CLIENTS.get(account_id) is not client:
-            client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
-            _HANDLER_CLIENTS[account_id] = client
+            _move_handler(account_id, client, handler, event_filter)
     return True
 
 

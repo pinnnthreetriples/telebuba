@@ -314,7 +314,7 @@ async def test_log_out_session_evicts_pool_before_wiping_file(
 
     order: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         order.append(f"evict:{account_id}")
 
     async def fake_remove(session_path: str) -> None:  # noqa: ARG001 - path unused in the fake
@@ -356,7 +356,7 @@ async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, mon
 
     evicted: list[tuple[str, bool]] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         # Record whether the logout RPC had already run when the eviction landed.
         evicted.append((account_id, client.logged_out))
 
@@ -397,7 +397,7 @@ async def test_request_phone_code_runs_under_the_pool_tombstone(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
@@ -422,7 +422,7 @@ async def test_submit_phone_code_runs_under_the_pool_tombstone(
 
     evicted: list[str] = []
 
-    async def fake_evict(account_id: str) -> None:
+    async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
     monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
