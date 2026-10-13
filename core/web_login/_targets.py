@@ -17,6 +17,11 @@ Both rules are worth nothing without a clock on them, so dressing one target has
 short deadline (:data:`_DRESS_TIMEOUT`). A CDP command that a target simply never answers
 would otherwise hold that target paused for the transport's whole 30 s timeout — which is
 not a hypothetical: it happened, several times over in one launch, and the login died.
+
+The resume rule has one exception: a dedicated or shared worker that could not be dressed
+is never let go, because the MTProto worker is the one that sends ``initConnection`` and an
+undressed one shows Telegram the operator's real machine. The whole browser is closed
+instead (:meth:`TargetDriver._end_window`) and the operator opens the window again.
 """
 
 from __future__ import annotations
@@ -143,6 +148,7 @@ class TargetDriver:
         target_info = params.get("targetInfo")
         kind = target_info.get("type") if isinstance(target_info, dict) else None
         page: str | None = None
+        resume = bool(params.get("waitingForDebugger"))
         try:
             if kind == _PAGE:
                 await asyncio.wait_for(self._dress_page(session_id), _DRESS_TIMEOUT)
@@ -152,21 +158,42 @@ class TargetDriver:
         except (CdpError, OSError, TimeoutError) as exc:
             # Logged, not swallowed silently: a stall here is invisible from the page,
             # and the last one was only ever found because it was in the log.
-            logger.warning("Dressing a %s target failed (%r); it is resumed undressed.", kind, exc)
+            logger.warning("Dressing a %s target failed (%r).", kind, exc)
             if isinstance(exc, LocaleRejectedError):
                 self._locale_rejected = exc
+            if kind in _WORKER_TYPES:
+                # Fail CLOSED, and harder than for a page: this may be the worker that
+                # sends initConnection, so it is never resumed — the browser goes.
+                resume = False
+                await self._end_window()
+                msg = f"An undressed {kind} target closed the browser."
+                raise CdpError(msg) from exc
             # Fail CLOSED: an undressed page is NOT handed back, so the launch waits
             # and then refuses rather than navigating to Telegram wearing the
             # operator's real machine. It is still resumed below — a paused target is
             # a frozen tab — it just never becomes the window's page. Nothing to unset:
             # ``page`` only becomes non-None after the awaited call has returned.
         finally:
-            if params.get("waitingForDebugger"):
+            if resume:
                 with suppress(CdpError, OSError):
                     await self._session.send_command(
                         "Runtime.runIfWaitingForDebugger", session_id=session_id
                     )
         return page
+
+    async def _end_window(self) -> None:
+        """Close the whole browser rather than let an undressed worker run.
+
+        The worker itself is left paused, so it runs nothing even if this fails. Not
+        ``Target.closeTarget`` on the worker: closing is not dependable for a dedicated
+        worker's target, and WebK without its MTProto worker is a broken window anyway.
+        ``Browser.close`` is the command the startup sweep already relies on; the browser
+        may drop the socket before it answers, so its outcome is not awaited past the
+        dressing bound.
+        """
+        logger.warning("A worker could not be dressed; closing the browser so it never runs.")
+        with suppress(CdpError, OSError, TimeoutError):
+            await asyncio.wait_for(self._session.send_command("Browser.close"), _DRESS_TIMEOUT)
 
     async def _dress_page(self, session_id: str) -> None:
         # Cascade first: a page's own dedicated workers attach through ITS session, so

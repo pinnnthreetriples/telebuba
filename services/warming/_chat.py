@@ -28,6 +28,7 @@ from schemas.telegram_actions import ActionResult, MarkDirectMessageRead, SendDi
 from services.content import release_sent_text
 from services.dialogues import get_partners
 from services.warming import _seams
+from services.warming._chat_live import live_opener, live_reply
 from services.warming._chat_text import _opener_text, _reply_text
 from services.warming._dm_breaker import active_dm_pause, fleet_dm_paused_now
 from services.warming._fleet import _stable_fraction
@@ -188,33 +189,18 @@ async def _reply_to_partner(  # noqa: PLR0911
             extra={"with": incoming.from_account},
         )
         return ChatResult()
-    # Read receipt + read-to-reply delay: a real user opens and reads the DM
-    # before answering, so mark it read then pause briefly. A failed read-ack is
-    # not a dialogue failure — proceed to reply regardless.
-    read = await _seams.execute(
-        sender_id,
-        MarkDirectMessageRead(
-            user_id=target.user_id,
-            peer_phone=target.phone,
-        ),
-    )
-    if read.status != "ok":
-        # The read-ack resolves the same peer the send would, so an unresolvable
-        # partner is already decided here — bail before spending a second lookup
-        # and a Gemini generation on a reply that cannot be delivered.
-        if read.error_type == _PEER_UNRESOLVED:
-            return await _drop_unresolvable_reply(sender_id, incoming)
-        await log_event(
-            "INFO",
-            "warming_dialogue_read_ack_skipped",
-            account_id=sender_id,
-            extra={"with": incoming.from_account},
-        )
+    unresolvable = await _ack_read(sender_id, incoming, target, target.user_id)
+    if unresolvable is not None:
+        return unresolvable
     warm = settings.warming
     delay = _seams.rng.uniform(
         warm.dm_read_reply_delay_min_seconds, warm.dm_read_reply_delay_max_seconds
     )
     await _seams.sleep(delay)
+    # Sometimes a reaction or a sticker instead of a text answer (4.7).
+    live = await live_reply(sender_id, incoming, target)
+    if live is not None:
+        return ChatResult(**live.fields())  # ty: ignore[invalid-argument-type]
     gen = await _reply_text(sender_id, secret, incoming)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
@@ -262,6 +248,36 @@ async def _reply_to_partner(  # noqa: PLR0911
         extra={"to": incoming.from_account},
     )
     return ChatResult(messages_sent=1, attempted_actions=1)
+
+
+async def _ack_read(
+    sender_id: str,
+    incoming: DialogueMessage,
+    target: AccountRead,
+    user_id: int,
+) -> ChatResult | None:
+    """Mark the DM read before answering, as a real user opens it first.
+
+    A failed read-ack is not a dialogue failure, except for a partner that cannot be
+    addressed at all: the read-ack resolves the same peer the send would, so the turn
+    ends here (the returned result) instead of spending a second lookup and a
+    generation on a reply that cannot be delivered.
+    """
+    read = await _seams.execute(
+        sender_id,
+        MarkDirectMessageRead(user_id=user_id, peer_phone=target.phone),
+    )
+    if read.status == "ok":
+        return None
+    if read.error_type == _PEER_UNRESOLVED:
+        return await _drop_unresolvable_reply(sender_id, incoming)
+    await log_event(
+        "INFO",
+        "warming_dialogue_read_ack_skipped",
+        account_id=sender_id,
+        extra={"with": incoming.from_account},
+    )
+    return None
 
 
 async def _send_dm(sender_id: str, target: AccountRead, user_id: int, text: str) -> ActionResult:
@@ -377,6 +393,10 @@ async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure
     target = _seams.rng.choice(eligible)
     if target.user_id is None:
         return ChatResult()
+    # Sometimes a post just read, forwarded with a word, instead of a text opener (4.7).
+    live = await live_opener(accounts.get(sender_id), target)
+    if live is not None:
+        return ChatResult(**live.fields())  # ty: ignore[invalid-argument-type]
     gen = await _opener_text(sender_id, secret, target.account_id)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)

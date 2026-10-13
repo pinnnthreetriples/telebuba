@@ -1,6 +1,6 @@
 ---
 name: change-warming-humanlike
-description: Change how a warming account behaves like a person — visit cadence and kinds, character and chat manner, chat language, real account age.
+description: Change how a warming account behaves like a person — visit cadence and kinds, character and chat manner, chat language, real account age, pool fill, discussions, groups and live DMs.
 last_updated: 2026-10-13
 edges:
   - target: context/runtime-warming.md
@@ -17,5 +17,8 @@ edges:
 - Character: code draws language, country, city, age and gender from the fleet hash; the model fills only occupation and interests in JSON mode, and a profile that repeats another (same occupation, interests overlap at the cap) is asked again and not stored. The manner is drawn from the account id and applied after sanitising, before the filter and dedup.
 - Language: prompts are English instructions naming the phone's language; dialogue pairs only accounts with a common language, and a cross-language pair forces a rebuild.
 - Real age: only the operator's registration date counts (the id estimate is a UI hint). It shifts the DM opening and the phase age; day one and the trust ceiling always apply.
+- Pool fill: searches read with an idle account outside warming, through gateway reads only (no neurocomment campaign runtime). Finds are `pending` rows; nothing walks or counts them until the operator approves them, and typing a proposed channel approves it.
+- Discussions and groups: a comment thread is read on the channel post itself, never by joining its linked group. Groups are walked only from their phase on, reacted to less, never written in; their joins share the per-phase join cap.
+- Live DMs: reactions, stickers and forwards run inside the dialogue turn, after every DM gate, with the fleet pause re-read before the send. Media waits for a few exchanges in the pair, and a variant that lands nothing leaves the message for a later visit.
 
 Verify: the warming conftest neutralises the budget split, the visit order draws, the character and the manner for whole-cycle scenarios — test those in their own modules, and keep a whole-cycle test per kind.

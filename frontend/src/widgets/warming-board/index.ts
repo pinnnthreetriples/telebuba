@@ -1,5 +1,6 @@
 export { ActionTuningCard } from './ui/ActionTuningCard';
 export { ChannelLanguageShortages } from './ui/ChannelLanguageShortages';
+export { ChannelPoolFill } from './ui/ChannelPoolFill';
 export { DmPauseBanner } from './ui/DmPauseBanner';
 export { GeoMismatchBanner } from './ui/GeoMismatchBanner';
 export { HandoffModal, type HandoffMode } from './ui/HandoffModal';

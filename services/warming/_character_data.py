@@ -56,5 +56,16 @@ DEFAULT_LAUGHS: Final[tuple[str, ...]] = ("haha", "hahaha")
 # Everyday emoji a chat line may end with when the account uses them.
 CHAT_EMOJI: Final[tuple[str, ...]] = ("🙂", "😅", "😂", "🙌", "👍", "😊", "🤔", "🔥")
 
+# The word that goes with a post forwarded to a friend, per language.
+FORWARD_WORDS: Final[dict[str, str]] = {
+    "es": "mira",
+    "pt": "olha",
+    "en": "look",
+    "fr": "regarde",
+    "ru": "смотри",
+    "uk": "дивись",
+    "de": "schau mal",
+}
+
 # Without a usable phone the account keeps the language warming always wrote in.
 FALLBACK_LANGUAGE: Final = "ru"

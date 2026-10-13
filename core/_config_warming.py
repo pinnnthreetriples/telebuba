@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core._config_warming_human import WarmingHumanSettings
 from core._config_warming_safety import WarmingSafetySettings
+from core._config_warming_social import WarmingSocialSettings
 from schemas.telegram_actions_warming import INLINE_BOT_WHITELIST
 
 _SearchQuery = Annotated[str, StringConstraints(min_length=2, max_length=32)]
@@ -33,7 +34,9 @@ _WINDOW_BOUNDS = {
 }
 
 
-class WarmingSettings(WarmingSafetySettings, WarmingHumanSettings, BaseSettings):
+class WarmingSettings(
+    WarmingSafetySettings, WarmingHumanSettings, WarmingSocialSettings, BaseSettings
+):
     """Tunables for the warming engine — all delays/limits live here, no magic numbers."""
 
     model_config = SettingsConfigDict(env_prefix="WARMING__", extra="ignore")
