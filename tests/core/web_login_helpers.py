@@ -99,6 +99,7 @@ class FakeProc:
     def __init__(self, recorder: dict[str, Any]) -> None:
         self._recorder = recorder
         self.returncode: int | None = None
+        self.pid = 4242
 
     def terminate(self) -> None:
         self._recorder["terminated"] = True
@@ -153,5 +154,6 @@ def wire_launch(
     monkeypatch.setattr(browser, "_browser_ws", _fake_ws)
     monkeypatch.setattr(browser, "CdpSession", FakeCdpFactory(session, recorder))
     monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(browser, "tie_to_backend", lambda pid: recorder.setdefault("tied", pid))
     # Process-global, so a leaked reservation from one test would starve the next.
     monkeypatch.setattr(browser, "_ports_in_flight", set())

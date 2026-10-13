@@ -67,8 +67,9 @@ _EDGE_UA = f"{_WIN_UA} Edg/{{edge}}"
 # A small curated set of current, plausible DESKTOP identities (Telegram Web /k/ is a
 # desktop web app). Each row is self-consistent: a macOS row carries MacIntel + a Mac UA
 # + an Apple GPU + a Retina scale factor; Windows rows carry Win32 + a Windows UA + an
-# Intel/NVIDIA/AMD GPU. Only the rows matching the INSTALLED browser are ever handed
-# out (see :func:`fingerprint_for`), so a window never claims Edge while running Chrome.
+# Intel/NVIDIA/AMD GPU. Only the rows matching the INSTALLED browser and the HOST's OS
+# are ever handed out (see :func:`fingerprint_for`), so a window never claims Edge while
+# running Chrome, nor a Mac while running on Windows.
 DEVICES: tuple[_Device, ...] = (
     _Device(
         name="win11-chrome-intel",

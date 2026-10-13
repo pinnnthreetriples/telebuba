@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from schemas.device_fingerprint import DeviceFingerprint
 from schemas.proxy import ProxyCheckResult, ProxySettings
-from services.accounts import _web_drive, _web_watch, web_login
+from services.accounts import _web_drive, _web_identity, _web_watch, web_login
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -49,6 +50,26 @@ def fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_web_watch, "_watchers", set())
     monkeypatch.setattr(_web_drive, "_POLL_INTERVAL", 0)
     monkeypatch.setattr(_web_drive, "_PASSWORD_GRACE", 0)
+    patch_device_language(monkeypatch, None)
+
+
+def patch_device_language(monkeypatch: pytest.MonkeyPatch, language: str | None) -> None:
+    """Stub the account's Telethon device: its ``system_lang_code``, or no row at all."""
+
+    async def _device(account_id: str) -> DeviceFingerprint | None:
+        if language is None:
+            return None
+        return DeviceFingerprint(
+            account_id=account_id,
+            platform="windows",
+            device_model="Desktop",
+            system_version="Windows 11",
+            app_version="5.4.0 x64",
+            lang_code=language.split("-")[0],
+            system_lang_code=language,
+        )
+
+    monkeypatch.setattr(_web_identity, "fetch_device_fingerprint", _device)
 
 
 class FakeRelay:
