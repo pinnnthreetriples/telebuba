@@ -261,8 +261,16 @@ async def test_a_restart_resumes_the_run_and_never_resends_a_send_in_flight(
     [first, _second] = await repo.list_bulk_run_items(job.job_id)
     await repo.save_bulk_run_item(first.model_copy(update={"status": "sending"}))
 
+    launched: list[asyncio.Task[None]] = []
+    launch = bulk_messages.launch_bulk_message_job
+
+    def tracking_launch(job_id: str) -> None:
+        launch(job_id)
+        launched.append(bulk_messages._TASKS[job_id])
+
+    monkeypatch.setattr(bulk_messages, "launch_bulk_message_job", tracking_launch)
     await bulk_messages.reconcile_bulk_messages_on_startup()
-    await bulk_messages._TASKS[job.job_id]
+    await asyncio.gather(*launched)
 
     finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
@@ -337,10 +345,12 @@ async def test_cancel_ends_a_long_wait_at_once(
     monkeypatch.setattr(bulk_messages, "execute", None)
     job = await bulk_messages.start_bulk_message_job(request, "owner-1")
     bulk_messages.launch_bulk_message_job(job.job_id)
+    # Held from the start: a finished task leaves the registry at once.
+    task = bulk_messages._TASKS[job.job_id]
     await asyncio.sleep(0.05)
 
     await bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
-    await asyncio.wait_for(bulk_messages._TASKS[job.job_id], timeout=5)
+    await asyncio.wait_for(task, timeout=5)
 
     finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
