@@ -21,6 +21,7 @@ from core.emulator.ldconsole import (
     launch_instance,
     quit_instance,
     remove_container,
+    set_container_network,
 )
 from core.emulator.telegram_app import (
     apply_account_proxy,
@@ -57,6 +58,7 @@ __all__ = [
     "quit_instance",
     "read_screen",
     "remove_container",
+    "set_container_network",
     "set_network",
     "wait_for_boot",
     "wait_screen",

@@ -10,9 +10,10 @@ in ``core.emulator``; the policy lives here:
   password ``input text`` cannot type (found out at the 2FA screen, it would cost a
   login code already sent);
 * one start at a time per account (a second one answers ``emulator_busy``);
-* a NEW container starts with its network off and gets it back only once the app's
-  proxy is set, so its first connection already goes through the proxy; the setting
-  is the app's own and outlives the container's window being closed;
+* every boot a start makes has its network cut (from the host right after launch,
+  then inside Android) and gets it back only once the app's proxy is set, so its
+  first connection already goes through the proxy; the setting is the app's own and
+  outlives the container's window being closed;
 * the sign-in state is read off the screen every time, never remembered;
 * a running container that shows the app's intro or phone screen is signed in where
   it stands; one showing the chat list, or anything else, is left alone;
@@ -48,6 +49,7 @@ from core.emulator import (
     quit_instance,
     read_screen,
     remove_container,
+    set_container_network,
     set_network,
     wait_for_boot,
 )
@@ -173,14 +175,18 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
             instance = await create_instance(name, spec, settings.emulator.templates.get(spec.sdk))
         serial = adb_serial(instance.index)
         await launch_instance(instance.index)
-        await wait_for_boot(serial)
-        await assert_sdk(serial, spec.sdk)
         # Every boot this call makes goes offline until the app's own SOCKS5 setting
         # names the account's CURRENT proxy: nothing about an existing container is
-        # trusted, not even that an earlier start got as far as setting it.
+        # trusted, not even that an earlier start got as far as setting it. The host
+        # side is cut at once, before Android is up (adb cannot reach it yet), so an
+        # app the boot starts by itself cannot connect; ``svc`` follows once it can.
+        await set_container_network(instance.index, online=False)
+        await wait_for_boot(serial)
+        await assert_sdk(serial, spec.sdk)
         await set_network(serial, enabled=False)
         await ensure_app(serial)
         await apply_account_proxy(serial, account.account_id)
+        await set_container_network(instance.index, online=True)
         await set_network(serial, enabled=True)
         signed_in = await sign_in(account, serial)
     except BaseException:

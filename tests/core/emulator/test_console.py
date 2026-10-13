@@ -16,6 +16,7 @@ from core.emulator.ldconsole import (
     find_instance,
     parse_list2,
     remove_container,
+    set_container_network,
 )
 from core.emulator.ui_dump import UiNode
 
@@ -252,3 +253,14 @@ async def test_a_taken_dump_is_read_back(console: Console) -> None:
     console.answer = lambda _argv: next(answers)
 
     assert await adb.dump_ui("emulator-5554") == "<hierarchy/>"
+
+
+@pytest.mark.asyncio
+async def test_the_host_side_network_switch_is_one_console_action(console: Console) -> None:
+    await set_container_network(1, online=False)
+    await set_container_network(1, online=True)
+
+    assert [call[1:] for call in console.calls] == [
+        ["action", "--index", "1", "--key", "call.network", "--value", "offline"],
+        ["action", "--index", "1", "--key", "call.network", "--value", "connect"],
+    ]

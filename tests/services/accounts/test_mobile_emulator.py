@@ -95,6 +95,9 @@ class _Container:
         if self.launch_gate is not None:
             await self.launch_gate.wait()
 
+    async def set_container_network(self, index: int, *, online: bool) -> None:
+        self.step(f"host:{index}:{online}")
+
     async def wait_for_boot(self, serial: str) -> None:
         self.on_serial(serial, "boot")
 
@@ -158,6 +161,7 @@ _SERVICE_FAKES = (
     "find_instance",
     "create_instance",
     "launch_instance",
+    "set_container_network",
     "wait_for_boot",
     "assert_sdk",
     "set_network",
@@ -275,8 +279,18 @@ async def test_a_new_container_starts_offline_until_the_apps_proxy_is_set(
     assert result.signed_in is True
     created = next(step for step in container.steps if step.startswith("create:"))
     assert created.endswith((":33:None", ":34:None"))
-    order = [s for s in container.steps if s.split(":")[0] in {"net", "app", "proxy", "launch"}]
-    assert order == ["launch:1", "net:False", "app", "proxy:acc", "net:True"]
+    order = [
+        s for s in container.steps if s.split(":")[0] in {"host", "net", "app", "proxy", "launch"}
+    ]
+    assert order == [
+        "launch:1",
+        "host:1:False",
+        "net:False",
+        "app",
+        "proxy:acc",
+        "host:1:True",
+        "net:True",
+    ]
 
 
 @pytest.mark.asyncio
@@ -351,7 +365,7 @@ async def test_a_running_signed_out_app_is_signed_in_where_it_stands(
     assert (result.status, result.signed_in) == ("already_running", True)
     assert f"phone:{_PHONE}" in container.steps
     assert "code:12345" in container.steps
-    booted = {"launch", "net", "app", "proxy", "create", "quit", "remove"}
+    booted = {"launch", "host", "net", "app", "proxy", "create", "quit", "remove"}
     assert not [step for step in container.steps if step.split(":")[0] in booted]
 
 
@@ -365,8 +379,18 @@ async def test_every_boot_of_an_existing_container_reapplies_the_current_proxy_o
 
     await open_account_mobile("acc")
 
-    order = [s for s in container.steps if s.split(":")[0] in {"net", "app", "proxy", "launch"}]
-    assert order == ["launch:1", "net:False", "app", "proxy:acc", "net:True"]
+    order = [
+        s for s in container.steps if s.split(":")[0] in {"host", "net", "app", "proxy", "launch"}
+    ]
+    assert order == [
+        "launch:1",
+        "host:1:False",
+        "net:False",
+        "app",
+        "proxy:acc",
+        "host:1:True",
+        "net:True",
+    ]
     assert not any(step.startswith("create:") for step in container.steps)
 
 
@@ -544,3 +568,15 @@ async def test_a_2fa_password_the_app_cannot_type_is_refused_before_the_number_i
     assert refused.value.code == "emulator_text_unsupported"
     assert container.steps == []
     assert "acc" not in devices_module._LAST_CODE_REQUEST, "no login code was requested"
+
+
+@pytest.mark.asyncio
+async def test_the_host_cuts_the_network_before_android_boots(container: _Container) -> None:
+    """Adb cannot reach a booting Android, so the host side goes offline first."""
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=False)
+
+    await open_account_mobile("acc")
+
+    steps = container.steps
+    assert steps.index("launch:1") < steps.index("host:1:False") < steps.index("boot")

@@ -93,6 +93,16 @@ async def launch_instance(index: int) -> None:
     await _console("launch", "--index", str(index))
 
 
+async def set_container_network(index: int, *, online: bool) -> None:
+    """Cut or restore the container's network from the host side (``call.network``).
+
+    Needs no booted Android, unlike ``svc`` through adb, so it can go out right after
+    ``launch``: an app the boot starts by itself then finds no network either.
+    """
+    value = "connect" if online else "offline"
+    await _console("action", "--index", str(index), "--key", "call.network", "--value", value)
+
+
 async def quit_instance(index: int) -> None:
     await _console("quit", "--index", str(index))
 
