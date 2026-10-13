@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
+from datetime import UTC, date, datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
@@ -49,6 +50,21 @@ AccountStatus = Literal[
     "proxy_error",
     "unknown_error",
 ]
+# Who gave the registration date. Only the operator does (decision Q15): an estimate
+# from the account id is a hint on the card, never stored.
+RegisteredSource = Literal["operator"]
+# Telegram's public launch: no account is older, so an earlier date is a typo.
+_TELEGRAM_LAUNCH = date(2013, 8, 14)
+
+
+def _registered_in_range(value: date) -> date:
+    if not _TELEGRAM_LAUNCH <= value <= datetime.now(UTC).date():
+        msg = "registered_at must lie between Telegram's launch and today"
+        raise ValueError(msg)
+    return value
+
+
+RegisteredDate = Annotated[date, AfterValidator(_registered_in_range)]
 
 
 class AccountCreate(BaseModel):
@@ -60,12 +76,23 @@ class AccountCreate(BaseModel):
     # invariant that every generator derives one from the other.
     session_name: str | None = Field(default=None, min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     phone: str | None = Field(default=None, min_length=1)
+    # The operator's registration date given at upload (item 4.8), written in the same
+    # insert so an import never lands half-done.
+    registered_at: RegisteredDate | None = None
 
 
 class AccountSessionFileImport(BaseModel):
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     label: str | None = Field(default=None, min_length=1)
+    # Optional at upload: when the account was registered in Telegram (item 4.8).
+    registered_at: RegisteredDate | None = None
+
+
+class AccountRegisteredUpdate(BaseModel):
+    """Body of ``PUT /accounts/{id}/registered-at``; ``None`` clears the date."""
+
+    registered_at: RegisteredDate | None = None
 
 
 class AccountRead(BaseModel):
@@ -86,6 +113,10 @@ class AccountRead(BaseModel):
     last_checked_at: str | None = None
     created_at: str
     updated_at: str
+    # When the account was registered in Telegram (ISO date), only ever as the operator
+    # gave it; ``None`` = unknown and the app age counts (Прогрев 2.0, item 4.8).
+    telegram_registered_at: str | None = None
+    registered_source: RegisteredSource | None = None
     device_platform: str | None = None
     device_model: str | None = None
     device_system_version: str | None = None

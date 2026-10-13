@@ -6620,6 +6620,127 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/registered-at": {
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Registered At",
+        "description": "Set (or clear, with ``null``) when the account was registered in Telegram.",
+        "operationId": "setAccountRegisteredAt",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRegisteredUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/bulk-messages": {
       "post": {
         "tags": [
@@ -20551,6 +20672,29 @@
             "type": "string",
             "title": "Updated At"
           },
+          "telegram_registered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Registered At"
+          },
+          "registered_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "operator"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Source"
+          },
           "device_platform": {
             "anyOf": [
               {
@@ -20801,6 +20945,25 @@
           "updated_at"
         ],
         "title": "AccountRead"
+      },
+      "AccountRegisteredUpdate": {
+        "properties": {
+          "registered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered At"
+          }
+        },
+        "type": "object",
+        "title": "AccountRegisteredUpdate",
+        "description": "Body of ``PUT /accounts/{id}/registered-at``; ``None`` clears the date."
       },
       "AccountStats": {
         "properties": {
@@ -21331,6 +21494,18 @@
               }
             ],
             "title": "Label"
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered At"
           }
         },
         "type": "object",
@@ -21356,6 +21531,18 @@
               }
             ],
             "title": "Label"
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered At"
           }
         },
         "type": "object",
@@ -21815,6 +22002,55 @@
         ],
         "title": "BulkPrivacyResult",
         "description": "Fleet-wide apply roll-up \u2014 per-account outcomes plus the three counts."
+      },
+      "CadencePreview": {
+        "properties": {
+          "persona": {
+            "type": "string",
+            "enum": [
+              "calm",
+              "normal",
+              "active"
+            ],
+            "title": "Persona"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "intro",
+              "settling",
+              "warming",
+              "active",
+              "warmed"
+            ],
+            "title": "Phase"
+          },
+          "visits_min": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Visits Min"
+          },
+          "visits_max": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Visits Max"
+          },
+          "actions_per_visit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Actions Per Visit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "persona",
+          "phase",
+          "visits_min",
+          "visits_max",
+          "actions_per_visit"
+        ],
+        "title": "CadencePreview",
+        "description": "Real visit numbers for one persona in one phase, for the start dialog's hint."
       },
       "CampaignCreate": {
         "properties": {
@@ -31642,6 +31878,39 @@
               }
             ]
           },
+          "visit_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "glance",
+                  "binge",
+                  "reply"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Kind"
+          },
+          "cycle_plan": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "set_online",
+                "join",
+                "read",
+                "react",
+                "stories",
+                "send_dm",
+                "extras"
+              ]
+            },
+            "type": "array",
+            "title": "Cycle Plan"
+          },
           "account_id": {
             "type": "string",
             "minLength": 1,
@@ -32286,6 +32555,13 @@
           },
           "soft_start": {
             "$ref": "#/components/schemas/SoftStartPlan"
+          },
+          "cadence_preview": {
+            "items": {
+              "$ref": "#/components/schemas/CadencePreview"
+            },
+            "type": "array",
+            "title": "Cadence Preview"
           }
         },
         "type": "object",

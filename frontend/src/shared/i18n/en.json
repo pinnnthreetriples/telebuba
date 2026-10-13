@@ -305,6 +305,15 @@
         "uploading": "uploading…",
         "done": "done",
         "error": "error"
+      },
+      "registered": {
+        "title": "Account age",
+        "label": "Telegram registration date",
+        "estimate": "From the account id ≈ {{year}} — a hint only, warming does not use it.",
+        "noEstimate": "No estimate from the account id yet: the account has not been checked.",
+        "save": "Save",
+        "clear": "Clear",
+        "error": "Could not save the date."
       }
     },
     "actions": {
@@ -913,7 +922,9 @@
       "twofaOnceWarn": "The passwords are shown once. Close this window and Telebuba will not show them again.",
       "twofaCopyAll": "Copy all",
       "twofaDownload": "Download .csv",
-      "twofaNotRun": "not attempted — the batch was stopped"
+      "twofaNotRun": "not attempted — the batch was stopped",
+      "registeredAt": "Telegram registration date (optional)",
+      "registeredAtHint": "Applies to every file in this upload. Older than half a year opens DMs a day earlier in warming; older than a year starts the «warming» phase on day 2."
     },
     "schedule": {
       "mode": "When to publish",
@@ -1336,6 +1347,8 @@
     "warming_dialogue_reply": "Dialogue reply",
     "warming_dialogue_read_ack_skipped": "Read receipt skipped",
     "warming_dialogue_peer_unresolved": "Partner unreachable by phone lookup",
+    "warming_character_created": "Account character created",
+    "warming_character_failed": "Account character not created",
     "warming_dialogue_faded": "Dialogue faded",
     "warming_dm_fleet_paused": "DMs paused for the whole fleet",
     "warming_dm_fleet_pause_lifted": "Fleet DM pause lifted",
@@ -3131,7 +3144,8 @@
       "active": {
         "name": "Active",
         "hint": "20–28 visits/day"
-      }
+      },
+      "cadence": "{{first}} visits a day · later up to {{last}}"
     },
     "notReady": {
       "noProxy": "no proxy",
@@ -3302,6 +3316,15 @@
         "floods": "Floods",
         "empty": "No history yet",
         "bar": "{{day}}: {{value}}"
+      }
+    },
+    "visit": {
+      "label": "Visit: {{kind}}",
+      "kind": {
+        "normal": "normal",
+        "glance": "quick look",
+        "binge": "long stay",
+        "reply": "reply only"
       }
     }
   },

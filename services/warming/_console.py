@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.phone_geo import evaluate_geo
 from schemas._warming_console import WarmingAttention
+from services.warming._real_age import dm_open_after_hours
 
 if TYPE_CHECKING:
     from schemas._warming_console import DmStatus
@@ -75,18 +76,20 @@ def _warming_hours(started_at: str | None, now: datetime) -> float:
     return (now - started).total_seconds() / _SECONDS_PER_HOUR
 
 
-def dm_status(  # noqa: PLR0911 - one return per gate, first blocker wins.
+def dm_status(  # noqa: PLR0911, PLR0913 - one return per gate; the gates read six inputs.
     masked: WarmingSettings,
     intensity: WarmingIntensity,
     readiness: WarmingReadiness,
     started_at: str | None,
     now: datetime,
+    registered_at: str | None = None,
 ) -> DmStatus:
     """Why this account's inter-account DMs are open or closed, first blocker first.
 
     Mirrors the engine's gates (``_chat._should_chat`` + ``compute_intensity``): the
     switch, a text-LLM key, the fleet pause, readiness (only when enforced), then the
-    account's own warming time and its trust band or post-quarantine DM block.
+    account's own warming time (a day shorter for a half-year-old registration) and
+    its trust band or post-quarantine DM block.
     """
     if not masked.inter_account_chat:
         return "chat_off"
@@ -98,7 +101,7 @@ def dm_status(  # noqa: PLR0911 - one return per gate, first blocker wins.
         return "not_ready"
     if intensity.dm_allowed:
         return "on"
-    if _warming_hours(started_at, now) < settings.warming.dm_min_age_hours:
+    if _warming_hours(started_at, now) < dm_open_after_hours(registered_at, now):
         return "too_young"
     return "trust"
 

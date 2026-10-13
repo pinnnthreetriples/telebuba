@@ -132,7 +132,7 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
     next_run_at: '2026-08-28T13:40:00Z',
     updated_at: NOW,
     last_error: null,
-    last_action: 'reaction',
+    last_action: 'read',
     last_channel: '@crypto_daily',
     heartbeat_at: NOW,
     started_at: '2026-08-20T09:00:00Z',
@@ -174,6 +174,9 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
     attention: null,
     geo_status: 'mismatch',
     geo_accepted: i % 2 === 1,
+    // The running visit (Прогрев 2.0, item 4.4): its kind and its own step order.
+    visit_kind: i === 0 ? 'glance' : null,
+    cycle_plan: i === 0 ? ['set_online', 'join', 'read', 'react'] : [],
     ...over,
   };
 }
@@ -221,6 +224,21 @@ export const warmingBoard = {
   active_count: 3,
   summary: {},
   card_log_limit: 20,
+  // Real visits a day per persona and phase (item 4.3), for the start dialog's hint.
+  cadence_preview: (['calm', 'normal', 'active'] as const).flatMap((persona, p) =>
+    (['intro', 'settling', 'warming', 'active', 'warmed'] as const).map((phase, i) => ({
+      persona,
+      phase,
+      visits_min: [4, 5, 5, 13, 20][i] ?? 4,
+      visits_max:
+        [
+          [5, 6, 7, 8, 8],
+          [5, 6, 8, 16, 16],
+          [5, 6, 8, 16, 28],
+        ][p]?.[i] ?? 5,
+      actions_per_visit: 3,
+    })),
+  ),
   warmed: [
     warmingState(4, {
       state: 'idle',

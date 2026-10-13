@@ -6,12 +6,13 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NamedTuple
 
-from core.db import fetch_account, load_warming_settings
+from core.db import fetch_account, load_warming_settings, oldest_unreplied_for
 from core.logging import log_event
-from core.repositories.warming_marks import store_cycle_base
+from core.repositories.warming_marks import store_cycle_base, store_visit_plan
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _loop, _seams
+from services.warming._cadence import visit_budget
 from services.warming._local_day import _local_date
 from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import _release_reservation_on_exit, _Reservation
@@ -22,11 +23,15 @@ from services.warming._transitions import (
     _gate_target_reached,
     _matches_active_run,
 )
+from services.warming._visits import choose_visit_kind, kind_budget, plan_visit
 from services.warming._worked_days import _count_cycle_day
 from services.warming.pacing import _account_age_hours, _now_iso, _roll_daily, compute_intensity
 
 if TYPE_CHECKING:
-    from schemas.warming import ActivityPersona, WarmingStateRecord
+    from collections.abc import Sequence
+
+    from schemas._warming_visits import VisitPlan
+    from schemas.warming import ActivityPersona, WarmingPhase, WarmingStateRecord
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +43,7 @@ class _IterationPlan(NamedTuple):
     remaining: int | None
     dm_allowed: bool
     persona: ActivityPersona
+    phase: WarmingPhase = "intro"
 
 
 class _ReservedIteration(NamedTuple):
@@ -47,6 +53,7 @@ class _ReservedIteration(NamedTuple):
     dm_allowed: bool
     persona: ActivityPersona
     reservation: _Reservation
+    phase: WarmingPhase = "intro"
 
 
 async def _gate_initial_state(
@@ -93,6 +100,7 @@ async def _plan_iteration(
         recovered_at=record.recovered_at if record is not None else None,
         now=now,
         started_at=record.started_at if record is not None else None,
+        registered_at=account.telegram_registered_at if account is not None else None,
     )
     daily = _roll_daily(record, _local_date(await _loop._account_tz(account_id), now))  # noqa: SLF001
     quiet = await _loop._gate_quiet_day(account_id, daily, now, run_id=run_id)  # noqa: SLF001
@@ -116,6 +124,7 @@ async def _plan_iteration(
         remaining,
         intensity.dm_allowed,
         persona,
+        intensity.phase,
     )
 
 
@@ -152,19 +161,27 @@ async def _reserve_iteration(
         plan.dm_allowed,
         plan.persona,
         reservation,
+        plan.phase,
     )
 
 
 class _ProgressReporter:
     """Best-effort monotonic progress rail for one active cycle."""
 
-    def __init__(self, account_id: str, run_id: str | None) -> None:
+    def __init__(
+        self,
+        account_id: str,
+        run_id: str | None,
+        steps: Sequence[str] | None = None,
+    ) -> None:
         self.account_id = account_id
         self.run_id = run_id
+        # This visit's own order (4.4), else the classic one; set_online comes first.
+        self.steps = tuple(steps) if steps else _loop._PROGRESS_STEPS  # noqa: SLF001
         self.max_step = 0  # set_online is seeded by the reservation write.
 
     async def __call__(self, step: str) -> None:
-        idx = _loop._PROGRESS_STEPS.index(step) if step in _loop._PROGRESS_STEPS else -1  # noqa: SLF001
+        idx = self.steps.index(step) if step in self.steps else -1
         if idx <= self.max_step:
             return
         self.max_step = idx
@@ -186,6 +203,25 @@ class _ProgressReporter:
             )
 
 
+async def _plan_this_visit(
+    account_id: str,
+    reserved: _ReservedIteration,
+) -> tuple[VisitPlan, int | None]:
+    """This visit's kind, order and budget, stored for the card's progress.
+
+    The budget is the day's remainder split over the visits left (4.3), capped by the
+    kind's share (4.4); what the visit leaves unspent returns through the reconcile.
+    «Только ответить» is offered only while a partner's DM waits and DMs are allowed.
+    """
+    dm_waiting = reserved.dm_allowed and await oldest_unreplied_for(account_id) is not None
+    kind = choose_visit_kind(reserved.persona, reserved.phase, _seams.rng, dm_waiting=dm_waiting)
+    visit = plan_visit(kind, _seams.rng)
+    split = visit_budget(reserved.persona, reserved.effective_cap, reserved.remaining)
+    budget = kind_budget(kind, split, reserved.remaining, _seams.rng)
+    await store_visit_plan(account_id, visit.kind, visit.steps, reserved.reservation.token)
+    return visit, budget
+
+
 async def _run_reserved_cycle(
     account_id: str,
     reserved: _ReservedIteration,
@@ -194,14 +230,16 @@ async def _run_reserved_cycle(
     """Run and settle one reserved cycle, releasing budget on local failure."""
     tally = _ChannelTally()
     try:
+        visit, budget = await _plan_this_visit(account_id, reserved)
         result = await _loop._execute_cycle(  # noqa: SLF001 - patchable cycle seam.
             WarmingCycleRequest(
                 account_id=account_id,
-                remaining_actions=reserved.remaining,
+                remaining_actions=budget,
                 dm_allowed=reserved.dm_allowed,
                 activity_persona=reserved.persona,
+                visit=visit,
             ),
-            on_step=_ProgressReporter(account_id, run_id),
+            on_step=_ProgressReporter(account_id, run_id, visit.steps),
             tally=tally,
         )
         schedule = await _loop._schedule_next_run(  # noqa: SLF001 - patchable schedule seam.

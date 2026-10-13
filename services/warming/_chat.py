@@ -94,20 +94,22 @@ async def _maybe_inter_account_chat(
     return await _open_with_partner(sender_id, partners, secret, accounts)
 
 
-def _should_chat(
+def _should_chat(  # noqa: PLR0913 - every gate's input, flat.
     data: WarmingCycleRequest,
     secret: WarmingSettingsSecret,
     tally: _ChannelTally,
     *,
     dm_allowed: bool,
     can_attempt: bool,
+    forced: bool = False,
 ) -> bool:
     """All gates for an inter-account DM this cycle.
 
     П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
     for direct callers); the fleet DM pause applies on top. The persona roll is
     last so it draws only once every prior gate passed — it decides *how often*
-    to chat, not whether it may.
+    to chat, not whether it may. ``forced`` (a «Только ответить» visit) skips only
+    that roll, never a gate.
     """
     return (
         can_attempt
@@ -119,23 +121,26 @@ def _should_chat(
         and secret.inter_account_chat
         # Either text provider can write the line (``_chat_text`` prefers DeepSeek).
         and bool(secret.gemini_api_key or secret.deepseek_api_key)
-        and _seams.rng.random() < persona_dm_probability(data.activity_persona)
+        and (forced or _seams.rng.random() < persona_dm_probability(data.activity_persona))
     )
 
 
-async def _run_chat_step(
+async def _run_chat_step(  # noqa: PLR0913 - the gates' inputs, flat.
     data: WarmingCycleRequest,
     secret: WarmingSettingsSecret,
     tally: _ChannelTally,
     *,
     dm_allowed: bool,
     can_attempt: bool,
+    forced: bool = False,
 ) -> int:
     """Maybe start/continue an inter-account DM; return messages_sent.
 
     Any flood is folded into ``tally``.
     """
-    if not _should_chat(data, secret, tally, dm_allowed=dm_allowed, can_attempt=can_attempt):
+    if not _should_chat(
+        data, secret, tally, dm_allowed=dm_allowed, can_attempt=can_attempt, forced=forced
+    ):
         return 0
     # A turn bills at most one action (one dialogue turn per cycle, one send in
     # it), so book that action BEFORE the turn runs and give it back if the turn

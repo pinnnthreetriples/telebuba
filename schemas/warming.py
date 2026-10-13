@@ -39,6 +39,10 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
+from schemas._warming_visits import (  # noqa: TC001 - pydantic resolves them at runtime.
+    CadencePreview,
+    VisitPlan,
+)
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
@@ -374,6 +378,8 @@ class WarmingBoardState(BaseModel):
     language_shortages: list[ChannelLanguageShortage] = Field(default_factory=list)
     # The soft neurocomment start's numbers, for the hand-off dialog to quote.
     soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
+    # Real visits a day per persona and phase, for the start dialog's persona hint.
+    cadence_preview: list[CadencePreview] = Field(default_factory=list)
 
 
 class StartWarmingRequest(StartWindow):
@@ -403,6 +409,8 @@ class WarmingCycleRequest(BaseModel):
     dm_allowed: bool | None = None
     # Operator persona — drives per-session reaction/DM probability + story view.
     activity_persona: ActivityPersona = "normal"
+    # This visit's kind and order (4.4); ``None`` = a normal visit in the classic order.
+    visit: VisitPlan | None = None
 
 
 CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]

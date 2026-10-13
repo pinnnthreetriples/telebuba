@@ -24,6 +24,7 @@ from core.db import (
     load_warming_settings,
 )
 from core.logging import log_event
+from schemas._warming_visits import VisitPlan
 from schemas.telegram_actions import SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
@@ -55,6 +56,9 @@ if TYPE_CHECKING:
     from schemas._warming_extras import JoinedChannel
     from schemas.warming import WarmingChannel, WarmingIntensity
     from services.warming._steps import _OnStep
+
+# The visits that walk the whole classic route: stories, DM and extras.
+_FULL_VISITS = frozenset({"normal", "binge"})
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
@@ -95,6 +99,19 @@ async def _extras_step(ctx: _ExtraContext, on_step: _OnStep | None) -> None:
     """Run the drawn extras and advance the rail only if at least one landed."""
     if await run_extras_step(ctx):
         await _emit_step(on_step, "extras")
+
+
+async def _before_channels(ctx: _ExtraContext, visit: VisitPlan, on_step: _OnStep | None) -> None:
+    """What the visit's order puts before the channels: one free read extra, the stories.
+
+    Both are reads, so a visit never writes before it has looked at its channels.
+    """
+    if visit.read_extra_first and await run_extras_step(ctx, before_channels=True):
+        await _emit_step(on_step, "extras")
+    if visit.stories_first and visit.kind in _FULL_VISITS:
+        await _watch_stories_step(
+            ctx.account_id, ctx.chosen, ctx.tally, on_step, can_attempt=ctx.can_attempt()
+        )
 
 
 async def _set_offline(account_id: str) -> None:
@@ -168,20 +185,78 @@ def _pick_channels(
     channels: list[WarmingChannel],
     language: str | None,
     intensity: WarmingIntensity,
+    count: int | None = None,
 ) -> list[WarmingChannel]:
     """This session's channels: a draw from the account's own-language interest set.
 
     Exploration stays inside the same language pool, so a stray pick never puts a
-    Mexican number on a Russian feed the pool had no reason to include.
+    Mexican number on a Russian feed the pool had no reason to include. ``count``
+    is the visit's own number (a glance reads one, a binge more), drawn as is.
     """
     affinity = _account_channel_affinity(
         account_id, channels, _affinity_epoch(datetime.now(UTC)), language
     )
+    if count is not None:
+        return _seams.rng.sample(affinity, min(count, len(affinity)))
     upper = min(intensity.channels_max, len(affinity))
     lower = min(intensity.channels_min, upper)
     chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
     pool, _tiers = _language_pool(channels, language)
     return _maybe_explore(chosen, pool, affinity, account_id, _seams.rng)
+
+
+async def _go_online(account_id: str, tally: _ChannelTally) -> bool:
+    """SetOnline(True), folding a refusal into ``tally``. True when the account is online."""
+    # Book before dispatch: cancellation can land while the RPC is already
+    # outside the process, so its outcome is ambiguous and must count spent.
+    tally.attempts += 1
+    online_result = await _seams.execute(account_id, SetOnline(online=True))
+    if online_result.status == "ok":
+        return True
+    if online_result.status in _WAIT_STATUSES:
+        tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(online_result)
+    elif online_result.status == "peer_flood":
+        tally.peer_flooded = True
+    else:
+        tally.failures += 1
+        tally.last_failed_action = "set_online"
+    return False
+
+
+async def _after_channels(
+    ctx: _ExtraContext,
+    data: WarmingCycleRequest,
+    visit: VisitPlan,
+    on_step: _OnStep | None,
+    *,
+    dm_allowed: bool,
+) -> int:
+    """Stories, the DM turn and the extras, as the visit's kind allows; returns DMs sent.
+
+    A glance stops after its channel; «Только ответить» only answers (the persona's DM
+    roll is skipped, every DM gate stays); normal and binge visits walk the whole route.
+    """
+    # One low-risk "glanced at stories" signal per session (every persona).
+    if visit.kind in _FULL_VISITS and not visit.stories_first:
+        await _watch_stories_step(
+            ctx.account_id, ctx.chosen, ctx.tally, on_step, can_attempt=ctx.can_attempt()
+        )
+    messages_sent = 0
+    if visit.kind != "glance":
+        messages_sent = await _run_chat_step(
+            data,
+            ctx.secret,
+            ctx.tally,
+            dm_allowed=dm_allowed,
+            can_attempt=ctx.can_attempt(),
+            forced=visit.kind == "reply",
+        )
+        if messages_sent:
+            await _emit_step(on_step, "send_dm")
+    # Extras go last so the budget-booking steps above never starve behind them.
+    if visit.kind in _FULL_VISITS:
+        await _extras_step(ctx, on_step)
+    return messages_sent
 
 
 async def run_one_cycle(
@@ -221,42 +296,37 @@ async def run_one_cycle(
     tally = tally if tally is not None else _ChannelTally()
     messages_sent = 0
     online_set = False
-
-    def _can_attempt() -> bool:
-        if data.remaining_actions is None:
-            return True
-        return tally.attempts < data.remaining_actions
-
-    if not _can_attempt():
+    if data.remaining_actions is not None and tally.attempts >= data.remaining_actions:
         return await _build_cycle_result(account_id, tally, messages_sent)
 
     try:
-        # Book before dispatch: cancellation can land while the RPC is already
-        # outside the process, so its outcome is ambiguous and must count spent.
-        tally.attempts += 1
-        online_result = await _seams.execute(account_id, SetOnline(online=True))
-        if online_result.status != "ok":
-            if online_result.status in _WAIT_STATUSES:
-                flooded, seconds, until = _classify_flood(online_result)
-                tally.flooded = flooded
-                tally.flood_seconds = seconds
-                tally.flood_until = until
-            elif online_result.status == "peer_flood":
-                tally.peer_flooded = True
-            else:
-                tally.failures += 1
-                tally.last_failed_action = "set_online"
+        online_set = await _go_online(account_id, tally)
+        if not online_set:
             return await _build_cycle_result(account_id, tally, messages_sent)
-
-        online_set = True
         await _emit_step(on_step, "set_online")
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
+        # The visit's kind and order (4.4); a direct call runs a normal visit.
+        visit = data.visit or VisitPlan()
         language = account_language(account.phone if account else None)
-        chosen = _pick_channels(account_id, channels, language, intensity)
+        chosen = _pick_channels(account_id, channels, language, intensity, visit.channels)
         joined = await list_joined_channels(account_id)
         chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
-        recent_ids, recent_media = await _run_channel_loop(
+        ctx = _ExtraContext(
+            account_id=account_id,
+            secret=secret,
+            persona=data.activity_persona,
+            chosen=chosen,
+            recent_ids={},
+            tally=tally,
+            remaining_actions=data.remaining_actions,
+            joined=joined,
+            account=account,
+            media_bytes_left=warm.extras_media_bytes_per_cycle,
+        )
+        # Small things before the channels — only ever reads, never a write.
+        await _before_channels(ctx, visit, on_step)
+        ctx.recent_ids, ctx.recent_media = await _run_channel_loop(
             data,
             tally,
             chosen,
@@ -264,34 +334,10 @@ async def run_one_cycle(
             on_step,
             phase=intensity.phase,
         )
-
-        # One low-risk "glanced at stories" signal per session (every persona).
-        await _watch_stories_step(account_id, chosen, tally, on_step, can_attempt=_can_attempt())
-
+        if visit.linger_seconds > 0:
+            await _seams.sleep(visit.linger_seconds)
         dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
-        messages_sent = await _run_chat_step(
-            data, secret, tally, dm_allowed=dm_ok, can_attempt=_can_attempt()
-        )
-        if messages_sent:
-            await _emit_step(on_step, "send_dm")
-
-        # Extras go last so the budget-booking steps above never starve behind them.
-        await _extras_step(
-            _ExtraContext(
-                account_id=account_id,
-                secret=secret,
-                persona=data.activity_persona,
-                chosen=chosen,
-                recent_ids=recent_ids,
-                recent_media=recent_media,
-                tally=tally,
-                remaining_actions=data.remaining_actions,
-                joined=joined,
-                account=account,
-                media_bytes_left=warm.extras_media_bytes_per_cycle,
-            ),
-            on_step,
-        )
+        messages_sent = await _after_channels(ctx, data, visit, on_step, dm_allowed=dm_ok)
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
         # account does not stay online forever.

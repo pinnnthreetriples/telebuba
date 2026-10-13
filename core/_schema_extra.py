@@ -6,6 +6,6 @@ imports it once so ``create_all`` and the migrations see every table.
 
 from __future__ import annotations
 
-from core import _schema_lifecycle, _schema_notifications
+from core import _schema_character, _schema_lifecycle, _schema_notifications
 
-__all__ = ["_schema_lifecycle", "_schema_notifications"]
+__all__ = ["_schema_character", "_schema_lifecycle", "_schema_notifications"]

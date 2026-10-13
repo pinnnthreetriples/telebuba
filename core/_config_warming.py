@@ -11,6 +11,7 @@ from typing import Annotated
 from pydantic import Field, StringConstraints, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from core._config_warming_human import WarmingHumanSettings
 from core._config_warming_safety import WarmingSafetySettings
 from schemas.telegram_actions_warming import INLINE_BOT_WHITELIST
 
@@ -32,7 +33,7 @@ _WINDOW_BOUNDS = {
 }
 
 
-class WarmingSettings(WarmingSafetySettings, BaseSettings):
+class WarmingSettings(WarmingSafetySettings, WarmingHumanSettings, BaseSettings):
     """Tunables for the warming engine — all delays/limits live here, no magic numbers."""
 
     model_config = SettingsConfigDict(env_prefix="WARMING__", extra="ignore")
@@ -236,8 +237,6 @@ class WarmingSettings(WarmingSafetySettings, BaseSettings):
     # Fresh accounts (< this many hours) cannot exceed ``intro`` even with a clean
     # trust score — the first day is the highest-risk window.
     phase_hard_floor_age_hours: float = Field(default=24.0, ge=0.0)
-    # Rough action count of one session; caps sessions/day by the phase budget.
-    expected_actions_per_session: int = Field(default=5, ge=1)
     # Upper day bound of each phase (inclusive); the next phase starts at bound+1.
     # ``null`` = terminal phase (no next bound).
     phase_day_bound: dict[str, int | None] = Field(
@@ -250,15 +249,9 @@ class WarmingSettings(WarmingSafetySettings, BaseSettings):
         },
     )
     # Daily action cap by phase (80 = CRMChat ceiling for accounts ≥2-3 months).
-    # The cap does double duty: it bounds the day's actions AND sets the cadence,
-    # because ``persona_next_run_seconds`` affords ``cap // expected_actions_per_
-    # session`` sessions and splits the active window between them. So a cap below
-    # 2x that divisor collapses to ONE session — a ~15h inter-cycle pause — and a
-    # cap at or below the divisor also starves the steps a cycle runs last: the
-    # story glance and the inter-account DM (``set_online`` itself counts as an
-    # action, and joins/reads take the rest). ``intro`` at 3 hit both: no first DM
-    # before the account left ``intro``, and a half-day gap between cycles. At 15 it
-    # affords 3 sessions ≈ a 5h gap, matching ``cold_start_spread_hours``.
+    # It bounds the day's actions and, through ``visit_actions_range``, how many
+    # visits the persona may make: the cap is split between them (``_visits``). At
+    # 15 that is 5-6 short visits; ``intro`` at 3 starved the DM and left one visit.
     # ``ge=1`` per value: a cap of 0 (or below) makes ``effective_cap <= 0``, which
     # switches off BOTH the daily gate and the pre-cycle budget reservation, so an
     # .env override of 0 would silently reopen the respend defect (#208) for every

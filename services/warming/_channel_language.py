@@ -12,10 +12,9 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.device_fingerprint_lang import language_pair
-from core.phone_geo import country_for_phone
 from core.repositories.warming import observe_warming_channel
 from schemas.warming import ChannelLanguageShortage, WarmingChannelObservation
+from services._account_language import account_language
 from services._lang_detect import detect_language
 
 if TYPE_CHECKING:
@@ -23,17 +22,6 @@ if TYPE_CHECKING:
 
     from schemas.telegram_action_results import ReadChannelFacts
     from schemas.warming import WarmingChannel
-
-
-def account_language(phone: str | None) -> str | None:
-    """The phone country's language, ``None`` without a usable number.
-
-    ``language_pair`` falls back to ``en`` for a missing number; here that would steer
-    an unknown account onto English channels, so no country means no language.
-    """
-    if country_for_phone(phone) is None:
-        return None
-    return language_pair(phone)[0]
 
 
 async def record_read_facts(channel: str, facts: ReadChannelFacts | None) -> None:

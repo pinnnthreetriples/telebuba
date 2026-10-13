@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, update
 
+from core._schema_character import _warming_account_character
 from core.db import (
     _accounts,
     _device_fingerprints,
@@ -176,6 +177,12 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_warming_account_state).where(
                 _warming_account_state.c.account_id == account_id,
+            ),
+        )
+        # No FK either: a re-import under the same id must draw a fresh character.
+        connection.execute(
+            delete(_warming_account_character).where(
+                _warming_account_character.c.account_id == account_id,
             ),
         )
         connection.execute(

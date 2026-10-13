@@ -69,6 +69,11 @@ from core.migration_steps_discovery import (
 )
 from core.migration_steps_dm_pause import _add_warming_settings_dm_paused_until
 from core.migration_steps_flood_memory import _add_warming_flood_memory
+from core.migration_steps_humanlike import (
+    _add_account_registered_at,
+    _add_warming_account_character,
+    _add_warming_state_visit,
+)
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
 from core.migration_steps_llm_keys import (
@@ -234,6 +239,9 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (82, "add_warming_state_geo_ack", _add_warming_state_geo_ack),
     (83, "add_warming_state_cycle_base", _add_warming_state_cycle_base),
     (84, "add_warming_state_nc_start", _add_warming_state_nc_start),
+    (85, "add_account_registered_at", _add_account_registered_at),
+    (86, "add_warming_account_character", _add_warming_account_character),
+    (87, "add_warming_state_visit", _add_warming_state_visit),
 )
 
 

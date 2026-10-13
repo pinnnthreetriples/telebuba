@@ -29,8 +29,11 @@ from schemas.dialogues import (
     DialoguePairsResult,
     DialoguePartnersResult,
 )
+from services._account_language import account_language
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.dialogues import DialoguePair
 
 _rng = random.SystemRandom()
@@ -52,12 +55,29 @@ async def get_partners(account_id: str) -> DialoguePartnersResult:
     return DialoguePartnersResult(partners=partners)
 
 
-async def _eligible_accounts() -> list[str]:
+async def _eligible_accounts() -> dict[str, str | None]:
+    """Warming accounts that can talk, sorted, each with its phone's language."""
     warming_ids = await list_warming_account_ids()
-    return sorted(
-        account.account_id
+    eligible = {
+        account.account_id: account_language(account.phone)
         for account in (await list_accounts()).accounts
         if account.account_id in warming_ids and health_for_status(account.status) != "fail"
+    }
+    return dict(sorted(eligible.items()))
+
+
+def _speaks_alike(languages: Mapping[str, str | None] | None, a: str, b: str) -> bool:
+    """Chat pairs only with a common language (4.2); no map = no restriction."""
+    return languages is None or languages.get(a) == languages.get(b)
+
+
+def _has_foreign_pair(pairs: list[DialoguePair], languages: Mapping[str, str | None]) -> bool:
+    """A pair from before language pairing, whose two sides speak differently."""
+    return any(
+        pair.account_a in languages
+        and pair.account_b in languages
+        and not _speaks_alike(languages, pair.account_a, pair.account_b)
+        for pair in pairs
     )
 
 
@@ -77,7 +97,11 @@ def _time_to_reshuffle(pairs: list[DialoguePair], now: datetime) -> bool:
     return now - oldest >= timedelta(days=settings.warming.dialogue_reshuffle_days)
 
 
-def _pairs_for_new_accounts(new_accounts: list[str], eligible: list[str]) -> list[tuple[str, str]]:
+def _pairs_for_new_accounts(
+    new_accounts: list[str],
+    eligible: list[str],
+    languages: Mapping[str, str | None] | None = None,
+) -> list[tuple[str, str]]:
     """Weave each newly-eligible account into the graph, leaving the rest alone.
 
     Mirrors :func:`_build_pairs`' per-account degree (``randint(min, max)``) but
@@ -87,7 +111,11 @@ def _pairs_for_new_accounts(new_accounts: list[str], eligible: list[str]) -> lis
     warm = settings.warming
     pairs: set[tuple[str, str]] = set()
     for account in new_accounts:
-        others = [other for other in eligible if other != account]
+        others = [
+            other
+            for other in eligible
+            if other != account and _speaks_alike(languages, account, other)
+        ]
         if not others:
             continue
         upper = min(warm.dialogue_partners_max, len(others))
@@ -98,13 +126,20 @@ def _pairs_for_new_accounts(new_accounts: list[str], eligible: list[str]) -> lis
     return sorted(pairs)
 
 
-def _build_pairs(accounts: list[str]) -> list[tuple[str, str]]:
+def _build_pairs(
+    accounts: list[str],
+    languages: Mapping[str, str | None] | None = None,
+) -> list[tuple[str, str]]:
     warm = settings.warming
     shuffled = list(accounts)
     _rng.shuffle(shuffled)
     pairs: set[tuple[str, str]] = set()
     for account in shuffled:
-        others = [other for other in shuffled if other != account]
+        others = [
+            other
+            for other in shuffled
+            if other != account and _speaks_alike(languages, account, other)
+        ]
         if not others:
             continue
         upper = min(warm.dialogue_partners_max, len(others))
@@ -126,7 +161,8 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
     reshuffles the whole graph and orphans every live conversation.
     """
     async with _assign_lock:
-        eligible = await _eligible_accounts()
+        languages = await _eligible_accounts()
+        eligible = list(languages)
         pairs = await list_dialogue_pairs()
         now = datetime.now(UTC)
 
@@ -135,8 +171,10 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
                 await replace_dialogue_pairs([])
             return DialoguePairsResult(pairs=[])
 
-        if force or not pairs or _time_to_reshuffle(pairs, now):
-            new_pairs = _build_pairs(eligible)
+        # A cross-language pair (from before language pairing) forces a rebuild too.
+        reshuffle = not pairs or _time_to_reshuffle(pairs, now)
+        if force or reshuffle or _has_foreign_pair(pairs, languages):
+            new_pairs = _build_pairs(eligible, languages)
             await replace_dialogue_pairs(new_pairs)
             await log_event(
                 "INFO",
@@ -152,7 +190,7 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
         if not removed and not added:
             return DialoguePairsResult(pairs=pairs)
 
-        new_pairs = _pairs_for_new_accounts(added, eligible) if added else []
+        new_pairs = _pairs_for_new_accounts(added, eligible, languages) if added else []
         await prune_and_add_pairs(removed, new_pairs)
         await log_event(
             "INFO",
