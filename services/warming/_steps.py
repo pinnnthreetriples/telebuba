@@ -33,6 +33,7 @@ from services.warming._channel_language import record_read_facts
 from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
 from services.warming._snapshot import JOIN_CAP_WINDOW, current_snapshot
 from services.warming._social_reads import maybe_read_discussion, reaction_chance
+from services.warming._tuning import effective_tuning
 from services.warming.pacing import (
     _FAILURE_STATUSES,
     _HALT_STATUSES,
@@ -76,6 +77,10 @@ def _human_delay(min_seconds: float, max_seconds: float) -> float:
 
 
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:
+    """Sleep one human pause, stretched or shortened by the pace card's preset (5.2)."""
+    factor = effective_tuning().pause_factor
+    if factor != 1.0:  # «Обычно» draws from the configured window untouched.
+        min_seconds, max_seconds = min_seconds * factor, max_seconds * factor
     await asyncio.sleep(_human_delay(min_seconds, max_seconds))
 
 

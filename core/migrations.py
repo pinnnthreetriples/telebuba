@@ -108,6 +108,7 @@ from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
+from core.migration_steps_tuning import _add_warming_settings_tuning
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warmed_days import _add_warming_warmed_days
@@ -244,6 +245,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (86, "add_warming_account_character", _add_warming_account_character),
     (87, "add_warming_state_visit", _add_warming_state_visit),
     (88, "add_account_devices", _add_account_devices),
+    (89, "add_warming_settings_tuning", _add_warming_settings_tuning),
 )
 
 

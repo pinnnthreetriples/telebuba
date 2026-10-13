@@ -4,6 +4,7 @@ export { ChannelPoolFill } from './ui/ChannelPoolFill';
 export { DmPauseBanner } from './ui/DmPauseBanner';
 export { GeoMismatchBanner } from './ui/GeoMismatchBanner';
 export { HandoffModal, type HandoffMode } from './ui/HandoffModal';
+export { PaceCard } from './ui/PaceCard';
 export { SpamRetryModal } from './ui/SpamRetryModal';
 export { WarmingBoard } from './ui/WarmingBoard';
 export { WarmingChannelPill } from './ui/WarmingChannelPill';

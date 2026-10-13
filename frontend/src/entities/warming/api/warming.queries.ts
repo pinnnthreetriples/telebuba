@@ -10,6 +10,7 @@ export {
   getWarmingBoardOptions as warmingBoardQueryOptions,
   getWarmingSettingsOptions as warmingSettingsQueryOptions,
   getWarmingSurvivalOptions as warmingSurvivalQueryOptions,
+  getWarmingTuningOptions as warmingTuningQueryOptions,
   listWarmedAccountsOptions as warmedAccountsQueryOptions,
   listWarmingChannelsOptions as warmingChannelsQueryOptions,
   listWarmingDialoguesOptions as warmingDialoguesQueryOptions,
@@ -22,4 +23,5 @@ export {
   stopWarmingMutation,
   unpromoteFromNeurocommentMutation,
   updateWarmingSettingsMutation,
+  updateWarmingTuningMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

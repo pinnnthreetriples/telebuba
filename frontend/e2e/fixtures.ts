@@ -252,6 +252,17 @@ export const warmingBoard = {
   ],
 };
 
+// «Темп прогрева» (5.2): «Обычно», то есть лимиты из конфига и та же каденция, что у доски.
+export const warmingTuning = {
+  preset: 'normal',
+  custom: null,
+  daily_caps: { intro: 15, settling: 15, warming: 20, active: 40, warmed: 80 },
+  pause_factor: 1,
+  dm_factor: 1,
+  cadence: warmingBoard.cadence_preview,
+  warnings: [],
+};
+
 // Выживаемость: девять решённых через 7 дней — меньше порога процента, поэтому
 // плитка в шапке печатает «7 из 9 · 2 без проверки» без процента.
 export const warmingSurvival = {
