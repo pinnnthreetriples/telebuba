@@ -123,7 +123,7 @@ def test_an_unresolvable_country_claims_no_place_at_all() -> None:
     assert unknown.locale == missing.locale
     assert unknown.timezone == "Etc/UTC"
     # And it is never silently one of the real countries we hand out on purpose.
-    assert unknown.timezone not in {zone for zone, _lang in fp_module._COUNTRY.values()}
+    assert unknown.timezone not in {zone for zone, _lang in fp_module.COUNTRY.values()}
 
 
 def test_the_device_language_wins_over_the_proxy_country_but_not_its_timezone() -> None:
