@@ -7,9 +7,13 @@ found users are handed to the bulk-message form as recipients.
 Optimised for the flood-sensitive ``contacts.ImportContacts`` RPC: numbers are
 normalised and de-duplicated, spread round-robin across the selected accounts (a
 phone is resolved by exactly one account, so the flood budget is not multiplied),
-and each account's slice is sent in batches with a jittered pause between them. A
+and each account's share is sent in small batches with a jittered pause between
+its own calls. Every number submitted counts against the account's UTC-day import
+allowance (``outreach_daily_usage``), so a run never gives an account more than
+it has left; numbers no account has room for are reported ``daily_limit``. A
 rate-limited account (a FloodWait, or numbers Telegram deferred via
-``retry_contacts``) stops and its remaining numbers are reported skipped.
+``retry_contacts``) stops and its remaining numbers are reported skipped; a
+silently limited one hands its numbers on (see ``_contact_lookup_lanes``).
 """
 
 from __future__ import annotations
@@ -20,31 +24,47 @@ import random
 import re
 import unicodedata
 from contextlib import suppress
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
+from core.repositories.outreach import (
+    add_outreach_usage,
+    list_accounts_with_contact_matches,
+    list_outreach_usage,
+    load_outreach_limits,
+)
 from core.telegram_client import (
     TelegramAccountNotFoundError,
     TelegramReadError,
     execute_read,
 )
-from schemas.contact_lookup import ContactLookupJob, ContactLookupOutcome
-from schemas.telegram_actions_contacts import CONTACT_LOOKUP_MAX_BATCH, LookupContactsByPhone
+from schemas.contact_lookup import ContactLookupJob
+from schemas.outreach_limits import OutreachDailyUsage
+from schemas.telegram_actions_contacts import LookupContactsByPhone
+from services.accounts._contact_lookup_lanes import (
+    Lane,
+    hand_over_silent_lane,
+    looks_silently_limited,
+    plan_lanes,
+    record_batch,
+    skip_phones,
+    stop_lane,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Sequence
 
     from schemas.contact_lookup import ContactLookupRequest
-    from schemas.telegram_actions_contacts import ContactLookupBatchResult, ContactLookupMatch
+    from schemas.outreach_limits import OutreachLimits
+    from schemas.telegram_actions_contacts import ContactLookupBatchResult
 
 _jobs: dict[str, ContactLookupJob] = {}
 _job_owners: dict[str, str] = {}
-_pending: dict[str, tuple[ContactLookupRequest, dict[str, list[str]]]] = {}
+_pending: dict[str, tuple[ContactLookupRequest, list[str]]] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _MAX_RETAINED_JOBS = 20
-# Half the action's cap: a smaller ImportContacts burst keeps each account further
-# from the import limit, at the cost of one more paced RPC per 100 numbers.
-_BATCH_SIZE = CONTACT_LOOKUP_MAX_BATCH // 2
 # Formatting separators, including the Unicode dashes (U+2010..U+2015, U+2212) a copied
 # number may carry.
 _PHONE_SEPARATORS = re.compile(r"[\s().\-\u2010-\u2015\u2212]")
@@ -82,13 +102,34 @@ def _normalize_unique(phones: Sequence[str]) -> list[str]:
     return out
 
 
-def _chunks(items: list[str], size: int) -> Iterator[list[str]]:
-    for start in range(0, len(items), size):
-        yield items[start : start + size]
+@dataclass(frozen=True)
+class _Pacing:
+    batch_size: int
+    min_delay_seconds: float
+    max_delay_seconds: float
+    silent_limit_streak: int
+
+    @classmethod
+    def resolve(cls, data: ContactLookupRequest, limits: OutreachLimits) -> _Pacing:
+        """The run's own pacing where the form sent it, the saved limits otherwise."""
+        if data.min_delay_seconds is None or data.max_delay_seconds is None:
+            delays = (limits.lookup_min_delay_seconds, limits.lookup_max_delay_seconds)
+        else:
+            delays = (data.min_delay_seconds, data.max_delay_seconds)
+        return cls(
+            batch_size=data.batch_size or limits.lookup_batch_size,
+            min_delay_seconds=delays[0],
+            max_delay_seconds=delays[1],
+            silent_limit_streak=limits.silent_limit_streak,
+        )
 
 
 def start_contact_lookup_job(data: ContactLookupRequest, owner_user_id: str) -> ContactLookupJob:
-    """Normalise + distribute the numbers, then accept one run; a second is refused."""
+    """Normalise the numbers, then accept one run; a second is refused.
+
+    The numbers are spread over the accounts when the run starts, against each
+    account's allowance left at that moment.
+    """
     if any(job.status == "running" for job in _jobs.values()):
         msg = "contact_lookup_run_active"
         raise ValueError(msg)
@@ -102,10 +143,6 @@ def start_contact_lookup_job(data: ContactLookupRequest, owner_user_id: str) -> 
         if old_job.status != "running":
             del _jobs[old_id]
             del _job_owners[old_id]
-    distribution: dict[str, list[str]] = {account_id: [] for account_id in data.account_ids}
-    for index, phone in enumerate(phones):
-        account_id = data.account_ids[index % len(data.account_ids)]
-        distribution[account_id].append(phone)
     job = ContactLookupJob(
         job_id=uuid4().hex,
         status="running",
@@ -115,7 +152,7 @@ def start_contact_lookup_job(data: ContactLookupRequest, owner_user_id: str) -> 
     )
     _jobs[job.job_id] = job
     _job_owners[job.job_id] = owner_user_id
-    _pending[job.job_id] = (data, distribution)
+    _pending[job.job_id] = (data, phones)
     _cancel_events[job.job_id] = asyncio.Event()
     return job.model_copy(deep=True)
 
@@ -175,135 +212,97 @@ def _read_error_code(exc: TelegramReadError) -> str:
     return "failed"
 
 
-def _outcome(account_id: str, phone: str, match: ContactLookupMatch | None) -> ContactLookupOutcome:
-    if match is None:
-        return ContactLookupOutcome(phone=phone, account_id=account_id, status="not_found")
-    display_name = " ".join(part for part in (match.first_name, match.last_name) if part) or None
-    return ContactLookupOutcome(
-        phone=phone,
-        account_id=account_id,
-        status="found",
-        user_id=match.user_id,
-        username=match.username,
-        display_name=display_name,
+def _utc_day() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+async def _pause(cancel_event: asyncio.Event, seconds: float) -> None:
+    """Wait out an account's pause; a cancel interrupts it at once."""
+    with suppress(TimeoutError):
+        await asyncio.wait_for(cancel_event.wait(), timeout=seconds)
+
+
+async def _check_batch(lane: Lane, batch: list[str], job: ContactLookupJob) -> bool:
+    """Run one ``ImportContacts`` call for the lane; False once the lane is stopped."""
+    # Counted before the call: a number Telegram saw counts even if the reply is lost.
+    await add_outreach_usage(
+        OutreachDailyUsage(account_id=lane.account_id, day=_utc_day(), contact_imports=len(batch))
     )
-
-
-def _skip_remaining(
-    account_id: str,
-    batches: list[list[str]],
-    job: ContactLookupJob,
-    *,
-    error_code: str,
-    retry_after: int | None,
-) -> None:
-    for batch in batches:
-        for phone in batch:
-            job.results.append(
-                ContactLookupOutcome(
-                    phone=phone,
-                    account_id=account_id,
-                    status="skipped",
-                    error_code=error_code,
-                    retry_after_seconds=retry_after,
-                )
+    try:
+        result = await execute_read(lane.account_id, LookupContactsByPhone(phones=batch))
+    except TelegramReadError as exc:
+        # Only a rate limit carries a wait; any other read error still stops this
+        # account, because the next batch would fail the same way.
+        stop_lane(lane, batch, job, error_code=_read_error_code(exc), retry_after=exc.seconds)
+        return False
+    except TelegramAccountNotFoundError:
+        stop_lane(lane, batch, job, error_code="account_not_found", retry_after=None)
+        return False
+    except Exception as exc:  # noqa: BLE001 - one account must not abort the run
+        logger.warning("contact lookup batch failed: %s", type(exc).__name__)
+        stop_lane(lane, batch, job, error_code="failed", retry_after=None)
+        return False
+    batch_result = cast("ContactLookupBatchResult", result)
+    deferred = record_batch(lane, batch, batch_result, job)
+    if batch_result.matches:
+        await add_outreach_usage(
+            OutreachDailyUsage(
+                account_id=lane.account_id,
+                day=_utc_day(),
+                contact_matches=len(batch_result.matches),
             )
-            job.completed += 1
+        )
+    if deferred:
+        # Telegram's import limit: the deferred numbers were never checked, and
+        # the next batch would be deferred the same way.
+        stop_lane(lane, deferred, job, error_code="flood_wait", retry_after=None)
+        return False
+    return True
 
 
-def _record_batch(
-    account_id: str,
-    batch: list[str],
-    batch_result: ContactLookupBatchResult,
-    job: ContactLookupJob,
-) -> list[str]:
-    """Record every checked phone of one batch; return the ones Telegram deferred."""
-    found = {match.phone: match for match in batch_result.matches}
-    retry = set(batch_result.retry)
-    deferred: list[str] = []
-    for phone in batch:
-        if phone in retry:
-            deferred.append(phone)
-            continue
-        job.results.append(_outcome(account_id, phone, found.get(phone)))
-        job.completed += 1
-    return deferred
-
-
-async def _run_account_lookup(
-    account_id: str,
-    phones: list[str],
-    data: ContactLookupRequest,
+async def _run_lanes(
+    lanes: list[Lane],
+    pacing: _Pacing,
     job: ContactLookupJob,
     cancel_event: asyncio.Event,
 ) -> None:
-    batches = list(_chunks(phones, _BATCH_SIZE))
-    for batch_index, batch in enumerate(batches):
-        if cancel_event.is_set():
+    """Always serve the lane whose own pause ends first; accounts never wait for each other."""
+    loop = asyncio.get_running_loop()
+    while not cancel_event.is_set():
+        waiting = [lane for lane in lanes if lane.queue and not lane.stopped]
+        if not waiting:
             return
-        # Pace this account's own batches only; other accounts have their own budget.
-        if batch_index:
-            delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
-                data.min_delay_seconds, data.max_delay_seconds
-            )
-            if delay:
-                with suppress(TimeoutError):
-                    await asyncio.wait_for(cancel_event.wait(), timeout=delay)
+        lane = min(waiting, key=lambda candidate: candidate.ready_at)
+        delay = lane.ready_at - loop.time()
+        if delay > 0:
+            await _pause(cancel_event, delay)
             if cancel_event.is_set():
                 return
-        try:
-            result = await execute_read(account_id, LookupContactsByPhone(phones=batch))
-        except TelegramReadError as exc:
-            # Only a rate limit carries a wait; any other read error still stops this
-            # account, because the next batch would fail the same way.
-            _skip_remaining(
-                account_id,
-                batches[batch_index:],
-                job,
-                error_code=_read_error_code(exc),
-                retry_after=exc.seconds,
-            )
-            return
-        except TelegramAccountNotFoundError:
-            _skip_remaining(
-                account_id,
-                batches[batch_index:],
-                job,
-                error_code="account_not_found",
-                retry_after=None,
-            )
-            return
-        except Exception as exc:  # noqa: BLE001 - one account must not abort the run
-            logger.warning("contact lookup batch failed: %s", type(exc).__name__)
-            _skip_remaining(
-                account_id, batches[batch_index:], job, error_code="failed", retry_after=None
-            )
-            return
-        deferred = _record_batch(account_id, batch, cast("ContactLookupBatchResult", result), job)
-        if deferred:
-            # Telegram's import limit: the deferred numbers were never checked, and
-            # the next batch would be deferred the same way.
-            _skip_remaining(
-                account_id,
-                [deferred, *batches[batch_index + 1 :]],
-                job,
-                error_code="flood_wait",
-                retry_after=None,
-            )
-            return
+        if not await _check_batch(lane, lane.take(pacing.batch_size), job):
+            continue
+        if looks_silently_limited(lane, lanes, pacing.silent_limit_streak):
+            hand_over_silent_lane(lane, lanes, job)
+            continue
+        lane.ready_at = loop.time() + random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
+            pacing.min_delay_seconds, pacing.max_delay_seconds
+        )
 
 
 async def run_contact_lookup_job(job_id: str) -> None:
-    """Resolve each account's slice in batches; found users end up in the results."""
-    data, distribution = _pending[job_id]
+    """Check each account's share within its daily allowance; found users end up in the results."""
+    data, phones = _pending[job_id]
     job = _jobs[job_id]
     cancel_event = _cancel_events[job_id]
     try:
-        for account_id, phones in distribution.items():
-            if cancel_event.is_set():
-                break
-            if phones:
-                await _run_account_lookup(account_id, phones, data, job, cancel_event)
+        limits = await load_outreach_limits()
+        usage = await list_outreach_usage(data.account_ids, _utc_day())
+        cap = data.daily_cap or limits.contact_imports_per_day
+        allowances = {account_id: cap - row.contact_imports for account_id, row in usage.items()}
+        found_before = await list_accounts_with_contact_matches(data.account_ids)
+        lanes, overflow = plan_lanes(phones, data.account_ids, allowances, found_before)
+        for account_id, phone in overflow:
+            skip_phones(account_id, [phone], job, error_code="daily_limit")
+        await _run_lanes(lanes, _Pacing.resolve(data, limits), job, cancel_event)
     finally:
         job.status = (
             "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"

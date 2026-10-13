@@ -10,6 +10,8 @@ import {
   cancelBulkMessageJobMutation,
   generateBulkMessageMutation,
   getBulkMessageJobQueryOptions,
+  outreachLimitsQueryOptions,
+  outreachUsageTodayQueryOptions,
   sendBulkMessagesMutation,
 } from '@/entities/account';
 import {
@@ -25,12 +27,23 @@ import {
   Textarea,
 } from '@/shared/ui';
 
+import {
+  forecastSends,
+  pacingFromLimits,
+  type PacingValues,
+  pauseRange,
+  windowMinutes,
+} from '../model/pacing';
+import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
+import { PacingBlock } from './PacingBlock';
+import { RunForecast } from './RunForecast';
+import { ScheduleSection } from './ScheduleSection';
 
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;
 const MAX_SENDS = 500;
-const MAX_DELAY_SECONDS = 300;
+const MAX_DELAY_SECONDS = 3600;
 
 type SendMode = 'each' | 'split';
 
@@ -40,8 +53,17 @@ export type BulkMessageDraft = {
   recipients: string;
   pins: Record<string, string[]>;
   message: string;
-  minDelay: string;
-  maxDelay: string;
+  // null: the pause range follows the pause slider (±50%).
+  minDelay: string | null;
+  maxDelay: string | null;
+  // null: the sliders still show the saved outreach limits.
+  pacing: PacingValues | null;
+  // null: the saved default schedule.
+  schedule: FullSchedule | null;
+  // A `datetime-local` value; empty starts at once.
+  startAt: string;
+  // The phone each looked-up recipient was found by (for the client's time zone).
+  phones: Record<string, string>;
   generatorOpen: boolean;
   prompt: string;
   provider: 'deepseek' | 'gemini' | null;
@@ -87,7 +109,7 @@ export function BulkMessageModal({
   onDraftSaved?: (draft: BulkMessageDraft) => void;
   onClose: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [ids, setIds] = useState<string[]>(initialDraft?.ids ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mode, setMode] = useState<SendMode>(initialDraft?.mode ?? 'each');
@@ -95,8 +117,12 @@ export function BulkMessageModal({
   // A raw user_id found by phone lookup is addressable only by the accounts that found it.
   const [pins, setPins] = useState<Record<string, string[]>>(initialDraft?.pins ?? {});
   const [message, setMessage] = useState(initialDraft?.message ?? '');
-  const [minDelay, setMinDelay] = useState(initialDraft?.minDelay ?? '0');
-  const [maxDelay, setMaxDelay] = useState(initialDraft?.maxDelay ?? '0');
+  const [minDelay, setMinDelay] = useState<string | null>(initialDraft?.minDelay ?? null);
+  const [maxDelay, setMaxDelay] = useState<string | null>(initialDraft?.maxDelay ?? null);
+  const [pacingEdit, setPacing] = useState<PacingValues | null>(initialDraft?.pacing ?? null);
+  const [scheduleEdit, setSchedule] = useState<FullSchedule | null>(initialDraft?.schedule ?? null);
+  const [startAt, setStartAt] = useState(initialDraft?.startAt ?? '');
+  const [phones, setPhones] = useState<Record<string, string>>(initialDraft?.phones ?? {});
   const [generatorOpen, setGeneratorOpen] = useState(initialDraft?.generatorOpen ?? false);
   const [prompt, setPrompt] = useState(initialDraft?.prompt ?? '');
   const [provider, setProvider] = useState<'deepseek' | 'gemini' | null>(
@@ -106,6 +132,14 @@ export function BulkMessageModal({
   const generationRevision = useRef(0);
 
   const fleet = useQuery(allAccountsQueryOptions());
+  const limits = useQuery(outreachLimitsQueryOptions());
+  const pacing = pacingEdit ?? pacingFromLimits(limits.data);
+  const schedule = scheduleEdit ?? fullSchedule(limits.data?.schedule);
+  const usageToday = useQuery({
+    ...outreachUsageTodayQueryOptions({ query: { account_ids: ids } }),
+    enabled: ids.length > 0 && jobId === null,
+  });
+  const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
   const send = useMutation(sendBulkMessagesMutation());
   const generate = useMutation(generateBulkMessageMutation());
   const cancel = useMutation(cancelBulkMessageJobMutation());
@@ -125,13 +159,18 @@ export function BulkMessageModal({
   const recipientList = recipientsFrom(recipients);
   const maxRecipients = mode === 'each' ? MAX_EACH_RECIPIENTS : MAX_SENDS;
   const sendCount = mode === 'each' ? ids.length * recipientList.length : recipientList.length;
-  const minSeconds = Number(minDelay);
-  const maxSeconds = Number(maxDelay);
+  const [sliderMin, sliderMax] = pauseRange(pacing.pause);
+  const minShown = minDelay ?? String(sliderMin);
+  const maxShown = maxDelay ?? String(sliderMax);
+  const delayEdited = minDelay !== null || maxDelay !== null;
+  const minSeconds = Number(minShown);
+  const maxSeconds = Number(maxShown);
   const delayReady =
-    /^\d+$/.test(minDelay) &&
-    /^\d+$/.test(maxDelay) &&
-    minSeconds <= maxSeconds &&
-    maxSeconds <= MAX_DELAY_SECONDS;
+    !delayEdited ||
+    (/^\d+$/.test(minShown) &&
+      /^\d+$/.test(maxShown) &&
+      minSeconds <= maxSeconds &&
+      maxSeconds <= MAX_DELAY_SECONDS);
   const batchReady =
     ids.length > 0 &&
     ids.length <= MAX_ACCOUNTS &&
@@ -140,13 +179,27 @@ export function BulkMessageModal({
     sendCount <= MAX_SENDS &&
     message.trim() !== '' &&
     message.length <= 4096 &&
-    delayReady;
+    delayReady &&
+    schedule.work_start < schedule.work_end;
   const started = jobId !== null;
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
   const stale = job.isError && errorCode(job.error) === 'not_found';
   const results = job.data?.results ?? [];
   const attention = results.filter((result) => result.status !== 'ok' && !result.handed_over);
   const handedOver = results.filter((result) => result.handed_over);
+  // Sends whose window followed the client's own zone; the rest used the operator's clock.
+  const clientTimed = results.filter((result) => result.time_basis === 'client').length;
+
+  const averagePause = delayEdited ? (minSeconds + maxSeconds) / 2 : pacing.pause;
+  const forecast = forecastSends({
+    mode,
+    recipients: recipientList.length,
+    left: ids.map((id) => pacing.messages - (usage.get(id)?.first_messages ?? 0)),
+    cap: pacing.messages,
+    pause: averagePause,
+    concurrency: schedule.concurrency,
+    windowMinutes: windowMinutes(schedule.work_start, schedule.work_end),
+  });
 
   const onSend = () => {
     if (!batchReady) return;
@@ -158,6 +211,12 @@ export function BulkMessageModal({
           text: message.trim(),
           min_delay_seconds: minSeconds,
           max_delay_seconds: maxSeconds,
+          daily_cap: pacing.messages,
+          schedule,
+          ...(startAt !== '' && { start_at: new Date(startAt).toISOString() }),
+          recipient_phones: Object.fromEntries(
+            Object.entries(phones).filter(([recipient]) => recipientList.includes(recipient)),
+          ),
           mode,
           ...(mode === 'split' && {
             recipient_accounts: Object.fromEntries(
@@ -177,7 +236,12 @@ export function BulkMessageModal({
       .catch(() => undefined);
   };
 
-  const appendRecipients = (lines: string[], found: Record<string, string>) => {
+  const appendRecipients = (
+    lines: string[],
+    found: Record<string, string>,
+    foundPhones: Record<string, string>,
+  ) => {
+    setPhones((prev) => ({ ...prev, ...foundPhones }));
     setRecipients((prev) => [...new Set([...recipientsFrom(prev), ...lines])].join('\n'));
     setPins((prev) => {
       const next = { ...prev };
@@ -254,6 +318,10 @@ export function BulkMessageModal({
         message,
         minDelay,
         maxDelay,
+        pacing: pacingEdit,
+        schedule: scheduleEdit,
+        startAt,
+        phones,
         generatorOpen,
         prompt,
         provider,
@@ -303,6 +371,24 @@ export function BulkMessageModal({
                         total: job.data?.total ?? sendCount,
                       })}
                     </p>
+                    {!complete && job.data?.wait_reason && job.data.next_send_at && (
+                      <p className="mt-1 type-small">
+                        {t(`accounts.messages.waiting.${job.data.wait_reason}`, {
+                          time: new Date(job.data.next_send_at).toLocaleString(i18n.language, {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          }),
+                        })}
+                      </p>
+                    )}
+                    {clientTimed > 0 && (
+                      <p className="mt-1 type-small">
+                        {t('accounts.messages.timeBasis', {
+                          client: clientTimed,
+                          operator: results.length - clientTimed,
+                        })}
+                      </p>
+                    )}
                   </div>
                   {job.isError && (
                     <p role="alert" className="text-danger">
@@ -485,7 +571,12 @@ export function BulkMessageModal({
                       setRecipients(event.target.value);
                     }}
                   />
-                  <ContactLookupPanel accountIds={ids} onAppendRecipients={appendRecipients} />
+                  <ContactLookupPanel
+                    accountIds={ids}
+                    onAppendRecipients={appendRecipients}
+                    pacing={pacing}
+                    onPacingChange={setPacing}
+                  />
                 </section>
 
                 <section className="space-y-2">
@@ -565,40 +656,74 @@ export function BulkMessageModal({
                 <section className="space-y-2">
                   <div className="flex items-center gap-2">
                     <h3 className="type-body-medium text-content-secondary">
-                      {t('accounts.messages.delay')}
+                      {t('accounts.messages.pacing.title')}
                     </h3>
-                    <HelpHint text={t('accounts.messages.delayHint')} />
+                    <HelpHint text={t('accounts.messages.pacing.hint')} />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(
-                      [
-                        ['delayFrom', 'minDelay', minDelay, setMinDelay],
-                        ['delayTo', 'maxDelay', maxDelay, setMaxDelay],
-                      ] as const
-                    ).map(([labelKey, ariaKey, value, setValue]) => (
-                      <label key={labelKey} className="flex items-center gap-2 type-small">
-                        <span>{t(`accounts.messages.${labelKey}`)}</span>
-                        <Input
-                          type="number"
-                          size="sm"
-                          min={0}
-                          max={MAX_DELAY_SECONDS}
-                          step={1}
-                          aria-label={t(`accounts.messages.${ariaKey}`)}
-                          value={value}
-                          onChange={(event) => {
-                            setValue(event.target.value);
-                          }}
+                  <PacingBlock
+                    presets
+                    keys={['pause', 'messages', 'contacts', 'batch']}
+                    values={pacing}
+                    onChange={setPacing}
+                    accountIds={ids}
+                    usage={usage}
+                    leftKind="messages"
+                    forecast={<RunForecast forecast={forecast} />}
+                    advanced={
+                      <div className="space-y-4">
+                        <ScheduleSection
+                          schedule={schedule}
+                          onChange={setSchedule}
+                          startAt={startAt}
+                          onStartAtChange={setStartAt}
                         />
-                        <span>{t('accounts.messages.secondsShort')}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {!delayReady && (
-                    <p role="alert" className="type-small text-danger">
-                      {t('accounts.messages.delayInvalid')}
-                    </p>
-                  )}
+                        {schedule.work_start >= schedule.work_end && (
+                          <p role="alert" className="type-small text-danger">
+                            {t('accounts.messages.schedule.invalidHours')}
+                          </p>
+                        )}
+                        <p className="type-small">{t('accounts.messages.delayHint')}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(
+                            [
+                              [
+                                'delayFrom',
+                                'minDelay',
+                                minShown,
+                                setMinDelay,
+                                setMaxDelay,
+                                maxShown,
+                              ],
+                              ['delayTo', 'maxDelay', maxShown, setMaxDelay, setMinDelay, minShown],
+                            ] as const
+                          ).map(([labelKey, ariaKey, value, setValue, setOther, other]) => (
+                            <label key={labelKey} className="flex items-center gap-2 type-small">
+                              <span>{t(`accounts.messages.${labelKey}`)}</span>
+                              <Input
+                                type="number"
+                                size="sm"
+                                min={0}
+                                max={MAX_DELAY_SECONDS}
+                                step={1}
+                                aria-label={t(`accounts.messages.${ariaKey}`)}
+                                value={value}
+                                onChange={(event) => {
+                                  setValue(event.target.value);
+                                  setOther(other);
+                                }}
+                              />
+                              <span>{t('accounts.messages.secondsShort')}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {!delayReady && (
+                          <p role="alert" className="type-small text-danger">
+                            {t('accounts.messages.delayInvalid')}
+                          </p>
+                        )}
+                      </div>
+                    }
+                  />
                 </section>
               </>
             )}

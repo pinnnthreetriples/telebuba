@@ -26,6 +26,7 @@ _ALLOWED_TABLES = frozenset(
         "neurocomment_linked_groups",
         "neurocomment_readiness",
         "neurocomment_runtime",
+        "outreach_limits",
         "proxies",
         "users",
     },

@@ -42,6 +42,10 @@ from services.accounts._twofa_email import (
     resend_account_twofa_email,
     set_account_twofa_email,
 )
+from services.accounts.bulk_messages import (
+    reconcile_bulk_messages_on_startup,
+    shutdown_bulk_messages_on_shutdown,
+)
 from services.accounts.channel_posts import (
     delete_account_channel_post,
     edit_account_channel_post,
@@ -193,6 +197,7 @@ __all__ = [
     "publish_account_channel_post",
     "read_account_privacy",
     "read_account_twofa",
+    "reconcile_bulk_messages_on_startup",
     "remove_account",
     "remove_account_profile_music",
     "remove_account_profile_photo",
@@ -211,6 +216,7 @@ __all__ = [
     "set_account_twofa",
     "set_account_twofa_email",
     "set_registered_at",
+    "shutdown_bulk_messages_on_shutdown",
     "shutdown_web_login",
     "start_phone_login",
     "submit_login_code",

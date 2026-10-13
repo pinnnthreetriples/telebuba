@@ -12,9 +12,11 @@ export {
   closeAccountWebWindowsMutation,
   confirmAccountTwofaEmailMutation,
   createAccountChannelMutation,
+  createOutreachPresetMutation,
   deleteAccountChannelMutation,
   deleteAccountChannelPostMutation,
   deleteAccountMutation,
+  deleteOutreachPresetMutation,
   generateBulkMessageMutation,
   editAccountChannelPostMutation,
   importAccountSessionMutation,
@@ -50,5 +52,6 @@ export {
   submitLoginCodeMutation,
   updateAccountChannelMutation,
   updateAccountProfileMutation,
+  updateOutreachPresetMutation,
   uploadScheduledMediaMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

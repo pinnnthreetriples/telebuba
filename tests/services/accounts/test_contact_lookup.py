@@ -1,4 +1,7 @@
-"""Contact-lookup run: normalisation, distribution, batching, flood-stop, cancel."""
+"""Contact-lookup run: normalisation, distribution, batching, flood-stop, cancel.
+
+Daily allowance, batch size and the silent-limit trap: ``test_contact_lookup_pacing``.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ from core.telegram_client import TelegramReadError
 from schemas.contact_lookup import ContactLookupRequest
 from schemas.telegram_actions_contacts import ContactLookupBatchResult, ContactLookupMatch
 from services.accounts import contact_lookup
+from services.accounts._contact_lookup_lanes import plan_lanes
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -90,8 +94,8 @@ def test_normalisation_dedupes_across_formats() -> None:
     )
     # The two spellings collapse to one lookup; junk and too-short entries drop out.
     assert job.total == 1
-    _data, distribution = contact_lookup._pending[job.job_id]
-    assert distribution == {"a1": ["+15551110000"]}
+    _data, phones = contact_lookup._pending[job.job_id]
+    assert phones == ["+15551110000"]
 
 
 def test_plus_and_bare_spellings_of_one_number_collapse() -> None:
@@ -102,8 +106,8 @@ def test_plus_and_bare_spellings_of_one_number_collapse() -> None:
         "owner-1",
     )
     assert job.total == 1
-    _data, distribution = contact_lookup._pending[job.job_id]
-    assert distribution == {"a1": ["+15551110000"], "a2": []}
+    _data, phones = contact_lookup._pending[job.job_id]
+    assert phones == ["+15551110000"]
 
 
 def test_copied_numbers_keep_working_despite_invisible_marks() -> None:
@@ -115,8 +119,8 @@ def test_copied_numbers_keep_working_despite_invisible_marks() -> None:
         ),
         "owner-1",
     )
-    _data, distribution = contact_lookup._pending[job.job_id]
-    assert distribution == {"a1": ["+15551110000", "+15552220000"]}
+    _data, phones = contact_lookup._pending[job.job_id]
+    assert phones == ["+15551110000", "+15552220000"]
 
 
 def test_only_separators_are_stripped_never_letters_or_list_delimiters() -> None:
@@ -128,20 +132,22 @@ def test_only_separators_are_stripped_never_letters_or_list_delimiters() -> None
         "owner-1",
     )
     # Two short numbers on one line must not fuse into a third, fabricated one.
-    _data, distribution = contact_lookup._pending[job.job_id]
-    assert distribution == {"a1": ["+15551110000"]}
+    _data, phones = contact_lookup._pending[job.job_id]
+    assert phones == ["+15551110000"]
 
 
 def test_phones_are_spread_round_robin_across_accounts() -> None:
-    job = contact_lookup.start_contact_lookup_job(
-        _request(phones=["+15550000001", "+15550000002", "+15550000003", "+15550000004"]),
-        "owner-1",
+    lanes, overflow = plan_lanes(
+        ["+15550000001", "+15550000002", "+15550000003", "+15550000004"],
+        ["a1", "a2"],
+        {"a1": 15, "a2": 15},
+        set(),
     )
-    _data, distribution = contact_lookup._pending[job.job_id]
-    assert distribution == {
+    assert {lane.account_id: list(lane.queue) for lane in lanes} == {
         "a1": ["+15550000001", "+15550000003"],
         "a2": ["+15550000002", "+15550000004"],
     }
+    assert overflow == []
 
 
 def test_second_run_is_refused_while_one_is_active() -> None:
@@ -187,7 +193,6 @@ async def test_run_maps_found_and_not_found_per_phone(monkeypatch: pytest.Monkey
 async def test_flood_stops_the_account_and_skips_its_remaining_numbers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(contact_lookup, "_BATCH_SIZE", 1)
 
     async def flooded(account_id: str, action: LookupContactsByPhone) -> ContactLookupBatchResult:
         if account_id == "a1":
@@ -200,6 +205,7 @@ async def test_flood_stops_the_account_and_skips_its_remaining_numbers(
         _request(
             account_ids=["a1", "a2"],
             phones=["+15551110000", "+15550000009", "+15552220000", "+15550000008"],
+            batch_size=1,
         ),
         "owner-1",
     )
@@ -221,9 +227,8 @@ async def test_flood_stops_the_account_and_skips_its_remaining_numbers(
 
 @pytest.mark.asyncio
 async def test_cancel_stops_before_the_next_batch(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(contact_lookup, "_BATCH_SIZE", 1)
     job = contact_lookup.start_contact_lookup_job(
-        _request(account_ids=["a1"], phones=["+15551110000", "+15552220000"]),
+        _request(account_ids=["a1"], phones=["+15551110000", "+15552220000"], batch_size=1),
         "owner-1",
     )
 
@@ -261,7 +266,6 @@ def test_read_error_code_maps_the_whole_flood_family() -> None:
 async def test_retry_contacts_stop_the_account_as_a_rate_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(contact_lookup, "_BATCH_SIZE", 1)
 
     async def limited(account_id: str, action: LookupContactsByPhone) -> ContactLookupBatchResult:
         if account_id == "a1":
@@ -273,6 +277,7 @@ async def test_retry_contacts_stop_the_account_as_a_rate_limit(
         _request(
             account_ids=["a1", "a2"],
             phones=["+15551110000", "+15550000009", "+15552220000"],
+            batch_size=1,
         ),
         "owner-1",
     )
@@ -293,25 +298,33 @@ async def test_retry_contacts_stop_the_account_as_a_rate_limit(
 async def test_pause_only_between_batches_of_the_same_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(contact_lookup, "_BATCH_SIZE", 1)
     monkeypatch.setattr(contact_lookup, "execute_read", _fake_lookup)
-    pauses: list[tuple[float, float]] = []
+    jitter: list[tuple[float, float]] = []
+    waits: list[float] = []
 
     def fake_uniform(low: float, high: float) -> float:
-        pauses.append((low, high))
-        return 0
+        jitter.append((low, high))
+        return 100
+
+    async def fake_pause(_cancel_event: object, seconds: float) -> None:
+        waits.append(seconds)
 
     monkeypatch.setattr(contact_lookup.random, "uniform", fake_uniform)
+    monkeypatch.setattr(contact_lookup, "_pause", fake_pause)
     job = contact_lookup.start_contact_lookup_job(
         _request(
             account_ids=["a1", "a2"],
             phones=["+15550000001", "+15550000002", "+15550000003"],
             min_delay_seconds=1,
             max_delay_seconds=3,
+            batch_size=1,
         ),
         "owner-1",
     )
     await contact_lookup.run_contact_lookup_job(job.job_id)
 
-    # a1 has two batches (one pause); a2's single batch owes nothing to a1's budget.
-    assert pauses == [(1, 3)]
+    # Each batch arms its account's own pause; only a1's second batch has to wait it
+    # out, a2's single batch owes nothing to a1's budget.
+    assert jitter == [(1, 3)] * 3
+    assert len(waits) == 1
+    assert 99 < waits[0] <= 100

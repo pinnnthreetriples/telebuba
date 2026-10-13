@@ -455,7 +455,7 @@
       "delay": "Delay between sends",
       "minDelay": "From, seconds",
       "maxDelay": "To, seconds",
-      "delayHint": "From 0 to 300 seconds; the minimum cannot exceed the maximum. The delay is random within the range.",
+      "delayHint": "An exact pause range instead of the slider: 0 to 3600 seconds, the minimum not above the maximum.",
       "delayFrom": "From",
       "delayTo": "To",
       "secondsShort": "sec",
@@ -525,7 +525,18 @@
         "newSearch": "New search",
         "startError": "Could not start the search. Check the numbers and try again.",
         "startActive": "A search is already running.",
-        "startNoValid": "No valid numbers."
+        "startNoValid": "No valid numbers.",
+        "delay": "Pause between one account's requests",
+        "delayHint": "From 0 to 3600 seconds, random within the range. Each account waits out its own pause; the others keep working.",
+        "pacingInvalid": "Check the pause.",
+        "recheck_one": "{{count}} needs a re-check",
+        "recheck_other": "{{count}} need a re-check",
+        "dailyLimit_one": "{{count}} not checked — daily limit",
+        "dailyLimit_other": "{{count}} not checked — daily limit",
+        "retryLater_one": "Put {{count}} unchecked number back",
+        "retryLater_other": "Put {{count}} unchecked numbers back",
+        "overflow_one": "{{count}} number will not be checked today — the accounts' daily limits are used up.",
+        "overflow_other": "{{count}} numbers will not be checked today — the accounts' daily limits are used up."
       },
       "code": {
         "account_not_found": "account not found",
@@ -538,7 +549,101 @@
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
         "failed": "Telegram rejected the message"
-      }
+      },
+      "pacing": {
+        "title": "Pace and limits",
+        "hint": "Presets and sliders set this run's pace. The zones follow CRM vendor documentation (Salebot, Whatcrm), not official Telegram limits.",
+        "mode": "Mode",
+        "preset": {
+          "careful": "Careful",
+          "normal": "Normal",
+          "fast": "Fast"
+        },
+        "manual": "Custom",
+        "save": "Save",
+        "saveConfirm": "Save preset",
+        "presetName": "Preset name",
+        "rename": "Rename “{{name}}”",
+        "delete": "Delete “{{name}}”",
+        "nameTaken": "A preset with this name already exists.",
+        "tooMany": "Too many presets — delete some first.",
+        "saveError": "Could not save the preset.",
+        "label": {
+          "pause": "Pause between messages",
+          "messages": "First messages per account per day",
+          "contacts": "New contacts per account per day",
+          "batch": "Numbers per request"
+        },
+        "value": {
+          "pauseSeconds": "≈ {{low}}–{{high}} s",
+          "pauseMinutes": "≈ {{low}}–{{high}} min",
+          "messages": "{{value}} a day",
+          "contacts": "{{value}} a day",
+          "batch": "{{value}} per request"
+        },
+        "zone": {
+          "ok": "Safe",
+          "warn": "Risk grows",
+          "risk": "High risk"
+        },
+        "recommend": {
+          "pause": "we recommend 1–3 min",
+          "messages": "we recommend up to 25",
+          "contacts": "we recommend up to 15, spread over the day",
+          "batch": "we recommend 1–5"
+        },
+        "left": {
+          "messages": "Left today (UTC): first messages",
+          "contacts": "Left today (UTC): new contacts"
+        },
+        "leftChip": "{{name}} · {{left}} of {{cap}}",
+        "advanced": "Advanced",
+        "forecastEmpty": "Pick accounts and recipients to see a forecast.",
+        "forecastSends_one": "message · {{duration}}",
+        "forecastSends_other": "messages · {{duration}}",
+        "duration": {
+          "underMinute": "under a minute",
+          "m": "≈ {{m}} min",
+          "hm": "≈ {{h}} h {{m}} min",
+          "days_one": "≈ {{count}} day",
+          "days_other": "≈ {{count}} days"
+        },
+        "forecastSpread": "Today's limits do not fit them all — the run spreads over several days. Add accounts to finish sooner."
+      },
+      "schedule": {
+        "title": "When to send",
+        "hours": "Working hours",
+        "from": "From",
+        "to": "To",
+        "days": "Working days",
+        "day": {
+          "0": "Mon",
+          "1": "Tue",
+          "2": "Wed",
+          "3": "Thu",
+          "4": "Fri",
+          "5": "Sat",
+          "6": "Sun"
+        },
+        "clientTime": "By the client's time (zone from the phone number)",
+        "breakAfter": "Break after",
+        "seriesSize": "Messages before a break",
+        "breakFor": "messages for",
+        "breakMin": "Break from, minutes",
+        "breakMax": "Break to, minutes",
+        "minutes": "min",
+        "startAt": "Scheduled start",
+        "concurrency": "Accounts sending at once",
+        "invalidHours": "The working day must end after it starts."
+      },
+      "waiting": {
+        "schedule": "Starts at {{time}}.",
+        "hours": "Outside working hours — next send at {{time}}.",
+        "daily_cap": "Today's limits are used up — next send at {{time}}.",
+        "pause": "Pausing — next send at {{time}}.",
+        "series_break": "Break after a series — next send at {{time}}."
+      },
+      "timeBasis": "By the client's time: {{client}} · by the operator's (client's zone unknown): {{operator}}"
     },
     "bulk": {
       "open": "Bulk edit",

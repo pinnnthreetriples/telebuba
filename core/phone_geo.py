@@ -81,6 +81,22 @@ def timezone_for_phone(phone: str | None) -> str | None:
     return zone
 
 
+@lru_cache(maxsize=1024)
+def exact_timezone_for_phone(phone: str | None) -> str | None:
+    """The IANA zone of a phone number only when the number pins exactly one, else ``None``.
+
+    Unlike :func:`timezone_for_phone` it never picks a representative: a caller that
+    schedules a message by the client's clock must not silently guess.
+    """
+    parsed = _parse(phone)
+    if parsed is None:
+        return None
+    zones = pn_timezone.time_zones_for_number(parsed)
+    if len(zones) != 1 or zones[0] == _UNKNOWN_TZ:
+        return None
+    return zones[0]
+
+
 def _lang_region(lang_code: str | None) -> str | None:
     """The region part of a ``ll-CC`` language tag (``ru-RU`` → ``RU``)."""
     if not lang_code or "-" not in lang_code:
