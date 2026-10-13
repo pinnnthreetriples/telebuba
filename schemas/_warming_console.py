@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from schemas.geo import GeoMatchStatus  # noqa: TC001 - pydantic resolves it at runtime.
+from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves it at runtime.
 
 # How an account enters neurocomment: ``soft`` caps it lower for its first days there.
 NcStartMode = Literal["soft", "normal"]
@@ -68,6 +69,8 @@ class WarmingCardConsole(BaseModel):
     geo_status: GeoMatchStatus = "unknown"
     # The operator accepted this exact phone/proxy country pair at a start.
     geo_accepted: bool = False
+    # Days since release and whether the account is alive (stage 3); ``None`` = not released.
+    survival: AccountSurvival | None = None
 
 
 class SoftStartProgress(BaseModel):

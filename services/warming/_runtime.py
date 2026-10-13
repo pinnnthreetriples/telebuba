@@ -394,7 +394,7 @@ async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> W
         # No await after the prepared generation and task registration: a request
         # cancellation can now only land after ownership is complete.
         _spawn_runtime_task(data.account_id, run_id)
-    await journal_start(data.account_id, existing, stint, account.user_id)
+    await journal_start(data.account_id, existing, stint, account)
     return await _current_card(data.account_id)
 
 

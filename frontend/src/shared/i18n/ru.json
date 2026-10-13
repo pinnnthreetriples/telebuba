@@ -1379,6 +1379,8 @@
     "warming_unpromoted_on_restart": "Возвращён в прогрев при перезапуске",
     "warming_phase_advanced": "Переход на следующую фазу",
     "spam_status_refreshed": "Спам-статус обновлён",
+    "survival_probe": "Проверка @SpamBot для счётчика выживаемости",
+    "survival_probe_failed": "Проход проверок выживаемости упал",
     "telegram_spam_status_probe_failed": "Не удалось проверить спам-статус",
     "telegram_pool_connect_failed": "Ошибка подключения к Telegram",
     "telegram_pool_connect_retry": "Повторное подключение к Telegram",

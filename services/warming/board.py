@@ -36,6 +36,7 @@ from schemas.warming import (
     is_warming,
     warming_health,
 )
+from services.survival import load_account_survivals
 from services.trust import account_trust_score_from
 from services.warming._channel_language import language_shortages
 from services.warming._console import (
@@ -55,6 +56,7 @@ from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.survival import AccountSurvival
     from schemas.warming import WarmingReadiness, WarmingStateRecord
 
 
@@ -103,6 +105,7 @@ def _to_card(
     record: WarmingStateRecord | None,
     *,
     readiness: WarmingReadiness | None = None,
+    survival: AccountSurvival | None = None,
 ) -> WarmingAccountState:
     state: WarmingState = record.state if record else "idle"
     # Collapse the per-field `record.x if record else default` ternaries (one per
@@ -120,6 +123,7 @@ def _to_card(
         state=state,
         health=warming_health(state),
         readiness=readiness,
+        survival=survival,
         spam_check_warning=(
             record is not None
             and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak
@@ -145,6 +149,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     spam_by_account = await list_spam_statuses()
     fingerprints = await list_device_fingerprints()
     floods_by_account = await list_warming_flood_summaries()
+    survivals = await load_account_survivals(accounts.accounts)
     channel_count = len(channels.channels)
     now = datetime.now(UTC)
     cards: list[WarmingAccountState] = []
@@ -164,7 +169,9 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             floods=floods,
         )
         readiness = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
-        card = _to_card(account, record, readiness=readiness)
+        card = _to_card(
+            account, record, readiness=readiness, survival=survivals.get(account.account_id)
+        )
 
         age_hours = _account_age_hours(account, now)
         intensity = compute_intensity(
@@ -242,6 +249,7 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             nc_handed_off=card.nc_handed_off,
             geo_status=card.geo_status,
             geo_accepted=card.geo_accepted,
+            survival=card.survival,
         )
         for card in cards
         if card.promoted_to_nc

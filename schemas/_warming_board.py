@@ -8,6 +8,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.geo import GeoMatchStatus  # noqa: TC001 - pydantic resolves it at runtime.
+from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves it at runtime.
 
 
 class WarmingSummary(BaseModel):
@@ -73,6 +74,8 @@ class WarmedAccount(BaseModel):
     # The geo verdict of the card, so «Вернуть в прогрев» can warn like a start does.
     geo_status: GeoMatchStatus = "unknown"
     geo_accepted: bool = False
+    # «День 12 после выпуска · жив» — the card's survival badge.
+    survival: AccountSurvival | None = None
 
 
 class WarmedAccountList(BaseModel):

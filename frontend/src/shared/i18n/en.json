@@ -1354,6 +1354,8 @@
     "warming_unpromoted_on_restart": "Returned to warming on restart",
     "warming_phase_advanced": "Advanced to next phase",
     "spam_status_refreshed": "Spam status refreshed",
+    "survival_probe": "@SpamBot asked for the survival counter",
+    "survival_probe_failed": "Survival check pass failed",
     "telegram_spam_status_probe_failed": "Spam-status probe failed",
     "telegram_pool_connect_failed": "Telegram connection failed",
     "telegram_pool_connect_retry": "Retrying Telegram connection",

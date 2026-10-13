@@ -38,6 +38,7 @@ from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_soft_start import SoftStartSettings
+from core._config_survival import SurvivalSettings
 from core._config_user_parser import UserParserSettings
 from core._config_warming import WarmingSettings
 
@@ -350,6 +351,7 @@ class Settings(BaseSettings):
     masstagging: MasstaggingSettings = Field(default_factory=MasstaggingSettings)
     notifications: NotificationsSettings = Field(default_factory=NotificationsSettings)
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
+    survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
 
 
 def load_settings() -> Settings:

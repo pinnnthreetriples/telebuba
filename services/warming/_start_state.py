@@ -12,6 +12,7 @@ from services.lifecycle_journal import record_lifecycle_event
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.warming import ActivityPersona, StartWarmingRequest, WarmingStateRecord
 
 
@@ -63,14 +64,22 @@ async def journal_start(
     account_id: str,
     existing: WarmingStateRecord | None,
     stint: CarriedStint,
-    tg_user_id: int | None,
+    account: AccountRead,
 ) -> None:
     """Log and journal a start; ``new_stint`` False = a restart that carried the stint's clock.
 
     The row is pinned to this start's own stint, not re-read from state: it runs after the
     account lock is released, when a concurrent stop/restart may have stamped a newer one.
+    It also keeps what the survival cohorts group by — persona, length, proxy country —
+    so they stay readable after the account is gone.
     """
     await log_event("INFO", "warming_started", account_id=account_id)
     new_stint = existing is None or existing.started_at != stint.started_at
-    snapshot = LifecycleSnapshot(tg_user_id=tg_user_id, stint_started_at=stint.started_at)
-    await record_lifecycle_event(account_id, "warming_started", {"new_stint": new_stint}, snapshot)
+    snapshot = LifecycleSnapshot(tg_user_id=account.user_id, stint_started_at=stint.started_at)
+    extra: dict[str, object] = {
+        "new_stint": new_stint,
+        "persona": stint.activity_persona,
+        "target_days": stint.target_days,
+        "proxy_country": (account.proxy_country_code or "").upper() or None,
+    }
+    await record_lifecycle_event(account_id, "warming_started", extra, snapshot)

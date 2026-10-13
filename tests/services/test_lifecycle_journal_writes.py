@@ -79,10 +79,13 @@ async def test_start_journals_a_new_stint_then_a_carried_restart(
     await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
 
     events = await list_lifecycle_events("acc-1")
-    assert [(e.kind, e.extra) for e in events] == [
-        ("warming_started", {"new_stint": True}),
-        ("warming_started", {"new_stint": False}),
+    assert [(e.kind, e.extra.get("new_stint")) for e in events] == [
+        ("warming_started", True),
+        ("warming_started", False),
     ]
+    # The cohort fields ride the start row, so a deleted account still has them.
+    assert events[0].extra["persona"] == "normal"
+    assert isinstance(events[0].extra["target_days"], int)
     assert events[0].stint_started_at is not None
     assert events[0].stint_started_at == events[1].stint_started_at
 
@@ -274,7 +277,11 @@ async def test_a_start_journals_its_own_stint_not_a_later_restarts() -> None:
     )
     stint = _start_state.CarriedStint("2026-10-01T00:00:00+00:00", 7, "normal", None, fresh=True)
 
-    await _start_state.journal_start("acc-1", None, stint, 4242)
+    account = await fetch_account("acc-1")
+    assert account is not None
+    await _start_state.journal_start(
+        "acc-1", None, stint, account.model_copy(update={"user_id": 4242})
+    )
 
     (event,) = await list_lifecycle_events("acc-1")
     assert event.stint_started_at == "2026-10-01T00:00:00+00:00"

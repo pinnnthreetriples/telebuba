@@ -42,6 +42,8 @@ _RECONCILE = (
     "reconcile_inboxes_on_startup",
     # The scheduled publisher starts last: it only reads what the others restored.
     "start_scheduled_posts",
+    # The survival probes only read the journal and ask @SpamBot through the pool.
+    "start_survival_probes",
 )
 # Neuroshilling sits between neurocomment and the pool teardown: its run tasks hold
 # pooled Telethon clients, so they have to drain before the pool goes.
@@ -49,6 +51,7 @@ _STEPS = (
     # First out: otherwise it keeps publishing while warming drains, and the pool
     # teardown then takes an upload in flight.
     "shutdown_scheduled_posts",
+    "shutdown_survival_probes",
     "shutdown_warming_runtime",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
