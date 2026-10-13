@@ -204,3 +204,14 @@ async def test_a_character_from_an_old_number_is_made_again(
     stored = await fetch_account_character("acc-1")
     assert stored is not None
     assert stored.occupation == "Diseñadora"
+
+
+@pytest.mark.asyncio
+async def test_a_racing_writer_gets_the_stored_character() -> None:
+    await create_account(AccountCreate(account_id="acc-1", phone=_MX))
+    first = base_character("acc-1", _MX).model_copy(
+        update={"occupation": "Chef", "interests": ["fútbol", "cine", "café"]}
+    )
+    second = first.model_copy(update={"occupation": "Taxista"})
+    assert await store_account_character(first) == first
+    assert await store_account_character(second) == first

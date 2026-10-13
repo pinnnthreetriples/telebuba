@@ -164,8 +164,8 @@ async def account_character(
             continue
         candidate = base.model_copy(update={"occupation": profile[0], "interests": profile[1]})
         if is_distinct(candidate, others):
-            await store_account_character(candidate, replace=stored is not None)
+            kept = await store_account_character(candidate, replace=stored is not None)
             await log_event("INFO", "warming_character_created", account_id=account_id)
-            return candidate
+            return kept
     await log_event("WARNING", "warming_character_failed", account_id=account_id)
     return None
