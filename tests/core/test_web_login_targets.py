@@ -2,9 +2,10 @@
 
 The worker half is the point of the whole mechanism — WebK builds ``initConnection``
 inside its MTProto worker, which a page-level override never reaches — so these tests
-pin that a worker target is injected on its OWN session, and that a target is ALWAYS
-resumed afterwards, including when dressing it failed. A target left paused is a tab
-that never loads for the operator.
+pin that a worker target is injected on its OWN session, and that a target is resumed
+afterwards — a target left paused is a tab that never loads for the operator. The one
+exception is a worker that could not be dressed: it is never resumed, and the browser is
+closed instead, because it may be the worker that sends ``initConnection``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from core.web_login.fingerprint import LocaleRejectedError, fingerprint_for, wor
 
 _FINGERPRINT = fingerprint_for("acct-1", "DE")
 _RESUME = "Runtime.runIfWaitingForDebugger"
+_CLOSE = "Browser.close"
 
 
 def attached(session_id: str, kind: str, *, waiting: bool = True) -> dict[str, Any]:
@@ -152,15 +154,16 @@ async def test_a_worker_is_dressed_by_the_script_alone_and_no_other_cdp_command(
 
 
 @pytest.mark.asyncio
-async def test_a_target_that_never_answers_is_resumed_within_the_dressing_bound(
+async def test_a_worker_that_never_answers_closes_the_browser_within_the_dressing_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A paused target we cannot dress must cost a moment, not half the login budget.
+    """A paused worker we cannot dress must cost a moment, and must never run undressed.
 
     Live, one command that never returned held a paused worker for the transport's whole
     30 s while every later attach queued behind it — the page reached its QR screen 33 s
-    late and the 90 s drive deadline fired with no login. The bound is what makes that
-    structurally impossible, whatever a future command turns out not to support.
+    late and the 90 s drive deadline fired with no login. The bound keeps that impossible;
+    and since the worker may be the one that sends ``initConnection``, running it bare
+    would show Telegram the operator's machine, so the browser is closed instead.
     """
     monkeypatch.setattr(_targets, "_DRESS_TIMEOUT", 0.05)
     session = _Session(
@@ -169,15 +172,14 @@ async def test_a_target_that_never_answers_is_resumed_within_the_dressing_bound(
     )
 
     started = time.monotonic()
-    # Bounded here too: without the fix this call simply never returns, and a hung test
-    # is a worse regression signal than a red one.
-    page = await asyncio.wait_for(_driver(session).first_page_session(), 5.0)
+    # Bounded here too: a hung test is a worse regression signal than a red one.
+    with pytest.raises(CdpError):
+        await asyncio.wait_for(_driver(session).first_page_session(), 5.0)
     elapsed = time.monotonic() - started
 
-    assert page == "P1"  # the page behind the stalled worker still got through
     assert elapsed < 1.0
-    # The undressable target is LET GO rather than held: a paused target is a frozen tab.
-    assert ({}, "W1") in [(p, s) for p, s in session.sent(_RESUME)]
+    assert session.sent(_CLOSE) == [({}, None)]
+    assert all(target != "W1" for _p, target in session.sent(_RESUME))
 
 
 def test_the_dressing_bound_is_far_below_the_transports_command_timeout() -> None:
@@ -236,17 +238,63 @@ async def test_a_service_worker_is_let_go_without_being_dressed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_target_is_resumed_even_when_dressing_it_failed() -> None:
+@pytest.mark.parametrize("kind", ["worker", "shared_worker"])
+async def test_an_undressed_worker_is_never_resumed_and_the_browser_is_closed(kind: str) -> None:
+    """The worker sends ``initConnection``; resumed bare, it reports the real machine.
+
+    The launch fails with it (the caller then kills the process it spawned), and nothing
+    is addressed to the worker after the failed dressing — above all not the resume.
+    """
     session = _Session(
-        events=[attached("W1", "worker"), attached("P1", "page")],
+        events=[attached("W1", kind), attached("P1", "page")],
         fail_methods=frozenset({"Runtime.evaluate"}),
     )
 
-    page = await _driver(session).first_page_session()
+    with pytest.raises(CdpError):
+        await _driver(session).first_page_session()
 
-    assert page == "P1"
-    # The worker was never dressed, but it MUST still be let go, or it hangs.
-    assert ({}, "W1") in [(p, s) for p, s in session.sent(_RESUME)]
+    assert session.sent(_CLOSE) == [({}, None)]
+    assert [m for m, _p, s in session.commands if s == "W1"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_worker_stays_paused_when_closing_the_browser_also_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A browser that does not answer ``Browser.close`` still never gets the worker run."""
+    monkeypatch.setattr(_targets, "_DRESS_TIMEOUT", 0.05)
+    session = _Session(
+        events=[attached("W1", "worker"), attached("P1", "page")],
+        fail_methods=frozenset({"Runtime.evaluate"}),
+        hang_methods=frozenset({_CLOSE}),
+    )
+
+    with pytest.raises(CdpError):
+        await asyncio.wait_for(_driver(session).first_page_session(), 5.0)
+
+    assert session.sent(_RESUME) == []
+
+
+@pytest.mark.asyncio
+async def test_a_later_undressed_worker_closes_the_browser_too() -> None:
+    """A reload's fresh worker is held to the same rule by the background driver."""
+    session = _Session(
+        events=[attached("P1", "page")], fail_methods=frozenset({"Runtime.evaluate"})
+    )
+    driver = _driver(session)
+    await driver.first_page_session()
+    driver.start()
+    try:
+        session._events.append(attached("W2", "worker"))
+        for _ in range(50):
+            await asyncio.sleep(0.01)
+            if session.sent(_CLOSE):
+                break
+    finally:
+        await driver.aclose()
+
+    assert session.sent(_CLOSE) == [({}, None)]
+    assert all(target != "W2" for _p, target in session.sent(_RESUME))
 
 
 @pytest.mark.asyncio
