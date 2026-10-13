@@ -103,6 +103,10 @@ def browser_env() -> dict[str, str]:
 
 def _create_kill_on_close_job() -> int:
     """A new Job Object that ends every member when its last handle is closed."""
+    # Inline, not a helper: it is also what tells the type checker the rest is Win32.
+    if sys.platform != "win32":
+        msg = "Job Objects exist on Windows only."
+        raise OSError(msg)
     import ctypes  # noqa: PLC0415 - Windows-only, never imported elsewhere
     from ctypes import wintypes  # noqa: PLC0415
 
@@ -155,6 +159,10 @@ def _create_kill_on_close_job() -> int:
 
 def _assign_to_job(job: int, pid: int) -> None:
     """Put process ``pid`` into ``job``; its later children join it automatically."""
+    # Inline, not a helper: it is also what tells the type checker the rest is Win32.
+    if sys.platform != "win32":
+        msg = "Job Objects exist on Windows only."
+        raise OSError(msg)
     import ctypes  # noqa: PLC0415 - Windows-only, never imported elsewhere
     from ctypes import wintypes  # noqa: PLC0415
 

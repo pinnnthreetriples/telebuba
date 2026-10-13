@@ -103,10 +103,11 @@ async def test_a_browser_that_cannot_be_tied_is_killed_not_used(
 # -------------------------------------------------------------------- Job Object
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Job Objects are Windows-only")
 @pytest.mark.asyncio
 async def test_closing_the_job_ends_the_process_tied_to_it() -> None:
     """The kernel closes the backend's job handle however the backend ends."""
+    if sys.platform != "win32":
+        pytest.skip("Job Objects are Windows-only")
     import ctypes  # noqa: PLC0415 - Windows-only
 
     child = await asyncio.create_subprocess_exec(
