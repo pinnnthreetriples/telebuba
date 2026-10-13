@@ -94,10 +94,28 @@ class BulkRun:
     wakeup: asyncio.Event = field(default_factory=asyncio.Event)
     tasks: set[asyncio.Task[None]] = field(default_factory=set)
     reported: tuple[str | None, str | None] = (None, None)
+    # The first error a send task died with; the loop re-raises it.
+    failure: BaseException | None = None
 
     async def run(self) -> bool:
-        """Send until nothing is pending or the run is cancelled; True when cancelled."""
+        """Send until nothing is pending or the run is cancelled; True when cancelled.
+
+        A failed send task stops the run with its error. If this loop itself is
+        cancelled (shutdown), the sends in flight are cancelled and awaited first: their
+        items stay ``sending`` in the database, and a restart marks them unconfirmed.
+        """
+        try:
+            return await self._run()
+        except asyncio.CancelledError:
+            for task in self.tasks:
+                task.cancel()
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+            raise
+
+    async def _run(self) -> bool:
         while not self.cancel.is_set():
+            if self.failure is not None:
+                raise self.failure
             # Cleared before looking, never after: a send that ends while this pass
             # awaits the database must still wake the sleep below.
             self.wakeup.clear()
@@ -225,13 +243,29 @@ class BulkRun:
         item.status = "sending"
         task = asyncio.create_task(self._send(item, lane))
         self.tasks.add(task)
-        task.add_done_callback(self.tasks.discard)
+        task.add_done_callback(self._settled)
+
+    def _settled(self, task: asyncio.Task[None]) -> None:
+        self.tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None and self.failure is None:
+            self.failure = task.exception()
+            self.wakeup.set()
 
     async def _send(self, item: BulkRunItem, lane: Lane) -> None:
         try:
-            await repo.save_bulk_run_item(item)
+            try:
+                await repo.save_bulk_run_item(item)
+            except Exception:
+                # Nothing went out: the recipient is still to be written to.
+                item.status = "pending"
+                raise
             outcome = await self.send(item.account_id, item.recipient, item.peer, self.data.text)
-            await self._record(item, lane, outcome)
+            try:
+                await self._record(item, lane, outcome)
+            except Exception:
+                # The message may have left: never send it again.
+                item.status = "unconfirmed"
+                raise
         finally:
             lane.sending = False
             self.wakeup.set()

@@ -647,3 +647,15 @@ test('saves the current sliders as a named preset', async () => {
     }),
   ]);
 });
+
+test('raising the shortest break past the longest moves the longest along', async () => {
+  mockApi();
+  renderModal();
+  await screen.findByDisplayValue('120');
+  await userEvent.click(screen.getByText('Дополнительно'));
+
+  await userEvent.clear(screen.getByLabelText('Перерыв от, минут'));
+  await userEvent.type(screen.getByLabelText('Перерыв от, минут'), '45');
+
+  expect(screen.getByLabelText('Перерыв до, минут')).toHaveValue(45);
+});

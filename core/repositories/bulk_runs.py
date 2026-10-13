@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 
 from core._schema_bulk_runs import _bulk_run_accounts, _bulk_run_items, _bulk_runs
 from core.db import _get_engine, _now_iso
@@ -24,6 +25,12 @@ if TYPE_CHECKING:
     from sqlalchemy import Select
 
 _LIVE = "running"
+
+
+class BulkRunActiveError(RuntimeError):
+    """Another run is already live; the unique live-run index refused this one."""
+
+
 _ACCOUNT_KEY = frozenset({"run_id", "account_id"})
 
 
@@ -34,7 +41,10 @@ def _create_bulk_run(
 ) -> None:
     now = _now_iso()
     with _get_engine().begin() as connection:
-        connection.execute(insert(_bulk_runs).values(**record.model_dump(), updated_at=now))
+        try:
+            connection.execute(insert(_bulk_runs).values(**record.model_dump(), updated_at=now))
+        except IntegrityError as exc:
+            raise BulkRunActiveError(record.id) from exc
         if items:
             connection.execute(
                 insert(_bulk_run_items),

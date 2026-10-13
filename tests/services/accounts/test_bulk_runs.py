@@ -17,6 +17,7 @@ from services.accounts._bulk_plan import next_open, zone_for
 from tests.services.accounts.conftest import ALWAYS_OPEN
 
 if TYPE_CHECKING:
+    from schemas.bulk_runs import BulkRunItem
     from tests.services.accounts.conftest import FakeClock
 
 pytestmark = pytest.mark.usefixtures("empty_bulk_jobs")
@@ -278,6 +279,7 @@ async def test_shutdown_leaves_the_run_live_for_the_next_start(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     hold = asyncio.Event()
+    stopped: list[str] = []
 
     async def held_execute(
         account_id: str,
@@ -285,7 +287,11 @@ async def test_shutdown_leaves_the_run_live_for_the_next_start(
         *,
         domain: str,  # noqa: ARG001
     ) -> ActionResult:
-        await hold.wait()
+        try:
+            await hold.wait()
+        except asyncio.CancelledError:
+            stopped.append(action.recipient)
+            raise
         return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
 
     monkeypatch.setattr(bulk_messages, "execute", held_execute)
@@ -309,6 +315,8 @@ async def test_shutdown_leaves_the_run_live_for_the_next_start(
     assert record is not None
     assert record.status == "running"
     assert bulk_messages._TASKS == {}
+    # The send in flight was stopped too, not left running on its own.
+    assert stopped == ["rcpt1"]
 
 
 @pytest.mark.asyncio
@@ -337,3 +345,93 @@ async def test_cancel_ends_a_long_wait_at_once(
     finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
     assert (finished.status, finished.completed) == ("cancelled", 0)
+
+
+def _one_recipient() -> BulkMessageRequest:
+    return BulkMessageRequest.model_validate(
+        {
+            "account_ids": ["a1"],
+            "recipients": ["@rcpt1"],
+            "text": "Hello",
+            "schedule": ALWAYS_OPEN,
+            "min_delay_seconds": 0,
+            "max_delay_seconds": 0,
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_second_live_run_is_refused_even_past_the_services_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
+
+    async def nothing_live() -> list[object]:
+        return []
+
+    # Two starts racing: both pass the check before either has written its run.
+    monkeypatch.setattr(repo, "list_live_bulk_runs", nothing_live)
+    with pytest.raises(ValueError, match="bulk_message_run_active"):
+        await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
+
+
+@pytest.mark.asyncio
+async def test_a_send_whose_result_cannot_be_stored_ends_the_run_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+    bulk_clock: FakeClock,  # noqa: ARG001
+) -> None:
+    calls: list[str] = []
+
+    async def fake_execute(
+        account_id: str,
+        action: SendChatMessage,
+        *,
+        domain: str,  # noqa: ARG001
+    ) -> ActionResult:
+        calls.append(action.recipient)
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(bulk_messages, "execute", fake_execute)
+    job = await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
+    save = repo.save_bulk_run_item
+    saves = 0
+
+    async def flaky_save(item: BulkRunItem) -> int:
+        nonlocal saves
+        saves += 1
+        if saves == 2:  # the result after the send
+            msg = "database is locked"
+            raise RuntimeError(msg)
+        return await save(item)
+
+    monkeypatch.setattr(repo, "save_bulk_run_item", flaky_save)
+    await bulk_messages.run_bulk_message_job(job.job_id)
+
+    record = await repo.get_bulk_run(job.job_id)
+    assert record is not None
+    assert record.status == "cancelled"
+    [item] = await repo.list_bulk_run_items(job.job_id)
+    assert item.status == "unconfirmed"
+    assert calls == ["rcpt1"]
+
+
+@pytest.mark.asyncio
+async def test_a_send_that_could_not_be_claimed_stays_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    bulk_clock: FakeClock,  # noqa: ARG001
+) -> None:
+    monkeypatch.setattr(bulk_messages, "execute", None)
+    job = await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
+
+    async def broken_save(_item: object) -> int:
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(repo, "save_bulk_run_item", broken_save)
+    await bulk_messages.run_bulk_message_job(job.job_id)
+
+    record = await repo.get_bulk_run(job.job_id)
+    assert record is not None
+    assert record.status == "cancelled"
+    [item] = await repo.list_bulk_run_items(job.job_id)
+    assert item.status == "pending"

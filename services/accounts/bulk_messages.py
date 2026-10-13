@@ -103,11 +103,16 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
         request_json=resolved.model_dump_json(),
         created_at=datetime.now(UTC).isoformat(),
     )
-    await repo.create_bulk_run(
-        record,
-        plan_items(run_id, resolved, schedule, recipients),
-        [BulkRunAccount(run_id=run_id, account_id=a) for a in resolved.account_ids],
-    )
+    try:
+        await repo.create_bulk_run(
+            record,
+            plan_items(run_id, resolved, schedule, recipients),
+            [BulkRunAccount(run_id=run_id, account_id=a) for a in resolved.account_ids],
+        )
+    except repo.BulkRunActiveError as exc:
+        # Another start won the race the check above cannot close on its own.
+        msg = "bulk_message_run_active"
+        raise ValueError(msg) from exc
     await repo.prune_bulk_runs(_MAX_RETAINED_JOBS)
     return await _job_view(record)
 
@@ -251,6 +256,11 @@ async def run_bulk_message_job(job_id: str) -> None:
     _RUNS[job_id] = run
     try:
         cancelled = await run.run()
+    except Exception as exc:  # noqa: BLE001 - a broken run must not stay live forever
+        logger.warning("bulk message run failed: %s", type(exc).__name__)
+        # A send whose result was never stored may have gone out: never resend it.
+        await repo.unconfirm_sending_items(job_id)
+        cancelled = True
     finally:
         _RUNS.pop(job_id, None)
     await repo.update_bulk_run(

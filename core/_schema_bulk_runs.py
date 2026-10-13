@@ -32,6 +32,13 @@ _bulk_runs = Table(
     Column("updated_at", String, nullable=False),
     Column("finished_at", String, nullable=True),
     Index("ix_bulk_runs_status", "status"),
+    # At most one live run: two starts racing past the service's check meet here.
+    Index(
+        "ux_bulk_runs_live",
+        "status",
+        unique=True,
+        sqlite_where=text("status = 'running'"),
+    ),
 )
 
 _bulk_run_items = Table(

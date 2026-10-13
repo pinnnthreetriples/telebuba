@@ -23,6 +23,13 @@ function NumberField({
   // The typed text, so a field can be cleared and retyped; only an in-range whole
   // number reaches the schedule, and leaving the field shows the value in force.
   const [text, setText] = useState(String(value));
+  // Follow a value changed from outside (the other break field moving this one), but
+  // keep text being typed that already means the same number.
+  const [shown, setShown] = useState(value);
+  if (value !== shown) {
+    setShown(value);
+    if (Number(text) !== value) setText(String(value));
+  }
   return (
     <Input
       type="number"

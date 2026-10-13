@@ -29,6 +29,8 @@ _STATEMENTS = (
     " finished_at VARCHAR,"
     " PRIMARY KEY (id))",
     "CREATE INDEX IF NOT EXISTS ix_bulk_runs_status ON bulk_runs (status)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_bulk_runs_live ON bulk_runs (status)"
+    " WHERE status = 'running'",
     "CREATE TABLE IF NOT EXISTS bulk_run_items ("
     " id INTEGER NOT NULL,"
     " run_id VARCHAR NOT NULL,"
