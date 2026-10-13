@@ -22,6 +22,15 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+# The partner-facing warming actions (4.6/4.7) join this union too; they live apart
+# because, unlike every model here, the DM ones carry a destination peer.
+from schemas.telegram_actions_warming_social import (
+    WarmDmForward,
+    WarmDmReact,
+    WarmDmSticker,
+    WarmReadDiscussion,
+)
+
 
 class WarmGetDialogs(BaseModel):
     """Read: open the chat list, like launching the app (``messages.getDialogs``)."""
@@ -222,6 +231,10 @@ WarmingAction = Annotated[
     | WarmToggleArchive
     | WarmMutePeer
     | WarmConsumeMedia
-    | WarmEmojiStatus,
+    | WarmEmojiStatus
+    | WarmDmForward
+    | WarmDmReact
+    | WarmDmSticker
+    | WarmReadDiscussion,
     Field(discriminator="action_type"),
 ]

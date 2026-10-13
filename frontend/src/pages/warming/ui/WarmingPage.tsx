@@ -37,6 +37,7 @@ import { DialogueFeed } from '@/widgets/dialogue-feed';
 import {
   ActionTuningCard,
   ChannelLanguageShortages,
+  ChannelPoolFill,
   DmPauseBanner,
   GeoMismatchBanner,
   HandoffModal,
@@ -538,6 +539,10 @@ export function WarmingPage() {
                 </ChipAddButton>
               )}
             </div>
+            <ChannelPoolFill
+              defaultLanguage={data.language_shortages?.[0]?.language}
+              onPoolChanged={invalidate}
+            />
           </CollapsibleCard>
 
           <CollapsibleCard

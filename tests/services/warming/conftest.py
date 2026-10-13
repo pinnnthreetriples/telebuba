@@ -70,6 +70,13 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     monkeypatch.setattr(settings.warming, "visit_stories_first_probability", 0.0)
     monkeypatch.setattr(settings.warming, "visit_read_extra_first_probability", 0.0)
     monkeypatch.setattr(settings.warming, "visit_binge_linger_seconds", (0.0, 0.0))
+    # Comment threads and the live DM variants (4.6/4.7) are per-visit draws as well;
+    # ``test_social_reads.py`` and ``test_chat_live.py`` switch them on.
+    monkeypatch.setattr(settings.warming, "discussion_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "discussion_binge_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "dm_reaction_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "dm_sticker_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "dm_forward_probability", 0.0)
     # The per-visit budget split (4.3) caps a cycle below the day's remainder; the
     # scenarios here count a whole cycle's actions, so they keep the full remainder.
     # ``test_cadence.py`` exercises the split itself.

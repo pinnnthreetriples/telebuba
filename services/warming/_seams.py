@@ -20,14 +20,17 @@ from core.config import settings
 from core.gemini import generate_text
 from core.openai import generate_text_deepseek
 from core.telegram_client import execute as _gateway_execute
+from core.telegram_client import execute_read as _gateway_execute_read
 from services.spam_status import refresh_spam_status as _refresh_spam_status
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from pydantic import BaseModel
+
     from schemas.device_fingerprint import DeviceType
     from schemas.spam_status import SpamStatusVerdict
-    from schemas.telegram_actions import ActionResult, TelegramAction
+    from schemas.telegram_actions import ActionResult, TelegramAction, TelegramReadAction
 
 # A loop task carries its generation in a context variable, while the runtime
 # registry carries the only generation currently allowed to dispatch.  Stop,
@@ -153,6 +156,16 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     return result
 
 
+async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel:
+    """A read-only gateway call for a NON-warming account (the pool-fill search, 4.5).
+
+    No lease: the account it reads with is never one warming owns, so no warming
+    generation can be retired under it. The fleet-wide slot still bounds concurrency.
+    """
+    async with _dispatch_slots:
+        return await _gateway_execute_read(account_id, action)
+
+
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
     """Fence the quarantine Telegram probe with the same runtime lease and slot."""
     async with _dispatch_slots:
@@ -179,6 +192,7 @@ async def sleep(seconds: float) -> None:
 
 __all__ = [
     "execute",
+    "execute_read",
     "generate_text",
     "generate_text_deepseek",
     "refresh_spam_status",

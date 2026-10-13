@@ -30,6 +30,7 @@ from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
 from services.warming._channel_language import account_language
 from services.warming._chat import _run_chat_step
+from services.warming._chat_live import remember_read_posts
 from services.warming._extras import run_extras_step
 from services.warming._extras_ctx import _ExtraContext
 from services.warming._fleet import (
@@ -38,6 +39,7 @@ from services.warming._fleet import (
     _language_pool,
     _maybe_explore,
 )
+from services.warming._social_reads import walkable_channels
 from services.warming._steps import (
     _ChannelTally,
     _emit_step,
@@ -243,6 +245,7 @@ async def _after_channels(
         )
     messages_sent = 0
     if visit.kind != "glance":
+        remember_read_posts(ctx.recent_ids)
         messages_sent = await _run_chat_step(
             data,
             ctx.secret,
@@ -277,7 +280,14 @@ async def run_one_cycle(
     """
     account_id = data.account_id
     secret = await load_warming_settings()
-    channels = (await list_warming_channels()).channels
+    account = await fetch_account(account_id)
+    # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
+    # depend on it and those are enforced by the loop (remaining_actions), not
+    # read in this cycle. Pass it in if channel/reaction/DM intensity ever
+    # becomes trust-dependent (#100).
+    intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
+    # Approved rows only, and public groups only from their phase on (4.5/4.6).
+    channels = walkable_channels((await list_warming_channels()).channels, intensity.phase)
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)
         return WarmingCycleResult(
@@ -287,12 +297,6 @@ async def run_one_cycle(
         )
 
     warm = settings.warming
-    account = await fetch_account(account_id)
-    # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
-    # depend on it and those are enforced by the loop (remaining_actions), not
-    # read in this cycle. Pass it in if channel/reaction/DM intensity ever
-    # becomes trust-dependent (#100).
-    intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     tally = tally if tally is not None else _ChannelTally()
     messages_sent = 0
     online_set = False

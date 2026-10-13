@@ -1437,6 +1437,18 @@ export type ChannelBanCheckList = {
 };
 
 /**
+ * ChannelBatchRequest
+ *
+ * Body of the approve/reject calls: the proposals the operator ticked.
+ */
+export type ChannelBatchRequest = {
+  /**
+   * Channels
+   */
+  channels: Array<string>;
+};
+
+/**
  * ChannelCreateRequest
  */
 export type ChannelCreateRequest = {
@@ -5371,6 +5383,50 @@ export type PhotoRemoveRequest = {
    * File Reference
    */
   file_reference: string;
+};
+
+/**
+ * PoolFillRequest
+ *
+ * «Найти каналы»: what to look for, in which language and country.
+ */
+export type PoolFillRequest = {
+  /**
+   * Language
+   */
+  language: string;
+  /**
+   * Country
+   */
+  country?: string | null;
+  /**
+   * Topics
+   */
+  topics: Array<string>;
+};
+
+/**
+ * PoolFillResult
+ *
+ * How a search went: hits seen, channels checked, proposals added for approval.
+ */
+export type PoolFillResult = {
+  /**
+   * Status
+   */
+  status: 'ok' | 'no_search_account';
+  /**
+   * Found
+   */
+  found?: number;
+  /**
+   * Checked
+   */
+  checked?: number;
+  /**
+   * Proposed
+   */
+  proposed?: number;
 };
 
 /**
@@ -12882,6 +12938,145 @@ export type GetWarmingSurvivalResponses = {
 
 export type GetWarmingSurvivalResponse =
   GetWarmingSurvivalResponses[keyof GetWarmingSurvivalResponses];
+
+export type FindWarmingChannelsData = {
+  body: PoolFillRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels/find';
+};
+
+export type FindWarmingChannelsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type FindWarmingChannelsError = FindWarmingChannelsErrors[keyof FindWarmingChannelsErrors];
+
+export type FindWarmingChannelsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PoolFillResult;
+};
+
+export type FindWarmingChannelsResponse =
+  FindWarmingChannelsResponses[keyof FindWarmingChannelsResponses];
+
+export type ListWarmingChannelProposalsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels/proposals';
+};
+
+export type ListWarmingChannelProposalsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListWarmingChannelProposalsError =
+  ListWarmingChannelProposalsErrors[keyof ListWarmingChannelProposalsErrors];
+
+export type ListWarmingChannelProposalsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type ListWarmingChannelProposalsResponse =
+  ListWarmingChannelProposalsResponses[keyof ListWarmingChannelProposalsResponses];
+
+export type ApproveWarmingChannelProposalsData = {
+  body: ChannelBatchRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels/proposals/approve';
+};
+
+export type ApproveWarmingChannelProposalsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ApproveWarmingChannelProposalsError =
+  ApproveWarmingChannelProposalsErrors[keyof ApproveWarmingChannelProposalsErrors];
+
+export type ApproveWarmingChannelProposalsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type ApproveWarmingChannelProposalsResponse =
+  ApproveWarmingChannelProposalsResponses[keyof ApproveWarmingChannelProposalsResponses];
+
+export type RejectWarmingChannelProposalsData = {
+  body: ChannelBatchRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels/proposals/reject';
+};
+
+export type RejectWarmingChannelProposalsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RejectWarmingChannelProposalsError =
+  RejectWarmingChannelProposalsErrors[keyof RejectWarmingChannelProposalsErrors];
+
+export type RejectWarmingChannelProposalsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type RejectWarmingChannelProposalsResponse =
+  RejectWarmingChannelProposalsResponses[keyof RejectWarmingChannelProposalsResponses];
 
 export type StartCampaignDiscoveryData = {
   body: DiscoverySearchRequest;
