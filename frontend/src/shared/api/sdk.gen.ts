@@ -124,6 +124,9 @@ import type {
   CreateNeuroshillingCampaignData,
   CreateNeuroshillingCampaignErrors,
   CreateNeuroshillingCampaignResponses,
+  CreateOutreachPresetData,
+  CreateOutreachPresetErrors,
+  CreateOutreachPresetResponses,
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
@@ -157,6 +160,9 @@ import type {
   DeleteNeuroshillingCampaignData,
   DeleteNeuroshillingCampaignErrors,
   DeleteNeuroshillingCampaignResponses,
+  DeleteOutreachPresetData,
+  DeleteOutreachPresetErrors,
+  DeleteOutreachPresetResponses,
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
@@ -268,6 +274,12 @@ import type {
   GetNotificationSettingsData,
   GetNotificationSettingsErrors,
   GetNotificationSettingsResponses,
+  GetOutreachLimitsData,
+  GetOutreachLimitsErrors,
+  GetOutreachLimitsResponses,
+  GetOutreachUsageTodayData,
+  GetOutreachUsageTodayErrors,
+  GetOutreachUsageTodayResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -361,6 +373,9 @@ import type {
   ListNeuroshillingCampaignsData,
   ListNeuroshillingCampaignsErrors,
   ListNeuroshillingCampaignsResponses,
+  ListOutreachPresetsData,
+  ListOutreachPresetsErrors,
+  ListOutreachPresetsResponses,
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
@@ -637,6 +652,12 @@ import type {
   UpdateNotificationSettingsData,
   UpdateNotificationSettingsErrors,
   UpdateNotificationSettingsResponses,
+  UpdateOutreachLimitsData,
+  UpdateOutreachLimitsErrors,
+  UpdateOutreachLimitsResponses,
+  UpdateOutreachPresetData,
+  UpdateOutreachPresetErrors,
+  UpdateOutreachPresetResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -1825,6 +1846,111 @@ export const cancelContactLookupJob = <ThrowOnError extends boolean = false>(
     CancelContactLookupJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/contact-lookup/{job_id}/cancel', ...options });
+
+/**
+ * Get Outreach Limits
+ */
+export const getOutreachLimits = <ThrowOnError extends boolean = false>(
+  options?: Options<GetOutreachLimitsData, ThrowOnError>,
+): RequestResult<GetOutreachLimitsResponses, GetOutreachLimitsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetOutreachLimitsResponses,
+    GetOutreachLimitsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/outreach-limits', ...options });
+
+/**
+ * Update Outreach Limits
+ */
+export const updateOutreachLimits = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateOutreachLimitsData, ThrowOnError>,
+): RequestResult<UpdateOutreachLimitsResponses, UpdateOutreachLimitsErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateOutreachLimitsResponses,
+    UpdateOutreachLimitsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/outreach-limits',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Outreach Usage Today
+ */
+export const getOutreachUsageToday = <ThrowOnError extends boolean = false>(
+  options: Options<GetOutreachUsageTodayData, ThrowOnError>,
+): RequestResult<GetOutreachUsageTodayResponses, GetOutreachUsageTodayErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetOutreachUsageTodayResponses,
+    GetOutreachUsageTodayErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/outreach-usage', ...options });
+
+/**
+ * List Outreach Presets
+ */
+export const listOutreachPresets = <ThrowOnError extends boolean = false>(
+  options?: Options<ListOutreachPresetsData, ThrowOnError>,
+): RequestResult<ListOutreachPresetsResponses, ListOutreachPresetsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListOutreachPresetsResponses,
+    ListOutreachPresetsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/outreach-presets', ...options });
+
+/**
+ * Create Outreach Preset
+ */
+export const createOutreachPreset = <ThrowOnError extends boolean = false>(
+  options: Options<CreateOutreachPresetData, ThrowOnError>,
+): RequestResult<CreateOutreachPresetResponses, CreateOutreachPresetErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateOutreachPresetResponses,
+    CreateOutreachPresetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/outreach-presets',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Outreach Preset
+ */
+export const deleteOutreachPreset = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteOutreachPresetData, ThrowOnError>,
+): RequestResult<DeleteOutreachPresetResponses, DeleteOutreachPresetErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteOutreachPresetResponses,
+    DeleteOutreachPresetErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/outreach-presets/{preset_id}', ...options });
+
+/**
+ * Update Outreach Preset
+ */
+export const updateOutreachPreset = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateOutreachPresetData, ThrowOnError>,
+): RequestResult<UpdateOutreachPresetResponses, UpdateOutreachPresetErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateOutreachPresetResponses,
+    UpdateOutreachPresetErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/outreach-presets/{preset_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Upload Scheduled Media

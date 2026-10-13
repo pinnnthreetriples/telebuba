@@ -46,6 +46,7 @@ from core.migration_steps_access_reason import _add_readiness_access_lost_reason
 from core.migration_steps_account_folders import _add_account_folders
 from core.migration_steps_account_limits import _add_neurocomment_account_limits
 from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
+from core.migration_steps_bulk_runs import _add_bulk_runs
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
@@ -98,6 +99,7 @@ from core.migration_steps_neurocomment import (
 from core.migration_steps_neuroshilling import _add_neuroshilling_tables
 from core.migration_steps_neuroshilling_chat import _add_neuroshilling_chat_log
 from core.migration_steps_notifications import _add_notification_settings
+from core.migration_steps_outreach import _add_outreach_presets, _add_outreach_tables
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_geo_consensus,
@@ -245,7 +247,10 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (86, "add_warming_account_character", _add_warming_account_character),
     (87, "add_warming_state_visit", _add_warming_state_visit),
     (88, "add_account_devices", _add_account_devices),
-    (89, "add_warming_settings_tuning", _add_warming_settings_tuning),
+    (89, "add_outreach_tables", _add_outreach_tables),
+    (90, "add_outreach_presets", _add_outreach_presets),
+    (91, "add_bulk_runs", _add_bulk_runs),
+    (92, "add_warming_settings_tuning", _add_warming_settings_tuning),
 )
 
 

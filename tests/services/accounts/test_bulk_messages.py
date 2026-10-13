@@ -8,17 +8,18 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import ValidationError
 
+from core.repositories import bulk_runs as repo
 from core.telegram_client._actions import _dispatch_action
-from schemas.bulk_messages import BulkMessageJob, BulkMessageRequest
+from schemas.bulk_messages import BulkMessageRequest
 from schemas.gemini import GeminiRequest, GeminiResult
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services.accounts import bulk_messages
+from tests.services.accounts.conftest import ALWAYS_OPEN
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from tests.services.accounts.conftest import FakeClock
 
-
-pytestmark = pytest.mark.usefixtures("empty_bulk_jobs")
+pytestmark = pytest.mark.usefixtures("empty_bulk_jobs", "bulk_clock")
 
 
 def _request(**overrides: object) -> BulkMessageRequest:
@@ -26,82 +27,100 @@ def _request(**overrides: object) -> BulkMessageRequest:
         "account_ids": ["a1", "a2"],
         "recipients": ["@first_chat", "t.me/second_chat"],
         "text": "Hello, world",
-        "min_delay_seconds": 2,
-        "max_delay_seconds": 2,
+        "min_delay_seconds": 0,
+        "max_delay_seconds": 0,
+        "schedule": ALWAYS_OPEN,
     }
     values.update(overrides)
     return BulkMessageRequest.model_validate(values)
 
 
-def test_invalid_batches_and_recipients_are_rejected_before_start() -> None:
+def _ok(account_id: str, action: SendChatMessage) -> ActionResult:
+    return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+
+async def _finish(job_id: str) -> None:
+    await bulk_messages.run_bulk_message_job(job_id)
+
+
+@pytest.mark.asyncio
+async def test_invalid_batches_and_recipients_are_rejected_before_start() -> None:
     with pytest.raises(ValidationError):
-        _request(max_delay_seconds=1)
+        _request(max_delay_seconds=1, min_delay_seconds=2)
     with pytest.raises(ValidationError):
         _request(account_ids=["a1", "a1"])
     with pytest.raises(ValidationError):
         _request(text=" ")
+    with pytest.raises(ValidationError):
+        _request(recipient_phones={"@stranger": "+15550000000"})
     with pytest.raises(ValueError, match="invalid recipient"):
-        bulk_messages.start_bulk_message_job(
+        await bulk_messages.start_bulk_message_job(
             _request(recipients=["t.me/+invitehash123"]), "owner-1"
         )
     with pytest.raises(ValueError, match="duplicate recipients"):
-        bulk_messages.start_bulk_message_job(
+        await bulk_messages.start_bulk_message_job(
             _request(recipients=["@first_chat", "t.me/first_chat"]), "owner-1"
         )
-    assert bulk_messages._jobs == {}
-
-
-def test_cancelled_jobs_are_pruned_when_retention_is_full() -> None:
-    for index in range(bulk_messages._MAX_RETAINED_JOBS):
-        job_id = f"old-{index}"
-        bulk_messages._jobs[job_id] = BulkMessageJob(
-            job_id=job_id,
-            status="cancelled",
-            total=1,
-            completed=0,
-            results=[],
-        )
-        bulk_messages._job_owners[job_id] = "owner-1"
-    bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    assert len(bulk_messages._jobs) == bulk_messages._MAX_RETAINED_JOBS
-    assert "old-0" not in bulk_messages._jobs
-    assert "old-0" not in bulk_messages._job_owners
-
-
-def test_job_lookup_and_cancel_are_limited_to_its_owner() -> None:
-    job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    assert bulk_messages.get_active_bulk_message_job("owner-1") == job
-    assert bulk_messages.get_active_bulk_message_job("owner-2") is None
-    assert bulk_messages.get_latest_bulk_message_job("owner-1") == job
-    assert bulk_messages.get_latest_bulk_message_job("owner-2") is None
-    assert bulk_messages.get_bulk_message_job(job.job_id, "owner-2") is None
-    assert bulk_messages.cancel_bulk_message_job(job.job_id, "owner-2") is None
-    assert not bulk_messages._cancel_events[job.job_id].is_set()
-
-
-def test_latest_job_includes_completed_run_and_uses_creation_order() -> None:
-    first = bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    bulk_messages._jobs[first.job_id].status = "completed"
-    assert bulk_messages.get_active_bulk_message_job("owner-1") is None
-    assert bulk_messages.get_latest_bulk_message_job("owner-1") == first.model_copy(
-        update={"status": "completed"}
-    )
-
-    other = bulk_messages.start_bulk_message_job(_request(), "owner-2")
-    bulk_messages._jobs[other.job_id].status = "completed"
-    latest = bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    assert bulk_messages.get_latest_bulk_message_job("owner-1") == latest
-    assert bulk_messages.get_latest_bulk_message_job("owner-2") == other.model_copy(
-        update={"status": "completed"}
-    )
+    assert await repo.list_live_bulk_runs() == []
 
 
 @pytest.mark.asyncio
-async def test_run_sends_every_pair_in_order_with_delays_and_partial_failures(
+async def test_finished_runs_are_pruned_when_retention_is_full(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(bulk_messages, "execute", _execute_ok)
+    first = await bulk_messages.start_bulk_message_job(_request(account_ids=["a1"]), "owner-1")
+    await _finish(first.job_id)
+    # The 21st start keeps the 20 newest finished runs besides itself; the first goes.
+    for _ in range(bulk_messages._MAX_RETAINED_JOBS + 1):
+        job = await bulk_messages.start_bulk_message_job(_request(account_ids=["a1"]), "owner-1")
+        await _finish(job.job_id)
+
+    assert await repo.get_bulk_run(first.job_id) is None
+    assert await repo.list_bulk_run_items(first.job_id) == []
+
+
+async def _execute_ok(
+    account_id: str,
+    action: SendChatMessage,
+    *,
+    domain: str,  # noqa: ARG001
+) -> ActionResult:
+    return _ok(account_id, action)
+
+
+@pytest.mark.asyncio
+async def test_job_lookup_and_cancel_are_limited_to_its_owner() -> None:
+    job = await bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    assert await bulk_messages.get_active_bulk_message_job("owner-1") == job
+    assert await bulk_messages.get_active_bulk_message_job("owner-2") is None
+    assert await bulk_messages.get_latest_bulk_message_job("owner-1") == job
+    assert await bulk_messages.get_latest_bulk_message_job("owner-2") is None
+    assert await bulk_messages.get_bulk_message_job(job.job_id, "owner-2") is None
+    assert await bulk_messages.cancel_bulk_message_job(job.job_id, "owner-2") is None
+    record = await repo.get_bulk_run(job.job_id)
+    assert record is not None
+    assert not record.cancel_requested
+
+
+@pytest.mark.asyncio
+async def test_latest_job_includes_a_finished_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bulk_messages, "execute", _execute_ok)
+    first = await bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    await _finish(first.job_id)
+
+    assert await bulk_messages.get_active_bulk_message_job("owner-1") is None
+    latest = await bulk_messages.get_latest_bulk_message_job("owner-1")
+    assert latest is not None
+    assert (latest.job_id, latest.status) == (first.job_id, "completed")
+
+
+@pytest.mark.asyncio
+async def test_run_sends_every_pair_with_each_accounts_own_pause(
+    monkeypatch: pytest.MonkeyPatch,
+    bulk_clock: FakeClock,
+) -> None:
     calls: list[tuple[str, str, str]] = []
-    sleeps: list[float] = []
 
     async def fake_execute(
         account_id: str, action: SendChatMessage, *, domain: str
@@ -110,45 +129,33 @@ async def test_run_sends_every_pair_in_order_with_delays_and_partial_failures(
         calls.append((account_id, action.recipient, action.text))
         refused = account_id == "a1" and action.recipient == "second_chat"
         return ActionResult(
-            status="flood_wait" if refused else "ok",
+            status="failed" if refused else "ok",
             action_type=action.action_type,
             account_id=account_id,
-            flood_wait_seconds=20 if refused else None,
+            error_type="UserPrivacyRestrictedError" if refused else None,
         )
 
-    async def fake_wait_for(
-        whatever: Coroutine[object, object, object],
-        *,
-        timeout: float,  # noqa: ASYNC109
-    ) -> None:
-        whatever.close()
-        sleeps.append(timeout)
-        raise TimeoutError
-
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    monkeypatch.setattr(bulk_messages.asyncio, "wait_for", fake_wait_for)
-
-    job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    assert job.total == 4
-    assert job.completed == 0
+    job = await bulk_messages.start_bulk_message_job(
+        _request(min_delay_seconds=2, max_delay_seconds=2), "owner-1"
+    )
+    assert (job.total, job.completed) == (4, 0)
     with pytest.raises(ValueError, match="bulk_message_run_active"):
-        bulk_messages.start_bulk_message_job(_request(), "owner-1")
-    await bulk_messages.run_bulk_message_job(job.job_id)
+        await bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    await _finish(job.job_id)
 
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
-    assert finished.status == "completed"
-    assert finished.completed == 4
-    assert [item.status for item in finished.results] == ["ok", "failed", "ok", "ok"]
-    assert finished.results[1].error_code == "flood_wait"
+    assert (finished.status, finished.completed) == ("completed", 4)
+    # a2 does not wait for a1's pause: the accounts take turns as each one is ready.
     assert calls == [
         ("a1", "first_chat", "Hello, world"),
-        ("a1", "second_chat", "Hello, world"),
         ("a2", "first_chat", "Hello, world"),
+        ("a1", "second_chat", "Hello, world"),
         ("a2", "second_chat", "Hello, world"),
     ]
-    assert sleeps == [2, 2, 2]
-    assert bulk_messages._pending == {}
+    assert [item.status for item in finished.results] == ["ok", "ok", "failed", "ok"]
+    assert [s for s in bulk_clock.sleeps if s] == [2]
 
 
 @pytest.mark.asyncio
@@ -162,14 +169,12 @@ async def test_unexpected_pair_failure_does_not_abort_run(monkeypatch: pytest.Mo
         if action.recipient == "first_chat":
             msg = "connection lost"
             raise RuntimeError(msg)
-        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+        return _ok(account_id, action)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    job = bulk_messages.start_bulk_message_job(
-        _request(account_ids=["a1"], min_delay_seconds=0, max_delay_seconds=0), "owner-1"
-    )
-    await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    job = await bulk_messages.start_bulk_message_job(_request(account_ids=["a1"]), "owner-1")
+    await _finish(job.job_id)
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
     assert [item.status for item in finished.results] == ["unconfirmed", "ok"]
     assert [item.error_code for item in finished.results] == ["delivery_unconfirmed", None]
@@ -202,30 +207,24 @@ async def test_unconfirmed_delivery_and_rate_limit_are_not_reported_as_failed_se
                 account_id=account_id,
                 flood_wait_seconds=42,
             )
-        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+        return _ok(account_id, action)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    job = bulk_messages.start_bulk_message_job(
-        _request(
-            recipients=["@first_chat", "@second_chat", "@third_chat"],
-            min_delay_seconds=0,
-            max_delay_seconds=0,
-        ),
-        "owner-1",
+    job = await bulk_messages.start_bulk_message_job(
+        _request(recipients=["@first_chat", "@second_chat", "@third_chat"]), "owner-1"
     )
-    await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    await _finish(job.job_id)
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
-    assert [item.status for item in finished.results] == [
-        "unconfirmed",
-        "failed",
-        "skipped",
-        "ok",
-        "ok",
-        "ok",
-    ]
-    assert finished.results[0].error_code == "delivery_unconfirmed"
-    assert finished.results[2].retry_after_seconds == 42
+    by_pair = {(r.account_id, r.recipient): r for r in finished.results}
+    assert by_pair["a1", "@first_chat"].status == "unconfirmed"
+    assert by_pair["a1", "@first_chat"].error_code == "delivery_unconfirmed"
+    assert by_pair["a1", "@second_chat"].status == "failed"
+    assert by_pair["a1", "@third_chat"].status == "skipped"
+    assert by_pair["a1", "@third_chat"].retry_after_seconds == 42
+    assert {by_pair["a2", r].status for r in ("@first_chat", "@second_chat", "@third_chat")} == {
+        "ok"
+    }
     assert ("a1", "third_chat") not in calls
 
 
@@ -250,20 +249,18 @@ async def test_a_dead_account_stops_instead_of_failing_every_pair(
                 error_type="ProfileGatewayError",
                 error_message="session_dead",
             )
-        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+        return _ok(account_id, action)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    job = bulk_messages.start_bulk_message_job(
-        _request(min_delay_seconds=0, max_delay_seconds=0), "owner-1"
-    )
-    await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    job = await bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    await _finish(job.job_id)
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
-    assert [(item.status, item.error_code) for item in finished.results] == [
-        ("failed", "session_dead"),
-        ("skipped", "session_dead"),
-        ("ok", None),
-        ("ok", None),
+    assert [(r.account_id, r.status, r.error_code) for r in finished.results] == [
+        ("a1", "failed", "session_dead"),
+        ("a1", "skipped", "session_dead"),
+        ("a2", "ok", None),
+        ("a2", "ok", None),
     ]
     assert calls == [("a1", "first_chat"), ("a2", "first_chat"), ("a2", "second_chat")]
 
@@ -271,9 +268,7 @@ async def test_a_dead_account_stops_instead_of_failing_every_pair(
 @pytest.mark.asyncio
 async def test_cancel_stops_before_next_pair(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
-    job = bulk_messages.start_bulk_message_job(
-        _request(account_ids=["a1"], min_delay_seconds=0, max_delay_seconds=0), "owner-1"
-    )
+    job = await bulk_messages.start_bulk_message_job(_request(account_ids=["a1"]), "owner-1")
 
     async def fake_execute(
         account_id: str,
@@ -282,17 +277,16 @@ async def test_cancel_stops_before_next_pair(monkeypatch: pytest.MonkeyPatch) ->
         domain: str,  # noqa: ARG001
     ) -> ActionResult:
         calls.append(action.recipient)
-        bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
-        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+        await bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
+        return _ok(account_id, action)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    await _finish(job.job_id)
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
-    assert finished.status == "cancelled"
-    assert finished.completed == 1
+    assert (finished.status, finished.completed, finished.total) == ("cancelled", 1, 2)
     assert calls == ["first_chat"]
-    assert bulk_messages._cancel_events == {}
+    assert bulk_messages._RUNS == {}
 
 
 @pytest.mark.asyncio

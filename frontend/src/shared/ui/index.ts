@@ -46,6 +46,7 @@ export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedOption } from './SegmentedControl';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
+export { Slider } from './Slider';
 export { Spinner } from './Spinner';
 export { StatGrid, StatTile } from './StatGrid';
 export type { Stat, StatTone } from './StatGrid';

@@ -6,12 +6,19 @@ import {
   activeContactLookupJobQueryOptions,
   cancelContactLookupJobMutation,
   getContactLookupJobQueryOptions,
+  outreachLimitsQueryOptions,
+  outreachUsageTodayQueryOptions,
   startContactLookupMutation,
 } from '@/entities/account';
 import { Button, HelpHint, Icon, IconButton, Input, Textarea } from '@/shared/ui';
 
+import { lookupOverflow, type PacingValues } from '../model/pacing';
+import { PacingBlock } from './PacingBlock';
+
 const MAX_PHONES = 1000;
-const MAX_DELAY_SECONDS = 300;
+const MAX_DELAY_SECONDS = 3600;
+// Never checked because of the account's state: re-run these later, not as "not on Telegram".
+const RETRY_LATER = new Set(['daily_limit', 'silent_limit']);
 
 // Pasted lists are often comma-, semicolon- or tab-separated (a spreadsheet column
 // pair); split on those too, so two numbers on one line are never sent fused.
@@ -50,19 +57,36 @@ function recipientToken(username: string | null | undefined, userId: number | nu
 export function ContactLookupPanel({
   accountIds,
   onAppendRecipients,
+  pacing,
+  onPacingChange,
 }: {
   accountIds: string[];
-  onAppendRecipients: (lines: string[], pins: Record<string, string>) => void;
+  // ``phones``: the number each recipient was found by, for the client's time zone.
+  onAppendRecipients: (
+    lines: string[],
+    pins: Record<string, string>,
+    phones: Record<string, string>,
+  ) => void;
+  // Shared with the send form's block: one preset sets both.
+  pacing: PacingValues;
+  onPacingChange: (pacing: PacingValues) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [phones, setPhones] = useState('');
-  const [minDelay, setMinDelay] = useState('1');
-  const [maxDelay, setMaxDelay] = useState('3');
+  // null: the saved outreach limit applies, and the run is started without the field.
+  const [minDelay, setMinDelay] = useState<string | null>(null);
+  const [maxDelay, setMaxDelay] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [added, setAdded] = useState<number | null>(null);
   const [resumeActive, setResumeActive] = useState(true);
 
+  const limits = useQuery({ ...outreachLimitsQueryOptions(), enabled: open });
+  const usageToday = useQuery({
+    ...outreachUsageTodayQueryOptions({ query: { account_ids: accountIds } }),
+    enabled: open && accountIds.length > 0,
+  });
+  const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
   const start = useMutation(startContactLookupMutation());
   const cancel = useMutation(cancelContactLookupJobMutation());
   const active = useQuery({
@@ -91,22 +115,44 @@ export function ContactLookupPanel({
   });
 
   const phoneList = phonesFrom(phones);
-  const minSeconds = Number(minDelay);
-  const maxSeconds = Number(maxDelay);
+  const minShown = minDelay ?? String(limits.data?.lookup_min_delay_seconds ?? '');
+  const maxShown = maxDelay ?? String(limits.data?.lookup_max_delay_seconds ?? '');
+  const delayEdited = minDelay !== null || maxDelay !== null;
+  const minSeconds = Number(minShown);
+  const maxSeconds = Number(maxShown);
   const delayReady =
-    /^\d+$/.test(minDelay) &&
-    /^\d+$/.test(maxDelay) &&
-    minSeconds <= maxSeconds &&
-    maxSeconds <= MAX_DELAY_SECONDS;
+    !delayEdited ||
+    (/^\d+$/.test(minShown) &&
+      /^\d+$/.test(maxShown) &&
+      minSeconds <= maxSeconds &&
+      maxSeconds <= MAX_DELAY_SECONDS);
   const canFind =
     accountIds.length > 0 && phoneList.length > 0 && phoneList.length <= MAX_PHONES && delayReady;
+  const overflow = lookupOverflow(
+    phoneList.length,
+    accountIds.map((id) => pacing.contacts - (usage.get(id)?.contact_imports ?? 0)),
+  );
 
   const started = jobId !== null;
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
-  const results = job.data?.results ?? [];
+  // A handed-over row is history: the account it went to holds the final answer.
+  const results = (job.data?.results ?? []).filter((row) => !row.handed_over);
   const found = results.filter((row) => row.status === 'found');
   const notFound = results.filter((row) => row.status === 'not_found').length;
-  const skipped = results.filter((row) => row.status === 'skipped').length;
+  const recheck = results.filter((row) => row.status === 'recheck').length;
+  const dailyLimit = results.filter(
+    (row) => row.status === 'skipped' && row.error_code === 'daily_limit',
+  ).length;
+  const skipped = results.filter(
+    (row) => row.status === 'skipped' && row.error_code !== 'daily_limit',
+  ).length;
+  const retryLater = results
+    .filter(
+      (row) =>
+        row.status === 'recheck' ||
+        (row.status === 'skipped' && RETRY_LATER.has(row.error_code ?? '')),
+    )
+    .map((row) => row.phone);
   const addable = [
     ...new Set(
       found
@@ -135,8 +181,9 @@ export function ContactLookupPanel({
         body: {
           account_ids: accountIds,
           phones: phoneList,
-          min_delay_seconds: minSeconds,
-          max_delay_seconds: maxSeconds,
+          ...(delayEdited && { min_delay_seconds: minSeconds, max_delay_seconds: maxSeconds }),
+          batch_size: pacing.batch,
+          daily_cap: pacing.contacts,
         },
       })
       .then((result) => {
@@ -155,7 +202,16 @@ export function ContactLookupPanel({
 
   const onAdd = () => {
     if (addable.length === 0) return;
-    onAppendRecipients(addable, pins);
+    onAppendRecipients(
+      addable,
+      pins,
+      Object.fromEntries(
+        found.flatMap((row) => {
+          const token = recipientToken(row.username, row.user_id);
+          return token === null ? [] : [[token, row.phone]];
+        }),
+      ),
+    );
     setAdded(addable.length);
   };
 
@@ -165,6 +221,11 @@ export function ContactLookupPanel({
     setResumeActive(false);
     start.reset();
     cancel.reset();
+  };
+
+  const onRetryLater = () => {
+    setPhones(retryLater.join('\n'));
+    onReset();
   };
 
   const startErrorKey =
@@ -219,45 +280,70 @@ export function ContactLookupPanel({
                 />
               </section>
 
-              <section className="space-y-2">
-                <h4 className="type-body-medium text-content-secondary">
-                  {t('accounts.messages.delay')}
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex items-center gap-2 type-small">
-                    <span>{t('accounts.messages.delayFrom')}</span>
-                    <Input
-                      type="number"
-                      size="sm"
-                      aria-label={t('accounts.messages.minDelay')}
-                      min={0}
-                      max={MAX_DELAY_SECONDS}
-                      step={1}
-                      value={minDelay}
-                      onChange={(event) => {
-                        setMinDelay(event.target.value);
-                      }}
-                    />
-                    <span>{t('accounts.messages.secondsShort')}</span>
-                  </label>
-                  <label className="flex items-center gap-2 type-small">
-                    <span>{t('accounts.messages.delayTo')}</span>
-                    <Input
-                      type="number"
-                      size="sm"
-                      aria-label={t('accounts.messages.maxDelay')}
-                      min={0}
-                      max={MAX_DELAY_SECONDS}
-                      step={1}
-                      value={maxDelay}
-                      onChange={(event) => {
-                        setMaxDelay(event.target.value);
-                      }}
-                    />
-                    <span>{t('accounts.messages.secondsShort')}</span>
-                  </label>
-                </div>
-              </section>
+              <PacingBlock
+                keys={['contacts', 'batch']}
+                values={pacing}
+                onChange={onPacingChange}
+                accountIds={accountIds}
+                usage={usage}
+                leftKind="contacts"
+                forecast={
+                  overflow > 0
+                    ? t('accounts.messages.lookup.overflow', { count: overflow })
+                    : undefined
+                }
+                advanced={
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="type-body-medium text-content-secondary">
+                        {t('accounts.messages.lookup.delay')}
+                      </h4>
+                      <HelpHint text={t('accounts.messages.lookup.delayHint')} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 type-small">
+                        <span>{t('accounts.messages.delayFrom')}</span>
+                        <Input
+                          type="number"
+                          size="sm"
+                          aria-label={t('accounts.messages.minDelay')}
+                          min={0}
+                          max={MAX_DELAY_SECONDS}
+                          step={1}
+                          value={minShown}
+                          onChange={(event) => {
+                            setMinDelay(event.target.value);
+                            setMaxDelay(maxShown);
+                          }}
+                        />
+                        <span>{t('accounts.messages.secondsShort')}</span>
+                      </label>
+                      <label className="flex items-center gap-2 type-small">
+                        <span>{t('accounts.messages.delayTo')}</span>
+                        <Input
+                          type="number"
+                          size="sm"
+                          aria-label={t('accounts.messages.maxDelay')}
+                          min={0}
+                          max={MAX_DELAY_SECONDS}
+                          step={1}
+                          value={maxShown}
+                          onChange={(event) => {
+                            setMaxDelay(event.target.value);
+                            setMinDelay(minShown);
+                          }}
+                        />
+                        <span>{t('accounts.messages.secondsShort')}</span>
+                      </label>
+                    </div>
+                  </section>
+                }
+              />
+              {!delayReady && (
+                <p role="alert" className="type-small text-danger-deep">
+                  {t('accounts.messages.lookup.pacingInvalid')}
+                </p>
+              )}
 
               {accountIds.length === 0 && (
                 <p className="type-small text-danger-deep">
@@ -285,6 +371,12 @@ export function ContactLookupPanel({
                   ? [
                       t('accounts.messages.lookup.found', { count: found.length }),
                       t('accounts.messages.lookup.notFound', { count: notFound }),
+                      ...(recheck > 0
+                        ? [t('accounts.messages.lookup.recheck', { count: recheck })]
+                        : []),
+                      ...(dailyLimit > 0
+                        ? [t('accounts.messages.lookup.dailyLimit', { count: dailyLimit })]
+                        : []),
                       ...(skipped > 0
                         ? [t('accounts.messages.lookup.skipped', { count: skipped })]
                         : []),
@@ -320,6 +412,11 @@ export function ContactLookupPanel({
                     {addable.length > 0
                       ? t('accounts.messages.lookup.addFound', { count: addable.length })
                       : t('accounts.messages.lookup.noneToAdd')}
+                  </Button>
+                )}
+                {complete && retryLater.length > 0 && (
+                  <Button onClick={onRetryLater}>
+                    {t('accounts.messages.lookup.retryLater', { count: retryLater.length })}
                   </Button>
                 )}
                 {complete && (

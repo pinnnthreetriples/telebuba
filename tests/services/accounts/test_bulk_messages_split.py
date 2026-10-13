@@ -8,8 +8,9 @@ from pydantic import ValidationError
 from schemas.bulk_messages import BulkMessageJob, BulkMessageRequest
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services.accounts import bulk_messages
+from tests.services.accounts.conftest import ALWAYS_OPEN
 
-pytestmark = pytest.mark.usefixtures("empty_bulk_jobs")
+pytestmark = pytest.mark.usefixtures("empty_bulk_jobs", "bulk_clock")
 
 _ACCOUNTS = ["a1", "a2", "a3", "a4"]
 _RECIPIENTS = ["@rcpt1", "@rcpt2", "@rcpt3", "@rcpt4", "@rcpt5"]
@@ -21,6 +22,9 @@ def _request(**overrides: object) -> BulkMessageRequest:
         "recipients": _RECIPIENTS,
         "text": "Hello",
         "mode": "split",
+        "min_delay_seconds": 0,
+        "max_delay_seconds": 0,
+        "schedule": ALWAYS_OPEN,
     }
     values.update(overrides)
     return BulkMessageRequest.model_validate(values)
@@ -47,9 +51,9 @@ async def _run(
         )
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
-    job = bulk_messages.start_bulk_message_job(request, "owner-1")
+    job = await bulk_messages.start_bulk_message_job(request, "owner-1")
     await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
     return finished, calls
 
@@ -121,13 +125,15 @@ async def test_a_stopped_account_hands_its_recipient_on_and_leaves_the_rotation(
     monkeypatch: pytest.MonkeyPatch, refusal: dict[str, object]
 ) -> None:
     job, calls = await _run(monkeypatch, _request(), {("a2", "rcpt2"): refusal})
+    # The refused recipient goes to the next live account at once; the others keep
+    # the accounts they were planned on, and a2 gets nothing more.
     assert calls == [
         ("a1", "rcpt1"),
         ("a2", "rcpt2"),
         ("a3", "rcpt2"),
-        ("a4", "rcpt3"),
-        ("a1", "rcpt4"),
-        ("a3", "rcpt5"),
+        ("a3", "rcpt3"),
+        ("a4", "rcpt4"),
+        ("a1", "rcpt5"),
     ]
     assert job.completed == job.total == 5
     handed = [result for result in job.results if result.handed_over]
@@ -170,7 +176,7 @@ async def test_when_every_account_stops_the_rest_are_skipped_without_duplicate_p
         ("a1", "@rcpt1", "failed", True),
         ("a2", "@rcpt1", "failed", False),
         ("a2", "@rcpt2", "skipped", False),
-        ("a1", "@rcpt3", "skipped", False),
+        ("a2", "@rcpt3", "skipped", False),
     ]
     assert job.results[-1].retry_after_seconds == 60
     assert job.completed == job.total == 3
@@ -195,10 +201,10 @@ async def test_a_pinned_recipient_goes_to_its_account_and_is_never_handed_on(
         ("a1", "@rcpt1", "ok", False),
         ("a1", "123", "ok", False),
         ("a2", "@rcpt3", "failed", True),
-        ("a1", "@rcpt3", "ok", False),
         ("a2", "456", "skipped", False),
+        ("a1", "@rcpt3", "ok", False),
     ]
-    assert job.results[-1].error_code == "peer_flood"
+    assert job.results[3].error_code == "peer_flood"
 
 
 @pytest.mark.asyncio
@@ -206,7 +212,7 @@ async def test_cancel_stops_split_before_the_next_recipient(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
-    job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    job = await bulk_messages.start_bulk_message_job(_request(), "owner-1")
 
     async def fake_execute(
         account_id: str,
@@ -215,12 +221,12 @@ async def test_cancel_stops_split_before_the_next_recipient(
         domain: str,  # noqa: ARG001
     ) -> ActionResult:
         calls.append(action.recipient)
-        bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
+        await bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
         return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
     await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
     assert finished.status == "cancelled"
     assert finished.completed == 1
@@ -232,7 +238,7 @@ async def test_cancel_after_a_refusal_does_not_report_a_hand_over_that_never_hap
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, str]] = []
-    job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    job = await bulk_messages.start_bulk_message_job(_request(), "owner-1")
 
     async def fake_execute(
         account_id: str,
@@ -242,7 +248,7 @@ async def test_cancel_after_a_refusal_does_not_report_a_hand_over_that_never_hap
     ) -> ActionResult:
         calls.append((account_id, action.recipient))
         if account_id == "a2":
-            bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
+            await bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
             return ActionResult(
                 status="flood_wait",
                 action_type=action.action_type,
@@ -253,7 +259,7 @@ async def test_cancel_after_a_refusal_does_not_report_a_hand_over_that_never_hap
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
     await bulk_messages.run_bulk_message_job(job.job_id)
-    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    finished = await bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
     assert finished is not None
     assert calls == [("a1", "rcpt1"), ("a2", "rcpt2")]
     assert finished.status == "cancelled"
@@ -264,6 +270,7 @@ async def test_cancel_after_a_refusal_does_not_report_a_hand_over_that_never_hap
     assert finished.completed == 2
 
 
-def test_a_user_id_with_leading_zeros_is_the_same_recipient() -> None:
+@pytest.mark.asyncio
+async def test_a_user_id_with_leading_zeros_is_the_same_recipient() -> None:
     with pytest.raises(ValueError, match="duplicate recipients"):
-        bulk_messages.start_bulk_message_job(_request(recipients=["123", "0123"]), "owner-1")
+        await bulk_messages.start_bulk_message_job(_request(recipients=["123", "0123"]), "owner-1")

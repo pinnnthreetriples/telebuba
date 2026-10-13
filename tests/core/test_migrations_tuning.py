@@ -1,4 +1,4 @@
-"""Migration #89 — ``warming_settings.tuning_preset`` / ``tuning_custom`` for the pace card."""
+"""Migration #92 — ``warming_settings.tuning_preset`` / ``tuning_custom`` for the pace card."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _columns(engine: Engine) -> set[str]:
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _STEP]
-    assert entries == [(89, "add_warming_settings_tuning", _STEP)]
+    assert entries == [(92, "add_warming_settings_tuning", _STEP)]
     versions = [entry[0] for entry in MIGRATIONS]
     assert versions == sorted(versions)
     assert len(versions) == len(set(versions))

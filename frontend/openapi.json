@@ -7728,6 +7728,607 @@
         }
       }
     },
+    "/api/v1/accounts/outreach-limits": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Outreach Limits",
+        "operationId": "getOutreachLimits",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Update Outreach Limits",
+        "operationId": "updateOutreachLimits",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutreachLimitsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/outreach-usage": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Outreach Usage Today",
+        "operationId": "getOutreachUsageToday",
+        "parameters": [
+          {
+            "name": "account_ids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "title": "Account Ids"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachUsageList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/outreach-presets": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "List Outreach Presets",
+        "operationId": "listOutreachPresets",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachPresetList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Create Outreach Preset",
+        "operationId": "createOutreachPreset",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutreachPresetWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachPreset"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/outreach-presets/{preset_id}": {
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Update Outreach Preset",
+        "operationId": "updateOutreachPreset",
+        "parameters": [
+          {
+            "name": "preset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preset Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutreachPresetWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutreachPreset"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Delete Outreach Preset",
+        "operationId": "deleteOutreachPreset",
+        "parameters": [
+          {
+            "name": "preset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preset Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scheduled/media": {
       "post": {
         "tags": [
@@ -22664,6 +23265,35 @@
             },
             "type": "array",
             "title": "Results"
+          },
+          "wait_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "schedule",
+                  "hours",
+                  "daily_cap",
+                  "pause",
+                  "series_break"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Reason"
+          },
+          "next_send_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Send At"
           }
         },
         "type": "object",
@@ -22722,6 +23352,21 @@
             "type": "boolean",
             "title": "Handed Over",
             "default": false
+          },
+          "time_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "client",
+                  "operator"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Basis"
           }
         },
         "type": "object",
@@ -22759,18 +23404,43 @@
             "title": "Text"
           },
           "min_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Min Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Delay Seconds"
           },
           "max_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Max Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Delay Seconds"
+          },
+          "daily_cap": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Cap"
           },
           "mode": {
             "type": "string",
@@ -22788,6 +23458,36 @@
             "type": "object",
             "maxProperties": 500,
             "title": "Recipient Accounts"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "recipient_phones": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 500,
+            "title": "Recipient Phones"
           }
         },
         "type": "object",
@@ -25095,7 +25795,8 @@
             "enum": [
               "found",
               "not_found",
-              "skipped"
+              "skipped",
+              "recheck"
             ],
             "title": "Status"
           },
@@ -25153,6 +25854,11 @@
               }
             ],
             "title": "Retry After Seconds"
+          },
+          "handed_over": {
+            "type": "boolean",
+            "title": "Handed Over",
+            "default": false
           }
         },
         "type": "object",
@@ -25183,19 +25889,57 @@
             "minItems": 1,
             "title": "Phones"
           },
+          "batch_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size"
+          },
+          "daily_cap": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 200.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Cap"
+          },
           "min_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Min Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Delay Seconds"
           },
           "max_delay_seconds": {
-            "type": "number",
-            "maximum": 300.0,
-            "minimum": 0.0,
-            "title": "Max Delay Seconds",
-            "default": 0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 3600.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Delay Seconds"
           }
         },
         "type": "object",
@@ -29265,6 +30009,330 @@
         "title": "OpenWebResult",
         "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand.\n``reason`` says which of those it was, and is ``None`` once signed in."
       },
+      "OutreachDailyUsage": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "contact_imports": {
+            "type": "integer",
+            "title": "Contact Imports",
+            "default": 0
+          },
+          "contact_matches": {
+            "type": "integer",
+            "title": "Contact Matches",
+            "default": 0
+          },
+          "first_messages": {
+            "type": "integer",
+            "title": "First Messages",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "day"
+        ],
+        "title": "OutreachDailyUsage",
+        "description": "One account's outreach totals for one UTC day; also the shape of an increment."
+      },
+      "OutreachLimits": {
+        "properties": {
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Contact Imports Per Day",
+            "default": 15
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size",
+            "default": 3
+          },
+          "lookup_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Min Delay Seconds",
+            "default": 180
+          },
+          "lookup_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Max Delay Seconds",
+            "default": 480
+          },
+          "silent_limit_streak": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Silent Limit Streak",
+            "default": 8
+          },
+          "first_messages_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Messages Per Day",
+            "default": 25
+          },
+          "bulk_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Min Delay Seconds",
+            "default": 60
+          },
+          "bulk_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Max Delay Seconds",
+            "default": 180
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/RunSchedule"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "title": "OutreachLimits"
+      },
+      "OutreachLimitsUpdate": {
+        "properties": {
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Contact Imports Per Day",
+            "default": 15
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size",
+            "default": 3
+          },
+          "lookup_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Min Delay Seconds",
+            "default": 180
+          },
+          "lookup_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Lookup Max Delay Seconds",
+            "default": 480
+          },
+          "silent_limit_streak": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "Silent Limit Streak",
+            "default": 8
+          },
+          "first_messages_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Messages Per Day",
+            "default": 25
+          },
+          "bulk_min_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Min Delay Seconds",
+            "default": 60
+          },
+          "bulk_max_delay_seconds": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Bulk Max Delay Seconds",
+            "default": 180
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/RunSchedule"
+          }
+        },
+        "type": "object",
+        "title": "OutreachLimitsUpdate",
+        "description": "The whole settings object; a save replaces every field."
+      },
+      "OutreachPreset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "pause_seconds": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 10.0,
+            "title": "Pause Seconds"
+          },
+          "first_messages_per_day": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 5.0,
+            "title": "First Messages Per Day"
+          },
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 40.0,
+            "minimum": 3.0,
+            "title": "Contact Imports Per Day"
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "pause_seconds",
+          "first_messages_per_day",
+          "contact_imports_per_day",
+          "lookup_batch_size",
+          "id",
+          "updated_at"
+        ],
+        "title": "OutreachPreset"
+      },
+      "OutreachPresetList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutreachPreset"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "OutreachPresetList"
+      },
+      "OutreachPresetWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "pause_seconds": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 10.0,
+            "title": "Pause Seconds"
+          },
+          "first_messages_per_day": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 5.0,
+            "title": "First Messages Per Day"
+          },
+          "contact_imports_per_day": {
+            "type": "integer",
+            "maximum": 40.0,
+            "minimum": 3.0,
+            "title": "Contact Imports Per Day"
+          },
+          "lookup_batch_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Lookup Batch Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "pause_seconds",
+          "first_messages_per_day",
+          "contact_imports_per_day",
+          "lookup_batch_size"
+        ],
+        "title": "OutreachPresetWrite"
+      },
+      "OutreachUsageList": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutreachDailyUsage"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "items"
+        ],
+        "title": "OutreachUsageList",
+        "description": "Today's (UTC) totals for the requested accounts, zeros where nothing was spent."
+      },
       "Page_ChannelPostView_": {
         "properties": {
           "items": {
@@ -30385,6 +31453,68 @@
         ],
         "title": "RetryPairRequest",
         "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
+      },
+      "RunSchedule": {
+        "properties": {
+          "work_start": {
+            "type": "string",
+            "title": "Work Start",
+            "default": "09:00"
+          },
+          "work_end": {
+            "type": "string",
+            "title": "Work End",
+            "default": "20:00"
+          },
+          "work_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Work Days"
+          },
+          "operator_timezone": {
+            "type": "string",
+            "title": "Operator Timezone",
+            "default": "Europe/Moscow"
+          },
+          "client_timezone": {
+            "type": "boolean",
+            "title": "Client Timezone",
+            "default": true
+          },
+          "series_size": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Series Size",
+            "default": 10
+          },
+          "series_break_min_seconds": {
+            "type": "integer",
+            "maximum": 7200.0,
+            "minimum": 0.0,
+            "title": "Series Break Min Seconds",
+            "default": 900
+          },
+          "series_break_max_seconds": {
+            "type": "integer",
+            "maximum": 7200.0,
+            "minimum": 0.0,
+            "title": "Series Break Max Seconds",
+            "default": 1800
+          },
+          "concurrency": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "default": 2
+          }
+        },
+        "type": "object",
+        "title": "RunSchedule"
       },
       "SchedulePhotoRequest": {
         "properties": {

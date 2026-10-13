@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.deps import get_current_user
 from api.errors import SERVICE_ERRORS, error_responses
@@ -32,12 +32,11 @@ bulk_messages_router = APIRouter()
 )
 async def send_bulk_messages(
     body: BulkMessageRequest,
-    background_tasks: BackgroundTasks,
     user: Annotated[UserRead, Depends(get_current_user)],
 ) -> BulkMessageJob:
     with service_errors_to_http():
-        job = bulk_messages.start_bulk_message_job(body, user.id)
-    background_tasks.add_task(bulk_messages.run_bulk_message_job, job.job_id)
+        job = await bulk_messages.start_bulk_message_job(body, user.id)
+    bulk_messages.launch_bulk_message_job(job.job_id)
     return job
 
 
@@ -60,7 +59,7 @@ async def generate_bulk_message(body: BulkMessageGenerateRequest) -> BulkMessage
 async def get_active_bulk_message_job(
     user: Annotated[UserRead, Depends(get_current_user)],
 ) -> BulkMessageJob | None:
-    return bulk_messages.get_active_bulk_message_job(user.id)
+    return await bulk_messages.get_active_bulk_message_job(user.id)
 
 
 @bulk_messages_router.get(
@@ -71,7 +70,7 @@ async def get_active_bulk_message_job(
 async def get_latest_bulk_message_job(
     user: Annotated[UserRead, Depends(get_current_user)],
 ) -> BulkMessageJob | None:
-    return bulk_messages.get_latest_bulk_message_job(user.id)
+    return await bulk_messages.get_latest_bulk_message_job(user.id)
 
 
 @bulk_messages_router.get(
@@ -83,7 +82,7 @@ async def get_latest_bulk_message_job(
 async def get_bulk_message_job(
     job_id: str, user: Annotated[UserRead, Depends(get_current_user)]
 ) -> BulkMessageJob:
-    job = bulk_messages.get_bulk_message_job(job_id, user.id)
+    job = await bulk_messages.get_bulk_message_job(job_id, user.id)
     if job is None:
         raise HTTPException(status_code=404, detail="bulk message job not found")
     return job
@@ -98,7 +97,7 @@ async def get_bulk_message_job(
 async def cancel_bulk_message_job(
     job_id: str, user: Annotated[UserRead, Depends(get_current_user)]
 ) -> BulkMessageJob:
-    job = bulk_messages.cancel_bulk_message_job(job_id, user.id)
+    job = await bulk_messages.cancel_bulk_message_job(job_id, user.id)
     if job is None:
         raise HTTPException(status_code=404, detail="bulk message job not found")
     return job
