@@ -43,6 +43,7 @@ from schemas._warming_visits import (  # noqa: TC001 - pydantic resolves them at
     CadencePreview,
     VisitPlan,
 )
+from schemas.device_fingerprint import DeviceType, desktop_only
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
@@ -178,6 +179,7 @@ class WarmingStateRecord(WarmingStateMarks):
     # quarantine) — what the target gate reads. ``last_warmed_date``: last counted.
     warmed_days: int = Field(default=0, ge=0)
     last_warmed_date: str | None = None
+    device_mode: DeviceType = "desktop"  # the stint's device; desktop on pre-device rows
 
 
 # #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
@@ -232,6 +234,8 @@ class WarmingStateWrite(BaseModel):
     activity_persona: ActivityPersona | None = None
     # See WarmingStateRecord.recovered_at.
     recovered_at: str | None = None
+    # ``None`` leaves the stint's device as it is: only a start writes it.
+    device_mode: DeviceType | None = None
     # #10: identifies ONE pre-cycle daily-budget booking. Written only by the
     # ``cycle_started`` write and read only by the hand-back's SQL guard, never by
     # a reader — so unlike every other field here, ``None`` means "leave the column
@@ -332,6 +336,7 @@ class WarmingAccountState(WarmingCardConsole):
     target_days: int | None = Field(default=None, ge=1)
     # Operator-chosen activity persona, surfaced on the card.
     activity_persona: ActivityPersona | None = None
+    devices: list[DeviceType] = Field(default_factory=desktop_only)  # primary first
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).
@@ -389,6 +394,7 @@ class StartWarmingRequest(StartWindow):
     target_days: int | None = Field(default=None, ge=1, le=365)
     # Operator-chosen activity persona (default = balanced).
     activity_persona: ActivityPersona = "normal"
+    device_mode: DeviceType = "desktop"  # mobile only by the operator's pick
 
 
 class PromoteRequest(BaseModel):

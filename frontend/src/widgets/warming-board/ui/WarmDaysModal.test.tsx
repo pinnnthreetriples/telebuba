@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -21,8 +21,8 @@ function renderWithClient(ui: ReactElement) {
 }
 
 // A confirm with no geo warning shown: nothing accepted, nobody left out.
-function choice(days: number, persona: string, delayHours: number) {
-  return { days, persona, delayHours, acceptGeo: false, onlyGeoMatching: false };
+function choice(days: number, persona: string, delayHours: number, device = 'desktop') {
+  return { days, persona, delayHours, device, acceptGeo: false, onlyGeoMatching: false };
 }
 
 test('presets, keyboard arrows and confirm', async () => {
@@ -236,6 +236,8 @@ test('in pool mode it starts every idle account with the picked delay and no spa
     screen.getByText('3 аккаунта — у каждого свой момент старта в выбранном окне'),
   ).toBeInTheDocument();
   expect(screen.queryByText('Спам-чек')).toBeNull();
+  // Each pool account warms through its own primary device: no device pick here.
+  expect(screen.queryByRole('radiogroup', { name: 'Устройство' })).toBeNull();
 
   await userEvent.click(screen.getByRole('radio', { name: '24 ч' }));
   await userEvent.click(screen.getByRole('button', { name: 'Запустить пул' }));
@@ -251,4 +253,57 @@ test('a picked delay alone also asks before closing', async () => {
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByText('Закрыть без сохранения?')).toBeInTheDocument();
+});
+
+test('the device defaults to desktop and mobile is forwarded only when picked', async () => {
+  const onConfirm = vi.fn();
+  renderWithClient(
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      devices={['desktop', 'mobile']}
+      onClose={vi.fn()}
+      onConfirm={onConfirm}
+    />,
+  );
+  const group = screen.getByRole('radiogroup', { name: 'Устройство' });
+  expect(within(group).getByRole('radio', { name: 'ПК' })).toBeChecked();
+
+  await userEvent.click(within(group).getByRole('radio', { name: 'Телефон' }));
+  await userEvent.click(screen.getByText('Запустить прогрев'));
+
+  expect(onConfirm).toHaveBeenCalledWith(choice(14, 'normal', 3, 'mobile'));
+});
+
+test('a device the account lacks is offered disabled, never picked', () => {
+  renderWithClient(
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      devices={['desktop']}
+      onClose={vi.fn()}
+      onConfirm={vi.fn()}
+    />,
+  );
+  const group = screen.getByRole('radiogroup', { name: 'Устройство' });
+  expect(within(group).getByRole('radio', { name: 'Телефон' })).toBeDisabled();
+});
+
+test('a mobile-only account opens on its phone', async () => {
+  const onConfirm = vi.fn();
+  renderWithClient(
+    <WarmDaysModal
+      accountId="a1"
+      phone="+79991234567"
+      devices={['mobile']}
+      onClose={vi.fn()}
+      onConfirm={onConfirm}
+    />,
+  );
+  const group = screen.getByRole('radiogroup', { name: 'Устройство' });
+  expect(within(group).getByRole('radio', { name: 'ПК' })).toBeDisabled();
+
+  await userEvent.click(screen.getByText('Запустить прогрев'));
+
+  expect(onConfirm).toHaveBeenCalledWith(choice(14, 'normal', 3, 'mobile'));
 });

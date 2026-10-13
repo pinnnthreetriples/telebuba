@@ -8443,6 +8443,127 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/devices": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Add Account Device",
+        "description": "Sign the other device in beside the account's existing one.\n\nA refusal answers 400 with a stable device code; a flood wait carries its seconds.",
+        "operationId": "addAccountDevice",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -20560,6 +20681,37 @@
             ],
             "title": "Session Name"
           },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
+          },
+          "second_session_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Session Name"
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -21425,6 +21577,24 @@
         "title": "AddChannelsRequest",
         "description": "Raw user input \u2014 one or many links/usernames, newline- or comma-separated."
       },
+      "AddDeviceRequest": {
+        "properties": {
+          "device_type": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_type"
+        ],
+        "title": "AddDeviceRequest",
+        "description": "API body for ``POST /accounts/{id}/devices``."
+      },
       "AssignAccountRequest": {
         "properties": {
           "account_id": {
@@ -21506,6 +21676,15 @@
               }
             ],
             "title": "Registered At"
+          },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -30013,6 +30192,15 @@
               }
             ],
             "title": "Label"
+          },
+          "session_device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Session Device",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -30156,6 +30344,15 @@
             ],
             "title": "Activity Persona",
             "default": "normal"
+          },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "desktop"
           }
         },
         "type": "object",
@@ -31795,6 +31992,17 @@
                 "type": "null"
               }
             ]
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
           }
         },
         "type": "object",
@@ -32363,6 +32571,17 @@
               }
             ],
             "title": "Activity Persona"
+          },
+          "devices": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "desktop",
+                "mobile"
+              ]
+            },
+            "type": "array",
+            "title": "Devices"
           },
           "readiness": {
             "anyOf": [

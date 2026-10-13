@@ -90,13 +90,20 @@ async def discard_imported_session(account_id: str, session_path: Path) -> Rollb
     Telethon's ``SQLiteSession``, re-create — the very file being removed.
     """
     async with removing_client(account_id):
+        # A second device the import signed in has its own ``.session`` beside the
+        # imported one; both leave with the row.
+        paths = [session_path]
         try:
-            if await fetch_account(account_id) is not None:
+            account = await fetch_account(account_id)
+            if account is not None:
+                if account.second_session_name is not None:
+                    paths.append(session_path.with_name(f"{account.second_session_name}.session"))
                 await delete_account(account_id)
         except Exception as exc:  # noqa: BLE001 — leaving the file beats orphaning a live row.
             return RollbackResult("row_kept", type(exc).__name__)
         try:
-            await asyncio.to_thread(session_path.unlink, missing_ok=True)
+            for path in paths:
+                await asyncio.to_thread(path.unlink, missing_ok=True)
         except OSError as exc:
             return RollbackResult("file_kept", type(exc).__name__)
     return RollbackResult("clean")

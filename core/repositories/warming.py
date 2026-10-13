@@ -349,6 +349,9 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
         insert_values["warmed_days"] = data.warmed_days
         insert_values["last_warmed_date"] = data.last_warmed_date
+    if data.device_mode is not None:
+        # Written by a start only; every other write leaves the stint's device alone.
+        insert_values["device_mode"] = data.device_mode
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1

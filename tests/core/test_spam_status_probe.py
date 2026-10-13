@@ -37,7 +37,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     connection to an already-open ``.session`` file.
     """
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return client
 
     monkeypatch.setattr("core.telegram_client._spam.get_client", fake_get_client)
@@ -161,7 +161,7 @@ async def test_check_spam_status_reports_a_pool_connect_failure(
 ) -> None:
     """A pool that can't connect must classify, not escape — the probe never raises."""
 
-    async def failing_get_client(_account_id: str) -> object:
+    async def failing_get_client(_account_id: str, _device_type: str | None = None) -> object:
         msg = "no route"
         raise ConnectionError(msg)
 
@@ -185,7 +185,7 @@ async def test_probe_error_is_the_class_name_only(monkeypatch: pytest.MonkeyPatc
     """
     endpoint = "203.0.113.9:1080"
 
-    async def failing_get_client(account_id: str) -> object:
+    async def failing_get_client(account_id: str, _device_type: str | None = None) -> object:
         raise TelegramClientPoolError(
             account_id,
             OSError(f"Could not connect to proxy {endpoint} [Connection refused]"),

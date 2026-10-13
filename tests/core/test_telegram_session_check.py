@@ -125,7 +125,7 @@ async def test_check_borrows_the_pooled_client(monkeypatch: pytest.MonkeyPatch) 
     _with_credentials(monkeypatch)
     borrowed: list[str] = []
 
-    async def fake_get_client(account_id: str) -> object:
+    async def fake_get_client(account_id: str, _device_type: str | None = None) -> object:
         borrowed.append(account_id)
         return _PooledClient()
 
@@ -150,7 +150,7 @@ async def test_a_user_without_the_premium_flag_stays_unknown(
         async def get_me(self) -> object:
             return SimpleNamespace(id=7)
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return _NoFlagClient()
 
     monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
@@ -168,7 +168,7 @@ async def test_pool_connect_failure_is_classified_by_its_cause(
     """A pool error is a wrapper: the verdict must come from the error it wraps."""
     _with_credentials(monkeypatch)
 
-    async def failing_get_client(account_id: str) -> object:
+    async def failing_get_client(account_id: str, _device_type: str | None = None) -> object:
         raise TelegramClientPoolError(account_id, ProxyConnectionError("proxy refused"))
 
     monkeypatch.setattr("core.telegram_client._session.get_client", failing_get_client)
@@ -222,7 +222,7 @@ async def test_a_silent_pooled_client_cannot_hang_the_check(
     _with_credentials(monkeypatch)
     monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         return _MuteClient()
 
     monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
@@ -246,7 +246,7 @@ async def test_a_held_connect_lock_cannot_hang_the_check(
     _with_credentials(monkeypatch)
     monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
 
-    async with _connect_lock("acc-1"):
+    async with _connect_lock(("acc-1", "desktop")):
         result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
 
     assert result.status == "network_error"

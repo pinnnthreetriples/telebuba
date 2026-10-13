@@ -60,6 +60,15 @@ if TYPE_CHECKING:
 _AUTH_LOCKS: dict[str, asyncio.Lock] = {}
 
 
+def account_auth_lock(account_id: str) -> asyncio.Lock:
+    """The lock every sign-in / sign-out of ``account_id`` holds, for account removal.
+
+    Removal takes it so no second-device sign-in can record a session between its
+    read of the account and its delete. Taken outside ``removing_client`` like here.
+    """
+    return _auth_lock(account_id)
+
+
 def _auth_lock(account_id: str) -> asyncio.Lock:
     """Serialise this module's three flows for one account.
 
@@ -86,7 +95,10 @@ async def request_phone_code(request: PhoneCodeRequest) -> PhoneCodeChallenge:
     profile = await prepare_telegram_client_profile(
         _login_request(request.account_id, request.session_name),
     )
-    async with _auth_lock(request.account_id), removing_client(request.account_id):
+    async with (
+        _auth_lock(request.account_id),
+        removing_client(request.account_id, profile.device_type),
+    ):
         client = create_telegram_client(profile)
         try:
             await client.connect()
@@ -118,7 +130,10 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
     profile = await prepare_telegram_client_profile(
         _login_request(request.account_id, request.session_name),
     )
-    async with _auth_lock(request.account_id), removing_client(request.account_id):
+    async with (
+        _auth_lock(request.account_id),
+        removing_client(request.account_id, profile.device_type),
+    ):
         client = create_telegram_client(profile)
         try:
             await client.connect()
@@ -183,7 +198,10 @@ async def log_out_session(
     """
     profile = await prepare_telegram_client_profile(request)
     error_message: str | None = None
-    async with _auth_lock(request.account_id), removing_client(request.account_id):
+    async with (
+        _auth_lock(request.account_id),
+        removing_client(request.account_id, profile.device_type),
+    ):
         client = create_telegram_client(profile)
         try:
             await client.connect()

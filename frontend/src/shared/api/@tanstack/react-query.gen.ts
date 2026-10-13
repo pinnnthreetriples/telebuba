@@ -13,6 +13,7 @@ import {
   accountStats,
   actOnChatBroadcastTarget,
   actOnMasstaggingTarget,
+  addAccountDevice,
   addAccountMusic,
   addAccountsToFolder,
   addWarmingChannels,
@@ -229,6 +230,9 @@ import type {
   ActOnMasstaggingTargetData,
   ActOnMasstaggingTargetError,
   ActOnMasstaggingTargetResponse,
+  AddAccountDeviceData,
+  AddAccountDeviceError,
+  AddAccountDeviceResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
@@ -3170,6 +3174,37 @@ export const rescheduleScheduledPostMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await rescheduleScheduledPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Add Account Device
+ *
+ * Sign the other device in beside the account's existing one.
+ *
+ * A refusal answers 400 with a stable device code; a flood wait carries its seconds.
+ */
+export const addAccountDeviceMutation = (
+  options?: Partial<Options<AddAccountDeviceData>>,
+): UseMutationOptions<
+  AddAccountDeviceResponse,
+  AddAccountDeviceError,
+  Options<AddAccountDeviceData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddAccountDeviceResponse,
+    AddAccountDeviceError,
+    Options<AddAccountDeviceData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addAccountDevice({
         ...options,
         ...fnOptions,
         throwOnError: true,

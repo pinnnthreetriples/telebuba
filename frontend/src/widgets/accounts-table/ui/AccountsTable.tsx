@@ -182,7 +182,15 @@ export function AccountsTable({
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
       cell: ({ row }) => (
-        <span className="type-body text-content-subtle">{deviceLabel(row.original)}</span>
+        <div>
+          <div className="type-body text-content-subtle">{deviceLabel(row.original)}</div>
+          {/* Which sign-ins the account has: a desktop, a phone, or both. */}
+          <div className="type-small">
+            {(row.original.devices ?? ['desktop'])
+              .map((device) => t(`accounts.devices.${device}`))
+              .join(' · ')}
+          </div>
+        </div>
       ),
     },
     {

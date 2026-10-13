@@ -3,21 +3,64 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from anyio import to_thread
 from telethon import TelegramClient
 
 from core.config import settings
-from core.db import fetch_account, fetch_account_proxy_settings
+from core.db import fetch_account, fetch_account_proxy_settings, fetch_device_fingerprint
 from core.device_fingerprint import get_or_create_device_fingerprint
+from core.device_fingerprint_android import ANDROID_LANG_PACK
 from core.secure_paths import make_private_dir
-from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
+from schemas.device_fingerprint import (
+    TelegramClientProfile,
+    TelegramClientRequest,
+    other_device,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from schemas.accounts import AccountRead
+    from schemas.device_fingerprint import DeviceFingerprint, DeviceType
+    from schemas.devices import DeviceRefusalCode
     from schemas.telegram_session import TelegramSessionCheckRequest
+
+# Stable codes for a device the client cannot be built for; the SPA translates them.
+DEVICE_MISSING: DeviceRefusalCode = "device_missing"
+MOBILE_API_NOT_CONFIGURED: DeviceRefusalCode = "mobile_api_not_configured"
+
+
+class DeviceUnavailableError(ValueError):
+    """The requested device cannot connect: the account lacks it, or mobile is not set up.
+
+    Never answered with another device — a desktop session presenting itself for a
+    phone the operator chose (or the reverse) is exactly the fallback this refuses.
+    """
+
+    def __init__(self, code: DeviceRefusalCode, account_id: str) -> None:
+        self.code: DeviceRefusalCode = code
+        self.account_id = account_id
+        # The message IS the code, like every other gateway ``ValueError``.
+        super().__init__(code)
+
+
+def mobile_api_configured() -> bool:
+    return bool(settings.telegram.mobile_api_id and settings.telegram.mobile_api_hash)
+
+
+def resolve_device(account: AccountRead | None, requested: DeviceType | None) -> DeviceType:
+    """The device a client is built for: ``requested``, else the account's primary.
+
+    An account row that is gone resolves to desktop, which is what every pre-device
+    caller (a probe racing a removal) always got.
+    """
+    devices: list[DeviceType] = account.devices if account is not None else ["desktop"]
+    device = requested or devices[0]
+    if device not in devices:
+        raise DeviceUnavailableError(DEVICE_MISSING, account.account_id if account else "")
+    return device
 
 
 async def _session_path(request: TelegramClientRequest) -> str:
@@ -25,7 +68,9 @@ async def _session_path(request: TelegramClientRequest) -> str:
 
     A caller that names the session wins. Otherwise the stored ``session_name``
     decides, because the pool — the borrower behind every warming, neurocomment
-    and dialog action — keys on ``account_id`` alone and passes no name.
+    and dialog action — keys on ``account_id`` and a device and passes no name.
+    The account's OTHER device lives in ``second_session_name``: a second, separate
+    authorization, never the same file opened with another fingerprint.
 
     All three creation paths currently derive ``session_name`` from the same
     value as ``account_id`` (``tdata_import`` names the file after the Telegram
@@ -42,6 +87,10 @@ async def _session_path(request: TelegramClientRequest) -> str:
     if request.session_name:
         return _session_dir_child(request.session_name)
     account = await fetch_account(request.account_id)
+    if account is not None and request.device_type not in {None, account.session_device}:
+        if account.second_session_name is None:
+            raise DeviceUnavailableError(DEVICE_MISSING, request.account_id)
+        return _session_dir_child(account.second_session_name)
     stored = account.session_name if account is not None else None
     return _session_dir_child(stored or request.account_id)
 
@@ -103,14 +152,56 @@ def _session_dir_child(name: str) -> str:
     return str(candidate)
 
 
+def _device_of(account: AccountRead | None, request: TelegramClientRequest) -> DeviceType | None:
+    """The device a NAMED session file belongs to, so it is never opened as the other one.
+
+    The login/logout flows and the session check name the account's own session;
+    resolving them to the primary device would open a mobile-only ``.session`` with
+    the desktop fingerprint once a desktop is added.
+    """
+    if account is None or request.session_name is None:
+        return None
+    if request.session_name == account.second_session_name:
+        return other_device(account.session_device)
+    return account.session_device if request.session_name == account.session_name else None
+
+
+async def _device_fingerprint(account_id: str, device_type: DeviceType) -> DeviceFingerprint:
+    """Desktop mints lazily as it always did; mobile only ever reads.
+
+    A mobile fingerprint is created where its authorization is (account creation or
+    the second-device sign-in), so a missing one is a refusal, not a mint.
+    """
+    if device_type == "desktop":
+        return await get_or_create_device_fingerprint(account_id)
+    if not mobile_api_configured():
+        raise DeviceUnavailableError(MOBILE_API_NOT_CONFIGURED, account_id)
+    fingerprint = await fetch_device_fingerprint(account_id, "mobile")
+    if fingerprint is None:
+        raise DeviceUnavailableError(DEVICE_MISSING, account_id)
+    return fingerprint
+
+
 async def prepare_telegram_client_profile(
     request: TelegramClientRequest,
+    *,
+    device: DeviceFingerprint | None = None,
 ) -> TelegramClientProfile:
+    """Everything a client for ``request``'s device needs, credentials resolved in core.
+
+    ``device`` is the second-device sign-in's not-yet-stored fingerprint; every other
+    caller reads the stored one.
+    """
     await _ensure_session_dir()
-    device = await get_or_create_device_fingerprint(request.account_id)
+    if device is None:
+        account = await fetch_account(request.account_id)
+        device_type = resolve_device(account, request.device_type or _device_of(account, request))
+        device = await _device_fingerprint(request.account_id, device_type)
+        request = request.model_copy(update={"device_type": device_type})
     proxy = await fetch_account_proxy_settings(request.account_id)
     return TelegramClientProfile(
         account_id=request.account_id,
+        device_type=device.device_type,
         session_path=await _session_path(request),
         receive_updates=request.receive_updates,
         device=device,
@@ -142,42 +233,36 @@ async def _ensure_session_dir() -> None:
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     device = profile.device
+    mobile = device.device_type == "mobile"
     proxy = _proxy_config(profile)
-    if proxy is not None:
-        client = TelegramClient(
-            profile.session_path,
-            settings.telegram.api_id,
-            settings.telegram.api_hash,
-            device_model=device.device_model,
-            system_version=device.system_version,
-            app_version=device.app_version,
-            lang_code=device.lang_code,
-            system_lang_code=device.system_lang_code,
-            receive_updates=profile.receive_updates,
-            timeout=settings.telegram.timeout_seconds,
-            connection_retries=settings.telegram.connection_retries,
-            retry_delay=settings.telegram.retry_delay_seconds,
-            request_retries=settings.telegram.request_retries,
-            flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
-            proxy=proxy,
-        )
-    else:
-        client = TelegramClient(
-            profile.session_path,
-            settings.telegram.api_id,
-            settings.telegram.api_hash,
-            device_model=device.device_model,
-            system_version=device.system_version,
-            app_version=device.app_version,
-            lang_code=device.lang_code,
-            system_lang_code=device.system_lang_code,
-            receive_updates=profile.receive_updates,
-            timeout=settings.telegram.timeout_seconds,
-            connection_retries=settings.telegram.connection_retries,
-            retry_delay=settings.telegram.retry_delay_seconds,
-            request_retries=settings.telegram.request_retries,
-            flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
-        )
+    # Passed only when set: an explicit ``proxy=None`` is not what a proxy-less
+    # client was ever built with.
+    proxy_option: dict[str, Any] = {"proxy": proxy} if proxy is not None else {}
+    client = TelegramClient(
+        profile.session_path,
+        settings.telegram.mobile_api_id if mobile else settings.telegram.api_id,
+        settings.telegram.mobile_api_hash if mobile else settings.telegram.api_hash,
+        device_model=device.device_model,
+        system_version=device.system_version,
+        app_version=device.app_version,
+        lang_code=device.lang_code,
+        system_lang_code=device.system_lang_code,
+        receive_updates=profile.receive_updates,
+        timeout=settings.telegram.timeout_seconds,
+        connection_retries=settings.telegram.connection_retries,
+        retry_delay=settings.telegram.retry_delay_seconds,
+        request_retries=settings.telegram.request_retries,
+        flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
+        **proxy_option,
+    )
+    if mobile:
+        # Telethon 1.x has no constructor argument for ``lang_pack`` and hardcodes ''
+        # in the ``InitConnectionRequest`` it builds once and resends on every
+        # (re)connect. The official Android app sends "android", so a mobile
+        # authorization without it is a mismatch. This sets that one TL field on the
+        # request object — the same object Telethon itself mutates in ``set_proxy``
+        # and opentele2 sets ``lang_pack`` on — and patches no code.
+        client._init_request.lang_pack = ANDROID_LANG_PACK  # noqa: SLF001
     # Telethon defaults ``parse_mode`` to markdown, which silently EATS the
     # metacharacters in every text we send: ``__bold__``, `` `code` ``,
     # ``~~strike~~``, ``**stars**`` and ``[text](url)`` come out stripped, and a

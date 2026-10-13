@@ -160,8 +160,11 @@ async def _warming_loop(
     with _seams.lease_scope(account_id, run_id):
         try:
             record = await fetch_warming_state(account_id)
-            if not _is_live_generation(record, run_id):
+            if record is None or not _is_live_generation(record, run_id):
                 return
+            # The stint's device, as its start persisted it (restored the same way
+            # after a restart): every action of this task borrows that client.
+            _seams.bind_device(record.device_mode)
             now = datetime.now(UTC)
             delay = await _initial_delay_seconds(account_id, record, now)
             await _persist_cold_start_schedule(account_id, record, delay, now, run_id)

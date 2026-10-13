@@ -118,7 +118,7 @@ def _message(media: object) -> SimpleNamespace:
 
 
 def _patch_pool(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    async def _get_client(account_id: str) -> object:
+    async def _get_client(account_id: str, _device_type: str | None = None) -> object:
         assert account_id == "acc-1"
         return client
 
@@ -276,7 +276,7 @@ async def test_gateway_fault_is_swallowed_into_unavailable(
 ) -> None:
     """A flood wait / dead proxy / pool failure must not escape and kill the post task."""
 
-    async def _boom(_account_id: str) -> object:
+    async def _boom(_account_id: str, _device_type: str | None = None) -> object:
         msg = "proxy is down"
         raise ConnectionError(msg)
 
@@ -329,7 +329,7 @@ async def test_a_crawling_download_is_cut_off_and_reported_unavailable(
 async def test_a_hung_pool_acquisition_is_cut_off_too(monkeypatch: pytest.MonkeyPatch) -> None:
     """The bound covers the whole fetch, not just the bytes: connecting can hang as well."""
 
-    async def _slow_client(_account_id: str) -> object:
+    async def _slow_client(_account_id: str, _device_type: str | None = None) -> object:
         await asyncio.sleep(5)
         raise AssertionError
 

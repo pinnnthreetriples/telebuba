@@ -7,6 +7,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from schemas.device_fingerprint import (
+    DeviceType,
+    desktop_only,
+)
 from schemas.geo import GeoMatchStatus  # noqa: TC001 - pydantic resolves it at runtime.
 from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves it at runtime.
 
@@ -76,6 +80,8 @@ class WarmedAccount(BaseModel):
     geo_accepted: bool = False
     # «День 12 после выпуска · жив» — the card's survival badge.
     survival: AccountSurvival | None = None
+    # The account's devices, primary first: what «Вернуть в прогрев» may offer.
+    devices: list[DeviceType] = Field(default_factory=desktop_only)
 
 
 class WarmedAccountList(BaseModel):

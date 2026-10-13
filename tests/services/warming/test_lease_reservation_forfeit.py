@@ -52,6 +52,7 @@ class _GatewayRecorder:
         action: TelegramAction,
         *,
         domain: str = "warming",  # noqa: ARG002 - mirrors the real signature
+        device_type: str | None = None,  # noqa: ARG002 - mirrors the real signature
     ) -> ActionResult:
         self.calls.append(action.action_type)
         return _ok(account_id, action)
@@ -129,6 +130,7 @@ async def test_a_cancelled_cycle_that_dispatched_nothing_keeps_its_day(
         _action: TelegramAction,
         *,
         domain: str = "warming",
+        device_type: str | None = None,
     ) -> ActionResult:
         raise NotImplementedError  # pragma: no cover - never reached
 
@@ -169,6 +171,7 @@ async def test_a_lease_revoked_mid_dispatch_still_forfeits_the_whole_day(
         action: TelegramAction,
         *,
         domain: str = "warming",
+        device_type: str | None = None,  # noqa: ARG001 - mirrors the real signature
     ) -> ActionResult:
         result = await gateway(account_id, action, domain=domain)
         _seams.revoke_lease(account_id, "run-1")

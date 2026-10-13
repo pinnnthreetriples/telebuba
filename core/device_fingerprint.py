@@ -3,8 +3,9 @@ from __future__ import annotations
 import secrets
 
 from core.db import fetch_account, fetch_device_fingerprint, insert_device_fingerprint
+from core.device_fingerprint_android import generate_android_fingerprint
 from core.device_fingerprint_lang import language_pair
-from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
+from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform, DeviceType
 
 _WINDOWS_VERSIONS = (
     "Windows 10",
@@ -142,8 +143,18 @@ def generate_random_device_fingerprint(
     )
 
 
-async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint:
-    existing = await fetch_device_fingerprint(account_id)
+async def get_or_create_device_fingerprint(
+    account_id: str,
+    device_type: DeviceType = "desktop",
+) -> DeviceFingerprint:
+    """The device's fingerprint, minted on first use and never changed afterwards.
+
+    Called with ``mobile`` only where a mobile authorization is being created (a new
+    account whose own session is mobile); a mobile client never mints one lazily —
+    ``_client`` reads it with ``fetch_device_fingerprint`` and refuses when it is
+    missing, so no code path can invent a phone for a desktop-only account.
+    """
+    existing = await fetch_device_fingerprint(account_id, device_type)
     if existing is not None:
         return existing
 
@@ -152,8 +163,9 @@ async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint
     # mint the ``en-US`` fallback and the first successful session check
     # corrects the language once (``core.repositories._accounts_session_check``).
     account = await fetch_account(account_id)
-    profile = generate_random_device_fingerprint(
-        account_id,
-        phone=account.phone if account else None,
-    )
+    phone = account.phone if account else None
+    if device_type == "mobile":
+        profile = generate_android_fingerprint(account_id, phone)
+    else:
+        profile = generate_random_device_fingerprint(account_id, phone=phone)
     return await insert_device_fingerprint(profile)

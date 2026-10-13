@@ -1,6 +1,7 @@
 // Account write actions, re-exported from the generated TanStack Query mutation
 // options (data access only through shared/api, per the FSD ADR).
 export {
+  addAccountDeviceMutation,
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,

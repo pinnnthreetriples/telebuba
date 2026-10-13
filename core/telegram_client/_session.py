@@ -10,7 +10,7 @@ from telethon import errors
 from telethon.tl.functions.help import GetAppConfigRequest
 
 from core.config import settings
-from core.telegram_client._client import prepare_session_check_profile
+from core.telegram_client._client import DeviceUnavailableError, prepare_session_check_profile
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     TelegramClientUnavailableError,
@@ -22,14 +22,27 @@ from schemas.telegram_session import TelegramSessionCheckResult
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-    from schemas.device_fingerprint import TelegramClientProfile
+    from schemas.device_fingerprint import DeviceType, TelegramClientProfile
     from schemas.telegram_session import SessionCheckStatus, TelegramSessionCheckRequest
 
 
-async def check_telegram_session(
+async def _unprobeable(
     request: TelegramSessionCheckRequest,
-) -> TelegramSessionCheckResult:
-    profile = await prepare_session_check_profile(request)
+) -> TelegramClientProfile | TelegramSessionCheckResult:
+    """The profile to probe, or the verdict for a session that cannot be probed at all."""
+    try:
+        profile = await prepare_session_check_profile(request)
+    except DeviceUnavailableError as exc:
+        # Same verdict as the missing desktop credentials below: a mobile session
+        # cannot be probed until the mobile app credentials are configured.
+        return TelegramSessionCheckResult(
+            account_id=request.account_id,
+            session_path=request.session_name or request.account_id,
+            status="session_error",
+            is_temporary=False,
+            error_type=exc.code,
+            error_message=exc.code,
+        )
     if settings.telegram.api_id == 0 or not settings.telegram.api_hash:
         return TelegramSessionCheckResult(
             account_id=profile.account_id,
@@ -42,6 +55,15 @@ async def check_telegram_session(
                 "fill them in to enable session checks."
             ),
         )
+    return profile
+
+
+async def check_telegram_session(
+    request: TelegramSessionCheckRequest,
+) -> TelegramSessionCheckResult:
+    profile = await _unprobeable(request)
+    if isinstance(profile, TelegramSessionCheckResult):
+        return profile
     result: TelegramSessionCheckResult
     try:
         # One deadline over the whole probe — see ``session_check_timeout_seconds``.
@@ -53,7 +75,7 @@ async def check_telegram_session(
         # the same verdict the pool's own refusal gets, for the same reason: nothing
         # was learned about this session, so the row must not be marked broken.
         async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
-            client = await _probe_client(profile.account_id)
+            client = await _probe_client(profile.account_id, profile.device_type)
             if not await client.is_user_authorized():
                 result = _status_session_check_result(profile, status="unauthorized")
             else:
@@ -100,7 +122,7 @@ async def check_telegram_session(
     return result
 
 
-async def _probe_client(account_id: str) -> TelegramClient:
+async def _probe_client(account_id: str, device_type: DeviceType) -> TelegramClient:
     """Borrow the account's pooled client, surfacing the pool's underlying cause.
 
     The check used to build its own throwaway client. Telethon keeps the
@@ -127,7 +149,7 @@ async def _probe_client(account_id: str) -> TelegramClient:
     check therefore reports on exactly the file every other action opens.
     """
     try:
-        return await get_client(account_id)
+        return await get_client(account_id, device_type)
     except TelegramClientUnavailableError:
         raise
     except TelegramClientPoolError as exc:

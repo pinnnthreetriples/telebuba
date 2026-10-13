@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { spamCheckAccountMutation } from '@/entities/account';
+import { DEVICE_TYPES, spamCheckAccountMutation, type DeviceType } from '@/entities/account';
 import type { CadencePreview } from '@/shared/api';
 import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
@@ -64,6 +64,8 @@ export interface StartDialogChoice {
   days: number;
   persona: ActivityPersona;
   delayHours: number;
+  // The single-account pick; a pool start sends each account's own primary device.
+  device: DeviceType;
   acceptGeo: boolean;
   onlyGeoMatching: boolean;
 }
@@ -75,12 +77,15 @@ export interface StartDialogChoice {
 export function WarmDaysModal({
   defaultDays = FALLBACK_DAYS,
   cadence,
+  devices = ['desktop'],
   onClose,
   onConfirm,
   ...target
 }: StartTarget & {
   defaultDays?: number;
   cadence?: CadencePreview[];
+  // The account's sign-ins; a device it lacks is offered disabled, never swapped in.
+  devices?: DeviceType[];
   onClose: () => void;
   onConfirm: (choice: StartDialogChoice) => void;
 }) {
@@ -95,18 +100,24 @@ export function WarmDaysModal({
   const [days, setDays] = useState(initialDays);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
   const [delayHours, setDelayHours] = useState(DEFAULT_DELAY_HOURS);
+  // Desktop unless the account has none: mobile is warmed only by an explicit pick.
+  const initialDevice: DeviceType = devices.includes('desktop') ? 'desktop' : 'mobile';
+  const [device, setDevice] = useState<DeviceType>(initialDevice);
   const [geoAccepted, setGeoAccepted] = useState(false);
   const poolMismatch = target.poolGeoMismatch ?? 0;
   // Consent is given only to a warning the dialog actually showed: the ticked box of a
   // single start, or the pool's «Запустить все».
   const confirm = (onlyGeoMatching: boolean) => {
     const acceptGeo = pool ? poolMismatch > 0 && !onlyGeoMatching : geoAccepted;
-    onConfirm({ days, persona, delayHours, acceptGeo, onlyGeoMatching });
+    onConfirm({ days, persona, delayHours, device, acceptGeo, onlyGeoMatching });
     onClose();
   };
-  // A length, cadence or delay picked and not yet started.
+  // A length, cadence, delay or device picked and not yet started.
   const dirty =
-    days !== initialDays || persona !== DEFAULT_PERSONA || delayHours !== DEFAULT_DELAY_HOURS;
+    days !== initialDays ||
+    persona !== DEFAULT_PERSONA ||
+    delayHours !== DEFAULT_DELAY_HOURS ||
+    device !== initialDevice;
   const [spam, setSpam] = useState<SpamState>('idle');
   const spamMutation = useMutation(spamCheckAccountMutation());
   const spamTipId = useId();
@@ -273,6 +284,27 @@ export function WarmDaysModal({
               setPersona(p);
             }}
           />
+
+          {pool ? null : (
+            <>
+              <div className="mb-2 type-body-medium">{t('warming.device.label')}</div>
+              <SegmentedControl
+                variant="outline"
+                className="mb-6"
+                value={device}
+                ariaLabel={t('warming.device.label')}
+                options={DEVICE_TYPES.map((d) => ({
+                  value: d,
+                  label: t(`accounts.devices.${d}`),
+                  disabled: !devices.includes(d),
+                  title: devices.includes(d) ? undefined : t('warming.device.missing'),
+                }))}
+                onChange={(d) => {
+                  setDevice(d);
+                }}
+              />
+            </>
+          )}
 
           <StartDelayField
             hours={delayHours}

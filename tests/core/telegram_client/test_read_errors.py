@@ -128,7 +128,7 @@ async def test_execute_read_wraps_infrastructure_errors(
 ) -> None:
     """Infrastructure failures obey the read gateway error contract."""
 
-    async def failing_get_client(_account_id: str) -> object:
+    async def failing_get_client(_account_id: str, _device_type: str | None = None) -> object:
         raise exc
 
     async def fake_fetch(account_id: str) -> object:
@@ -175,7 +175,7 @@ async def test_execute_read_many_opens_single_client_for_batch(
 
     shared_client = FakeClient()
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         nonlocal pool_borrows
         pool_borrows += 1
         return shared_client

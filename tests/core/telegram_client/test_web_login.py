@@ -17,7 +17,7 @@ async def test_accept_web_login_token_calls_accept_with_the_given_bytes(
 ) -> None:
     captured: list[object] = []
 
-    async def fake_get_client(account_id: str) -> object:
+    async def fake_get_client(account_id: str, _device_type: str | None = None) -> object:
         assert account_id == "acc-1"
 
         async def confirmer(request: object) -> None:
@@ -41,7 +41,7 @@ async def test_accept_web_login_token_lets_accept_errors_propagate(
     class _RotatedError(Exception):
         """Stands in for Telethon's AUTH_TOKEN_* rotation errors."""
 
-    async def fake_get_client(_account_id: str) -> object:
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
         async def confirmer(_request: object) -> None:
             raise _RotatedError
 

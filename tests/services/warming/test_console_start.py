@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -25,6 +26,9 @@ from services.warming import _runtime
 from tests.factories import seed_account_proxy
 from tests.services.warming._support import _fake_loop
 
+if TYPE_CHECKING:
+    from schemas.device_fingerprint import DeviceType
+
 # A Mexico City number behind a US proxy: the pair the dialog warns about.
 _MX_PHONE = "+525512345678"
 
@@ -39,14 +43,20 @@ def _quiet_start(monkeypatch: pytest.MonkeyPatch) -> object:
     _account_owner.reset_for_tests()
 
 
-async def _account(proxy_country: str | None = "US", phone: str = _MX_PHONE) -> None:
+async def _account(
+    proxy_country: str | None = "US",
+    phone: str = _MX_PHONE,
+    session_device: DeviceType = "desktop",
+) -> None:
     await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=False,
         enforce_readiness=False,
         gemini_api_key="",
     )
-    await create_account(AccountCreate(account_id="acc-1", phone=phone))
+    await create_account(
+        AccountCreate(account_id="acc-1", phone=phone, session_device=session_device),
+    )
     if proxy_country is not None:
         proxy_id = await seed_account_proxy("acc-1", host="1.2.3.4")
         await update_proxy_check(
@@ -235,3 +245,14 @@ async def test_the_warmed_card_carries_the_geo_and_the_board_the_soft_plan(
     assert (warmed.geo_status, warmed.geo_accepted) == ("mismatch", False)
     assert board.soft_start.days == 7
     assert board.soft_start.last_day_comments == settings.soft_start.last_day_comments
+
+
+@pytest.mark.asyncio
+async def test_the_warmed_card_offers_the_accounts_own_devices_to_resume() -> None:
+    await _account(session_device="mobile")
+    await _graduate(warmed_days=14)
+
+    board = await warming.load_board()
+
+    (warmed,) = board.warmed
+    assert warmed.devices == ["mobile"]

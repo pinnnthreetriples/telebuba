@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Final, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from core.db import fetch_account, fetch_warming_state, upsert_warming_state
 from schemas.warming import (
@@ -16,6 +16,9 @@ from schemas.warming import (
     warming_health,
 )
 from services.warming.board import _to_card
+
+if TYPE_CHECKING:
+    from schemas.device_fingerprint import DeviceType
 
 
 class _Sentinel:
@@ -54,6 +57,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     activity_persona: ActivityPersona | None | _Sentinel = _SENTINEL,
     recovered_at: str | None | _Sentinel = _SENTINEL,
     warmed_days: int | None = None,
+    device_mode: DeviceType | None = None,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -120,6 +124,8 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             # Like the token: ``None`` leaves the worked days alone. A value (a fresh
             # stint's 0) also clears the last counted date with it.
             warmed_days=warmed_days,
+            # ``None`` leaves the column alone — see ``WarmingStateWrite.device_mode``.
+            device_mode=device_mode,
         ),
     )
 
