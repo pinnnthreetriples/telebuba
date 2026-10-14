@@ -128,21 +128,18 @@ async def _search_locked(
 ) -> PoolFillResult | None:
     """Borrow the account under its lock and search; ``None`` when it is no longer ours.
 
-    The standing is asked again once the lock is held — the pick is several awaits old
-    — and the claim beneath the loan is compared once more right after lending, in the
-    same await-free stretch, so a claim that landed meanwhile is never searched over.
+    The standing is asked again once the lock is held — the pick is several awaits old.
+    Its last registry read and the loan share one await-free stretch, and every other
+    claim is made under this same lock, so nothing can claim the account in between.
     """
     async with account_lock(account_id):
         standing = await search_standing(account_id)
         if not _same_standing(standing, consent):
             return None
-        beneath = _account_owner.owners().get(account_id)
         holder = uuid.uuid4().hex
         if not _account_owner.lend(account_id, holder):
             return None
         try:
-            if _account_owner.owners().get(account_id) != beneath:
-                return None
             if consent is not None:
                 await _log_loan("warming_pool_search_account_taken", account_id, consent)
             return await _search_with(account_id, request, topics, origin)
