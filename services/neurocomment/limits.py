@@ -22,6 +22,7 @@ read, which resolves it against a count taken in the same transaction.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 
 from core.config import settings
 from core.db import (
@@ -59,22 +60,23 @@ def _resets_at(window: LimitWindow, length: timedelta) -> str | None:
     return (datetime.fromisoformat(window.slot_at) + length).isoformat()
 
 
-def _gauge(  # noqa: PLR0913 - keyword-only fields of one gauge.
-    *,
-    limit: int,
-    fleet_default: int,
-    override: int | None,
-    soft_cap: int | None,
-    window: LimitWindow,
-    length: timedelta,
-) -> AccountLimitGauge:
+class _Cap(NamedTuple):
+    """One cap's numbers: what is enforced, the fleet's, the account's own, the soft one."""
+
+    limit: int
+    fleet_default: int
+    override: int | None
+    soft_cap: int | None
+
+
+def _gauge(cap: _Cap, window: LimitWindow, length: timedelta) -> AccountLimitGauge:
     return AccountLimitGauge(
-        limit=limit,
+        limit=cap.limit,
         used=window.used,
-        fleet_default=fleet_default,
-        overridden=override is not None,
-        override=override,
-        soft_cap=soft_cap,
+        fleet_default=cap.fleet_default,
+        overridden=cap.override is not None,
+        override=cap.override,
+        soft_cap=cap.soft_cap,
         resets_at=_resets_at(window, length),
     )
 
@@ -97,31 +99,37 @@ async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimit
     return AccountLimitsView(
         account_id=account_id,
         joins=_gauge(
-            limit=caps.max_joins_per_day,
-            # Neurocomment's fleet number, because this modal is neurocomment's. The join
-            # LOG is shared with neuroshilling, and so is an override, but the two features
-            # keep separate fleet defaults — see ``services._account_limits``.
-            fleet_default=settings.neurocomment.max_joins_per_account_per_day,
-            override=override.max_joins_per_day,
-            soft_cap=soft.joins_per_day if soft else None,
-            window=joins,
-            length=_DAY,
+            _Cap(
+                caps.max_joins_per_day,
+                # Neurocomment's fleet number, because this modal is neurocomment's. The
+                # join LOG is shared with neuroshilling, and so is an override, but the two
+                # features keep separate fleet defaults — see ``services._account_limits``.
+                settings.neurocomment.max_joins_per_account_per_day,
+                override.max_joins_per_day,
+                soft.joins_per_day if soft else None,
+            ),
+            joins,
+            _DAY,
         ),
         comments_per_hour=_gauge(
-            limit=caps.max_comments_per_hour,
-            fleet_default=fleet.max_comments_per_hour,
-            override=override.max_comments_per_hour,
-            soft_cap=soft.comments_per_hour if soft else None,
-            window=hourly,
-            length=_HOUR,
+            _Cap(
+                caps.max_comments_per_hour,
+                fleet.max_comments_per_hour,
+                override.max_comments_per_hour,
+                soft.comments_per_hour if soft else None,
+            ),
+            hourly,
+            _HOUR,
         ),
         comments_per_channel_per_day=_gauge(
-            limit=caps.max_comments_per_channel_per_day,
-            fleet_default=fleet.max_comments_per_channel_per_day,
-            override=override.max_comments_per_channel_per_day,
-            soft_cap=soft.comments_per_channel_per_day if soft else None,
-            window=per_channel,
-            length=_DAY,
+            _Cap(
+                caps.max_comments_per_channel_per_day,
+                fleet.max_comments_per_channel_per_day,
+                override.max_comments_per_channel_per_day,
+                soft.comments_per_channel_per_day if soft else None,
+            ),
+            per_channel,
+            _DAY,
         ),
         busiest_channel=per_channel.channel,
     )

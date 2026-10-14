@@ -4111,7 +4111,7 @@ export const updateWarmingSettingsMutation = (
 /**
  * Lift Warming Dm Pause
  *
- * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did.
  */
 export const liftWarmingDmPauseMutation = (
   options?: Partial<Options<LiftWarmingDmPauseData>>,

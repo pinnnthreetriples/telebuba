@@ -3157,7 +3157,10 @@
     "dmPause": {
       "banner": "DMs paused until {{date}}",
       "detail": "Two DM spam blocks within a day — messages between accounts are stopped for the whole fleet.",
-      "lift": "Lift the pause"
+      "lift": "Lift the pause",
+      "confirmTitle": "Lift the DM pause for the whole fleet?",
+      "confirmBody": "The pause holds until {{date}} because DMs got two spam blocks. Lifting it now lets every account message again. The log records your login.",
+      "cancel": "Cancel"
     },
     "tune": {
       "title": "Action fine-tuning",

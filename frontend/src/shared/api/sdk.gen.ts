@@ -2485,7 +2485,7 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
 /**
  * Lift Warming Dm Pause
  *
- * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did.
  */
 export const liftWarmingDmPause = <ThrowOnError extends boolean = false>(
   options?: Options<LiftWarmingDmPauseData, ThrowOnError>,

@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 
+from api.deps import get_current_user
 from api.errors import error_responses
 from api.v1._warming_pool import pool_router
 from api.v1._warming_tuning import tuning_router
 from core.config import settings
 from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
+from schemas.auth import UserRead  # noqa: TC001 - FastAPI resolves the dependency type
 from schemas.dialogues import DialogueFeed
 from schemas.survival import SurvivalCohortKind, SurvivalReport
 from schemas.warming import (
@@ -242,9 +244,11 @@ async def update_warming_settings(body: WarmingSettingsUpdate) -> WarmingSetting
     response_model=WarmingSettings,
     operation_id="liftWarmingDmPause",
 )
-async def lift_warming_dm_pause() -> WarmingSettings:
-    """«Снять паузу»: reopen inter-account DMs the fleet breaker paused."""
-    return await warming_service.lift_dm_pause()
+async def lift_warming_dm_pause(
+    user: Annotated[UserRead, Depends(get_current_user)],
+) -> WarmingSettings:
+    """«Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did."""
+    return await warming_service.lift_dm_pause(user.username)
 
 
 @router.get("/dialogues", response_model=DialogueFeed, operation_id="listWarmingDialogues")
