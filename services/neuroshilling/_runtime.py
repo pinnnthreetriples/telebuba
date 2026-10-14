@@ -180,6 +180,9 @@ async def _claim_accounts(campaign_id: str, account_ids: list[str]) -> None:
     """
     from services.warming import account_lock  # noqa: PLC0415 - avoids an import cycle
 
+    # Warming's channel search holds the lock for minutes; refuse now rather than wait.
+    if any(_account_owner.is_lent(account_id) for account_id in account_ids):
+        raise NeuroshillingConflictError(_ACCOUNT_BUSY)
     async with AsyncExitStack() as locks:
         for account_id in sorted(account_ids):
             await locks.enter_async_context(account_lock(account_id))

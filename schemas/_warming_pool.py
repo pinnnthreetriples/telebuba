@@ -47,6 +47,8 @@ class PoolFillRequest(BaseModel):
     country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
     topics: list[_Topic] = Field(default_factory=list, max_length=5)
     pull_account_id: str | None = Field(default=None, min_length=1, max_length=200)
+    # What the operator was told it is doing; a pull is refused if that has changed.
+    pull_busy_with: PoolSearchBusyWith | None = None
 
 
 class PoolSearchCandidate(BaseModel):

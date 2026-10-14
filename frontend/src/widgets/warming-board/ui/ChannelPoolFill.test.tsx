@@ -79,6 +79,7 @@ test('a busy account is only taken after the operator agrees', async () => {
     country: null,
     topics: [],
     pull_account_id: 'acc-9',
+    pull_busy_with: 'chat_broadcast',
   });
 });
 

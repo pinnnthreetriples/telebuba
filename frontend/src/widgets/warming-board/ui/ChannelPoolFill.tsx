@@ -42,9 +42,15 @@ export function ChannelPoolFill({
         onSuccess: (found) => {
           setResult(found);
           if (found.status === 'needs_consent' && found.pull_candidate) {
-            setConsent({ ...body, pull_account_id: found.pull_candidate.account_id });
+            setConsent({
+              ...body,
+              pull_account_id: found.pull_candidate.account_id,
+              pull_busy_with: found.pull_candidate.busy_with,
+            });
           }
-          if ((found.added ?? 0) > 0) onPoolChanged();
+          if (found.status !== 'needs_consent' && found.status !== 'already_running') {
+            onPoolChanged();
+          }
         },
       },
     );

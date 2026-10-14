@@ -102,6 +102,8 @@ async def _pull(
     if standing is None:
         return PoolFillResult(status="no_search_account")
     consent = standing if isinstance(standing, PoolSearchCandidate) else None
+    if consent is not None and consent.busy_with != request.pull_busy_with:
+        return PoolFillResult(status="needs_consent", pull_candidate=consent)
     result = await _search_locked(account_id, consent, request, topics, origin)
     if result is not None:
         return result
@@ -197,7 +199,11 @@ async def _search_with(
         status="ok",
         created_at=datetime.now(UTC).isoformat(),
     )
-    outcome = await _hunt(account_id, request, topics)
+    try:
+        outcome = await _hunt(account_id, request, topics)
+    except Exception:
+        await record_channel_search(search.model_copy(update={"status": "failed"}))
+        raise
     if outcome is None:
         await record_channel_search(search.model_copy(update={"status": "failed"}))
         return PoolFillResult(status="failed")

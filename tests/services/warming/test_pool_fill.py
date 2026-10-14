@@ -19,13 +19,14 @@ from schemas.warming import AddChannelsRequest, RemoveChannelRequest
 from services import _account_owner, warming
 from services.neurocomment import _state as nc_state
 from services.neurocomment._state import in_cooldown
-from services.warming import _seams, pool_fill
+from services.warming import _pool_accounts, _seams, pool_fill
 from tests.services.warming._pool_support import NOW, FakeTelegram, seed_account, seed_warming
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _REQUEST = PoolFillRequest(language="es", country="MX", topics=["fútbol"])
+BUSY = "chat_broadcast"
 
 
 @pytest.fixture
@@ -115,7 +116,7 @@ async def test_a_busy_account_is_only_offered_never_taken(telegram: FakeTelegram
 @pytest.mark.asyncio
 async def test_consent_pulls_the_account_and_gives_it_back(telegram: FakeTelegram) -> None:
     await seed_account("caster")
-    assert _account_owner.try_claim("caster", "masstagging", "camp-1") is None
+    assert _account_owner.try_claim("caster", "chat_broadcast", "camp-1") is None
     seen: list[tuple[bool, object]] = []
 
     async def during(account_id: str) -> None:
@@ -129,7 +130,7 @@ async def test_consent_pulls_the_account_and_gives_it_back(telegram: FakeTelegra
 
     telegram.during = during
     result = await pool_fill.find_channels(
-        _REQUEST.model_copy(update={"pull_account_id": "caster"})
+        _REQUEST.model_copy(update={"pull_account_id": "caster", "pull_busy_with": BUSY})
     )
 
     assert result.status == "ok"
@@ -138,7 +139,7 @@ async def test_consent_pulls_the_account_and_gives_it_back(telegram: FakeTelegra
     # Back with its campaign, which never lost its claim.
     assert not _account_owner.is_lent("caster")
     assert (_account_owner.owner_of("caster"), _account_owner.holder_of("caster")) == (
-        "masstagging",
+        "chat_broadcast",
         "camp-1",
     )
 
@@ -154,7 +155,9 @@ async def test_a_failing_search_still_gives_the_account_back(telegram: FakeTeleg
 
     telegram.during = boom
     with pytest.raises(RuntimeError):
-        await pool_fill.find_channels(_REQUEST.model_copy(update={"pull_account_id": "caster"}))
+        await pool_fill.find_channels(
+            _REQUEST.model_copy(update={"pull_account_id": "caster", "pull_busy_with": BUSY})
+        )
 
     assert not _account_owner.is_lent("caster")
     assert _account_owner.owner_of("caster") == "chat_broadcast"
@@ -269,3 +272,51 @@ async def test_no_topics_and_no_known_interests_means_no_search(telegram: FakeTe
 
     assert result.status == "no_topics"
     assert telegram.reads == []
+
+
+@pytest.mark.asyncio
+async def test_consent_for_other_work_is_asked_again(telegram: FakeTelegram) -> None:
+    await seed_account("caster")
+    assert _account_owner.try_claim("caster", "neuroshilling", "camp-1") is None
+
+    # The operator agreed while it was broadcasting; it now runs a neuroshilling dialogue.
+    result = await pool_fill.find_channels(
+        _REQUEST.model_copy(update={"pull_account_id": "caster", "pull_busy_with": BUSY})
+    )
+
+    assert result.status == "needs_consent"
+    assert result.pull_candidate is not None
+    assert result.pull_candidate.busy_with == "neuroshilling"
+    assert telegram.reads == []
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_message_account_is_never_taken(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await seed_account("sender")
+
+    async def bulk() -> set[str]:
+        return {"sender"}
+
+    monkeypatch.setattr(_pool_accounts, "_bulk_accounts", bulk)
+    result = await pool_fill.find_channels(_REQUEST)
+
+    assert result.status == "no_search_account"
+    assert telegram.reads == []
+
+
+@pytest.mark.asyncio
+async def test_a_crashed_search_still_rests_the_language(telegram: FakeTelegram) -> None:
+    await seed_account("searcher")
+
+    async def boom(_account_id: str) -> None:
+        msg = "gateway crashed"
+        raise RuntimeError(msg)
+
+    telegram.during = boom
+    with pytest.raises(RuntimeError):
+        await pool_fill.find_channels(_REQUEST)
+
+    rows = await list_channel_searches_since(NOW - timedelta(days=1))
+    assert [r.status for r in rows] == ["failed"]

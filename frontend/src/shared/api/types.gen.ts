@@ -5636,6 +5636,10 @@ export type PoolFillRequest = {
    * Pull Account Id
    */
   pull_account_id?: string | null;
+  /**
+   * Pull Busy With
+   */
+  pull_busy_with?: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging' | null;
 };
 
 /**

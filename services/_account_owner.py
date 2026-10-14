@@ -57,6 +57,7 @@ for state that is worth less than the ceremony.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Literal
 
 Owner = Literal["warming", "neuroshilling", "chat_broadcast", "user_parser", "masstagging"]
@@ -68,7 +69,8 @@ SEARCH_LOAN: SearchLoan = "channel_search"
 # account_id -> (owner, holder)
 _OWNED: dict[str, tuple[Owner, str]] = {}
 # account_id -> the pool search borrowing it, kept beside ``_OWNED``.
-_LENT: dict[str, str] = {}
+# The event is set when the loan ends, for a caller that must wait for it.
+_LENT: dict[str, tuple[str, asyncio.Event]] = {}
 
 
 def owner_of(account_id: str) -> Owner | None:
@@ -91,19 +93,27 @@ def lend(account_id: str, holder: str) -> bool:
     """
     if account_id in _LENT:
         return False
-    _LENT[account_id] = holder
+    _LENT[account_id] = (holder, asyncio.Event())
     return True
 
 
 def give_back(account_id: str, holder: str) -> None:
     """End this search's loan, only if this search still has it."""
-    if _LENT.get(account_id) == holder:
+    loan = _LENT.get(account_id)
+    if loan is not None and loan[0] == holder:
         del _LENT[account_id]
+        loan[1].set()
+
+
+def loan_end(account_id: str) -> asyncio.Event | None:
+    """Set when the search borrowing this account gives it back; ``None`` when none does."""
+    loan = _LENT.get(account_id)
+    return None if loan is None else loan[1]
 
 
 def lent() -> dict[str, str]:
     """A snapshot of ``account_id -> search holder`` for the accounts being searched with."""
-    return dict(_LENT)
+    return {account_id: loan[0] for account_id, loan in _LENT.items()}
 
 
 def try_claim(account_id: str, owner: Owner, holder: str) -> Owner | SearchLoan | None:

@@ -106,7 +106,9 @@ async def test_with_no_free_account_it_asks_once_and_takes_nothing(
     assert request.language == "es"
 
     # The operator agrees to pull one: the search runs and the request is answered.
-    pulled = await pool_fill.find_channels(PoolFillRequest(language="es", pull_account_id="caster"))
+    pulled = await pool_fill.find_channels(
+        PoolFillRequest(language="es", pull_account_id="caster", pull_busy_with="chat_broadcast")
+    )
     assert pulled.status == "ok"
     assert await pending_refill_request(["es"]) is None
     assert _account_owner.owner_of("caster") == "chat_broadcast"

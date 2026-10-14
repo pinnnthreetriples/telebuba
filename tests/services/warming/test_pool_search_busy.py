@@ -18,13 +18,18 @@ from core.config import settings
 from schemas._warming_pool import PoolFillRequest
 from schemas.telegram_actions import GetUserProfile
 from services import _account_owner
+from services.accounts import lifecycle
 from services.chat_broadcast import _runtime as broadcast_runtime
 from services.chat_broadcast import _seams as broadcast_seams
+from services.masstagging import _runtime as masstagging_runtime
 from services.masstagging import _seams as masstagging_seams
 from services.neurocomment import _discovery_pool, _gates
 from services.neurocomment import _seams as neurocomment_seams
 from services.neurocomment import _state as nc_state
+from services.neuroshilling import _runtime as neuroshilling_runtime
 from services.neuroshilling import _seams as neuroshilling_seams
+from services.neuroshilling.campaigns import NeuroshillingConflictError
+from services.user_parser import _pool as parser_pool
 from services.user_parser import _seams as parser_seams
 from services.warming import _seams, pool_fill
 from tests.services.warming._pool_support import FakeTelegram, seed_account
@@ -114,14 +119,35 @@ async def test_every_feature_waits_for_the_search_to_send(
 
 
 @pytest.mark.asyncio
-async def test_a_campaign_claims_the_account_only_after_the_search(search: _Search) -> None:
-    claim = asyncio.create_task(broadcast_runtime.claim_free("camp-1", ["acc-x"]))
-    await asyncio.sleep(0.05)
-    assert not claim.done()
+async def test_campaign_starts_skip_or_refuse_the_account_without_waiting(search: _Search) -> None:
+    # Broadcast and masstagging leave a lent account out; neuroshilling refuses the roster;
+    # the user parser counts it as held. None of them waits out the search's lock.
+    assert await broadcast_runtime.claim_free("camp-1", ["acc-x"]) == []
+    assert await masstagging_runtime.claim_free("camp-2", ["acc-x"]) == []
+    with pytest.raises(NeuroshillingConflictError):
+        await neuroshilling_runtime._claim_accounts("camp-3", ["acc-x"])
+    assert parser_pool._held("acc-x", cast("Any", _ParserFleet()))
 
     search.release.set()
     await cast("asyncio.Task[object]", search.task)
-    assert await claim == ["acc-x"]
+    assert await broadcast_runtime.claim_free("camp-1", ["acc-x"]) == ["acc-x"]
+
+
+@pytest.mark.asyncio
+async def test_a_delete_waits_for_the_search_outside_the_global_lock(search: _Search) -> None:
+    waiter = asyncio.create_task(lifecycle._wait_for_channel_search("acc-x"))
+    await asyncio.sleep(0.05)
+    assert not waiter.done()
+
+    search.release.set()
+    await cast("asyncio.Task[object]", search.task)
+    await asyncio.wait_for(waiter, 1)
+
+
+class _ParserFleet:
+    listener_running = False
+    listener_id = None
+    warming: frozenset[str] = frozenset()
 
 
 @pytest.mark.asyncio

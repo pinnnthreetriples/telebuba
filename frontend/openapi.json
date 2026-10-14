@@ -30366,6 +30366,23 @@
               }
             ],
             "title": "Pull Account Id"
+          },
+          "pull_busy_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "neurocomment",
+                  "neuroshilling",
+                  "chat_broadcast",
+                  "masstagging"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pull Busy With"
           }
         },
         "type": "object",

@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from core.db import list_accounts, list_warming_states
+from core.repositories.bulk_runs import list_bulk_run_accounts, list_live_bulk_runs
 from core.repositories.neurocomment import list_active_campaign_account_names
 from schemas._warming_pool import PoolSearchCandidate
 from schemas.warming import is_warming
@@ -60,8 +61,19 @@ class _Fleet:
     accounts: dict[str, AccountRead]
     states: dict[str, WarmingStateRecord]
     commenting: set[str]
+    # Accounts of a live bulk message run: it sends without the lifecycle lock, so
+    # nothing would pause it during a search — they are never taken, not even pulled.
+    bulk: set[str]
     listener: str | None
     now: datetime
+
+
+async def _bulk_accounts() -> set[str]:
+    return {
+        item.account_id
+        for run in await list_live_bulk_runs()
+        for item in await list_bulk_run_accounts(run.id)
+    }
 
 
 async def _fleet() -> _Fleet:
@@ -69,6 +81,7 @@ async def _fleet() -> _Fleet:
         accounts={a.account_id: a for a in (await list_accounts()).accounts},
         states={record.account_id: record for record in await list_warming_states()},
         commenting=set(await list_active_campaign_account_names()),
+        bulk=await _bulk_accounts(),
         listener=await running_listener_account_id(),
         now=datetime.now(UTC),
     )
@@ -87,6 +100,7 @@ def _usable(account_id: str, fleet: _Fleet) -> bool:
     owner = _account_owner.owner_of(account_id)
     return (
         account_id != fleet.listener
+        and account_id not in fleet.bulk
         and owner not in {"warming", "user_parser"}
         and not _account_owner.is_lent(account_id)
         and not _discovery_state.account_busy(account_id)
