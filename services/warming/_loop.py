@@ -7,6 +7,7 @@ are reached via :mod:`services.warming._seams`.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.db import fetch_warming_state
@@ -20,7 +21,8 @@ from services.warming._fleet import _is_quiet_day
 from services.warming._flood_memory import remember_flood
 from services.warming._local_day import _next_local_wake
 from services.warming._reservation import _reconcile_reservation, _Reservation
-from services.warming._state import _set_state
+from services.warming._snapshot import refresh_after_cycle
+from services.warming._state import READ_CURRENT, _set_state
 from services.warming._transitions import (
     _calculate_next_run,
     _matches_active_run,
@@ -35,7 +37,6 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from datetime import datetime
 
     from schemas.warming import ActivityPersona, WarmingState
     from services.warming._steps import _ChannelTally
@@ -185,10 +186,15 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     if latest is not None and latest.state == "idle":
         return result
 
+    # Inside a cycle, score it from the snapshot with what the cycle may have changed
+    # re-read; a direct call (no snapshot) reads every signal as before.
+    snapshot = await refresh_after_cycle(account_id, flooded=result.status == "peer_flood")
+    now = datetime.now(UTC)
     new_phase, phase_entered_iso, phase_event = await _resolve_phase_after_cycle(
         account_id,
         age_hours,
         latest,
+        snapshot.trust(now, latest) if snapshot is not None else None,
     )
     write = await _set_state(
         account_id,
@@ -211,11 +217,15 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
         expected_run_id=run_id,
         current_phase=new_phase,
         phase_entered_at=phase_entered_iso,
+        # Read just above, and the CAS below still guards the write.
+        current=latest if snapshot is not None else READ_CURRENT,
     )
     # Count the cycle on its day only when the write landed: a cycle a newer
     # generation retired must leave no trace in the history either.
     if write.applied:
-        await record_cycle_stats(result, new_phase)
+        # The day's trust is scored from the row as just written (its flood stamp).
+        stats_trust = snapshot.trust(now, write.record) if snapshot is not None else None
+        await record_cycle_stats(result, new_phase, trust=stats_trust)
     # Announce the phase transition only once the write actually landed: if the
     # CAS rejected it (a newer generation took the row between the read above and
     # this write), the transition never happened, so a logged event would be a

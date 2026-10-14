@@ -23,6 +23,7 @@ from schemas.warming import (
 )
 from services.warming._cadence import persona_visits
 from services.warming._real_age import dm_open_after_hours, shifted_age_hours
+from services.warming._tuning import effective_tuning
 
 if TYPE_CHECKING:
     from random import Random
@@ -90,9 +91,10 @@ def persona_dm_probability(persona: ActivityPersona) -> float:
     """Per-session probability the account starts an inter-account DM.
 
     Layered on top of the age + trust + settings DM gate — the persona only
-    decides *how often* to chat once chatting is already allowed.
+    decides *how often* to chat once chatting is already allowed. The pace card's
+    preset may scale it (``_tuning``); «Обычно» leaves it as configured.
     """
-    return settings.warming.persona_dm_probability[persona]
+    return effective_tuning().persona_dm_probability[persona]
 
 
 def _active_window_hours() -> float:
@@ -260,7 +262,8 @@ def compute_intensity(  # noqa: PLR0913 - keyword-only stamps of one account row
     factor, dm_until = recovery_limits(recovered_at, now)
     started = _parse_utc(started_at)
     warming_hours = (now - started).total_seconds() / _SECONDS_PER_HOUR if started else 0.0
-    cap = warm.phase_daily_cap[phase]
+    # The pace card's preset (5.2) picks the per-phase cap; «Обычно» is the config's.
+    cap = effective_tuning().phase_daily_cap[phase]
     # 0 means "no cap" and stays so; a real cap never ramps below one action.
     daily_cap = max(1, round(cap * factor)) if cap > 0 else cap
     return WarmingIntensity(

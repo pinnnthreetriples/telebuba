@@ -180,6 +180,9 @@ _warming_settings = Table(
     # Fleet DM breaker: DMs are paused until this instant; DM spam blocks before it
     # are spent (a lifted or expired pause does not re-trip on them). NULL = never.
     Column("dm_paused_until", String, nullable=True),
+    # The pace card's preset (5.2) and the last «Свой» limits as JSON; NULL = «Обычно».
+    Column("tuning_preset", String, nullable=True),
+    Column("tuning_custom", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(

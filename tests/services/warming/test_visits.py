@@ -15,7 +15,6 @@ from core.db import (
     save_warming_settings,
     upsert_warming_state,
 )
-from core.repositories.warming_marks import store_visit_plan
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
 from schemas._warming_visits import VisitPlan, VisitStep
 from schemas.accounts import AccountCreate
@@ -251,11 +250,10 @@ async def test_stories_and_a_free_read_may_open_the_visit(monkeypatch: pytest.Mo
 async def test_the_progress_follows_the_visits_own_order(monkeypatch: pytest.MonkeyPatch) -> None:
     writes: list[str] = []
 
-    async def set_state(_account_id: str, _state: str, **kwargs: object) -> object:
-        writes.append(str(kwargs["last_action"]))
-        return None
+    async def store_progress(_account_id: str, step: str, *_args: object) -> None:
+        writes.append(step)
 
-    monkeypatch.setattr(_loop, "_set_state", set_state)
+    monkeypatch.setattr(_iteration, "store_cycle_progress", store_progress)
     reporter = _iteration._ProgressReporter(
         "acc-1", None, ["set_online", "stories", "join", "read", "react", "send_dm"]
     )
@@ -265,20 +263,34 @@ async def test_the_progress_follows_the_visits_own_order(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_the_visit_is_stored_for_the_card() -> None:
+async def test_the_visit_is_stored_with_the_booking_for_the_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_iteration, "choose_visit_kind", lambda *_a, **_k: "glance")
     await create_account(AccountCreate(account_id="acc-1"))
-    await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="active", reservation_token="tok")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+    plan = _iteration._IterationPlan(
+        age_hours=500.0,
+        effective_cap=15,
+        daily=(0, "2026-06-13"),
+        remaining=15,
+        dm_allowed=False,
+        persona="normal",
     )
-    await store_visit_plan("acc-1", "glance", ["set_online", "read"], "other-token")
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.visit_kind is None
-    await store_visit_plan("acc-1", "glance", ["set_online", "read"], "tok")
+
+    reserved = await _iteration._reserve_iteration("acc-1", plan, None)
+
+    assert isinstance(reserved, _iteration._ReservedIteration)
+    assert reserved.visit is not None
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.visit_kind == "glance"
-    assert record.cycle_plan == ["set_online", "read"]
+    assert record.cycle_plan == reserved.visit.steps
+    # Any later write leaves the booking's marks alone.
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="sleeping"))
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert (record.visit_kind, record.cycle_plan) == ("glance", reserved.visit.steps)
 
 
 @pytest.mark.asyncio

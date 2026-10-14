@@ -41,6 +41,7 @@ from services.warming._phases import (  # noqa: F401 - re-exported for the pacin
     persona_next_run_seconds,
     persona_reaction_probability,
 )
+from services.warming._snapshot import current_snapshot
 
 if TYPE_CHECKING:
     from random import Random
@@ -209,7 +210,13 @@ def warming_days_since(
 
 
 async def _account_tz(account_id: str) -> str | None:
-    """The account's IANA timezone (from its phone number), or ``None``."""
+    """The account's IANA timezone (from its phone number), or ``None``.
+
+    Inside a running cycle the account comes from the cycle's snapshot (5.1).
+    """
+    snapshot = current_snapshot(account_id)
+    if snapshot is not None:
+        return snapshot.tz
     account = await fetch_account(account_id)
     return timezone_for_phone(account.phone) if account else None
 

@@ -25,6 +25,8 @@ edges:
 3. Persist through the warming repository; keep timing injectable through `services/warming/_seams.py`.
 4. Classify/log failures so tasks cannot die silently.
 5. Test normal behavior, persistence/restart, failure and cancellation. Keep task ownership until terminal, fence every Telegram dispatch with the runtime generation, and book attempts immediately before dispatch so unknown outcomes remain spent.
-6. Run relevant backend gates.
+6. On the cycle path read nothing new per step: inside `run_loop_iteration` the steps take settings, the row, account, spam, trust inputs, channels and joined channels from `_snapshot.current_snapshot` (a call outside an iteration falls back to reading). The settle re-reads only what a cycle can change; progress ticks are narrow UPDATEs. `test_cycle_db_budget.py` pins the statements one cycle sends.
+7. Per-phase daily caps, in-visit pauses and persona DM chances follow the «Темп прогрева» preset: read them through `_tuning.effective_tuning`, never `settings.warming` directly. «Обычно» hands back the configured objects; phase bounds stay in `.env`.
+8. Run relevant backend gates.
 
 Verify: no API/UI policy in warming; Telegram uses typed actions; task stop/reconcile is bounded; restart/promotion/handoff/delete cannot cross a non-quiescent task; board/read paths stay bulk-loaded (console rows and the survival badge are pure functions over the loaded rows). Runtime invariants live in `context/runtime-warming.md`.

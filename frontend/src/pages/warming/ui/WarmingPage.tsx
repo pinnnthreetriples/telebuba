@@ -43,6 +43,7 @@ import {
   HandoffModal,
   type HandoffMode,
   needsGeoConsent,
+  PaceCard,
   readinessReasonKey,
   SpamRetryModal,
   type StartDialogChoice,
@@ -709,6 +710,8 @@ export function WarmingPage() {
               карточек, а тумблерам левая колонка мала — 340px не держат и двух
               столбцов. */}
           <ActionTuningCard />
+          {/* Темп всего прогрева (5.2) — тоже общий, поэтому рядом с тумблерами. */}
+          <PaceCard />
         </div>
       </div>
 

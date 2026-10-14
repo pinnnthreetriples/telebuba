@@ -11925,6 +11925,154 @@
         }
       }
     },
+    "/api/v1/warming/tuning": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warming Tuning",
+        "description": "The pace in force: the preset, its per-phase limits and the visits they make.",
+        "operationId": "getWarmingTuning",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingTuning"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Update Warming Tuning",
+        "description": "Pick \u00ab\u041e\u0441\u0442\u043e\u0440\u043e\u0436\u043d\u043e\u00bb, \u00ab\u041e\u0431\u044b\u0447\u043d\u043e\u00bb, \u00ab\u0411\u044b\u0441\u0442\u0440\u043e\u00bb or \u00ab\u0421\u0432\u043e\u0439\u00bb with its own limits.",
+        "operationId": "updateWarmingTuning",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmingTuningUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingTuning"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search": {
       "post": {
         "tags": [
@@ -32484,6 +32632,38 @@
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
       },
+      "TuningWarning": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "low_daily_cap",
+            "title": "Code"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "intro",
+              "settling",
+              "warming",
+              "active",
+              "warmed"
+            ],
+            "title": "Phase"
+          },
+          "daily_cap": {
+            "type": "integer",
+            "title": "Daily Cap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "phase",
+          "daily_cap"
+        ],
+        "title": "TuningWarning",
+        "description": "Allowed but worth a second look \u2014 the UI words it; ``low_daily_cap`` for now."
+      },
       "TwoFactorStatusResult": {
         "properties": {
           "has_password": {
@@ -35244,6 +35424,140 @@
         "type": "object",
         "title": "WarmingSummary",
         "description": "Fleet-level roll-up shown at the top of the warming page."
+      },
+      "WarmingTuning": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "careful",
+              "normal",
+              "fast",
+              "custom"
+            ],
+            "title": "Preset"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingTuningCustom"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daily_caps": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Daily Caps"
+          },
+          "pause_factor": {
+            "type": "number",
+            "title": "Pause Factor"
+          },
+          "dm_factor": {
+            "type": "number",
+            "title": "Dm Factor"
+          },
+          "cadence": {
+            "items": {
+              "$ref": "#/components/schemas/CadencePreview"
+            },
+            "type": "array",
+            "title": "Cadence"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/TuningWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset",
+          "daily_caps",
+          "pause_factor",
+          "dm_factor"
+        ],
+        "title": "WarmingTuning",
+        "description": "The pace in force: the preset, what it resolves to and the visits it makes."
+      },
+      "WarmingTuningCustom": {
+        "properties": {
+          "daily_caps": {
+            "additionalProperties": {
+              "type": "integer",
+              "maximum": 80.0,
+              "minimum": 1.0
+            },
+            "propertyNames": {
+              "enum": [
+                "intro",
+                "settling",
+                "warming",
+                "active",
+                "warmed"
+              ]
+            },
+            "type": "object",
+            "title": "Daily Caps"
+          },
+          "pause_factor": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.5,
+            "title": "Pause Factor",
+            "default": 1.0
+          },
+          "dm_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Dm Factor",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "daily_caps"
+        ],
+        "title": "WarmingTuningCustom",
+        "description": "\u00ab\u0421\u0432\u043e\u0439\u00bb: the operator's own limit per phase and the pace around it."
+      },
+      "WarmingTuningUpdate": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "careful",
+              "normal",
+              "fast",
+              "custom"
+            ],
+            "title": "Preset"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingTuningCustom"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset"
+        ],
+        "title": "WarmingTuningUpdate",
+        "description": "``PUT /warming/tuning``: pick a preset; \u00ab\u0421\u0432\u043e\u0439\u00bb brings its limits along."
       },
       "WebWindowCount": {
         "properties": {

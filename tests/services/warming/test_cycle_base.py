@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from core.db import create_account, fetch_warming_state, upsert_warming_state
-from core.repositories.warming_marks import store_cycle_base
+from schemas._warming_visits import CycleMarks
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 from services import warming
@@ -45,17 +45,30 @@ async def test_the_booking_stores_the_settled_base_and_the_board_shows_it() -> N
 
 @pytest.mark.asyncio
 async def test_an_older_booking_cannot_write_its_base_over_a_newer_one() -> None:
+    """The marks ride the booking's own CAS: a retired generation's booking is refused whole."""
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="active", reservation_token="newer"),
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            run_id="newer",
+            reservation_token="newer",
+            cycle_marks=CycleMarks(base_actions=7, visit_kind="binge", steps=["set_online"]),
+        ),
     )
 
-    await store_cycle_base("acc-1", 3, "older")
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.cycle_base_actions is None
+    stale = await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            run_id="older",
+            expected_run_id="older",
+            reservation_token="older",
+            cycle_marks=CycleMarks(base_actions=3, visit_kind="glance", steps=["set_online"]),
+        ),
+    )
 
-    await store_cycle_base("acc-1", 7, "newer")
+    assert stale.applied is False
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.cycle_base_actions == 7
+    assert (record.cycle_base_actions, record.visit_kind) == (7, "binge")

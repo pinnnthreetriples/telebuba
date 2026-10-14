@@ -3340,6 +3340,33 @@
         }
       }
     },
+    "pace": {
+      "title": "Warming pace",
+      "subtitle": "How many actions a day and how long the pauses are, for every account — no .env edit",
+      "preset": {
+        "careful": "Careful",
+        "normal": "Normal",
+        "fast": "Fast",
+        "custom": "Custom"
+      },
+      "hint": {
+        "careful": "Lower limits, longer pauses, half as many direct messages",
+        "normal": "As configured on the server",
+        "fast": "Higher limits, shorter pauses",
+        "custom": "Your own limit for each phase; it may not go down from phase to phase"
+      },
+      "col": {
+        "phase": "Phase",
+        "limit": "Daily limit"
+      },
+      "visitsCaption": "Visits a day by user type",
+      "factors": "Pauses ×{{pause}} · direct messages ×{{dm}}",
+      "lowCap": "Only {{cap}} actions a day in the «{{phase}}» phase — warming will be very slow.",
+      "limitLabel": "Daily limit, «{{phase}}» phase",
+      "invalid": "A limit is a whole number from 1 to 80, not below the phase before it.",
+      "save": "Save my limits",
+      "cancel": "Cancel"
+    },
     "days": {
       "title": "Warm up account",
       "subtitle": "{{phone}} · choose the warming length",

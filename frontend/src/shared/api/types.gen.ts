@@ -6794,6 +6794,26 @@ export type TdataImportResult = {
 };
 
 /**
+ * TuningWarning
+ *
+ * Allowed but worth a second look — the UI words it; ``low_daily_cap`` for now.
+ */
+export type TuningWarning = {
+  /**
+   * Code
+   */
+  code: 'low_daily_cap';
+  /**
+   * Phase
+   */
+  phase: 'intro' | 'settling' | 'warming' | 'active' | 'warmed';
+  /**
+   * Daily Cap
+   */
+  daily_cap: number;
+};
+
+/**
  * TwoFactorStatusResult
  *
  * Gateway output for ``GetTwoFactorStatus`` — booleans plus the public hint.
@@ -8237,6 +8257,76 @@ export type WarmingSummary = {
    * Trust Risk
    */
   trust_risk?: number;
+};
+
+/**
+ * WarmingTuning
+ *
+ * The pace in force: the preset, what it resolves to and the visits it makes.
+ */
+export type WarmingTuning = {
+  /**
+   * Preset
+   */
+  preset: 'careful' | 'normal' | 'fast' | 'custom';
+  custom?: WarmingTuningCustom | null;
+  /**
+   * Daily Caps
+   */
+  daily_caps: {
+    [key: string]: number;
+  };
+  /**
+   * Pause Factor
+   */
+  pause_factor: number;
+  /**
+   * Dm Factor
+   */
+  dm_factor: number;
+  /**
+   * Cadence
+   */
+  cadence?: Array<CadencePreview>;
+  /**
+   * Warnings
+   */
+  warnings?: Array<TuningWarning>;
+};
+
+/**
+ * WarmingTuningCustom
+ *
+ * «Свой»: the operator's own limit per phase and the pace around it.
+ */
+export type WarmingTuningCustom = {
+  /**
+   * Daily Caps
+   */
+  daily_caps: {
+    [key: string]: number;
+  };
+  /**
+   * Pause Factor
+   */
+  pause_factor?: number;
+  /**
+   * Dm Factor
+   */
+  dm_factor?: number;
+};
+
+/**
+ * WarmingTuningUpdate
+ *
+ * ``PUT /warming/tuning``: pick a preset; «Свой» brings its limits along.
+ */
+export type WarmingTuningUpdate = {
+  /**
+   * Preset
+   */
+  preset: 'careful' | 'normal' | 'fast' | 'custom';
+  custom?: WarmingTuningCustom | null;
 };
 
 /**
@@ -13642,6 +13732,73 @@ export type RejectWarmingChannelProposalsResponses = {
 
 export type RejectWarmingChannelProposalsResponse =
   RejectWarmingChannelProposalsResponses[keyof RejectWarmingChannelProposalsResponses];
+
+export type GetWarmingTuningData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/tuning';
+};
+
+export type GetWarmingTuningErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetWarmingTuningError = GetWarmingTuningErrors[keyof GetWarmingTuningErrors];
+
+export type GetWarmingTuningResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingTuning;
+};
+
+export type GetWarmingTuningResponse = GetWarmingTuningResponses[keyof GetWarmingTuningResponses];
+
+export type UpdateWarmingTuningData = {
+  body: WarmingTuningUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/tuning';
+};
+
+export type UpdateWarmingTuningErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateWarmingTuningError = UpdateWarmingTuningErrors[keyof UpdateWarmingTuningErrors];
+
+export type UpdateWarmingTuningResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingTuning;
+};
+
+export type UpdateWarmingTuningResponse =
+  UpdateWarmingTuningResponses[keyof UpdateWarmingTuningResponses];
 
 export type StartCampaignDiscoveryData = {
   body: DiscoverySearchRequest;

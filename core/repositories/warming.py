@@ -348,6 +348,12 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # unconditionally would have every unrelated write NULL out the token the
         # hand-back guards on, which is the stranded day all over again.
         insert_values["reservation_token"] = data.reservation_token
+    if data.cycle_marks is not None:
+        # Written with the booking, under its CAS, so the card never shows one
+        # cycle's plan on top of another's budget.
+        insert_values["cycle_base_actions"] = data.cycle_marks.base_actions
+        insert_values["visit_kind"] = data.cycle_marks.visit_kind
+        insert_values["cycle_plan"] = ",".join(data.cycle_marks.steps)
     if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
         insert_values["warmed_days"] = data.warmed_days
         insert_values["last_warmed_date"] = data.last_warmed_date
@@ -383,15 +389,15 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         _warming_account_state.c.account_id == data.account_id,
     )
     with _get_engine().begin() as connection:
-        result = connection.execute(stmt)
-        # SQLite reports rowcount=1 for both the INSERT branch and a matching
-        # ON CONFLICT DO UPDATE; rowcount=0 when the UPDATE's WHERE rejected.
-        applied = result.rowcount > 0
-        # Read the written row back on the *same* connection instead of opening a
-        # fresh one via ``_fetch_warming_state`` — the values (incl. the atomic
-        # ``cycles_completed`` bump) are already committed here, so this drops a
-        # DB round-trip per state write.
-        row = connection.execute(select_stmt).mappings().first()
+        # RETURNING hands back the written row (incl. the atomic ``cycles_completed``
+        # bump) in the same statement: the INSERT branch and a matching ON CONFLICT
+        # DO UPDATE return it, an UPDATE the CAS ``WHERE`` rejected returns nothing.
+        row = connection.execute(stmt.returning(*_warming_account_state.c)).mappings().first()
+        applied = row is not None
+        if row is None:
+            # Rejected: report the row the other generation left, read on the same
+            # connection inside the same transaction.
+            row = connection.execute(select_stmt).mappings().first()
     if row is None:
         msg = f"Warming state was not persisted: {data.account_id}"
         raise RuntimeError(msg)

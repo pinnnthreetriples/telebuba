@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -31,7 +31,9 @@ from services.pacing import human_delay
 from services.warming import _seams
 from services.warming._channel_language import record_read_facts
 from services.warming._phases import _PHASE_ORDER, persona_reaction_probability
+from services.warming._snapshot import JOIN_CAP_WINDOW, current_snapshot
 from services.warming._social_reads import maybe_read_discussion, reaction_chance
+from services.warming._tuning import effective_tuning
 from services.warming.pacing import (
     _FAILURE_STATUSES,
     _HALT_STATUSES,
@@ -56,10 +58,6 @@ if TYPE_CHECKING:
     # mid-cycle. None = no-op (every non-loop caller and most tests).
     _OnStep = Callable[[str], Awaitable[None]]
 
-# The join cap is a rolling day, not a calendar one: a join at 23:59 still counts
-# against the next morning's cycles.
-_JOIN_CAP_WINDOW = timedelta(hours=24)
-
 
 def _human_delay(min_seconds: float, max_seconds: float) -> float:
     """Warming's human-like pause — the shared draw, bound to warming's seam and shape.
@@ -79,6 +77,10 @@ def _human_delay(min_seconds: float, max_seconds: float) -> float:
 
 
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:
+    """Sleep one human pause, stretched or shortened by the pace card's preset (5.2)."""
+    factor = effective_tuning().pause_factor
+    if factor != 1.0:  # «Обычно» draws from the configured window untouched.
+        min_seconds, max_seconds = min_seconds * factor, max_seconds * factor
     await asyncio.sleep(_human_delay(min_seconds, max_seconds))
 
 
@@ -96,12 +98,28 @@ async def _joins_left_today(account_id: str, age_phase: WarmingPhase) -> int:
     old account sits in a lower phase than its age says).
     """
     phase = age_phase
-    state = await fetch_warming_state(account_id)
+    snapshot = current_snapshot(account_id)
+    # The cycle's snapshot holds the row as the gates read it: only the settle writes
+    # ``current_phase``, and the joined rows change only through this walk.
+    state = snapshot.record if snapshot else await fetch_warming_state(account_id)
     if state is not None and state.current_phase is not None:
         phase = min(age_phase, state.current_phase, key=_PHASE_ORDER.index)
     cap = settings.warming.phase_joins_per_day_max[phase]
-    joined = await count_joins_since(account_id, datetime.now(UTC) - _JOIN_CAP_WINDOW)
+    since = datetime.now(UTC) - JOIN_CAP_WINDOW
+    joined = snapshot.joins_since(since) if snapshot else await count_joins_since(account_id, since)
     return max(0, cap - joined)
+
+
+async def _is_joined(account_id: str, channel: str) -> bool:
+    """Joined and not left — from the cycle's snapshot when one runs (5.1).
+
+    The walk visits each chosen channel once, so a join earlier in this walk never
+    has to be seen here again.
+    """
+    snapshot = current_snapshot(account_id)
+    if snapshot is not None:
+        return snapshot.is_joined(channel)
+    return await is_channel_joined(account_id, channel)
 
 
 async def _observe_read(account_id: str, channel: str, facts: ReadChannelFacts | None) -> None:
@@ -317,7 +335,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     for channel in chosen:
         if not _can_attempt():
             break
-        if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
+        if secret.join_enabled and not await _is_joined(account_id, channel.channel):
             if joins_left <= 0:
                 continue
             joins_left -= 1

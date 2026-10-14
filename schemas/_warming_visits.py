@@ -36,6 +36,18 @@ class VisitPlan(BaseModel):
     linger_seconds: float = Field(default=0.0, ge=0.0)
 
 
+class CycleMarks(BaseModel):
+    """What a booked cycle shows on its card, written with its booking (item 5.1).
+
+    ``base_actions`` is the day's settled count the booking sits on (``_console``);
+    the visit's kind and step order drive the card's progress rail.
+    """
+
+    base_actions: int = Field(ge=0)
+    visit_kind: VisitKind
+    steps: list[VisitStep] = Field(default_factory=list)
+
+
 class CadencePreview(BaseModel):
     """Real visit numbers for one persona in one phase, for the start dialog's hint."""
 

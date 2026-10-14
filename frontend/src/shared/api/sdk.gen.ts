@@ -295,6 +295,9 @@ import type {
   GetWarmingSurvivalData,
   GetWarmingSurvivalErrors,
   GetWarmingSurvivalResponses,
+  GetWarmingTuningData,
+  GetWarmingTuningErrors,
+  GetWarmingTuningResponses,
   HandoffToNeurocommentData,
   HandoffToNeurocommentErrors,
   HandoffToNeurocommentResponses,
@@ -658,6 +661,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
+  UpdateWarmingTuningData,
+  UpdateWarmingTuningErrors,
+  UpdateWarmingTuningResponses,
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoErrors,
   UploadChatBroadcastPhotoResponses,
@@ -2612,6 +2618,40 @@ export const rejectWarmingChannelProposals = <ThrowOnError extends boolean = fal
     ThrowOnError
   >({
     url: '/api/v1/warming/channels/proposals/reject',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Warming Tuning
+ *
+ * The pace in force: the preset, its per-phase limits and the visits they make.
+ */
+export const getWarmingTuning = <ThrowOnError extends boolean = false>(
+  options?: Options<GetWarmingTuningData, ThrowOnError>,
+): RequestResult<GetWarmingTuningResponses, GetWarmingTuningErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetWarmingTuningResponses, GetWarmingTuningErrors, ThrowOnError>({
+    url: '/api/v1/warming/tuning',
+    ...options,
+  });
+
+/**
+ * Update Warming Tuning
+ *
+ * Pick «Осторожно», «Обычно», «Быстро» or «Свой» with its own limits.
+ */
+export const updateWarmingTuning = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateWarmingTuningData, ThrowOnError>,
+): RequestResult<UpdateWarmingTuningResponses, UpdateWarmingTuningErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateWarmingTuningResponses,
+    UpdateWarmingTuningErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/tuning',
     ...options,
     headers: {
       'Content-Type': 'application/json',

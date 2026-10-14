@@ -9,6 +9,7 @@ from fastapi import status as http_status
 
 from api.errors import error_responses
 from api.v1._warming_pool import pool_router
+from api.v1._warming_tuning import tuning_router
 from core.config import settings
 from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
@@ -275,3 +276,5 @@ async def get_warming_survival(cohort: SurvivalCohortKind = "week") -> SurvivalR
 
 # «Найти каналы» and the approval of its proposals (Прогрев 2.0, item 4.5).
 router.include_router(pool_router)
+# «Темп прогрева»: the pace presets (Прогрев 2.0, item 5.2).
+router.include_router(tuning_router)

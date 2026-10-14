@@ -39,10 +39,7 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
-from schemas._warming_visits import (  # noqa: TC001 - pydantic resolves them at runtime.
-    CadencePreview,
-    VisitPlan,
-)
+from schemas._warming_visits import CadencePreview, CycleMarks, VisitPlan  # noqa: TC001
 from schemas.device_fingerprint import DeviceType, desktop_only
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
@@ -244,6 +241,8 @@ class WarmingStateWrite(BaseModel):
     # carry the token without every caller knowing it exists; the hand-back clears
     # it in its own statement.
     reservation_token: str | None = None
+    # Booking-only too: the card's marks of the booked cycle, written with its token.
+    cycle_marks: CycleMarks | None = None
     # ``None`` leaves both worked-day columns alone; a value (a fresh stint's 0)
     # writes it with ``last_warmed_date``.
     warmed_days: int | None = Field(default=None, ge=0)

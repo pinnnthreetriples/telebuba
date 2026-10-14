@@ -104,6 +104,7 @@ import {
   getWarmingBoard,
   getWarmingSettings,
   getWarmingSurvival,
+  getWarmingTuning,
   handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
@@ -226,6 +227,7 @@ import {
   updateOutreachLimits,
   updateOutreachPreset,
   updateWarmingSettings,
+  updateWarmingTuning,
   uploadChatBroadcastPhoto,
   uploadMasstaggingMedia,
   uploadScheduledMedia,
@@ -514,6 +516,9 @@ import type {
   GetWarmingSurvivalData,
   GetWarmingSurvivalError,
   GetWarmingSurvivalResponse,
+  GetWarmingTuningData,
+  GetWarmingTuningError,
+  GetWarmingTuningResponse,
   HandoffToNeurocommentData,
   HandoffToNeurocommentError,
   HandoffToNeurocommentResponse,
@@ -877,6 +882,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
+  UpdateWarmingTuningData,
+  UpdateWarmingTuningError,
+  UpdateWarmingTuningResponse,
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoError,
   UploadChatBroadcastPhotoResponse,
@@ -4315,6 +4323,62 @@ export const rejectWarmingChannelProposalsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await rejectWarmingChannelProposals({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getWarmingTuningQueryKey = (options?: Options<GetWarmingTuningData>) =>
+  createQueryKey('getWarmingTuning', options);
+
+/**
+ * Get Warming Tuning
+ *
+ * The pace in force: the preset, its per-phase limits and the visits they make.
+ */
+export const getWarmingTuningOptions = (options?: Options<GetWarmingTuningData>) =>
+  queryOptions<
+    GetWarmingTuningResponse,
+    GetWarmingTuningError,
+    GetWarmingTuningResponse,
+    ReturnType<typeof getWarmingTuningQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getWarmingTuning({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getWarmingTuningQueryKey(options),
+  });
+
+/**
+ * Update Warming Tuning
+ *
+ * Pick «Осторожно», «Обычно», «Быстро» or «Свой» with its own limits.
+ */
+export const updateWarmingTuningMutation = (
+  options?: Partial<Options<UpdateWarmingTuningData>>,
+): UseMutationOptions<
+  UpdateWarmingTuningResponse,
+  UpdateWarmingTuningError,
+  Options<UpdateWarmingTuningData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateWarmingTuningResponse,
+    UpdateWarmingTuningError,
+    Options<UpdateWarmingTuningData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateWarmingTuning({
         ...options,
         ...fnOptions,
         throwOnError: true,
