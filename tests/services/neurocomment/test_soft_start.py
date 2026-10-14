@@ -2,7 +2,8 @@
 
 Five days after a «Мягкий старт» hand-off the fleet caps are lowered to the soft ones
 (days 1-2: 2/h, 1 per channel, 5 joins; days 3-5: 4 / 2 / 10) and a per-day comment cap
-ramps 5 → 15. An operator's own override still applies as written.
+ramps 5 → 15. An operator's own override is held under the soft cap too — the lower of
+the two applies — and takes effect as written once the soft period is over.
 """
 
 from __future__ import annotations
@@ -146,14 +147,55 @@ async def test_a_fleet_already_below_the_soft_cap_stays_lower() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_manual_override_still_applies_in_a_soft_start() -> None:
+async def test_a_higher_manual_override_is_held_under_every_soft_cap() -> None:
     fleet = await settings_store.load_settings()
-    override = AccountLimitOverride(account_id="acc-1", max_comments_per_hour=9)
+    override = AccountLimitOverride(
+        account_id="acc-1",
+        max_joins_per_day=40,
+        max_comments_per_hour=9,
+        max_comments_per_channel_per_day=7,
+    )
+
+    early, late, after = (resolve_limits(override, fleet, day) for day in (1, 4, None))
+
+    assert (
+        early.max_joins_per_day,
+        early.max_comments_per_hour,
+        early.max_comments_per_channel_per_day,
+        early.max_comments_per_day,
+    ) == (5, 2, 1, soft_caps(1).comments_per_day)
+    assert (late.max_joins_per_day, late.max_comments_per_hour) == (10, 4)
+    # The soft period over, the override applies as written.
+    assert (
+        after.max_joins_per_day,
+        after.max_comments_per_hour,
+        after.max_comments_per_channel_per_day,
+        after.max_comments_per_day,
+    ) == (40, 9, 7, 0)
+
+
+@pytest.mark.asyncio
+async def test_a_lower_manual_override_wins_over_the_soft_cap() -> None:
+    fleet = await settings_store.load_settings()
+    override = AccountLimitOverride(
+        account_id="acc-1", max_comments_per_hour=1, max_joins_per_day=2
+    )
+
+    caps = resolve_limits(override, fleet, 4)
+
+    assert (caps.max_comments_per_hour, caps.max_joins_per_day) == (1, 2)
+
+
+@pytest.mark.asyncio
+async def test_an_override_of_no_cap_is_still_soft_capped() -> None:
+    fleet = await settings_store.load_settings()
+    override = AccountLimitOverride(
+        account_id="acc-1", max_joins_per_day=0, max_comments_per_channel_per_day=0
+    )
 
     caps = resolve_limits(override, fleet, 1)
 
-    assert caps.max_comments_per_hour == 9
-    assert caps.max_comments_per_day == soft_caps(1).comments_per_day
+    assert (caps.max_joins_per_day, caps.max_comments_per_channel_per_day) == (5, 1)
 
 
 async def _soft_account(account_id: str = "acc-1", *, at: datetime | None = None) -> None:
@@ -176,8 +218,13 @@ async def test_the_join_cap_of_a_soft_account_is_the_soft_one(
 
     assert await account_join_cap("acc-1", 20) == 5
     assert await account_join_cap("acc-old", 20) == 20
+    # An override above the soft cap waits for the soft period; one below it applies.
     await limits.save_account_limits("acc-1", AccountLimitsUpdate(max_joins_per_day=7))
-    assert await account_join_cap("acc-1", 20) == 7
+    assert await account_join_cap("acc-1", 20) == 5
+    await limits.save_account_limits("acc-1", AccountLimitsUpdate(max_joins_per_day=3))
+    assert await account_join_cap("acc-1", 20) == 3
+    await limits.save_account_limits("acc-old", AccountLimitsUpdate(max_joins_per_day=7))
+    assert await account_join_cap("acc-old", 20) == 7
 
 
 @pytest.mark.asyncio
@@ -189,6 +236,25 @@ async def test_the_limits_view_reports_the_soft_caps() -> None:
     assert view is not None
     assert view.comments_per_hour.limit == 2
     assert view.joins.limit == 5
+    assert (view.joins.soft_cap, view.comments_per_hour.soft_cap) == (5, 2)
+    assert view.comments_per_channel_per_day.soft_cap == 1
+
+
+@pytest.mark.asyncio
+async def test_the_limits_view_keeps_the_stored_override_apart_from_the_soft_limit() -> None:
+    await _soft_account()
+    await _soft_account("acc-old", at=datetime.now(UTC) - timedelta(days=6))
+    update = AccountLimitsUpdate(max_comments_per_hour=9)
+
+    view = await limits.save_account_limits("acc-1", update)
+    after = await limits.save_account_limits("acc-old", update)
+
+    assert view is not None
+    assert after is not None
+    gauge = view.comments_per_hour
+    assert (gauge.limit, gauge.override, gauge.overridden, gauge.soft_cap) == (2, 9, True, 2)
+    late = after.comments_per_hour
+    assert (late.limit, late.override, late.soft_cap) == (9, 9, None)
 
 
 async def _campaign(account_id: str = "acc-1") -> str:
@@ -199,15 +265,18 @@ async def _campaign(account_id: str = "acc-1") -> str:
 
 
 @pytest.mark.asyncio
-async def test_the_soft_day_cap_refuses_once_the_day_is_spent() -> None:
+async def test_the_soft_day_cap_refuses_once_the_day_is_spent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Lift the hour and per-channel caps (soft and fleet alike: an override no longer
+    # lifts a soft cap) so only the soft day cap (5 on day 1) is left.
+    monkeypatch.setattr(settings.soft_start, "early_comments_per_hour", 100)
+    monkeypatch.setattr(settings.soft_start, "early_comments_per_channel_per_day", 100)
     await _soft_account()
     campaign_id = await _campaign()
-    # Lift the hour and per-channel caps so only the soft day cap (5 on day 1) is left.
-    await limits.save_account_limits(
-        "acc-1",
-        AccountLimitsUpdate(max_comments_per_hour=100, max_comments_per_channel_per_day=0),
+    fleet = (await settings_store.load_settings()).model_copy(
+        update={"max_comments_per_hour": 100, "max_comments_per_channel_per_day": 0},
     )
-    fleet = await settings_store.load_settings()
     for post_id in range(4):
         await claim_comment(f"@c{post_id}", post_id, campaign_id, "acc-1")
 

@@ -40,6 +40,7 @@ from schemas.neurocomment_limits import (
     LimitWindow,
 )
 from services._account_limits import account_soft_day, resolve_limits
+from services._soft_start import soft_caps
 from services.neurocomment import settings_store
 
 _HOUR = timedelta(hours=1)
@@ -58,11 +59,12 @@ def _resets_at(window: LimitWindow, length: timedelta) -> str | None:
     return (datetime.fromisoformat(window.slot_at) + length).isoformat()
 
 
-def _gauge(
+def _gauge(  # noqa: PLR0913 - keyword-only fields of one gauge.
     *,
     limit: int,
     fleet_default: int,
     override: int | None,
+    soft_cap: int | None,
     window: LimitWindow,
     length: timedelta,
 ) -> AccountLimitGauge:
@@ -71,13 +73,17 @@ def _gauge(
         used=window.used,
         fleet_default=fleet_default,
         overridden=override is not None,
+        override=override,
+        soft_cap=soft_cap,
         resets_at=_resets_at(window, length),
     )
 
 
 async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimitsView:
     fleet = await settings_store.load_settings()
-    caps = resolve_limits(override, fleet, await account_soft_day(account_id))
+    day = await account_soft_day(account_id)
+    caps = resolve_limits(override, fleet, day)
+    soft = soft_caps(day) if day is not None else None
     now = datetime.now(UTC)
     hour_ago = (now - _HOUR).isoformat()
     day_ago = (now - _DAY).isoformat()
@@ -97,6 +103,7 @@ async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimit
             # keep separate fleet defaults — see ``services._account_limits``.
             fleet_default=settings.neurocomment.max_joins_per_account_per_day,
             override=override.max_joins_per_day,
+            soft_cap=soft.joins_per_day if soft else None,
             window=joins,
             length=_DAY,
         ),
@@ -104,6 +111,7 @@ async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimit
             limit=caps.max_comments_per_hour,
             fleet_default=fleet.max_comments_per_hour,
             override=override.max_comments_per_hour,
+            soft_cap=soft.comments_per_hour if soft else None,
             window=hourly,
             length=_HOUR,
         ),
@@ -111,6 +119,7 @@ async def _view(account_id: str, override: AccountLimitOverride) -> AccountLimit
             limit=caps.max_comments_per_channel_per_day,
             fleet_default=fleet.max_comments_per_channel_per_day,
             override=override.max_comments_per_channel_per_day,
+            soft_cap=soft.comments_per_channel_per_day if soft else None,
             window=per_channel,
             length=_DAY,
         ),

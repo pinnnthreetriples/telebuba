@@ -196,6 +196,14 @@ export type AccountLimitGauge = {
    */
   overridden?: boolean;
   /**
+   * Override
+   */
+  override?: number | null;
+  /**
+   * Soft Cap
+   */
+  soft_cap?: number | null;
+  /**
    * Resets At
    */
   resets_at?: string | null;

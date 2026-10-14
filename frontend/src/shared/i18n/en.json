@@ -2334,7 +2334,8 @@
         "save": "Save",
         "saveFailed": "Could not save the limits",
         "loading": "Loading…",
-        "loadFailed": "Could not load the limits"
+        "loadFailed": "Could not load the limits",
+        "softHeld": "Soft start: at most {{value}} while it runs, even if the own limit is higher"
       },
       "discovery": {
         "open": "Find channels",

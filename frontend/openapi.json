@@ -21470,6 +21470,30 @@
             "title": "Overridden",
             "default": false
           },
+          "override": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override"
+          },
+          "soft_cap": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft Cap"
+          },
           "resets_at": {
             "anyOf": [
               {
