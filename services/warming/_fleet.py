@@ -107,14 +107,16 @@ def _account_channel_affinity(
     the channels near the cutoff — gradual, not a wholesale swap). The slice is
     carved from the account's :func:`_language_pool`, own-language channels
     first, and is never smaller than the affinity floor; pools no larger than
-    that floor stay whole (nothing to subdivide).
+    that floor stay whole (nothing to subdivide). Channels the account found by its
+    own search (``found_by``) rank ahead of everything else, so they never churn out of
+    its interests: it went looking for them.
     """
     warm = settings.warming
     key = (
         account_id,
         epoch,
         language,
-        frozenset((c.channel, c.language) for c in channels),
+        frozenset((c.channel, c.language, c.found_by == account_id) for c in channels),
         _affinity_floor(),
         warm.channel_affinity_ratio,
         warm.channel_affinity_churn_strength,
@@ -130,6 +132,9 @@ def _account_channel_affinity(
         del _AFFINITY_CACHE[stale]
 
     pool, rank = _language_pool(channels, language)
+    for channel in pool:
+        if channel.found_by == account_id:
+            rank[channel.channel] = -1
     floor = _affinity_floor()
     if len(pool) <= floor:
         result = pool

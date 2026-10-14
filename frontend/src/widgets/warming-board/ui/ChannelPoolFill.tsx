@@ -1,91 +1,91 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  approveWarmingChannelProposalsMutation,
-  findWarmingChannelsMutation,
-  rejectWarmingChannelProposalsMutation,
-  warmingChannelProposalsQueryKey,
-  warmingChannelProposalsQueryOptions,
-} from '@/entities/warming';
-import type { PoolFillResult } from '@/shared/api';
-import { Button, Input, Modal, ModalFooter, ModalHeader } from '@/shared/ui';
+import { findWarmingChannelsMutation } from '@/entities/warming';
+import type { PoolFillRequest, PoolFillResult, PoolRefillRequest } from '@/shared/api';
+import { Button, ConfirmModal, Input, Modal, ModalFooter, ModalHeader, Notice } from '@/shared/ui';
 
-// «Найти каналы» (Прогрев 2.0, item 4.5). A search proposes channels in a language,
-// country and topics; the operator approves the ones to warm on, in a batch. Nothing
-// a search finds is used before that (decision Q12: manual approval only).
+// «Найти каналы» (Прогрев 2.0, 4.5 and its follow-up). A search with an account outside
+// warming; everything it finds that passes the filters joins the pool at once, and the
+// operator removes what they do not want from the list above. When no account is free
+// the server names the busy one it would take and nothing happens until the operator
+// agrees in the confirm dialog («Выдернуть на поиск»). The automatic refill asks the
+// same way, through the banner, when it found no free account on its own.
 export function ChannelPoolFill({
   defaultLanguage,
+  refillRequest,
   onPoolChanged,
 }: {
   defaultLanguage?: string;
+  refillRequest?: PoolRefillRequest | null;
   onPoolChanged: () => void;
 }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState(defaultLanguage ?? 'es');
   const [country, setCountry] = useState('');
   const [topics, setTopics] = useState('');
   const [result, setResult] = useState<PoolFillResult | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const proposals = useQuery(warmingChannelProposalsQueryOptions());
+  const [consent, setConsent] = useState<PoolFillRequest | null>(null);
   const find = useMutation(findWarmingChannelsMutation());
-  const approve = useMutation(approveWarmingChannelProposalsMutation());
-  const reject = useMutation(rejectWarmingChannelProposalsMutation());
-  const waiting = proposals.data?.channels ?? [];
   const topicList = topics
     .split(',')
     .map((topic) => topic.trim())
     .filter((topic) => topic.length >= 2)
     .slice(0, 5);
 
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: warmingChannelProposalsQueryKey() });
-  };
-  const runSearch = () => {
+  const run = (body: PoolFillRequest) => {
     find.mutate(
-      {
-        body: {
-          language: language.trim().toLowerCase(),
-          country: country.trim() ? country.trim().toUpperCase() : null,
-          topics: topicList,
-        },
-      },
+      { body },
       {
         onSuccess: (found) => {
           setResult(found);
-          refresh();
+          if (found.status === 'needs_consent' && found.pull_candidate) {
+            setConsent({ ...body, pull_account_id: found.pull_candidate.account_id });
+          }
+          if ((found.added ?? 0) > 0) onPoolChanged();
         },
       },
     );
   };
-  const decide = (keep: boolean) => {
-    const body = { channels: [...picked] };
-    const mutation = keep ? approve : reject;
-    mutation.mutate(
-      { body },
-      {
-        onSuccess: () => {
-          setPicked(new Set());
-          refresh();
-          onPoolChanged();
-        },
-      },
-    );
-  };
-  const toggle = (channel: string) => {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(channel)) next.delete(channel);
-      else next.add(channel);
-      return next;
+  const runForm = () => {
+    run({
+      language: language.trim().toLowerCase(),
+      country: country.trim() ? country.trim().toUpperCase() : null,
+      topics: topicList,
     });
   };
+  const answerRefill = (request: PoolRefillRequest) => {
+    setLanguage(request.language);
+    setOpen(true);
+    run({ language: request.language, topics: [] });
+  };
+  const candidate = result?.pull_candidate;
 
   return (
     <div className="mt-4">
+      {refillRequest ? (
+        <div className="mb-3">
+          <Notice tone="warning">
+            <p className="m-0 type-small-medium">{t('warming.poolFill.refillTitle')}</p>
+            <p className="m-0 mt-1 type-small">
+              {t('warming.poolFill.refillHint', { language: refillRequest.language })}
+            </p>
+            <div className="mt-2">
+              <Button
+                size="sm"
+                loading={find.isPending}
+                onClick={() => {
+                  answerRefill(refillRequest);
+                }}
+              >
+                {t('warming.poolFill.refillAction')}
+              </Button>
+            </div>
+          </Notice>
+        </div>
+      ) : null}
       <Button
         size="sm"
         onClick={() => {
@@ -94,60 +94,6 @@ export function ChannelPoolFill({
       >
         {t('warming.poolFill.open')}
       </Button>
-
-      {waiting.length > 0 ? (
-        <div className="mt-3">
-          <p className="m-0 mb-2 type-small-medium text-content-primary">
-            {t('warming.poolFill.waiting', { count: waiting.length })}
-          </p>
-          <ul className="m-0 flex list-none flex-col gap-1 p-0">
-            {waiting.map((channel) => (
-              <li key={channel.channel} className="flex items-center gap-2 type-small">
-                <input
-                  type="checkbox"
-                  checked={picked.has(channel.channel)}
-                  onChange={() => {
-                    toggle(channel.channel);
-                  }}
-                  aria-label={t('warming.poolFill.pick', { channel: channel.channel })}
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  @{channel.channel}
-                  {channel.label ? ` · ${channel.label}` : ''}
-                </span>
-                {channel.subscribers != null ? (
-                  <span className="text-content-subtle">
-                    {t('warming.poolFill.subscribers', { count: channel.subscribers })}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-2 flex gap-2">
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={picked.size === 0}
-              loading={approve.isPending}
-              onClick={() => {
-                decide(true);
-              }}
-            >
-              {t('warming.poolFill.approve')}
-            </Button>
-            <Button
-              size="sm"
-              disabled={picked.size === 0}
-              loading={reject.isPending}
-              onClick={() => {
-                decide(false);
-              }}
-            >
-              {t('warming.poolFill.reject')}
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {open ? (
         <Modal
@@ -196,12 +142,10 @@ export function ChannelPoolFill({
                 </label>
                 {result ? (
                   <p className="m-0 type-small text-content-muted" role="status">
-                    {result.status === 'ok'
-                      ? t('warming.poolFill.result', {
-                          found: result.found ?? 0,
-                          proposed: result.proposed ?? 0,
-                        })
-                      : t('warming.poolFill.noAccount')}
+                    {t(`warming.poolFill.status.${result.status}`, {
+                      found: result.found ?? 0,
+                      added: result.added ?? 0,
+                    })}
                   </p>
                 ) : null}
                 {find.isError ? (
@@ -212,9 +156,9 @@ export function ChannelPoolFill({
                 <Button onClick={close}>{t('warming.poolFill.close')}</Button>
                 <Button
                   variant="primary"
-                  disabled={topicList.length === 0 || language.trim().length !== 2}
+                  disabled={language.trim().length !== 2}
                   loading={find.isPending}
-                  onClick={runSearch}
+                  onClick={runForm}
                 >
                   {t('warming.poolFill.search')}
                 </Button>
@@ -222,6 +166,24 @@ export function ChannelPoolFill({
             </>
           )}
         </Modal>
+      ) : null}
+
+      {consent && candidate ? (
+        <ConfirmModal
+          title={t('warming.poolFill.consentTitle')}
+          body={t('warming.poolFill.consentBody', {
+            name: candidate.name,
+            work: t(`warming.poolFill.busyWith.${candidate.busy_with}`),
+          })}
+          confirmLabel={t('warming.poolFill.consentConfirm')}
+          cancelLabel={t('warming.poolFill.consentCancel')}
+          onClose={() => {
+            setConsent(null);
+          }}
+          onConfirm={() => {
+            run(consent);
+          }}
+        />
       ) : null}
     </div>
   );

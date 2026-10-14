@@ -1,10 +1,6 @@
 export {
   addWarmingChannelsMutation,
-  approveWarmingChannelProposalsMutation,
   findWarmingChannelsMutation,
-  rejectWarmingChannelProposalsMutation,
-  warmingChannelProposalsQueryKey,
-  warmingChannelProposalsQueryOptions,
   handoffToNeurocommentMutation,
   liftWarmingDmPauseMutation,
   promoteToNeurocommentMutation,

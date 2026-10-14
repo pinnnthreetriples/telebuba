@@ -144,6 +144,8 @@ _warming_channels = Table(
     Column("last_post_at", String, nullable=True),
     Column("source", String, nullable=False, server_default="manual"),
     Column("status", String, nullable=False, server_default="approved"),
+    # The warming account whose own search found it (migration #93).
+    Column("found_by", String, nullable=True),
 )
 _warming_joined_channels = Table(
     "warming_joined_channels",

@@ -32,6 +32,7 @@ from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export
     WarmingChannelObservation,
 )
 from schemas._warming_console import SoftStartPlan, WarmingCardConsole, WarmingStateMarks
+from schemas._warming_pool import PoolRefillRequest  # noqa: TC001 - a pydantic field type
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -384,6 +385,9 @@ class WarmingBoardState(BaseModel):
     soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
     # Real visits a day per persona and phase, for the start dialog's persona hint.
     cadence_preview: list[CadencePreview] = Field(default_factory=list)
+    # The automatic refill wanted to search a short language and found no free account:
+    # the channels card asks the operator for one («Нужен аккаунт для поиска каналов»).
+    pool_refill_request: PoolRefillRequest | None = None
 
 
 class StartWarmingRequest(StartWindow):

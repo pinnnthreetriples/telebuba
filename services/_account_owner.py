@@ -36,6 +36,20 @@ release and a restart-time restore inside a runtime whose restart logic is load-
 claim that point checks are better. The next feature to need the answer is the one that
 should stop paying it.
 
+**A channel search borrows an account, it does not claim it.** The warming pool search
+(``services.warming.pool_fill``) reads with an account outside warming for a few
+minutes: a free one, or — only with the operator's consent — one another feature is
+using. :func:`lend` records that loan BESIDE the claims, never over them. The search
+holds the account's lifecycle lock for its whole length, and every feature claims and
+dispatches under that lock, so the feature that owns the account simply waits at its
+next send and goes on when the lock is released: nothing about its run changes, no work
+is handed to another account, nothing is released. That is also why :func:`owner_of`
+keeps answering the claim — the broadcast and masstagging coordinators read it to decide
+which accounts are still in their run, and a loan answered there would make them give
+the account's work away. The loan is for the readers that pick an account without
+taking the lock: neurocomment's per-post selection and discovery's busy check ask
+:func:`is_lent` and pick another account, and :func:`try_claim` refuses a lent account.
+
 In-memory on purpose: nothing here outlives the process, a restart is a full
 repair, and a table would need its own migration plus its own garbage collector
 for state that is worth less than the ceremony.
@@ -46,25 +60,64 @@ from __future__ import annotations
 from typing import Literal
 
 Owner = Literal["warming", "neuroshilling", "chat_broadcast", "user_parser", "masstagging"]
+# Not an owner — nothing claims as it: what :func:`try_claim` answers while a channel
+# search borrows the account.
+SearchLoan = Literal["channel_search"]
+SEARCH_LOAN: SearchLoan = "channel_search"
 
 # account_id -> (owner, holder)
 _OWNED: dict[str, tuple[Owner, str]] = {}
+# account_id -> the pool search borrowing it, kept beside ``_OWNED``.
+_LENT: dict[str, str] = {}
 
 
 def owner_of(account_id: str) -> Owner | None:
-    """Which feature holds this account, or ``None`` when nothing does."""
+    """Which feature holds this account, or ``None`` when nothing does (loans aside)."""
     held = _OWNED.get(account_id)
     return None if held is None else held[0]
 
 
-def try_claim(account_id: str, owner: Owner, holder: str) -> Owner | None:
+def is_lent(account_id: str) -> bool:
+    """Whether a channel search is reading with this account right now."""
+    return account_id in _LENT
+
+
+def lend(account_id: str, holder: str) -> bool:
+    """Borrow ``account_id`` for a channel search; ``False`` when one already has it.
+
+    The caller decides WHETHER the account may be borrowed (free, or pulled with the
+    operator's consent) and holds the account's lifecycle lock across that decision,
+    this call and the whole search; this only records it.
+    """
+    if account_id in _LENT:
+        return False
+    _LENT[account_id] = holder
+    return True
+
+
+def give_back(account_id: str, holder: str) -> None:
+    """End this search's loan, only if this search still has it."""
+    if _LENT.get(account_id) == holder:
+        del _LENT[account_id]
+
+
+def lent() -> dict[str, str]:
+    """A snapshot of ``account_id -> search holder`` for the accounts being searched with."""
+    return dict(_LENT)
+
+
+def try_claim(account_id: str, owner: Owner, holder: str) -> Owner | SearchLoan | None:
     """Claim ``account_id``; return ``None`` on success, else the current owner.
+
+    A borrowed account is refused as ``"channel_search"`` until the search gives it back.
 
     Idempotent for the same ``(owner, holder)`` pair, so a caller that re-enters
     its own claim path is not refused by itself. A DIFFERENT holder of the same
     owner is refused just like a different owner would be — that is what enforces
     "one running campaign per account" without any extra state.
     """
+    if account_id in _LENT:
+        return SEARCH_LOAN
     held = _OWNED.get(account_id)
     if held is not None and held != (owner, holder):
         return held[0]
@@ -130,3 +183,4 @@ def holder_of(account_id: str) -> str | None:
 
 def reset_for_tests() -> None:
     _OWNED.clear()
+    _LENT.clear()

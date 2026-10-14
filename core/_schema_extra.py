@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from core import (
     _schema_bulk_runs,
+    _schema_channel_search,
     _schema_character,
     _schema_lifecycle,
     _schema_notifications,
@@ -16,6 +17,7 @@ from core import (
 
 __all__ = [
     "_schema_bulk_runs",
+    "_schema_channel_search",
     "_schema_character",
     "_schema_lifecycle",
     "_schema_notifications",

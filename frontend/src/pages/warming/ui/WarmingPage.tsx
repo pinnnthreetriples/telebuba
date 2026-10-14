@@ -542,6 +542,7 @@ export function WarmingPage() {
             </div>
             <ChannelPoolFill
               defaultLanguage={data.language_shortages?.[0]?.language}
+              refillRequest={data.pool_refill_request}
               onPoolChanged={invalidate}
             />
           </CollapsibleCard>

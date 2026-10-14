@@ -33,7 +33,9 @@ async def _clean_spam_status(account_id: str, *, force: bool = False) -> SpamSta
 
 
 @pytest.fixture(autouse=True)
-def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _isolate_runtime(  # noqa: PLR0915 - one flat list of isolation switches
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
@@ -77,6 +79,9 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     monkeypatch.setattr(settings.warming, "dm_reaction_probability", 0.0)
     monkeypatch.setattr(settings.warming, "dm_sticker_probability", 0.0)
     monkeypatch.setattr(settings.warming, "dm_forward_probability", 0.0)
+    # An account's own channel search is a per-visit draw too, and reads Telegram;
+    # ``test_self_search.py`` switches it on.
+    monkeypatch.setattr(settings.warming, "self_search_enabled", False)
     # The per-visit budget split (4.3) caps a cycle below the day's remainder; the
     # scenarios here count a whole cycle's actions, so they keep the full remainder.
     # ``test_cadence.py`` exercises the split itself.
