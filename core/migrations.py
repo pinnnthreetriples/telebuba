@@ -50,6 +50,7 @@ from core.migration_steps_bulk_runs import _add_bulk_runs
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
+from core.migration_steps_channel_search import _add_warming_channel_search
 from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
@@ -251,6 +252,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (90, "add_outreach_presets", _add_outreach_presets),
     (91, "add_bulk_runs", _add_bulk_runs),
     (92, "add_warming_settings_tuning", _add_warming_settings_tuning),
+    (93, "add_warming_channel_search", _add_warming_channel_search),
 )
 
 

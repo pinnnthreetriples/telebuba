@@ -39,6 +39,7 @@ from services.warming._fleet import (
     _language_pool,
     _maybe_explore,
 )
+from services.warming._self_search import SelfSearchVisit, search_for_self, walk_found_first
 from services.warming._snapshot import current_snapshot
 from services.warming._social_reads import walkable_channels
 from services.warming._steps import (
@@ -57,7 +58,7 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from schemas._warming_extras import JoinedChannel
-    from schemas.warming import WarmingChannel, WarmingIntensity
+    from schemas.warming import WarmingChannel, WarmingIntensity, WarmingPhase
     from services.warming._steps import _OnStep
 
 # The visits that walk the whole classic route: stories, DM and extras.
@@ -263,6 +264,32 @@ async def _after_channels(
     return messages_sent
 
 
+async def _search_step(
+    ctx: _ExtraContext,
+    visit: VisitPlan,
+    phase: WarmingPhase,
+    channels: list[WarmingChannel],
+    language: str | None,
+) -> bool:
+    """The account's own channel search; puts its finds first. ``True`` = a limit stops it."""
+    if ctx.account is None:
+        return False
+    search = SelfSearchVisit(
+        account=ctx.account,
+        language=language,
+        phase=phase,
+        visit_kind=visit.kind,
+        channels=channels,
+        tally=ctx.tally,
+        remaining_actions=ctx.remaining_actions,
+    )
+    if await search_for_self(search):
+        return True
+    found = _without_cooling_down(search.found, ctx.joined, datetime.now(UTC))
+    ctx.chosen = walk_found_first(ctx.chosen, found)
+    return False
+
+
 async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
@@ -334,10 +361,13 @@ async def run_one_cycle(
         )
         # Small things before the channels — only ever reads, never a write.
         await _before_channels(ctx, visit, on_step)
+        # Sometimes it looks for channels of its own interests first (a read, booked).
+        if await _search_step(ctx, visit, intensity.phase, channels, language):
+            return await _build_cycle_result(account_id, tally, messages_sent)
         ctx.recent_ids, ctx.recent_media = await _run_channel_loop(
             data,
             tally,
-            chosen,
+            ctx.chosen,
             secret,
             on_step,
             phase=intensity.phase,

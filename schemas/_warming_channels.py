@@ -10,11 +10,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 WarmingChannelKind = Literal["channel", "group"]
-# Where the row came from: typed by the operator, or (later) proposed by discovery.
-WarmingChannelSource = Literal["manual", "discovery"]
-# ``pending`` is reserved for discovery proposals awaiting the operator; every row the
-# operator adds, and every row written before the column existed, is ``approved``.
-WarmingChannelStatus = Literal["approved", "pending"]
+# Where the row came from: typed by the operator, found by a pool search («Найти
+# каналы» or the automatic refill), or found by a warming account searching for itself.
+WarmingChannelSource = Literal["manual", "discovery", "self_search"]
+# Everything a search finds that passes the filters is ``approved`` at once. A found
+# channel the operator removes stays as ``removed`` so no later search brings it back;
+# it is never listed or walked, and typing it in again restores it.
+WarmingChannelStatus = Literal["approved", "removed"]
 
 # ISO 639-1 language and ISO 3166 alpha-2 country, lower- and upper-case as stored.
 # ``other`` is a script the detector cannot name (CJK, Arabic...): known foreign to
@@ -41,6 +43,8 @@ class WarmingChannel(BaseModel):
     last_post_at: str | None = None
     source: WarmingChannelSource = "manual"
     status: WarmingChannelStatus = "approved"
+    # The warming account whose own search found it; that account prefers it.
+    found_by: str | None = None
 
 
 class WarmingChannelList(BaseModel):

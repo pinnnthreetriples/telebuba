@@ -86,6 +86,19 @@ async def get_account_delete_reason(account_id: str) -> AccountDeleteReasonGuess
     return AccountDeleteReasonGuess(reason=await guess_delete_reason(account_id))
 
 
+async def _wait_for_channel_search(account_id: str) -> None:
+    """Let a warming channel search on this account end before taking any lock.
+
+    The search holds the account's lifecycle lock for minutes. Waiting for it under
+    the global neurocomment lock would stall neurocomment for every account; waiting
+    here costs only this delete. The search ends on its own timeout at the latest.
+    """
+    from services import _account_owner  # noqa: PLC0415
+
+    while (ended := _account_owner.loan_end(account_id)) is not None:
+        await ended.wait()
+
+
 async def remove_account(account_id: str, reason: DeleteReason | None = None) -> None:
     """Public delete: stop warming + purge DB rows under one lifecycle lock.
 
@@ -127,6 +140,7 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
     # Lock order is global neurocomment lifecycle → per-account lifecycle everywhere.
     # This makes delete atomic against listener start/switch/reconcile and prevents the
     # in-memory handler from surviving a DB cascade or resurrecting on pool rebuild.
+    await _wait_for_channel_search(account_id)
     async with nc_runtime.neurocomment_lifecycle(), account_lock(account_id):
         # A running neuroshilling campaign is talking through this session and has
         # dealt it lines in memory; deleting under it would leave the run sending as

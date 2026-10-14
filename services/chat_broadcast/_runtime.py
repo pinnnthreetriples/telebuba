@@ -137,6 +137,9 @@ async def claim_free(campaign_id: str, account_ids: list[str]) -> list[str]:
     from services.neurocomment import _discovery_state  # noqa: PLC0415 - import cycle
     from services.warming import account_lock  # noqa: PLC0415 - avoids an import cycle
 
+    # Warming's channel search holds a lent account's lock for minutes: skip it, as
+    # every other busy account is skipped, rather than wait the search out.
+    account_ids = [a for a in account_ids if not _account_owner.is_lent(a)]
     async with AsyncExitStack() as locks:
         for account_id in sorted(set(account_ids)):
             await locks.enter_async_context(account_lock(account_id))
