@@ -82,6 +82,11 @@ class WarmedAccount(BaseModel):
     survival: AccountSurvival | None = None
     # The account's devices, primary first: what «Вернуть в прогрев» may offer.
     devices: list[DeviceType] = Field(default_factory=desktop_only)
+    # The wave the account graduated in and when that wave began (the card names it).
+    wave: int = Field(default=1, ge=1)
+    started_at: str | None = None
+    # A kept spam block (permanent «Спамблок» badge).
+    spam_blocked_at: str | None = None
 
 
 class WarmedAccountList(BaseModel):

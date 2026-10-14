@@ -23,7 +23,7 @@ reach as ``services.warming._x``.
 from __future__ import annotations
 
 from services.warming._chat_text import _sanitize_chat_text
-from services.warming._console_start import resume_warming, start_warming_with_consent
+from services.warming._console_start import rewarm_account, start_warming_with_consent
 from services.warming._cycle import run_one_cycle
 from services.warming._exclusion import AccountUnavailableError
 from services.warming._handoff_spam import HandoffSpamRefusedError
@@ -33,19 +33,21 @@ from services.warming._runtime import (
     _ACCOUNT_LOCKS,
     _RUNTIME,
     AccountIsListenerError,
+    NotGraduatedError,
     UnknownAccountError,
     WarmingNotReadyError,
     WarmingTaskNotQuiescentError,
     _stop_warming_locked,
     account_lock,
     handoff_to_neurocomment,
+    keep_spam_blocked,
     promote_to_neurocomment,
     reconcile_warming_runtime,
     shutdown_warming_runtime,
     start_warming,
     stop_warming,
-    unmark_neurocomment,
 )
+from services.warming._spam_block import NotSpamBlockedError
 from services.warming._start_options import preview_start
 from services.warming._start_state import WarmingDeviceUnavailableError
 from services.warming._steps import _human_delay
@@ -76,6 +78,8 @@ __all__ = [
     "AccountIsListenerError",
     "AccountUnavailableError",
     "HandoffSpamRefusedError",
+    "NotGraduatedError",
+    "NotSpamBlockedError",
     "UnknownAccountError",
     "UnknownChannelError",
     "WarmingDeviceUnavailableError",
@@ -96,6 +100,7 @@ __all__ = [
     "compute_intensity",
     "evaluate_readiness",
     "handoff_to_neurocomment",
+    "keep_spam_blocked",
     "label_channel",
     "lift_dm_pause",
     "list_channels",
@@ -108,7 +113,7 @@ __all__ = [
     "promote_to_neurocomment",
     "reconcile_warming_runtime",
     "remove_channel",
-    "resume_warming",
+    "rewarm_account",
     "run_loop_iteration",
     "run_one_cycle",
     "save_settings",
@@ -116,5 +121,4 @@ __all__ = [
     "start_warming",
     "start_warming_with_consent",
     "stop_warming",
-    "unmark_neurocomment",
 ]

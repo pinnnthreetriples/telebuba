@@ -6,7 +6,9 @@ the check" escape — an unreadable answer refuses, and the operator retries.
 
 A ``limited`` answer takes the account off the warmed card and back into warming's
 quarantine, where the recovery ladder re-asks after the quarantine window like it does
-for a peer flood. Runs under the caller's per-account lifecycle lock.
+for a peer flood — unless the block is already known (``services.warming._spam_block``):
+an account the operator kept after a confirmed spam block is handed off with it, since
+commenting needs no messages to strangers. Runs under the caller's per-account lock.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
+from schemas.warming import spam_block_known
 from services.warming import _exclusion, _runtime
 from services.warming._spam_check import ask_spambot
 from services.warming._state import _set_state
@@ -93,7 +96,7 @@ async def assert_spam_clean_for_handoff(account_id: str) -> None:
     if record is None or not record.promoted_to_nc:
         return
     verdict = await ask_spambot(account_id)
-    if verdict.status == "clean":
+    if verdict.status == "clean" or (verdict.status == "limited" and spam_block_known(record)):
         return
     if verdict.status == "limited":
         await unmark_promoted_to_nc(account_id)

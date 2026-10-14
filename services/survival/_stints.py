@@ -1,12 +1,15 @@
-"""Journal rows → stints. Pure: no I/O, no clock.
+"""Journal rows → account lives and their waves. Pure: no I/O, no clock.
 
 An account id can come back after a deletion (a re-import), so the journal of one id
-is first cut into *lives* at each ``deleted`` row. Inside a life a stint opens at a
-``warming_started`` row whose stint start differs from the open one; a resume or a
-restart that carried the clock repeats the same start and opens nothing. A row that
+is first cut into *lives* at each ``deleted`` row. Inside a life a wave (one warming
+stint) opens at a ``warming_started`` row whose stint start differs from the open one;
+a restart that carried the clock repeats the same start and opens nothing. A row that
 names a stint start nobody opened (its start fell out of the log retention before the
-journal existed) opens that stint too. Rows before any stint — an account that was
-never warmed — belong to no stint.
+journal existed) opens that stint too. Rows before the first wave — an account that
+was never warmed — belong to no wave and do not make a life count.
+
+The wave number is the one the start row recorded (``extra.wave``), else one past the
+previous wave of the life: rows from before waves were numbered still count in order.
 """
 
 from __future__ import annotations
@@ -34,20 +37,34 @@ def parse_moment(raw: str | None) -> datetime | None:
 
 @dataclass(frozen=True)
 class Stint:
-    """One warming stint of one account life, with the rows observed during it."""
+    """One wave: a warming stint of one account life, with the rows observed during it."""
 
     account_id: str
     started_at: datetime
     # The stint start exactly as the journal spells it (the cohort fallback matches on it).
     start_key: str
-    # Rows from the stint's opening up to the next stint of the same life.
+    wave: int
+    # Rows from the wave's opening up to the next wave of the same life.
     events: tuple[LifecycleEvent, ...]
-    # Every row of the life, for the old-deletion guess (was it ever limited?).
-    life_events: tuple[LifecycleEvent, ...]
-    # The next stint's start in the same life: observation of this one stops there.
-    cut_at: datetime | None
-    # The last stint of a life no ``deleted`` row has ended: the account's current one.
+
+
+@dataclass(frozen=True)
+class Life:
+    """One account life that was warmed at least once: its waves and its rows."""
+
+    account_id: str
+    waves: tuple[Stint, ...]
+    # Every row from the first wave's opening to the life's end, in journal order.
+    events: tuple[LifecycleEvent, ...]
+    # Every row of the life, the ones before its first wave included.
+    all_events: tuple[LifecycleEvent, ...]
+    # No ``deleted`` row ended it: the live account's current life.
     current: bool
+
+    @property
+    def started_at(self) -> datetime:
+        """When the life's first wave began: the life's day 0."""
+        return self.waves[0].started_at
 
 
 def split_lives(events: Iterable[LifecycleEvent]) -> list[list[LifecycleEvent]]:
@@ -86,36 +103,53 @@ def _openings(life: list[LifecycleEvent]) -> list[tuple[int, str, datetime]]:
     return openings
 
 
-def life_stints(life: list[LifecycleEvent]) -> list[Stint]:
-    """The stints of one life, oldest first."""
+def _wave_number(event: LifecycleEvent, previous: int) -> int:
+    """The wave the opening row recorded, else the one after ``previous``."""
+    recorded = event.extra.get("wave") if event.kind == "warming_started" else None
+    if isinstance(recorded, int) and not isinstance(recorded, bool) and recorded > previous:
+        return recorded
+    return previous + 1
+
+
+def life_waves(life: list[LifecycleEvent]) -> list[Stint]:
+    """The waves of one life, oldest first."""
     openings = _openings(life)
-    live = not life or life[-1].kind != "deleted"
-    stints: list[Stint] = []
+    waves: list[Stint] = []
     for position, (index, key, started_at) in enumerate(openings):
         following = openings[position + 1] if position + 1 < len(openings) else None
         stop = following[0] if following else len(life)
-        stints.append(
+        previous = waves[-1].wave if waves else 0
+        waves.append(
             Stint(
                 account_id=life[index].account_id,
                 started_at=started_at,
                 start_key=key,
+                wave=_wave_number(life[index], previous),
                 events=tuple(life[index:stop]),
-                life_events=tuple(life),
-                cut_at=following[2] if following else None,
-                current=live and following is None,
             ),
         )
-    return stints
+    return waves
 
 
-def build_stints(events: Iterable[LifecycleEvent]) -> list[Stint]:
-    """Every stint in the journal, grouped per account id in journal order."""
+def build_life(rows: list[LifecycleEvent]) -> Life | None:
+    """The life these rows (one life, journal order) describe; ``None`` if never warmed."""
+    waves = life_waves(rows)
+    if not waves:
+        return None
+    first = rows.index(waves[0].events[0])
+    return Life(
+        account_id=rows[0].account_id,
+        waves=tuple(waves),
+        events=tuple(rows[first:]),
+        all_events=tuple(rows),
+        current=rows[-1].kind != "deleted",
+    )
+
+
+def build_lives(events: Iterable[LifecycleEvent]) -> list[Life]:
+    """Every warmed life in the journal, grouped per account id in journal order."""
     by_account: dict[str, list[LifecycleEvent]] = {}
     for event in sorted(events, key=lambda row: row.id):
         by_account.setdefault(event.account_id, []).append(event)
-    return [
-        stint
-        for rows in by_account.values()
-        for life in split_lives(rows)
-        for stint in life_stints(life)
-    ]
+    lives = (build_life(rows) for account in by_account.values() for rows in split_lives(account))
+    return [life for life in lives if life is not None]

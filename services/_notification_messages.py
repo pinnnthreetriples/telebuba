@@ -25,8 +25,9 @@ _SPAM_STATUS_EVENT = "spam_status_refreshed"
 _EVENT_KINDS: dict[str, NotificationKind] = {
     "warming_quarantine_extended": "quarantine",
     "warming_dm_fleet_paused": "fleet_dm_paused",
+    # The quarantine re-check confirmed the block: warming stopped, the card asks to decide.
+    "warming_spam_blocked": "spam_blocked",
     # Each of these leaves the account in the warming ``error`` column.
-    "warming_quarantine_exhausted": "error",
     "warming_quarantine_unreadable": "error",
     "warming_loop_crashed": "error",
     "warming_target_reached": "warmed",
@@ -37,6 +38,10 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "quarantine": "{label}: спам-блок (PeerFlood), аккаунт на карантине прогрева.",
     "fleet_dm_paused": "Прогрев: личные сообщения между аккаунтами приостановлены для всего парка.",
     "spam_limited": "{label}: @SpamBot сообщает об ограничениях аккаунта.",
+    "spam_blocked": (
+        "{label}: @SpamBot подтвердил спамблок — прогрев остановлен. "
+        "Решите на карточке аккаунта: удалить или оставить."
+    ),
     "error": "{label}: прогрев остановлен с ошибкой — нужна проверка.",
     "warmed": "{label}: прогрев завершён, аккаунт готов к передаче.",
 }
@@ -53,7 +58,10 @@ def notification_kind(entry: LogEntry) -> NotificationKind | None:
     if entry.event == _CYCLE_EVENT:
         return "quarantine" if entry.extra.get("status") == "peer_flood" else None
     if entry.event == _SPAM_STATUS_EVENT:
-        return "spam_limited" if entry.extra.get("status") == "limited" else None
+        # Only the news: an account already limited (a kept spam block is permanent)
+        # answers "limited" at every scheduled check and must not ping each time.
+        news = entry.extra.get("previous") != "limited"
+        return "spam_limited" if entry.extra.get("status") == "limited" and news else None
     return _EVENT_KINDS.get(entry.event)
 
 

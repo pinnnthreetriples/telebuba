@@ -310,6 +310,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsErrors,
   ImportMasstaggingTargetsResponses,
+  KeepSpamBlockedAccountData,
+  KeepSpamBlockedAccountErrors,
+  KeepSpamBlockedAccountResponses,
   LabelWarmingChannelData,
   LabelWarmingChannelErrors,
   LabelWarmingChannelResponses,
@@ -409,6 +412,9 @@ import type {
   ListWarmingDialoguesData,
   ListWarmingDialoguesErrors,
   ListWarmingDialoguesResponses,
+  ListWarmingWavesData,
+  ListWarmingWavesErrors,
+  ListWarmingWavesResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
@@ -490,12 +496,12 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsErrors,
   ResolveChatBroadcastTargetsResponses,
-  ResumeWarmingData,
-  ResumeWarmingErrors,
-  ResumeWarmingResponses,
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  RewarmAccountData,
+  RewarmAccountErrors,
+  RewarmAccountResponses,
   SaveChatBroadcastPaceData,
   SaveChatBroadcastPaceErrors,
   SaveChatBroadcastPaceResponses,
@@ -628,9 +634,6 @@ import type {
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
-  UnpromoteFromNeurocommentData,
-  UnpromoteFromNeurocommentErrors,
-  UnpromoteFromNeurocommentResponses,
   UpdateAccountChannelData,
   UpdateAccountChannelErrors,
   UpdateAccountChannelResponses,
@@ -2286,28 +2289,37 @@ export const handoffToNeurocomment = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Unpromote Account
+ * Keep Spam Blocked Account
  *
- * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ * «Оставить»: keep an account warming stopped on a confirmed spam block.
  */
-export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
-  options: Options<UnpromoteFromNeurocommentData, ThrowOnError>,
-): RequestResult<
-  UnpromoteFromNeurocommentResponses,
-  UnpromoteFromNeurocommentErrors,
-  ThrowOnError
-> =>
+export const keepSpamBlockedAccount = <ThrowOnError extends boolean = false>(
+  options: Options<KeepSpamBlockedAccountData, ThrowOnError>,
+): RequestResult<KeepSpamBlockedAccountResponses, KeepSpamBlockedAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<
-    UnpromoteFromNeurocommentResponses,
-    UnpromoteFromNeurocommentErrors,
+    KeepSpamBlockedAccountResponses,
+    KeepSpamBlockedAccountErrors,
     ThrowOnError
   >({
-    url: '/api/v1/warming/unpromote',
+    url: '/api/v1/warming/spam-block/keep',
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * List Warming Waves
+ *
+ * Every warming wave of the account's current life: start, end, why, worked days.
+ */
+export const listWarmingWaves = <ThrowOnError extends boolean = false>(
+  options: Options<ListWarmingWavesData, ThrowOnError>,
+): RequestResult<ListWarmingWavesResponses, ListWarmingWavesErrors, ThrowOnError> =>
+  (options.client ?? client).get<ListWarmingWavesResponses, ListWarmingWavesErrors, ThrowOnError>({
+    url: '/api/v1/warming/waves/{account_id}',
+    ...options,
   });
 
 /**
@@ -2328,15 +2340,15 @@ export const startWarming = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Resume Warming
+ * Rewarm Account
  *
- * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ * «Вернуть в прогрев»: a graduated account warms again from zero as its next wave.
  */
-export const resumeWarming = <ThrowOnError extends boolean = false>(
-  options: Options<ResumeWarmingData, ThrowOnError>,
-): RequestResult<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError> =>
-  (options.client ?? client).post<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError>({
-    url: '/api/v1/warming/resume',
+export const rewarmAccount = <ThrowOnError extends boolean = false>(
+  options: Options<RewarmAccountData, ThrowOnError>,
+): RequestResult<RewarmAccountResponses, RewarmAccountErrors, ThrowOnError> =>
+  (options.client ?? client).post<RewarmAccountResponses, RewarmAccountErrors, ThrowOnError>({
+    url: '/api/v1/warming/rewarm',
     ...options,
     headers: {
       'Content-Type': 'application/json',

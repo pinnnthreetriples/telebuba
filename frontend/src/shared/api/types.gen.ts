@@ -685,7 +685,7 @@ export type AccountSurvival = {
   /**
    * Cause
    */
-  cause?: 'spam_limited' | 'session_dead' | 'deleted_dead' | null;
+  cause?: 'session_dead' | 'account_frozen' | 'deleted_dead' | null;
   /**
    * Wounds
    */
@@ -5791,7 +5791,7 @@ export type ProfileStoryView = {
 /**
  * PromoteRequest
  *
- * Body for promote/unpromote: graduate an account to/from the neurocomment pool.
+ * Body naming one account: promote, the spam-block «Оставить» and the like.
  */
 export type PromoteRequest = {
   /**
@@ -6632,13 +6632,13 @@ export type SubmitCodeRequest = {
 /**
  * SurvivalCause
  *
- * How many stints died of one cause.
+ * How many lives died of one cause.
  */
 export type SurvivalCause = {
   /**
    * Cause
    */
-  cause: 'spam_limited' | 'session_dead' | 'deleted_dead';
+  cause: 'session_dead' | 'account_frozen' | 'deleted_dead';
   /**
    * Count
    */
@@ -6648,9 +6648,9 @@ export type SurvivalCause = {
 /**
  * SurvivalCohort
  *
- * One cohort row: its key (ISO week ``2026-W37``, persona, days, country) and windows.
+ * One cohort row: its key (ISO week ``2026-W37``, persona, days, country, waves).
  *
- * ``key`` is ``None`` for stints the journal cannot place (e.g. no proxy country).
+ * ``key`` is ``None`` for lives the journal cannot place (e.g. no proxy country).
  */
 export type SurvivalCohort = {
   /**
@@ -6666,7 +6666,7 @@ export type SurvivalCohort = {
 /**
  * SurvivalCounter
  *
- * Stints of one window by outcome; ``wounded`` is the part of ``alive`` with a wound.
+ * Lives of one window by outcome; ``wounded`` is the part of ``alive`` with a wound.
  */
 export type SurvivalCounter = {
   /**
@@ -6700,51 +6700,11 @@ export type SurvivalCounter = {
 };
 
 /**
- * SurvivalReport
+ * SurvivalLife
  *
- * The survival panel: totals, one cohort cut, causes, stints and fleet history.
+ * One swimmer-plot row; every ``*_day`` counts whole days from the life's first start.
  */
-export type SurvivalReport = {
-  /**
-   * Cohort
-   */
-  cohort: 'week' | 'persona' | 'length' | 'proxy_country';
-  /**
-   * Windows
-   */
-  windows?: Array<SurvivalCounter>;
-  /**
-   * Cohorts
-   */
-  cohorts?: Array<SurvivalCohort>;
-  /**
-   * Causes
-   */
-  causes?: Array<SurvivalCause>;
-  /**
-   * Stints
-   */
-  stints?: Array<SurvivalStint>;
-  /**
-   * Releases
-   */
-  releases?: number;
-  /**
-   * Full Data Since
-   */
-  full_data_since?: string | null;
-  /**
-   * Daily
-   */
-  daily?: Array<FleetDailyStats>;
-};
-
-/**
- * SurvivalStint
- *
- * One swimmer-plot row; every ``*_day`` counts whole days from the stint's start.
- */
-export type SurvivalStint = {
+export type SurvivalLife = {
   /**
    * Account Id
    */
@@ -6776,11 +6736,75 @@ export type SurvivalStint = {
   /**
    * Cause
    */
-  cause?: 'spam_limited' | 'session_dead' | 'deleted_dead' | null;
+  cause?: 'session_dead' | 'account_frozen' | 'deleted_dead' | null;
   /**
    * Wound Days
    */
   wound_days?: Array<number>;
+  /**
+   * Waves
+   */
+  waves?: Array<SurvivalWave>;
+};
+
+/**
+ * SurvivalReport
+ *
+ * The survival panel: totals, one cohort cut, causes, lives and fleet history.
+ */
+export type SurvivalReport = {
+  /**
+   * Cohort
+   */
+  cohort: 'week' | 'persona' | 'length' | 'proxy_country' | 'waves';
+  /**
+   * Windows
+   */
+  windows?: Array<SurvivalCounter>;
+  /**
+   * Cohorts
+   */
+  cohorts?: Array<SurvivalCohort>;
+  /**
+   * Causes
+   */
+  causes?: Array<SurvivalCause>;
+  /**
+   * Lives
+   */
+  lives?: Array<SurvivalLife>;
+  /**
+   * Releases
+   */
+  releases?: number;
+  /**
+   * Full Data Since
+   */
+  full_data_since?: string | null;
+  /**
+   * Daily
+   */
+  daily?: Array<FleetDailyStats>;
+};
+
+/**
+ * SurvivalWave
+ *
+ * One wave on a life's row: its number, the day it began and its release day.
+ */
+export type SurvivalWave = {
+  /**
+   * Wave
+   */
+  wave: number;
+  /**
+   * Start Day
+   */
+  start_day: number;
+  /**
+   * Release Day
+   */
+  release_day?: number | null;
 };
 
 /**
@@ -7553,6 +7577,18 @@ export type WarmedAccount = {
    * Devices
    */
   devices?: Array<'desktop' | 'mobile'>;
+  /**
+   * Wave
+   */
+  wave?: number;
+  /**
+   * Started At
+   */
+  started_at?: string | null;
+  /**
+   * Spam Blocked At
+   */
+  spam_blocked_at?: string | null;
 };
 
 /**
@@ -7580,7 +7616,15 @@ export type WarmingAccountState = {
   /**
    * Dm Status
    */
-  dm_status?: 'on' | 'chat_off' | 'no_llm_key' | 'paused' | 'not_ready' | 'too_young' | 'trust';
+  dm_status?:
+    | 'on'
+    | 'chat_off'
+    | 'no_llm_key'
+    | 'spam_blocked'
+    | 'paused'
+    | 'not_ready'
+    | 'too_young'
+    | 'trust';
   attention?: WarmingAttention | null;
   /**
    * Geo Status
@@ -7600,6 +7644,14 @@ export type WarmingAccountState = {
    */
   cycle_plan?: Array<'set_online' | 'join' | 'read' | 'react' | 'stories' | 'send_dm' | 'extras'>;
   /**
+   * Wave
+   */
+  wave?: number;
+  /**
+   * Spam Blocked At
+   */
+  spam_blocked_at?: string | null;
+  /**
    * Account Id
    */
   account_id: string;
@@ -7610,7 +7662,7 @@ export type WarmingAccountState = {
   /**
    * State
    */
-  state: 'idle' | 'active' | 'sleeping' | 'flood_wait' | 'quarantine' | 'error';
+  state: 'idle' | 'active' | 'sleeping' | 'flood_wait' | 'quarantine' | 'error' | 'spam_blocked';
   /**
    * Health
    */
@@ -7816,10 +7868,10 @@ export type WarmingAttention = {
    * Code
    */
   code:
+    | 'spam_blocked'
     | 'quarantine'
     | 'flood_wait'
     | 'stopping'
-    | 'quarantine_exhausted'
     | 'quarantine_unreadable'
     | 'not_ready'
     | 'error';
@@ -8335,6 +8387,59 @@ export type WarmingTuningUpdate = {
    */
   preset: 'careful' | 'normal' | 'fast' | 'custom';
   custom?: WarmingTuningCustom | null;
+};
+
+/**
+ * WarmingWave
+ *
+ * One wave: when it began and ended, why it ended, and the days it worked.
+ */
+export type WarmingWave = {
+  /**
+   * Wave
+   */
+  wave: number;
+  /**
+   * Started At
+   */
+  started_at: string;
+  /**
+   * Ended At
+   */
+  ended_at?: string | null;
+  /**
+   * End Reason
+   */
+  end_reason?:
+    'released' | 'stopped' | 'spam_blocked' | 'session_dead' | 'deleted' | 'replaced' | null;
+  /**
+   * Worked Days
+   */
+  worked_days?: number | null;
+  /**
+   * Target Days
+   */
+  target_days?: number | null;
+  /**
+   * Persona
+   */
+  persona?: string | null;
+};
+
+/**
+ * WarmingWaveList
+ *
+ * ``GET /warming/waves/{account_id}``: the account's waves, oldest first.
+ */
+export type WarmingWaveList = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Waves
+   */
+  waves?: Array<WarmingWave>;
 };
 
 /**
@@ -13035,18 +13140,26 @@ export type HandoffToNeurocommentResponses = {
 export type HandoffToNeurocommentResponse =
   HandoffToNeurocommentResponses[keyof HandoffToNeurocommentResponses];
 
-export type UnpromoteFromNeurocommentData = {
+export type KeepSpamBlockedAccountData = {
   body: PromoteRequest;
   path?: never;
   query?: never;
-  url: '/api/v1/warming/unpromote';
+  url: '/api/v1/warming/spam-block/keep';
 };
 
-export type UnpromoteFromNeurocommentErrors = {
+export type KeepSpamBlockedAccountErrors = {
   /**
    * Not authenticated
    */
   401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
   /**
    * Request validation failed
    */
@@ -13057,18 +13170,60 @@ export type UnpromoteFromNeurocommentErrors = {
   500: ErrorEnvelope;
 };
 
-export type UnpromoteFromNeurocommentError =
-  UnpromoteFromNeurocommentErrors[keyof UnpromoteFromNeurocommentErrors];
+export type KeepSpamBlockedAccountError =
+  KeepSpamBlockedAccountErrors[keyof KeepSpamBlockedAccountErrors];
 
-export type UnpromoteFromNeurocommentResponses = {
+export type KeepSpamBlockedAccountResponses = {
   /**
    * Successful Response
    */
   200: WarmingAccountState;
 };
 
-export type UnpromoteFromNeurocommentResponse =
-  UnpromoteFromNeurocommentResponses[keyof UnpromoteFromNeurocommentResponses];
+export type KeepSpamBlockedAccountResponse =
+  KeepSpamBlockedAccountResponses[keyof KeepSpamBlockedAccountResponses];
+
+export type ListWarmingWavesData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/warming/waves/{account_id}';
+};
+
+export type ListWarmingWavesErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListWarmingWavesError = ListWarmingWavesErrors[keyof ListWarmingWavesErrors];
+
+export type ListWarmingWavesResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingWaveList;
+};
+
+export type ListWarmingWavesResponse = ListWarmingWavesResponses[keyof ListWarmingWavesResponses];
 
 export type StartWarmingData = {
   body: StartWarmingRequest;
@@ -13115,14 +13270,14 @@ export type StartWarmingResponses = {
 
 export type StartWarmingResponse = StartWarmingResponses[keyof StartWarmingResponses];
 
-export type ResumeWarmingData = {
+export type RewarmAccountData = {
   body: StartWarmingRequest;
   path?: never;
   query?: never;
-  url: '/api/v1/warming/resume';
+  url: '/api/v1/warming/rewarm';
 };
 
-export type ResumeWarmingErrors = {
+export type RewarmAccountErrors = {
   /**
    * Bad request, or Telegram refused the action
    */
@@ -13149,16 +13304,16 @@ export type ResumeWarmingErrors = {
   500: ErrorEnvelope;
 };
 
-export type ResumeWarmingError = ResumeWarmingErrors[keyof ResumeWarmingErrors];
+export type RewarmAccountError = RewarmAccountErrors[keyof RewarmAccountErrors];
 
-export type ResumeWarmingResponses = {
+export type RewarmAccountResponses = {
   /**
    * Successful Response
    */
   200: WarmingAccountState;
 };
 
-export type ResumeWarmingResponse = ResumeWarmingResponses[keyof ResumeWarmingResponses];
+export type RewarmAccountResponse = RewarmAccountResponses[keyof RewarmAccountResponses];
 
 export type PreviewWarmingStartData = {
   body: StartPreviewRequest;
@@ -13570,7 +13725,7 @@ export type GetWarmingSurvivalData = {
     /**
      * Cohort
      */
-    cohort?: 'week' | 'persona' | 'length' | 'proxy_country';
+    cohort?: 'week' | 'persona' | 'length' | 'proxy_country' | 'waves';
   };
   url: '/api/v1/warming/survival';
 };

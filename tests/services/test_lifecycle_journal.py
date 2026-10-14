@@ -84,21 +84,22 @@ async def test_a_healthy_account_is_guessed_retired() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["unauthorized", "account_error"])
+@pytest.mark.parametrize("status", ["unauthorized", "account_error", "frozen"])
 async def test_a_dead_session_status_is_guessed_dead(status: SessionCheckStatus) -> None:
     await _account(status=status)
     assert await guess_delete_reason("a1") == "dead"
 
 
 @pytest.mark.asyncio
-async def test_a_limited_spam_verdict_is_guessed_dead() -> None:
+async def test_a_spam_blocked_account_is_guessed_written_off() -> None:
+    """A spam block leaves a working account: deleting it is the operator writing it off."""
     await _account()
     await upsert_spam_status(
         SpamStatusVerdict(
             account_id="a1", status="limited", checked_at=datetime.now(UTC).isoformat()
         )
     )
-    assert await guess_delete_reason("a1") == "dead"
+    assert await guess_delete_reason("a1") == "retired"
 
 
 @pytest.mark.asyncio
@@ -106,7 +107,7 @@ async def test_a_limited_spam_verdict_is_guessed_dead() -> None:
     ("kind", "extra", "expected"),
     [
         ("session_dead", {"status": "unauthorized"}, "dead"),
-        ("spambot_verdict", {"status": "limited"}, "dead"),
+        ("spambot_verdict", {"status": "limited"}, "retired"),
         ("spambot_verdict", {"status": "clean"}, "retired"),
         ("quarantined", {"status": "peer_flood"}, "retired"),
     ],
@@ -156,7 +157,8 @@ async def test_a_prepared_deletion_falls_back_to_the_guess() -> None:
     await record_account_deleted(await prepare_account_deleted("a1", None))
 
     [event] = await list_lifecycle_events("a1")
-    assert event.extra == {"reason": "dead", "reason_source": "guess"}
+    # A guessed death names its evidence, so survival can tell it from older guesses.
+    assert event.extra == {"reason": "dead", "reason_source": "guess", "evidence": "session"}
 
 
 @pytest.mark.asyncio

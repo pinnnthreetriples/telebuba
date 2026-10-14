@@ -1,63 +1,79 @@
-"""Journal rows → stints: lives cut at deletions, stints opened by new starts only."""
+"""Journal rows → lives and waves: lives cut at deletions, waves opened by new starts only."""
 
 from __future__ import annotations
 
-from services.survival._stints import build_stints, parse_moment
+from services.survival._stints import build_lives, parse_moment
 from tests.services.survival._support import at, iso, limited, released_life, row
 
 
-def test_a_resume_with_the_same_start_opens_no_second_stint() -> None:
+def test_a_restart_with_the_same_start_opens_no_second_wave() -> None:
     events = [
         *released_life(14),
         row("warming_started", 20, stint=0, new_stint=False),
         row("promoted", 25, stint=0),
     ]
 
-    [stint] = build_stints(events)
+    [life] = build_lives(events)
 
-    assert stint.started_at == at(0)
-    assert len(stint.events) == len(events)
-    assert stint.current
-    assert stint.cut_at is None
+    assert [wave.wave for wave in life.waves] == [1]
+    assert life.started_at == at(0)
+    assert len(life.events) == len(events)
+    assert life.current
 
 
-def test_a_fresh_start_cuts_the_previous_stint() -> None:
+def test_a_fresh_start_is_the_next_wave_of_the_same_life() -> None:
     events = [*released_life(14), row("warming_started", 30, stint=30, new_stint=True)]
 
-    first, second = build_stints(events)
+    [life] = build_lives(events)
 
-    assert first.cut_at == at(30)
-    assert not first.current
-    assert second.current
+    first, second = life.waves
+    assert (first.wave, second.wave) == (1, 2)
     assert second.started_at == at(30)
+    assert first.events[-1].kind == "warmed"
+    assert life.started_at == at(0)
+
+
+def test_the_recorded_wave_number_wins_and_old_rows_count_in_order() -> None:
+    events = [
+        row("warming_started", 0),
+        row("warming_started", 10, stint=10, wave=3),
+        row("warming_started", 20, stint=20),
+        # A recorded number that would go backwards is not trusted.
+        row("warming_started", 30, stint=30, wave=2),
+    ]
+
+    [life] = build_lives(events)
+
+    assert [wave.wave for wave in life.waves] == [1, 3, 4, 5]
 
 
 def test_a_repeated_id_after_a_deletion_is_a_new_life() -> None:
-    # The first account died and was deleted; a re-import under the same id warms again.
+    # The first account was deleted; a re-import under the same id warms again.
     events = [
         *released_life(14),
         limited(16),
-        row("deleted", 17, reason="dead"),
+        row("deleted", 17, reason="retired"),
         row("warming_started", 40, stint=40, new_stint=True),
     ]
 
-    old, new = build_stints(events)
+    old, new = build_lives(events)
 
     assert not old.current
     assert old.events[-1].kind == "deleted"
     assert new.current
-    assert all(event.kind != "spambot_verdict" for event in new.life_events)
+    assert [wave.wave for wave in new.waves] == [1]
+    assert all(event.kind != "spambot_verdict" for event in new.all_events)
 
 
 def test_a_row_naming_an_unopened_stint_opens_it() -> None:
     # The start fell out of the log retention before the journal existed.
-    [stint] = build_stints([row("warmed", 14, stint=0), row("spambot_verdict", 15, status="clean")])
+    [life] = build_lives([row("warmed", 14, stint=0), row("spambot_verdict", 15, status="clean")])
 
-    assert stint.started_at == at(0)
-    assert [event.kind for event in stint.events] == ["warmed", "spambot_verdict"]
+    assert life.started_at == at(0)
+    assert [event.kind for event in life.events] == ["warmed", "spambot_verdict"]
 
 
-def test_rows_before_any_stint_and_unreadable_starts_belong_to_none() -> None:
+def test_rows_before_any_wave_and_unreadable_starts_make_no_life() -> None:
     events = [
         row("spambot_verdict", 1, stint=None, status="clean"),
         row("warmed", 2, stint=None),
@@ -65,21 +81,30 @@ def test_rows_before_any_stint_and_unreadable_starts_belong_to_none() -> None:
     broken = row("warming_started", 3)
     broken = broken.model_copy(update={"stint_started_at": "not a date"})
 
-    assert build_stints([*events, broken]) == []
+    assert build_lives([*events, broken]) == []
+
+
+def test_rows_before_the_first_wave_stay_out_of_the_life_events() -> None:
+    early = row("session_dead", 1, stint=None, status="unauthorized")
+
+    [life] = build_lives([early, row("warming_started", 5, stint=5)])
+
+    assert early not in life.events
+    assert early in life.all_events
 
 
 def test_a_start_without_a_stamp_opens_at_its_own_moment() -> None:
     start = row("warming_started", 5, stint=None)
 
-    [stint] = build_stints([start])
+    [life] = build_lives([start])
 
-    assert stint.started_at == at(5)
+    assert life.started_at == at(5)
 
 
 def test_accounts_are_kept_apart() -> None:
-    stints = build_stints([*released_life(account="a"), *released_life(account="b")])
+    lives = build_lives([*released_life(account="a"), *released_life(account="b")])
 
-    assert sorted(stint.account_id for stint in stints) == ["a", "b"]
+    assert sorted(life.account_id for life in lives) == ["a", "b"]
 
 
 def test_parse_moment_reads_naive_as_utc_and_refuses_garbage() -> None:

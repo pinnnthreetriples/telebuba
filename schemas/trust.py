@@ -42,3 +42,6 @@ class TrustSignals(BaseModel):
     # fades over ``settings.trust.flood_history_decay_days``.
     flood_total: int = Field(default=0, ge=0)
     last_flood_at: str | None = None
+    # The operator kept this account after @SpamBot confirmed its spam block: the block
+    # is a known, accepted condition (DMs stay shut), not a fresh risk to score again.
+    spam_block_known: bool = False

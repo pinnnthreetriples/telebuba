@@ -19,6 +19,9 @@ from pydantic import BaseModel, Field
 # spambot_verdict — @SpamBot answered; ``extra`` carries the status.
 # session_dead    — a session check found the session revoked or the account gone.
 # deleted         — the operator deleted the account; ``extra`` carries the reason.
+# warming_stopped — a wave ended without a graduation: ``extra.reason`` is ``operator``
+#                   (the Stop button) or ``spam_blocked`` (@SpamBot confirmed the block);
+#                   ``extra`` also carries the wave and its worked days (migration 94).
 LifecycleEventKind = Literal[
     "warming_started",
     "warmed",
@@ -28,6 +31,7 @@ LifecycleEventKind = Literal[
     "spambot_verdict",
     "session_dead",
     "deleted",
+    "warming_stopped",
 ]
 LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "warming_started",
@@ -38,6 +42,7 @@ LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "spambot_verdict",
     "session_dead",
     "deleted",
+    "warming_stopped",
 )
 
 # Why an account left the fleet: ``dead`` — Telegram took it (limited, banned, the

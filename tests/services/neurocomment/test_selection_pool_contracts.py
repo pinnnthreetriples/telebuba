@@ -196,4 +196,6 @@ def test_health_passes_cached_language_and_signals_to_policy(
         "lang_code": "ru",
         "now": now,
     }
-    readiness.assert_called_once_with(_account("a"), 2, spam=spam, trust_score=trust)
+    readiness.assert_called_once_with(
+        _account("a"), 2, spam=spam, trust_score=trust, spam_block_known=False
+    )

@@ -298,6 +298,34 @@ async def unmark_promoted_to_nc(account_id: str) -> None:
     await asyncio.to_thread(_mark_unpromoted, account_id)
 
 
+def _left_alone_unless_given(data: WarmingStateWrite) -> dict[str, object | None]:
+    """The columns a write sets only when it carries them (``None`` = leave as is)."""
+    values: dict[str, object | None] = {}
+    if data.reservation_token is not None:
+        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
+        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
+        # unconditionally would have every unrelated write NULL out the token the
+        # hand-back guards on, which is the stranded day all over again.
+        values["reservation_token"] = data.reservation_token
+    if data.cycle_marks is not None:
+        # Written with the booking, under its CAS, so the card never shows one
+        # cycle's plan on top of another's budget.
+        values["cycle_base_actions"] = data.cycle_marks.base_actions
+        values["visit_kind"] = data.cycle_marks.visit_kind
+        values["cycle_plan"] = ",".join(data.cycle_marks.steps)
+    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
+        values["warmed_days"] = data.warmed_days
+        values["last_warmed_date"] = data.last_warmed_date
+    if data.device_mode is not None:
+        # Written by a start only; every other write leaves the stint's device alone.
+        values["device_mode"] = data.device_mode
+    if data.wave is not None:  # a start only, under the same CAS as its stint stamp
+        values["wave"] = data.wave
+    if data.spam_blocked_at is not None:  # the spam-block stop and keeping that account
+        values["spam_blocked_at"] = data.spam_blocked_at
+    return values
+
+
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     # F9 + P1.2 + P2.4 + Round-2 P1 + Round-4 P1.1/P1.2: collapse to a single
     # sqlite_insert ON CONFLICT DO UPDATE so the whole upsert runs under
@@ -342,24 +370,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         "activity_persona": data.activity_persona or "normal",
         "recovered_at": data.recovered_at,
     }
-    if data.reservation_token is not None:
-        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
-        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
-        # unconditionally would have every unrelated write NULL out the token the
-        # hand-back guards on, which is the stranded day all over again.
-        insert_values["reservation_token"] = data.reservation_token
-    if data.cycle_marks is not None:
-        # Written with the booking, under its CAS, so the card never shows one
-        # cycle's plan on top of another's budget.
-        insert_values["cycle_base_actions"] = data.cycle_marks.base_actions
-        insert_values["visit_kind"] = data.cycle_marks.visit_kind
-        insert_values["cycle_plan"] = ",".join(data.cycle_marks.steps)
-    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
-        insert_values["warmed_days"] = data.warmed_days
-        insert_values["last_warmed_date"] = data.last_warmed_date
-    if data.device_mode is not None:
-        # Written by a start only; every other write leaves the stint's device alone.
-        insert_values["device_mode"] = data.device_mode
+    insert_values.update(_left_alone_unless_given(data))
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1

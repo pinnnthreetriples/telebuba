@@ -5,7 +5,8 @@ Data contract only — no behaviour, no I/O (non-negotiable #2). Flows between t
 
 ``WarmingState``: idle (not running) · active (running a cycle) · sleeping
 (waiting for the next persona-paced run) · flood_wait / quarantine (cooling
-down) · error (last cycle failed).
+down) · error (last cycle failed) · spam_blocked (@SpamBot confirmed a spam block on
+the quarantine re-check: warming stopped, waiting for the operator to delete or keep).
 """
 
 from __future__ import annotations
@@ -42,14 +43,21 @@ from schemas._warming_start import StartWindow
 from schemas._warming_visits import CadencePreview, CycleMarks, VisitPlan  # noqa: TC001
 from schemas.device_fingerprint import DeviceType, desktop_only
 
-WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
+WarmingState = Literal[
+    "idle", "active", "sleeping", "flood_wait", "quarantine", "error", "spam_blocked"
+]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
 # test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
 _RUN_HOLDS = Literal[_CAMPAIGN_HOLDS, "account_busy_user_parser", "account_busy_masstagging"]
 _SPAM = Literal["spam_check_unavailable", "spam_limited"]  # hand-off's @SpamBot refusals
-WarmingRefusalCode = Literal["account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM]
+# A stale card: «Вернуть в прогрев» on an account no longer graduated, «Оставить» on one
+# no longer stopped on a spam block.
+_STALE_CARD = Literal["not_graduated", "not_spam_blocked"]
+WarmingRefusalCode = Literal[
+    "account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM, _STALE_CARD
+]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and
@@ -62,8 +70,10 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 ActivityPersona = Literal["calm", "normal", "active"]
 
 _ACTIVE_STATES: frozenset[WarmingState] = frozenset(
-    {"active", "sleeping", "flood_wait", "quarantine", "error"},
+    {"active", "sleeping", "flood_wait", "quarantine", "error", "spam_blocked"},
 )
+# On the warming board, yet no loop runs: the operator has to act first.
+_PARKED_STATES: frozenset[WarmingState] = frozenset({"error", "spam_blocked"})
 
 
 def warming_health(state: WarmingState) -> WarmingHealth:
@@ -71,14 +81,14 @@ def warming_health(state: WarmingState) -> WarmingHealth:
 
     - ``ok`` (green)  — actively warming.
     - ``warn`` (amber) — sleeping between cycles, flood-waited, or quarantined.
-    - ``fail`` (red)  — last cycle errored.
+    - ``fail`` (red)  — last cycle errored, or @SpamBot confirmed a spam block.
     - ``idle`` (grey) — not being warmed.
     """
     if state == "active":
         return "ok"
     if state in {"sleeping", "flood_wait", "quarantine"}:
         return "warn"
-    if state == "error":
+    if state in _PARKED_STATES:
         return "fail"
     return "idle"
 
@@ -86,6 +96,18 @@ def warming_health(state: WarmingState) -> WarmingHealth:
 def is_warming(state: WarmingState) -> bool:
     """True when the account belongs in the right-hand (warming) kanban column."""
     return state in _ACTIVE_STATES
+
+
+def is_parked(state: WarmingState) -> bool:
+    """True for a warming-column state no loop runs in (``error``, ``spam_blocked``)."""
+    return state in _PARKED_STATES
+
+
+def spam_block_known(record: WarmingStateRecord | None) -> bool:
+    """True once @SpamBot confirmed this account life's spam block (see ``_spam_block``)."""
+    if record is None:
+        return False
+    return record.state == "spam_blocked" or record.spam_blocked_at is not None
 
 
 class WarmingIntensity(BaseModel):
@@ -247,6 +269,10 @@ class WarmingStateWrite(BaseModel):
     # writes it with ``last_warmed_date``.
     warmed_days: int | None = Field(default=None, ge=0)
     last_warmed_date: str | None = None
+    # ``None`` leaves the column alone, like ``device_mode``: only a start writes the
+    # stint's wave, only the spam-block stop (or keeping that account) the mark.
+    wave: int | None = Field(default=None, ge=1)
+    spam_blocked_at: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -397,7 +423,7 @@ class StartWarmingRequest(StartWindow):
 
 
 class PromoteRequest(BaseModel):
-    """Body for promote/unpromote: graduate an account to/from the neurocomment pool."""
+    """Body naming one account: promote, the spam-block «Оставить» and the like."""
 
     account_id: str = Field(min_length=1)
 

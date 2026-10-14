@@ -264,24 +264,6 @@ async def test_warmed_account_carries_telegram_name() -> None:
     assert warmed[0].avatar_etag == updated.avatar_etag
 
 
-@pytest.mark.asyncio
-async def test_unmark_neurocomment_removes_from_warmed_list() -> None:
-    """The un-promote affordance flips the flag back; the warmed-list drops the account."""
-    from services.warming import promote_to_neurocomment, unmark_neurocomment  # noqa: PLC0415
-
-    await create_account(AccountCreate(account_id="returner", label="Returner"))
-    await upsert_warming_state(
-        WarmingStateWrite(account_id="returner", state="active", started_at=_days_ago(30)),
-    )
-    await promote_to_neurocomment("returner")
-    assert [a.account_id for a in (await list_warmed_accounts(14)).accounts] == ["returner"]
-
-    card = await unmark_neurocomment("returner")
-
-    assert card.promoted_to_nc is False
-    assert (await list_warmed_accounts(14)).accounts == []
-
-
 async def _seed_clean_spam_reading(account_id: str) -> None:
     """A fresh ``clean`` @SpamBot reading — the hand-off reuses it instead of asking."""
     await upsert_spam_status(
@@ -328,30 +310,6 @@ async def test_handoff_rejects_account_not_graduated() -> None:
 
     with pytest.raises(ValueError, match="not in the warmed pool"):
         await handoff_to_neurocomment("raw")
-
-
-@pytest.mark.asyncio
-async def test_unmark_neurocomment_clears_handoff_flag() -> None:
-    """Un-promoting a handed-off account clears BOTH flags (no NC idle-pool leak)."""
-    from services.warming import (  # noqa: PLC0415
-        handoff_to_neurocomment,
-        promote_to_neurocomment,
-        unmark_neurocomment,
-    )
-
-    await create_account(AccountCreate(account_id="round", label="Round"))
-    await upsert_warming_state(
-        WarmingStateWrite(account_id="round", state="active", started_at=_days_ago(30)),
-    )
-    await promote_to_neurocomment("round")
-    await _seed_clean_spam_reading("round")
-    await handoff_to_neurocomment("round")
-
-    card = await unmark_neurocomment("round")
-
-    assert card.promoted_to_nc is False
-    assert card.nc_handed_off is False
-    assert (await list_warmed_accounts(14)).accounts == []
 
 
 @pytest.mark.asyncio

@@ -2,18 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AccountAvatar, accountDisplayName } from '@/entities/account';
+import { AccountAvatar, accountDisplayName, deleteAccountMutation } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
   handoffToNeurocommentMutation,
+  keepSpamBlockedAccountMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
-  resumeWarmingMutation,
+  rewarmAccountMutation,
+  SpamBlockBadge,
   startWarmingMutation,
   stopWarmingMutation,
   SurvivalBadge,
   warmingBoardQueryOptions,
+  WaveChip,
 } from '@/entities/warming';
 import type { StartWarmingRequest, WarmedAccount, WarmingAccountState } from '@/shared/api';
 import { errorMessage, mutationErrorText, useTransientFeedback } from '@/shared/lib';
@@ -33,6 +36,7 @@ import {
   StatGrid,
   toastError,
 } from '@/shared/ui';
+import { DeleteAccountModal, type DeleteReason } from '@/widgets/accounts-table';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import {
   ActionTuningCard,
@@ -126,8 +130,11 @@ export function WarmingPage() {
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
   // "Запустить пул" opens the start dialog for every idle account instead of firing.
   const [poolStartOpen, setPoolStartOpen] = useState(false);
-  // «Вернуть в прогрев» opens the start dialog and continues the stint (item 2.5).
-  const [resumeFor, setResumeFor] = useState<WarmedAccount | null>(null);
+  // «Вернуть в прогрев» opens the same start dialog; the account warms again from zero
+  // as its next wave.
+  const [rewarmFor, setRewarmFor] = useState<WarmedAccount | null>(null);
+  // «Удалить» on a spam-blocked card opens the ordinary account delete dialog.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // «В нейрокомментинг» asks for the start mode first (item 2.4).
   const [handoffFor, setHandoffFor] = useState<string | null>(null);
   // The survival tile in the header opens its panel under the banners (stage 3).
@@ -151,7 +158,9 @@ export function WarmingPage() {
   const addChannels = useMutation(addWarmingChannelsMutation());
   const removeChannel = useMutation(removeWarmingChannelMutation());
   const promote = useMutation(promoteToNeurocommentMutation());
-  const resume = useMutation(resumeWarmingMutation());
+  const rewarm = useMutation(rewarmAccountMutation());
+  const keep = useMutation(keepSpamBlockedAccountMutation());
+  const remove = useMutation(deleteAccountMutation());
   // Inline: "@SpamBot did not answer" opens the retry dialog rather than a toast;
   // runHandoff toasts every other refusal itself.
   const handoff = useMutation({ ...handoffToNeurocommentMutation(), meta: { inlineError: true } });
@@ -278,9 +287,15 @@ export function WarmingPage() {
     runOnAccount(accountId, () =>
       start.mutateAsync({ body: { account_id: accountId, ...choice } }),
     );
-  const resumeAccount = (accountId: string, choice: StartChoice) =>
+  const rewarmAccount = (accountId: string, choice: StartChoice) =>
     runOnAccount(accountId, () =>
-      resume.mutateAsync({ body: { account_id: accountId, ...choice } }),
+      rewarm.mutateAsync({ body: { account_id: accountId, ...choice } }),
+    );
+  const keepAccount = (accountId: string) =>
+    runOnAccount(accountId, () => keep.mutateAsync({ body: { account_id: accountId } }));
+  const deleteAccount = (accountId: string, reason: DeleteReason | undefined) =>
+    runOnAccount(accountId, () =>
+      remove.mutateAsync({ path: { account_id: accountId }, query: { reason } }),
     );
   // A batch keeps the pool button disabled until its LAST call settles: isPending
   // tracks only the last-fired call and would re-enable it mid-batch.
@@ -311,7 +326,10 @@ export function WarmingPage() {
   const channelLabels = Object.fromEntries(
     channels.filter((c) => c.label).map((c) => [c.channel, c.label as string]),
   );
-  const errors = [...idle, ...warming].filter((a) => a.state === 'error').length;
+  // A confirmed spam block waits for the operator just like an error does.
+  const errors = [...idle, ...warming].filter(
+    (a) => a.state === 'error' || a.state === 'spam_blocked',
+  ).length;
   const poolOn = warming.length > 0;
   // With the readiness check switched off the engine starts a not-ready account, so
   // the button does too; the reasons stay on the row as a warning, not a block.
@@ -463,6 +481,7 @@ export function WarmingPage() {
                             {account.geo_accepted ? (
                               <Badge>{t('warming.geo.accepted')}</Badge>
                             ) : null}
+                            <SpamBlockBadge blockedAt={account.spam_blocked_at} />
                           </div>
                         </div>
                         <Button
@@ -593,9 +612,16 @@ export function WarmingPage() {
                             {flag}
                           </div>
                         ) : null}
-                        {acc.survival ? (
-                          <div className="mt-2">
-                            <SurvivalBadge survival={acc.survival} />
+                        {acc.survival || acc.spam_blocked_at || (acc.wave ?? 1) > 1 ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {acc.survival ? <SurvivalBadge survival={acc.survival} /> : null}
+                            <SpamBlockBadge blockedAt={acc.spam_blocked_at} />
+                            <WaveChip
+                              accountId={acc.account_id}
+                              name={name}
+                              wave={acc.wave}
+                              startedAt={acc.started_at}
+                            />
                           </div>
                         ) : null}
                         <div className="mt-2 flex items-center gap-2">
@@ -654,7 +680,7 @@ export function WarmingPage() {
                         aria-label={t('warming.warmed.backToWarm')}
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
-                          setResumeFor(acc);
+                          setRewarmFor(acc);
                         }}
                         className="flex size-touch shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
@@ -695,6 +721,10 @@ export function WarmingPage() {
             onPromote={(id) => {
               runGraduation(promote, id);
             }}
+            onDelete={setDeletingId}
+            onKeep={(id) => {
+              void keepAccount(id);
+            }}
             busyIds={busyIds}
             feedback={accountFeedback.feedback}
             logLimit={data.card_log_limit}
@@ -732,20 +762,37 @@ export function WarmingPage() {
         />
       ) : null}
 
-      {resumeFor ? (
+      {rewarmFor ? (
         <WarmDaysModal
-          accountId={resumeFor.account_id}
-          phone={resumeFor.phone ?? resumeFor.label}
-          resumeDays={resumeFor.warmed_days ?? 0}
+          accountId={rewarmFor.account_id}
+          phone={rewarmFor.phone ?? rewarmFor.label}
+          nextWave={(rewarmFor.wave ?? 1) + 1}
           defaultDays={data.default_target_days}
           cadence={data.cadence_preview}
-          geo={geoOf(resumeFor)}
-          devices={resumeFor.devices}
+          geo={geoOf(rewarmFor)}
+          devices={rewarmFor.devices}
           onClose={() => {
-            setResumeFor(null);
+            setRewarmFor(null);
           }}
           onConfirm={(choice) => {
-            void resumeAccount(resumeFor.account_id, startChoice(choice));
+            void rewarmAccount(rewarmFor.account_id, startChoice(choice));
+          }}
+        />
+      ) : null}
+
+      {deletingId ? (
+        <DeleteAccountModal
+          accountId={deletingId}
+          phone={
+            warming.find((a) => a.account_id === deletingId)?.phone ??
+            warming.find((a) => a.account_id === deletingId)?.label ??
+            deletingId
+          }
+          onClose={() => {
+            setDeletingId(null);
+          }}
+          onConfirm={(reason) => {
+            void deleteAccount(deletingId, reason);
           }}
         />
       ) : null}

@@ -82,7 +82,11 @@ async def test_start_journals_a_new_stint_then_a_carried_restart(
     assert [(e.kind, e.extra.get("new_stint")) for e in events] == [
         ("warming_started", True),
         ("warming_started", False),
+        ("warming_stopped", None),
     ]
+    # Both start rows name the same (first) wave; the Stop ends it with its worked days.
+    assert [e.extra["wave"] for e in events[:2]] == [1, 1]
+    assert events[2].extra == {"reason": "operator", "wave": 1, "worked_days": 0}
     # The cohort fields ride the start row, so a deleted account still has them.
     assert events[0].extra["persona"] == "normal"
     assert isinstance(events[0].extra["target_days"], int)
@@ -198,12 +202,15 @@ def _check_result(status: SessionCheckStatus) -> TelegramSessionCheckResult:
     [
         ("alive", "unauthorized", ["session_dead"]),
         ("alive", "account_error", ["session_dead"]),
-        ("unauthorized", "unauthorized", []),
+        ("alive", "frozen", ["session_dead"]),
+        # Already dead, yet no death on record (an action marked it frozen): news once.
+        ("frozen", "frozen", ["session_dead"]),
+        ("unauthorized", "unauthorized", ["session_dead"]),
         ("new", "unauthorized", []),
         ("alive", "network_error", []),
     ],
 )
-async def test_a_session_death_is_journaled_on_the_transition_only(
+async def test_a_session_death_is_journaled_once(
     monkeypatch: pytest.MonkeyPatch,
     before: SessionCheckStatus,
     after: SessionCheckStatus,
@@ -220,6 +227,23 @@ async def test_a_session_death_is_journaled_on_the_transition_only(
     await check_account_session(AccountCheckRequest(account_id="acc-1"))
 
     assert await _kinds() == expected
+
+
+@pytest.mark.asyncio
+async def test_a_re_check_of_a_journaled_death_writes_no_second_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def probe(_request: object) -> TelegramSessionCheckResult:
+        return _check_result("unauthorized")
+
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", probe)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await update_account_from_session_check(_check_result("alive"))
+
+    await check_account_session(AccountCheckRequest(account_id="acc-1"))
+    await check_account_session(AccountCheckRequest(account_id="acc-1"))
+
+    assert await _kinds() == ["session_dead"]
 
 
 @pytest.mark.asyncio
@@ -276,7 +300,7 @@ async def test_a_start_journals_its_own_stint_not_a_later_restarts() -> None:
         )
     )
     stint = _start_state.CarriedStint(
-        "2026-10-01T00:00:00+00:00", 7, "normal", "desktop", None, fresh=True
+        "2026-10-01T00:00:00+00:00", 7, "normal", "desktop", None, fresh=True, wave=1
     )
 
     account = await fetch_account("acc-1")
