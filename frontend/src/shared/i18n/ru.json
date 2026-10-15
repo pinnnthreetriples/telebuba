@@ -2134,7 +2134,8 @@
       "warm_read_discussion": "Чтение комментариев к посту",
       "warm_dm_react": "Реакция в ЛС",
       "warm_dm_sticker": "Стикер в ЛС",
-      "warm_dm_forward": "Пересылка поста в ЛС"
+      "warm_dm_forward": "Пересылка поста в ЛС",
+      "outreach_set_typing": "«Печатает…» перед сообщением"
     },
     "status": {
       "failed": "ошибка",

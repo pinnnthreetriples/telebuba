@@ -2102,7 +2102,8 @@
       "warm_read_discussion": "Post comments read",
       "warm_dm_react": "DM reaction",
       "warm_dm_sticker": "DM sticker",
-      "warm_dm_forward": "Post forwarded in DM"
+      "warm_dm_forward": "Post forwarded in DM",
+      "outreach_set_typing": "“Typing…” before a message"
     },
     "status": {
       "failed": "failed",
