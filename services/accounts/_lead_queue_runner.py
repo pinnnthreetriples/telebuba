@@ -32,6 +32,7 @@ from services.accounts._bulk_claims import BUSY_CODE
 from services.accounts._bulk_plan import next_open, next_utc_day
 from services.accounts._bulk_runner import STOP_CODES
 from services.accounts._lead_queue_lookup import run_lookup_pass
+from services.accounts._recipient_history import OWNED_BY_OTHER_ACCOUNT, RECENTLY_MESSAGED
 
 if TYPE_CHECKING:
     from schemas.bulk_runs import BulkRunItem, BulkRunRecord
@@ -51,6 +52,8 @@ _DEAD_ACCOUNT = frozenset(
 )
 # The account sent nothing and may send again later: its lead waits for the next run.
 _RETRY_CODES = (STOP_CODES - _DEAD_ACCOUNT) | {BUSY_CODE}
+# The recipient-history rules refused the send: the client was already contacted.
+_HISTORY_CODES = frozenset({RECENTLY_MESSAGED, OWNED_BY_OTHER_ACCOUNT})
 _MAX_RUN_LEADS = 500
 _MAX_RUN_ACCOUNTS = 50
 logger = logging.getLogger(__name__)
@@ -267,6 +270,8 @@ class LeadQueueRunner:
             else:
                 rest = next_utc_day(now)
             self.send_rest[item.account_id] = max(rest, self.send_rest.get(item.account_id, now))
+        elif item.error_code in _HISTORY_CODES:
+            lead.status, lead.error_code = "skipped", item.error_code
         else:
             lead.status, lead.error_code = "failed", item.error_code
         return True

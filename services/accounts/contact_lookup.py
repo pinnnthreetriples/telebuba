@@ -52,11 +52,21 @@ from services.accounts._contact_lookup_lanes import (
     skip_phones,
     stop_lane,
 )
+from services.accounts._contact_rechecks import (
+    load_contact_rechecks,
+    place_rechecks,
+    settle_rechecks,
+    summarize_contact_rechecks,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from schemas.contact_lookup import ContactLookupOutcome, ContactLookupRequest
+    from schemas.contact_lookup import (
+        ContactLookupOutcome,
+        ContactLookupRequest,
+        ContactRecheckSummary,
+    )
     from schemas.outreach_limits import OutreachLimits
     from schemas.telegram_actions_contacts import ContactLookupBatchResult
 
@@ -144,7 +154,8 @@ def start_contact_lookup_job(data: ContactLookupRequest, owner_user_id: str) -> 
         msg = "contact_lookup_run_active"
         raise ValueError(msg)
     phones = _normalize_unique(data.phones)
-    if not phones:
+    # No numbers at all is a run of the due "not found" re-checks only.
+    if not phones and (data.phones or data.recheck_not_found is False):
         msg = "no valid phones"
         raise ValueError(msg)
     for old_id, old_job in list(_jobs.items()):
@@ -199,6 +210,11 @@ def cancel_contact_lookup_job(job_id: str, owner_user_id: str) -> ContactLookupJ
     if event is not None:
         event.set()
     return job.model_copy(deep=True)
+
+
+async def get_contact_rechecks() -> ContactRecheckSummary:
+    """The "not found" numbers waiting for another account's re-check."""
+    return await summarize_contact_rechecks()
 
 
 def _read_error_code(exc: TelegramReadError) -> str:
@@ -331,7 +347,15 @@ async def run_contact_lookup_job(job_id: str) -> None:
         lanes, overflow = plan_lanes(phones, data.account_ids, allowances, found_before)
         for account_id, phone in overflow:
             skip_phones(account_id, [phone], job, error_code="daily_limit")
+        recheck = limits.recipients.recheck_not_found
+        if data.recheck_not_found is not None:
+            recheck = data.recheck_not_found
+        queued = await load_contact_rechecks()
+        if recheck:
+            # The operator's own numbers first; due re-checks take the room left over.
+            job.total += len(place_rechecks(lanes, queued.values(), phones, datetime.now(UTC)))
         await _run_lanes(lanes, LookupPacing.resolve(data, limits), job, cancel_event)
+        await settle_rechecks(job, queued, enabled=recheck, now=datetime.now(UTC))
     finally:
         job.status = (
             "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"

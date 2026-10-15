@@ -148,3 +148,22 @@ async def test_a_resumed_queue_looks_up_again_after_a_pause_interrupted_it(
     await runner.tick(_now())
 
     assert telegram.batches == [("a1", _phones(1))]
+
+
+@pytest.mark.asyncio
+async def test_a_client_the_history_rules_refuse_is_skipped_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    phones = _phones(1)
+    launched = await _setup(monkeypatch, _Telegram({phones[0]: 501}), phones=phones)
+    runner = LeadQueueRunner()
+    await runner.tick(_now())
+    item = (await runs_repo.list_bulk_run_items(launched[0]))[0]
+    item.status, item.error_code = "skipped", "recently_messaged"
+    await runs_repo.save_bulk_run_item(item)
+    await runs_repo.update_bulk_run(launched[0], status="completed")
+
+    await runner.sync(_now())
+
+    lead = (await _by_phone())[phones[0]]
+    assert (lead.status, lead.error_code) == ("skipped", "recently_messaged")

@@ -15,7 +15,8 @@ from schemas.accounts import _ACCOUNT_ID_PATTERN
 from schemas.bulk_runs import WaitReason  # noqa: TC001
 
 # "pending": waiting for a lookup; "found": waiting for a send; "messaging": in a run;
-# "skipped": the same Telegram user is already queued under another number.
+# "skipped": the client was already contacted (queued under another number, or the
+# recipient-history rules refused the send).
 LeadStatus = Literal[
     "pending", "found", "messaging", "sent", "not_found", "failed", "unconfirmed", "skipped"
 ]

@@ -230,6 +230,7 @@ test('sends every selected account to every distinct recipient and shows progres
       series_break_max_seconds: 1800,
       concurrency: 2,
     },
+    recipient_rules: { no_repeat_days: 30, one_account_per_client: true, recheck_not_found: true },
     recipient_phones: {},
     mode: 'each',
   });
@@ -534,6 +535,7 @@ test('starts on the saved limits and sends the slider pace as a jittered range',
       series_break_max_seconds: 1800,
       concurrency: 2,
     },
+    recipient_rules: { no_repeat_days: 30, one_account_per_client: true, recheck_not_found: true },
     recipient_phones: {},
     mode: 'each',
   });

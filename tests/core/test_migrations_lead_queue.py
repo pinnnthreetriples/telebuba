@@ -1,4 +1,4 @@
-"""Migration 97 — the lead queue, one live bulk run per kind, and parity with ``create_all``."""
+"""Migration 98 — the lead queue, one live bulk run per kind, and parity with ``create_all``."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _index_sql(engine: Engine) -> str:
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_lead_queue]
-    assert entries == [(97, "add_lead_queue", _add_lead_queue)]
+    assert entries == [(98, "add_lead_queue", _add_lead_queue)]
 
 
 @pytest.mark.parametrize("table", _TABLES)

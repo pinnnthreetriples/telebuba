@@ -14,6 +14,7 @@ from core import (
     _schema_lifecycle,
     _schema_notifications,
     _schema_outreach,
+    _schema_recipients,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "_schema_lifecycle",
     "_schema_notifications",
     "_schema_outreach",
+    "_schema_recipients",
 ]

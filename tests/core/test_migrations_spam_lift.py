@@ -54,7 +54,9 @@ def _migrate(engine: Engine) -> None:
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _allow_lifecycle_spam_block_lifted]
-    assert [entry[0] for entry in entries] == [96]
+    assert [(version, step) for version, _name, step in entries] == [
+        (96, _allow_lifecycle_spam_block_lifted)
+    ]
 
 
 def test_the_rebuild_keeps_rows_and_ids_and_admits_the_new_kind(v95_engine: Engine) -> None:

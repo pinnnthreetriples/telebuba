@@ -35,7 +35,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     engine = legacy_engine("migrated.db")
     with engine.begin() as connection:
         _add_bulk_runs(connection)
-        # Migration 97 adds ``bulk_runs.kind``, which ``create_all`` already has.
+        # Migration 98 adds ``bulk_runs.kind``, which ``create_all`` already has.
         _add_lead_queue(connection)
     return engine
 

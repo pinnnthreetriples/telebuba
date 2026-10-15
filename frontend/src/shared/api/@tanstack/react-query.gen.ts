@@ -84,6 +84,7 @@ import {
   getChatBroadcastBoard,
   getChatBroadcastSettings,
   getContactLookupJob,
+  getContactRechecks,
   getHealth,
   getLatestBulkMessageJob,
   getLatestContactLookupJob,
@@ -458,6 +459,9 @@ import type {
   GetContactLookupJobData,
   GetContactLookupJobError,
   GetContactLookupJobResponse,
+  GetContactRechecksData,
+  GetContactRechecksError,
+  GetContactRechecksResponse,
   GetHealthData,
   GetHealthError,
   GetHealthResponse,
@@ -3037,6 +3041,31 @@ export const getLatestContactLookupJobOptions = (
       return data;
     },
     queryKey: getLatestContactLookupJobQueryKey(options),
+  });
+
+export const getContactRechecksQueryKey = (options?: Options<GetContactRechecksData>) =>
+  createQueryKey('getContactRechecks', options);
+
+/**
+ * Get Contact Rechecks
+ */
+export const getContactRechecksOptions = (options?: Options<GetContactRechecksData>) =>
+  queryOptions<
+    GetContactRechecksResponse,
+    GetContactRechecksError,
+    GetContactRechecksResponse,
+    ReturnType<typeof getContactRechecksQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getContactRechecks({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getContactRechecksQueryKey(options),
   });
 
 export const getContactLookupJobQueryKey = (options: Options<GetContactLookupJobData>) =>

@@ -1,4 +1,4 @@
-"""SQLAlchemy tables for the lead queue (migration #97).
+"""SQLAlchemy tables for the lead queue (migration #98).
 
 ``lead_queue_items`` holds one row per queued phone number for its whole life, so a
 number is never queued (and messaged) twice; ``lead_queue_settings`` is the queue's

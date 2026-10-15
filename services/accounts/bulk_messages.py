@@ -45,6 +45,7 @@ from services.accounts._bulk_claims import (
 )
 from services.accounts._bulk_plan import plan_items
 from services.accounts._bulk_runner import BulkRun, Lane
+from services.accounts._recipient_history import screen_recipients, skip_by_history
 from services.accounts._result import AccountActionError, raise_for_result
 
 _MAX_RETAINED_JOBS = 20
@@ -88,6 +89,7 @@ async def _resolve(data: BulkMessageRequest) -> tuple[BulkMessageRequest, RunSch
             ),
             "daily_cap": data.daily_cap or limits.first_messages_per_day,
             "schedule": schedule,
+            "recipient_rules": data.recipient_rules or limits.recipients,
         }
     )
     return resolved, schedule
@@ -114,19 +116,23 @@ async def start_bulk_message_job(
         msg = "duplicate recipients"
         raise ValueError(msg)
     resolved, schedule = await _resolve(data)
+    now = datetime.now(UTC)
+    resolved, verdicts = await screen_recipients(resolved, recipients, now)
     run_id = run_id or uuid4().hex
     record = BulkRunRecord(
         id=run_id,
         owner_user_id=owner_user_id,
         status="running",
         request_json=resolved.model_dump_json(),
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=now.isoformat(),
         kind=kind,
     )
+    items = plan_items(run_id, resolved, schedule, recipients)
+    skip_by_history(items, verdicts)
     try:
         await repo.create_bulk_run(
             record,
-            plan_items(run_id, resolved, schedule, recipients),
+            items,
             [BulkRunAccount(run_id=run_id, account_id=a) for a in resolved.account_ids],
         )
     except repo.BulkRunActiveError as exc:

@@ -1273,6 +1273,7 @@ export type BulkMessageRequest = {
     [key: string]: string;
   };
   schedule?: RunSchedule | null;
+  recipient_rules?: RecipientRules | null;
   /**
    * Start At
    */
@@ -2683,6 +2684,10 @@ export type ContactLookupOutcome = {
    * Handed Over
    */
   handed_over?: boolean;
+  /**
+   * Rechecked
+   */
+  rechecked?: boolean;
 };
 
 /**
@@ -2696,7 +2701,7 @@ export type ContactLookupRequest = {
   /**
    * Phones
    */
-  phones: Array<string>;
+  phones?: Array<string>;
   /**
    * Batch Size
    */
@@ -2713,6 +2718,26 @@ export type ContactLookupRequest = {
    * Max Delay Seconds
    */
   max_delay_seconds?: number | null;
+  /**
+   * Recheck Not Found
+   */
+  recheck_not_found?: boolean | null;
+};
+
+/**
+ * ContactRecheckSummary
+ *
+ * Numbers waiting to be checked again by another account after a "not found".
+ */
+export type ContactRecheckSummary = {
+  /**
+   * Waiting
+   */
+  waiting: number;
+  /**
+   * Due
+   */
+  due: number;
 };
 
 /**
@@ -5507,6 +5532,7 @@ export type OutreachLimits = {
    */
   bulk_max_delay_seconds?: number;
   schedule?: RunSchedule;
+  recipients?: RecipientRules;
   /**
    * Updated At
    */
@@ -5552,6 +5578,7 @@ export type OutreachLimitsUpdate = {
    */
   bulk_max_delay_seconds?: number;
   schedule?: RunSchedule;
+  recipients?: RecipientRules;
 };
 
 /**
@@ -6297,6 +6324,24 @@ export type ReadinessStatus = {
    * Database
    */
   database: boolean;
+};
+
+/**
+ * RecipientRules
+ */
+export type RecipientRules = {
+  /**
+   * No Repeat Days
+   */
+  no_repeat_days?: number | null;
+  /**
+   * One Account Per Client
+   */
+  one_account_per_client?: boolean;
+  /**
+   * Recheck Not Found
+   */
+  recheck_not_found?: boolean;
 };
 
 /**
@@ -12079,6 +12124,40 @@ export type GetLatestContactLookupJobResponses = {
 
 export type GetLatestContactLookupJobResponse =
   GetLatestContactLookupJobResponses[keyof GetLatestContactLookupJobResponses];
+
+export type GetContactRechecksData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup/rechecks';
+};
+
+export type GetContactRechecksErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetContactRechecksError = GetContactRechecksErrors[keyof GetContactRechecksErrors];
+
+export type GetContactRechecksResponses = {
+  /**
+   * Successful Response
+   */
+  200: ContactRecheckSummary;
+};
+
+export type GetContactRechecksResponse =
+  GetContactRechecksResponses[keyof GetContactRechecksResponses];
 
 export type GetContactLookupJobData = {
   body?: never;
