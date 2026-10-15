@@ -30,6 +30,7 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
 )
+from schemas.warming import spam_block_known
 from services import _account_owner
 from services._account_limits import account_limits, resolve_limits
 from services._soft_start import soft_day
@@ -246,7 +247,13 @@ def _is_healthy(
     )
     if trust.score < pool.limits.min_trust_score:
         return False
-    health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
+    health = evaluate_readiness(
+        account,
+        channel_count,
+        spam=spam,
+        trust_score=trust,
+        spam_block_known=spam_block_known(pool.states.get(account.account_id)),
+    )
     return health.ready
 
 

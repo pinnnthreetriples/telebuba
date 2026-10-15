@@ -30,6 +30,7 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
+from schemas.warming import spam_block_known
 from services import _account_owner
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
@@ -37,7 +38,7 @@ from services.warming import _exclusion, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
-from services.warming._start_state import carry_or_restamp, journal_start
+from services.warming._start_state import assert_on_warmed_card, carry_or_restamp, journal_start
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
     _now_iso,
@@ -260,6 +261,7 @@ async def _evaluate_account_readiness(
         channel_count,
         spam=await get_spam_status(account_id),
         trust_score=await account_trust_score(account_id),
+        spam_block_known=spam_block_known(await fetch_warming_state(account_id)),
     )
 
 
@@ -301,16 +303,12 @@ async def _cancel_existing_task(account_id: str) -> None:
     """
     if await _cancel_runtime_task(account_id, last_event="restart_stopping"):
         return
-    await log_event(
-        "WARNING",
-        "warming_restart_timeout",
-        account_id=account_id,
-    )
+    await log_event("WARNING", "warming_restart_timeout", account_id=account_id)
     raise WarmingTaskNotQuiescentError(account_id)
 
 
-async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> WarmingAccountState:
-    """Start the warming loop; ``resume`` carries a graduated stint (``carry_or_restamp``)."""
+async def start_warming(data: StartWarmingRequest, *, rewarm: bool = False) -> WarmingAccountState:
+    """Start the loop; ``rewarm`` also requires the warmed card (``assert_on_warmed_card``)."""
     async with _account_lock(data.account_id):
         account = await fetch_account(data.account_id)
         if account is None:
@@ -335,7 +333,9 @@ async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> W
         # per-booking reservation token still lets normal cancellation hand unused
         # budget back before this new generation is minted.
         existing = await fetch_warming_state(data.account_id)
-        stint = carry_or_restamp(existing, data, account, resume=resume)
+        if rewarm:
+            assert_on_warmed_card(existing, data.account_id)
+        stint = carry_or_restamp(existing, data, account)
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
@@ -371,6 +371,7 @@ async def start_warming(data: StartWarmingRequest, *, resume: bool = False) -> W
                 activity_persona=stint.activity_persona,
                 warmed_days=0 if stint.fresh else None,
                 device_mode=stint.device_mode,
+                wave=stint.wave,
             )
             # Build dialogue ownership before the first cycle; cancellation here is
             # covered by the same rollback as cancellation during the state commit.
@@ -428,7 +429,6 @@ from services.warming._graduation import (  # noqa: E402, F401 - re-export after
     handoff_to_neurocomment,
     promote_to_neurocomment,
     stop_warming,
-    unmark_neurocomment,
 )
 from services.warming._maintenance import (  # noqa: E402, F401 - lifecycle re-exports.
     _purge_loop,

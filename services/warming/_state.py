@@ -62,6 +62,8 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     warmed_days: int | None = None,
     device_mode: DeviceType | None = None,
     cycle_marks: CycleMarks | None = None,
+    wave: int | None = None,
+    spam_blocked_at: str | None = None,
     current: WarmingStateRecord | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
     # ``current`` lets a caller that just read the row (the cycle's snapshot, the
@@ -135,6 +137,10 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             # ``None`` leaves the column alone — see ``WarmingStateWrite.device_mode``.
             device_mode=device_mode,
             cycle_marks=cycle_marks,
+            # Both leave their column alone when ``None``: a start writes the wave, the
+            # spam-block stop (and the operator keeping that account) writes the mark.
+            wave=wave,
+            spam_blocked_at=spam_blocked_at,
         ),
     )
 

@@ -1,4 +1,4 @@
-"""The start dialog's geo consent and «Вернуть в прогрев» (Прогрев 2.0, items 2.2 and 2.5)."""
+"""The start dialog's geo consent and «Вернуть в прогрев» (a new wave from zero)."""
 
 from __future__ import annotations
 
@@ -165,11 +165,11 @@ async def _graduate(*, warmed_days: int, handed_off: bool = False) -> str:
 
 
 @pytest.mark.asyncio
-async def test_resume_continues_the_stint_with_its_worked_days() -> None:
+async def test_rewarm_starts_the_next_wave_from_zero_with_the_dialog_choice() -> None:
     await _account(proxy_country="MX")
-    started = await _graduate(warmed_days=14, handed_off=True)
+    started = await _graduate(warmed_days=14, handed_off=False)
 
-    card = await warming.resume_warming(
+    card = await warming.rewarm_account(
         StartWarmingRequest(account_id="acc-1", target_days=21, activity_persona="calm")
     )
 
@@ -177,10 +177,10 @@ async def test_resume_continues_the_stint_with_its_worked_days() -> None:
     assert record is not None
     assert card.state == "active"
     assert (record.promoted_to_nc, record.nc_handed_off) == (False, False)
-    assert record.started_at == started
-    assert record.warmed_days == 14
-    assert record.last_warmed_date == "2026-06-01"
-    # The dialog's new length and cadence apply to the continued stint.
+    # A fresh stint: a new clock, no worked days carried, the next wave.
+    assert record.started_at != started
+    assert record.warmed_days == 0
+    assert (record.wave, card.wave) == (2, 2)
     assert (record.target_days, record.activity_persona) == (21, "calm")
     assert record.stopped_at is None
 
@@ -198,37 +198,42 @@ async def test_a_plain_start_of_a_graduated_account_still_opens_a_new_stint() ->
     assert record.warmed_days == 0
 
 
+@pytest.mark.parametrize("handed_off", [False, True])
 @pytest.mark.asyncio
-async def test_resume_of_an_account_that_was_never_graduated_starts_fresh() -> None:
+async def test_rewarm_refuses_an_account_not_on_the_warmed_card(*, handed_off: bool) -> None:
     await _account(proxy_country="MX")
-    await upsert_warming_state(
-        WarmingStateWrite(
-            account_id="acc-1",
-            state="idle",
-            started_at="2026-01-01T00:00:00+00:00",
-            warmed_days=3,
-        ),
-    )
+    if handed_off:
+        await _graduate(warmed_days=14, handed_off=True)
+    else:
+        await upsert_warming_state(
+            WarmingStateWrite(
+                account_id="acc-1",
+                state="idle",
+                started_at="2026-01-01T00:00:00+00:00",
+                warmed_days=3,
+            ),
+        )
 
-    await warming.resume_warming(StartWarmingRequest(account_id="acc-1"))
+    with pytest.raises(warming.NotGraduatedError):
+        await warming.rewarm_account(StartWarmingRequest(account_id="acc-1"))
 
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.started_at != "2026-01-01T00:00:00+00:00"
-    assert record.warmed_days == 0
+    assert record.state == "idle"
+    assert "acc-1" not in warming._RUNTIME
 
 
 @pytest.mark.asyncio
-async def test_resume_records_a_geo_consent_too() -> None:
+async def test_rewarm_records_a_geo_consent_too() -> None:
     await _account()
     await _graduate(warmed_days=5)
 
-    await warming.resume_warming(StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True))
+    await warming.rewarm_account(StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True))
 
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.geo_ack == "MX>US"
-    assert record.warmed_days == 5
+    assert record.warmed_days == 0
 
 
 @pytest.mark.asyncio

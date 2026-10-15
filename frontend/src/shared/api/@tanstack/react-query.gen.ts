@@ -108,6 +108,7 @@ import {
   importAccountSession,
   importAccountTdata,
   importMasstaggingTargets,
+  keepSpamBlockedAccount,
   labelWarmingChannel,
   liftWarmingDmPause,
   linkCampaignChannel,
@@ -140,6 +141,7 @@ import {
   listWarmingChannels,
   listWarmingDailyStats,
   listWarmingDialogues,
+  listWarmingWaves,
   login,
   logout,
   logoutAccount,
@@ -167,8 +169,8 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resolveChatBroadcastTargets,
-  resumeWarming,
   resyncAccountAvatar,
+  rewarmAccount,
   saveChatBroadcastPace,
   saveChatBroadcastSettings,
   saveChatCollection,
@@ -213,7 +215,6 @@ import {
   stopWarming,
   submitLoginCode,
   unassignProxy,
-  unpromoteFromNeurocomment,
   updateAccountChannel,
   updateAccountLimits,
   updateAccountProfile,
@@ -525,6 +526,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsError,
   ImportMasstaggingTargetsResponse,
+  KeepSpamBlockedAccountData,
+  KeepSpamBlockedAccountError,
+  KeepSpamBlockedAccountResponse,
   LabelWarmingChannelData,
   LabelWarmingChannelError,
   LabelWarmingChannelResponse,
@@ -621,6 +625,9 @@ import type {
   ListWarmingDialoguesData,
   ListWarmingDialoguesError,
   ListWarmingDialoguesResponse,
+  ListWarmingWavesData,
+  ListWarmingWavesError,
+  ListWarmingWavesResponse,
   LoginData,
   LoginError,
   LoginResponse,
@@ -699,12 +706,12 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsError,
   ResolveChatBroadcastTargetsResponse,
-  ResumeWarmingData,
-  ResumeWarmingError,
-  ResumeWarmingResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  RewarmAccountData,
+  RewarmAccountError,
+  RewarmAccountResponse,
   SaveChatBroadcastPaceData,
   SaveChatBroadcastPaceError,
   SaveChatBroadcastPaceResponse,
@@ -837,9 +844,6 @@ import type {
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
-  UnpromoteFromNeurocommentData,
-  UnpromoteFromNeurocommentError,
-  UnpromoteFromNeurocommentResponse,
   UpdateAccountChannelData,
   UpdateAccountChannelError,
   UpdateAccountChannelResponse,
@@ -3806,24 +3810,24 @@ export const handoffToNeurocommentMutation = (
 };
 
 /**
- * Unpromote Account
+ * Keep Spam Blocked Account
  *
- * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ * «Оставить»: keep an account warming stopped on a confirmed spam block.
  */
-export const unpromoteFromNeurocommentMutation = (
-  options?: Partial<Options<UnpromoteFromNeurocommentData>>,
+export const keepSpamBlockedAccountMutation = (
+  options?: Partial<Options<KeepSpamBlockedAccountData>>,
 ): UseMutationOptions<
-  UnpromoteFromNeurocommentResponse,
-  UnpromoteFromNeurocommentError,
-  Options<UnpromoteFromNeurocommentData>
+  KeepSpamBlockedAccountResponse,
+  KeepSpamBlockedAccountError,
+  Options<KeepSpamBlockedAccountData>
 > => {
   const mutationOptions: UseMutationOptions<
-    UnpromoteFromNeurocommentResponse,
-    UnpromoteFromNeurocommentError,
-    Options<UnpromoteFromNeurocommentData>
+    KeepSpamBlockedAccountResponse,
+    KeepSpamBlockedAccountError,
+    Options<KeepSpamBlockedAccountData>
   > = {
     mutationFn: async (fnOptions) => {
-      const { data } = await unpromoteFromNeurocomment({
+      const { data } = await keepSpamBlockedAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -3833,6 +3837,33 @@ export const unpromoteFromNeurocommentMutation = (
   };
   return mutationOptions;
 };
+
+export const listWarmingWavesQueryKey = (options: Options<ListWarmingWavesData>) =>
+  createQueryKey('listWarmingWaves', options);
+
+/**
+ * List Warming Waves
+ *
+ * Every warming wave of the account's current life: start, end, why, worked days.
+ */
+export const listWarmingWavesOptions = (options: Options<ListWarmingWavesData>) =>
+  queryOptions<
+    ListWarmingWavesResponse,
+    ListWarmingWavesError,
+    ListWarmingWavesResponse,
+    ReturnType<typeof listWarmingWavesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingWaves({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingWavesQueryKey(options),
+  });
 
 /**
  * Start Warming
@@ -3860,20 +3891,20 @@ export const startWarmingMutation = (
 };
 
 /**
- * Resume Warming
+ * Rewarm Account
  *
- * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ * «Вернуть в прогрев»: a graduated account warms again from zero as its next wave.
  */
-export const resumeWarmingMutation = (
-  options?: Partial<Options<ResumeWarmingData>>,
-): UseMutationOptions<ResumeWarmingResponse, ResumeWarmingError, Options<ResumeWarmingData>> => {
+export const rewarmAccountMutation = (
+  options?: Partial<Options<RewarmAccountData>>,
+): UseMutationOptions<RewarmAccountResponse, RewarmAccountError, Options<RewarmAccountData>> => {
   const mutationOptions: UseMutationOptions<
-    ResumeWarmingResponse,
-    ResumeWarmingError,
-    Options<ResumeWarmingData>
+    RewarmAccountResponse,
+    RewarmAccountError,
+    Options<RewarmAccountData>
   > = {
     mutationFn: async (fnOptions) => {
-      const { data } = await resumeWarming({
+      const { data } = await rewarmAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -4099,7 +4130,7 @@ export const updateWarmingSettingsMutation = (
 /**
  * Lift Warming Dm Pause
  *
- * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did.
  */
 export const liftWarmingDmPauseMutation = (
   options?: Partial<Options<LiftWarmingDmPauseData>>,

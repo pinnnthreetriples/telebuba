@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import fetch_warming_state
 from core.logging import log_event
-from schemas.warming import is_warming
+from schemas.warming import is_parked, is_warming
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
 from services.warming._state import _set_state
@@ -45,7 +45,7 @@ def _is_live_generation(record: WarmingStateRecord | None, run_id: str | None) -
     """
     if record is None:
         return False
-    if not is_warming(record.state) or record.state == "error":
+    if not is_warming(record.state) or is_parked(record.state):
         return False
     if run_id is None:
         return True

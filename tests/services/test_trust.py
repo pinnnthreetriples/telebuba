@@ -68,6 +68,24 @@ def test_compute_trust_score_spam_limited_drops_band() -> None:
     assert "spam-limited" in score.reasons
 
 
+def test_a_kept_spam_block_is_not_scored_again() -> None:
+    """The block that confirmed it already shut DMs for good; it must not sink the band."""
+    score = compute_trust_score(
+        TrustSignals(
+            account_id="a",
+            account_status="alive",
+            spam_status="limited",
+            quarantine_count=1,
+            flood_active=False,
+            geo_status="match",
+            proxy_status="tcp_working",
+            age_hours=1000.0,
+            spam_block_known=True,
+        ),
+    )
+    assert (score.score, score.reasons) == (100, [])
+
+
 def test_compute_trust_score_new_account_ramp_is_linear() -> None:
     """0h → full penalty (10); halfway → ~half; threshold → 0. No cliff."""
 

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from core.repositories.logs import list_recent_logs
 from core.repositories.warming_dm_pause import store_dm_paused_until
 
 if TYPE_CHECKING:
@@ -35,6 +36,18 @@ async def test_the_pause_shows_on_settings_and_board_and_the_lift_clears_it(app:
     assert lift_resp.status_code == 200
     assert lift_resp.json()["dm_paused_until"] is None
     assert after.json()["dm_paused_until"] is None
+    lifted = [e for e in await list_recent_logs() if e.event == "warming_dm_fleet_pause_lifted"]
+    # Who reopened DMs for the whole fleet: the signed-in operator's login, nothing else.
+    assert [entry.extra for entry in lifted] == [{"operator": "admin"}]
+
+
+@pytest.mark.asyncio
+async def test_a_lift_without_a_pause_logs_nothing(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/dm-pause/lift")
+
+    assert resp.status_code == 200
+    assert not [e for e in await list_recent_logs() if e.event == "warming_dm_fleet_pause_lifted"]
 
 
 @pytest.mark.asyncio

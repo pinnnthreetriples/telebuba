@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from core.config import settings
 from core.db import get_spam_status, list_warming_channels
 from core.logging import log_event
-from schemas.warming import WarmingCycleResult
+from schemas.warming import WarmingCycleResult, is_parked, spam_block_known
 from services.lifecycle_journal import record_lifecycle_event
 from services.trust import account_trust_score
 from services.warming import _seams
@@ -69,7 +69,7 @@ def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -
     """
     if record is None:
         return run_id is None  # no DB row + no expectation → trivially "match"
-    if record.state in ("idle", "error"):
+    if record.state == "idle" or is_parked(record.state):
         return False
     if run_id is None:
         return True
@@ -109,7 +109,13 @@ async def _gate_readiness(  # noqa: PLR0913 - explicit readiness signals read cl
     else:
         channel_count = len((await list_warming_channels()).channels)
         spam = await get_spam_status(account_id)
-    readiness = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
+    readiness = evaluate_readiness(
+        account,
+        channel_count,
+        spam=spam,
+        trust_score=trust,
+        spam_block_known=spam_block_known(record),
+    )
     if readiness.ready:
         return None
     reasons = "; ".join(readiness.reasons)

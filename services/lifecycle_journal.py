@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, NamedTuple
 
-from core.db import fetch_account, get_spam_status
+from core.db import fetch_account
 from core.repositories.lifecycle import (
     append_lifecycle_event,
     fetch_lifecycle_snapshot,
@@ -23,7 +23,7 @@ from core.repositories.lifecycle import (
 )
 
 if TYPE_CHECKING:
-    from schemas.accounts import AccountStatus
+    from schemas.accounts import AccountRead, AccountStatus
     from schemas.lifecycle import (
         DeleteReason,
         LifecycleEvent,
@@ -33,9 +33,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Session-check verdicts that mean the session is gone for good: Telegram revoked the
-# authorization, or the account itself was deactivated/banned.
-DEAD_SESSION_STATUSES: frozenset[AccountStatus] = frozenset({"unauthorized", "account_error"})
+# Session-check verdicts that mean the account is gone for good: Telegram revoked the
+# authorization, deactivated or banned the account, or froze it.
+DEAD_SESSION_STATUSES: frozenset[AccountStatus] = frozenset(
+    {"unauthorized", "account_error", "frozen"},
+)
 
 
 async def record_lifecycle_event(
@@ -61,7 +63,7 @@ async def record_lifecycle_event(
         )
 
 
-def _current_life(events: list[LifecycleEvent], born_at: str | None) -> list[LifecycleEvent]:
+def current_life(events: list[LifecycleEvent], born_at: str | None) -> list[LifecycleEvent]:
     """Events of the live account only: a re-imported id must not inherit a past death.
 
     Two independent boundaries, because the ``deleted`` row is best-effort and may be
@@ -75,27 +77,41 @@ def _current_life(events: list[LifecycleEvent], born_at: str | None) -> list[Lif
     return [event for event in since_delete if event.created_at >= born_at]
 
 
-def _is_death_event(event: LifecycleEvent) -> bool:
-    if event.kind == "session_dead":
-        return True
-    return event.kind == "spambot_verdict" and event.extra.get("status") == "limited"
-
-
 async def guess_delete_reason(account_id: str) -> DeleteReason:
-    """``dead`` when @SpamBot ever limited the account or its session died, else ``retired``.
+    """``dead`` when the account's session died for good, else ``retired``.
 
-    Reads the live account status and cached spam verdict as well as the journal, so an
-    account whose death predates the journal is still recognised.
+    Reads the live account status as well as the journal, so an account whose death
+    predates the journal is still recognised. A spam block is NOT a death: the account
+    still works, so deleting one is the operator writing it off.
     """
     account = await fetch_account(account_id)
     if account is not None and account.status in DEAD_SESSION_STATUSES:
         return "dead"
-    verdict = await get_spam_status(account_id)
-    if verdict is not None and verdict.status == "limited":
-        return "dead"
     born_at = account.created_at if account is not None else None
-    events = _current_life(await list_lifecycle_events(account_id), born_at)
-    return "dead" if any(_is_death_event(event) for event in events) else "retired"
+    events = current_life(await list_lifecycle_events(account_id), born_at)
+    return "dead" if any(event.kind == "session_dead" for event in events) else "retired"
+
+
+async def record_session_death(account: AccountRead, status: AccountStatus) -> None:
+    """Journal that a session check found ``account`` gone for good — once per death.
+
+    Written on the transition into a dead status, and also when the account already
+    wears one with no death on its life's record: a Telegram action can mark an account
+    ``frozen`` without any session check seeing it. A ``new`` import never lived.
+    Never raises (the journal never breaks its caller).
+    """
+    if status not in DEAD_SESSION_STATUSES or account.status == "new":
+        return
+    if account.status in DEAD_SESSION_STATUSES:
+        try:
+            events = await list_lifecycle_events(account.account_id)
+        except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
+            logger.warning("lifecycle journal read failed: %s", type(exc).__name__, exc_info=exc)
+            return
+        life = current_life(events, account.created_at)
+        if any(event.kind == "session_dead" for event in life):
+            return
+    await record_lifecycle_event(account.account_id, "session_dead", {"status": status})
 
 
 class PendingDeletion(NamedTuple):
@@ -126,8 +142,15 @@ async def prepare_account_deleted(
             exc_info=exc,
         )
         return None
-    source = "operator" if reason else "guess"
-    return PendingDeletion(account_id, {"reason": resolved, "reason_source": source}, snapshot)
+    extra: dict[str, object] = {
+        "reason": resolved,
+        "reason_source": "operator" if reason else "guess",
+    }
+    if reason is None and resolved == "dead":
+        # Guessed dead only ever on a dead session now; survival trusts a guess with this
+        # evidence and treats older guesses (made on a spam limit) as write-offs.
+        extra["evidence"] = "session"
+    return PendingDeletion(account_id, extra, snapshot)
 
 
 async def record_account_deleted(pending: PendingDeletion | None) -> None:

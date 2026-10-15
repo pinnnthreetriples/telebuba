@@ -14,6 +14,7 @@ import pytest
 
 from core.db import _metadata
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
+from core.migration_steps_waves import _allow_lifecycle_warming_stopped
 from core.migrations import MIGRATIONS, apply_migrations
 from tests.core.test_migrations_scheduled_posts import _checks, _shape
 
@@ -82,6 +83,9 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
 def test_created_and_migrated_schemas_match(
     created_engine: Engine, migrated_engine: Engine
 ) -> None:
+    # 95 widened the kind CHECK by rebuilding the table; 74 + 95 is today's schema.
+    with migrated_engine.begin() as connection:
+        _allow_lifecycle_warming_stopped(connection)
     assert _shape(created_engine, _TABLE) == _shape(migrated_engine, _TABLE)
     assert any("'session_dead'" in check for check in _checks(created_engine, _TABLE))
 

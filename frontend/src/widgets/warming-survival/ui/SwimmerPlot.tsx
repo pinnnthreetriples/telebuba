@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next';
 
-import type { SurvivalStint } from '@/shared/api';
+import type { SurvivalLife } from '@/shared/api';
 import { cn } from '@/shared/lib';
 import { EmptyState, Icon } from '@/shared/ui';
 
-// One row per stint on a shared day axis (a swimmer plot): the warming stretch blue, the
-// life after release green, a dot on each spam block, a cross on the day of death. A
-// written-off or warmed-again row is grey from its release on: it left the count.
-const AFTER: Record<SurvivalStint['status'], string> = {
+// One row per account life on a shared day axis (a swimmer plot): the warming stretch
+// blue, the life after its first release green, a dot on each wound (a spam block or a
+// flood), a tick where a new wave began («Вернуть в прогрев»), a cross on the day of
+// death. A written-off row is grey from its release on: it left the count.
+const AFTER: Record<SurvivalLife['status'], string> = {
   warming: 'bg-action-primary',
   alive: 'bg-success',
   wounded: 'bg-success',
@@ -20,7 +21,7 @@ function pct(day: number, span: number): string {
   return `${String((Math.min(day, span) / span) * 100)}%`;
 }
 
-function StintBar({ stint, span }: { stint: SurvivalStint; span: number }) {
+function LifeBar({ stint, span }: { stint: SurvivalLife; span: number }) {
   const { t } = useTranslation();
   const release = stint.release_day ?? stint.end_day;
   const cause = stint.cause ? t(`warming.survival.causes.${stint.cause}`) : '';
@@ -40,6 +41,16 @@ function StintBar({ stint, span }: { stint: SurvivalStint; span: number }) {
           style={{ left: pct(release, span), width: pct(stint.end_day - release, span) }}
         />
       )}
+      {stint.waves
+        ?.filter((wave) => wave.wave > 1)
+        .map((wave) => (
+          <span
+            key={`wave-${String(wave.wave)}`}
+            title={t('warming.survival.swimmer.wave', { wave: wave.wave, day: wave.start_day })}
+            className="absolute top-1/2 h-badge w-0 -translate-y-1/2 border-l border-line-strong"
+            style={{ left: pct(wave.start_day, span) }}
+          />
+        ))}
       {stint.wound_days?.map((day, index) => (
         <span
           key={`${String(day)}-${String(index)}`}
@@ -61,16 +72,16 @@ function StintBar({ stint, span }: { stint: SurvivalStint; span: number }) {
   );
 }
 
-export function SwimmerPlot({ stints }: { stints: readonly SurvivalStint[] }) {
+export function SwimmerPlot({ lives }: { lives: readonly SurvivalLife[] }) {
   const { t } = useTranslation();
-  if (stints.length === 0) {
+  if (lives.length === 0) {
     return <EmptyState size="sm">{t('warming.survival.swimmer.empty')}</EmptyState>;
   }
-  const span = Math.max(1, ...stints.map((stint) => stint.end_day));
+  const span = Math.max(1, ...lives.map((life) => life.end_day));
   return (
     <div>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {stints.map((stint) => {
+        {lives.map((stint) => {
           const status = t(`warming.survival.status.${stint.status}`);
           return (
             <li
@@ -85,7 +96,7 @@ export function SwimmerPlot({ stints }: { stints: readonly SurvivalStint[] }) {
               <span className="truncate type-small">
                 {stint.label} · {status}
               </span>
-              <StintBar stint={stint} span={span} />
+              <LifeBar stint={stint} span={span} />
             </li>
           );
         })}

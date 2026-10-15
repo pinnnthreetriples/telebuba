@@ -14,7 +14,7 @@ test('the badge says the day after release and the status', () => {
 
 test('a dead account wears the danger tone', () => {
   render(
-    <SurvivalBadge survival={{ days_since_release: 3, status: 'dead', cause: 'spam_limited' }} />,
+    <SurvivalBadge survival={{ days_since_release: 3, status: 'dead', cause: 'session_dead' }} />,
   );
 
   expect(screen.getByText('День 3 после выпуска · умер').className).toContain('danger');

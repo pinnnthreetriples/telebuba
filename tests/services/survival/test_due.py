@@ -6,8 +6,8 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from services.survival._due import ProbeCandidate, ProbePacing, pick_due_probe
-from services.survival._outcomes import stint_facts
-from services.survival._stints import build_stints
+from services.survival._outcomes import life_facts
+from services.survival._stints import build_lives
 from tests.services.survival._support import GRACE, at, clean, limited, released_life, row
 
 if TYPE_CHECKING:
@@ -21,8 +21,8 @@ def _pacing(day: float) -> ProbePacing:
 
 
 def _candidate(events: list[LifecycleEvent], proxy: str = "p1") -> ProbeCandidate:
-    stint = build_stints(events)[-1]
-    return ProbeCandidate(stint.account_id, proxy, stint_facts(stint))
+    life = build_lives(events)[-1]
+    return ProbeCandidate(life.account_id, proxy, life_facts(life))
 
 
 def test_day_seven_without_an_answer_is_due() -> None:
@@ -59,14 +59,25 @@ def test_an_old_release_asks_once_for_day_thirty() -> None:
     assert due.window == "d30"
 
 
-def test_dead_written_off_and_unreleased_stints_are_never_asked() -> None:
-    dead = _candidate([*released_life(14, account="a"), limited(15, account="a")])
+def test_dead_written_off_and_unreleased_lives_are_never_asked() -> None:
+    dead = _candidate(
+        [*released_life(14, account="a"), row("session_dead", 15, account="a", status="frozen")]
+    )
     written_off = _candidate(
         [*released_life(14, account="b"), row("deleted", 15, account="b", reason="retired")]
     )
     warming = _candidate([row("warming_started", 0, account="c")])
 
     assert pick_due_probe([dead, written_off, warming], {}, {}, _pacing(40)) is None
+
+
+def test_a_spam_blocked_account_is_still_asked_it_is_alive() -> None:
+    wounded = _candidate([*released_life(14), limited(15)])
+
+    due = pick_due_probe([wounded], {}, {}, _pacing(21.5))
+
+    assert due is not None
+    assert due.window == "d7"
 
 
 def test_the_most_overdue_goes_first() -> None:

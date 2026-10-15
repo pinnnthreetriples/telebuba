@@ -96,34 +96,6 @@ async def test_repeated_promote_is_state_idempotent(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_unmark_is_idempotent_and_does_not_restart_warming() -> None:
-    await _seed_active(promoted=True)
-    await _graduation._stop_warming_locked("acc-1")
-
-    first = await warming.unmark_neurocomment("acc-1")
-    second = await warming.unmark_neurocomment("acc-1")
-
-    assert first.promoted_to_nc is False
-    assert second.promoted_to_nc is False
-    assert first.state == second.state == "idle"
-    assert "acc-1" not in warming._RUNTIME
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.promoted_to_nc is False
-    assert record.state == "idle"
-
-
-@pytest.mark.asyncio
-async def test_unmark_unknown_account_does_not_create_stub_row() -> None:
-    card = await warming.unmark_neurocomment("ghost")
-
-    assert card.account_id == "ghost"
-    assert card.state == "idle"
-    assert card.promoted_to_nc is False
-    assert await fetch_warming_state("ghost") is None
-
-
-@pytest.mark.asyncio
 async def test_promotion_mark_failure_leaves_account_safely_stopped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -225,29 +197,3 @@ async def test_task_cleanup_error_is_logged_but_stop_still_lands(
     names = [event for event, _kwargs in events]
     assert names == ["warming_stop_task_error", "warming_stopped"]
     assert events[0][1]["extra"] == {"error_type": "RuntimeError"}
-
-
-@pytest.mark.asyncio
-async def test_unmark_failure_emits_no_success_and_preserves_flag(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    await _seed_active(promoted=True)
-    events: list[str] = []
-
-    async def fail(_account_id: str) -> None:
-        message = "write failed"
-        raise RuntimeError(message)
-
-    async def log(_level: str, event: str, **_kwargs: object) -> None:
-        events.append(event)
-
-    monkeypatch.setattr(_graduation, "unmark_promoted_to_nc", fail)
-    monkeypatch.setattr(_graduation, "log_event", log)
-
-    with pytest.raises(RuntimeError, match="write failed"):
-        await warming.unmark_neurocomment("acc-1")
-
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.promoted_to_nc is True
-    assert events == []

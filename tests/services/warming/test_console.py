@@ -7,6 +7,7 @@ owns the words.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +19,7 @@ from schemas.warming import (
     WarmingStateRecord,
 )
 from services.warming._console import (
+    account_dm_status,
     account_geo,
     attention,
     dm_status,
@@ -26,6 +28,9 @@ from services.warming._console import (
     settled_today,
 )
 from tests.services.warming._support import _account
+
+if TYPE_CHECKING:
+    from schemas._warming_console import DmStatus
 
 _NOW = datetime(2026, 6, 13, 12, 0, tzinfo=UTC)
 _READY = WarmingReadiness(ready=True)
@@ -135,7 +140,6 @@ def test_a_flood_wait_names_its_deadline() -> None:
     [
         ("stop_timeout", "stopping"),
         ("restart_stopping", "stopping"),
-        ("quarantine_exhausted", "quarantine_exhausted"),
         ("quarantine_unreadable", "quarantine_unreadable"),
     ],
 )
@@ -155,6 +159,32 @@ def test_readiness_outranks_a_plain_error_and_carries_its_reasons() -> None:
     plain = attention(_record(state="error", last_event="loop_crashed"), _READY)
     assert plain is not None
     assert plain.code == "error"
+
+
+def test_a_spam_block_outranks_everything_and_a_kept_one_needs_no_look() -> None:
+    stopped = attention(_record(state="spam_blocked", last_event="spam_blocked"), _NOT_READY)
+    kept = attention(_record(state="idle", spam_blocked_at="2026-10-01T00:00:00+00:00"), _READY)
+
+    assert stopped is not None
+    assert stopped.code == "spam_blocked"
+    assert kept is None
+
+
+@pytest.mark.parametrize(
+    ("fleet", "expected"),
+    [
+        ("on", "spam_blocked"),
+        ("trust", "spam_blocked"),
+        ("paused", "spam_blocked"),
+        ("chat_off", "chat_off"),
+        ("no_llm_key", "no_llm_key"),
+    ],
+)
+def test_a_known_spam_block_shuts_dms_after_the_fleet_switches(
+    fleet: DmStatus, expected: DmStatus
+) -> None:
+    assert account_dm_status(fleet, spam_blocked=True) == expected
+    assert account_dm_status(fleet, spam_blocked=False) == fleet
 
 
 def test_a_healthy_card_needs_no_attention() -> None:

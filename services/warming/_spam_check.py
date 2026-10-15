@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import get_spam_status, record_spam_check_outcome
 from core.logging import log_event
-from schemas.warming import WarmingCycleResult
+from schemas.warming import WarmingCycleResult, spam_block_known
 from services.warming import _seams
 from services.warming._state import _set_state
 
@@ -136,7 +136,7 @@ async def _spam_step(
     *,
     run_id: str | None,
 ) -> tuple[WarmingCycleResult | None, bool]:
-    """The cycle's spam step: ask when due, quarantine on ``limited``.
+    """The cycle's spam step: ask when due, quarantine on a new ``limited``.
 
     An unreadable answer adds one to the streak and lets the cycle go on — the next
     cycle asks again; a reading resets the streak. Returns the terminal result when
@@ -164,6 +164,8 @@ async def _spam_step(
                 account_id=account_id,
                 extra={"streak": streak},
             )
-    if verdict.status == "limited":
+    # A kept account's block is already known: its ``limited`` is no news, warming goes
+    # on without DMs instead of re-entering the quarantine ladder it already finished.
+    if verdict.status == "limited" and not spam_block_known(record):
         return await _quarantine_limited(account_id, now, run_id=run_id), True
     return None, True

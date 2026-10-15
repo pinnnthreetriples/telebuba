@@ -135,6 +135,8 @@ def evaluate_readiness(
     channel_count: int,
     spam: SpamStatusVerdict | None = None,
     trust_score: TrustScore | None = None,
+    *,
+    spam_block_known: bool = False,
 ) -> WarmingReadiness:
     """Decide whether an account can safely start warming, from last-known state.
 
@@ -142,6 +144,8 @@ def evaluate_readiness(
     show a badge cheaply and ``start_warming`` can refuse broken accounts.
 
     Only ``new`` and permanent statuses block; transient ones are the loop's business.
+    ``spam_block_known``: the operator kept this account after @SpamBot confirmed its
+    spam block, so ``limited`` is its known condition, not a reason to refuse it.
     """
     reasons: list[str] = []
     if account.status == "new" or health_for_status(account.status) == "fail":
@@ -152,7 +156,7 @@ def evaluate_readiness(
         reasons.append("proxy failed")
     if channel_count <= 0:
         reasons.append("no channels")
-    if spam and spam.status == "limited":
+    if spam and spam.status == "limited" and not spam_block_known:
         reasons.append("spam limited")
     if trust_score and trust_score.band == "critical":
         reasons.append("trust critical")

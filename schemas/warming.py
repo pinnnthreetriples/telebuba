@@ -5,7 +5,8 @@ Data contract only — no behaviour, no I/O (non-negotiable #2). Flows between t
 
 ``WarmingState``: idle (not running) · active (running a cycle) · sleeping
 (waiting for the next persona-paced run) · flood_wait / quarantine (cooling
-down) · error (last cycle failed).
+down) · error (last cycle failed) · spam_blocked (@SpamBot confirmed a spam block on
+the quarantine re-check: warming stopped, waiting for the operator to delete or keep).
 """
 
 from __future__ import annotations
@@ -44,17 +45,28 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
+from schemas._warming_states import (  # noqa: F401, TC001 - runtime re-export, not type-only
+    WarmingHealth,
+    WarmingState,
+    is_parked,
+    is_warming,
+    spam_block_known,
+    warming_health,
+)
 from schemas._warming_visits import CadencePreview, CycleMarks, VisitPlan  # noqa: TC001
 from schemas.device_fingerprint import DeviceType, desktop_only
 
-WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
-WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
 # test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
 _RUN_HOLDS = Literal[_CAMPAIGN_HOLDS, "account_busy_user_parser", "account_busy_masstagging"]
 _SPAM = Literal["spam_check_unavailable", "spam_limited"]  # hand-off's @SpamBot refusals
-WarmingRefusalCode = Literal["account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM]
+# A stale card: «Вернуть в прогрев» on an account no longer graduated, «Оставить» on one
+# no longer stopped on a spam block.
+_STALE_CARD = Literal["not_graduated", "not_spam_blocked"]
+WarmingRefusalCode = Literal[
+    "account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM, _STALE_CARD
+]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and
@@ -65,32 +77,6 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 # by the phase ceiling (effective = min(persona, phase/trust)); orthogonal to
 # ``WarmingPhase``. Current contract: ``.mex/context/runtime.md`` and ``services.warming.pacing``.
 ActivityPersona = Literal["calm", "normal", "active"]
-
-_ACTIVE_STATES: frozenset[WarmingState] = frozenset(
-    {"active", "sleeping", "flood_wait", "quarantine", "error"},
-)
-
-
-def warming_health(state: WarmingState) -> WarmingHealth:
-    """Map a warming state to a traffic-light colour for the UI.
-
-    - ``ok`` (green)  — actively warming.
-    - ``warn`` (amber) — sleeping between cycles, flood-waited, or quarantined.
-    - ``fail`` (red)  — last cycle errored.
-    - ``idle`` (grey) — not being warmed.
-    """
-    if state == "active":
-        return "ok"
-    if state in {"sleeping", "flood_wait", "quarantine"}:
-        return "warn"
-    if state == "error":
-        return "fail"
-    return "idle"
-
-
-def is_warming(state: WarmingState) -> bool:
-    """True when the account belongs in the right-hand (warming) kanban column."""
-    return state in _ACTIVE_STATES
 
 
 class WarmingIntensity(BaseModel):
@@ -252,6 +238,10 @@ class WarmingStateWrite(BaseModel):
     # writes it with ``last_warmed_date``.
     warmed_days: int | None = Field(default=None, ge=0)
     last_warmed_date: str | None = None
+    # ``None`` leaves the column alone, like ``device_mode``: only a start writes the
+    # stint's wave, only the spam-block stop (or keeping that account) the mark.
+    wave: int | None = Field(default=None, ge=1)
+    spam_blocked_at: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -404,7 +394,7 @@ class StartWarmingRequest(StartWindow):
 
 
 class PromoteRequest(BaseModel):
-    """Body for promote/unpromote: graduate an account to/from the neurocomment pool."""
+    """Body naming one account: promote, the spam-block «Оставить» and the like."""
 
     account_id: str = Field(min_length=1)
 
