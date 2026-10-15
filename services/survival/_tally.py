@@ -30,6 +30,7 @@ from services.survival._outcomes import (
 from services.survival._stints import parse_moment
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime, timedelta
 
     from schemas.survival import SurvivalCohortKind, SurvivalWindow
@@ -101,19 +102,28 @@ def tally_windows(judged: list[Judged], clock: Clock) -> list[SurvivalCounter]:
     return [tally(judged, window, clock) for window in SURVIVAL_WINDOWS]
 
 
+def _week_key(item: Judged) -> str:
+    year, week, _ = deciding_wave(item.life).started_at.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def _length_key(item: Judged) -> str | None:
+    days = item.cohorts.target_days
+    return str(days) if days is not None else None
+
+
+_COHORT_KEYS: dict[SurvivalCohortKind, Callable[[Judged], str | None]] = {
+    "week": _week_key,
+    "waves": lambda item: str(len(item.life.waves)),
+    "persona": lambda item: item.cohorts.persona,
+    "length": _length_key,
+    "proxy_country": lambda item: item.cohorts.proxy_country,
+}
+
+
 def cohort_key(item: Judged, kind: SurvivalCohortKind) -> str | None:
     """The cohort a life falls in: start week, persona, length, country or wave count."""
-    if kind == "week":
-        year, week, _ = deciding_wave(item.life).started_at.isocalendar()
-        return f"{year}-W{week:02d}"
-    if kind == "waves":
-        return str(len(item.life.waves))
-    if kind == "persona":
-        return item.cohorts.persona
-    if kind == "length":
-        days = item.cohorts.target_days
-        return str(days) if days is not None else None
-    return item.cohorts.proxy_country
+    return _COHORT_KEYS[kind](item)
 
 
 def _numeric(kind: SurvivalCohortKind) -> bool:

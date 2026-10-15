@@ -26,6 +26,7 @@ from services.warming._chat_text import _sanitize_chat_text
 from services.warming._console_start import rewarm_account, start_warming_with_consent
 from services.warming._cycle import run_one_cycle
 from services.warming._exclusion import AccountUnavailableError
+from services.warming._graduation import keep_spam_blocked
 from services.warming._handoff_spam import HandoffSpamRefusedError
 from services.warming._loop import run_loop_iteration
 from services.warming._runner import _initial_delay_seconds, _loop_sleep_seconds
@@ -33,14 +34,12 @@ from services.warming._runtime import (
     _ACCOUNT_LOCKS,
     _RUNTIME,
     AccountIsListenerError,
-    NotGraduatedError,
     UnknownAccountError,
     WarmingNotReadyError,
     WarmingTaskNotQuiescentError,
     _stop_warming_locked,
     account_lock,
     handoff_to_neurocomment,
-    keep_spam_blocked,
     promote_to_neurocomment,
     reconcile_warming_runtime,
     shutdown_warming_runtime,
@@ -49,7 +48,7 @@ from services.warming._runtime import (
 )
 from services.warming._spam_block import NotSpamBlockedError
 from services.warming._start_options import preview_start
-from services.warming._start_state import WarmingDeviceUnavailableError
+from services.warming._start_state import NotGraduatedError, WarmingDeviceUnavailableError
 from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import (

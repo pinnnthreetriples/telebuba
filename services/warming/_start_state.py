@@ -36,6 +36,20 @@ class WarmingDeviceUnavailableError(ValueError):
         super().__init__(f"{code}: {account_id}")
 
 
+class NotGraduatedError(ValueError):
+    """«Вернуть в прогрев» on an account that is not on the warmed card (anymore)."""
+
+
+def assert_on_warmed_card(existing: WarmingStateRecord | None, account_id: str) -> None:
+    """Refuse «Вернуть в прогрев» unless the account is graduated and not handed off.
+
+    Checked under the account lock, so a stale click cannot restart an account someone
+    already moved on; a graduated account is idle, so the start is a fresh wave.
+    """
+    if existing is None or not existing.promoted_to_nc or existing.nc_handed_off:
+        raise NotGraduatedError(account_id)
+
+
 class CarriedStint(NamedTuple):
     """Stable fields that one warming start writes to the account row."""
 

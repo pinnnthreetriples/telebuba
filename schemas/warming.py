@@ -40,13 +40,17 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
+from schemas._warming_states import (  # noqa: F401, TC001 - runtime re-export, not type-only
+    WarmingHealth,
+    WarmingState,
+    is_parked,
+    is_warming,
+    spam_block_known,
+    warming_health,
+)
 from schemas._warming_visits import CadencePreview, CycleMarks, VisitPlan  # noqa: TC001
 from schemas.device_fingerprint import DeviceType, desktop_only
 
-WarmingState = Literal[
-    "idle", "active", "sleeping", "flood_wait", "quarantine", "error", "spam_blocked"
-]
-WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
 # test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
@@ -68,46 +72,6 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 # by the phase ceiling (effective = min(persona, phase/trust)); orthogonal to
 # ``WarmingPhase``. Current contract: ``.mex/context/runtime.md`` and ``services.warming.pacing``.
 ActivityPersona = Literal["calm", "normal", "active"]
-
-_ACTIVE_STATES: frozenset[WarmingState] = frozenset(
-    {"active", "sleeping", "flood_wait", "quarantine", "error", "spam_blocked"},
-)
-# On the warming board, yet no loop runs: the operator has to act first.
-_PARKED_STATES: frozenset[WarmingState] = frozenset({"error", "spam_blocked"})
-
-
-def warming_health(state: WarmingState) -> WarmingHealth:
-    """Map a warming state to a traffic-light colour for the UI.
-
-    - ``ok`` (green)  — actively warming.
-    - ``warn`` (amber) — sleeping between cycles, flood-waited, or quarantined.
-    - ``fail`` (red)  — last cycle errored, or @SpamBot confirmed a spam block.
-    - ``idle`` (grey) — not being warmed.
-    """
-    if state == "active":
-        return "ok"
-    if state in {"sleeping", "flood_wait", "quarantine"}:
-        return "warn"
-    if state in _PARKED_STATES:
-        return "fail"
-    return "idle"
-
-
-def is_warming(state: WarmingState) -> bool:
-    """True when the account belongs in the right-hand (warming) kanban column."""
-    return state in _ACTIVE_STATES
-
-
-def is_parked(state: WarmingState) -> bool:
-    """True for a warming-column state no loop runs in (``error``, ``spam_blocked``)."""
-    return state in _PARKED_STATES
-
-
-def spam_block_known(record: WarmingStateRecord | None) -> bool:
-    """True once @SpamBot confirmed this account life's spam block (see ``_spam_block``)."""
-    if record is None:
-        return False
-    return record.state == "spam_blocked" or record.spam_blocked_at is not None
 
 
 class WarmingIntensity(BaseModel):
