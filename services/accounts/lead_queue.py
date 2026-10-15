@@ -43,10 +43,13 @@ class _Loop:
 _LOOP = _Loop()
 
 
-def _wake(*, interrupt: bool = False) -> None:
+def _wake(*, paused: bool | None = None) -> None:
+    """Wake the loop; a settings save also sets (pause) or clears (resume) its cancel."""
     if _LOOP.runner is not None:
-        if interrupt:
+        if paused is True:
             _LOOP.runner.cancel.set()
+        elif paused is False:
+            _LOOP.runner.cancel.clear()
         _LOOP.runner.wakeup.set()
 
 
@@ -103,7 +106,7 @@ async def update_lead_queue_settings(
     if saved.paused:
         for record in await runs_repo.list_live_bulk_runs("lead_queue"):
             await bulk_messages.cancel_bulk_message_job(record.id, record.owner_user_id)
-    _wake(interrupt=saved.paused)
+    _wake(paused=saved.paused)
     return saved
 
 

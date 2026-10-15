@@ -565,7 +565,8 @@
         "addError": "Could not add the numbers.",
         "list": "Latest leads",
         "remove": "Remove {{phone}} from the queue",
-        "removeError": "Could not remove the lead: it is already being sent.",
+        "removeBusy": "Could not remove the lead: it is already being sent.",
+        "removeError": "Could not remove the lead.",
         "count": {
           "pending": "to look up: {{n}}",
           "found": "found: {{n}}",

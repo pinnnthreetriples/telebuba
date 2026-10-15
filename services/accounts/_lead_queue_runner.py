@@ -112,7 +112,8 @@ def _run_request(leads: list[LeadQueueItem], text: str) -> BulkMessageRequest:
 class LeadQueueRunner:
     def __init__(self) -> None:
         self.wakeup = asyncio.Event()
-        # Set by a pause: interrupts a lookup pass in flight; cleared by the next pass.
+        # Set by a pause, cleared only by a resume: no stale tick can clear it, so a
+        # lookup never starts (and one in flight stops) once a pause is saved.
         self.cancel = asyncio.Event()
         self.next_lookup_at: datetime | None = None
         # Account -> UTC day it rests from lookups (stopped or silently limited).
@@ -165,7 +166,9 @@ class LeadQueueRunner:
             return self.next_lookup_at
         day = now.date().isoformat()
         accounts = [a for a in configured.account_ids if self.lookup_rest.get(a) != day]
-        self.cancel.clear()
+        if self.cancel.is_set():
+            # Paused after this tick read the settings: the next tick sees the pause.
+            return now
         checked, resting = (
             await run_lookup_pass(accounts, limits, now, self.cancel) if accounts else (0, set())
         )

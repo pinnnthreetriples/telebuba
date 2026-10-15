@@ -7,8 +7,8 @@ import pytest
 from core.repositories import bulk_runs as runs_repo
 from core.repositories import lead_queue as repo
 from schemas.bulk_messages import BulkMessageRequest
-from schemas.lead_queue import LeadQueueSettings
-from services.accounts import _lead_queue_lookup, bulk_messages
+from schemas.lead_queue import LeadQueueSettings, LeadQueueSettingsUpdate
+from services.accounts import _lead_queue_lookup, bulk_messages, lead_queue
 from services.accounts._lead_queue_runner import LeadQueueRunner
 from tests.services.accounts.test_lead_queue_runner import (
     _by_phone,
@@ -137,16 +137,23 @@ async def test_a_live_run_nobody_drives_is_launched_again(monkeypatch: pytest.Mo
 
 
 @pytest.mark.asyncio
-async def test_a_resumed_queue_looks_up_again_after_a_pause_interrupted_it(
+async def test_a_pause_request_holds_until_a_resume_clears_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     telegram = _Telegram()
     await _setup(monkeypatch, telegram, accounts=("a1",), phones=_phones(1))
     runner = LeadQueueRunner()
+    monkeypatch.setattr(lead_queue._LOOP, "runner", runner)
+    # A pause saved after this tick read the (unpaused) settings.
     runner.cancel.set()
 
     await runner.tick(_now())
+    assert telegram.batches == []
 
+    await lead_queue.update_lead_queue_settings(
+        LeadQueueSettingsUpdate(account_ids=["a1"], text="Hello", paused=False), "owner-1"
+    )
+    await runner.tick(_now())
     assert telegram.batches == [("a1", _phones(1))]
 
 

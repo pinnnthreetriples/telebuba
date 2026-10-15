@@ -19,7 +19,9 @@ function respond(body: unknown, status = 200): Response {
 
 type Sent = { method: string; path: string; body: unknown };
 
-function mockApi(options: { paused?: boolean; items?: LeadQueueItem[] } = {}) {
+function mockApi(
+  options: { paused?: boolean; items?: LeadQueueItem[]; removeStatus?: number } = {},
+) {
   const sent: Sent[] = [];
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
@@ -47,7 +49,10 @@ function mockApi(options: { paused?: boolean; items?: LeadQueueItem[] } = {}) {
       return respond({ account_ids: [], text: '', paused: true, owner_user_id: 'u1' });
     }
     if (path.startsWith('/api/v1/accounts/lead-queue/leads/')) {
-      return new Response(null, { status: 204 });
+      const status = options.removeStatus ?? 204;
+      if (status === 204) return new Response(null, { status });
+      const code = status === 409 ? 'conflict' : 'not_found';
+      return respond({ error: { code, message: 'no' } }, status);
     }
     return respond({ error: { code: 'not_found', message: 'no' } }, 404);
   });
@@ -146,5 +151,22 @@ test('only a lead no run holds yet offers removal', async () => {
     expect(sent.some((call) => call.method === 'DELETE' && call.path.endsWith('/leads/1'))).toBe(
       true,
     );
+  });
+});
+
+test.each([
+  [409, 'Не удалось убрать заявку: она уже отправляется.', 1],
+  [404, 'Не удалось убрать заявку.', 2],
+])('a %i on removal says why, and a gone lead refreshes the list', async (status, text, reads) => {
+  const sent = mockApi({ items: [lead(1, '+15550000001', 'pending')], removeStatus: status });
+  const user = userEvent.setup();
+  renderPanel([], '');
+  await user.click(screen.getByRole('button', { name: 'Очередь заявок' }));
+
+  await user.click(await screen.findByRole('button', { name: 'Убрать +15550000001 из очереди' }));
+
+  expect(await screen.findByText(text)).toBeTruthy();
+  await vi.waitFor(() => {
+    expect(sent.filter((call) => call.method === 'GET')).toHaveLength(reads);
   });
 });

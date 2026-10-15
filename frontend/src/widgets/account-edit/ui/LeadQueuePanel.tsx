@@ -32,6 +32,13 @@ const TONE: Record<LeadStatus, BadgeTone> = {
 };
 const COUNTED = ['pending', 'found', 'messaging', 'sent', 'not_found', 'failed'] as const;
 
+function errorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('error' in error)) return null;
+  const detail = error.error;
+  if (typeof detail !== 'object' || detail === null || !('code' in detail)) return null;
+  return typeof detail.code === 'string' ? detail.code : null;
+}
+
 export function LeadQueuePanel({ accountIds, message }: { accountIds: string[]; message: string }) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -81,7 +88,8 @@ export function LeadQueuePanel({ accountIds, message }: { accountIds: string[]; 
     void remove
       .mutateAsync({ path: { lead_id: id } })
       .then(() => refresh())
-      .catch(() => undefined);
+      // Already gone (removed elsewhere): drop the stale row.
+      .catch((error: unknown) => (errorCode(error) === 'not_found' ? refresh() : undefined));
   };
 
   const counts = queue.data?.counts ?? {};
@@ -237,7 +245,11 @@ export function LeadQueuePanel({ accountIds, message }: { accountIds: string[]; 
           )}
           {remove.isError && (
             <p role="alert" className="type-small text-danger-deep">
-              {t('accounts.messages.queue.removeError')}
+              {t(
+                errorCode(remove.error) === 'conflict'
+                  ? 'accounts.messages.queue.removeBusy'
+                  : 'accounts.messages.queue.removeError',
+              )}
             </p>
           )}
         </div>
