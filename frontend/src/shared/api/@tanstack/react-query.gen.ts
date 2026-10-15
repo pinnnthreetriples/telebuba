@@ -19,7 +19,6 @@ import {
   addWarmingChannels,
   adoptCampaignDiscovery,
   approveNeuroshillingScenario,
-  approveWarmingChannelProposals,
   assignCampaignAccount,
   assignProxy,
   assignProxyByEndpoint,
@@ -104,10 +103,12 @@ import {
   getWarmingBoard,
   getWarmingSettings,
   getWarmingSurvival,
+  getWarmingTuning,
   handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
   importMasstaggingTargets,
+  keepSpamBlockedAccount,
   labelWarmingChannel,
   liftWarmingDmPause,
   linkCampaignChannel,
@@ -137,10 +138,10 @@ import {
   listUserParserPresets,
   listUserParserRunUsers,
   listWarmedAccounts,
-  listWarmingChannelProposals,
   listWarmingChannels,
   listWarmingDailyStats,
   listWarmingDialogues,
+  listWarmingWaves,
   login,
   logout,
   logoutAccount,
@@ -153,7 +154,6 @@ import {
   probeProxy,
   promoteToNeurocomment,
   publishAccountChannelPost,
-  rejectWarmingChannelProposals,
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountsFromFolder,
@@ -169,8 +169,8 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resolveChatBroadcastTargets,
-  resumeWarming,
   resyncAccountAvatar,
+  rewarmAccount,
   saveChatBroadcastPace,
   saveChatBroadcastSettings,
   saveChatCollection,
@@ -215,7 +215,6 @@ import {
   stopWarming,
   submitLoginCode,
   unassignProxy,
-  unpromoteFromNeurocomment,
   updateAccountChannel,
   updateAccountLimits,
   updateAccountProfile,
@@ -226,6 +225,7 @@ import {
   updateOutreachLimits,
   updateOutreachPreset,
   updateWarmingSettings,
+  updateWarmingTuning,
   uploadChatBroadcastPhoto,
   uploadMasstaggingMedia,
   uploadScheduledMedia,
@@ -261,9 +261,6 @@ import type {
   ApproveNeuroshillingScenarioData,
   ApproveNeuroshillingScenarioError,
   ApproveNeuroshillingScenarioResponse,
-  ApproveWarmingChannelProposalsData,
-  ApproveWarmingChannelProposalsError,
-  ApproveWarmingChannelProposalsResponse,
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
@@ -514,6 +511,9 @@ import type {
   GetWarmingSurvivalData,
   GetWarmingSurvivalError,
   GetWarmingSurvivalResponse,
+  GetWarmingTuningData,
+  GetWarmingTuningError,
+  GetWarmingTuningResponse,
   HandoffToNeurocommentData,
   HandoffToNeurocommentError,
   HandoffToNeurocommentResponse,
@@ -526,6 +526,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsError,
   ImportMasstaggingTargetsResponse,
+  KeepSpamBlockedAccountData,
+  KeepSpamBlockedAccountError,
+  KeepSpamBlockedAccountResponse,
   LabelWarmingChannelData,
   LabelWarmingChannelError,
   LabelWarmingChannelResponse,
@@ -613,9 +616,6 @@ import type {
   ListWarmedAccountsData,
   ListWarmedAccountsError,
   ListWarmedAccountsResponse,
-  ListWarmingChannelProposalsData,
-  ListWarmingChannelProposalsError,
-  ListWarmingChannelProposalsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -625,6 +625,9 @@ import type {
   ListWarmingDialoguesData,
   ListWarmingDialoguesError,
   ListWarmingDialoguesResponse,
+  ListWarmingWavesData,
+  ListWarmingWavesError,
+  ListWarmingWavesResponse,
   LoginData,
   LoginError,
   LoginResponse,
@@ -658,9 +661,6 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostError,
   PublishAccountChannelPostResponse,
-  RejectWarmingChannelProposalsData,
-  RejectWarmingChannelProposalsError,
-  RejectWarmingChannelProposalsResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -706,12 +706,12 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsError,
   ResolveChatBroadcastTargetsResponse,
-  ResumeWarmingData,
-  ResumeWarmingError,
-  ResumeWarmingResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  RewarmAccountData,
+  RewarmAccountError,
+  RewarmAccountResponse,
   SaveChatBroadcastPaceData,
   SaveChatBroadcastPaceError,
   SaveChatBroadcastPaceResponse,
@@ -844,9 +844,6 @@ import type {
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
-  UnpromoteFromNeurocommentData,
-  UnpromoteFromNeurocommentError,
-  UnpromoteFromNeurocommentResponse,
   UpdateAccountChannelData,
   UpdateAccountChannelError,
   UpdateAccountChannelResponse,
@@ -877,6 +874,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
+  UpdateWarmingTuningData,
+  UpdateWarmingTuningError,
+  UpdateWarmingTuningResponse,
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoError,
   UploadChatBroadcastPhotoResponse,
@@ -3810,24 +3810,24 @@ export const handoffToNeurocommentMutation = (
 };
 
 /**
- * Unpromote Account
+ * Keep Spam Blocked Account
  *
- * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ * «Оставить»: keep an account warming stopped on a confirmed spam block.
  */
-export const unpromoteFromNeurocommentMutation = (
-  options?: Partial<Options<UnpromoteFromNeurocommentData>>,
+export const keepSpamBlockedAccountMutation = (
+  options?: Partial<Options<KeepSpamBlockedAccountData>>,
 ): UseMutationOptions<
-  UnpromoteFromNeurocommentResponse,
-  UnpromoteFromNeurocommentError,
-  Options<UnpromoteFromNeurocommentData>
+  KeepSpamBlockedAccountResponse,
+  KeepSpamBlockedAccountError,
+  Options<KeepSpamBlockedAccountData>
 > => {
   const mutationOptions: UseMutationOptions<
-    UnpromoteFromNeurocommentResponse,
-    UnpromoteFromNeurocommentError,
-    Options<UnpromoteFromNeurocommentData>
+    KeepSpamBlockedAccountResponse,
+    KeepSpamBlockedAccountError,
+    Options<KeepSpamBlockedAccountData>
   > = {
     mutationFn: async (fnOptions) => {
-      const { data } = await unpromoteFromNeurocomment({
+      const { data } = await keepSpamBlockedAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -3837,6 +3837,33 @@ export const unpromoteFromNeurocommentMutation = (
   };
   return mutationOptions;
 };
+
+export const listWarmingWavesQueryKey = (options: Options<ListWarmingWavesData>) =>
+  createQueryKey('listWarmingWaves', options);
+
+/**
+ * List Warming Waves
+ *
+ * Every warming wave of the account's current life: start, end, why, worked days.
+ */
+export const listWarmingWavesOptions = (options: Options<ListWarmingWavesData>) =>
+  queryOptions<
+    ListWarmingWavesResponse,
+    ListWarmingWavesError,
+    ListWarmingWavesResponse,
+    ReturnType<typeof listWarmingWavesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingWaves({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingWavesQueryKey(options),
+  });
 
 /**
  * Start Warming
@@ -3864,20 +3891,20 @@ export const startWarmingMutation = (
 };
 
 /**
- * Resume Warming
+ * Rewarm Account
  *
- * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ * «Вернуть в прогрев»: a graduated account warms again from zero as its next wave.
  */
-export const resumeWarmingMutation = (
-  options?: Partial<Options<ResumeWarmingData>>,
-): UseMutationOptions<ResumeWarmingResponse, ResumeWarmingError, Options<ResumeWarmingData>> => {
+export const rewarmAccountMutation = (
+  options?: Partial<Options<RewarmAccountData>>,
+): UseMutationOptions<RewarmAccountResponse, RewarmAccountError, Options<RewarmAccountData>> => {
   const mutationOptions: UseMutationOptions<
-    ResumeWarmingResponse,
-    ResumeWarmingError,
-    Options<ResumeWarmingData>
+    RewarmAccountResponse,
+    RewarmAccountError,
+    Options<RewarmAccountData>
   > = {
     mutationFn: async (fnOptions) => {
-      const { data } = await resumeWarming({
+      const { data } = await rewarmAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -4103,7 +4130,7 @@ export const updateWarmingSettingsMutation = (
 /**
  * Lift Warming Dm Pause
  *
- * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did.
  */
 export const liftWarmingDmPauseMutation = (
   options?: Partial<Options<LiftWarmingDmPauseData>>,
@@ -4213,7 +4240,7 @@ export const getWarmingSurvivalOptions = (options?: Options<GetWarmingSurvivalDa
 /**
  * Find Warming Channels
  *
- * Search channels for the pool with an account outside warming; propose the fits.
+ * Search channels with an account outside warming; the fits join the pool at once.
  */
 export const findWarmingChannelsMutation = (
   options?: Partial<Options<FindWarmingChannelsData>>,
@@ -4239,24 +4266,23 @@ export const findWarmingChannelsMutation = (
   return mutationOptions;
 };
 
-export const listWarmingChannelProposalsQueryKey = (
-  options?: Options<ListWarmingChannelProposalsData>,
-) => createQueryKey('listWarmingChannelProposals', options);
+export const getWarmingTuningQueryKey = (options?: Options<GetWarmingTuningData>) =>
+  createQueryKey('getWarmingTuning', options);
 
 /**
- * List Warming Channel Proposals
+ * Get Warming Tuning
+ *
+ * The pace in force: the preset, its per-phase limits and the visits they make.
  */
-export const listWarmingChannelProposalsOptions = (
-  options?: Options<ListWarmingChannelProposalsData>,
-) =>
+export const getWarmingTuningOptions = (options?: Options<GetWarmingTuningData>) =>
   queryOptions<
-    ListWarmingChannelProposalsResponse,
-    ListWarmingChannelProposalsError,
-    ListWarmingChannelProposalsResponse,
-    ReturnType<typeof listWarmingChannelProposalsQueryKey>
+    GetWarmingTuningResponse,
+    GetWarmingTuningError,
+    GetWarmingTuningResponse,
+    ReturnType<typeof getWarmingTuningQueryKey>
   >({
     queryFn: async ({ queryKey, signal }) => {
-      const { data } = await listWarmingChannelProposals({
+      const { data } = await getWarmingTuning({
         ...options,
         ...queryKey[0],
         signal,
@@ -4264,57 +4290,28 @@ export const listWarmingChannelProposalsOptions = (
       });
       return data;
     },
-    queryKey: listWarmingChannelProposalsQueryKey(options),
+    queryKey: getWarmingTuningQueryKey(options),
   });
 
 /**
- * Approve Warming Channel Proposals
+ * Update Warming Tuning
  *
- * Move the ticked proposals into the pool; returns the proposals still waiting.
+ * Pick «Осторожно», «Обычно», «Быстро» or «Свой» with its own limits.
  */
-export const approveWarmingChannelProposalsMutation = (
-  options?: Partial<Options<ApproveWarmingChannelProposalsData>>,
+export const updateWarmingTuningMutation = (
+  options?: Partial<Options<UpdateWarmingTuningData>>,
 ): UseMutationOptions<
-  ApproveWarmingChannelProposalsResponse,
-  ApproveWarmingChannelProposalsError,
-  Options<ApproveWarmingChannelProposalsData>
+  UpdateWarmingTuningResponse,
+  UpdateWarmingTuningError,
+  Options<UpdateWarmingTuningData>
 > => {
   const mutationOptions: UseMutationOptions<
-    ApproveWarmingChannelProposalsResponse,
-    ApproveWarmingChannelProposalsError,
-    Options<ApproveWarmingChannelProposalsData>
+    UpdateWarmingTuningResponse,
+    UpdateWarmingTuningError,
+    Options<UpdateWarmingTuningData>
   > = {
     mutationFn: async (fnOptions) => {
-      const { data } = await approveWarmingChannelProposals({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      });
-      return data;
-    },
-  };
-  return mutationOptions;
-};
-
-/**
- * Reject Warming Channel Proposals
- *
- * Drop the ticked proposals; returns the proposals still waiting.
- */
-export const rejectWarmingChannelProposalsMutation = (
-  options?: Partial<Options<RejectWarmingChannelProposalsData>>,
-): UseMutationOptions<
-  RejectWarmingChannelProposalsResponse,
-  RejectWarmingChannelProposalsError,
-  Options<RejectWarmingChannelProposalsData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    RejectWarmingChannelProposalsResponse,
-    RejectWarmingChannelProposalsError,
-    Options<RejectWarmingChannelProposalsData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await rejectWarmingChannelProposals({
+      const { data } = await updateWarmingTuning({
         ...options,
         ...fnOptions,
         throwOnError: true,

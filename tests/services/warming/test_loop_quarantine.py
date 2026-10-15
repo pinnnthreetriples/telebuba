@@ -12,6 +12,7 @@ from core.config import settings
 from core.db import (
     create_account,
     fetch_warming_state,
+    record_spam_check_outcome,
     save_warming_settings,
     upsert_spam_status,
     upsert_warming_state,
@@ -24,7 +25,7 @@ from schemas.warming import (
     WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _runtime, _seams
+from services.warming import _iteration, _loop, _runtime, _seams
 from tests.services.warming._support import (
     _no_quiet_days,
     _Recorder,
@@ -77,13 +78,22 @@ async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyP
 
     active_actions: list[str | None] = []
     real_set_state = _loop._set_state
+    real_progress = _iteration.store_cycle_progress
 
     async def _spy(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
         if state == "active":
             active_actions.append(cast("str | None", kwargs.get("last_action")))
         return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
 
+    async def _progress_spy(
+        account_id: str, step: str, heartbeat_at: str, expected_run_id: str | None
+    ) -> None:
+        active_actions.append(step)
+        await real_progress(account_id, step, heartbeat_at, expected_run_id)
+
     monkeypatch.setattr(_loop, "_set_state", _spy)
+    # The rail's ticks are narrow writes of their own (5.1), not state upserts.
+    monkeypatch.setattr(_iteration, "store_cycle_progress", _progress_spy)
 
     await warming.run_loop_iteration("acc-1")
 
@@ -108,17 +118,13 @@ async def test_loop_iteration_survives_progress_write_failure(
     await _set_settings(chat=False, reactions=False, key="")
     await create_account(AccountCreate(account_id="acc-1"))
 
-    real_set_state = _loop._set_state
+    async def _flaky(*_args: object) -> None:
+        # Only the mid-cycle progress writes blow up; the cycle_started / finalize
+        # boundary writes go through untouched.
+        msg = "database is locked"
+        raise RuntimeError(msg)
 
-    async def _flaky(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
-        # Only the mid-cycle progress writes blow up (state=active, no last_event);
-        # the cycle_started / finalize boundary writes go through untouched.
-        if state == "active" and kwargs.get("last_event") is None:
-            msg = "database is locked"
-            raise RuntimeError(msg)
-        return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
-
-    monkeypatch.setattr(_loop, "_set_state", _flaky)
+    monkeypatch.setattr(_iteration, "store_cycle_progress", _flaky)
 
     result = await warming.run_loop_iteration("acc-1")
 
@@ -270,26 +276,19 @@ async def test_quarantine_recovers_when_cleared(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_quarantine_holds_on_unknown_verdict_but_spends_a_repeat(
+async def test_an_unreadable_recheck_spends_no_recheck_but_counts_its_streak(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A REFUSED probe must not release a quarantine — and must not hold it for free.
 
     ``unknown`` is not a reading of the account's standing (a proxy outage or a dead
-    session gives one), so treating any non-``limited`` verdict as "recovered" was a
-    fail-open that freed every quarantined account once per cycle. But leaving the
-    counter frozen replaced it with an unbounded fail-closed: ``refresh_spam_status``
-    returns an UNCACHED ``unknown`` for every probe that never reached @SpamBot, so
-    a dead session re-probed each window and held forever, one WARNING per window,
-    with ``quarantine_exhausted`` — the only route to ``error`` and the only
-    ERROR-level alert — unreachable.
-
-    Pre-fix ``quarantine_count`` stayed at 1, so the counter assertion failed.
+    session gives one), so it neither releases the hold nor spends one of the spam
+    block's re-checks. It is bounded on its own instead: every unreadable window adds
+    one to the row's unreadable streak (``quarantine_unreadable_max`` ends it).
     """
-    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=1),
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=0),
     )
 
     async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
@@ -303,7 +302,8 @@ async def test_quarantine_holds_on_unknown_verdict_but_spends_a_repeat(
     state = await fetch_warming_state("acc-1")
     assert state is not None
     assert state.state == "quarantine"
-    assert state.quarantine_count == 2, "the hold must be bounded — the window costs a repeat"
+    assert state.quarantine_count == 0, "an unreadable answer is not a re-check of the block"
+    assert state.spam_unknown_streak == 1, "but the hold is bounded"
 
 
 @pytest.mark.asyncio
@@ -314,18 +314,18 @@ async def test_quarantine_unreadable_escalates_with_its_own_reason(
 
     The whole point of spending the budget: the last unreadable window parks the
     account and fires the ERROR-level alert, instead of the board showing
-    ``quarantine`` indefinitely. It must not claim ``quarantine_exhausted`` — that
-    message asserts a re-checked, still-standing flood, which is exactly what was
-    NOT established here.
+    ``quarantine`` indefinitely. It must not claim a spam block — nothing confirmed one.
 
     Pre-fix every assertion failed: the iteration took the ``quarantine_extended``
     path with the counter unchanged, forever.
     """
-    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    monkeypatch.setattr(settings.warming, "quarantine_unreadable_max", 3)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=2),
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=0),
     )
+    for _ in range(2):
+        await record_spam_check_outcome("acc-1", readable=False, expected_run_id=None)
 
     async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
         return _verdict(account_id, "unknown")
@@ -366,7 +366,9 @@ async def test_quarantine_extends_when_still_limited(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_quarantine_exhausts_to_error(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_still_limited_after_the_last_recheck_stops_as_spam_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
@@ -380,10 +382,11 @@ async def test_quarantine_exhausts_to_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     result = await warming.run_loop_iteration("acc-1")
 
-    assert result.status == "error"
+    assert (result.status, result.detail) == ("error", "spam blocked")
     state = await fetch_warming_state("acc-1")
     assert state is not None
-    assert state.state == "error"
+    assert state.state == "spam_blocked"
+    assert state.spam_blocked_at is not None
 
 
 @pytest.mark.asyncio

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import get_spam_status, record_spam_check_outcome
 from core.logging import log_event
-from schemas.warming import WarmingCycleResult
+from schemas.warming import WarmingCycleResult, spam_block_known
 from services.warming import _seams
 from services.warming._state import _set_state
 
@@ -120,18 +120,33 @@ async def _gate_spam_check(
     *,
     run_id: str | None,
 ) -> WarmingCycleResult | None:
-    """The cycle's spam step: ask when due, quarantine on ``limited``.
-
-    An unreadable answer adds one to the streak and lets the cycle go on — the next
-    cycle asks again; a reading resets the streak. Returns the terminal result when
-    the iteration must stop, else ``None``.
-    """
+    """The cycle's spam step on a fresh read of the cached reading; see ``_spam_step``."""
     if record is None:
         return None
     cached = await get_spam_status(account_id)
+    gated, _asked = await _spam_step(account_id, record, cached, now, run_id=run_id)
+    return gated
+
+
+async def _spam_step(
+    account_id: str,
+    record: WarmingStateRecord,
+    cached: SpamStatusVerdict | None,
+    now: datetime,
+    *,
+    run_id: str | None,
+) -> tuple[WarmingCycleResult | None, bool]:
+    """The cycle's spam step: ask when due, quarantine on a new ``limited``.
+
+    An unreadable answer adds one to the streak and lets the cycle go on — the next
+    cycle asks again; a reading resets the streak. Returns the terminal result when
+    the iteration must stop (else ``None``) and whether @SpamBot was asked, so the
+    caller knows ``cached`` is no longer the stored reading.
+    """
     if not spam_check_due(cached, record, now):
-        return None
-    verdict = await ask_spambot(account_id)
+        return None, False
+    force = cached is not None and cached.status == "unknown"
+    verdict = await _seams.refresh_spam_status(account_id, force=force)
     readable = verdict.status != "unknown"
     if not readable or record.spam_unknown_streak > 0:
         streak = await record_spam_check_outcome(
@@ -140,7 +155,8 @@ async def _gate_spam_check(
             expected_run_id=run_id,
         )
         if streak is None:
-            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+            stale = WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+            return stale, True
         if not readable:
             await log_event(
                 "WARNING",
@@ -148,6 +164,8 @@ async def _gate_spam_check(
                 account_id=account_id,
                 extra={"streak": streak},
             )
-    if verdict.status == "limited":
-        return await _quarantine_limited(account_id, now, run_id=run_id)
-    return None
+    # A kept account's block is already known: its ``limited`` is no news, warming goes
+    # on without DMs instead of re-entering the quarantine ladder it already finished.
+    if verdict.status == "limited" and not spam_block_known(record):
+        return await _quarantine_limited(account_id, now, run_id=run_id), True
+    return None, True

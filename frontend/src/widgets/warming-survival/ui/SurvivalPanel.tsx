@@ -59,7 +59,7 @@ export function SurvivalPanel({ id }: { id: string }) {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div>
               <div className="mb-3 type-h3">{t('warming.survival.swimmer.title')}</div>
-              <SwimmerPlot stints={data.stints ?? []} />
+              <SwimmerPlot lives={data.lives ?? []} />
             </div>
             <div className="flex min-w-0 flex-col gap-4">
               <div className="type-h3">{t('warming.survival.cohort.title')}</div>

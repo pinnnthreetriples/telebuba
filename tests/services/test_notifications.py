@@ -16,7 +16,7 @@ from schemas.accounts import AccountRead
 from schemas.logs import LogEntry
 from schemas.notifications import BotMessage, BotSendResult
 from services import notifications
-from services._notification_messages import account_label, notification_kind
+from services._notification_messages import account_label, compose_message, notification_kind
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -113,9 +113,15 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
         (_entry("warming_quarantine_extended"), "quarantine"),
         (_entry("warming_dm_fleet_paused", account_id=None), "fleet_dm_paused"),
         (_entry("spam_status_refreshed", status="limited"), "spam_limited"),
+        (_entry("spam_status_refreshed", status="limited", previous="clean"), "spam_limited"),
+        (_entry("spam_status_refreshed", status="limited", previous=None), "spam_limited"),
+        # A known (kept) spam block answers "limited" at every scheduled check: no ping.
+        (_entry("spam_status_refreshed", status="limited", previous="limited"), None),
         (_entry("spam_status_refreshed", status="clean"), None),
         (_entry("spam_status_refreshed", status="unknown"), None),
-        (_entry("warming_quarantine_exhausted"), "error"),
+        (_entry("warming_spam_blocked"), "spam_blocked"),
+        # The old three-strikes stop is gone; its name no longer pings anything.
+        (_entry("warming_quarantine_exhausted"), None),
         (_entry("warming_quarantine_unreadable"), "error"),
         (_entry("warming_loop_crashed"), "error"),
         (_entry("warming_target_reached"), "warmed"),
@@ -125,6 +131,14 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
 )
 def test_events_map_to_notification_kinds(entry: LogEntry, kind: str | None) -> None:
     assert notification_kind(entry) == kind
+
+
+def test_the_spam_block_message_says_warming_stopped_and_what_to_do() -> None:
+    text = compose_message("spam_blocked", "Polina (@polina)")
+
+    assert "Polina (@polina)" in text
+    assert "подтвердил спамблок" in text
+    assert "удалить или оставить" in text
 
 
 def test_the_label_never_carries_a_phone_number() -> None:

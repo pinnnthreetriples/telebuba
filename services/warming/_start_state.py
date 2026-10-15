@@ -11,6 +11,7 @@ from schemas.lifecycle import LifecycleSnapshot
 from schemas.warming import is_warming
 from services.lifecycle_journal import record_lifecycle_event
 from services.warming._start_options import first_run_at
+from services.warming._waves import next_wave
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
@@ -35,6 +36,20 @@ class WarmingDeviceUnavailableError(ValueError):
         super().__init__(f"{code}: {account_id}")
 
 
+class NotGraduatedError(ValueError):
+    """«Вернуть в прогрев» on an account that is not on the warmed card (anymore)."""
+
+
+def assert_on_warmed_card(existing: WarmingStateRecord | None, account_id: str) -> None:
+    """Refuse «Вернуть в прогрев» unless the account is graduated and not handed off.
+
+    Checked under the account lock, so a stale click cannot restart an account someone
+    already moved on; a graduated account is idle, so the start is a fresh wave.
+    """
+    if existing is None or not existing.promoted_to_nc or existing.nc_handed_off:
+        raise NotGraduatedError(account_id)
+
+
 class CarriedStint(NamedTuple):
     """Stable fields that one warming start writes to the account row."""
 
@@ -44,19 +59,18 @@ class CarriedStint(NamedTuple):
     device_mode: DeviceType
     # The chosen first cycle (``None`` → the loop's cold-start spread).
     first_run_at: str | None
-    # A start from idle (or a first start) opens a new stint whose worked days
-    # begin at zero; a resume or restart of a running stint keeps them.
+    # A start from idle (or a first start) opens a new stint — the next wave — whose
+    # worked days begin at zero; a restart of a running stint keeps them and its wave.
     fresh: bool
+    wave: int
 
 
 def carry_or_restamp(
     existing: WarmingStateRecord | None,
     data: StartWarmingRequest,
     account: AccountRead,
-    *,
-    resume: bool = False,
 ) -> CarriedStint:
-    """Carry an in-flight stint; restamp a genuine start from idle/stopped.
+    """Carry an in-flight stint; restamp a genuine start from idle/stopped as a new wave.
 
     A genuine start with a chosen delay begins its stint at the first cycle, not at
     the click: the rest before it must not count toward ``target_days``, or a 1-day
@@ -64,15 +78,16 @@ def carry_or_restamp(
     Refuses (``WarmingDeviceUnavailableError``) a stint whose device ``account``
     cannot warm through, before anything about the running stint changes.
 
-    ``resume`` is «Вернуть в прогрев» on a graduated account: the stint goes on with
-    its clock and worked days, while the dialog's new length, persona and device apply —
-    the old length is the one the account just finished.
+    A graduated account («Вернуть в прогрев») is idle, so it starts a new wave from
+    zero like any other start from idle. So does a stopped spam-blocked account: its
+    stint ended with the stop, it only waits on the board for the operator's decision.
     """
-    continuing = existing is not None and is_warming(existing.state)
-    resuming = resume and existing is not None and existing.promoted_to_nc
+    continuing = (
+        existing is not None and is_warming(existing.state) and existing.state != "spam_blocked"
+    )
     first_run = first_run_at(account, data)
     restamp = first_run or _now_iso()
-    carried = continuing or resuming
+    carried = continuing
     started_at = existing.started_at if carried and existing and existing.started_at else restamp
     target_days = (
         existing.target_days
@@ -85,7 +100,10 @@ def carry_or_restamp(
         raise WarmingDeviceUnavailableError(_DEVICE_MISSING, account.account_id)
     if device_mode == "mobile" and not mobile_api_configured():
         raise WarmingDeviceUnavailableError(_NO_MOBILE_API, account.account_id)
-    return CarriedStint(started_at, target_days, persona, device_mode, first_run, fresh=not carried)
+    wave = existing.wave if carried and existing else next_wave(existing)
+    return CarriedStint(
+        started_at, target_days, persona, device_mode, first_run, fresh=not carried, wave=wave
+    )
 
 
 async def journal_start(
@@ -108,6 +126,7 @@ async def journal_start(
         "new_stint": new_stint,
         "persona": stint.activity_persona,
         "target_days": stint.target_days,
+        "wave": stint.wave,
         "proxy_country": (account.proxy_country_code or "").upper() or None,
     }
     await record_lifecycle_event(account_id, "warming_started", extra, snapshot)

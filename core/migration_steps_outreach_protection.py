@@ -1,4 +1,4 @@
-"""Migration 94 — outreach account protection.
+"""Migration 98 — outreach account protection.
 
 The limits row gains its protection settings, and ``outreach_account_rests`` keeps the
 last limit each account met. ``CREATE ... IF NOT EXISTS`` and a guarded ``ADD COLUMN``:

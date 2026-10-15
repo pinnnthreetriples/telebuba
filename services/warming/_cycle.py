@@ -39,6 +39,8 @@ from services.warming._fleet import (
     _language_pool,
     _maybe_explore,
 )
+from services.warming._self_search import SelfSearchVisit, search_for_self, walk_found_first
+from services.warming._snapshot import current_snapshot
 from services.warming._social_reads import walkable_channels
 from services.warming._steps import (
     _ChannelTally,
@@ -56,7 +58,7 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from schemas._warming_extras import JoinedChannel
-    from schemas.warming import WarmingChannel, WarmingIntensity
+    from schemas.warming import WarmingChannel, WarmingIntensity, WarmingPhase
     from services.warming._steps import _OnStep
 
 # The visits that walk the whole classic route: stories, DM and extras.
@@ -262,6 +264,32 @@ async def _after_channels(
     return messages_sent
 
 
+async def _search_step(
+    ctx: _ExtraContext,
+    visit: VisitPlan,
+    phase: WarmingPhase,
+    channels: list[WarmingChannel],
+    language: str | None,
+) -> bool:
+    """The account's own channel search; puts its finds first. ``True`` = a limit stops it."""
+    if ctx.account is None:
+        return False
+    search = SelfSearchVisit(
+        account=ctx.account,
+        language=language,
+        phase=phase,
+        visit_kind=visit.kind,
+        channels=channels,
+        tally=ctx.tally,
+        remaining_actions=ctx.remaining_actions,
+    )
+    if await search_for_self(search):
+        return True
+    found = _without_cooling_down(search.found, ctx.joined, datetime.now(UTC))
+    ctx.chosen = walk_found_first(ctx.chosen, found)
+    return False
+
+
 async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
@@ -279,15 +307,18 @@ async def run_one_cycle(
     daily-budget reservation from that (#208).
     """
     account_id = data.account_id
-    secret = await load_warming_settings()
-    account = await fetch_account(account_id)
+    # Inside an iteration the gates already read all of it (5.1); a direct call reads.
+    snapshot = current_snapshot(account_id)
+    secret = snapshot.controls if snapshot else await load_warming_settings()
+    account = snapshot.account if snapshot else await fetch_account(account_id)
     # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
     # depend on it and those are enforced by the loop (remaining_actions), not
     # read in this cycle. Pass it in if channel/reaction/DM intensity ever
     # becomes trust-dependent (#100).
     intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     # Approved rows only, and public groups only from their phase on (4.5/4.6).
-    channels = walkable_channels((await list_warming_channels()).channels, intensity.phase)
+    approved = list(snapshot.channels) if snapshot else (await list_warming_channels()).channels
+    channels = walkable_channels(approved, intensity.phase)
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)
         return WarmingCycleResult(
@@ -314,7 +345,7 @@ async def run_one_cycle(
         visit = data.visit or VisitPlan()
         language = account_language(account.phone if account else None)
         chosen = _pick_channels(account_id, channels, language, intensity, visit.channels)
-        joined = await list_joined_channels(account_id)
+        joined = list(snapshot.joined) if snapshot else await list_joined_channels(account_id)
         chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
         ctx = _ExtraContext(
             account_id=account_id,
@@ -330,10 +361,13 @@ async def run_one_cycle(
         )
         # Small things before the channels — only ever reads, never a write.
         await _before_channels(ctx, visit, on_step)
+        # Sometimes it looks for channels of its own interests first (a read, booked).
+        if await _search_step(ctx, visit, intensity.phase, channels, language):
+            return await _build_cycle_result(account_id, tally, messages_sent)
         ctx.recent_ids, ctx.recent_media = await _run_channel_loop(
             data,
             tally,
-            chosen,
+            ctx.chosen,
             secret,
             on_step,
             phase=intensity.phase,

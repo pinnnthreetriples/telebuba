@@ -18,6 +18,7 @@ from sqlalchemy import insert, select, update
 from core.config import settings
 from core.db import _get_engine, _now_iso, _warming_settings
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
+from schemas._warming_tuning import StoredTuning
 from schemas.warming import CaptchaLlmProvider, WarmingSettingsSecret
 
 if TYPE_CHECKING:
@@ -117,8 +118,27 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         deepseek_api_key=_str_or(mapping.get("deepseek_api_key"), settings.deepseek.api_key),
         extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
         dm_paused_until=_optional_text(mapping.get("dm_paused_until")),
+        tuning=_stored_tuning(mapping.get("tuning_preset"), mapping.get("tuning_custom")),
         updated_at=str(mapping["updated_at"]),
     )
+
+
+def _stored_tuning(preset: object, custom: object) -> StoredTuning:
+    """The pace card's stored choice; anything unreadable reads as «Обычно».
+
+    A row written before the columns existed, or a value this build no longer
+    accepts, must leave the engine as ``.env`` configures it — never fail the read
+    every warming cycle starts with.
+    """
+    try:
+        return StoredTuning.model_validate(
+            {
+                "preset": preset or "normal",
+                "custom": json.loads(str(custom)) if custom else None,
+            },
+        )
+    except (ValueError, TypeError):
+        return StoredTuning()
 
 
 def _default_warming_settings_values() -> dict[str, object]:

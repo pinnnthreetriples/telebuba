@@ -5,7 +5,8 @@ Data contract only — no behaviour, no I/O (non-negotiable #2). Flows between t
 
 ``WarmingState``: idle (not running) · active (running a cycle) · sleeping
 (waiting for the next persona-paced run) · flood_wait / quarantine (cooling
-down) · error (last cycle failed).
+down) · error (last cycle failed) · spam_blocked (@SpamBot confirmed a spam block on
+the quarantine re-check: warming stopped, waiting for the operator to delete or keep).
 """
 
 from __future__ import annotations
@@ -32,6 +33,11 @@ from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export
     WarmingChannelObservation,
 )
 from schemas._warming_console import SoftStartPlan, WarmingCardConsole, WarmingStateMarks
+from schemas._warming_cycle import (  # noqa: F401 - runtime re-export, not type-only
+    CycleStatus,
+    WarmingCycleResult,
+)
+from schemas._warming_pool import PoolRefillRequest  # noqa: TC001 - a pydantic field type
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -39,20 +45,33 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
     WarmingSettingsUpdate,
 )
 from schemas._warming_start import StartWindow
-from schemas._warming_visits import (  # noqa: TC001 - pydantic resolves them at runtime.
-    CadencePreview,
-    VisitPlan,
+from schemas._warming_states import (  # noqa: F401, TC001 - runtime re-export, not type-only
+    WarmingHealth,
+    WarmingState,
+    is_parked,
+    is_warming,
+    spam_block_known,
+    warming_health,
 )
+from schemas._warming_visits import CadencePreview, CycleMarks, VisitPlan  # noqa: TC001
 from schemas.device_fingerprint import DeviceType, desktop_only
 
-WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
-WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
 # test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
-_RUN_HOLDS = Literal[_CAMPAIGN_HOLDS, "account_busy_user_parser", "account_busy_masstagging"]
+_RUN_HOLDS = Literal[
+    _CAMPAIGN_HOLDS,
+    "account_busy_user_parser",
+    "account_busy_masstagging",
+    "account_busy_bulk_messages",
+]
 _SPAM = Literal["spam_check_unavailable", "spam_limited"]  # hand-off's @SpamBot refusals
-WarmingRefusalCode = Literal["account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM]
+# A stale card: «Вернуть в прогрев» on an account no longer graduated, «Оставить» on one
+# no longer stopped on a spam block.
+_STALE_CARD = Literal["not_graduated", "not_spam_blocked"]
+WarmingRefusalCode = Literal[
+    "account_running_discovery", "account_cooling", _RUN_HOLDS, _SPAM, _STALE_CARD
+]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and
@@ -63,32 +82,6 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 # by the phase ceiling (effective = min(persona, phase/trust)); orthogonal to
 # ``WarmingPhase``. Current contract: ``.mex/context/runtime.md`` and ``services.warming.pacing``.
 ActivityPersona = Literal["calm", "normal", "active"]
-
-_ACTIVE_STATES: frozenset[WarmingState] = frozenset(
-    {"active", "sleeping", "flood_wait", "quarantine", "error"},
-)
-
-
-def warming_health(state: WarmingState) -> WarmingHealth:
-    """Map a warming state to a traffic-light colour for the UI.
-
-    - ``ok`` (green)  — actively warming.
-    - ``warn`` (amber) — sleeping between cycles, flood-waited, or quarantined.
-    - ``fail`` (red)  — last cycle errored.
-    - ``idle`` (grey) — not being warmed.
-    """
-    if state == "active":
-        return "ok"
-    if state in {"sleeping", "flood_wait", "quarantine"}:
-        return "warn"
-    if state == "error":
-        return "fail"
-    return "idle"
-
-
-def is_warming(state: WarmingState) -> bool:
-    """True when the account belongs in the right-hand (warming) kanban column."""
-    return state in _ACTIVE_STATES
 
 
 class WarmingIntensity(BaseModel):
@@ -244,10 +237,16 @@ class WarmingStateWrite(BaseModel):
     # carry the token without every caller knowing it exists; the hand-back clears
     # it in its own statement.
     reservation_token: str | None = None
+    # Booking-only too: the card's marks of the booked cycle, written with its token.
+    cycle_marks: CycleMarks | None = None
     # ``None`` leaves both worked-day columns alone; a value (a fresh stint's 0)
     # writes it with ``last_warmed_date``.
     warmed_days: int | None = Field(default=None, ge=0)
     last_warmed_date: str | None = None
+    # ``None`` leaves the column alone, like ``device_mode``: only a start writes the
+    # stint's wave, only the spam-block stop (or keeping that account) the mark.
+    wave: int | None = Field(default=None, ge=1)
+    spam_blocked_at: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -385,6 +384,8 @@ class WarmingBoardState(BaseModel):
     soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
     # Real visits a day per persona and phase, for the start dialog's persona hint.
     cadence_preview: list[CadencePreview] = Field(default_factory=list)
+    # The refill found no free account: the channels card asks the operator for one.
+    pool_refill_request: PoolRefillRequest | None = None
 
 
 class StartWarmingRequest(StartWindow):
@@ -398,7 +399,7 @@ class StartWarmingRequest(StartWindow):
 
 
 class PromoteRequest(BaseModel):
-    """Body for promote/unpromote: graduate an account to/from the neurocomment pool."""
+    """Body naming one account: promote, the spam-block «Оставить» and the like."""
 
     account_id: str = Field(min_length=1)
 
@@ -417,24 +418,3 @@ class WarmingCycleRequest(BaseModel):
     activity_persona: ActivityPersona = "normal"
     # This visit's kind and order (4.4); ``None`` = a normal visit in the classic order.
     visit: VisitPlan | None = None
-
-
-CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]
-
-
-class WarmingCycleResult(BaseModel):
-    """Outcome of one warming cycle — drives counters and the activity log."""
-
-    account_id: str = Field(min_length=1)
-    status: CycleStatus
-    channels_joined: int = Field(default=0, ge=0)
-    channels_read: int = Field(default=0, ge=0)
-    reactions_sent: int = Field(default=0, ge=0)
-    messages_sent: int = Field(default=0, ge=0)
-    detail: str | None = None
-    flood_wait_seconds: int | None = Field(default=None, ge=0)
-    flood_wait_until: str | None = None
-    failures: int = Field(default=0, ge=0)
-    attempted_actions: int = Field(default=0, ge=0)
-    last_failed_action: str | None = None
-    last_failed_channel: str | None = None

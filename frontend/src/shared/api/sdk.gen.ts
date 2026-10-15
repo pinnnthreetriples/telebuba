@@ -40,9 +40,6 @@ import type {
   ApproveNeuroshillingScenarioData,
   ApproveNeuroshillingScenarioErrors,
   ApproveNeuroshillingScenarioResponses,
-  ApproveWarmingChannelProposalsData,
-  ApproveWarmingChannelProposalsErrors,
-  ApproveWarmingChannelProposalsResponses,
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
@@ -295,6 +292,9 @@ import type {
   GetWarmingSurvivalData,
   GetWarmingSurvivalErrors,
   GetWarmingSurvivalResponses,
+  GetWarmingTuningData,
+  GetWarmingTuningErrors,
+  GetWarmingTuningResponses,
   HandoffToNeurocommentData,
   HandoffToNeurocommentErrors,
   HandoffToNeurocommentResponses,
@@ -307,6 +307,9 @@ import type {
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsErrors,
   ImportMasstaggingTargetsResponses,
+  KeepSpamBlockedAccountData,
+  KeepSpamBlockedAccountErrors,
+  KeepSpamBlockedAccountResponses,
   LabelWarmingChannelData,
   LabelWarmingChannelErrors,
   LabelWarmingChannelResponses,
@@ -394,9 +397,6 @@ import type {
   ListWarmedAccountsData,
   ListWarmedAccountsErrors,
   ListWarmedAccountsResponses,
-  ListWarmingChannelProposalsData,
-  ListWarmingChannelProposalsErrors,
-  ListWarmingChannelProposalsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -406,6 +406,9 @@ import type {
   ListWarmingDialoguesData,
   ListWarmingDialoguesErrors,
   ListWarmingDialoguesResponses,
+  ListWarmingWavesData,
+  ListWarmingWavesErrors,
+  ListWarmingWavesResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
@@ -439,9 +442,6 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostErrors,
   PublishAccountChannelPostResponses,
-  RejectWarmingChannelProposalsData,
-  RejectWarmingChannelProposalsErrors,
-  RejectWarmingChannelProposalsResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -487,12 +487,12 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsErrors,
   ResolveChatBroadcastTargetsResponses,
-  ResumeWarmingData,
-  ResumeWarmingErrors,
-  ResumeWarmingResponses,
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  RewarmAccountData,
+  RewarmAccountErrors,
+  RewarmAccountResponses,
   SaveChatBroadcastPaceData,
   SaveChatBroadcastPaceErrors,
   SaveChatBroadcastPaceResponses,
@@ -625,9 +625,6 @@ import type {
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
-  UnpromoteFromNeurocommentData,
-  UnpromoteFromNeurocommentErrors,
-  UnpromoteFromNeurocommentResponses,
   UpdateAccountChannelData,
   UpdateAccountChannelErrors,
   UpdateAccountChannelResponses,
@@ -658,6 +655,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
+  UpdateWarmingTuningData,
+  UpdateWarmingTuningErrors,
+  UpdateWarmingTuningResponses,
   UploadChatBroadcastPhotoData,
   UploadChatBroadcastPhotoErrors,
   UploadChatBroadcastPhotoResponses,
@@ -2280,28 +2280,37 @@ export const handoffToNeurocomment = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Unpromote Account
+ * Keep Spam Blocked Account
  *
- * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ * «Оставить»: keep an account warming stopped on a confirmed spam block.
  */
-export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
-  options: Options<UnpromoteFromNeurocommentData, ThrowOnError>,
-): RequestResult<
-  UnpromoteFromNeurocommentResponses,
-  UnpromoteFromNeurocommentErrors,
-  ThrowOnError
-> =>
+export const keepSpamBlockedAccount = <ThrowOnError extends boolean = false>(
+  options: Options<KeepSpamBlockedAccountData, ThrowOnError>,
+): RequestResult<KeepSpamBlockedAccountResponses, KeepSpamBlockedAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<
-    UnpromoteFromNeurocommentResponses,
-    UnpromoteFromNeurocommentErrors,
+    KeepSpamBlockedAccountResponses,
+    KeepSpamBlockedAccountErrors,
     ThrowOnError
   >({
-    url: '/api/v1/warming/unpromote',
+    url: '/api/v1/warming/spam-block/keep',
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * List Warming Waves
+ *
+ * Every warming wave of the account's current life: start, end, why, worked days.
+ */
+export const listWarmingWaves = <ThrowOnError extends boolean = false>(
+  options: Options<ListWarmingWavesData, ThrowOnError>,
+): RequestResult<ListWarmingWavesResponses, ListWarmingWavesErrors, ThrowOnError> =>
+  (options.client ?? client).get<ListWarmingWavesResponses, ListWarmingWavesErrors, ThrowOnError>({
+    url: '/api/v1/warming/waves/{account_id}',
+    ...options,
   });
 
 /**
@@ -2322,15 +2331,15 @@ export const startWarming = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Resume Warming
+ * Rewarm Account
  *
- * «Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days.
+ * «Вернуть в прогрев»: a graduated account warms again from zero as its next wave.
  */
-export const resumeWarming = <ThrowOnError extends boolean = false>(
-  options: Options<ResumeWarmingData, ThrowOnError>,
-): RequestResult<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError> =>
-  (options.client ?? client).post<ResumeWarmingResponses, ResumeWarmingErrors, ThrowOnError>({
-    url: '/api/v1/warming/resume',
+export const rewarmAccount = <ThrowOnError extends boolean = false>(
+  options: Options<RewarmAccountData, ThrowOnError>,
+): RequestResult<RewarmAccountResponses, RewarmAccountErrors, ThrowOnError> =>
+  (options.client ?? client).post<RewarmAccountResponses, RewarmAccountErrors, ThrowOnError>({
+    url: '/api/v1/warming/rewarm',
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -2479,7 +2488,7 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
 /**
  * Lift Warming Dm Pause
  *
- * «Снять паузу»: reopen inter-account DMs the fleet breaker paused.
+ * «Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did.
  */
 export const liftWarmingDmPause = <ThrowOnError extends boolean = false>(
   options?: Options<LiftWarmingDmPauseData, ThrowOnError>,
@@ -2535,7 +2544,7 @@ export const getWarmingSurvival = <ThrowOnError extends boolean = false>(
 /**
  * Find Warming Channels
  *
- * Search channels for the pool with an account outside warming; propose the fits.
+ * Search channels with an account outside warming; the fits join the pool at once.
  */
 export const findWarmingChannels = <ThrowOnError extends boolean = false>(
   options: Options<FindWarmingChannelsData, ThrowOnError>,
@@ -2554,64 +2563,32 @@ export const findWarmingChannels = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * List Warming Channel Proposals
- */
-export const listWarmingChannelProposals = <ThrowOnError extends boolean = false>(
-  options?: Options<ListWarmingChannelProposalsData, ThrowOnError>,
-): RequestResult<
-  ListWarmingChannelProposalsResponses,
-  ListWarmingChannelProposalsErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    ListWarmingChannelProposalsResponses,
-    ListWarmingChannelProposalsErrors,
-    ThrowOnError
-  >({ url: '/api/v1/warming/channels/proposals', ...options });
-
-/**
- * Approve Warming Channel Proposals
+ * Get Warming Tuning
  *
- * Move the ticked proposals into the pool; returns the proposals still waiting.
+ * The pace in force: the preset, its per-phase limits and the visits they make.
  */
-export const approveWarmingChannelProposals = <ThrowOnError extends boolean = false>(
-  options: Options<ApproveWarmingChannelProposalsData, ThrowOnError>,
-): RequestResult<
-  ApproveWarmingChannelProposalsResponses,
-  ApproveWarmingChannelProposalsErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    ApproveWarmingChannelProposalsResponses,
-    ApproveWarmingChannelProposalsErrors,
-    ThrowOnError
-  >({
-    url: '/api/v1/warming/channels/proposals/approve',
+export const getWarmingTuning = <ThrowOnError extends boolean = false>(
+  options?: Options<GetWarmingTuningData, ThrowOnError>,
+): RequestResult<GetWarmingTuningResponses, GetWarmingTuningErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetWarmingTuningResponses, GetWarmingTuningErrors, ThrowOnError>({
+    url: '/api/v1/warming/tuning',
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
   });
 
 /**
- * Reject Warming Channel Proposals
+ * Update Warming Tuning
  *
- * Drop the ticked proposals; returns the proposals still waiting.
+ * Pick «Осторожно», «Обычно», «Быстро» or «Свой» with its own limits.
  */
-export const rejectWarmingChannelProposals = <ThrowOnError extends boolean = false>(
-  options: Options<RejectWarmingChannelProposalsData, ThrowOnError>,
-): RequestResult<
-  RejectWarmingChannelProposalsResponses,
-  RejectWarmingChannelProposalsErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    RejectWarmingChannelProposalsResponses,
-    RejectWarmingChannelProposalsErrors,
+export const updateWarmingTuning = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateWarmingTuningData, ThrowOnError>,
+): RequestResult<UpdateWarmingTuningResponses, UpdateWarmingTuningErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateWarmingTuningResponses,
+    UpdateWarmingTuningErrors,
     ThrowOnError
   >({
-    url: '/api/v1/warming/channels/proposals/reject',
+    url: '/api/v1/warming/tuning',
     ...options,
     headers: {
       'Content-Type': 'application/json',

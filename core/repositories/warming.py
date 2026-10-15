@@ -67,13 +67,14 @@ def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
             "last_post_at": _optional_str(mapping.get("last_post_at")),
             "source": _optional_str(mapping.get("source")) or "manual",
             "status": _optional_str(mapping.get("status")) or "approved",
+            "found_by": _optional_str(mapping.get("found_by")),
         },
     )
 
 
 def _list_warming_channels() -> WarmingChannelList:
-    # Proposals awaiting the operator (``status='pending'``, 4.5) live in warming_pool.
-    approved = _warming_channels.c.status != "pending"
+    # A found channel the operator removed stays as ``removed`` and is never listed.
+    approved = _warming_channels.c.status == "approved"
     statement = select(_warming_channels).where(approved).order_by(_warming_channels.c.id.asc())
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
@@ -104,13 +105,20 @@ async def add_warming_channel(channel: str, label: str | None = None) -> Warming
 
 
 def _remove_warming_channel(channel: str) -> WarmingChannelList:
+    """Drop an operator's own channel; keep a found one as ``removed``.
+
+    A search would otherwise find the removed channel again and put it straight back,
+    since nothing waits for approval any more.
+    """
+    row = _warming_channels.c.channel == channel
     with _get_engine().begin() as connection:
         connection.execute(
             delete(_warming_joined_channels).where(_warming_joined_channels.c.channel == channel),
         )
         connection.execute(
-            delete(_warming_channels).where(_warming_channels.c.channel == channel),
+            delete(_warming_channels).where(row, _warming_channels.c.source == "manual")
         )
+        connection.execute(update(_warming_channels).where(row).values(status="removed"))
     return _list_warming_channels()
 
 
@@ -298,6 +306,34 @@ async def unmark_promoted_to_nc(account_id: str) -> None:
     await asyncio.to_thread(_mark_unpromoted, account_id)
 
 
+def _left_alone_unless_given(data: WarmingStateWrite) -> dict[str, object | None]:
+    """The columns a write sets only when it carries them (``None`` = leave as is)."""
+    values: dict[str, object | None] = {}
+    if data.reservation_token is not None:
+        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
+        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
+        # unconditionally would have every unrelated write NULL out the token the
+        # hand-back guards on, which is the stranded day all over again.
+        values["reservation_token"] = data.reservation_token
+    if data.cycle_marks is not None:
+        # Written with the booking, under its CAS, so the card never shows one
+        # cycle's plan on top of another's budget.
+        values["cycle_base_actions"] = data.cycle_marks.base_actions
+        values["visit_kind"] = data.cycle_marks.visit_kind
+        values["cycle_plan"] = ",".join(data.cycle_marks.steps)
+    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
+        values["warmed_days"] = data.warmed_days
+        values["last_warmed_date"] = data.last_warmed_date
+    if data.device_mode is not None:
+        # Written by a start only; every other write leaves the stint's device alone.
+        values["device_mode"] = data.device_mode
+    if data.wave is not None:  # a start only, under the same CAS as its stint stamp
+        values["wave"] = data.wave
+    if data.spam_blocked_at is not None:  # the spam-block stop and keeping that account
+        values["spam_blocked_at"] = data.spam_blocked_at
+    return values
+
+
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     # F9 + P1.2 + P2.4 + Round-2 P1 + Round-4 P1.1/P1.2: collapse to a single
     # sqlite_insert ON CONFLICT DO UPDATE so the whole upsert runs under
@@ -342,18 +378,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         "activity_persona": data.activity_persona or "normal",
         "recovered_at": data.recovered_at,
     }
-    if data.reservation_token is not None:
-        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
-        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
-        # unconditionally would have every unrelated write NULL out the token the
-        # hand-back guards on, which is the stranded day all over again.
-        insert_values["reservation_token"] = data.reservation_token
-    if data.warmed_days is not None:  # only a fresh stint; daily counts use _warming_days
-        insert_values["warmed_days"] = data.warmed_days
-        insert_values["last_warmed_date"] = data.last_warmed_date
-    if data.device_mode is not None:
-        # Written by a start only; every other write leaves the stint's device alone.
-        insert_values["device_mode"] = data.device_mode
+    insert_values.update(_left_alone_unless_given(data))
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1
@@ -383,15 +408,15 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         _warming_account_state.c.account_id == data.account_id,
     )
     with _get_engine().begin() as connection:
-        result = connection.execute(stmt)
-        # SQLite reports rowcount=1 for both the INSERT branch and a matching
-        # ON CONFLICT DO UPDATE; rowcount=0 when the UPDATE's WHERE rejected.
-        applied = result.rowcount > 0
-        # Read the written row back on the *same* connection instead of opening a
-        # fresh one via ``_fetch_warming_state`` — the values (incl. the atomic
-        # ``cycles_completed`` bump) are already committed here, so this drops a
-        # DB round-trip per state write.
-        row = connection.execute(select_stmt).mappings().first()
+        # RETURNING hands back the written row (incl. the atomic ``cycles_completed``
+        # bump) in the same statement: the INSERT branch and a matching ON CONFLICT
+        # DO UPDATE return it, an UPDATE the CAS ``WHERE`` rejected returns nothing.
+        row = connection.execute(stmt.returning(*_warming_account_state.c)).mappings().first()
+        applied = row is not None
+        if row is None:
+            # Rejected: report the row the other generation left, read on the same
+            # connection inside the same transaction.
+            row = connection.execute(select_stmt).mappings().first()
     if row is None:
         msg = f"Warming state was not persisted: {data.account_id}"
         raise RuntimeError(msg)

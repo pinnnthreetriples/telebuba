@@ -50,6 +50,7 @@ from core.migration_steps_bulk_runs import _add_bulk_runs
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
+from core.migration_steps_channel_search import _add_warming_channel_search
 from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
@@ -111,6 +112,7 @@ from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
+from core.migration_steps_tuning import _add_warming_settings_tuning
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warmed_days import _add_warming_warmed_days
@@ -118,6 +120,10 @@ from core.migration_steps_warming_channels import _add_warming_channel_labels
 from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
     _add_warming_settings_extra_toggles,
+)
+from core.migration_steps_waves import (
+    _add_warming_state_wave,
+    _allow_lifecycle_warming_stopped,
 )
 
 if TYPE_CHECKING:
@@ -250,7 +256,11 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (89, "add_outreach_tables", _add_outreach_tables),
     (90, "add_outreach_presets", _add_outreach_presets),
     (91, "add_bulk_runs", _add_bulk_runs),
-    (94, "add_outreach_protection", _add_outreach_protection),
+    (92, "add_warming_settings_tuning", _add_warming_settings_tuning),
+    (93, "add_warming_channel_search", _add_warming_channel_search),
+    (94, "add_warming_state_wave", _add_warming_state_wave),
+    (95, "allow_lifecycle_warming_stopped", _allow_lifecycle_warming_stopped),
+    (98, "add_outreach_protection", _add_outreach_protection),
 )
 
 

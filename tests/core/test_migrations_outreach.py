@@ -1,4 +1,4 @@
-"""Migrations 89, 90 and 94 — outreach tables, and their parity with ``create_all``."""
+"""Migrations 89, 90 and 98 — outreach tables, and their parity with ``create_all``."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     with engine.begin() as connection:
         _add_outreach_tables(connection)
         _add_outreach_presets(connection)
-        # 91 adds the limits row's schedule column, 94 its protection column.
+        # 91 adds the limits row's schedule column, 98 its protection column.
         _add_bulk_runs(connection)
         _add_outreach_protection(connection)
     return engine
@@ -48,7 +48,7 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
     presets = [entry for entry in MIGRATIONS if entry[2] is _add_outreach_presets]
     assert presets == [(90, "add_outreach_presets", _add_outreach_presets)]
     protection = [entry for entry in MIGRATIONS if entry[2] is _add_outreach_protection]
-    assert protection == [(94, "add_outreach_protection", _add_outreach_protection)]
+    assert protection == [(98, "add_outreach_protection", _add_outreach_protection)]
 
 
 @pytest.mark.parametrize("table", _TABLES)

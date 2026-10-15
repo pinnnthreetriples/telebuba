@@ -210,14 +210,14 @@ async def test_an_expired_pause_lets_dms_through(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.asyncio
 async def test_lift_reopens_dms_and_is_a_no_op_without_a_pause() -> None:
-    assert (await warming.lift_dm_pause()).dm_paused_until is None
+    assert (await warming.lift_dm_pause("admin")).dm_paused_until is None
     assert await _stored_pause() is None
 
     until = datetime.now(UTC) + timedelta(hours=72)
     await store_dm_paused_until(until.isoformat())
     assert (await warming.load_settings()).dm_paused_until == until.isoformat()
 
-    lifted = await warming.lift_dm_pause()
+    lifted = await warming.lift_dm_pause("admin")
 
     assert lifted.dm_paused_until is None
     stored = await _stored_pause()

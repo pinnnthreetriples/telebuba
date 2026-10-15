@@ -144,6 +144,8 @@ _warming_channels = Table(
     Column("last_post_at", String, nullable=True),
     Column("source", String, nullable=False, server_default="manual"),
     Column("status", String, nullable=False, server_default="approved"),
+    # The warming account whose own search found it (migration #93).
+    Column("found_by", String, nullable=True),
 )
 _warming_joined_channels = Table(
     "warming_joined_channels",
@@ -180,6 +182,9 @@ _warming_settings = Table(
     # Fleet DM breaker: DMs are paused until this instant; DM spam blocks before it
     # are spent (a lifted or expired pause does not re-trip on them). NULL = never.
     Column("dm_paused_until", String, nullable=True),
+    # The pace card's preset (5.2) and the last «Свой» limits as JSON; NULL = «Обычно».
+    Column("tuning_preset", String, nullable=True),
+    Column("tuning_custom", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(
@@ -249,6 +254,10 @@ _warming_account_state = Table(
     Column("cycle_plan", String, nullable=True),
     # The device this stint warms through; desktop unless the operator chose mobile.
     Column("device_mode", String, nullable=False, server_default="desktop"),
+    # The stint's warming wave and the confirmed spam block; see
+    # schemas._warming_console.WarmingStateMarks. Migration 94.
+    Column("wave", Integer, nullable=False, server_default="1"),
+    Column("spam_blocked_at", String, nullable=True),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

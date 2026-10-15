@@ -313,6 +313,7 @@ export function BulkMessageModal({
   const failureText = (code: string | null | undefined) => {
     switch (code) {
       case 'account_not_found':
+      case 'account_busy':
       case 'session_dead':
       case 'account_deactivated':
       case 'account_frozen':

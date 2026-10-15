@@ -1,4 +1,4 @@
-"""SQLAlchemy tables for outreach pacing (migrations #89, #90 and #94).
+"""SQLAlchemy tables for outreach pacing (migrations #89, #90 and #98).
 
 ``outreach_limits`` is the operator's settings singleton; ``outreach_daily_usage``
 counts per account and UTC day what the contact lookup and the bulk-message tool
@@ -32,7 +32,7 @@ _outreach_limits = Table(
     Column("bulk_max_delay_seconds", Float, nullable=False),
     # ``RunSchedule`` as JSON (migration #91); NULL means its defaults.
     Column("schedule_json", String, nullable=True),
-    # ``OutreachProtection`` as JSON (migration #94); NULL means its defaults.
+    # ``OutreachProtection`` as JSON (migration #98); NULL means its defaults.
     Column("protection_json", String, nullable=True),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_outreach_limits_single_row"),

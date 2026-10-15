@@ -87,7 +87,7 @@ test('the operator can override the guess', async () => {
   });
 
   await userEvent.click(select);
-  await userEvent.click(screen.getByRole('option', { name: 'Списан' }));
+  await userEvent.click(screen.getByRole('option', { name: /^Списан/ }));
   await userEvent.click(screen.getByText('Удалить'));
 
   expect(onConfirm).toHaveBeenCalledWith('retired');

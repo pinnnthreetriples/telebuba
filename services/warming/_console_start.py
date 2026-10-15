@@ -4,9 +4,11 @@ Geo never refuses a start: a phone/proxy country mismatch is a warning the opera
 can accept. The acceptance is stored after the start went through, as the pair it
 covers (``_console.geo_pair``), so a later proxy in another country asks again.
 
-A resume is a start that keeps the graduated account's stint — its clock and worked
-days — under the same per-account lock, clearing the graduation flags on the way
-(``start_warming`` does both; ``carry_or_restamp`` decides what carries).
+«Вернуть в прогрев» is the same start from the same dialog (days, persona, delay,
+device, geo consent) on a graduated account: it warms again FROM ZERO as the account's
+next wave, the graduation flags cleared on the way (``start_warming`` does both, under
+the per-account lock). It used to continue the counted days, so an account with its
+target already worked graduated again at once and the operator saw nothing happen.
 """
 
 from __future__ import annotations
@@ -42,8 +44,8 @@ async def _record_geo_consent(data: StartWarmingRequest) -> bool:
     return True
 
 
-async def _start(data: StartWarmingRequest, *, resume: bool) -> WarmingAccountState:
-    card = await _runtime.start_warming(data, resume=resume)
+async def _start(data: StartWarmingRequest, *, rewarm: bool) -> WarmingAccountState:
+    card = await _runtime.start_warming(data, rewarm=rewarm)
     if await _record_geo_consent(data):
         return await _current_card(data.account_id)
     return card
@@ -51,11 +53,13 @@ async def _start(data: StartWarmingRequest, *, resume: bool) -> WarmingAccountSt
 
 async def start_warming_with_consent(data: StartWarmingRequest) -> WarmingAccountState:
     """Start warming and remember a geo consent given in the start dialog."""
-    return await _start(data, resume=False)
+    return await _start(data, rewarm=False)
 
 
-async def resume_warming(data: StartWarmingRequest) -> WarmingAccountState:
-    """«Вернуть в прогрев»: un-graduate and continue the stint where it stopped."""
-    card = await _start(data, resume=True)
-    await log_event("INFO", "warming_resumed", account_id=data.account_id)
+async def rewarm_account(data: StartWarmingRequest) -> WarmingAccountState:
+    """«Вернуть в прогрев»: a graduated account starts its next wave from zero."""
+    card = await _start(data, rewarm=True)
+    await log_event(
+        "INFO", "warming_rewarmed", account_id=data.account_id, extra={"wave": card.wave}
+    )
     return card

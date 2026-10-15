@@ -228,7 +228,13 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
             "INFO" if status != "limited" else "WARNING",
             "spam_status_refreshed",
             account_id=account_id,
-            extra={"status": status, "detail": detail},
+            # ``previous``: the stored answer this one replaces, so a reader can tell a
+            # new restriction from a known one (the bot pings only on news).
+            extra={
+                "status": status,
+                "detail": detail,
+                "previous": cached.status if cached is not None else None,
+            },
         )
         await record_lifecycle_event(
             account_id, "spambot_verdict", {"status": status, "detail": detail}

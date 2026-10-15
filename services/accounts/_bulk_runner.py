@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 from core.repositories import bulk_runs as repo
 from core.repositories.outreach import add_outreach_usage, list_outreach_usage
+from schemas.bulk_messages import BulkMessageOutcome
 from schemas.outreach_limits import OutreachDailyUsage
 from schemas.outreach_protection import RUN_STOPPED_CODE
 from services.accounts._bulk_plan import next_open, next_utc_day
@@ -35,7 +36,7 @@ from services.accounts._outreach_protection import LIMIT_CODES, halve, record_li
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
 
-    from schemas.bulk_messages import BulkMessageOutcome, BulkMessageRequest
+    from schemas.bulk_messages import BulkMessageRequest
     from schemas.bulk_runs import BulkRunAccount, BulkRunItem, WaitReason
     from schemas.outreach_protection import OutreachProtection
     from schemas.run_schedule import RunSchedule
@@ -358,18 +359,31 @@ class BulkRun:
         for pending in [i for i in self.items if i.status == "pending"]:
             await self._skip(pending, stop)
 
+    async def leave_out(self, account_ids: list[str], code: str) -> None:
+        """Take accounts out before the run sends: they send nothing, ``code`` says why.
+
+        Every lane is stopped first, so split mode hands a left-out account's recipients
+        only to accounts that stay in the run.
+        """
+        lanes = [self.lanes[a] for a in account_ids if self.lanes[a].row.stop_code is None]
+        for lane in lanes:
+            lane.row.stop_code = code
+            lane.row.retry_after_seconds = None
+        for lane in lanes:
+            account_id = lane.row.account_id
+            outcome = BulkMessageOutcome(
+                account_id=account_id, recipient="", status="skipped", error_code=code
+            )
+            await self._pass_on(account_id, outcome, self._rotation_after(account_id))
+            await repo.save_bulk_run_account(lane.row)
+
     async def _stop(self, lane: Lane, refused: BulkRunItem, outcome: BulkMessageOutcome) -> None:
         lane.row.stop_code = outcome.error_code
         lane.row.retry_after_seconds = outcome.retry_after_seconds
         stopped = lane.row.account_id
-        pending = [i for i in self.items if i.status == "pending" and i.account_id == stopped]
-        if self.data.mode == "each":
-            for item in pending:
-                await self._skip(item, outcome)
-            return
         pinned = self.data.recipient_accounts
         rotation = self._rotation_after(stopped)
-        if refused.recipient not in pinned and self._any_live():
+        if self.data.mode == "split" and refused.recipient not in pinned and self._any_live():
             # The refused row stays as history; the next live account gets a fresh one.
             refused.handed_over = True
             await repo.save_bulk_run_item(refused)
@@ -387,6 +401,18 @@ class BulkRun:
             )
             self.items.insert(self.items.index(refused) + 1, retry)
             retry.id = await repo.save_bulk_run_item(retry)
+        await self._pass_on(stopped, outcome, rotation)
+
+    async def _pass_on(
+        self, stopped: str, outcome: BulkMessageOutcome, rotation: Iterator[str]
+    ) -> None:
+        """A stopped account's pending recipients: skipped, or handed on in split mode."""
+        pending = [i for i in self.items if i.status == "pending" and i.account_id == stopped]
+        if self.data.mode == "each":
+            for item in pending:
+                await self._skip(item, outcome)
+            return
+        pinned = self.data.recipient_accounts
         for item in pending:
             if item.recipient in pinned or not self._any_live():
                 await self._skip(item, outcome)

@@ -6,17 +6,26 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NamedTuple
 
-from core.db import fetch_account, load_warming_settings, oldest_unreplied_for
 from core.logging import log_event
-from core.repositories.warming_marks import store_cycle_base, store_visit_plan
-from schemas.warming import WarmingCycleRequest, WarmingCycleResult
-from services.trust import account_trust_score
+from core.repositories.dialogues import oldest_unreplied_for
+from core.repositories.spam_status import get_spam_status
+from core.repositories.warming import load_warming_settings
+from core.repositories.warming_marks import store_cycle_progress
+from schemas._warming_visits import CycleMarks, VisitPlan
+from schemas.warming import WarmingCycleRequest, WarmingCycleResult, spam_block_known
 from services.warming import _loop, _seams
 from services.warming._cadence import visit_budget
 from services.warming._local_day import _local_date
 from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import _release_reservation_on_exit, _Reservation
-from services.warming._spam_check import _gate_spam_check
+from services.warming._snapshot import (
+    current_snapshot,
+    load_cycle_snapshot,
+    publish_snapshot,
+    snapshot_scope,
+)
+from services.warming._spam_check import _spam_step
+from services.warming._state import READ_CURRENT
 from services.warming._steps import _ChannelTally
 from services.warming._transitions import (
     _gate_readiness,
@@ -30,7 +39,7 @@ from services.warming.pacing import _account_age_hours, _now_iso, _roll_daily, c
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from schemas._warming_visits import VisitPlan
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import ActivityPersona, WarmingPhase, WarmingStateRecord
 
 logger = logging.getLogger(__name__)
@@ -54,6 +63,9 @@ class _ReservedIteration(NamedTuple):
     persona: ActivityPersona
     reservation: _Reservation
     phase: WarmingPhase = "intro"
+    # This visit's kind and order and its share of the day's budget (4.3/4.4).
+    visit: VisitPlan | None = None
+    budget: int | None = None
 
 
 async def _gate_initial_state(
@@ -73,24 +85,47 @@ async def _gate_initial_state(
     return None
 
 
+async def _gate_spam(
+    account_id: str,
+    record: WarmingStateRecord | None,
+    now: datetime,
+    run_id: str | None,
+) -> WarmingCycleResult | SpamStatusVerdict | None:
+    """The spam step on the cached reading; returns the reading the cycle goes on with."""
+    spam = await get_spam_status(account_id)
+    if record is None:
+        return spam
+    gated, asked = await _spam_step(account_id, record, spam, now, run_id=run_id)
+    if gated is not None:
+        return gated
+    # @SpamBot was asked, so the stored reading moved on: score trust from that one.
+    return await get_spam_status(account_id) if asked else spam
+
+
 async def _plan_iteration(
     account_id: str,
     run_id: str | None,
 ) -> _IterationPlan | WarmingCycleResult:
-    """Apply pre-cycle gates and compute the account's available budget."""
+    """Apply pre-cycle gates and compute the account's available budget.
+
+    Past the generation, target and spam gates the rest of the cycle's data is read
+    once (``_snapshot``) and published for the steps that follow.
+    """
     now = datetime.now(UTC)
     controls = await load_warming_settings()
     record = await _loop.fetch_warming_state(account_id)
     initial_gate = await _gate_initial_state(account_id, record, now, run_id)
     if initial_gate is not None:
         return initial_gate
-    spam_gate = await _gate_spam_check(account_id, record, now, run_id=run_id)
-    if spam_gate is not None:
-        return spam_gate
+    spam = await _gate_spam(account_id, record, now, run_id)
+    if isinstance(spam, WarmingCycleResult):
+        return spam
 
-    account = await fetch_account(account_id)
+    snapshot = await load_cycle_snapshot(account_id, controls, record, spam)
+    publish_snapshot(snapshot)
+    account = snapshot.account
     age_hours = _account_age_hours(account, now)
-    trust = await account_trust_score(account_id)
+    trust = snapshot.trust(now)
     not_ready = await _gate_readiness(account, controls, record, trust, now, run_id=run_id)
     if not_ready is not None:
         return not_ready
@@ -122,10 +157,28 @@ async def _plan_iteration(
         intensity.daily_cap,
         daily,
         remaining,
-        intensity.dm_allowed,
+        # A confirmed spam block shuts DMs for good: the account cannot write to strangers.
+        intensity.dm_allowed and not spam_block_known(record),
         persona,
         intensity.phase,
     )
+
+
+async def _plan_this_visit(
+    account_id: str,
+    plan: _IterationPlan,
+) -> tuple[VisitPlan, int | None]:
+    """This visit's kind, order and budget, booked with the reservation for the card.
+
+    The budget is the day's remainder split over the visits left (4.3), capped by the
+    kind's share (4.4); what the visit leaves unspent returns through the reconcile.
+    «Только ответить» is offered only while a partner's DM waits and DMs are allowed.
+    """
+    dm_waiting = plan.dm_allowed and await oldest_unreplied_for(account_id) is not None
+    kind = choose_visit_kind(plan.persona, plan.phase, _seams.rng, dm_waiting=dm_waiting)
+    visit = plan_visit(kind, _seams.rng)
+    split = visit_budget(plan.persona, plan.effective_cap, plan.remaining)
+    return visit, kind_budget(kind, split, plan.remaining, _seams.rng)
 
 
 async def _reserve_iteration(
@@ -133,8 +186,15 @@ async def _reserve_iteration(
     plan: _IterationPlan,
     run_id: str | None,
 ) -> _ReservedIteration | WarmingCycleResult:
-    """Reserve the full remaining daily budget before any Telegram action."""
+    """Plan the visit, then reserve the full remaining daily budget before any Telegram action.
+
+    One write books the budget and stores what the card shows while it is booked: the
+    settled count the booking sits on (``_console``) and the visit's plan. Both ride
+    the booking's own CAS, so an older cycle's marks never land on a newer booking.
+    """
+    visit, budget = await _plan_this_visit(account_id, plan)
     reservation = _Reservation.book(plan.daily, plan.remaining)
+    snapshot = current_snapshot(account_id)
     started = await _loop._set_state(  # noqa: SLF001 - patchable state seam.
         account_id,
         "active",
@@ -147,13 +207,14 @@ async def _reserve_iteration(
         daily_count_date=plan.daily[1],
         expected_run_id=run_id,
         reservation_token=reservation.token,
+        cycle_marks=CycleMarks(
+            base_actions=reservation.daily_count, visit_kind=visit.kind, steps=visit.steps
+        ),
+        # The gates just read the row and nothing since wrote what this write carries.
+        current=snapshot.record if snapshot is not None else READ_CURRENT,
     )
     if run_id is not None and not started.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-    # What the card shows while the booking inflates ``daily_actions`` (``_console``).
-    # After the CAS and fenced by this booking's token, so an older cycle's late write
-    # can never land on a newer booking.
-    await store_cycle_base(account_id, reservation.daily_count, reservation.token)
     return _ReservedIteration(
         plan.age_hours,
         plan.effective_cap,
@@ -162,6 +223,8 @@ async def _reserve_iteration(
         plan.persona,
         reservation,
         plan.phase,
+        visit,
+        budget,
     )
 
 
@@ -186,13 +249,8 @@ class _ProgressReporter:
             return
         self.max_step = idx
         try:
-            await _loop._set_state(  # noqa: SLF001 - patchable state seam.
-                self.account_id,
-                "active",
-                last_action=step,
-                heartbeat_at=_now_iso(),
-                expected_run_id=self.run_id,
-            )
+            # One narrow UPDATE: the rail needs no read of the row to carry the rest.
+            await store_cycle_progress(self.account_id, step, _now_iso(), self.run_id)
         except Exception as exc:  # Cosmetic progress must not abort a healthy cycle.
             logger.exception("progress write failed for %s at step %s", self.account_id, step)
             await log_event(
@@ -203,25 +261,6 @@ class _ProgressReporter:
             )
 
 
-async def _plan_this_visit(
-    account_id: str,
-    reserved: _ReservedIteration,
-) -> tuple[VisitPlan, int | None]:
-    """This visit's kind, order and budget, stored for the card's progress.
-
-    The budget is the day's remainder split over the visits left (4.3), capped by the
-    kind's share (4.4); what the visit leaves unspent returns through the reconcile.
-    «Только ответить» is offered only while a partner's DM waits and DMs are allowed.
-    """
-    dm_waiting = reserved.dm_allowed and await oldest_unreplied_for(account_id) is not None
-    kind = choose_visit_kind(reserved.persona, reserved.phase, _seams.rng, dm_waiting=dm_waiting)
-    visit = plan_visit(kind, _seams.rng)
-    split = visit_budget(reserved.persona, reserved.effective_cap, reserved.remaining)
-    budget = kind_budget(kind, split, reserved.remaining, _seams.rng)
-    await store_visit_plan(account_id, visit.kind, visit.steps, reserved.reservation.token)
-    return visit, budget
-
-
 async def _run_reserved_cycle(
     account_id: str,
     reserved: _ReservedIteration,
@@ -229,12 +268,12 @@ async def _run_reserved_cycle(
 ) -> WarmingCycleResult:
     """Run and settle one reserved cycle, releasing budget on local failure."""
     tally = _ChannelTally()
+    visit = reserved.visit or VisitPlan()
     try:
-        visit, budget = await _plan_this_visit(account_id, reserved)
         result = await _loop._execute_cycle(  # noqa: SLF001 - patchable cycle seam.
             WarmingCycleRequest(
                 account_id=account_id,
-                remaining_actions=budget,
+                remaining_actions=reserved.budget,
                 dm_allowed=reserved.dm_allowed,
                 activity_persona=reserved.persona,
                 visit=visit,
@@ -278,11 +317,16 @@ async def run_loop_iteration(
     *,
     run_id: str | None = None,
 ) -> WarmingCycleResult:
-    """Run one CAS-fenced warming iteration without the inter-cycle sleep."""
-    planned = await _plan_iteration(account_id, run_id)
-    if isinstance(planned, WarmingCycleResult):
-        return planned
-    reserved = await _reserve_iteration(account_id, planned, run_id)
-    if isinstance(reserved, WarmingCycleResult):
-        return reserved
-    return await _run_reserved_cycle(account_id, reserved, run_id)
+    """Run one CAS-fenced warming iteration without the inter-cycle sleep.
+
+    The cycle's data is read once and lives for exactly this iteration
+    (``_snapshot.snapshot_scope``), so the next iteration starts from fresh reads.
+    """
+    with snapshot_scope():
+        planned = await _plan_iteration(account_id, run_id)
+        if isinstance(planned, WarmingCycleResult):
+            return planned
+        reserved = await _reserve_iteration(account_id, planned, run_id)
+        if isinstance(reserved, WarmingCycleResult):
+            return reserved
+        return await _run_reserved_cycle(account_id, reserved, run_id)
