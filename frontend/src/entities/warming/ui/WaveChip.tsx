@@ -66,8 +66,12 @@ function WavesModal({
             ))}
           </ul>
         ) : (
-          <EmptyState size="sm">
-            {query.isPending ? t('warming.waves.loading') : t('warming.waves.empty')}
+          <EmptyState size="sm" tone={query.isError ? 'danger' : undefined}>
+            {query.isPending
+              ? t('warming.waves.loading')
+              : query.isError
+                ? t('warming.waves.error')
+                : t('warming.waves.empty')}
           </EmptyState>
         )}
       </div>

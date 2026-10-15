@@ -109,6 +109,23 @@ test('a second wave wears its chip, and the chip opens the wave history', async 
   expect(within(dialog).getByText(/14 дней из 14/)).toBeInTheDocument();
 });
 
+test('a failed wave history says so instead of claiming there are no waves', async () => {
+  routeWith({ ...BOARD, warming: [BLOCKED] });
+  const routed = vi.mocked(fetch).getMockImplementation();
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    if (new URL((input as Request).url).pathname === '/api/v1/warming/waves/blocked') {
+      return Promise.resolve(jsonResponse({ detail: 'boom' }, 500));
+    }
+    return routed!(input, init);
+  });
+  renderWithClient(<WarmingPage />);
+
+  await userEvent.click(await screen.findByRole('button', { name: /^Волна 2 · с / }));
+
+  const dialog = await screen.findByRole('dialog', { name: 'Волны прогрева · blocked' });
+  expect(await within(dialog).findByText('Не удалось загрузить волны')).toBeVisible();
+});
+
 test('a kept account in the ready column keeps its badge', async () => {
   const kept: WarmingAccountState = {
     ...BLOCKED,

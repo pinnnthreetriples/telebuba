@@ -3656,7 +3656,8 @@
         "replaced": "next wave started"
       },
       "loading": "Loading waves…",
-      "empty": "The account has not been warmed yet"
+      "empty": "The account has not been warmed yet",
+      "error": "Could not load the waves"
     }
   },
   "auth": {
