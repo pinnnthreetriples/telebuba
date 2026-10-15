@@ -10,6 +10,7 @@ from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from schemas.accounts import _ACCOUNT_ID_PATTERN
 from schemas.bulk_runs import TimeBasis, WaitReason  # noqa: TC001
 from schemas.outreach_limits import MAX_FIRST_MESSAGES_PER_DAY, MAX_PAUSE_SECONDS
+from schemas.recipient_rules import RecipientRules  # noqa: TC001
 from schemas.run_schedule import RunSchedule  # noqa: TC001
 
 _MAX_SENDS = 500
@@ -34,6 +35,8 @@ class BulkMessageRequest(BaseModel):
     recipient_accounts: dict[str, str] = Field(default_factory=dict, max_length=_MAX_SENDS)
     # When and how the run spreads its sends; left out, the saved default schedule.
     schedule: RunSchedule | None = None
+    # Who may be written to given earlier runs; left out, the saved default rules.
+    recipient_rules: RecipientRules | None = None
     # No send before this moment; left out, the run starts at once.
     start_at: AwareDatetime | None = None
     # The phone a lookup found each recipient by, so the window can follow the

@@ -132,3 +132,11 @@ async def test_contact_lookup_job_is_private_to_its_owner(
         other_cancel = await client.post(f"/api/v1/accounts/contact-lookup/{job_id}/cancel")
         assert other_cancel.status_code == 404
         assert not contact_lookup._cancel_events[job_id].is_set()
+
+
+@pytest.mark.asyncio
+async def test_contact_lookup_rechecks_route_is_not_taken_for_a_job_id(app: FastAPI) -> None:
+    async with _client(app) as client:
+        response = await client.get("/api/v1/accounts/contact-lookup/rechecks")
+    assert response.status_code == 200
+    assert response.json() == {"waiting": 0, "due": 0}

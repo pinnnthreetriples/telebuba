@@ -232,6 +232,9 @@ import type {
   GetContactLookupJobData,
   GetContactLookupJobErrors,
   GetContactLookupJobResponses,
+  GetContactRechecksData,
+  GetContactRechecksErrors,
+  GetContactRechecksResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
@@ -1816,6 +1819,18 @@ export const getLatestContactLookupJob = <ThrowOnError extends boolean = false>(
     GetLatestContactLookupJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/contact-lookup/latest', ...options });
+
+/**
+ * Get Contact Rechecks
+ */
+export const getContactRechecks = <ThrowOnError extends boolean = false>(
+  options?: Options<GetContactRechecksData, ThrowOnError>,
+): RequestResult<GetContactRechecksResponses, GetContactRechecksErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetContactRechecksResponses,
+    GetContactRechecksErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/contact-lookup/rechecks', ...options });
 
 /**
  * Get Contact Lookup Job

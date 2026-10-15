@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   activeContactLookupJobQueryOptions,
   cancelContactLookupJobMutation,
+  contactRechecksQueryOptions,
   getContactLookupJobQueryOptions,
   outreachLimitsQueryOptions,
   outreachUsageTodayQueryOptions,
@@ -59,6 +60,7 @@ export function ContactLookupPanel({
   onAppendRecipients,
   pacing,
   onPacingChange,
+  recheckNotFound,
 }: {
   accountIds: string[];
   // ``phones``: the number each recipient was found by, for the client's time zone.
@@ -70,6 +72,9 @@ export function ContactLookupPanel({
   // Shared with the send form's block: one preset sets both.
   pacing: PacingValues;
   onPacingChange: (pacing: PacingValues) => void;
+  // Queue this search's "not found" numbers for another account tomorrow and take
+  // in the ones due today.
+  recheckNotFound: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -87,6 +92,8 @@ export function ContactLookupPanel({
     enabled: open && accountIds.length > 0,
   });
   const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
+  const rechecks = useQuery({ ...contactRechecksQueryOptions(), enabled: open && jobId === null });
+  const dueRechecks = recheckNotFound ? (rechecks.data?.due ?? 0) : 0;
   const start = useMutation(startContactLookupMutation());
   const cancel = useMutation(cancelContactLookupJobMutation());
   const active = useQuery({
@@ -126,8 +133,12 @@ export function ContactLookupPanel({
       /^\d+$/.test(maxShown) &&
       minSeconds <= maxSeconds &&
       maxSeconds <= MAX_DELAY_SECONDS);
+  // With no numbers typed, a search runs only the re-checks that are due.
   const canFind =
-    accountIds.length > 0 && phoneList.length > 0 && phoneList.length <= MAX_PHONES && delayReady;
+    accountIds.length > 0 &&
+    (phoneList.length > 0 || dueRechecks > 0) &&
+    phoneList.length <= MAX_PHONES &&
+    delayReady;
   const overflow = lookupOverflow(
     phoneList.length,
     accountIds.map((id) => pacing.contacts - (usage.get(id)?.contact_imports ?? 0)),
@@ -140,6 +151,7 @@ export function ContactLookupPanel({
   const found = results.filter((row) => row.status === 'found');
   const notFound = results.filter((row) => row.status === 'not_found').length;
   const recheck = results.filter((row) => row.status === 'recheck').length;
+  const rechecked = results.filter((row) => row.rechecked).length;
   const dailyLimit = results.filter(
     (row) => row.status === 'skipped' && row.error_code === 'daily_limit',
   ).length;
@@ -184,6 +196,7 @@ export function ContactLookupPanel({
           ...(delayEdited && { min_delay_seconds: minSeconds, max_delay_seconds: maxSeconds }),
           batch_size: pacing.batch,
           daily_cap: pacing.contacts,
+          recheck_not_found: recheckNotFound,
         },
       })
       .then((result) => {
@@ -280,6 +293,15 @@ export function ContactLookupPanel({
                 />
               </section>
 
+              {recheckNotFound && (rechecks.data?.waiting ?? 0) > 0 && (
+                <p className="type-small">
+                  {t('accounts.messages.lookup.rechecksWaiting', {
+                    count: rechecks.data?.waiting ?? 0,
+                    due: dueRechecks,
+                  })}
+                </p>
+              )}
+
               <PacingBlock
                 keys={['contacts', 'batch']}
                 values={pacing}
@@ -373,6 +395,9 @@ export function ContactLookupPanel({
                       t('accounts.messages.lookup.notFound', { count: notFound }),
                       ...(recheck > 0
                         ? [t('accounts.messages.lookup.recheck', { count: recheck })]
+                        : []),
+                      ...(rechecked > 0
+                        ? [t('accounts.messages.lookup.rechecked', { count: rechecked })]
                         : []),
                       ...(dailyLimit > 0
                         ? [t('accounts.messages.lookup.dailyLimit', { count: dailyLimit })]
