@@ -10,15 +10,16 @@ searching, joining or reading channels, so it searches like any other account (t
 - **free**: alive, with a session, and nothing else is using it — no campaign of any
   feature holds it, it serves no active neurocomment campaign, it is not the running
   listener, no discovery or user-parser run reads with it, and no flood is cooling it;
-- **pullable**: as free, except that neurocomment (commenting), neuroshilling, a chat
-  broadcast or masstagging is using it. Such an account is only ever taken after the
-  operator agreed in the consent dialog, and is given back when the search ends;
+- **pullable**: as free, except that neurocomment (commenting), a bulk message run,
+  neuroshilling, a chat broadcast or masstagging is using it. Such an account is only
+  ever taken after the operator agreed in the consent dialog, and is given back when
+  the search ends;
 - **unusable**: everything else — in warming (a spam-block stop aside), the listener, a
   discovery or parser run, cooling, dead. Never taken, not even with consent.
 
 The pull order puts the work that suffers least from a pause first: a skipped post or
-two of commenting, then masstagging and broadcast rounds, and a scripted neuroshilling
-dialogue last.
+two of commenting, a bulk run's next message a few minutes late, then masstagging and
+broadcast rounds, and a scripted neuroshilling dialogue last.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
 
 _PULL_ORDER: Final[tuple[PoolSearchBusyWith, ...]] = (
     "neurocomment",
+    "bulk_messages",
     "masstagging",
     "chat_broadcast",
     "neuroshilling",
@@ -54,6 +56,7 @@ _PULLABLE_OWNERS: Final[dict[str, PoolSearchBusyWith]] = {
     "neuroshilling": "neuroshilling",
     "chat_broadcast": "chat_broadcast",
     "masstagging": "masstagging",
+    "bulk_messages": "bulk_messages",
 }
 
 
@@ -64,8 +67,8 @@ class _Fleet:
     accounts: dict[str, AccountRead]
     states: dict[str, WarmingStateRecord]
     commenting: set[str]
-    # Accounts of a live bulk message run: it sends without the lifecycle lock, so
-    # nothing would pause it during a search — they are never taken, not even pulled.
+    # Accounts of a live bulk message run. The run claims them in the registry when its
+    # loop starts; the rows also cover a run a restart has not resumed yet.
     bulk: set[str]
     listener: str | None
     now: datetime
@@ -108,7 +111,6 @@ def _usable(account_id: str, fleet: _Fleet) -> bool:
     owner = _account_owner.owner_of(account_id)
     return (
         account_id != fleet.listener
-        and account_id not in fleet.bulk
         and owner not in {"warming", "user_parser"}
         and not _account_owner.is_lent(account_id)
         and not _discovery_state.account_busy(account_id)
@@ -121,6 +123,8 @@ def _busy_with(account_id: str, fleet: _Fleet) -> PoolSearchBusyWith | None:
     held = _PULLABLE_OWNERS.get(_account_owner.owner_of(account_id) or "")
     if held is not None:
         return held
+    if account_id in fleet.bulk:
+        return "bulk_messages"
     return "neurocomment" if account_id in fleet.commenting else None
 
 

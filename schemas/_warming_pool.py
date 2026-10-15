@@ -29,7 +29,9 @@ PoolFillStatus = Literal[
     "failed",
 ]
 # What a busy account is doing, as the consent dialog names it.
-PoolSearchBusyWith = Literal["neurocomment", "neuroshilling", "chat_broadcast", "masstagging"]
+PoolSearchBusyWith = Literal[
+    "neurocomment", "neuroshilling", "chat_broadcast", "masstagging", "bulk_messages"
+]
 # Who asked for a search: a warming account for itself, the automatic refill, the operator.
 ChannelSearchOrigin = Literal["self", "refill", "manual"]
 ChannelSearchStatus = Literal["ok", "flood", "failed", "no_account"]

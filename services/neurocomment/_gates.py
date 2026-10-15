@@ -153,6 +153,7 @@ _BLOCK_PRIORITY = (
     "busy_chat_broadcast",
     "busy_user_parser",
     "busy_masstagging",
+    "busy_bulk_messages",
     "busy_channel_search",
     "quota_hour",
     "quota_day",
@@ -181,7 +182,7 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
     # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
     # per-account I/O in this pass holds — there is nothing here to bulk-load.
     owner = _account_owner.owner_of(account_id)
-    if owner in {"neuroshilling", "chat_broadcast", "user_parser", "masstagging"}:
+    if owner in {"neuroshilling", "chat_broadcast", "user_parser", "masstagging", "bulk_messages"}:
         return f"busy_{owner}"
     # Warming's channel-pool search is reading with it for a few minutes; another
     # account takes the post instead of this one waiting at the send for the search.
