@@ -77,6 +77,11 @@ async def keep_spam_blocked(record: WarmingStateRecord | None, account_id: str) 
     if record is None or not spam_block_known(record):
         raise NotSpamBlockedError(account_id)
     if record.state != "spam_blocked":
+        # A repeat «Оставить» only finishes a keep whose placement write did not land;
+        # an account already warming again (or handed on) is never touched.
+        unfinished = record.state == "idle" and record.last_event == "spam_block_kept"
+        if unfinished and not record.promoted_to_nc:
+            await mark_promoted_to_nc(account_id)
         return
     now = datetime.now(UTC).isoformat()
     await _set_state(

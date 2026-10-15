@@ -100,6 +100,31 @@ async def test_keep_moves_the_account_to_idle_and_remembers_the_block() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_repeat_keep_finishes_only_an_unfinished_placement() -> None:
+    await _blocked(state="idle")
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="idle", last_event="spam_block_kept")
+    )
+
+    await warming.keep_spam_blocked("acc-1")
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.promoted_to_nc is True, "the placement the first keep missed is finished"
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_keep_never_promotes_a_rewarmed_account() -> None:
+    await _blocked(state="sleeping")
+
+    await warming.keep_spam_blocked("acc-1")
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert (record.state, record.promoted_to_nc) == ("sleeping", False)
+
+
+@pytest.mark.asyncio
 async def test_keep_refuses_an_account_never_stopped_on_a_spam_block() -> None:
     await _seed_ready_account()
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
