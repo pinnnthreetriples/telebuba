@@ -156,7 +156,11 @@ async def run_lookup_pass(
         )
         for account_id in account_ids
     }
-    pending = await repo.list_leads(["pending"], limit=_PENDING_WINDOW)
+    # Read apart, so re-checks that only their own account could take (it rests, or is
+    # the only one configured) never fill the window and starve the fresh numbers.
+    fresh = await repo.list_leads(["pending"], limit=_PENDING_WINDOW, recheck=False)
+    rechecks = await repo.list_leads(["pending"], limit=_PENDING_WINDOW, recheck=True)
+    pending = sorted([*fresh, *rechecks], key=lambda lead: lead.id or 0)
     lanes = plan_pass(pending, room, await list_accounts_with_contact_matches(account_ids))
     if not lanes:
         return 0, set()

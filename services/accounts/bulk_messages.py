@@ -306,6 +306,11 @@ async def run_bulk_message_job(job_id: str) -> None:
     )
 
 
+def is_bulk_message_job_driven(job_id: str) -> bool:
+    """Whether this process runs the job's loop; a live row without one was orphaned."""
+    return job_id in _TASKS or job_id in _RUNS
+
+
 def launch_bulk_message_job(job_id: str) -> None:
     """Run in the background, tracked so shutdown can stop it and a restart resume it."""
     task = asyncio.create_task(run_bulk_message_job(job_id))

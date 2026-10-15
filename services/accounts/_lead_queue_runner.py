@@ -44,6 +44,13 @@ SYNC_SECONDS = 60
 _RETRY_SECONDS = 300
 # An account another feature (or the operator's own run) holds: look again later.
 _BUSY_REST = timedelta(minutes=30)
+# Stop codes that end an account for good: only it can write to the user it found, so
+# its leads fail instead of waiting for a day that never comes.
+_DEAD_ACCOUNT = frozenset(
+    {"account_not_found", "session_dead", "account_deactivated", "account_frozen"}
+)
+# The account sent nothing and may send again later: its lead waits for the next run.
+_RETRY_CODES = (STOP_CODES - _DEAD_ACCOUNT) | {BUSY_CODE}
 _MAX_RUN_LEADS = 500
 _MAX_RUN_ACCOUNTS = 50
 logger = logging.getLogger(__name__)
@@ -75,7 +82,7 @@ def _ready(configured: LeadQueueSettings) -> bool:
 class LeadQueueRunner:
     def __init__(self) -> None:
         self.wakeup = asyncio.Event()
-        # The queue never stops on its own; this only interrupts a lookup pass.
+        # Set by a pause: interrupts a lookup pass in flight; cleared by the next pass.
         self.cancel = asyncio.Event()
         self.next_lookup_at: datetime | None = None
         # Account -> UTC day it rests from lookups (stopped or silently limited).
@@ -101,7 +108,15 @@ class LeadQueueRunner:
         live = await runs_repo.list_live_bulk_runs("lead_queue")
         wakes: list[datetime] = [now + timedelta(seconds=SYNC_SECONDS)] if live else []
         if not _ready(configured):
+            # A run that slipped past the pause (started while it was being saved).
+            for record in live:
+                if not record.cancel_requested:
+                    await bulk_messages.cancel_bulk_message_job(record.id, record.owner_user_id)
             return min(wakes, default=None)
+        for record in live:
+            if not bulk_messages.is_bulk_message_job_driven(record.id):
+                # Its loop died without settling the row: drive it again so it ends.
+                bulk_messages.launch_bulk_message_job(record.id)
         limits = await load_outreach_limits()
         schedule = limits.schedule
         opens = next_open(now, schedule.operator_timezone, schedule)
@@ -110,7 +125,7 @@ class LeadQueueRunner:
         elif await repo.list_leads(["pending"], limit=1):
             wakes.append(await self._lookup(configured, limits, now))
         if not live:
-            wakes.extend(await self._start_run(configured, now))
+            wakes.extend(await self._start_run(now))
         return min(wakes, default=None)
 
     async def _lookup(
@@ -120,6 +135,7 @@ class LeadQueueRunner:
             return self.next_lookup_at
         day = now.date().isoformat()
         accounts = [a for a in configured.account_ids if self.lookup_rest.get(a) != day]
+        self.cancel.clear()
         checked, resting = (
             await run_lookup_pass(accounts, limits, now, self.cancel) if accounts else (0, set())
         )
@@ -128,8 +144,17 @@ class LeadQueueRunner:
         self.next_lookup_at = now + lookup_spacing(limits) if checked else next_utc_day(now)
         return self.next_lookup_at
 
-    async def _start_run(self, configured: LeadQueueSettings, now: datetime) -> list[datetime]:
-        """Hand the found leads to a new send run; returns when to look again."""
+    async def _start_run(self, now: datetime) -> list[datetime]:
+        """Hand the found leads to a new send run; returns when to look again.
+
+        The settings are read again here, after a lookup pass that may have taken
+        minutes, and once more after the run is stored: a pause saved in between either
+        stops this start or finds the run live and cancels it. Leads are claimed by a
+        conditional update, so one removed meanwhile is never part of the run.
+        """
+        configured = await repo.load_lead_queue_settings()
+        if not _ready(configured):
+            return []
         found = await repo.list_leads(["found"], limit=_MAX_RUN_LEADS)
         resting = {a: until for a, until in self.send_rest.items() if until > now}
         leads: list[LeadQueueItem] = []
@@ -145,11 +170,14 @@ class LeadQueueRunner:
         if not leads:
             return [min(resting.values())] if found and resting else []
         run_id = uuid4().hex
+        claimed = await repo.claim_leads([lead.id for lead in leads if lead.id is not None], run_id)
+        leads = [lead for lead in leads if lead.id in claimed]
+        if not leads:
+            return [now]
         for lead in leads:
             lead.status, lead.run_id = "messaging", run_id
-        await repo.save_leads(leads)
         request = BulkMessageRequest(
-            account_ids=list(accounts),
+            account_ids=list(dict.fromkeys(str(lead.account_id) for lead in leads)),
             recipients=[str(lead.user_id) for lead in leads],
             text=configured.text,
             mode="split",
@@ -163,6 +191,8 @@ class LeadQueueRunner:
         except ValueError:
             await self._back_to_found(leads)
             raise
+        if not _ready(await repo.load_lead_queue_settings()):
+            await bulk_messages.cancel_bulk_message_job(run_id, configured.owner_user_id or "")
         bulk_messages.launch_bulk_message_job(run_id)
         return [now + timedelta(seconds=SYNC_SECONDS)]
 
@@ -216,7 +246,7 @@ class LeadQueueRunner:
             lead.status = "sent"
         elif item.status == "unconfirmed":
             lead.status, lead.error_code = "unconfirmed", item.error_code
-        elif item.error_code in STOP_CODES or item.error_code == BUSY_CODE:
+        elif item.error_code in _RETRY_CODES:
             # The account provably sent nothing and cannot send for now: retry later.
             lead.status, lead.run_id, lead.finished_at = "found", None, None
             if item.error_code == BUSY_CODE:

@@ -61,11 +61,18 @@ async def list_leads(
     *,
     limit: int | None = None,
     newest_first: bool = False,
+    recheck: bool | None = None,
 ) -> list[LeadQueueItem]:
-    """Leads in queue order (oldest first) unless ``newest_first``; ``statuses`` narrows."""
+    """Leads in queue order (oldest first) unless ``newest_first``.
+
+    ``statuses`` narrows; ``recheck`` keeps only re-checks (True) or only the rest (False).
+    """
     statement = select(_items)
     if statuses is not None:
         statement = statement.where(_items.c.status.in_(list(statuses)))
+    if recheck is not None:
+        column = _items.c.recheck_account_id
+        statement = statement.where(column.is_not(None) if recheck else column.is_(None))
     statement = statement.order_by(_items.c.id.desc() if newest_first else _items.c.id)
     if limit is not None:
         statement = statement.limit(limit)
@@ -112,6 +119,29 @@ def _save_leads(leads: Sequence[LeadQueueItem]) -> None:
 async def save_leads(leads: Sequence[LeadQueueItem]) -> None:
     """Overwrite each lead's row in one transaction."""
     await asyncio.to_thread(_save_leads, leads)
+
+
+def _claim_leads(lead_ids: Sequence[int], run_id: str) -> set[int]:
+    now = _now_iso()
+    claimed: set[int] = set()
+    with _get_engine().begin() as connection:
+        for lead_id in lead_ids:
+            result = connection.execute(
+                update(_items)
+                .where((_items.c.id == lead_id) & (_items.c.status == "found"))
+                .values(status="messaging", run_id=run_id, updated_at=now)
+            )
+            if result.rowcount:
+                claimed.add(lead_id)
+    return claimed
+
+
+async def claim_leads(lead_ids: Sequence[int], run_id: str) -> set[int]:
+    """Move the leads still "found" to "messaging" in ``run_id``; returns the ids moved.
+
+    Conditional per row, so a lead removed (or changed) since it was read is left out.
+    """
+    return await asyncio.to_thread(_claim_leads, lead_ids, run_id)
 
 
 def _delete_lead(lead_id: int, statuses: Collection[str]) -> bool:
