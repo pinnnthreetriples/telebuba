@@ -57,6 +57,10 @@ class ListenerBusyMasstaggingError(Exception):
     """The same refusal for an account a running masstagging campaign holds."""
 
 
+class ListenerBusyBulkMessagesError(Exception):
+    """The same refusal for an account a running bulk message run sends from."""
+
+
 async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     """Fence the owner, stop producers, then boundedly drain owned workers."""
     from services.neurocomment import _runtime  # noqa: PLC0415
@@ -94,6 +98,8 @@ async def _refuse_if_busy(listener_account_id: str) -> None:
         raise ListenerBusyUserParserError(listener_account_id)
     if _account_owner.owner_of(listener_account_id) == "masstagging":
         raise ListenerBusyMasstaggingError(listener_account_id)
+    if _account_owner.owner_of(listener_account_id) == "bulk_messages":
+        raise ListenerBusyBulkMessagesError(listener_account_id)
 
 
 async def start_neurocomment(

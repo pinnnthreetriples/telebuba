@@ -63,6 +63,7 @@ MasstaggingBusyOwner = Literal[
     "masstagging",
     "discovery",
     "user_parser",
+    "bulk_messages",
 ]
 
 

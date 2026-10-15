@@ -15,7 +15,8 @@ BOTH the owner and the holder match. That is what stops a late done-callback fro
 an evicted generation releasing the claim its successor now holds — the same
 identity check ``services.warming._seams.revoke_lease`` already makes on leases.
 
-**Neurocomment is not an owner.** Warming, neuroshilling and chat broadcast write;
+**Neurocomment is not an owner.** Warming, neuroshilling, chat broadcast, the user
+parser, masstagging and bulk message runs (``services.accounts._bulk_claims``) write;
 neurocomment only ever reads. Neuroshilling asks the DATABASE whether an account is serving an
 active neurocomment campaign. Drift between "the registry says free" and "the
 feature is using it" therefore cannot arise for neurocomment, because no line of
@@ -60,7 +61,9 @@ from __future__ import annotations
 import asyncio
 from typing import Literal
 
-Owner = Literal["warming", "neuroshilling", "chat_broadcast", "user_parser", "masstagging"]
+Owner = Literal[
+    "warming", "neuroshilling", "chat_broadcast", "user_parser", "masstagging", "bulk_messages"
+]
 # Not an owner — nothing claims as it: what :func:`try_claim` answers while a channel
 # search borrows the account.
 SearchLoan = Literal["channel_search"]

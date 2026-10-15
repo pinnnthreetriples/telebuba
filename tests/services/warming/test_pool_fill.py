@@ -291,9 +291,10 @@ async def test_consent_for_other_work_is_asked_again(telegram: FakeTelegram) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_message_account_is_never_taken(
+async def test_a_bulk_run_account_a_restart_has_not_resumed_needs_consent(
     telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Only the run's rows name it: the claim comes when the resumed loop starts.
     await seed_account("sender")
 
     async def bulk() -> set[str]:
@@ -302,7 +303,9 @@ async def test_a_bulk_message_account_is_never_taken(
     monkeypatch.setattr(_pool_accounts, "_bulk_accounts", bulk)
     result = await pool_fill.find_channels(_REQUEST)
 
-    assert result.status == "no_search_account"
+    assert result.status == "needs_consent"
+    assert result.pull_candidate is not None
+    assert result.pull_candidate.busy_with == "bulk_messages"
     assert telegram.reads == []
 
 
