@@ -28,7 +28,7 @@ export function PhaseTrack({ account }: { account: WarmingAccountState }) {
   const name = t(`warming.console.phase.${phase}`);
   return (
     <div className="rounded-md bg-canvas p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
           {/* The phase names are written lower-case for use inside sentences; here one
               stands alone as the tile's headline. */}
@@ -40,7 +40,7 @@ export function PhaseTrack({ account }: { account: WarmingAccountState }) {
           </div>
         </div>
         {nextPhase ? (
-          <div className="shrink-0 text-right">
+          <div className="ml-auto text-right">
             <div className="type-small text-content-muted">{t('warming.card.phaseNext')}</div>
             <div className="type-small-medium text-info-strong">
               {t(`warming.console.phase.${nextPhase}`)}
