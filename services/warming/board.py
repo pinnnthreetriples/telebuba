@@ -49,6 +49,7 @@ from services.warming._console import (
     settled_today,
     today_actions,
 )
+from services.warming._pool_requests import pending_refill_request
 from services.warming.pacing import (
     _account_age_hours,
     compute_intensity,
@@ -292,6 +293,7 @@ async def load_board() -> WarmingBoardState:
     # it back into idle. Buckets stay disjoint; a graduation is never stranded.
     idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
     warming = [card for card in cards if is_warming(card.state)]
+    shortages = language_shortages((card.phone for card in [*idle, *warming]), channels.channels)
     return WarmingBoardState(
         idle=idle,
         warming=warming,
@@ -305,12 +307,10 @@ async def load_board() -> WarmingBoardState:
         warmed=_warmed_from_cards(cards, settings.neurocomment.warmed_min_days),
         default_target_days=settings.neurocomment.warmed_min_days,
         mechanics=_derive_mechanics(masked),
-        language_shortages=language_shortages(
-            (card.phone for card in [*idle, *warming]),
-            channels.channels,
-        ),
+        language_shortages=shortages,
         soft_start=SoftStartPlan.model_validate(settings.soft_start.model_dump()),
         cadence_preview=cadence_preview(),
+        pool_refill_request=await pending_refill_request([s.language for s in shortages]),
     )
 
 

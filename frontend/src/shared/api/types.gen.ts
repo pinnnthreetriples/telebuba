@@ -1464,18 +1464,6 @@ export type ChannelBanCheckList = {
 };
 
 /**
- * ChannelBatchRequest
- *
- * Body of the approve/reject calls: the proposals the operator ticked.
- */
-export type ChannelBatchRequest = {
-  /**
-   * Channels
-   */
-  channels: Array<string>;
-};
-
-/**
  * ChannelCreateRequest
  */
 export type ChannelCreateRequest = {
@@ -5626,6 +5614,10 @@ export type PhotoRemoveRequest = {
  * PoolFillRequest
  *
  * «Найти каналы»: what to look for, in which language and country.
+ *
+ * Without topics the search takes them from the interests of that language's
+ * accounts. ``pull_account_id`` is the operator's consent to take that busy account
+ * off its work for the search; it is checked again before anything is taken.
  */
 export type PoolFillRequest = {
   /**
@@ -5639,19 +5631,34 @@ export type PoolFillRequest = {
   /**
    * Topics
    */
-  topics: Array<string>;
+  topics?: Array<string>;
+  /**
+   * Pull Account Id
+   */
+  pull_account_id?: string | null;
+  /**
+   * Pull Busy With
+   */
+  pull_busy_with?: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging' | null;
 };
 
 /**
  * PoolFillResult
  *
- * How a search went: hits seen, channels checked, proposals added for approval.
+ * How a search went: hits seen, channels checked, channels added to the pool.
  */
 export type PoolFillResult = {
   /**
    * Status
    */
-  status: 'ok' | 'no_search_account';
+  status:
+    | 'ok'
+    | 'no_search_account'
+    | 'needs_consent'
+    | 'no_topics'
+    | 'already_running'
+    | 'flooded'
+    | 'failed';
   /**
    * Found
    */
@@ -5661,9 +5668,46 @@ export type PoolFillResult = {
    */
   checked?: number;
   /**
-   * Proposed
+   * Added
    */
-  proposed?: number;
+  added?: number;
+  pull_candidate?: PoolSearchCandidate | null;
+};
+
+/**
+ * PoolRefillRequest
+ *
+ * The automatic refill wanted to search this language and found no free account.
+ */
+export type PoolRefillRequest = {
+  /**
+   * Language
+   */
+  language: string;
+  /**
+   * Requested At
+   */
+  requested_at: string;
+};
+
+/**
+ * PoolSearchCandidate
+ *
+ * The busy account a search would take, and what it would stop doing for it.
+ */
+export type PoolSearchCandidate = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Busy With
+   */
+  busy_with: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging';
 };
 
 /**
@@ -7881,6 +7925,7 @@ export type WarmingBoardState = {
    * Cadence Preview
    */
   cadence_preview?: Array<CadencePreview>;
+  pool_refill_request?: PoolRefillRequest | null;
 };
 
 /**
@@ -7928,11 +7973,15 @@ export type WarmingChannel = {
   /**
    * Source
    */
-  source?: 'manual' | 'discovery';
+  source?: 'manual' | 'discovery' | 'self_search';
   /**
    * Status
    */
-  status?: 'approved' | 'pending';
+  status?: 'approved' | 'removed';
+  /**
+   * Found By
+   */
+  found_by?: string | null;
 };
 
 /**
@@ -13652,111 +13701,6 @@ export type FindWarmingChannelsResponses = {
 
 export type FindWarmingChannelsResponse =
   FindWarmingChannelsResponses[keyof FindWarmingChannelsResponses];
-
-export type ListWarmingChannelProposalsData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/api/v1/warming/channels/proposals';
-};
-
-export type ListWarmingChannelProposalsErrors = {
-  /**
-   * Not authenticated
-   */
-  401: ErrorEnvelope;
-  /**
-   * Request validation failed
-   */
-  422: ErrorEnvelope;
-  /**
-   * Internal server error
-   */
-  500: ErrorEnvelope;
-};
-
-export type ListWarmingChannelProposalsError =
-  ListWarmingChannelProposalsErrors[keyof ListWarmingChannelProposalsErrors];
-
-export type ListWarmingChannelProposalsResponses = {
-  /**
-   * Successful Response
-   */
-  200: WarmingChannelList;
-};
-
-export type ListWarmingChannelProposalsResponse =
-  ListWarmingChannelProposalsResponses[keyof ListWarmingChannelProposalsResponses];
-
-export type ApproveWarmingChannelProposalsData = {
-  body: ChannelBatchRequest;
-  path?: never;
-  query?: never;
-  url: '/api/v1/warming/channels/proposals/approve';
-};
-
-export type ApproveWarmingChannelProposalsErrors = {
-  /**
-   * Not authenticated
-   */
-  401: ErrorEnvelope;
-  /**
-   * Request validation failed
-   */
-  422: ErrorEnvelope;
-  /**
-   * Internal server error
-   */
-  500: ErrorEnvelope;
-};
-
-export type ApproveWarmingChannelProposalsError =
-  ApproveWarmingChannelProposalsErrors[keyof ApproveWarmingChannelProposalsErrors];
-
-export type ApproveWarmingChannelProposalsResponses = {
-  /**
-   * Successful Response
-   */
-  200: WarmingChannelList;
-};
-
-export type ApproveWarmingChannelProposalsResponse =
-  ApproveWarmingChannelProposalsResponses[keyof ApproveWarmingChannelProposalsResponses];
-
-export type RejectWarmingChannelProposalsData = {
-  body: ChannelBatchRequest;
-  path?: never;
-  query?: never;
-  url: '/api/v1/warming/channels/proposals/reject';
-};
-
-export type RejectWarmingChannelProposalsErrors = {
-  /**
-   * Not authenticated
-   */
-  401: ErrorEnvelope;
-  /**
-   * Request validation failed
-   */
-  422: ErrorEnvelope;
-  /**
-   * Internal server error
-   */
-  500: ErrorEnvelope;
-};
-
-export type RejectWarmingChannelProposalsError =
-  RejectWarmingChannelProposalsErrors[keyof RejectWarmingChannelProposalsErrors];
-
-export type RejectWarmingChannelProposalsResponses = {
-  /**
-   * Successful Response
-   */
-  200: WarmingChannelList;
-};
-
-export type RejectWarmingChannelProposalsResponse =
-  RejectWarmingChannelProposalsResponses[keyof RejectWarmingChannelProposalsResponses];
 
 export type GetWarmingTuningData = {
   body?: never;

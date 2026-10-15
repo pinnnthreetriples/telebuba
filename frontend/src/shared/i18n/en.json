@@ -1761,9 +1761,11 @@
     "warming_dialogue_live_reply": "Answered with a reaction or a sticker",
     "warming_dialogue_live_opener": "Forwarded a post to a partner",
     "warming_pool_fill_done": "Channel search finished",
-    "warming_pool_fill_read_failed": "Channel search: a read failed",
-    "warming_pool_fill_approved": "Found channels approved",
-    "warming_pool_fill_rejected": "Found channels rejected"
+    "warming_pool_refill_needs_account": "Automatic channel search: no free account",
+    "warming_pool_refill_failed": "Automatic channel search: a pass failed",
+    "warming_pool_search_account_taken": "Account taken for a channel search",
+    "warming_pool_search_account_returned": "Account returned after a channel search",
+    "warming_self_search_done": "The account searched channels itself"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1876,6 +1878,7 @@
     "removed": "removed from the list",
     "errors_in_a_row": "too many errors in a row",
     "busy_masstagging": "the account is busy with a running mass-tagging campaign",
+    "busy_channel_search": "the account is busy with a warming channel search",
     "already_tagged": "already tagged",
     "username_not_found": "no such username",
     "phone_not_found": "phone not found",
@@ -3638,21 +3641,35 @@
     "poolFill": {
       "open": "Find channels",
       "title": "Find channels for warming",
-      "hint": "Searches with an account that is not being warmed. Fits are 2k–500k subscribers, alive, in the right language, no casinos, 18+ or signals. Found channels wait for your approval.",
+      "hint": "Searches with an account that is neither being warmed nor busy. Fits are 2k–500k subscribers, alive, in the right language, no casinos, betting, 18+, signals or easy-money pitches. Everything that fits goes straight into the channel list — remove what you don't want.",
       "language": "Language (code, e.g. es)",
       "country": "Country (optional, e.g. MX)",
-      "topics": "Topics, comma-separated (up to 5)",
+      "topics": "Topics, comma-separated (up to 5; empty = the interests of that language's accounts)",
       "search": "Search",
       "close": "Close",
-      "result": "Found {{found}}, {{proposed}} added for approval.",
-      "noAccount": "No idle account outside warming to search with.",
       "error": "The search failed.",
-      "waiting_one": "{{count}} found channel awaits approval",
-      "waiting_other": "{{count}} found channels await approval",
-      "pick": "Pick {{channel}}",
-      "subscribers": "{{count}} subs",
-      "approve": "Approve",
-      "reject": "Reject"
+      "status": {
+        "ok": "Found {{found}}, {{added}} added to the list.",
+        "flooded": "Telegram rate-limited this account's search. {{added}} added, try again later.",
+        "failed": "The search ran out of time. The account is back, try again later.",
+        "no_search_account": "No account can search: they are all warming or busy with work that cannot pause.",
+        "needs_consent": "No free account — a busy one can be taken, please confirm.",
+        "no_topics": "Nothing to search for: enter some topics.",
+        "already_running": "A search is already running — wait for it."
+      },
+      "consentTitle": "Take a busy account for the search?",
+      "consentBody": "No account is free. The search could take “{{name}}”, which {{work}} right now. That work pauses for this account during the search (up to 15 minutes), then the account goes back to it.",
+      "consentConfirm": "Pull it for the search",
+      "consentCancel": "Cancel",
+      "busyWith": {
+        "neurocomment": "is commenting (neurocomment)",
+        "neuroshilling": "is working in neuroshilling",
+        "chat_broadcast": "is running a chat broadcast",
+        "masstagging": "is working in mass tagging"
+      },
+      "refillTitle": "An account is needed to search channels",
+      "refillHint": "The pool is short of {{language}} channels and the automatic search found no free account. Pick the account to search with.",
+      "refillAction": "Pick an account"
     }
   },
   "auth": {

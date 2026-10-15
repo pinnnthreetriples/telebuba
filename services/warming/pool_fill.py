@@ -1,240 +1,233 @@
-"""«Найти каналы» — the warming channel pool refills itself (Прогрев 2.0, item 4.5).
+"""«Найти каналы» and the automatic refill — a pool search with an account outside warming.
 
-The operator names a language, a country and a few topics. Telegram's own search and its
-"similar channels" find candidates: the same gateway reads neurocomment discovery uses,
-not its campaign runtime. Each candidate must fit warming:
-- between ``pool_fill_min_subscribers`` and ``pool_fill_max_subscribers`` subscribers;
-- posted within ``pool_fill_alive_days``;
-- not visibly in another language;
-- no scam, 18+, casino or crypto-signal word in its title.
+The search looks for channels of one language (and country) on the given topics, or
+on the interests of that language's accounts when none are given (``_pool_topics``).
+Everything that passes ``_pool_filters`` goes straight into the pool as ``approved``:
+there is no approval step any more, the operator prunes the list instead.
 
-Fits are proposed as ``pending`` rows and nothing walks them until the operator
-approves them in a batch (decision Q12: manual approval only).
+**Which account reads.** A free one, when there is one (``_pool_accounts``). Otherwise
+nothing is taken on the search's own initiative: the result is ``needs_consent`` with
+the busy account the search would take and what it is doing, and only a second call
+carrying that account as ``pull_account_id`` — the operator's «Выдернуть на поиск» —
+takes it. A warming account is never taken, not even then.
 
-The search reads with an account that is NOT being warmed (decision Q13): one of the
-accounts neurocomment discovery may pick, preferring those handed to neurocomment.
-Warming never spends its own accounts' traffic on searching.
+**While it reads, the account is the search's.** The account's lifecycle lock is held
+for the whole search, and the search lends it in ``services._account_owner`` on top of
+whatever holds it. Every feature claims accounts and dispatches under that same lock,
+so nothing can claim it or send with it until the search ends; the loan is what their
+pickers and per-turn checks see meanwhile. The loan is ended in ``finally``, so a
+search that fails, times out (``pool_fill_timeout_seconds``) or is cancelled still
+gives the account back to whatever held it before.
+
+**One pool search at a time.** A second one, from the button or the refill, is told
+``already_running`` instead of queueing another account's reads behind the first.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import asyncio
+import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from core.channel_tokens import dedup_key
 from core.config import settings
-from core.db import list_accounts, list_warming_channels, list_warming_states
 from core.logging import log_event
-from core.repositories.warming_pool import (
-    approve_warming_channels,
-    list_pending_warming_channels,
-    propose_warming_channels,
-    reject_warming_channels,
-)
-from core.telegram_client import TelegramReadError
-from schemas._warming_pool import PoolFillResult
-from schemas.telegram_action_results import LinkedDiscussionGroupResult
-from schemas.telegram_actions import GetLinkedDiscussionGroup
-from schemas.telegram_actions_activity import GetLastPostAt, LastPostResult
-from schemas.telegram_actions_discovery import (
-    GetSimilarChannels,
-    SearchChannels,
-    TelegramChannelMatch,
-    TelegramChannelMatches,
-)
-from schemas.warming import WarmingChannel
-from services._lang_detect import detect_language
-from services.neurocomment._discovery_pool import list_search_accounts
+from core.repositories.warming_pool import add_found_warming_channels, list_known_warming_channels
+from core.repositories.warming_searches import record_channel_search
+from schemas._warming_pool import ChannelSearchRecord, PoolFillResult, PoolSearchCandidate
+from services import _account_owner
+from services.neurocomment._discovery_providers import flood_cooldown, record_flood
 from services.warming import _seams
+from services.warming._pool_accounts import free_search_accounts, pull_candidates, search_standing
+from services.warming._pool_hunt import HuntPlan, hunt_channels
+from services.warming._pool_topics import topics_for
 from services.warming._runtime import account_lock
+from services.warming._steps import _human_delay
 
 if TYPE_CHECKING:
-    from schemas._warming_pool import ChannelBatchRequest, PoolFillRequest
-    from schemas.warming import WarmingChannelList
+    from pydantic import BaseModel
 
-# Similar-channel lookups are seeded from this many of the biggest keyword hits.
+    from schemas._warming_pool import ChannelSearchOrigin, PoolFillRequest
+    from schemas.telegram_actions import TelegramReadAction
+    from services.warming._pool_hunt import HuntOutcome, Reader
+
 _SIMILAR_SEEDS = 2
 
 
-async def _search_accounts() -> list[str]:
-    """Idle, alive accounts outside warming, those handed to neurocomment first."""
-    free = {
-        item.account_id for item in (await list_search_accounts()).items if not item.busy_reason
-    }
-    alive = {a.account_id for a in (await list_accounts()).accounts if a.status == "alive"}
-    states = {record.account_id: record for record in await list_warming_states()}
-    picks = sorted(free & alive)
-    handed = [a for a in picks if (r := states.get(a)) is not None and r.nc_handed_off]
-    return handed + [a for a in picks if a not in handed]
+class _Running:
+    """Whether a pool search is under way; set and cleared with no await in between."""
+
+    active = False
 
 
-async def _matches(
-    account_id: str, action: SearchChannels | GetSimilarChannels
-) -> list[TelegramChannelMatch]:
+async def find_channels(
+    request: PoolFillRequest, origin: ChannelSearchOrigin = "manual"
+) -> PoolFillResult:
+    """Search with a free account, or with the pulled one the operator agreed to give."""
+    if _Running.active:
+        return PoolFillResult(status="already_running")
+    _Running.active = True
     try:
-        result = await _seams.execute_read(account_id, action)
-    except TelegramReadError as exc:
-        await log_event(
-            "WARNING",
-            "warming_pool_fill_read_failed",
-            account_id=account_id,
-            extra={"error_type": exc.kind},
-        )
-        return []
-    return result.items if isinstance(result, TelegramChannelMatches) else []
+        return await _find(request, origin)
+    finally:
+        _Running.active = False
 
 
-def _blocked(title: str) -> bool:
-    lowered = title.casefold()
-    return any(word.casefold() in lowered for word in settings.warming.pool_fill_blocked_words)
+def is_running() -> bool:
+    """Whether a pool search is reading right now."""
+    return _Running.active
 
 
-def _size_ok(size: int | None) -> bool:
-    warm = settings.warming
-    return (
-        size is not None
-        and warm.pool_fill_min_subscribers <= size <= warm.pool_fill_max_subscribers
-    )
-
-
-def _text_ok(text: str, language: str) -> bool:
-    """No blocked word, and not visibly written in another language."""
-    return not _blocked(text) and detect_language(text) in {None, language}
-
-
-def _fits(match: TelegramChannelMatch, language: str, known: set[str]) -> bool:
-    """The free checks, before any probe: a new handle, the title, a size if one came."""
-    if not match.username or dedup_key(match.username) in known:
-        return False
-    size = match.participants_count
-    return _text_ok(match.title, language) and (size is None or _size_ok(size))
-
-
-async def _probe(
-    account_id: str,
-    match: TelegramChannelMatch,
-    language: str,
-    now: datetime,
-) -> tuple[int, str] | None:
-    """``(subscribers, last post)`` of a channel that fits on its full info, else ``None``.
-
-    Search hits rarely carry a subscriber count, so ``getFullChannel`` answers it, with
-    the about text the words and the language are checked against too.
-    """
-    handle = f"@{match.username}"
-    try:
-        full = await _seams.execute_read(account_id, GetLinkedDiscussionGroup(channel=handle))
-    except TelegramReadError:
-        return None
-    if not isinstance(full, LinkedDiscussionGroupResult):
-        return None
-    size = (
-        full.participants_count if full.participants_count is not None else match.participants_count
-    )
-    text = " ".join(part for part in (match.title, full.about or "") if part)
-    if not _size_ok(size) or not _text_ok(text, language) or size is None:
-        return None
-    last_post = await _alive_since(account_id, handle, now)
-    return (size, last_post) if last_post is not None else None
-
-
-async def _alive_since(account_id: str, handle: str, now: datetime) -> str | None:
-    """The newest post's time when it is recent enough, else ``None``."""
-    try:
-        result = await _seams.execute_read(account_id, GetLastPostAt(channel=handle))
-    except TelegramReadError:
-        return None
-    if not isinstance(result, LastPostResult) or result.last_post_at is None:
-        return None
-    posted = datetime.fromisoformat(result.last_post_at)
-    posted = posted if posted.tzinfo is not None else posted.replace(tzinfo=UTC)
-    alive = now - posted <= timedelta(days=settings.warming.pool_fill_alive_days)
-    return result.last_post_at if alive else None
-
-
-async def _collect(account_id: str, request: PoolFillRequest) -> list[TelegramChannelMatch]:
-    hits: dict[str, TelegramChannelMatch] = {}
-    for topic in request.topics:
-        for match in await _matches(account_id, SearchChannels(query=topic, kind="all")):
-            hits.setdefault((match.username or "").casefold(), match)
-    seeds = sorted(
-        (m for m in hits.values() if m.username),
-        key=lambda m: m.participants_count or 0,
-        reverse=True,
-    )[:_SIMILAR_SEEDS]
-    for seed in seeds:
-        for match in await _matches(account_id, GetSimilarChannels(seed=f"@{seed.username}")):
-            hits.setdefault((match.username or "").casefold(), match)
-    return [match for key, match in hits.items() if key]
-
-
-async def find_channels(request: PoolFillRequest) -> PoolFillResult:
-    """Search, check and propose channels for the pool; the operator approves them later.
-
-    The searching account's lifecycle lock is held for the whole read sequence, and the
-    account is checked again once it is held: warming starts take the same lock, so it
-    cannot claim the account while the search still reads with it.
-    """
-    for account_id in await _search_accounts():
-        async with account_lock(account_id):
-            if account_id in await _search_accounts():
-                return await _search_with(account_id, request)
+async def _find(request: PoolFillRequest, origin: ChannelSearchOrigin) -> PoolFillResult:
+    topics = request.topics or await topics_for(request.language)
+    if not topics:
+        return PoolFillResult(status="no_topics")
+    if request.pull_account_id is not None:
+        return await _pull(request.pull_account_id, request, topics, origin)
+    for account_id in await free_search_accounts():
+        result = await _search_locked(account_id, None, request, topics, origin)
+        if result is not None:
+            return result
+    candidates = await pull_candidates()
+    if candidates:
+        return PoolFillResult(status="needs_consent", pull_candidate=candidates[0])
     return PoolFillResult(status="no_search_account")
 
 
-async def _search_with(account_id: str, request: PoolFillRequest) -> PoolFillResult:
-    pool = (await list_warming_channels()).channels + (
-        await list_pending_warming_channels()
-    ).channels
-    known = {dedup_key(channel.channel) for channel in pool}
-    found = await _collect(account_id, request)
-    fitting = [m for m in found if _fits(m, request.language, known)]
-    now = datetime.now(UTC)
-    proposals: list[WarmingChannel] = []
-    checked = fitting[: settings.warming.pool_fill_max_probes]
-    for match in checked:
-        probed = await _probe(account_id, match, request.language, now)
-        if probed is None:
-            continue
-        subscribers, last_post = probed
-        proposals.append(
-            WarmingChannel(
-                channel=dedup_key(match.username or ""),
-                label=match.title or None,
-                created_at=now.isoformat(),
-                language=request.language,
-                country=request.country,
-                kind=match.kind,
-                subscribers=subscribers,
-                last_post_at=last_post,
-                source="discovery",
-                status="pending",
-            ),
-        )
-    proposed = await propose_warming_channels(proposals)
+async def _pull(
+    account_id: str, request: PoolFillRequest, topics: list[str], origin: ChannelSearchOrigin
+) -> PoolFillResult:
+    """The consented pull: only while the account still does what the operator was told."""
+    standing = await search_standing(account_id)
+    if standing is None:
+        return PoolFillResult(status="no_search_account")
+    consent = standing if isinstance(standing, PoolSearchCandidate) else None
+    if consent is not None and consent.busy_with != request.pull_busy_with:
+        return PoolFillResult(status="needs_consent", pull_candidate=consent)
+    result = await _search_locked(account_id, consent, request, topics, origin)
+    if result is not None:
+        return result
+    fresh = await search_standing(account_id)
+    if isinstance(fresh, PoolSearchCandidate):
+        return PoolFillResult(status="needs_consent", pull_candidate=fresh)
+    return PoolFillResult(status="no_search_account")
+
+
+def _same_standing(
+    standing: PoolSearchCandidate | str | None, consent: PoolSearchCandidate | None
+) -> bool:
+    if consent is None:
+        return isinstance(standing, str)
+    return isinstance(standing, PoolSearchCandidate) and standing.busy_with == consent.busy_with
+
+
+async def _search_locked(
+    account_id: str,
+    consent: PoolSearchCandidate | None,
+    request: PoolFillRequest,
+    topics: list[str],
+    origin: ChannelSearchOrigin,
+) -> PoolFillResult | None:
+    """Borrow the account under its lock and search; ``None`` when it is no longer ours.
+
+    The standing is asked again once the lock is held — the pick is several awaits old.
+    Its last registry read and the loan share one await-free stretch, and every other
+    claim is made under this same lock, so nothing can claim the account in between.
+    """
+    async with account_lock(account_id):
+        standing = await search_standing(account_id)
+        if not _same_standing(standing, consent):
+            return None
+        holder = uuid.uuid4().hex
+        if not _account_owner.lend(account_id, holder):
+            return None
+        try:
+            if consent is not None:
+                await _log_loan("warming_pool_search_account_taken", account_id, consent)
+            return await _search_with(account_id, request, topics, origin)
+        finally:
+            _account_owner.give_back(account_id, holder)
+            if consent is not None:
+                await _log_loan("warming_pool_search_account_returned", account_id, consent)
+
+
+async def _log_loan(code: str, account_id: str, consent: PoolSearchCandidate) -> None:
+    await log_event("INFO", code, account_id=account_id, extra={"busy_with": consent.busy_with})
+
+
+def _reader(account_id: str) -> Reader:
+    """Reads with ``account_id``, a person's pause before every read but the first."""
+    first = True
+
+    async def read(action: TelegramReadAction) -> BaseModel:
+        nonlocal first
+        if not first:
+            await _seams.sleep(_human_delay(*settings.warming.pool_fill_pause_seconds))
+        first = False
+        return await _seams.execute_read(account_id, action)
+
+    return read
+
+
+async def _hunt(account_id: str, request: PoolFillRequest, topics: list[str]) -> HuntOutcome | None:
+    """The search itself, bounded in time; ``None`` when it ran out of time."""
+    warm = settings.warming
+    plan = HuntPlan(
+        language=request.language,
+        country=request.country,
+        topics=tuple(topics),
+        source="discovery",
+        max_probes=warm.pool_fill_max_probes,
+        max_reads=len(topics) + _SIMILAR_SEEDS + 2 * warm.pool_fill_max_probes,
+        similar_seeds=_SIMILAR_SEEDS,
+    )
+    known = await list_known_warming_channels()
+    try:
+        async with asyncio.timeout(warm.pool_fill_timeout_seconds):
+            return await hunt_channels(_reader(account_id), plan, known)
+    except TimeoutError:
+        return None
+
+
+async def _search_with(
+    account_id: str, request: PoolFillRequest, topics: list[str], origin: ChannelSearchOrigin
+) -> PoolFillResult:
+    search = ChannelSearchRecord(
+        origin=origin,
+        account_id=account_id,
+        language=request.language,
+        status="ok",
+        created_at=datetime.now(UTC).isoformat(),
+    )
+    try:
+        outcome = await _hunt(account_id, request, topics)
+    except Exception:
+        await record_channel_search(search.model_copy(update={"status": "failed"}))
+        raise
+    if outcome is None:
+        await record_channel_search(search.model_copy(update={"status": "failed"}))
+        return PoolFillResult(status="failed")
+    added = await add_found_warming_channels(outcome.fits, settings.warming.max_channels_total)
+    if outcome.flood is not None:
+        search.status = "flood"
+        await record_flood(account_id, flood_cooldown(outcome.flood))
+    search.found, search.added = outcome.found, len(added)
+    await record_channel_search(search)
     await log_event(
-        "INFO",
+        "WARNING" if outcome.flood is not None else "INFO",
         "warming_pool_fill_done",
         account_id=account_id,
-        extra={"found": len(found), "checked": len(checked), "proposed": proposed},
+        extra={
+            "origin": origin,
+            "found": outcome.found,
+            "checked": outcome.checked,
+            "added": len(added),
+            "flooded": outcome.flood is not None,
+        },
     )
-    return PoolFillResult(status="ok", found=len(found), checked=len(checked), proposed=proposed)
-
-
-async def list_proposals() -> WarmingChannelList:
-    """The proposals waiting for the operator."""
-    return await list_pending_warming_channels()
-
-
-async def approve_proposals(data: ChannelBatchRequest) -> WarmingChannelList:
-    """Move the ticked proposals into the walked pool."""
-    approved = await approve_warming_channels(data.channels)
-    await log_event("INFO", "warming_pool_fill_approved", extra={"count": approved})
-    return await list_pending_warming_channels()
-
-
-async def reject_proposals(data: ChannelBatchRequest) -> WarmingChannelList:
-    """Drop the ticked proposals."""
-    rejected = await reject_warming_channels(data.channels)
-    await log_event("INFO", "warming_pool_fill_rejected", extra={"count": rejected})
-    return await list_pending_warming_channels()
+    return PoolFillResult(
+        status="flooded" if outcome.flood is not None else "ok",
+        found=outcome.found,
+        checked=outcome.checked,
+        added=len(added),
+    )

@@ -70,6 +70,7 @@ def _to_match(
         participants_count=participants if isinstance(participants, int) else None,
         kind=entity_kind,
         join_request=optional_bool(getattr(entity, "join_request", None)),
+        flagged=getattr(entity, "scam", False) is True or getattr(entity, "fake", False) is True,
     )
 
 
