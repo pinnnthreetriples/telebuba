@@ -8,7 +8,7 @@ import pytest
 
 from services.survival._outcomes import life_facts, life_status, window_outcome
 from services.survival._stints import build_lives
-from tests.services.survival._support import GRACE, at, clean, limited, released_life, row
+from tests.services.survival._support import GRACE, at, clean, iso, limited, released_life, row
 
 if TYPE_CHECKING:
     from schemas.lifecycle import LifecycleEvent, LifecycleEventKind
@@ -110,6 +110,53 @@ def test_deleting_a_spam_blocked_account_as_dead_is_still_a_write_off(
     events.append(row("deleted", 18).model_copy(update={"extra": dead}))
 
     assert _outcomes(events, 60) == ["alive", "censored", "censored"]
+
+
+def test_a_death_found_later_is_dated_by_its_evidence_and_keeps_its_finding() -> None:
+    events = [*released_life(14), clean(20), row("session_dead", 25, evidence_at=iso(19.5))]
+
+    facts = _facts(events)
+
+    assert (facts.died_at, facts.found_at) == (at(19.5), at(25))
+    # Died before day 21 although found after it: the day-7 window is a death.
+    assert _outcomes(events, 60) == ["alive", "dead", "dead"]
+
+
+@pytest.mark.parametrize("evidence", [iso(30), "not a moment", 7])
+def test_evidence_never_dates_a_death_after_its_finding(evidence: object) -> None:
+    events = [*released_life(14), row("session_dead", 25, evidence_at=evidence)]
+
+    facts = _facts(events)
+
+    assert facts.died_at == facts.found_at == at(25)
+
+
+def test_a_lifted_spam_block_is_no_write_off_when_deleted_as_dead() -> None:
+    events = [
+        *released_life(14),
+        limited(15),
+        row("warming_stopped", 16, reason="spam_blocked"),
+        row("spam_block_lifted", 20),
+        row("deleted", 25, reason="dead", reason_source="operator"),
+    ]
+
+    assert _facts(events).cause == "deleted_dead"
+
+
+def test_a_block_confirmed_again_after_its_lift_is_a_write_off_again() -> None:
+    events = [
+        *released_life(14),
+        limited(15),
+        clean(20),
+        row("spam_block_lifted", 20),
+        limited(22),
+        row("deleted", 25, reason="dead", reason_source="operator"),
+    ]
+
+    facts = _facts(events)
+    assert facts.cause is None
+    assert facts.censored_at == at(25)
+    assert len(facts.wounds) == 2, "the second limited after a lift is a new wound"
 
 
 def test_an_operator_deletion_as_dead_is_a_death() -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta, timezone
+
 import pytest
 
 from core.db import create_account, upsert_warming_state
@@ -11,7 +13,7 @@ from schemas.lifecycle import LifecycleSnapshot
 from schemas.warming import WarmingStateRecord, WarmingStateWrite
 from services.survival import load_account_waves
 from services.survival.waves import account_waves
-from tests.services.survival._support import iso, row
+from tests.services.survival._support import at, iso, row
 
 
 def _record(**fields: object) -> WarmingStateRecord:
@@ -56,6 +58,35 @@ def test_an_operator_stop_and_a_dead_session_end_a_wave_too() -> None:
 
     assert (stopped.end_reason, stopped.worked_days) == ("stopped", 2)
     assert (dead.end_reason, dead.wave) == ("session_dead", 2)
+
+
+def test_a_death_found_later_ends_its_wave_when_it_was_first_shown() -> None:
+    events = [
+        row("warming_started", 0),
+        row("session_dead", 9, status="frozen", evidence_at=iso(6)),
+    ]
+
+    (dead,) = account_waves(events, None)
+
+    assert (dead.end_reason, dead.ended_at) == ("session_dead", iso(6))
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        iso(12),  # later than the finding: the finding stands
+        "not a moment",
+        # Earlier, but in another offset: compared as moments, not as text.
+        (at(9) - timedelta(hours=1)).astimezone(timezone(timedelta(hours=5))).isoformat(),
+    ],
+)
+def test_a_wave_ends_at_the_earlier_valid_moment_only(evidence: str) -> None:
+    events = [row("warming_started", 0), row("session_dead", 9, evidence_at=evidence)]
+
+    (dead,) = account_waves(events, None)
+
+    expected = evidence if evidence.endswith("+05:00") else iso(9)
+    assert dead.ended_at == expected
 
 
 def test_history_from_before_wave_journalling_ends_at_the_next_start() -> None:

@@ -14,13 +14,18 @@ Outcomes in a window:
                   ``limited``) at or after it;
 * ``dead``      — the session died for good (revoked, deactivated, banned, frozen), or the
                   operator deleted the account as dead. A guessed or reasonless deletion is
-                  a death only with that session evidence, otherwise a write-off;
+                  a death only with that session evidence, otherwise a write-off. A death
+                  found later is dated by the earliest refusal on record that showed it
+                  (never before the last thing that proved the account alive), else by
+                  its finding; both moments are kept;
 * ``unchecked`` — the window has passed but no @SpamBot answer says it is alive;
 * ``censored``  — written off by the operator first (a spam-blocked account deleted
                   included); out of the calculation, not a death;
 * ``pending``   — the window has not passed yet.
 A *wound* leaves the account alive and is counted beside it: a peer flood that put it
-in quarantine, or a spam block (@SpamBot's ``limited``: no messages to strangers).
+in quarantine, or a spam block (@SpamBot's ``limited``: no messages to strangers). A
+block @SpamBot later lifts (``spam_block_lifted``) stays a wound; a new ``limited``
+after a ``clean`` answer is a new one.
 """
 
 from __future__ import annotations
@@ -107,7 +112,10 @@ class SurvivalLife(BaseModel):
     end_day: int = Field(ge=0)
     # The life's first release, which every window counts from.
     release_day: int | None = Field(default=None, ge=0)
+    # The death is dated by its earliest recorded evidence; ``found_day`` is when it was
+    # found, later than ``death_day`` when a check only caught up with it afterwards.
     death_day: int | None = Field(default=None, ge=0)
+    found_day: int | None = Field(default=None, ge=0)
     cause: DeathCause | None = None
     wound_days: list[int] = Field(default_factory=list)
     # Every wave of the life, oldest first; a second one marks a re-warm on the bar.

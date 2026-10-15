@@ -111,6 +111,7 @@ from core.migration_steps_pool import (
 from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
+from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
 from core.migration_steps_tuning import _add_warming_settings_tuning
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
@@ -260,7 +261,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (93, "add_warming_channel_search", _add_warming_channel_search),
     (94, "add_warming_state_wave", _add_warming_state_wave),
     (95, "allow_lifecycle_warming_stopped", _allow_lifecycle_warming_stopped),
-    # 96 is taken by the open spam-block follow-up (#547).
+    (96, "allow_lifecycle_spam_block_lifted", _allow_lifecycle_spam_block_lifted),
     (97, "add_lead_queue", _add_lead_queue),
 )
 

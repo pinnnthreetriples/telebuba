@@ -6948,6 +6948,10 @@ export type SurvivalLife = {
    */
   death_day?: number | null;
   /**
+   * Found Day
+   */
+  found_day?: number | null;
+  /**
    * Cause
    */
   cause?: 'session_dead' | 'account_frozen' | 'deleted_dead' | null;
