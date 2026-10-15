@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
-from schemas.warming import is_warming
+from schemas.warming import is_parked, is_warming
 from services.warming import _runtime
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ async def reconcile_warming_runtime() -> None:
         if _is_interrupted_stop(record):
             await _settle_interrupted_stop(record)
             continue
-        if not is_warming(record.state) or record.state == "error":
+        if not is_warming(record.state) or is_parked(record.state):
             continue
         restarted += await _reconcile_account(record.account_id, controls, channel_count)
     if restarted:
@@ -90,7 +90,7 @@ async def _reconcile_account(
     """Restore one account if its locked, freshly-read state remains eligible."""
     async with _runtime._account_lock(account_id):  # noqa: SLF001 - shared lifecycle lock.
         fresh = await _runtime.fetch_warming_state(account_id)
-        if fresh is None or not is_warming(fresh.state) or fresh.state == "error":
+        if fresh is None or not is_warming(fresh.state) or is_parked(fresh.state):
             return 0
         existing = _runtime._RUNTIME.get(account_id)  # noqa: SLF001 - shared ownership map.
         if existing is not None and not existing.done():

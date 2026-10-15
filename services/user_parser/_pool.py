@@ -69,6 +69,7 @@ def _held(account_id: str, fleet: _Fleet) -> bool:
         or account_id in fleet.warming
         or _discovery_holds(account_id)
         or _account_owner.owner_of(account_id) is not None
+        or _account_owner.is_lent(account_id)
     )
 
 

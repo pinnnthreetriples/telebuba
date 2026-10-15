@@ -303,19 +303,23 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
   expect(phoneFlag?.parentElement?.textContent).toContain('+79261112233');
   expect(proxyFlag?.parentElement?.textContent).toContain('SOCKS5');
 
-  // «Вернуть в прогрев» opens the start dialog and continues the stint (item 2.5).
+  // «Вернуть в прогрев» opens the ordinary start dialog and starts the next wave from zero.
   await userEvent.click(screen.getByLabelText('Обратно в прогрев'));
-  const resumeDialog = await screen.findByRole('dialog', { name: 'Вернуть в прогрев' });
-  expect(resumeDialog).toHaveTextContent('отработано дней: 0');
-  await userEvent.click(screen.getByRole('button', { name: 'Продолжить прогрев' }));
-  const resumed = await waitFor(() => {
+  const rewarmDialog = await screen.findByRole('dialog', { name: 'Прогрев аккаунта' });
+  expect(rewarmDialog).toHaveTextContent('Волна 2: прогрев начнётся с нуля');
+  await userEvent.click(screen.getByRole('button', { name: 'Запустить прогрев' }));
+  const rewarmed = await waitFor(() => {
     const call = vi
       .mocked(fetch)
-      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/resume'));
+      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/rewarm'));
     expect(call).toBeDefined();
     return call?.[0] as Request;
   });
-  expect(await resumed.clone().json()).toMatchObject({ account_id: 'grad', target_days: 14 });
+  expect(await rewarmed.clone().json()).toMatchObject({ account_id: 'grad', target_days: 14 });
+  const resumed = vi
+    .mocked(fetch)
+    .mock.calls.some(([input]) => (input as Request).url.includes('/warming/resume'));
+  expect(resumed).toBe(false);
   const unpromoted = vi
     .mocked(fetch)
     .mock.calls.some(([input]) => (input as Request).url.includes('/warming/unpromote'));

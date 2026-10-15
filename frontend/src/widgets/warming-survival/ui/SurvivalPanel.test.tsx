@@ -44,10 +44,10 @@ const REPORT: SurvivalReport = {
     { key: null, windows: [{ window: 'd7', alive: 1 }] },
   ],
   causes: [
-    { cause: 'spam_limited', count: 6 },
+    { cause: 'account_frozen', count: 6 },
     { cause: 'session_dead', count: 1 },
   ],
-  stints: [
+  lives: [
     {
       account_id: 'a1',
       label: 'Main',
@@ -56,8 +56,12 @@ const REPORT: SurvivalReport = {
       end_day: 19,
       release_day: 14,
       death_day: 19,
-      cause: 'spam_limited',
+      cause: 'account_frozen',
       wound_days: [16],
+      waves: [
+        { wave: 1, start_day: 0, release_day: 10 },
+        { wave: 2, start_day: 12 },
+      ],
     },
     {
       account_id: 'a2',
@@ -133,11 +137,13 @@ test('a click opens the panel with counters, rows, cohorts, causes and history',
     '2 без проверки · с ранением: 1',
   );
   expect(screen.getByLabelText('Main: умер, 19 дн')).toBeInTheDocument();
-  expect(screen.getByTitle('Смерть на 19-й день: спам-лимит')).toBeInTheDocument();
-  expect(screen.getByTitle('Спам-блок на 16-й день')).toBeInTheDocument();
+  expect(screen.getByTitle('Смерть на 19-й день: аккаунт заморожен')).toBeInTheDocument();
+  expect(screen.getByTitle('Ранение на 16-й день')).toBeInTheDocument();
+  // A re-warm is a tick on the same row, never a second row.
+  expect(screen.getByTitle('Волна 2 с 12-го дня')).toBeInTheDocument();
   expect(screen.getByText('нед. 37')).toBeInTheDocument();
   expect(screen.getByText('не известно')).toBeInTheDocument();
-  expect(screen.getByText('спам-лимит 6 · сессия умерла 1')).toBeInTheDocument();
+  expect(screen.getByText('аккаунт заморожен 6 · сессия умерла 1')).toBeInTheDocument();
   expect(screen.getAllByRole('img', { name: /12/ }).length).toBeGreaterThan(0);
   expect(screen.getByRole('button', { name: /7 из 9/ })).toHaveAttribute('aria-expanded', 'true');
 });

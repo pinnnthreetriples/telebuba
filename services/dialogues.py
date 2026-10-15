@@ -17,7 +17,7 @@ from core.db import (
     list_accounts,
     list_dialogue_pairs,
     list_recent_dialogue_messages,
-    list_warming_account_ids,
+    list_warming_states,
     prune_and_add_pairs,
     replace_dialogue_pairs,
 )
@@ -29,6 +29,7 @@ from schemas.dialogues import (
     DialoguePairsResult,
     DialoguePartnersResult,
 )
+from schemas.warming import is_warming, spam_block_known
 from services._account_language import account_language
 
 if TYPE_CHECKING:
@@ -56,8 +57,16 @@ async def get_partners(account_id: str) -> DialoguePartnersResult:
 
 
 async def _eligible_accounts() -> dict[str, str | None]:
-    """Warming accounts that can talk, sorted, each with its phone's language."""
-    warming_ids = await list_warming_account_ids()
+    """Warming accounts that can talk, sorted, each with its phone's language.
+
+    An account with a confirmed spam block cannot write to strangers, so it is never
+    anyone's partner: the other side would wait on a reply that cannot come.
+    """
+    warming_ids = {
+        record.account_id
+        for record in await list_warming_states()
+        if is_warming(record.state) and not spam_block_known(record)
+    }
     eligible = {
         account.account_id: account_language(account.phone)
         for account in (await list_accounts()).accounts

@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
+from schemas._warming_tuning import StoredTuning
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
 CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
@@ -83,6 +84,8 @@ class WarmingSettingsSecret(BaseModel):
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     # The stored breaker stamp as written — possibly in the past (see the column note).
     dm_paused_until: str | None = None
+    # The pace card's choice (5.2); the engine resolves it in ``_tuning.effective_tuning``.
+    tuning: StoredTuning = Field(default_factory=StoredTuning)
     updated_at: str = Field(min_length=1)
 
 

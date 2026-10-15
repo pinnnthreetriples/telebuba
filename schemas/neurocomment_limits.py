@@ -87,6 +87,13 @@ class AccountLimitGauge(BaseModel):
     used: int = Field(ge=0)
     fleet_default: int = Field(ge=0)
     overridden: bool = False
+    # The stored override itself. ``limit`` is what is ENFORCED, which a soft start can
+    # hold below the override, so the edit box must not echo ``limit`` back as the
+    # account's own number.
+    override: int | None = Field(default=None, ge=0)
+    # The soft start's cap for this quantity while one runs (``None`` outside it): the
+    # enforced ``limit`` never exceeds it, override or not.
+    soft_cap: int | None = Field(default=None, ge=0)
     resets_at: str | None = None
 
 

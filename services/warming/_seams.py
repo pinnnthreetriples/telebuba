@@ -166,6 +166,19 @@ async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel
         return await _gateway_execute_read(account_id, action)
 
 
+async def execute_owned_read(account_id: str, action: TelegramReadAction) -> BaseModel:
+    """A read-only gateway call for a warming account's own search, fenced like ``execute``.
+
+    The account IS warming's here, so the same generation lease applies: a stopped or
+    replaced cycle never starts a search read, and one revoked mid-read fails closed.
+    """
+    async with _dispatch_slots:
+        _assert_live_lease(account_id, WarmingLeaseRevokedError)
+        result = await _gateway_execute_read(account_id, action)
+    _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
+    return result
+
+
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
     """Fence the quarantine Telegram probe with the same runtime lease and slot."""
     async with _dispatch_slots:
@@ -192,6 +205,7 @@ async def sleep(seconds: float) -> None:
 
 __all__ = [
     "execute",
+    "execute_owned_read",
     "execute_read",
     "generate_text",
     "generate_text_deepseek",

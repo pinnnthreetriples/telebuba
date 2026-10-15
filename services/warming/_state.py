@@ -18,6 +18,7 @@ from schemas.warming import (
 from services.warming.board import _to_card
 
 if TYPE_CHECKING:
+    from schemas._warming_visits import CycleMarks
     from schemas.device_fingerprint import DeviceType
 
 
@@ -26,6 +27,8 @@ class _Sentinel:
 
 
 _SENTINEL: Final = _Sentinel()
+# ``current=READ_CURRENT``: the caller holds no fresh copy of the row, so read it.
+READ_CURRENT: Final = _SENTINEL
 
 
 async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than a bag model here.
@@ -58,8 +61,15 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     recovered_at: str | None | _Sentinel = _SENTINEL,
     warmed_days: int | None = None,
     device_mode: DeviceType | None = None,
+    cycle_marks: CycleMarks | None = None,
+    wave: int | None = None,
+    spam_blocked_at: str | None = None,
+    current: WarmingStateRecord | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
-    current = await fetch_warming_state(account_id)
+    # ``current`` lets a caller that just read the row (the cycle's snapshot, the
+    # settle's CAS read) hand it in instead of reading it a second time.
+    if isinstance(current, _Sentinel):
+        current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
     # When the caller asks for an increment, we send ``cycles_completed=1`` so a
     # brand-new row gets cycle #1, and the repo's ON CONFLICT path uses an
@@ -126,6 +136,11 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             warmed_days=warmed_days,
             # ``None`` leaves the column alone — see ``WarmingStateWrite.device_mode``.
             device_mode=device_mode,
+            cycle_marks=cycle_marks,
+            # Both leave their column alone when ``None``: a start writes the wave, the
+            # spam-block stop (and the operator keeping that account) writes the mark.
+            wave=wave,
+            spam_blocked_at=spam_blocked_at,
         ),
     )
 

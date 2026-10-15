@@ -1,6 +1,6 @@
 """Which account the survival probe asks @SpamBot about next. Pure: the clock is passed in.
 
-An account is due when its current stint was released, it is neither dead nor written
+An account is due when its current life was released, it is neither dead nor written
 off, a post-release window (day 7, day 30) has closed, and no @SpamBot answer — of any
 kind — has come since that window's end, less one cache lifetime (the same ``grace`` the
 outcome rule uses). Only the latest closed window counts, so an account asks twice over
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from datetime import datetime, timedelta
 
     from schemas.survival import SurvivalWindow
-    from services.survival._outcomes import StintFacts
+    from services.survival._outcomes import LifeFacts
 
 # Accounts without a proxy all share the host's address.
 DIRECT = "direct"
@@ -29,11 +29,11 @@ DIRECT = "direct"
 
 @dataclass(frozen=True)
 class ProbeCandidate:
-    """A released, living account's current stint and the proxy it speaks through."""
+    """A released, living account's current life and the proxy it speaks through."""
 
     account_id: str
     proxy_key: str
-    facts: StintFacts
+    facts: LifeFacts
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ class DueProbe:
     window_end: datetime
 
 
-def _closed_window(facts: StintFacts, now: datetime) -> tuple[SurvivalWindow, datetime] | None:
+def _closed_window(facts: LifeFacts, now: datetime) -> tuple[SurvivalWindow, datetime] | None:
     """The latest post-release window that has closed by ``now``."""
     closed: tuple[SurvivalWindow, datetime] | None = None
     for window in SURVIVAL_WINDOW_DAYS:

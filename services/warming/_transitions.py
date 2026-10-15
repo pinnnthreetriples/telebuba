@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, NamedTuple
 from core.config import settings
 from core.db import get_spam_status, list_warming_channels
 from core.logging import log_event
-from schemas.warming import WarmingCycleResult
+from schemas.warming import WarmingCycleResult, is_parked, spam_block_known
 from services.lifecycle_journal import record_lifecycle_event
 from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._local_day import _next_local_wake
+from services.warming._snapshot import current_snapshot
 from services.warming._state import _set_state
 from services.warming.pacing import (
     _PHASE_ORDER,
@@ -68,7 +69,7 @@ def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -
     """
     if record is None:
         return run_id is None  # no DB row + no expectation → trivially "match"
-    if record.state in ("idle", "error"):
+    if record.state == "idle" or is_parked(record.state):
         return False
     if run_id is None:
         return True
@@ -102,12 +103,18 @@ async def _gate_readiness(  # noqa: PLR0913 - explicit readiness signals read cl
     ):
         return None
     account_id = account.account_id
-    channel_count = len((await list_warming_channels()).channels)
+    snapshot = current_snapshot(account_id)
+    if snapshot is not None:
+        channel_count, spam = len(snapshot.channels), snapshot.spam
+    else:
+        channel_count = len((await list_warming_channels()).channels)
+        spam = await get_spam_status(account_id)
     readiness = evaluate_readiness(
         account,
         channel_count,
-        spam=await get_spam_status(account_id),
+        spam=spam,
         trust_score=trust,
+        spam_block_known=spam_block_known(record),
     )
     if readiness.ready:
         return None
@@ -262,6 +269,7 @@ async def _resolve_phase_after_cycle(
     account_id: str,
     age_hours: float,
     latest: WarmingStateRecord | None,
+    post_trust: TrustScore | None = None,
 ) -> tuple[WarmingPhase, str, _PhaseEvent | None]:
     """Compute the post-cycle phase and the ``warming_phase_advanced`` event to emit.
 
@@ -272,9 +280,11 @@ async def _resolve_phase_after_cycle(
     diagnosis. We recompute trust on purpose: the cycle may have just shifted
     spam/quarantine/flood signals, and the phase should react in the same write.
     Seed-only semantics for the first ever cycle (``prev is None`` → no event,
-    just stamp the entry timestamp).
+    just stamp the entry timestamp). The settle passes ``post_trust`` scored from
+    the cycle's snapshot with those signals re-read; without it, it is read here.
     """
-    post_trust = await account_trust_score(account_id)
+    if post_trust is None:
+        post_trust = await account_trust_score(account_id)
     post_intensity = compute_intensity(age_hours, trust_band=post_trust.band)
     new_phase = post_intensity.phase
     prev_phase = latest.current_phase if latest is not None else None

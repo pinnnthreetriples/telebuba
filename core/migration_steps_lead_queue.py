@@ -1,4 +1,4 @@
-"""Migration 92 — the lead queue, and one live bulk run per kind.
+"""Migration 97 — the lead queue, and one live bulk run per kind.
 
 The queue's tables are ``CREATE ... IF NOT EXISTS``: ``create_all`` runs BEFORE
 ``apply_migrations``, so on a fresh database they come from

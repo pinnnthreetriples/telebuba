@@ -16,8 +16,10 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from schemas._warming_visits import CadencePreview
+from services.warming._tuning import effective_tuning
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from random import Random
 
     from schemas._warming_visits import Persona, WarmingPhase
@@ -68,15 +70,20 @@ def visit_budget(persona: str, daily_cap: int, remaining: int | None) -> int | N
     return min(remaining, budget)
 
 
-def cadence_preview() -> list[CadencePreview]:
-    """Visits a day and actions per visit for every persona in every phase."""
+def cadence_preview(daily_caps: Mapping[str, int] | None = None) -> list[CadencePreview]:
+    """Visits a day and actions per visit for every persona in every phase.
+
+    Under the pace in force (``_tuning``), or under ``daily_caps`` when the pace card
+    shows what a preset would make.
+    """
     warm = settings.warming
+    caps = daily_caps if daily_caps is not None else effective_tuning().phase_daily_cap
     lo, hi = warm.visit_actions_range
     rows: list[CadencePreview] = []
     for persona in _PERSONAS:
         low, high = warm.persona_sessions[persona]
         for phase in _PHASES:
-            cap = warm.phase_daily_cap[phase]
+            cap = caps[phase]
             visits_min = max(1, min(low, _affordable(cap, hi)))
             visits_max = max(visits_min, min(high, _affordable(cap, lo)))
             per_visit = math.ceil(cap / expected_visits(persona, cap))

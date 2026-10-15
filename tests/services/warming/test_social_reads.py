@@ -5,9 +5,14 @@ from __future__ import annotations
 import pytest
 
 from core.config import settings
-from core.repositories.warming_pool import propose_warming_channels
+from core.repositories.warming_pool import add_found_warming_channels
 from schemas._warming_visits import VisitPlan
-from schemas.warming import AddChannelsRequest, WarmingChannel, WarmingCycleRequest
+from schemas.warming import (
+    AddChannelsRequest,
+    RemoveChannelRequest,
+    WarmingChannel,
+    WarmingCycleRequest,
+)
 from services import warming
 from services.warming import _seams
 from services.warming._social_reads import reaction_chance, walkable_channels
@@ -20,11 +25,11 @@ def _channel(name: str, **over: object) -> WarmingChannel:
     return WarmingChannel.model_validate(base)
 
 
-def test_groups_wait_for_their_phase_and_proposals_are_never_walked() -> None:
+def test_groups_wait_for_their_phase_and_removed_finds_are_never_walked() -> None:
     pool = [
         _channel("@chan"),
         _channel("@group", kind="group"),
-        _channel("@proposal", status="pending"),
+        _channel("@removed", status="removed", source="discovery"),
     ]
     assert [c.channel for c in walkable_channels(pool, "settling")] == ["@chan"]
     assert [c.channel for c in walkable_channels(pool, "warming")] == ["@chan", "@group"]
@@ -79,10 +84,11 @@ async def test_a_glance_never_opens_comments(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_a_pending_proposal_alone_is_no_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_a_removed_find_alone_is_no_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    await propose_warming_channels([_channel("@proposal", status="pending")])
+    await add_found_warming_channels([_channel("found_one", source="discovery")], limit=10)
+    await warming.remove_channel(RemoveChannelRequest(channel="found_one"))
     await _set_settings(chat=False, reactions=False, key="")
 
     result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))

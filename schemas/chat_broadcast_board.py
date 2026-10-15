@@ -82,6 +82,7 @@ ChatBroadcastBusyOwner = Literal[
     "discovery",
     "user_parser",
     "masstagging",
+    "bulk_messages",
 ]
 
 

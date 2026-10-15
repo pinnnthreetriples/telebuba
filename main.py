@@ -72,6 +72,7 @@ from services.user_parser import (
     shutdown_user_parser_on_shutdown,
 )
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
+from services.warming.pool_refill import shutdown_pool_refill, start_pool_refill
 
 # Stdlib sink for full text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
@@ -181,6 +182,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await start_scheduled_posts()
     # Day-7/day-30 @SpamBot checks for the survival counter; it only reads the journal.
     await start_survival_probes()
+    # The warming pool refills a short language on its own (never with a busy account).
+    await start_pool_refill()
     try:
         yield
     finally:
@@ -189,6 +192,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("scheduled_posts", shutdown_scheduled_posts)
         # Before the pool: a probe in flight asks @SpamBot through a pooled client.
         await _shutdown_step("survival_probes", shutdown_survival_probes)
+        # Before warming and the pool: a refill search reads on the pooled client.
+        await _shutdown_step("pool_refill", shutdown_pool_refill)
         await _shutdown_step("warming", shutdown_warming_runtime)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)

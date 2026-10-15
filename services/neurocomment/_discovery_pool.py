@@ -35,6 +35,15 @@ if TYPE_CHECKING:
     from schemas.neurocomment_discovery import DiscoveryStartStatus
     from schemas.neurocomment_discovery_request import DiscoveryBusyReason
 
+# The owners that are reading with an account in the registry right now.
+_READING_OWNERS = frozenset({"user_parser", "masstagging"})
+
+
+def _reading(account_id: str) -> bool:
+    """A user-parser or masstagging run holds it, or warming's channel search borrows it."""
+    owner = _account_owner.owner_of(account_id)
+    return owner in _READING_OWNERS or _account_owner.is_lent(account_id)
+
 
 @dataclass(frozen=True, slots=True)
 class SearchAccount:
@@ -218,9 +227,7 @@ def _blocker(
     if account_id in fleet.warming:
         return "account_busy"
     # Another campaign's run is reading with it right now — or a user-parser run is.
-    if _discovery_state.account_busy(account_id, other_than=campaign_id) or _account_owner.owner_of(
-        account_id
-    ) in {"user_parser", "masstagging"}:
+    if _discovery_state.account_busy(account_id, other_than=campaign_id) or _reading(account_id):
         return "account_busy"
     return None
 
@@ -312,7 +319,7 @@ async def taken_account(campaign_id: str, account_ids: list[str]) -> str | None:
             account_id in fleet.warming
             or (fleet.listener_running and fleet.listener_id == account_id)
             or _discovery_state.account_busy(account_id, other_than=campaign_id)
-            or _account_owner.owner_of(account_id) in {"user_parser", "masstagging"}
+            or _reading(account_id)
         ):
             return account_id
     return None

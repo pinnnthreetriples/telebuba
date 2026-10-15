@@ -34,8 +34,10 @@ async def test_the_panel_counts_cohorts_causes_and_rows(monkeypatch: pytest.Monk
         *released_life(14, account="live"),
         clean(22, account="live"),
         *released_life(14, account="gone"),
-        limited(16, account="gone"),
+        row("session_dead", 16, account="gone", status="unauthorized"),
         row("deleted", 17, account="gone", reason="dead"),
+        # Re-warmed: still one account in every number.
+        row("warming_started", 18, account="live", stint=18, wave=2),
     ]
     _journal(monkeypatch, events)
 
@@ -43,9 +45,11 @@ async def test_the_panel_counts_cohorts_causes_and_rows(monkeypatch: pytest.Monk
 
     warming, d7, _d30 = panel.windows
     assert (warming.alive, d7.alive, d7.dead) == (2, 1, 1)
-    assert [(cause.cause, cause.count) for cause in panel.causes] == [("spam_limited", 1)]
+    assert [(cause.cause, cause.count) for cause in panel.causes] == [("session_dead", 1)]
     assert [cohort.key for cohort in panel.cohorts] == ["2026-W37"]
-    assert {stint.label for stint in panel.stints} == {"Main", "gone"}
+    assert sorted(life.label for life in panel.lives) == ["Main", "gone"]
+    main = next(life for life in panel.lives if life.label == "Main")
+    assert [wave.wave for wave in main.waves] == [1, 2]
     assert panel.releases == 2
     assert panel.full_data_since == iso(0)[:10]
 
@@ -94,7 +98,7 @@ async def test_an_empty_journal_is_an_empty_panel_with_history(
 
     panel = await load_survival(now=at(25))
 
-    assert panel.stints == []
+    assert panel.lives == []
     assert panel.full_data_since is None
     assert [(point.day, point.accounts, point.cycles, point.reads) for point in panel.daily] == [
         (day, 2, 4, 6),

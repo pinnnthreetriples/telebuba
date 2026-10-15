@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
-import { SurvivalBadge } from '@/entities/warming';
+import { SpamBlockBadge, SurvivalBadge, WaveChip } from '@/entities/warming';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
@@ -21,6 +21,7 @@ import {
 } from '@/shared/ui';
 
 import { FloodMemoryLine } from './FloodMemoryLine';
+import { SpamBlockPanel } from './SpamBlockPanel';
 import { AttentionRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
 import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
@@ -29,6 +30,9 @@ interface WarmingBoardProps {
   warming: WarmingAccountState[];
   onStop: (accountId: string) => void;
   onPromote: (accountId: string) => void;
+  // A confirmed spam block's two answers: the account delete dialog, or keep it.
+  onDelete?: (accountId: string) => void;
+  onKeep?: (accountId: string) => void;
   // A set, not one id: stop and promote are per card, the bulk pool button fires
   // one per account, and any two can be in flight at once.
   busyIds: ReadonlySet<string>;
@@ -45,6 +49,10 @@ interface WarmingBoardProps {
 type WarmingState = WarmingAccountState['state'];
 
 const DAY_SEGMENTS = 42;
+
+function noop(): void {
+  // A board without the spam-block actions wired (they show only on such a card).
+}
 // The target a card falls back to when the board has not answered yet.
 const TWO_WEEK_DAYS = 14;
 
@@ -63,6 +71,7 @@ const WARM_STATUS: Record<WarmingState, BadgeTone> = {
   flood_wait: 'warning',
   quarantine: 'warning',
   error: 'danger',
+  spam_blocked: 'danger',
 };
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
@@ -117,6 +126,8 @@ function WarmingCard({
   account,
   onStop,
   onPromote,
+  onDelete,
+  onKeep,
   busy,
   result,
   logLimit,
@@ -126,6 +137,8 @@ function WarmingCard({
   account: WarmingAccountState;
   onStop: (id: string) => void;
   onPromote: (id: string) => void;
+  onDelete: (id: string) => void;
+  onKeep: (id: string) => void;
   busy: boolean;
   result?: FeedbackResult;
   logLimit: number;
@@ -177,7 +190,9 @@ function WarmingCard({
   const target = account.target_days ?? defaultTargetDays;
   const elapsed = account.warmed_days ?? 0;
   const days = Math.min(elapsed, target);
-  const complete = elapsed >= target;
+  // Warming stopped on a confirmed spam block: the card waits for the operator's call.
+  const blocked = account.state === 'spam_blocked';
+  const complete = elapsed >= target && !blocked;
   const statusTone = badgeTone(WARM_STATUS[account.state]);
   const primaryId = accountDisplayName(account);
 
@@ -210,6 +225,13 @@ function WarmingCard({
                 {t(`warming.warmStatus.${account.state}`)}
               </span>
               {account.geo_accepted ? <Badge>{t('warming.geo.accepted')}</Badge> : null}
+              <SpamBlockBadge blockedAt={account.spam_blocked_at} />
+              <WaveChip
+                accountId={account.account_id}
+                name={primaryId}
+                wave={account.wave}
+                startedAt={account.started_at}
+              />
               {/* A resumed account was released before: its life after release goes on. */}
               {account.survival ? <SurvivalBadge survival={account.survival} /> : null}
             </div>
@@ -218,7 +240,7 @@ function WarmingCard({
         {/* shrink-0: without it the truncating name above just pushes its cost onto
             the actions instead, and the "Стоп" button loses its label. */}
         <div className="flex shrink-0 items-center gap-2">
-          {!complete ? (
+          {!complete && !blocked ? (
             <>
               <FeedbackMark result={result} />
               <Button
@@ -273,9 +295,21 @@ function WarmingCard({
         />
       </div>
 
-      {!complete ? <TodayRow account={account} /> : null}
+      {!complete && !blocked ? <TodayRow account={account} /> : null}
       <VisitRow account={account} />
-      <AttentionRow account={account} />
+      {blocked ? (
+        <SpamBlockPanel
+          busy={busy}
+          onDelete={() => {
+            onDelete(account.account_id);
+          }}
+          onKeep={() => {
+            onKeep(account.account_id);
+          }}
+        />
+      ) : (
+        <AttentionRow account={account} />
+      )}
 
       {/* The backend decides when @SpamBot has been silent long enough to say so. */}
       {account.spam_check_warning ? (
@@ -434,6 +468,8 @@ export function WarmingBoard({
   warming,
   onStop,
   onPromote,
+  onDelete = noop,
+  onKeep = noop,
   busyIds,
   feedback = {},
   logLimit = DEFAULT_CARD_LOG_LIMIT,
@@ -475,6 +511,8 @@ export function WarmingBoard({
             account={account}
             onStop={onStop}
             onPromote={onPromote}
+            onDelete={onDelete}
+            onKeep={onKeep}
             busy={busyIds.has(account.account_id)}
             result={feedback[account.account_id]}
             logLimit={logLimit}

@@ -22,11 +22,15 @@ class WarmingSafetySettings(BaseModel):
     spam_check_interval_hours: float = Field(default=72.0, gt=0.0)
     spam_check_jitter_hours: float = Field(default=12.0, ge=0.0)
     spam_unknown_warn_streak: int = Field(default=3, ge=1)
-    # PEER_FLOOD quarantine: how long an account rests before its status is
-    # re-checked, and how many consecutive still-limited re-checks are tolerated
-    # before it is given up on (marked error + alerted).
+    # Quarantine (a peer flood, or @SpamBot answering "limited"): how long an account
+    # rests before @SpamBot is asked again, and how many still-limited answers end
+    # warming. A spam block is permanent, so one re-check is the default: still limited
+    # stops warming in ``spam_blocked`` for the operator to delete or keep the account.
+    # Unreadable answers say nothing about the block and do not spend a re-check; they
+    # are bounded on their own and park the account in ``error`` past that bound.
     quarantine_hours: float = Field(default=48.0, gt=0.0)
-    quarantine_max_repeats: int = Field(default=3, ge=1)
+    quarantine_max_repeats: int = Field(default=1, ge=1)
+    quarantine_unreadable_max: int = Field(default=3, ge=1)
     # After a clean quarantine release: cap ramps from this share to full; DMs stay shut.
     release_ramp_start_fraction: float = Field(default=0.3, ge=0.0, le=1.0)
     release_ramp_days: float = Field(default=5.0, ge=0.0)

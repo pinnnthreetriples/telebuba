@@ -11,7 +11,7 @@ from core.db import create_account, fetch_warming_state, upsert_warming_state
 from schemas.accounts import AccountCreate
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.warming import WarmingStateRecord, WarmingStateWrite, WarmingStateWriteResult
-from services.warming import _quarantine, _seams
+from services.warming import _quarantine, _seams, _spam_block
 
 
 def _record(*, count: int = 0, state: str = "quarantine") -> WarmingStateRecord:
@@ -126,15 +126,15 @@ async def test_final_quarantine_write_losing_generation_is_silent(
         {
             "verdict": "limited",
             "count": 2,
-            "state": "error",
-            "event": "warming_quarantine_exhausted",
-            "last_event": "quarantine_exhausted",
-            "detail": "quarantine exhausted",
+            "state": "spam_blocked",
+            "event": "warming_spam_blocked",
+            "last_event": "spam_blocked",
+            "detail": "spam blocked",
             "status": "error",
-            "level": "ERROR",
+            "level": "WARNING",
         },
     ],
-    ids=["recover", "extend", "exhaust"],
+    ids=["recover", "extend", "spam_blocked"],
 )
 async def test_quarantine_outcome_is_emitted_only_after_applied_write(
     monkeypatch: pytest.MonkeyPatch,
@@ -167,9 +167,15 @@ async def test_quarantine_outcome_is_emitted_only_after_applied_write(
     async def log(level: str, event: str, **kwargs: object) -> None:
         events.append({"level": level, "event": event, **kwargs})
 
+    async def wave_end(*_args: object) -> None:
+        return None
+
     monkeypatch.setattr(_quarantine, "_set_state", set_state)
+    monkeypatch.setattr(_spam_block, "_set_state", set_state)
+    monkeypatch.setattr(_spam_block, "record_wave_end", wave_end)
     monkeypatch.setattr(_seams, "refresh_spam_status", refresh)
     monkeypatch.setattr(_quarantine, "log_event", log)
+    monkeypatch.setattr(_spam_block, "log_event", log)
 
     now = datetime(2026, 7, 17, 12, tzinfo=UTC)
     result = await _quarantine._recover_from_quarantine(
@@ -201,5 +207,5 @@ async def test_quarantine_outcome_is_emitted_only_after_applied_write(
         assert events[0]["extra"] == {"checks": count + 1}
     else:
         assert final["quarantine_count"] == count + 1
-        assert final["last_error"] == "peer-flood not lifted after 3 checks"
+        assert final["spam_blocked_at"] == now.isoformat()
         assert events[0]["extra"] == {"checks": count + 1}

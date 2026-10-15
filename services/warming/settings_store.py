@@ -115,13 +115,15 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     return _mask_settings(secret)
 
 
-async def lift_dm_pause() -> WarmingSettings:
+async def lift_dm_pause(operator: str) -> WarmingSettings:
     """«Снять паузу»: reopen fleet DMs now, spending the blocks that tripped the pause.
 
     A no-op without a pause in force, so a stray call cannot wipe the running count.
+    ``operator`` is the signed-in user's login, logged so the event says who reopened DMs
+    for the whole fleet — never anything else about them.
     """
     now = datetime.now(UTC)
     if active_dm_pause((await load_warming_settings()).dm_paused_until, now) is not None:
         await store_dm_paused_until(now.isoformat())
-        await log_event("INFO", "warming_dm_fleet_pause_lifted")
+        await log_event("INFO", "warming_dm_fleet_pause_lifted", extra={"operator": operator})
     return await load_settings()

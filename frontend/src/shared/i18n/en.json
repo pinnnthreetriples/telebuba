@@ -352,8 +352,8 @@
       "reasonLabel": "Reason",
       "reasonPending": "Working it out…",
       "reason": {
-        "dead": "Dead",
-        "retired": "Retired"
+        "dead": "Dead (Telegram took it: session, ban, freeze)",
+        "retired": "Written off (working, spam-blocked included)"
       }
     },
     "proxyDeleteModal": {
@@ -548,7 +548,8 @@
         "premium_wait": "temporarily limited by Telegram",
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
-        "failed": "Telegram rejected the message"
+        "failed": "Telegram rejected the message",
+        "account_busy": "another module is using the account (warming, a campaign or a channel search), so it sent nothing in this run"
       },
       "pacing": {
         "title": "Pace and limits",
@@ -1234,7 +1235,9 @@
       "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo.",
       "collection_name_taken": "A category with this name already exists. Pick another name.",
       "account_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign, then start warming.",
+      "account_busy_bulk_messages": "A bulk message run is sending from this account right now. Stop the run, then start warming.",
       "listener_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign or pick another listener account.",
+      "listener_busy_bulk_messages": "A bulk message run is sending from this account right now. Stop the run or pick another listener account.",
       "masstagging_no_accounts": "The campaign has no account. Add accounts in the settings.",
       "masstagging_no_free_accounts": "No account of the campaign can work: a spam block, an inactive session or another module holds it.",
       "masstagging_no_targets": "Add at least one person to tag.",
@@ -1279,7 +1282,9 @@
       "emulator_field_missing": "The expected field is not on Telegram's screen — finish the sign-in in the container window.",
       "emulator_phone_invalid": "The account's phone number could not be read.",
       "emulator_code_timeout": "The login code did not reach the existing session in time.",
-      "emulator_twofa_missing": "The account has a cloud password that is not stored."
+      "emulator_twofa_missing": "The account has a cloud password that is not stored.",
+      "not_graduated": "The account is no longer warmed — refresh the page",
+      "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page"
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1761,9 +1766,14 @@
     "warming_dialogue_live_reply": "Answered with a reaction or a sticker",
     "warming_dialogue_live_opener": "Forwarded a post to a partner",
     "warming_pool_fill_done": "Channel search finished",
-    "warming_pool_fill_read_failed": "Channel search: a read failed",
-    "warming_pool_fill_approved": "Found channels approved",
-    "warming_pool_fill_rejected": "Found channels rejected"
+    "warming_pool_refill_needs_account": "Automatic channel search: no free account",
+    "warming_pool_refill_failed": "Automatic channel search: a pass failed",
+    "warming_pool_search_account_taken": "Account taken for a channel search",
+    "warming_pool_search_account_returned": "Account returned after a channel search",
+    "warming_self_search_done": "The account searched channels itself",
+    "warming_spam_blocked": "Spam block confirmed by @SpamBot — warming stopped",
+    "warming_spam_block_kept": "Spam-blocked account kept",
+    "warming_rewarmed": "Account back in warming — a new wave from zero"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -1876,6 +1886,8 @@
     "removed": "removed from the list",
     "errors_in_a_row": "too many errors in a row",
     "busy_masstagging": "the account is busy with a running mass-tagging campaign",
+    "busy_bulk_messages": "the account is busy with a running bulk message run",
+    "busy_channel_search": "the account is busy with a warming channel search",
     "already_tagged": "already tagged",
     "username_not_found": "no such username",
     "phone_not_found": "phone not found",
@@ -2334,7 +2346,8 @@
         "save": "Save",
         "saveFailed": "Could not save the limits",
         "loading": "Loading…",
-        "loadFailed": "Could not load the limits"
+        "loadFailed": "Could not load the limits",
+        "softHeld": "Soft start: at most {{value}} while it runs, even if the own limit is higher"
       },
       "discovery": {
         "open": "Find channels",
@@ -2939,7 +2952,8 @@
           "neurocomment": "held by neurocomment",
           "chat_broadcast": "busy with a chat broadcast",
           "user_parser": "busy with the user parser",
-          "masstagging": "busy with mass tagging"
+          "masstagging": "busy with mass tagging",
+          "bulk_messages": "busy with a bulk message run"
         },
         "busyNamed": "{{owner}} — {{name}}"
       },
@@ -3144,7 +3158,8 @@
       "idle": "idle",
       "flood_wait": "paused",
       "quarantine": "quarantine",
-      "error": "error"
+      "error": "error",
+      "spam_blocked": "spam block"
     },
     "stopModal": {
       "title": "Stop warming?",
@@ -3156,7 +3171,10 @@
     "dmPause": {
       "banner": "DMs paused until {{date}}",
       "detail": "Two DM spam blocks within a day — messages between accounts are stopped for the whole fleet.",
-      "lift": "Lift the pause"
+      "lift": "Lift the pause",
+      "confirmTitle": "Lift the DM pause for the whole fleet?",
+      "confirmBody": "The pause holds until {{date}} because DMs got two spam blocks. Lifting it now lets every account message again. The log records your login.",
+      "cancel": "Cancel"
     },
     "tune": {
       "title": "Action fine-tuning",
@@ -3340,6 +3358,33 @@
         }
       }
     },
+    "pace": {
+      "title": "Warming pace",
+      "subtitle": "How many actions a day and how long the pauses are, for every account — no .env edit",
+      "preset": {
+        "careful": "Careful",
+        "normal": "Normal",
+        "fast": "Fast",
+        "custom": "Custom"
+      },
+      "hint": {
+        "careful": "Lower limits, longer pauses, half as many direct messages",
+        "normal": "As configured on the server",
+        "fast": "Higher limits, shorter pauses",
+        "custom": "Your own limit for each phase; it may not go down from phase to phase"
+      },
+      "col": {
+        "phase": "Phase",
+        "limit": "Daily limit"
+      },
+      "visitsCaption": "Visits a day by user type",
+      "factors": "Pauses ×{{pause}} · direct messages ×{{dm}}",
+      "lowCap": "Only {{cap}} actions a day in the «{{phase}}» phase — warming will be very slow.",
+      "limitLabel": "Daily limit, «{{phase}}» phase",
+      "invalid": "A limit is a whole number from 1 to 80, not below the phase before it.",
+      "save": "Save my limits",
+      "cancel": "Cancel"
+    },
     "days": {
       "title": "Warm up account",
       "subtitle": "{{phone}} · choose the warming length",
@@ -3415,11 +3460,6 @@
       "banner_other": "Phone and proxy geo differ on {{count}} accounts",
       "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
     },
-    "resume": {
-      "title": "Back to warming",
-      "subtitle": "{{phone}} · {{count}} days worked so far, the count continues",
-      "start": "Continue warming"
-    },
     "handoff": {
       "title": "To neurocomment",
       "subtitle": "How the account starts in neurocomment",
@@ -3457,16 +3497,17 @@
         "paused": "paused for every account",
         "not_ready": "account not ready",
         "too_young": "warming just started",
-        "trust": "low trust"
+        "trust": "low trust",
+        "spam_blocked": "spam block"
       },
       "attention": {
         "quarantine": "Quarantine {{attempt}}/{{attempts}}",
         "flood_wait": "Flood until {{time}}",
         "stopping": "Stopping…",
-        "quarantine_exhausted": "Quarantine exhausted — the spam block holds",
         "quarantine_unreadable": "Quarantine exhausted — @SpamBot does not answer",
         "not_ready": "Not ready: {{reasons}}",
-        "error": "Cycle error — see the log"
+        "error": "Cycle error — see the log",
+        "spam_blocked": "Warming stopped: @SpamBot confirmed a spam block"
       },
       "until": "until {{time}}"
     },
@@ -3506,23 +3547,26 @@
         "weekKey": "wk {{week}}",
         "lengthKey": "{{days}} d",
         "unknown": "unknown",
-        "empty": "No cohorts yet"
+        "empty": "No cohorts yet",
+        "waves": "Number of waves",
+        "wavesKey": "waves: {{count}}"
       },
       "causes": {
         "title": "Causes of death",
         "none": "No deaths",
         "item": "{{cause}} {{count}}",
-        "spam_limited": "spam limit",
         "session_dead": "session died",
-        "deleted_dead": "deleted as dead"
+        "deleted_dead": "deleted as dead",
+        "account_frozen": "account frozen"
       },
       "swimmer": {
         "title": "Each account's life",
         "empty": "No account has warmed yet",
-        "legend": "Blue is warming, green is after release, a dot is a spam block, a cross is a death",
+        "legend": "Blue — warming, green — after release, dot — a wound (spam block or flood), tick — a new wave, cross — death",
         "row": "{{label}}: {{status}}, {{days}} d",
         "death": "Died on day {{day}}: {{cause}}",
-        "wound": "Spam block on day {{day}}"
+        "wound": "Wound on day {{day}}",
+        "wave": "Wave {{wave}} from day {{day}}"
       },
       "status": {
         "warming": "warming",
@@ -3557,21 +3601,69 @@
     "poolFill": {
       "open": "Find channels",
       "title": "Find channels for warming",
-      "hint": "Searches with an account that is not being warmed. Fits are 2k–500k subscribers, alive, in the right language, no casinos, 18+ or signals. Found channels wait for your approval.",
+      "hint": "Searches with an account that is neither being warmed nor busy. Fits are 2k–500k subscribers, alive, in the right language, no casinos, betting, 18+, signals or easy-money pitches. Everything that fits goes straight into the channel list — remove what you don't want.",
       "language": "Language (code, e.g. es)",
       "country": "Country (optional, e.g. MX)",
-      "topics": "Topics, comma-separated (up to 5)",
+      "topics": "Topics, comma-separated (up to 5; empty = the interests of that language's accounts)",
       "search": "Search",
       "close": "Close",
-      "result": "Found {{found}}, {{proposed}} added for approval.",
-      "noAccount": "No idle account outside warming to search with.",
       "error": "The search failed.",
-      "waiting_one": "{{count}} found channel awaits approval",
-      "waiting_other": "{{count}} found channels await approval",
-      "pick": "Pick {{channel}}",
-      "subscribers": "{{count}} subs",
-      "approve": "Approve",
-      "reject": "Reject"
+      "status": {
+        "ok": "Found {{found}}, {{added}} added to the list.",
+        "flooded": "Telegram rate-limited this account's search. {{added}} added, try again later.",
+        "failed": "The search ran out of time. The account is back, try again later.",
+        "no_search_account": "No account can search: they are all warming or busy with work that cannot pause.",
+        "needs_consent": "No free account — a busy one can be taken, please confirm.",
+        "no_topics": "Nothing to search for: enter some topics.",
+        "already_running": "A search is already running — wait for it."
+      },
+      "consentTitle": "Take a busy account for the search?",
+      "consentBody": "No account is free. The search could take “{{name}}”, which {{work}} right now. That work pauses for this account during the search (up to 15 minutes), then the account goes back to it.",
+      "consentConfirm": "Pull it for the search",
+      "consentCancel": "Cancel",
+      "busyWith": {
+        "neurocomment": "is commenting (neurocomment)",
+        "neuroshilling": "is working in neuroshilling",
+        "chat_broadcast": "is running a chat broadcast",
+        "masstagging": "is working in mass tagging",
+        "bulk_messages": "is sending bulk messages"
+      },
+      "refillTitle": "An account is needed to search channels",
+      "refillHint": "The pool is short of {{language}} channels and the automatic search found no free account. Pick the account to search with.",
+      "refillAction": "Pick an account"
+    },
+    "spamBlock": {
+      "badge": "Spam block",
+      "badgeHint": "@SpamBot confirmed a spam block: the account cannot message strangers. Warming DMs stay off for it for good.",
+      "title": "Spam block",
+      "body": "Warming stopped: @SpamBot confirmed a spam block. The account works but cannot message strangers. Delete it, or keep it — then it can warm again (without DMs) or go to neurocommenting.",
+      "delete": "Delete",
+      "keep": "Keep"
+    },
+    "rewarm": {
+      "note": "Wave {{wave}}: warming starts from zero"
+    },
+    "waves": {
+      "chip": "Wave {{wave}} · since {{date}}",
+      "title": "Warming waves · {{name}}",
+      "subtitle": "Every warming start from zero is a new wave",
+      "wave": "Wave {{wave}}",
+      "since": "since {{date}}",
+      "days_one": "{{count}} day of {{target}}",
+      "days_other": "{{count}} days of {{target}}",
+      "daysUnknown": "days not recorded",
+      "end": {
+        "running": "running",
+        "released": "warmed",
+        "stopped": "stopped by hand",
+        "spam_blocked": "stopped: spam block",
+        "session_dead": "session died",
+        "deleted": "account deleted",
+        "replaced": "next wave started"
+      },
+      "loading": "Loading waves…",
+      "empty": "The account has not been warmed yet",
+      "error": "Could not load the waves"
     }
   },
   "auth": {
@@ -3704,7 +3796,8 @@
       "chat_broadcast": "another broadcast",
       "discovery": "channel search",
       "user_parser": "user parser",
-      "masstagging": "mass tagging"
+      "masstagging": "mass tagging",
+      "bulk_messages": "bulk messages"
     },
     "board": {
       "title": "Work board",

@@ -10348,14 +10348,14 @@
         }
       }
     },
-    "/api/v1/warming/unpromote": {
+    "/api/v1/warming/spam-block/keep": {
       "post": {
         "tags": [
           "warming"
         ],
-        "summary": "Unpromote Account",
-        "description": "Reverse a graduation: clear the promotion flag (the warmed card's \u00ab\u0432\u0435\u0440\u043d\u0443\u0442\u044c\u00bb).",
-        "operationId": "unpromoteFromNeurocomment",
+        "summary": "Keep Spam Blocked Account",
+        "description": "\u00ab\u041e\u0441\u0442\u0430\u0432\u0438\u0442\u044c\u00bb: keep an account warming stopped on a confirmed spam block.",
+        "operationId": "keepSpamBlockedAccount",
         "parameters": [
           {
             "name": "tb_session",
@@ -10417,6 +10417,115 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/waves/{account_id}": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "List Warming Waves",
+        "description": "Every warming wave of the account's current life: start, end, why, worked days.",
+        "operationId": "listWarmingWaves",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingWaveList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -10538,14 +10647,14 @@
         }
       }
     },
-    "/api/v1/warming/resume": {
+    "/api/v1/warming/rewarm": {
       "post": {
         "tags": [
           "warming"
         ],
-        "summary": "Resume Warming",
-        "description": "\u00ab\u0412\u0435\u0440\u043d\u0443\u0442\u044c \u0432 \u043f\u0440\u043e\u0433\u0440\u0435\u0432\u00bb: continue a graduated account's stint, keeping its worked days.",
-        "operationId": "resumeWarming",
+        "summary": "Rewarm Account",
+        "description": "\u00ab\u0412\u0435\u0440\u043d\u0443\u0442\u044c \u0432 \u043f\u0440\u043e\u0433\u0440\u0435\u0432\u00bb: a graduated account warms again from zero as its next wave.",
+        "operationId": "rewarmAccount",
         "parameters": [
           {
             "name": "tb_session",
@@ -11292,7 +11401,7 @@
           "warming"
         ],
         "summary": "Lift Warming Dm Pause",
-        "description": "\u00ab\u0421\u043d\u044f\u0442\u044c \u043f\u0430\u0443\u0437\u0443\u00bb: reopen inter-account DMs the fleet breaker paused.",
+        "description": "\u00ab\u0421\u043d\u044f\u0442\u044c \u043f\u0430\u0443\u0437\u0443\u00bb: reopen inter-account DMs the fleet breaker paused; logs who did.",
         "operationId": "liftWarmingDmPause",
         "parameters": [
           {
@@ -11548,7 +11657,8 @@
                 "week",
                 "persona",
                 "length",
-                "proxy_country"
+                "proxy_country",
+                "waves"
               ],
               "type": "string",
               "default": "week",
@@ -11622,7 +11732,7 @@
           "warming"
         ],
         "summary": "Find Warming Channels",
-        "description": "Search channels for the pool with an account outside warming; propose the fits.",
+        "description": "Search channels with an account outside warming; the fits join the pool at once.",
         "operationId": "findWarmingChannels",
         "parameters": [
           {
@@ -11696,13 +11806,14 @@
         }
       }
     },
-    "/api/v1/warming/channels/proposals": {
+    "/api/v1/warming/tuning": {
       "get": {
         "tags": [
           "warming"
         ],
-        "summary": "List Warming Channel Proposals",
-        "operationId": "listWarmingChannelProposals",
+        "summary": "Get Warming Tuning",
+        "description": "The pace in force: the preset, its per-phase limits and the visits they make.",
+        "operationId": "getWarmingTuning",
         "parameters": [
           {
             "name": "tb_session",
@@ -11727,7 +11838,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
+                  "$ref": "#/components/schemas/WarmingTuning"
                 }
               }
             }
@@ -11763,16 +11874,14 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/warming/channels/proposals/approve": {
-      "post": {
+      },
+      "put": {
         "tags": [
           "warming"
         ],
-        "summary": "Approve Warming Channel Proposals",
-        "description": "Move the ticked proposals into the pool; returns the proposals still waiting.",
-        "operationId": "approveWarmingChannelProposals",
+        "summary": "Update Warming Tuning",
+        "description": "Pick \u00ab\u041e\u0441\u0442\u043e\u0440\u043e\u0436\u043d\u043e\u00bb, \u00ab\u041e\u0431\u044b\u0447\u043d\u043e\u00bb, \u00ab\u0411\u044b\u0441\u0442\u0440\u043e\u00bb or \u00ab\u0421\u0432\u043e\u0439\u00bb with its own limits.",
+        "operationId": "updateWarmingTuning",
         "parameters": [
           {
             "name": "tb_session",
@@ -11796,7 +11905,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChannelBatchRequest"
+                "$ref": "#/components/schemas/WarmingTuningUpdate"
               }
             }
           }
@@ -11807,87 +11916,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warming/channels/proposals/reject": {
-      "post": {
-        "tags": [
-          "warming"
-        ],
-        "summary": "Reject Warming Channel Proposals",
-        "description": "Drop the ticked proposals; returns the proposals still waiting.",
-        "operationId": "rejectWarmingChannelProposals",
-        "parameters": [
-          {
-            "name": "tb_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tb Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChannelBatchRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
+                  "$ref": "#/components/schemas/WarmingTuning"
                 }
               }
             }
@@ -21322,6 +21351,30 @@
             "title": "Overridden",
             "default": false
           },
+          "override": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override"
+          },
+          "soft_cap": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft Cap"
+          },
           "resets_at": {
             "anyOf": [
               {
@@ -22279,8 +22332,8 @@
               {
                 "type": "string",
                 "enum": [
-                  "spam_limited",
                   "session_dead",
+                  "account_frozen",
                   "deleted_dead"
                 ]
               },
@@ -23614,25 +23667,6 @@
         "type": "object",
         "title": "ChannelBanCheckList"
       },
-      "ChannelBatchRequest": {
-        "properties": {
-          "channels": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 200,
-            "minItems": 1,
-            "title": "Channels"
-          }
-        },
-        "type": "object",
-        "required": [
-          "channels"
-        ],
-        "title": "ChannelBatchRequest",
-        "description": "Body of the approve/reject calls: the proposals the operator ticked."
-      },
       "ChannelCreateRequest": {
         "properties": {
           "title": {
@@ -24091,7 +24125,8 @@
                   "chat_broadcast",
                   "discovery",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -27288,7 +27323,8 @@
                   "chat_broadcast",
                   "discovery",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -28770,7 +28806,8 @@
                   "neurocomment",
                   "chat_broadcast",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -30452,17 +30489,46 @@
             },
             "type": "array",
             "maxItems": 5,
-            "minItems": 1,
             "title": "Topics"
+          },
+          "pull_account_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pull Account Id"
+          },
+          "pull_busy_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "neurocomment",
+                  "neuroshilling",
+                  "chat_broadcast",
+                  "masstagging",
+                  "bulk_messages"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pull Busy With"
           }
         },
         "type": "object",
         "required": [
-          "language",
-          "topics"
+          "language"
         ],
         "title": "PoolFillRequest",
-        "description": "\u00ab\u041d\u0430\u0439\u0442\u0438 \u043a\u0430\u043d\u0430\u043b\u044b\u00bb: what to look for, in which language and country."
+        "description": "\u00ab\u041d\u0430\u0439\u0442\u0438 \u043a\u0430\u043d\u0430\u043b\u044b\u00bb: what to look for, in which language and country.\n\nWithout topics the search takes them from the interests of that language's\naccounts. ``pull_account_id`` is the operator's consent to take that busy account\noff its work for the search; it is checked again before anything is taken."
       },
       "PoolFillResult": {
         "properties": {
@@ -30470,7 +30536,12 @@
             "type": "string",
             "enum": [
               "ok",
-              "no_search_account"
+              "no_search_account",
+              "needs_consent",
+              "no_topics",
+              "already_running",
+              "flooded",
+              "failed"
             ],
             "title": "Status"
           },
@@ -30486,11 +30557,21 @@
             "title": "Checked",
             "default": 0
           },
-          "proposed": {
+          "added": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Proposed",
+            "title": "Added",
             "default": 0
+          },
+          "pull_candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolSearchCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -30498,7 +30579,58 @@
           "status"
         ],
         "title": "PoolFillResult",
-        "description": "How a search went: hits seen, channels checked, proposals added for approval."
+        "description": "How a search went: hits seen, channels checked, channels added to the pool."
+      },
+      "PoolRefillRequest": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$",
+            "title": "Language"
+          },
+          "requested_at": {
+            "type": "string",
+            "title": "Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "requested_at"
+        ],
+        "title": "PoolRefillRequest",
+        "description": "The automatic refill wanted to search this language and found no free account."
+      },
+      "PoolSearchCandidate": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "busy_with": {
+            "type": "string",
+            "enum": [
+              "neurocomment",
+              "neuroshilling",
+              "chat_broadcast",
+              "masstagging",
+              "bulk_messages"
+            ],
+            "title": "Busy With"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "name",
+          "busy_with"
+        ],
+        "title": "PoolSearchCandidate",
+        "description": "The busy account a search would take, and what it would stop doing for it."
       },
       "PrivacySettingsResult": {
         "properties": {
@@ -30721,7 +30853,7 @@
           "account_id"
         ],
         "title": "PromoteRequest",
-        "description": "Body for promote/unpromote: graduate an account to/from the neurocomment pool."
+        "description": "Body naming one account: promote, the spam-block \u00ab\u041e\u0441\u0442\u0430\u0432\u0438\u0442\u044c\u00bb and the like."
       },
       "ProxyAssignRequest": {
         "properties": {
@@ -32206,8 +32338,8 @@
           "cause": {
             "type": "string",
             "enum": [
-              "spam_limited",
               "session_dead",
+              "account_frozen",
               "deleted_dead"
             ],
             "title": "Cause"
@@ -32224,7 +32356,7 @@
           "count"
         ],
         "title": "SurvivalCause",
-        "description": "How many stints died of one cause."
+        "description": "How many lives died of one cause."
       },
       "SurvivalCohort": {
         "properties": {
@@ -32249,7 +32381,7 @@
         },
         "type": "object",
         "title": "SurvivalCohort",
-        "description": "One cohort row: its key (ISO week ``2026-W37``, persona, days, country) and windows.\n\n``key`` is ``None`` for stints the journal cannot place (e.g. no proxy country)."
+        "description": "One cohort row: its key (ISO week ``2026-W37``, persona, days, country, waves).\n\n``key`` is ``None`` for lives the journal cannot place (e.g. no proxy country)."
       },
       "SurvivalCounter": {
         "properties": {
@@ -32304,81 +32436,9 @@
           "window"
         ],
         "title": "SurvivalCounter",
-        "description": "Stints of one window by outcome; ``wounded`` is the part of ``alive`` with a wound."
+        "description": "Lives of one window by outcome; ``wounded`` is the part of ``alive`` with a wound."
       },
-      "SurvivalReport": {
-        "properties": {
-          "cohort": {
-            "type": "string",
-            "enum": [
-              "week",
-              "persona",
-              "length",
-              "proxy_country"
-            ],
-            "title": "Cohort"
-          },
-          "windows": {
-            "items": {
-              "$ref": "#/components/schemas/SurvivalCounter"
-            },
-            "type": "array",
-            "title": "Windows"
-          },
-          "cohorts": {
-            "items": {
-              "$ref": "#/components/schemas/SurvivalCohort"
-            },
-            "type": "array",
-            "title": "Cohorts"
-          },
-          "causes": {
-            "items": {
-              "$ref": "#/components/schemas/SurvivalCause"
-            },
-            "type": "array",
-            "title": "Causes"
-          },
-          "stints": {
-            "items": {
-              "$ref": "#/components/schemas/SurvivalStint"
-            },
-            "type": "array",
-            "title": "Stints"
-          },
-          "releases": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Releases",
-            "default": 0
-          },
-          "full_data_since": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Full Data Since"
-          },
-          "daily": {
-            "items": {
-              "$ref": "#/components/schemas/FleetDailyStats"
-            },
-            "type": "array",
-            "title": "Daily"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cohort"
-        ],
-        "title": "SurvivalReport",
-        "description": "The survival panel: totals, one cohort cut, causes, stints and fleet history."
-      },
-      "SurvivalStint": {
+      "SurvivalLife": {
         "properties": {
           "account_id": {
             "type": "string",
@@ -32440,8 +32500,8 @@
               {
                 "type": "string",
                 "enum": [
-                  "spam_limited",
                   "session_dead",
+                  "account_frozen",
                   "deleted_dead"
                 ]
               },
@@ -32457,6 +32517,13 @@
             },
             "type": "array",
             "title": "Wound Days"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalWave"
+            },
+            "type": "array",
+            "title": "Waves"
           }
         },
         "type": "object",
@@ -32467,8 +32534,114 @@
           "status",
           "end_day"
         ],
-        "title": "SurvivalStint",
-        "description": "One swimmer-plot row; every ``*_day`` counts whole days from the stint's start."
+        "title": "SurvivalLife",
+        "description": "One swimmer-plot row; every ``*_day`` counts whole days from the life's first start."
+      },
+      "SurvivalReport": {
+        "properties": {
+          "cohort": {
+            "type": "string",
+            "enum": [
+              "week",
+              "persona",
+              "length",
+              "proxy_country",
+              "waves"
+            ],
+            "title": "Cohort"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCounter"
+            },
+            "type": "array",
+            "title": "Windows"
+          },
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCohort"
+            },
+            "type": "array",
+            "title": "Cohorts"
+          },
+          "causes": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalCause"
+            },
+            "type": "array",
+            "title": "Causes"
+          },
+          "lives": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalLife"
+            },
+            "type": "array",
+            "title": "Lives"
+          },
+          "releases": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Releases",
+            "default": 0
+          },
+          "full_data_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Data Since"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/FleetDailyStats"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cohort"
+        ],
+        "title": "SurvivalReport",
+        "description": "The survival panel: totals, one cohort cut, causes, lives and fleet history."
+      },
+      "SurvivalWave": {
+        "properties": {
+          "wave": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Wave"
+          },
+          "start_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start Day"
+          },
+          "release_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wave",
+          "start_day"
+        ],
+        "title": "SurvivalWave",
+        "description": "One wave on a life's row: its number, the day it began and its release day."
       },
       "TdataImportResult": {
         "properties": {
@@ -32483,6 +32656,38 @@
         "type": "object",
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
+      },
+      "TuningWarning": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "low_daily_cap",
+            "title": "Code"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "intro",
+              "settling",
+              "warming",
+              "active",
+              "warmed"
+            ],
+            "title": "Phase"
+          },
+          "daily_cap": {
+            "type": "integer",
+            "title": "Daily Cap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "phase",
+          "daily_cap"
+        ],
+        "title": "TuningWarning",
+        "description": "Allowed but worth a second look \u2014 the UI words it; ``low_daily_cap`` for now."
       },
       "TwoFactorStatusResult": {
         "properties": {
@@ -33770,6 +33975,34 @@
             },
             "type": "array",
             "title": "Devices"
+          },
+          "wave": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Wave",
+            "default": 1
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "spam_blocked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Blocked At"
           }
         },
         "type": "object",
@@ -33810,6 +34043,7 @@
               "on",
               "chat_off",
               "no_llm_key",
+              "spam_blocked",
               "paused",
               "not_ready",
               "too_young",
@@ -33886,6 +34120,23 @@
             "type": "array",
             "title": "Cycle Plan"
           },
+          "wave": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Wave",
+            "default": 1
+          },
+          "spam_blocked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Blocked At"
+          },
           "account_id": {
             "type": "string",
             "minLength": 1,
@@ -33904,7 +34155,8 @@
               "sleeping",
               "flood_wait",
               "quarantine",
-              "error"
+              "error",
+              "spam_blocked"
             ],
             "title": "State"
           },
@@ -34415,10 +34667,10 @@
           "code": {
             "type": "string",
             "enum": [
+              "spam_blocked",
               "quarantine",
               "flood_wait",
               "stopping",
-              "quarantine_exhausted",
               "quarantine_unreadable",
               "not_ready",
               "error"
@@ -34548,6 +34800,16 @@
             },
             "type": "array",
             "title": "Cadence Preview"
+          },
+          "pool_refill_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolRefillRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -34649,7 +34911,8 @@
             "type": "string",
             "enum": [
               "manual",
-              "discovery"
+              "discovery",
+              "self_search"
             ],
             "title": "Source",
             "default": "manual"
@@ -34658,10 +34921,21 @@
             "type": "string",
             "enum": [
               "approved",
-              "pending"
+              "removed"
             ],
             "title": "Status",
             "default": "approved"
+          },
+          "found_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
           }
         },
         "type": "object",
@@ -35244,6 +35518,247 @@
         "type": "object",
         "title": "WarmingSummary",
         "description": "Fleet-level roll-up shown at the top of the warming page."
+      },
+      "WarmingTuning": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "careful",
+              "normal",
+              "fast",
+              "custom"
+            ],
+            "title": "Preset"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingTuningCustom"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daily_caps": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Daily Caps"
+          },
+          "pause_factor": {
+            "type": "number",
+            "title": "Pause Factor"
+          },
+          "dm_factor": {
+            "type": "number",
+            "title": "Dm Factor"
+          },
+          "cadence": {
+            "items": {
+              "$ref": "#/components/schemas/CadencePreview"
+            },
+            "type": "array",
+            "title": "Cadence"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/TuningWarning"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset",
+          "daily_caps",
+          "pause_factor",
+          "dm_factor"
+        ],
+        "title": "WarmingTuning",
+        "description": "The pace in force: the preset, what it resolves to and the visits it makes."
+      },
+      "WarmingTuningCustom": {
+        "properties": {
+          "daily_caps": {
+            "additionalProperties": {
+              "type": "integer",
+              "maximum": 80.0,
+              "minimum": 1.0
+            },
+            "propertyNames": {
+              "enum": [
+                "intro",
+                "settling",
+                "warming",
+                "active",
+                "warmed"
+              ]
+            },
+            "type": "object",
+            "title": "Daily Caps"
+          },
+          "pause_factor": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.5,
+            "title": "Pause Factor",
+            "default": 1.0
+          },
+          "dm_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Dm Factor",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "daily_caps"
+        ],
+        "title": "WarmingTuningCustom",
+        "description": "\u00ab\u0421\u0432\u043e\u0439\u00bb: the operator's own limit per phase and the pace around it."
+      },
+      "WarmingTuningUpdate": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "careful",
+              "normal",
+              "fast",
+              "custom"
+            ],
+            "title": "Preset"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingTuningCustom"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset"
+        ],
+        "title": "WarmingTuningUpdate",
+        "description": "``PUT /warming/tuning``: pick a preset; \u00ab\u0421\u0432\u043e\u0439\u00bb brings its limits along."
+      },
+      "WarmingWave": {
+        "properties": {
+          "wave": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Wave"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "released",
+                  "stopped",
+                  "spam_blocked",
+                  "session_dead",
+                  "deleted",
+                  "replaced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          },
+          "worked_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worked Days"
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
+          },
+          "persona": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persona"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wave",
+          "started_at"
+        ],
+        "title": "WarmingWave",
+        "description": "One wave: when it began and ended, why it ended, and the days it worked."
+      },
+      "WarmingWaveList": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "waves": {
+            "items": {
+              "$ref": "#/components/schemas/WarmingWave"
+            },
+            "type": "array",
+            "title": "Waves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "WarmingWaveList",
+        "description": "``GET /warming/waves/{account_id}``: the account's waves, oldest first."
       },
       "WebWindowCount": {
         "properties": {

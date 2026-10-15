@@ -62,6 +62,8 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         visit_kind=cast("VisitKind | None", _optional_str(mapping.get("visit_kind"))),
         cycle_plan=cast("list[VisitStep]", _split_plan(mapping.get("cycle_plan"))),
         device_mode="mobile" if mapping.get("device_mode") == "mobile" else "desktop",
+        wave=max(1, _optional_int(mapping.get("wave")) or 1),
+        spam_blocked_at=_optional_str(mapping.get("spam_blocked_at")),
     )
 
 
