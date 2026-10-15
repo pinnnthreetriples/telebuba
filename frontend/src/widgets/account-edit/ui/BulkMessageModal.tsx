@@ -36,6 +36,7 @@ import {
 } from '../model/pacing';
 import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
+import { LeadQueuePanel } from './LeadQueuePanel';
 import { PacingBlock } from './PacingBlock';
 import { RunForecast } from './RunForecast';
 import { ScheduleSection } from './ScheduleSection';
@@ -578,6 +579,7 @@ export function BulkMessageModal({
                     pacing={pacing}
                     onPacingChange={setPacing}
                   />
+                  <LeadQueuePanel accountIds={ids} message={message} />
                 </section>
 
                 <section className="space-y-2">

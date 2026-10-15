@@ -82,6 +82,8 @@ export {
   getActiveContactLookupJobOptions as activeContactLookupJobQueryOptions,
   getLatestContactLookupJobOptions as latestContactLookupJobQueryOptions,
   getContactLookupJobOptions as getContactLookupJobQueryOptions,
+  getLeadQueueOptions as leadQueueQueryOptions,
+  getLeadQueueQueryKey as leadQueueQueryKey,
   getOutreachLimitsOptions as outreachLimitsQueryOptions,
   getOutreachUsageTodayOptions as outreachUsageTodayQueryOptions,
   listOutreachPresetsOptions as outreachPresetsQueryOptions,

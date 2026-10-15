@@ -89,7 +89,8 @@ def test_an_existing_run_becomes_manual_and_one_live_run_per_kind_is_allowed(
         connection.exec_driver_sql(_RUN.format("", ""), ("old",))
         _add_lead_queue(connection)
         connection.exec_driver_sql(_RUN.format(", kind", ", 'lead_queue'"), ("queue",))
-        kinds = dict(connection.exec_driver_sql("SELECT id, kind FROM bulk_runs").all())
+        rows = connection.exec_driver_sql("SELECT id, kind FROM bulk_runs").all()
+        kinds = {str(row[0]): str(row[1]) for row in rows}
     assert kinds == {"old": "manual", "queue": "lead_queue"}
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.exec_driver_sql(_RUN.format("", ""), ("second-manual",))

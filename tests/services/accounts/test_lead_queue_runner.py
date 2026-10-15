@@ -13,7 +13,7 @@ from core.repositories import lead_queue as repo
 from core.repositories.outreach import add_outreach_usage, save_outreach_limits
 from schemas.bulk_messages import BulkMessageRequest
 from schemas.lead_queue import LeadInput, LeadQueueAddRequest, LeadQueueSettings
-from schemas.outreach_limits import OutreachDailyUsage, OutreachLimitsUpdate
+from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits, OutreachLimitsUpdate
 from schemas.run_schedule import RunSchedule
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from schemas.telegram_actions_contacts import ContactLookupBatchResult, ContactLookupMatch
@@ -114,10 +114,10 @@ async def _send_all(monkeypatch: pytest.MonkeyPatch, outcomes: dict[str, ActionR
 
 
 def test_lookups_spread_one_accounts_allowance_over_the_window() -> None:
-    limits = OutreachLimitsUpdate(contact_imports_per_day=15, lookup_batch_size=3)
+    limits = OutreachLimits(contact_imports_per_day=15, lookup_batch_size=3)
     # 09:00-20:00 is 11 hours; 15 numbers in batches of 3 are 5 passes.
     assert lookup_spacing(limits) == timedelta(hours=11) / 5
-    tight = OutreachLimitsUpdate(
+    tight = OutreachLimits(
         contact_imports_per_day=200, lookup_batch_size=1, lookup_max_delay_seconds=600
     )
     assert lookup_spacing(tight) == timedelta(seconds=600)
@@ -135,9 +135,8 @@ async def test_a_pass_gives_each_account_one_batch_and_waits_a_spacing(
     wake_at = await runner.tick(now)
 
     assert telegram.batches == [("a1", _phones(10)[0:6:2]), ("a2", _phones(10)[1:6:2])]
-    assert wake_at == now + lookup_spacing(
-        OutreachLimitsUpdate(schedule=RunSchedule(**ALWAYS_OPEN))
-    )
+    open_limits = OutreachLimits(schedule=RunSchedule.model_validate(ALWAYS_OPEN))
+    assert wake_at == now + lookup_spacing(open_limits)
     statuses = [lead.status for lead in await repo.list_leads()]
     assert statuses == ["not_found"] * 6 + ["pending"] * 4
     # Before the spacing is over, a change wakes the loop but checks nothing.
@@ -184,6 +183,7 @@ async def test_nothing_is_looked_up_outside_the_window_or_while_paused(
 
     wake_at = await LeadQueueRunner().tick(now)
     schedule = RunSchedule.model_validate({**ALWAYS_OPEN, "work_days": [closed_day]})
+    assert wake_at is not None
     assert wake_at == next_open(now, schedule.operator_timezone, schedule)
     assert wake_at > now
 

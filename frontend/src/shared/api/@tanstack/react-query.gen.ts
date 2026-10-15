@@ -16,6 +16,7 @@ import {
   addAccountDevice,
   addAccountMusic,
   addAccountsToFolder,
+  addLeadsToQueue,
   addWarmingChannels,
   adoptCampaignDiscovery,
   approveNeuroshillingScenario,
@@ -86,6 +87,7 @@ import {
   getHealth,
   getLatestBulkMessageJob,
   getLatestContactLookupJob,
+  getLeadQueue,
   getMasstaggingBoard,
   getMasstaggingSettings,
   getMe,
@@ -161,6 +163,7 @@ import {
   removeAccountTwofa,
   removeCampaignAccount,
   removeCampaignChannel,
+  removeQueuedLead,
   removeWarmingChannel,
   renameAccountFolder,
   renameUserParserBase,
@@ -219,6 +222,7 @@ import {
   updateAccountLimits,
   updateAccountProfile,
   updateCampaignPrompt,
+  updateLeadQueueSettings,
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
   updateNotificationSettings,
@@ -252,6 +256,9 @@ import type {
   AddAccountsToFolderData,
   AddAccountsToFolderError,
   AddAccountsToFolderResponse,
+  AddLeadsToQueueData,
+  AddLeadsToQueueError,
+  AddLeadsToQueueResponse,
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
@@ -460,6 +467,9 @@ import type {
   GetLatestContactLookupJobData,
   GetLatestContactLookupJobError,
   GetLatestContactLookupJobResponse,
+  GetLeadQueueData,
+  GetLeadQueueError,
+  GetLeadQueueResponse,
   GetMasstaggingBoardData,
   GetMasstaggingBoardError,
   GetMasstaggingBoardResponse,
@@ -682,6 +692,9 @@ import type {
   RemoveCampaignChannelData,
   RemoveCampaignChannelError,
   RemoveCampaignChannelResponse,
+  RemoveQueuedLeadData,
+  RemoveQueuedLeadError,
+  RemoveQueuedLeadResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
@@ -856,6 +869,9 @@ import type {
   UpdateCampaignPromptData,
   UpdateCampaignPromptError,
   UpdateCampaignPromptResponse,
+  UpdateLeadQueueSettingsData,
+  UpdateLeadQueueSettingsError,
+  UpdateLeadQueueSettingsResponse,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsError,
   UpdateNeurocommentSettingsResponse,
@@ -3248,6 +3264,112 @@ export const updateOutreachPresetMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateOutreachPreset({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getLeadQueueQueryKey = (options?: Options<GetLeadQueueData>) =>
+  createQueryKey('getLeadQueue', options);
+
+/**
+ * Get Lead Queue
+ */
+export const getLeadQueueOptions = (options?: Options<GetLeadQueueData>) =>
+  queryOptions<
+    GetLeadQueueResponse,
+    GetLeadQueueError,
+    GetLeadQueueResponse,
+    ReturnType<typeof getLeadQueueQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getLeadQueue({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getLeadQueueQueryKey(options),
+  });
+
+/**
+ * Add Leads To Queue
+ */
+export const addLeadsToQueueMutation = (
+  options?: Partial<Options<AddLeadsToQueueData>>,
+): UseMutationOptions<
+  AddLeadsToQueueResponse,
+  AddLeadsToQueueError,
+  Options<AddLeadsToQueueData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddLeadsToQueueResponse,
+    AddLeadsToQueueError,
+    Options<AddLeadsToQueueData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addLeadsToQueue({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Queued Lead
+ */
+export const removeQueuedLeadMutation = (
+  options?: Partial<Options<RemoveQueuedLeadData>>,
+): UseMutationOptions<
+  RemoveQueuedLeadResponse,
+  RemoveQueuedLeadError,
+  Options<RemoveQueuedLeadData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveQueuedLeadResponse,
+    RemoveQueuedLeadError,
+    Options<RemoveQueuedLeadData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeQueuedLead({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Lead Queue Settings
+ */
+export const updateLeadQueueSettingsMutation = (
+  options?: Partial<Options<UpdateLeadQueueSettingsData>>,
+): UseMutationOptions<
+  UpdateLeadQueueSettingsResponse,
+  UpdateLeadQueueSettingsError,
+  Options<UpdateLeadQueueSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateLeadQueueSettingsResponse,
+    UpdateLeadQueueSettingsError,
+    Options<UpdateLeadQueueSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateLeadQueueSettings({
         ...options,
         ...fnOptions,
         throwOnError: true,
