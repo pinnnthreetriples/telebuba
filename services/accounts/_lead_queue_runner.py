@@ -28,6 +28,7 @@ from core.repositories.outreach import load_outreach_limits
 from schemas.bulk_messages import BulkMessageRequest
 from schemas.run_schedule import clock_minutes
 from services.accounts import bulk_messages
+from services.accounts._bulk_claims import BUSY_CODE
 from services.accounts._bulk_plan import next_open, next_utc_day
 from services.accounts._bulk_runner import STOP_CODES
 from services.accounts._lead_queue_lookup import run_lookup_pass
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
 SYNC_SECONDS = 60
 # After a tick failed: try again, but never in a tight loop.
 _RETRY_SECONDS = 300
+# An account another feature (or the operator's own run) holds: look again later.
+_BUSY_REST = timedelta(minutes=30)
 _MAX_RUN_LEADS = 500
 _MAX_RUN_ACCOUNTS = 50
 logger = logging.getLogger(__name__)
@@ -213,14 +216,15 @@ class LeadQueueRunner:
             lead.status = "sent"
         elif item.status == "unconfirmed":
             lead.status, lead.error_code = "unconfirmed", item.error_code
-        elif item.error_code in STOP_CODES:
+        elif item.error_code in STOP_CODES or item.error_code == BUSY_CODE:
             # The account provably sent nothing and cannot send for now: retry later.
             lead.status, lead.run_id, lead.finished_at = "found", None, None
-            rest = (
-                now + timedelta(seconds=item.retry_after_seconds)
-                if item.retry_after_seconds
-                else next_utc_day(now)
-            )
+            if item.error_code == BUSY_CODE:
+                rest = now + _BUSY_REST
+            elif item.retry_after_seconds:
+                rest = now + timedelta(seconds=item.retry_after_seconds)
+            else:
+                rest = next_utc_day(now)
             self.send_rest[item.account_id] = max(rest, self.send_rest.get(item.account_id, now))
         else:
             lead.status, lead.error_code = "failed", item.error_code
