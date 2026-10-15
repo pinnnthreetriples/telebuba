@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import list_warming_channels
+from core.db import list_warming_channels, upsert_warming_state
 from core.repositories.warming_searches import list_channel_searches_since
 from schemas._warming_pool import PoolFillRequest
-from schemas.warming import AddChannelsRequest, RemoveChannelRequest
+from schemas.warming import AddChannelsRequest, RemoveChannelRequest, WarmingStateWrite
 from services import _account_owner, warming
 from services.neurocomment import _state as nc_state
 from services.neurocomment._state import in_cooldown
@@ -94,6 +94,28 @@ async def test_a_warming_account_is_never_searched_with(telegram: FakeTelegram) 
     assert result.status == "no_search_account"
     assert pulled.status == "no_search_account"
     assert telegram.reads == []
+
+
+@pytest.mark.parametrize("state", ["spam_blocked", "idle"])
+@pytest.mark.asyncio
+async def test_a_spam_blocked_account_searches_like_any_other(
+    telegram: FakeTelegram, state: str
+) -> None:
+    """A spam block shuts messages to strangers only: stopped or kept, it may search."""
+    await seed_account("blocked-1")
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="blocked-1",
+            state=state,  # ty: ignore[invalid-argument-type]
+            spam_blocked_at="2026-10-01T00:00:00+00:00",
+        )
+    )
+
+    assert await _pool_accounts.free_search_accounts() == ["blocked-1"]
+    result = await pool_fill.find_channels(_REQUEST)
+
+    assert result.status != "no_search_account"
+    assert telegram.reads != []
 
 
 @pytest.mark.asyncio
@@ -291,9 +313,10 @@ async def test_consent_for_other_work_is_asked_again(telegram: FakeTelegram) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_message_account_is_never_taken(
+async def test_a_bulk_run_account_a_restart_has_not_resumed_needs_consent(
     telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Only the run's rows name it: the claim comes when the resumed loop starts.
     await seed_account("sender")
 
     async def bulk() -> set[str]:
@@ -302,7 +325,9 @@ async def test_a_bulk_message_account_is_never_taken(
     monkeypatch.setattr(_pool_accounts, "_bulk_accounts", bulk)
     result = await pool_fill.find_channels(_REQUEST)
 
-    assert result.status == "no_search_account"
+    assert result.status == "needs_consent"
+    assert result.pull_candidate is not None
+    assert result.pull_candidate.busy_with == "bulk_messages"
     assert telegram.reads == []
 
 

@@ -77,7 +77,7 @@ def compute_trust_score(signals: TrustSignals, now: datetime | None = None) -> T
     if signals.account_status != "alive":
         score -= trust.penalty_not_alive
         reasons.append(f"status {signals.account_status}")
-    # A known, kept spam block is scored once already — by shutting DMs for good — so
+    # A known, kept spam block is scored once already — by shutting DMs while it stands — so
     # neither its "limited" nor the quarantine re-check that confirmed it docks the score
     # again; otherwise every kept account sank to "critical" and could never warm again.
     known = signals.spam_block_known

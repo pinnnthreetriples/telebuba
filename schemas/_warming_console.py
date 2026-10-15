@@ -19,7 +19,7 @@ from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves 
 NcStartMode = Literal["soft", "normal"]
 
 # Why inter-account DMs are (not) open for one card, first blocker wins:
-# chat switched off · no text-LLM key · the account's own spam block (permanent) · fleet
+# chat switched off · no text-LLM key · the account's own spam block (until lifted) · fleet
 # pause · readiness · warming too short · trust band or a post-quarantine block · open.
 DmStatus = Literal[
     "on", "chat_off", "no_llm_key", "spam_blocked", "paused", "not_ready", "too_young", "trust"
@@ -99,7 +99,8 @@ class WarmingCardConsole(BaseModel):
     cycle_plan: list[VisitStep] = Field(default_factory=list)
     # Today's breakdown from the daily totals; ``None`` when the day has no row yet.
     today: WarmingTodayActions | None = None
-    # The stint's wave (the card names it from wave 2 on) and the permanent spam-block mark.
+    # The stint's wave (the card names it from wave 2 on) and the spam-block mark, which a
+    # clean @SpamBot answer clears.
     wave: int = Field(default=1, ge=1)
     spam_blocked_at: str | None = None
 

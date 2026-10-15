@@ -50,12 +50,14 @@ NEUROSHILLING_CODE: WarmingRefusalCode = "account_busy_neuroshilling"
 CHAT_BROADCAST_CODE: WarmingRefusalCode = "account_busy_chat_broadcast"
 USER_PARSER_CODE: WarmingRefusalCode = "account_busy_user_parser"
 MASSTAGGING_CODE: WarmingRefusalCode = "account_busy_masstagging"
+BULK_MESSAGES_CODE: WarmingRefusalCode = "account_busy_bulk_messages"
 # Every other runtime that can hold an account, and the code naming it.
 _HOLD_CODES: dict[str, WarmingRefusalCode] = {
     "neuroshilling": NEUROSHILLING_CODE,
     "chat_broadcast": CHAT_BROADCAST_CODE,
     "user_parser": USER_PARSER_CODE,
     "masstagging": MASSTAGGING_CODE,
+    "bulk_messages": BULK_MESSAGES_CODE,
 }
 
 

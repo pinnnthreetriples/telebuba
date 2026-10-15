@@ -50,6 +50,7 @@ from schemas._warming_states import (  # noqa: F401, TC001 - runtime re-export, 
     WarmingState,
     is_parked,
     is_warming,
+    lifts_spam_block,
     spam_block_known,
     warming_health,
 )
@@ -59,7 +60,12 @@ from schemas.device_fingerprint import DeviceType, desktop_only
 # Every start/hand-off refusal that answers with a CODE, declared whole so the i18n parity
 # test holds ``shell.code.*`` to it. Two more (stopping task, listener) answer in prose.
 _CAMPAIGN_HOLDS = Literal["account_busy_neuroshilling", "account_busy_chat_broadcast"]
-_RUN_HOLDS = Literal[_CAMPAIGN_HOLDS, "account_busy_user_parser", "account_busy_masstagging"]
+_RUN_HOLDS = Literal[
+    _CAMPAIGN_HOLDS,
+    "account_busy_user_parser",
+    "account_busy_masstagging",
+    "account_busy_bulk_messages",
+]
 _SPAM = Literal["spam_check_unavailable", "spam_limited"]  # hand-off's @SpamBot refusals
 # A stale card: «Вернуть в прогрев» on an account no longer graduated, «Оставить» on one
 # no longer stopped on a spam block.

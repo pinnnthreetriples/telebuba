@@ -24125,7 +24125,8 @@
                   "chat_broadcast",
                   "discovery",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -27322,7 +27323,8 @@
                   "chat_broadcast",
                   "discovery",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -28804,7 +28806,8 @@
                   "neurocomment",
                   "chat_broadcast",
                   "user_parser",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -30509,7 +30512,8 @@
                   "neurocomment",
                   "neuroshilling",
                   "chat_broadcast",
-                  "masstagging"
+                  "masstagging",
+                  "bulk_messages"
                 ]
               },
               {
@@ -30613,7 +30617,8 @@
               "neurocomment",
               "neuroshilling",
               "chat_broadcast",
-              "masstagging"
+              "masstagging",
+              "bulk_messages"
             ],
             "title": "Busy With"
           }
@@ -32489,6 +32494,18 @@
               }
             ],
             "title": "Death Day"
+          },
+          "found_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found Day"
           },
           "cause": {
             "anyOf": [

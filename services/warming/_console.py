@@ -132,7 +132,7 @@ def account_dm_status(fleet: DmStatus, *, spam_blocked: bool) -> DmStatus:
     """The fleet-level verdict, unless the account's own confirmed spam block shuts DMs.
 
     Ranks after the two switches that shut DMs for everyone (chat off, no LLM key) and
-    before everything else: the block is permanent, so no pause or trust band matters.
+    before everything else: while the block stands no pause or trust band matters.
     """
     if spam_blocked and fleet not in {"chat_off", "no_llm_key"}:
         return "spam_blocked"

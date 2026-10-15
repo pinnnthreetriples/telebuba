@@ -1752,6 +1752,7 @@ export type ChatBroadcastBoardAccount = {
     | 'discovery'
     | 'user_parser'
     | 'masstagging'
+    | 'bulk_messages'
     | null;
 };
 
@@ -3685,6 +3686,7 @@ export type MasstaggingBoardAccount = {
     | 'discovery'
     | 'user_parser'
     | 'masstagging'
+    | 'bulk_messages'
     | null;
   /**
    * Until
@@ -4598,6 +4600,7 @@ export type NeuroshillingBoardAccount = {
     | 'chat_broadcast'
     | 'user_parser'
     | 'masstagging'
+    | 'bulk_messages'
     | null;
   /**
    * Busy Campaign Name
@@ -5647,7 +5650,8 @@ export type PoolFillRequest = {
   /**
    * Pull Busy With
    */
-  pull_busy_with?: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging' | null;
+  pull_busy_with?:
+    'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging' | 'bulk_messages' | null;
 };
 
 /**
@@ -5715,7 +5719,7 @@ export type PoolSearchCandidate = {
   /**
    * Busy With
    */
-  busy_with: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging';
+  busy_with: 'neurocomment' | 'neuroshilling' | 'chat_broadcast' | 'masstagging' | 'bulk_messages';
 };
 
 /**
@@ -6777,6 +6781,10 @@ export type SurvivalLife = {
    * Death Day
    */
   death_day?: number | null;
+  /**
+   * Found Day
+   */
+  found_day?: number | null;
   /**
    * Cause
    */
