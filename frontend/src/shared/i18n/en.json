@@ -3130,7 +3130,61 @@
       "floodTotal": "Floods total: {{total}}",
       "dmBlockedUntil": "DMs closed until {{date}}",
       "limitShare": "limit {{percent}}",
-      "mediaBytes": "downloaded {{kb}} KB"
+      "mediaBytes": "downloaded {{kb}} KB",
+      "daysOf_one": "of {{target}} day",
+      "daysOf_other": "of {{target}} days",
+      "idleShort_one": "{{count}} day not counted",
+      "idleShort_other": "{{count}} days not counted",
+      "todayTitle": "Today",
+      "step": {
+        "set_online": "online",
+        "stories": "stories",
+        "join": "join",
+        "read": "reading",
+        "react": "reactions",
+        "extras": "small things",
+        "send_dm": "DMs"
+      },
+      "liveNow": "online now",
+      "phaseOf": "Phase {{at}} of {{total}}",
+      "phaseNext": "next",
+      "inDays": "in {{days}} d",
+      "todayBooked_one": "{{count}} more in progress right now",
+      "todayBooked_other": "{{count}} more in progress right now",
+      "fact": {
+        "visit": "Visit",
+        "dm": "DMs",
+        "spam": "@SpamBot",
+        "persona": "Persona"
+      },
+      "inTime": "in {{time}}",
+      "on": "on",
+      "off": "off",
+      "spam": {
+        "clean": "clean",
+        "limited": "spam block",
+        "unknown": "not checked"
+      },
+      "doing": {
+        "set_online": "Going online",
+        "stories": "Watching stories",
+        "join": "Joining a channel",
+        "read": "Reading channels",
+        "react": "Reacting",
+        "extras": "Browsing the app",
+        "send_dm": "Writing a DM"
+      },
+      "stepOf": "step {{at}} of {{total}}",
+      "kind": {
+        "reads": "Reads",
+        "reactions": "Reactions",
+        "joins": "Joins",
+        "dms": "Direct messages"
+      },
+      "todayUnit_one": "action",
+      "todayUnit_other": "actions",
+      "stepDone": "done: {{step}}",
+      "stepNext": "next: {{step}}"
     },
     "actions": {
       "stopShort": "Stop"

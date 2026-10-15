@@ -19,6 +19,7 @@ from core.db import (
     list_warming_states,
 )
 from core.phone_geo import country_for_phone
+from core.repositories.warming_daily_stats import list_warming_daily_stats_for
 from core.repositories.warming_floods import (
     list_warming_flood_summaries,
 )
@@ -48,6 +49,7 @@ from services.warming._console import (
     dm_status,
     geo_accepted,
     settled_today,
+    today_actions,
 )
 from services.warming._pool_requests import pending_refill_request
 from services.warming.pacing import (
@@ -59,9 +61,12 @@ from services.warming.pacing import (
 from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.accounts import AccountRead
     from schemas.survival import AccountSurvival
     from schemas.warming import WarmingReadiness, WarmingStateRecord
+    from schemas.warming_daily_stats import WarmingDailyStats
 
 
 def _warming_days_since(
@@ -137,6 +142,31 @@ def _to_card(
     )
 
 
+async def _daily_rows(
+    records: Mapping[str, WarmingStateRecord],
+) -> dict[tuple[str, str], WarmingDailyStats]:
+    """Each card's budget-day totals in one read, keyed by ``(account, day)``.
+
+    Read by the exact pair, not by a date range: a parked account keeps its last budget
+    day across midnight, and a range wide enough for it would read the whole fleet's
+    history back to that day.
+    """
+    keys = [
+        (record.account_id, record.daily_count_date)
+        for record in records.values()
+        if record.daily_count_date is not None
+    ]
+    return {(row.account_id, row.day): row for row in await list_warming_daily_stats_for(keys)}
+
+
+def _copy_identity(card: WarmingAccountState, account: AccountRead) -> None:
+    """The card's who-and-where fields, straight off the account."""
+    card.phone_country = country_for_phone(account.phone)
+    card.proxy_country = (account.proxy_country_code or "").upper() or None
+    card.phone = account.phone
+    card.proxy_type = account.proxy_type
+
+
 async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, WarmingSettings]:
     """Build one enriched card per account, unfiltered.
 
@@ -157,6 +187,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     survivals = await load_account_survivals(accounts.accounts)
     channel_count = len(channels.channels)
     now = datetime.now(UTC)
+    daily_rows = await _daily_rows(records)
     cards: list[WarmingAccountState] = []
     for account in accounts.accounts:
         record = records.get(account.account_id)
@@ -210,10 +241,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             and (readiness.ready or not masked.enforce_readiness)
             and masked.dm_paused_until is None
         )
-        card.phone_country = country_for_phone(account.phone)
-        card.proxy_country = (account.proxy_country_code or "").upper() or None
-        card.phone = account.phone
-        card.proxy_type = account.proxy_type
+        _copy_identity(card, account)
         card.phase = intensity.phase
         card.daily_cap = intensity.daily_cap
         card.progress_to_next = intensity.progress_to_next
@@ -227,6 +255,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.geo_status = geo.status
         card.geo_accepted = geo_accepted(geo, record)
         card.daily_settled = settled_today(record)
+        card.today = today_actions(record, daily_rows)
         card.dm_status = account_dm_status(
             dm_status(
                 masked, intensity, readiness, card.started_at, now, account.telegram_registered_at

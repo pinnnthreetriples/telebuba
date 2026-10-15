@@ -83,7 +83,15 @@ test('renders one card per warming account without the old stage stepper', () =>
   expect(screen.queryByText('?')).not.toBeInTheDocument();
 });
 
-test('the phase row names the phase, persona, trust and spam status', () => {
+// A text split across spans (`<span>6</span> / 15 действий`), matched on the element
+// whose own text is exactly it — not on a parent that also holds the title.
+function textOf(text: string) {
+  return (_: string, element: Element | null) =>
+    element?.textContent === text &&
+    [...element.children].every((child) => child.textContent !== text);
+}
+
+test('the path tile names the phase, its place and the next one; the facts the persona and spam', () => {
   const acc: WarmingAccountState = {
     ...account('a1', 'active'),
     phase: 'settling',
@@ -95,12 +103,13 @@ test('the phase row names the phase, persona, trust and spam status', () => {
   renderWithClient(
     <WarmingBoard warming={[acc]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  expect(screen.getAllByText('Фаза: обживается').length).toBeGreaterThan(0);
-  expect(screen.getByText('до следующей фазы: 3 дн.')).toBeInTheDocument();
+  expect(screen.getByText('Обживается')).toBeInTheDocument();
+  expect(screen.getByText('Фаза 2 из 5')).toBeInTheDocument();
+  expect(screen.getByText(textOf('прогрев · через 3 дн.'))).toBeInTheDocument();
   expect(screen.getByText('Спокойный')).toBeInTheDocument();
-  expect(screen.getByText('Доверие 70')).toHaveClass('text-success-deep');
-  expect(screen.getByText('Спам: ограничен')).toBeInTheDocument();
-  expect(screen.getByRole('progressbar', { name: 'Фаза: обживается' })).toBeInTheDocument();
+  expect(screen.getByText('спамблок')).toHaveClass('text-danger');
+  // The redesign took trust off the card.
+  expect(screen.queryByText(/Доверие/)).not.toBeInTheDocument();
 });
 
 test('an unchecked spam status says so', () => {
@@ -112,7 +121,7 @@ test('an unchecked spam status says so', () => {
       busyIds={NONE_BUSY}
     />,
   );
-  expect(screen.getByText('Спам: не проверялся')).toBeInTheDocument();
+  expect(screen.getByText('не проверялся')).toBeInTheDocument();
 });
 
 test('today counts settled actions, not the running booking, with the DM status', () => {
@@ -126,10 +135,12 @@ test('today counts settled actions, not the running booking, with the DM status'
   renderWithClient(
     <WarmingBoard warming={[acc]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  expect(
-    screen.getByText('Сегодня 6 из 15 действий · ЛС: выкл., переписка отключена'),
-  ).toBeInTheDocument();
-  expect(screen.queryByText(/15 из 15/)).not.toBeInTheDocument();
+  expect(screen.getByText(textOf('6 / 15 действий'))).toBeInTheDocument();
+  expect(screen.queryByText(/^15 \/ 15/)).not.toBeInTheDocument();
+  // The booking's remainder is in flight, not done.
+  expect(screen.getByText('ещё 9 делаются прямо сейчас')).toBeInTheDocument();
+  expect(screen.getByText('выключены')).toBeInTheDocument();
+  expect(screen.getByText('переписка отключена')).toBeInTheDocument();
 });
 
 test('a resting account shows when it comes back, and open DMs', () => {
@@ -143,9 +154,9 @@ test('a resting account shows when it comes back, and open DMs', () => {
   renderWithClient(
     <WarmingBoard warming={[resting]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  expect(
-    screen.getByText('Сегодня 4 действий · следующий заход через 1:20 · ЛС: вкл.'),
-  ).toBeInTheDocument();
+  expect(screen.getByText(textOf('4 действия'))).toBeInTheDocument();
+  expect(screen.getByText('через 1:20')).toBeInTheDocument();
+  expect(screen.getByText('включены')).toBeInTheDocument();
 });
 
 test('the problem row appears only when there is a problem', () => {
@@ -239,8 +250,9 @@ test('shows the per-account target as the day-progress denominator, not a hardco
       busyIds={NONE_BUSY}
     />,
   );
-  expect(screen.getByText('6 / 7 дней')).toBeInTheDocument();
-  expect(screen.queryByText(/\/ 14 дней/)).not.toBeInTheDocument();
+  expect(screen.getByRole('img', { name: '6 / 7 дней' })).toBeInTheDocument();
+  expect(screen.getByText('из 7 дней')).toBeInTheDocument();
+  expect(screen.queryByText(/из 14 дней/)).not.toBeInTheDocument();
 });
 
 test('pluralizes the Russian day noun by the target (день / дня / дней)', () => {
@@ -252,7 +264,8 @@ test('pluralizes the Russian day noun by the target (день / дня / дне�
       busyIds={NONE_BUSY}
     />,
   );
-  expect(screen.getByText('0 / 1 день')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: '0 / 1 день' })).toBeInTheDocument();
+  expect(screen.getByText('из 1 дня')).toBeInTheDocument();
 
   rerender(
     <QueryClientProvider client={new QueryClient()}>
@@ -264,7 +277,8 @@ test('pluralizes the Russian day noun by the target (день / дня / дне�
       />
     </QueryClientProvider>,
   );
-  expect(screen.getByText('1 / 3 дня')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: '1 / 3 дня' })).toBeInTheDocument();
+  expect(screen.getByText('из 3 дней')).toBeInTheDocument();
 });
 
 test('keeps an account in progress below its target', () => {
