@@ -376,7 +376,7 @@ async def test_a_second_live_run_is_refused_even_past_the_services_check(
 ) -> None:
     await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
 
-    async def nothing_live() -> list[object]:
+    async def nothing_live(_kind: str | None = None) -> list[object]:
         return []
 
     # Two starts racing: both pass the check before either has written its run.
