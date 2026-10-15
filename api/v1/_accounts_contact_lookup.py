@@ -12,7 +12,7 @@ from api.v1._errors import service_errors_to_http
 from schemas.auth import (
     UserRead,  # noqa: TC001 - FastAPI resolves dependency annotations at runtime
 )
-from schemas.contact_lookup import ContactLookupJob, ContactLookupRequest
+from schemas.contact_lookup import ContactLookupJob, ContactLookupRequest, ContactRecheckSummary
 from services.accounts import contact_lookup
 
 contact_lookup_router = APIRouter()
@@ -56,6 +56,15 @@ async def get_latest_contact_lookup_job(
     user: Annotated[UserRead, Depends(get_current_user)],
 ) -> ContactLookupJob | None:
     return contact_lookup.get_latest_contact_lookup_job(user.id)
+
+
+@contact_lookup_router.get(
+    "/accounts/contact-lookup/rechecks",
+    response_model=ContactRecheckSummary,
+    operation_id="getContactRechecks",
+)
+async def get_contact_rechecks() -> ContactRecheckSummary:
+    return await contact_lookup.get_contact_rechecks()
 
 
 @contact_lookup_router.get(

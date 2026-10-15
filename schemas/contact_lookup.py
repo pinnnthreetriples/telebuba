@@ -26,7 +26,8 @@ _MAX_PHONE_LENGTH = 40
 
 class ContactLookupRequest(BaseModel):
     account_ids: list[str] = Field(min_length=1, max_length=MAX_LOOKUP_ACCOUNTS)
-    phones: list[str] = Field(min_length=1, max_length=MAX_PHONES)
+    # Empty only to run the "not found" re-checks that are due (see ``recheck_not_found``).
+    phones: list[str] = Field(default_factory=list, max_length=MAX_PHONES)
     # Numbers per ``ImportContacts`` call and the pause between one account's calls.
     # Left out, they come from the saved outreach limits.
     batch_size: int | None = Field(default=None, ge=1, le=MAX_LOOKUP_BATCH)
@@ -34,6 +35,9 @@ class ContactLookupRequest(BaseModel):
     daily_cap: int | None = Field(default=None, ge=1, le=MAX_CONTACT_IMPORTS_PER_DAY)
     min_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
     max_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
+    # Queue this run's "not found" numbers for another account tomorrow and take in the
+    # ones due today; left out, the saved recipient rules decide.
+    recheck_not_found: bool | None = None
 
     @model_validator(mode="after")
     def validate_batch(self) -> ContactLookupRequest:
@@ -74,6 +78,8 @@ class ContactLookupOutcome(BaseModel):
     retry_after_seconds: int | None = None
     # Re-check row whose number went to another account: that account's row is final.
     handed_over: bool = False
+    # A number an earlier run reported "not found", checked again by another account.
+    rechecked: bool = False
 
 
 class ContactLookupJob(BaseModel):
@@ -82,3 +88,11 @@ class ContactLookupJob(BaseModel):
     total: int
     completed: int
     results: list[ContactLookupOutcome]
+
+
+class ContactRecheckSummary(BaseModel):
+    """Numbers waiting to be checked again by another account after a "not found"."""
+
+    # Every queued number; ``due`` of them may go into the next lookup run already.
+    waiting: int
+    due: int

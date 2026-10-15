@@ -7552,6 +7552,75 @@
         }
       }
     },
+    "/api/v1/accounts/contact-lookup/rechecks": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Contact Rechecks",
+        "operationId": "getContactRechecks",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactRecheckSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/contact-lookup/{job_id}": {
       "get": {
         "tags": [
@@ -23374,6 +23443,16 @@
               }
             ]
           },
+          "recipient_rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecipientRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "start_at": {
             "anyOf": [
               {
@@ -25746,6 +25825,11 @@
             "type": "boolean",
             "title": "Handed Over",
             "default": false
+          },
+          "rechecked": {
+            "type": "boolean",
+            "title": "Rechecked",
+            "default": false
           }
         },
         "type": "object",
@@ -25773,7 +25857,6 @@
             },
             "type": "array",
             "maxItems": 1000,
-            "minItems": 1,
             "title": "Phones"
           },
           "batch_size": {
@@ -25827,14 +25910,43 @@
               }
             ],
             "title": "Max Delay Seconds"
+          },
+          "recheck_not_found": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recheck Not Found"
           }
         },
         "type": "object",
         "required": [
-          "account_ids",
-          "phones"
+          "account_ids"
         ],
         "title": "ContactLookupRequest"
+      },
+      "ContactRecheckSummary": {
+        "properties": {
+          "waiting": {
+            "type": "integer",
+            "title": "Waiting"
+          },
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "waiting",
+          "due"
+        ],
+        "title": "ContactRecheckSummary",
+        "description": "Numbers waiting to be checked again by another account after a \"not found\"."
       },
       "DialogueFeed": {
         "properties": {
@@ -30000,6 +30112,9 @@
           "schedule": {
             "$ref": "#/components/schemas/RunSchedule"
           },
+          "recipients": {
+            "$ref": "#/components/schemas/RecipientRules"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -30082,6 +30197,9 @@
           },
           "schedule": {
             "$ref": "#/components/schemas/RunSchedule"
+          },
+          "recipients": {
+            "$ref": "#/components/schemas/RecipientRules"
           }
         },
         "type": "object",
@@ -31401,6 +31519,36 @@
         ],
         "title": "ReadinessStatus",
         "description": "Whether the process can actually SERVE, not merely that it is running.\n\nBooleans only, one per dependency. This probe is unauthenticated, so the body\nmust carry no diagnostic detail whatsoever: ``str(exc)`` on a SQLAlchemy\n``StatementError`` appends the failing SQL and its bound parameters, which for\nthis datastore includes its filesystem path. \"Reachable / not\" is the entire\ncontract; the operator reads the cause from the server log."
+      },
+      "RecipientRules": {
+        "properties": {
+          "no_repeat_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Repeat Days",
+            "default": 30
+          },
+          "one_account_per_client": {
+            "type": "boolean",
+            "title": "One Account Per Client",
+            "default": true
+          },
+          "recheck_not_found": {
+            "type": "boolean",
+            "title": "Recheck Not Found",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "RecipientRules"
       },
       "RemoveChannelRequest": {
         "properties": {

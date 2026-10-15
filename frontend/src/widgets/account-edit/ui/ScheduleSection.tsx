@@ -7,7 +7,7 @@ import type { FullSchedule } from '../model/schedule';
 
 const DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 
-function NumberField({
+export function NumberField({
   label,
   value,
   min,

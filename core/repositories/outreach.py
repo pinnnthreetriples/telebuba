@@ -42,6 +42,9 @@ def _load_outreach_limits() -> OutreachLimits:
     schedule = values.pop("schedule_json")
     if schedule is not None:
         values["schedule"] = json.loads(str(schedule))
+    recipients = values.pop("recipients_json")
+    if recipients is not None:
+        values["recipients"] = json.loads(str(recipients))
     return OutreachLimits.model_validate(values)
 
 
@@ -52,8 +55,9 @@ async def load_outreach_limits() -> OutreachLimits:
 
 def _save_outreach_limits(data: OutreachLimitsUpdate) -> OutreachLimits:
     values = {
-        **data.model_dump(exclude={"schedule"}),
+        **data.model_dump(exclude={"schedule", "recipients"}),
         "schedule_json": data.schedule.model_dump_json(),
+        "recipients_json": data.recipients.model_dump_json(),
         "updated_at": _now_iso(),
     }
     with _get_engine().begin() as connection:
