@@ -272,20 +272,25 @@ async def _send(account_id: str, recipient: str, peer: str, text: str) -> BulkMe
     return await send_locked(account_id, lambda: _send_one(account_id, recipient, peer, text))
 
 
-async def _show_typing(account_id: str, peer: str, min_seconds: float, max_seconds: float) -> None:
-    """Show "typing…" to the recipient for a random moment; a failure only skips the show.
+async def _show_typing(account_id: str, peer: str, protection: OutreachProtection) -> None:
+    """Show "typing…" for a moment in the protection's range; a failure only skips the show.
 
     Never raises: the send that follows must go out exactly as it would without it.
     """
+    if not protection.typing:
+        return
+    typing = OutreachSetTyping(recipient=peer)
     try:
-        result = await execute(
-            account_id, OutreachSetTyping(recipient=peer), domain="bulk_messages"
+        # Under the lifecycle lock, like the send it announces.
+        result = await send_locked(
+            account_id, lambda: execute(account_id, typing, domain="bulk_messages")
         )
     except Exception as exc:  # noqa: BLE001 - typing must never stop or repeat the send
         logger.warning("bulk message typing failed: %s", type(exc).__name__)
         return
     if result.status == "ok":
-        await asyncio.sleep(random.uniform(min_seconds, max_seconds))  # noqa: S311  # nosec B311 - timing jitter, not a secret
+        low, high = protection.typing_min_seconds, protection.typing_max_seconds
+        await asyncio.sleep(random.uniform(low, high))  # noqa: S311  # nosec B311 - timing jitter, not a secret
 
 
 async def _load_run(record: BulkRunRecord) -> BulkRun:

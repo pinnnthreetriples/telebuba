@@ -11,7 +11,7 @@ from core.db import create_account, upsert_spam_status
 from core.repositories.outreach_rests import list_outreach_rests, record_outreach_rest
 from schemas.accounts import AccountCreate
 from schemas.bulk_messages import BulkMessageJob, BulkMessageRequest
-from schemas.outreach_protection import OutreachRest, SkippedAccount
+from schemas.outreach_protection import OutreachProtection, OutreachRest, SkippedAccount
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from schemas.telegram_actions_outreach import OutreachSetTyping
@@ -232,22 +232,29 @@ async def test_left_out_accounts_send_nothing_and_split_plans_around_them(
 @pytest.mark.usefixtures("bulk_clock")
 async def test_typing_shows_before_each_send_and_can_be_switched_off(
     monkeypatch: pytest.MonkeyPatch,
-    typing_shows: list[tuple[str, str, float, float]],
+    typing_shows: list[tuple[str, str, OutreachProtection]],
 ) -> None:
     _, calls = await _run(
         monkeypatch, account_ids=["a1"], recipients=["@rcpt1", "@rcpt2"], mode="each"
     )
     assert calls == [("a1", "rcpt1"), ("a1", "rcpt2")]
-    assert typing_shows == [("a1", "rcpt1", 2, 5), ("a1", "rcpt2", 2, 5)]
+    assert [(account, peer) for account, peer, _ in typing_shows] == [
+        ("a1", "rcpt1"),
+        ("a1", "rcpt2"),
+    ]
+    assert typing_shows[0][2] == OutreachProtection()
 
     typing_shows.clear()
     await _run(
         monkeypatch,
         account_ids=["a1"],
         recipients=["@rcpt3"],
-        protection={"typing": False},
+        protection={"typing": False, "typing_max_seconds": 9},
     )
-    assert typing_shows == []
+    # The run hands its own copy to the seam, which shows nothing with typing off.
+    assert [(peer, p.typing, p.typing_max_seconds) for _, peer, p in typing_shows] == [
+        ("rcpt3", False, 9)
+    ]
 
 
 @pytest.mark.asyncio
@@ -317,8 +324,11 @@ async def test_show_typing_waits_only_after_telegram_showed_it(
     monkeypatch.setattr(bulk_messages.asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(bulk_messages.random, "uniform", lambda low, high: (low + high) / 2)
 
-    await _REAL_SHOW_TYPING("a1", "123", 2, 4)
-    await _REAL_SHOW_TYPING("a1", "123", 2, 4)
+    shown = OutreachProtection(typing_min_seconds=2, typing_max_seconds=4)
+    await _REAL_SHOW_TYPING("a1", "123", shown)
+    await _REAL_SHOW_TYPING("a1", "123", shown)
+    await _REAL_SHOW_TYPING("a1", "123", shown.model_copy(update={"typing": False}))
 
+    # Typing off calls nothing; a refused typing waits for nothing.
     assert [action.recipient for action in sent] == ["123", "123"]
     assert waits == [3]

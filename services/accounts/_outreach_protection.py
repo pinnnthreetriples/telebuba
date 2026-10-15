@@ -123,3 +123,15 @@ async def record_limit(
             rest_until=rest_until.isoformat(),
         )
     )
+
+
+async def note_limit(
+    account_id: str,
+    code: str,
+    retry_after_seconds: int | None,
+    protection: OutreachProtection,
+    limited_accounts: int,
+) -> bool:
+    """Record a limit now; True when ``limited_accounts`` (this one included) stop the run."""
+    await record_limit(account_id, code, retry_after_seconds, protection, datetime.now(UTC))
+    return protection.stop_run_on_limits and limited_accounts >= protection.stop_run_after_accounts

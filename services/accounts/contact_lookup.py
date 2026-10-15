@@ -60,7 +60,7 @@ from services.accounts._contact_lookup_lanes import (
 )
 from services.accounts._outreach_protection import (
     halve,
-    record_limit,
+    note_limit,
     skipped_accounts,
     young_account_ids,
 )
@@ -310,9 +310,8 @@ async def _limited(
 ) -> None:
     """Start the lane's rest; past the threshold, skip every number still queued."""
     code, retry_after = lane.limit or ("", None)
-    await record_limit(lane.account_id, code, retry_after, protection, datetime.now(UTC))
     limited = sum(other.limit is not None for other in lanes)
-    if not protection.stop_run_on_limits or limited < protection.stop_run_after_accounts:
+    if not await note_limit(lane.account_id, code, retry_after, protection, limited):
         return
     for other in lanes:
         if not other.stopped:
