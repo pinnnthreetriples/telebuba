@@ -1,7 +1,7 @@
 ---
 name: runtime-warming
 description: Warming scheduling, budget, dialogue, recovery and board runtime.
-last_updated: 2026-10-13
+last_updated: 2026-10-15
 edges:
   - target: patterns/account-devices.md
     condition: the warming device
@@ -29,20 +29,20 @@ grounds_to:
 - One owned in-memory `asyncio.Task` runs per persisted active account. Ownership is retained until the task is terminal; a timed-out Stop remains non-quiescent and blocks restart, promotion, handoff and deletion. FastAPI lifespan reconciles persisted state; one uvicorn worker is required while ownership is process-local.
 - Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing.
 - Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Each Telegram attempt is booked immediately before dispatch; cancellation or lease loss after dispatch is an unknown outcome and remains spent. Hard process death stays fail-closed: actual spend is unknown.
-- The warming day is the account's local calendar day (phone tz, UTC when unknown): daily budget, quiet day, new-day wait and daily stats follow it; a parked account wakes in its own local morning at its chronotype. A stored day one ahead of the local date is the same day. Target counts worked days (worked cycle or quiet day, not error/quarantine); only a fresh start from idle resets it (a return to warming keeps them).
+- The warming day is the account's local calendar day (phone tz, UTC when unknown): daily budget, quiet day, new-day wait and daily stats follow it; a parked account wakes in its own local morning at its chronotype. A stored day one ahead of the local date is the same day. Target counts worked days (worked cycle or quiet day, not error/quarantine). A start from idle («Вернуть в прогрев» too) opens the next `wave` from zero; a restart of a running stint keeps both.
 - Cycle work spends one shared budget across online/join/read/react/story/DM actions; when tuning caps or cadence, keep later steps reachable.
 - Extras are the last cycle step, drawn per persona from a registry of toggled-on eligible specs. Read extras never book the daily budget; write extras book it immediately before dispatch like every other step, and are skipped (never queued, never drawn) once it is spent. An extra that ran but found nothing to act on (`warm_skip`) stays booked yet is not a landed extra. Poll/video/voice extras aim only at posts the channel read classified as such.
 - Self-scoped extras (notes, forwards, drafts, reminders) have no destination; core hardcodes `InputPeerSelf`.
-- Media extras debit a per-cycle byte budget before dispatch, like attempts; Premium-only extras never probe by writing — an unknown Premium flag means "do not try".
+- Media extras debit a per-cycle byte budget before dispatch; Premium-only extras never probe by writing — unknown Premium means "do not try".
 - A channel warming left stays out of the cycle (no read, no re-join) for the re-join cooldown; `is_channel_joined` means joined-and-not-left, and a re-join restarts the joined-age clock the leave policy reads. Joins (re-joins too) obey a per-phase rolling-24h cap; past it an unjoined channel is skipped unread and unbooked.
 - Inter-account DMs open `dm_min_age_hours` after the stint's `started_at`; cold peers resolve via `contacts.resolvePhone`, never saved as contacts. An unaddressable peer skips the turn without parking the sender, but still spends budget.
-- Fleet DM breaker: DM spam blocks fleet-wide within a window pause all DMs (`warming_settings.dm_paused_until`, liftable on the board); blocks before that stamp are spent, so an ended pause never re-trips.
-- @SpamBot is asked on a stint's first cycle, then every interval ± a per-account offset, in-cycle via the seam. `limited` quarantines; unreadable bumps a card-warning streak. Handoff needs `clean`: no answer refuses, `limited` un-promotes into quarantine.
-- Quarantine releases only on a confirmed clean check; unknown spends a bounded recovery attempt. Outcomes publish only once the final generation-guarded write applies. A release ramps the cap back and holds DMs; floods weigh on trust.
+- Fleet DM breaker: fleet-wide DM spam blocks in a window pause all DMs (`dm_paused_until`; a confirmed lift logs the operator); earlier blocks are spent.
+- @SpamBot is asked on a stint's first cycle, then every interval ± a per-account offset, in-cycle via the seam. A new `limited` quarantines; unreadable bumps a card-warning streak. Handoff needs `clean`: no answer refuses, `limited` un-promotes into quarantine.
+- Quarantine releases on a clean check; still `limited` after `quarantine_max_repeats` stops in `spam_blocked`; unknown is bounded apart. A known block (`spam_blocked_at`) never re-quarantines, refuses or docks trust; DMs stay off. Outcomes publish only after the generation-guarded write.
 - Scheduling lives in pacing/fleet modules, one session in cycle modules, task state/sleep/cancellation/recovery in runtime modules. A generation lease around Telegram dispatch stops a retired cycle starting a later action. Injectable collaborators stay behind the warming seam.
 - Start refuses any account neurocomment already owns: the running listener and an in-flight channel-discovery run are hard exclusions; a live cooldown either runtime recorded is a health verdict and obeys the operator's `enforce_readiness` switch, like warming's own flood deadline does through trust. Refusals carry a stable code, never readiness reasons, and change only whether warming starts.
 - A running neuroshilling campaign is refused the same ungated way, via the shared in-memory ownership registry, not a point check: warming claims each account it spawns and releases only on an identity match, and neuroshilling's start refuses against that claim — weaken either side and two paced streams share a session. Warming's re-spawn of an account it holds bypasses the refusal, safe only because refusal and eviction share the per-account lifecycle lock.
-- Geo never refuses a start; consent is per `PHONE>PROXY` pair. Cards count actions settled before a running cycle's booking.
-- Board/read paths stay bulk-loaded; loop failures are logged and persisted, never silent.
+- Geo never refuses a start; consent is per `PHONE>PROXY` pair. Cards count settled actions, not a running booking.
+- Board/read paths stay bulk-loaded; loop failures are logged and persisted.
 
-Exact caps, timings and implementation headroom belong to config/tests/code, not memory.
+Exact caps and timings belong to config/tests/code, not memory.
