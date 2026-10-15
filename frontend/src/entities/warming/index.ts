@@ -2,13 +2,13 @@ export {
   addWarmingChannelsMutation,
   findWarmingChannelsMutation,
   handoffToNeurocommentMutation,
+  keepSpamBlockedAccountMutation,
   liftWarmingDmPauseMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
-  resumeWarmingMutation,
+  rewarmAccountMutation,
   startWarmingMutation,
   stopWarmingMutation,
-  unpromoteFromNeurocommentMutation,
   updateWarmingSettingsMutation,
   updateWarmingTuningMutation,
   warmedAccountsQueryOptions,
@@ -18,6 +18,9 @@ export {
   warmingSettingsQueryOptions,
   warmingSurvivalQueryOptions,
   warmingTuningQueryOptions,
+  warmingWavesQueryOptions,
 } from './api/warming.queries';
 export { warmingStartPreviewQueryOptions } from './api/startPreview.queries';
+export { SpamBlockBadge } from './ui/SpamBlockBadge';
 export { SurvivalBadge } from './ui/SurvivalBadge';
+export { WaveChip } from './ui/WaveChip';

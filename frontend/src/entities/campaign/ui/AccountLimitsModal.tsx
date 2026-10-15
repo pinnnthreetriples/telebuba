@@ -37,6 +37,13 @@ const CAP_MAX = 10_000;
 // fleet". Three states, because "no override" and "zero" are different limits.
 type Draft = Partial<Record<LimitKey, number | ''>>;
 
+// The account's own stored number, or '' when it follows the fleet. Never `limit`: a soft
+// start can enforce less than the override, and echoing that back would save the soft
+// cap as the account's own number.
+function ownValue(gauge: AccountLimitGauge): number | '' {
+  return gauge.overridden ? (gauge.override ?? gauge.limit) : '';
+}
+
 function share(gauge: AccountLimitGauge): number {
   return gauge.limit > 0 ? gauge.used / gauge.limit : 0;
 }
@@ -79,7 +86,9 @@ function LimitRow({
   const { t, i18n } = useTranslation();
   const state = tone(gauge);
   const resets = resetLabel(gauge.resets_at, i18n.language);
-  const value = draft === undefined ? (gauge.overridden ? gauge.limit : '') : draft;
+  const value = draft === undefined ? ownValue(gauge) : draft;
+  // The soft start holds this cap down while it runs, the account's own number included.
+  const softHeld = gauge.soft_cap != null;
 
   return (
     <div className="border-b border-canvas py-4 last:border-b-0">
@@ -125,6 +134,11 @@ function LimitRow({
           ? t('neurocomment.modal.limits.fleetValue', { value: gauge.fleet_default })
           : t('neurocomment.modal.limits.ownValue', { value: gauge.fleet_default })}
       </div>
+      {softHeld ? (
+        <div className="mt-1 type-small text-warning-deep">
+          {t('neurocomment.modal.limits.softHeld', { value: gauge.soft_cap })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -167,7 +181,7 @@ export function AccountLimitsModal({
     // is the only way the operator can hand a cap back to the fleet.
     const body = Object.fromEntries(
       KEYS.map((key) => {
-        const value = draft[key] ?? (view[key].overridden ? view[key].limit : '');
+        const value = draft[key] ?? ownValue(view[key]);
         // Clamped on the way out as well as on the way in: an untouched row echoes back a
         // STORED cap, and a stored value predating this ceiling would otherwise 422 the
         // whole replace — taking the rows the operator did edit down with it, with no way
@@ -199,7 +213,7 @@ export function AccountLimitsModal({
     view !== undefined &&
     KEYS.some((key) => {
       const typed = draft[key];
-      return typed !== undefined && typed !== (view[key].overridden ? view[key].limit : '');
+      return typed !== undefined && typed !== ownValue(view[key]);
     });
 
   return (

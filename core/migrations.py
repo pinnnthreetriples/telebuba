@@ -120,6 +120,10 @@ from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
     _add_warming_settings_extra_toggles,
 )
+from core.migration_steps_waves import (
+    _add_warming_state_wave,
+    _allow_lifecycle_warming_stopped,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -253,6 +257,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (91, "add_bulk_runs", _add_bulk_runs),
     (92, "add_warming_settings_tuning", _add_warming_settings_tuning),
     (93, "add_warming_channel_search", _add_warming_channel_search),
+    (94, "add_warming_state_wave", _add_warming_state_wave),
+    (95, "allow_lifecycle_warming_stopped", _allow_lifecycle_warming_stopped),
 )
 
 

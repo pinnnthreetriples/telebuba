@@ -9,19 +9,21 @@ import { counterOf, isoWeekNumber, shareOf, type SurvivalWindow } from '../lib/s
 
 export type CohortKind = SurvivalReport['cohort'];
 
-const KINDS: readonly CohortKind[] = ['week', 'persona', 'length', 'proxy_country'];
+const KINDS: readonly CohortKind[] = ['week', 'persona', 'length', 'proxy_country', 'waves'];
 const WINDOWS: readonly SurvivalWindow[] = ['warming', 'd7', 'd30'];
 
 function cohortLabel(t: TFunction, kind: CohortKind, key: string | null | undefined): string {
   if (key == null) return t('warming.survival.cohort.unknown');
   if (kind === 'week') return t('warming.survival.cohort.weekKey', { week: isoWeekNumber(key) });
   if (kind === 'length') return t('warming.survival.cohort.lengthKey', { days: key });
+  if (kind === 'waves') return t('warming.survival.cohort.wavesKey', { count: Number(key) });
   if (kind === 'persona') return t(`warming.persona.${key}.name`, { defaultValue: key });
   return key;
 }
 
 // «нед. 37 · 3 из 4»: one row per cohort, a «N из M» cell per window. Q10: the start
-// week is the default cut; persona, length and proxy country are one click away.
+// week is the default cut; persona, length, proxy country and the number of warming
+// waves are one click away. Every row counts account lives: a re-warm is not a second.
 export function CohortTable({
   report,
   kind,

@@ -254,6 +254,10 @@ _warming_account_state = Table(
     Column("cycle_plan", String, nullable=True),
     # The device this stint warms through; desktop unless the operator chose mobile.
     Column("device_mode", String, nullable=False, server_default="desktop"),
+    # The stint's warming wave and the confirmed spam block; see
+    # schemas._warming_console.WarmingStateMarks. Migration 94.
+    Column("wave", Integer, nullable=False, server_default="1"),
+    Column("spam_blocked_at", String, nullable=True),
 )
 # Flood memory: one row per PeerFlood warming met. No FK to ``accounts`` and no
 # purge on account deletion, so the lifetime count survives a delete + re-import.

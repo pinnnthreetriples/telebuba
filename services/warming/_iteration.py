@@ -12,7 +12,7 @@ from core.repositories.spam_status import get_spam_status
 from core.repositories.warming import load_warming_settings
 from core.repositories.warming_marks import store_cycle_progress
 from schemas._warming_visits import CycleMarks, VisitPlan
-from schemas.warming import WarmingCycleRequest, WarmingCycleResult
+from schemas.warming import WarmingCycleRequest, WarmingCycleResult, spam_block_known
 from services.warming import _loop, _seams
 from services.warming._cadence import visit_budget
 from services.warming._local_day import _local_date
@@ -157,7 +157,8 @@ async def _plan_iteration(
         intensity.daily_cap,
         daily,
         remaining,
-        intensity.dm_allowed,
+        # A confirmed spam block shuts DMs for good: the account cannot write to strangers.
+        intensity.dm_allowed and not spam_block_known(record),
         persona,
         intensity.phase,
     )

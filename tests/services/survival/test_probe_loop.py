@@ -106,6 +106,30 @@ async def test_accounts_behind_one_proxy_wait_an_hour(
 
 
 @pytest.mark.asyncio
+async def test_a_pass_journals_a_death_no_session_check_saw(
+    monkeypatch: pytest.MonkeyPatch, asks: _Asks
+) -> None:
+    """An action marked the account frozen; the counter must still see it die — once."""
+    await _seed(monkeypatch, ("a", "p1"))
+    recorded: list[tuple[str, str]] = []
+
+    async def record(account: AccountRead, status: str) -> None:
+        recorded.append((account.account_id, status))
+
+    monkeypatch.setattr(_probe_loop, "record_session_death", record)
+    frozen = (await _probe_loop.list_accounts()).accounts[0].model_copy(update={"status": "frozen"})
+
+    async def listed() -> AccountList:
+        return AccountList(accounts=[frozen])
+
+    monkeypatch.setattr(_probe_loop, "list_accounts", listed)
+
+    assert await run_probe_pass(now=at(22)) is None
+    assert recorded == [("a", "frozen")]
+    assert asks.account_ids == [], "a dead account is never asked"
+
+
+@pytest.mark.asyncio
 async def test_switched_off_probes_ask_nothing(
     monkeypatch: pytest.MonkeyPatch, asks: _Asks
 ) -> None:

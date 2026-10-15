@@ -438,20 +438,6 @@ async def test_handoff_refused_on_spambot_answers_409_with_the_code(
 
 
 @pytest.mark.asyncio
-async def test_unpromote_clears_flag(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake(account_id: str) -> WarmingAccountState:
-        return WarmingAccountState(
-            account_id=account_id, label="X", state="idle", health="idle", promoted_to_nc=False
-        )
-
-    monkeypatch.setattr("services.warming.unmark_neurocomment", _fake)
-    async with _client(app) as client:
-        resp = await client.post("/api/v1/warming/unpromote", json={"account_id": "acc-1"})
-    assert resp.status_code == 200
-    assert resp.json()["promoted_to_nc"] is False
-
-
-@pytest.mark.asyncio
 async def test_dialogues_returns_labeled_feed(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -128,11 +128,25 @@ def dm_status(  # noqa: PLR0911, PLR0913 - one return per gate; the gates read s
     return "trust"
 
 
+def account_dm_status(fleet: DmStatus, *, spam_blocked: bool) -> DmStatus:
+    """The fleet-level verdict, unless the account's own confirmed spam block shuts DMs.
+
+    Ranks after the two switches that shut DMs for everyone (chat off, no LLM key) and
+    before everything else: the block is permanent, so no pause or trust band matters.
+    """
+    if spam_blocked and fleet not in {"chat_off", "no_llm_key"}:
+        return "spam_blocked"
+    return fleet
+
+
 def attention(
     record: WarmingStateRecord | None,
     readiness: WarmingReadiness,
 ) -> WarmingAttention | None:
     """The single most urgent problem on a card, or ``None`` when nothing needs a look."""
+    if record is not None and record.state == "spam_blocked":
+        # Warming stopped and waits for the operator: delete the account or keep it.
+        return WarmingAttention(code="spam_blocked")
     if record is not None and record.state == "quarantine":
         return WarmingAttention(
             code="quarantine",
@@ -157,8 +171,6 @@ def _error_attention(record: WarmingStateRecord) -> WarmingAttention:
     """Name an ``error`` row by what stopped it; a plain ``error`` ranks below readiness."""
     if record.last_event in _STOPPING_EVENTS:
         return WarmingAttention(code="stopping")
-    if record.last_event == "quarantine_exhausted":
-        return WarmingAttention(code="quarantine_exhausted")
     if record.last_event == "quarantine_unreadable":
         return WarmingAttention(code="quarantine_unreadable")
     return WarmingAttention(code="error")

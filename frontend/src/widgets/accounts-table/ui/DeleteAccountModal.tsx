@@ -11,7 +11,7 @@ export type DeleteReason = AccountDeleteReasonGuess['reason'];
 const REASONS: readonly DeleteReason[] = ['dead', 'retired'];
 
 // The design's delete-account confirm dialog. The reason goes to the lifecycle
-// journal; it is pre-selected from the server's guess (limited or dead session →
+// journal; it is pre-selected from the server's guess (a dead, banned or frozen session →
 // dead, otherwise retired) and the operator may change it. Confirming before the
 // guess arrives sends no reason, and the server journals its own guess.
 export function DeleteAccountModal({

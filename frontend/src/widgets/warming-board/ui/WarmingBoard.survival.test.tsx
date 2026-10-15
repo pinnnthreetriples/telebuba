@@ -39,5 +39,5 @@ test('only a released card wears the survival badge', () => {
   );
 
   expect(screen.getAllByText(/после выпуска/)).toHaveLength(1);
-  expect(screen.getByText('День 4 после выпуска · жив, было ранение')).toBeInTheDocument();
+  expect(screen.getByText('День 4 после выпуска · жив, есть ранение')).toBeInTheDocument();
 });

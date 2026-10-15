@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 
+from api.deps import get_current_user
 from api.errors import error_responses
 from api.v1._warming_pool import pool_router
 from api.v1._warming_tuning import tuning_router
 from core.config import settings
 from schemas._warming_console import HandoffRequest  # noqa: TC001 - FastAPI reads the body type
 from schemas._warming_start import StartPreview, StartPreviewRequest
+from schemas._warming_waves import WarmingWaveList
+from schemas.auth import UserRead  # noqa: TC001 - FastAPI resolves the dependency type
 from schemas.dialogues import DialogueFeed
 from schemas.survival import SurvivalCohortKind, SurvivalReport
 from schemas.warming import (
@@ -93,21 +96,49 @@ async def handoff_account(body: HandoffRequest) -> WarmingAccountState:
 
 
 @router.post(
-    "/unpromote",
+    "/spam-block/keep",
     response_model=WarmingAccountState,
-    operation_id="unpromoteFromNeurocomment",
+    operation_id="keepSpamBlockedAccount",
+    responses=error_responses(404, 409),
 )
-async def unpromote_account(body: PromoteRequest) -> WarmingAccountState:
-    """Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»)."""
-    return await warming_service.unmark_neurocomment(body.account_id)
-
-
-async def _start_or_http(body: StartWarmingRequest, *, resume: bool) -> WarmingAccountState:
-    """Start (or resume) warming, mapping every refusal onto its HTTP status."""
+async def keep_spam_blocked_account(body: PromoteRequest) -> WarmingAccountState:
+    """«Оставить»: keep an account warming stopped on a confirmed spam block."""
     try:
-        if resume:
-            return await warming_service.resume_warming(body)
+        return await warming_service.keep_spam_blocked(body.account_id)
+    except warming_service.UnknownAccountError as exc:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except warming_service.NotSpamBlockedError as exc:
+        # A stale card: the account is no longer (or never was) stopped on a spam block.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT, detail="not_spam_blocked"
+        ) from exc
+
+
+@router.get(
+    "/waves/{account_id}",
+    response_model=WarmingWaveList,
+    operation_id="listWarmingWaves",
+    responses=error_responses(404),
+)
+async def list_warming_waves(account_id: str) -> WarmingWaveList:
+    """Every warming wave of the account's current life: start, end, why, worked days."""
+    waves = await survival_service.load_account_waves(account_id)
+    if waves is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="unknown account")
+    return waves
+
+
+async def _start_or_http(body: StartWarmingRequest, *, rewarm: bool) -> WarmingAccountState:
+    """Start warming (or start a graduated account's next wave), mapping every refusal."""
+    try:
+        if rewarm:
+            return await warming_service.rewarm_account(body)
         return await warming_service.start_warming_with_consent(body)
+    except warming_service.NotGraduatedError as exc:
+        # A stale warmed card: the account was moved on (started, handed off) meanwhile.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT, detail="not_graduated"
+        ) from exc
     except warming_service.UnknownAccountError as exc:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except warming_service.WarmingTaskNotQuiescentError as exc:
@@ -146,18 +177,18 @@ async def _start_or_http(body: StartWarmingRequest, *, resume: bool) -> WarmingA
 )
 async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
     """Start warming; a geo mismatch never refuses, ``accept_geo_mismatch`` records consent."""
-    return await _start_or_http(body, resume=False)
+    return await _start_or_http(body, rewarm=False)
 
 
 @router.post(
-    "/resume",
+    "/rewarm",
     response_model=WarmingAccountState,
-    operation_id="resumeWarming",
+    operation_id="rewarmAccount",
     responses=error_responses(400, 404, 409),
 )
-async def resume_warming(body: StartWarmingRequest) -> WarmingAccountState:
-    """«Вернуть в прогрев»: continue a graduated account's stint, keeping its worked days."""
-    return await _start_or_http(body, resume=True)
+async def rewarm_account(body: StartWarmingRequest) -> WarmingAccountState:
+    """«Вернуть в прогрев»: a graduated account warms again from zero as its next wave."""
+    return await _start_or_http(body, rewarm=True)
 
 
 @router.post(
@@ -242,9 +273,11 @@ async def update_warming_settings(body: WarmingSettingsUpdate) -> WarmingSetting
     response_model=WarmingSettings,
     operation_id="liftWarmingDmPause",
 )
-async def lift_warming_dm_pause() -> WarmingSettings:
-    """«Снять паузу»: reopen inter-account DMs the fleet breaker paused."""
-    return await warming_service.lift_dm_pause()
+async def lift_warming_dm_pause(
+    user: Annotated[UserRead, Depends(get_current_user)],
+) -> WarmingSettings:
+    """«Снять паузу»: reopen inter-account DMs the fleet breaker paused; logs who did."""
+    return await warming_service.lift_dm_pause(user.username)
 
 
 @router.get("/dialogues", response_model=DialogueFeed, operation_id="listWarmingDialogues")

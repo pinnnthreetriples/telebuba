@@ -352,8 +352,8 @@
       "reasonLabel": "Reason",
       "reasonPending": "Working it out…",
       "reason": {
-        "dead": "Dead",
-        "retired": "Retired"
+        "dead": "Dead (Telegram took it: session, ban, freeze)",
+        "retired": "Written off (working, spam-blocked included)"
       }
     },
     "proxyDeleteModal": {
@@ -1279,7 +1279,9 @@
       "emulator_field_missing": "The expected field is not on Telegram's screen — finish the sign-in in the container window.",
       "emulator_phone_invalid": "The account's phone number could not be read.",
       "emulator_code_timeout": "The login code did not reach the existing session in time.",
-      "emulator_twofa_missing": "The account has a cloud password that is not stored."
+      "emulator_twofa_missing": "The account has a cloud password that is not stored.",
+      "not_graduated": "The account is no longer warmed — refresh the page",
+      "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page"
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1765,7 +1767,10 @@
     "warming_pool_refill_failed": "Automatic channel search: a pass failed",
     "warming_pool_search_account_taken": "Account taken for a channel search",
     "warming_pool_search_account_returned": "Account returned after a channel search",
-    "warming_self_search_done": "The account searched channels itself"
+    "warming_self_search_done": "The account searched channels itself",
+    "warming_spam_blocked": "Spam block confirmed by @SpamBot — warming stopped",
+    "warming_spam_block_kept": "Spam-blocked account kept",
+    "warming_rewarmed": "Account back in warming — a new wave from zero"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -2337,7 +2342,8 @@
         "save": "Save",
         "saveFailed": "Could not save the limits",
         "loading": "Loading…",
-        "loadFailed": "Could not load the limits"
+        "loadFailed": "Could not load the limits",
+        "softHeld": "Soft start: at most {{value}} while it runs, even if the own limit is higher"
       },
       "discovery": {
         "open": "Find channels",
@@ -3201,7 +3207,8 @@
       "idle": "idle",
       "flood_wait": "paused",
       "quarantine": "quarantine",
-      "error": "error"
+      "error": "error",
+      "spam_blocked": "spam block"
     },
     "stopModal": {
       "title": "Stop warming?",
@@ -3213,7 +3220,10 @@
     "dmPause": {
       "banner": "DMs paused until {{date}}",
       "detail": "Two DM spam blocks within a day — messages between accounts are stopped for the whole fleet.",
-      "lift": "Lift the pause"
+      "lift": "Lift the pause",
+      "confirmTitle": "Lift the DM pause for the whole fleet?",
+      "confirmBody": "The pause holds until {{date}} because DMs got two spam blocks. Lifting it now lets every account message again. The log records your login.",
+      "cancel": "Cancel"
     },
     "tune": {
       "title": "Action fine-tuning",
@@ -3499,11 +3509,6 @@
       "banner_other": "Phone and proxy geo differ on {{count}} accounts",
       "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
     },
-    "resume": {
-      "title": "Back to warming",
-      "subtitle": "{{phone}} · {{count}} days worked so far, the count continues",
-      "start": "Continue warming"
-    },
     "handoff": {
       "title": "To neurocomment",
       "subtitle": "How the account starts in neurocomment",
@@ -3541,16 +3546,17 @@
         "paused": "paused for every account",
         "not_ready": "account not ready",
         "too_young": "warming just started",
-        "trust": "low trust"
+        "trust": "low trust",
+        "spam_blocked": "spam block"
       },
       "attention": {
         "quarantine": "Quarantine {{attempt}}/{{attempts}}",
         "flood_wait": "Flood until {{time}}",
         "stopping": "Stopping…",
-        "quarantine_exhausted": "Quarantine exhausted — the spam block holds",
         "quarantine_unreadable": "Quarantine exhausted — @SpamBot does not answer",
         "not_ready": "Not ready: {{reasons}}",
-        "error": "Cycle error — see the log"
+        "error": "Cycle error — see the log",
+        "spam_blocked": "Warming stopped: @SpamBot confirmed a spam block"
       },
       "until": "until {{time}}"
     },
@@ -3590,23 +3596,26 @@
         "weekKey": "wk {{week}}",
         "lengthKey": "{{days}} d",
         "unknown": "unknown",
-        "empty": "No cohorts yet"
+        "empty": "No cohorts yet",
+        "waves": "Number of waves",
+        "wavesKey": "waves: {{count}}"
       },
       "causes": {
         "title": "Causes of death",
         "none": "No deaths",
         "item": "{{cause}} {{count}}",
-        "spam_limited": "spam limit",
         "session_dead": "session died",
-        "deleted_dead": "deleted as dead"
+        "deleted_dead": "deleted as dead",
+        "account_frozen": "account frozen"
       },
       "swimmer": {
         "title": "Each account's life",
         "empty": "No account has warmed yet",
-        "legend": "Blue is warming, green is after release, a dot is a spam block, a cross is a death",
+        "legend": "Blue — warming, green — after release, dot — a wound (spam block or flood), tick — a new wave, cross — death",
         "row": "{{label}}: {{status}}, {{days}} d",
         "death": "Died on day {{day}}: {{cause}}",
-        "wound": "Spam block on day {{day}}"
+        "wound": "Wound on day {{day}}",
+        "wave": "Wave {{wave}} from day {{day}}"
       },
       "status": {
         "warming": "warming",
@@ -3670,6 +3679,39 @@
       "refillTitle": "An account is needed to search channels",
       "refillHint": "The pool is short of {{language}} channels and the automatic search found no free account. Pick the account to search with.",
       "refillAction": "Pick an account"
+    },
+    "spamBlock": {
+      "badge": "Spam block",
+      "badgeHint": "@SpamBot confirmed a spam block: the account cannot message strangers. Warming DMs stay off for it for good.",
+      "title": "Spam block",
+      "body": "Warming stopped: @SpamBot confirmed a spam block. The account works but cannot message strangers. Delete it, or keep it — then it can warm again (without DMs) or go to neurocommenting.",
+      "delete": "Delete",
+      "keep": "Keep"
+    },
+    "rewarm": {
+      "note": "Wave {{wave}}: warming starts from zero"
+    },
+    "waves": {
+      "chip": "Wave {{wave}} · since {{date}}",
+      "title": "Warming waves · {{name}}",
+      "subtitle": "Every warming start from zero is a new wave",
+      "wave": "Wave {{wave}}",
+      "since": "since {{date}}",
+      "days_one": "{{count}} day of {{target}}",
+      "days_other": "{{count}} days of {{target}}",
+      "daysUnknown": "days not recorded",
+      "end": {
+        "running": "running",
+        "released": "warmed",
+        "stopped": "stopped by hand",
+        "spam_blocked": "stopped: spam block",
+        "session_dead": "session died",
+        "deleted": "account deleted",
+        "replaced": "next wave started"
+      },
+      "loading": "Loading waves…",
+      "empty": "The account has not been warmed yet",
+      "error": "Could not load the waves"
     }
   },
   "auth": {

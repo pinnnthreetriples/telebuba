@@ -40,8 +40,8 @@ type StartTarget =
       phone: string;
       // A phone/proxy country mismatch not yet accepted for this pair (item 2.2).
       geo?: { phoneCountry: string; proxyCountry: string };
-      // «Вернуть в прогрев»: the worked days the continued stint keeps (item 2.5).
-      resumeDays?: number;
+      // «Вернуть в прогрев»: the wave this start opens. It warms from zero, like any start.
+      nextWave?: number;
       poolAccountIds?: undefined;
       poolSkipped?: undefined;
       poolGeoMismatch?: undefined;
@@ -55,7 +55,7 @@ type StartTarget =
       accountId?: undefined;
       phone?: undefined;
       geo?: undefined;
-      resumeDays?: undefined;
+      nextWave?: undefined;
     };
 
 // What the dialog hands back. `acceptGeo` is the consent to every mismatch it showed;
@@ -90,12 +90,10 @@ export function WarmDaysModal({
   onConfirm: (choice: StartDialogChoice) => void;
 }) {
   const pool = target.poolAccountIds !== undefined;
-  const resume = target.resumeDays !== undefined;
   const { t } = useTranslation();
   // The configured default is never cut down: a 45-day `warmed_min_days` would
-  // otherwise start a 30-day stint just because the operator pressed Start. A resume
-  // opens one day past what the stint already worked, so it does not finish at once.
-  const initialDays = Math.max(MIN, Math.round(defaultDays), (target.resumeDays ?? 0) + 1);
+  // otherwise start a 30-day stint just because the operator pressed Start.
+  const initialDays = Math.max(MIN, Math.round(defaultDays));
   const max = Math.max(MAX, initialDays);
   const [days, setDays] = useState(initialDays);
   const [persona, setPersona] = useState<ActivityPersona>(DEFAULT_PERSONA);
@@ -122,11 +120,7 @@ export function WarmDaysModal({
   const spamMutation = useMutation(spamCheckAccountMutation());
   const spamTipId = useId();
   const personaTipId = useId();
-  const title = pool
-    ? t('warming.pool.title')
-    : resume
-      ? t('warming.resume.title')
-      : t('warming.days.title');
+  const title = pool ? t('warming.pool.title') : t('warming.days.title');
   const dayCount = (n: number) => `${String(n)} ${t('warming.days.label', { count: n })}`;
 
   // Real @SpamBot probe against this account; the result is shown on the pill.
@@ -201,9 +195,12 @@ export function WarmDaysModal({
           <div className="mb-6 type-body text-content-muted">
             {target.poolAccountIds !== undefined
               ? t('warming.pool.subtitle', { count: target.poolAccountIds.length })
-              : resume
-                ? t('warming.resume.subtitle', { phone: target.phone, count: target.resumeDays })
-                : t('warming.days.subtitle', { phone: target.phone })}
+              : t('warming.days.subtitle', { phone: target.phone })}
+            {target.nextWave ? (
+              <div className="mt-1 text-info-strong">
+                {t('warming.rewarm.note', { wave: target.nextWave })}
+              </div>
+            ) : null}
             {target.poolSkipped ? (
               <div className="mt-1 text-warning-deep">
                 {t('warming.pool.skipped', { count: target.poolSkipped })}
@@ -357,11 +354,7 @@ export function WarmDaysModal({
                   confirm(false);
                 }}
               >
-                {pool
-                  ? t('warming.pool.start')
-                  : resume
-                    ? t('warming.resume.start')
-                    : t('warming.days.start')}
+                {pool ? t('warming.pool.start') : t('warming.days.start')}
               </Button>
               <Button onClick={close}>{t('warming.days.cancel')}</Button>
             </div>

@@ -1,8 +1,9 @@
 """Warming stop + graduation lifecycle — the "stop and beyond" paths.
 
 ``stop_warming`` / ``_stop_warming_locked`` cancel a running loop and return the
-account to idle; ``promote_to_neurocomment`` / ``unmark_neurocomment`` graduate
-an account into (or back out of) the neurocomment pool. Split from ``_runtime``
+account to idle; ``promote_to_neurocomment`` graduates an account into the
+neurocomment pool and ``handoff_to_neurocomment`` hands it over; ``keep_spam_blocked``
+is the operator's «Оставить» on a confirmed spam block. Split from ``_runtime``
 for the file-size budget; ``_runtime`` re-imports every name so call sites keep
 importing them from ``services.warming._runtime`` (and the package root).
 
@@ -20,16 +21,18 @@ from typing import TYPE_CHECKING
 
 from core.db import (
     fetch_account,
+    fetch_warming_state,
     mark_nc_handed_off,
     mark_promoted_to_nc,
-    unmark_promoted_to_nc,
 )
 from core.logging import log_event
 from core.repositories.warming_marks import store_nc_start
+from schemas.warming import is_warming
 from services.lifecycle_journal import record_lifecycle_event
-from services.warming import _handoff_spam, _runtime
+from services.warming import _handoff_spam, _runtime, _spam_block
 from services.warming._runtime import _account_lock
 from services.warming._state import _current_card, _set_state
+from services.warming._waves import record_wave_end
 from services.warming.pacing import _now_iso
 
 if TYPE_CHECKING:
@@ -37,6 +40,7 @@ if TYPE_CHECKING:
     from schemas.warming import (
         StopWarmingRequest,
         WarmingAccountState,
+        WarmingStateRecord,
     )
 
 
@@ -92,11 +96,35 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     a no-op for the DB — only the in-memory task is managed.
     """
     async with _account_lock(data.account_id):
+        before = await fetch_warming_state(data.account_id)
         with suppress(_runtime.WarmingTaskNotQuiescentError):
             await _stop_warming_locked(data.account_id)
+        await _settle_stopped_wave(before, await fetch_warming_state(data.account_id))
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
     await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable seam, reached via the module.
     return await _current_card(data.account_id)
+
+
+async def _settle_stopped_wave(
+    before: WarmingStateRecord | None,
+    after: WarmingStateRecord | None,
+) -> None:
+    """Journal the wave a Stop ended — or hand a spam block that raced it to the operator.
+
+    The operator ended a wave unreleased (an errored one included: the next start is a
+    new wave) only when the row really reached idle on the same stint. A spam-blocked
+    wave was journalled by the stop that blocked it; a block that landed while this Stop
+    cancelled the loop must still wait for the operator's call, not pass as kept.
+    """
+    if before is None or after is None or not is_warming(before.state):
+        return
+    if before.state == "spam_blocked":
+        return
+    if after.spam_blocked_at is not None and before.spam_blocked_at is None:
+        await _set_state(after.account_id, "spam_blocked", last_event="spam_blocked", current=after)
+        return
+    if after.state == "idle" and after.started_at == before.started_at:
+        await record_wave_end(before, "operator")
 
 
 async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
@@ -108,10 +136,15 @@ async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
     neurocomment warmed-account overview will pick it up on the next poll.
     """
     async with _account_lock(account_id):
+        before = await fetch_warming_state(account_id)
         await _stop_warming_locked(account_id)
         await mark_promoted_to_nc(account_id)
     await log_event("INFO", "warming_promoted_to_neurocomment", account_id=account_id)
-    await record_lifecycle_event(account_id, "promoted")
+    # The wave and its worked days ride the release, for the account's wave history.
+    extra: dict[str, object] = (
+        {"wave": before.wave, "worked_days": before.warmed_days} if before is not None else {}
+    )
+    await record_lifecycle_event(account_id, "promoted", extra)
     await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable seam, reached via the module.
     return await _current_card(account_id)
 
@@ -127,7 +160,7 @@ async def handoff_to_neurocomment(
     Requires a ``clean`` @SpamBot answer first (``_handoff_spam``): an unreadable one
     refuses, a ``limited`` one sends the account back into quarantine.
     The warming page hides the account, the neurocomment page starts counting
-    and offering it. ``unmark_neurocomment`` reverses both flags at once.
+    and offering it. A later start (or «Вернуть в прогрев») clears both flags at once.
     ``start_mode`` ``soft`` lowers its neurocomment caps for the first days
     (``services._soft_start``); the hand-off time starts that clock.
     """
@@ -143,13 +176,16 @@ async def handoff_to_neurocomment(
     return await _current_card(account_id)
 
 
-async def unmark_neurocomment(account_id: str) -> WarmingAccountState:
-    """Reverse a graduation: clear ``promoted_to_nc`` + ``nc_handed_off`` (un-promote button).
+async def keep_spam_blocked(account_id: str) -> WarmingAccountState:
+    """«Оставить»: keep a spam-blocked account — idle, its block remembered for good.
 
-    Held under the per-account lock for symmetry with ``promote_to_neurocomment``
-    so a concurrent re-promote / restart does not race the flip.
+    Raises ``NotSpamBlockedError`` (a ``ValueError``) for an account that never stopped
+    on a confirmed spam block, ``UnknownAccountError`` for one that does not exist.
     """
     async with _account_lock(account_id):
-        await unmark_promoted_to_nc(account_id)
-    await log_event("INFO", "warming_unpromoted_from_neurocomment", account_id=account_id)
+        if await fetch_account(account_id) is None:
+            msg = f"Unknown account: {account_id}"
+            raise _runtime.UnknownAccountError(msg)
+        await _spam_block.keep_spam_blocked(await fetch_warming_state(account_id), account_id)
+    await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable seam, reached via the module.
     return await _current_card(account_id)

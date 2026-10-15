@@ -19,16 +19,18 @@ from schemas.survival import AccountSurvival  # noqa: TC001 - pydantic resolves 
 NcStartMode = Literal["soft", "normal"]
 
 # Why inter-account DMs are (not) open for one card, first blocker wins:
-# chat switched off · no text-LLM key · fleet pause · readiness · warming too short ·
-# trust band or a post-quarantine block · open.
-DmStatus = Literal["on", "chat_off", "no_llm_key", "paused", "not_ready", "too_young", "trust"]
+# chat switched off · no text-LLM key · the account's own spam block (permanent) · fleet
+# pause · readiness · warming too short · trust band or a post-quarantine block · open.
+DmStatus = Literal[
+    "on", "chat_off", "no_llm_key", "spam_blocked", "paused", "not_ready", "too_young", "trust"
+]
 
 # The one problem a card names, most urgent first; the SPA translates the code.
 AttentionCode = Literal[
+    "spam_blocked",
     "quarantine",
     "flood_wait",
     "stopping",
-    "quarantine_exhausted",
     "quarantine_unreadable",
     "not_ready",
     "error",
@@ -49,7 +51,7 @@ class WarmingAttention(BaseModel):
 
 
 class WarmingStateMarks(BaseModel):
-    """Row columns written outside the main upsert (migrations 82-84)."""
+    """Row columns written outside the main upsert (migrations 82-84, 94)."""
 
     # Geo consent as "PHONE>PROXY" ("MX>US"): it covers only that pair, so a new proxy
     # country asks again without anything having to clear it.
@@ -62,6 +64,14 @@ class WarmingStateMarks(BaseModel):
     # The visit the booked cycle runs and its step order (4.4, migration 87).
     visit_kind: VisitKind | None = None
     cycle_plan: list[VisitStep] = Field(default_factory=list)
+    # The account's warming wave (migration 94): 1 for its first stint, +1 for every
+    # fresh stint of the same account life («Вернуть в прогрев» included). A deletion
+    # takes the row with it, so a re-imported account starts again at 1.
+    wave: int = Field(default=1, ge=1)
+    # When @SpamBot confirmed a spam block on the quarantine re-check. Permanent for the
+    # account life: DMs stay shut, ``limited`` no longer quarantines or refuses, and the
+    # card wears a «Спамблок» badge after the operator chose to keep the account.
+    spam_blocked_at: str | None = None
 
 
 class WarmingTodayActions(BaseModel):
@@ -89,6 +99,9 @@ class WarmingCardConsole(BaseModel):
     cycle_plan: list[VisitStep] = Field(default_factory=list)
     # Today's breakdown from the daily totals; ``None`` when the day has no row yet.
     today: WarmingTodayActions | None = None
+    # The stint's wave (the card names it from wave 2 on) and the permanent spam-block mark.
+    wave: int = Field(default=1, ge=1)
+    spam_blocked_at: str | None = None
 
 
 class SoftStartProgress(BaseModel):

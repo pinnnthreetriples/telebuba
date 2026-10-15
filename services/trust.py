@@ -24,6 +24,7 @@ from core.repositories.warming_floods import (
     fetch_warming_flood_summary,
 )
 from schemas.trust import TrustBand, TrustScore, TrustSignals
+from schemas.warming import spam_block_known
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -76,13 +77,17 @@ def compute_trust_score(signals: TrustSignals, now: datetime | None = None) -> T
     if signals.account_status != "alive":
         score -= trust.penalty_not_alive
         reasons.append(f"status {signals.account_status}")
-    if signals.spam_status == "limited":
+    # A known, kept spam block is scored once already — by shutting DMs for good — so
+    # neither its "limited" nor the quarantine re-check that confirmed it docks the score
+    # again; otherwise every kept account sank to "critical" and could never warm again.
+    known = signals.spam_block_known
+    if signals.spam_status == "limited" and not known:
         score -= trust.penalty_spam_limited
         reasons.append("spam-limited")
     # "unknown" deliberately does NOT dock the score: it means "not probed yet"
     # rather than "risky". Operators see it in the spam badge and can refresh
     # from the card; no need to mix a missing-data marker into the verdict.
-    if signals.quarantine_count > 0:
+    if signals.quarantine_count > 0 and not known:
         score -= trust.penalty_quarantine_each * signals.quarantine_count
         reasons.append(f"quarantined x{signals.quarantine_count}")
     if signals.flood_active:
@@ -186,6 +191,7 @@ def account_trust_score_from(  # noqa: PLR0913 - already-loaded signals, one per
             age_hours=_age_hours(account.created_at, now),
             flood_total=floods.flood_total if floods else 0,
             last_flood_at=floods.last_flood_at if floods else None,
+            spam_block_known=spam_block_known(record),
         ),
         now,
     )

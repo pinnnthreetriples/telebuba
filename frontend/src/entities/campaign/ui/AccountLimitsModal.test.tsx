@@ -165,3 +165,40 @@ test('an untouched cap stored above the ceiling is clamped, not echoed into a 42
     expect(body.max_comments_per_hour).toBe(5);
   });
 });
+
+test('a soft start shows the enforced cap while the box keeps the account own number', async () => {
+  const soft = {
+    ...VIEW,
+    comments_per_hour: {
+      limit: 2,
+      used: 1,
+      fleet_default: 10,
+      overridden: true,
+      override: 30,
+      soft_cap: 2,
+      resets_at: null,
+    },
+  };
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(
+      new Response(JSON.stringify(soft), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  );
+  const onClose = vi.fn();
+  renderWithClient(<AccountLimitsModal accountId="a1" name="Polina" onClose={onClose} />);
+
+  expect(await screen.findByText('1 / 2')).toBeInTheDocument();
+  expect(screen.getByLabelText('Комментарии в час')).toHaveValue(30);
+  expect(screen.getByText(/Мягкий старт: пока он идёт, не больше 2/)).toBeInTheDocument();
+
+  // Saving an unrelated edit must not store the soft cap as the account's own number.
+  await userEvent.type(screen.getByLabelText('Вступления в каналы'), '7');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+  expect((await putBody()).max_comments_per_hour).toBe(30);
+});

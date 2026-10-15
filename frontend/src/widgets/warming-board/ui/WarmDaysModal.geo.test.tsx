@@ -100,22 +100,22 @@ test('a pool where nothing matches cannot start only the matching ones', () => {
   expect(screen.getByRole('button', { name: 'Только совпадающие' })).toBeDisabled();
 });
 
-test('a resume keeps the worked days and opens one day past them', async () => {
+test('«Вернуть в прогрев» is the start dialog itself, naming the wave it opens', async () => {
   const onConfirm = vi.fn();
   renderWithClient(
     <WarmDaysModal
       accountId="a1"
       phone="+79991234567"
-      resumeDays={20}
+      nextWave={2}
       defaultDays={14}
       onClose={vi.fn()}
       onConfirm={onConfirm}
     />,
   );
 
-  expect(
-    screen.getByText('+79991234567 · отработано дней: 20, счёт продолжится'),
-  ).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Продолжить прогрев' }));
-  expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ days: 21, acceptGeo: false }));
+  expect(screen.getByRole('dialog', { name: 'Прогрев аккаунта' })).toBeInTheDocument();
+  expect(screen.getByText('Волна 2: прогрев начнётся с нуля')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Запустить прогрев' }));
+  // The default length, not one past worked days: the new wave counts from zero.
+  expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ days: 14, acceptGeo: false }));
 });

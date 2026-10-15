@@ -35,6 +35,7 @@ from schemas.warming import (
     WarmingState,
     WarmingSummary,
     is_warming,
+    spam_block_known,
     warming_health,
 )
 from services.survival import load_account_survivals
@@ -42,6 +43,7 @@ from services.trust import account_trust_score_from
 from services.warming._cadence import cadence_preview
 from services.warming._channel_language import language_shortages
 from services.warming._console import (
+    account_dm_status,
     account_geo,
     attention,
     dm_status,
@@ -193,7 +195,13 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             now=now,
             floods=floods,
         )
-        readiness = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
+        readiness = evaluate_readiness(
+            account,
+            channel_count,
+            spam=spam,
+            trust_score=trust,
+            spam_block_known=spam_block_known(record),
+        )
         card = _to_card(
             account, record, readiness=readiness, survival=survivals.get(account.account_id)
         )
@@ -220,6 +228,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         # while the engine still sends.
         card.dm_allowed = (
             intensity.dm_allowed
+            and not spam_block_known(record)
             and (readiness.ready or not masked.enforce_readiness)
             and masked.dm_paused_until is None
         )
@@ -238,8 +247,11 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.geo_accepted = geo_accepted(geo, record)
         card.daily_settled = settled_today(record)
         card.today = today_actions(record, daily_rows)
-        card.dm_status = dm_status(
-            masked, intensity, readiness, card.started_at, now, account.telegram_registered_at
+        card.dm_status = account_dm_status(
+            dm_status(
+                masked, intensity, readiness, card.started_at, now, account.telegram_registered_at
+            ),
+            spam_blocked=spam_block_known(record),
         )
         card.attention = attention(record, readiness)
         cards.append(card)
@@ -277,6 +289,9 @@ def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[
             geo_accepted=card.geo_accepted,
             survival=card.survival,
             devices=card.devices,
+            wave=card.wave,
+            started_at=card.started_at,
+            spam_blocked_at=card.spam_blocked_at,
         )
         for card in cards
         if card.promoted_to_nc
@@ -341,7 +356,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
 
 _TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})
 _TRUST_RISK_BANDS: Final = frozenset({"at_risk", "critical"})
-_ATTENTION_STATES: Final = frozenset({"flood_wait", "quarantine", "error"})
+_ATTENTION_STATES: Final = frozenset({"flood_wait", "quarantine", "error", "spam_blocked"})
 
 
 def _build_summary(cards: list[WarmingAccountState]) -> WarmingSummary:
