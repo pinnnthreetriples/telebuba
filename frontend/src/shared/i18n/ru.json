@@ -3159,7 +3159,65 @@
       "floodTotal": "Флудов всего: {{total}}",
       "dmBlockedUntil": "ЛС закрыты до {{date}}",
       "limitShare": "лимит {{percent}}",
-      "mediaBytes": "скачано {{kb}} КБ"
+      "mediaBytes": "скачано {{kb}} КБ",
+      "daysOf_one": "из {{target}} дня",
+      "daysOf_few": "из {{target}} дней",
+      "daysOf_many": "из {{target}} дней",
+      "idleShort_one": "{{count}} день не засчитан",
+      "idleShort_few": "{{count}} дня не засчитаны",
+      "idleShort_many": "{{count}} дней не засчитаны",
+      "todayTitle": "Сегодня",
+      "step": {
+        "set_online": "в сети",
+        "stories": "истории",
+        "join": "вступление",
+        "read": "чтение",
+        "react": "реакции",
+        "extras": "мелочи",
+        "send_dm": "личка"
+      },
+      "liveNow": "в сети сейчас",
+      "phaseOf": "Фаза {{at}} из {{total}}",
+      "phaseNext": "дальше",
+      "inDays": "через {{days}} дн.",
+      "todayBooked_one": "ещё {{count}} делается прямо сейчас",
+      "todayBooked_few": "ещё {{count}} делаются прямо сейчас",
+      "todayBooked_many": "ещё {{count}} делаются прямо сейчас",
+      "fact": {
+        "visit": "Заход",
+        "dm": "ЛС",
+        "spam": "@SpamBot",
+        "persona": "Персона"
+      },
+      "inTime": "через {{time}}",
+      "on": "включены",
+      "off": "выключены",
+      "spam": {
+        "clean": "чисто",
+        "limited": "спамблок",
+        "unknown": "не проверялся"
+      },
+      "doing": {
+        "set_online": "Выходит в сеть",
+        "stories": "Смотрит истории",
+        "join": "Вступает в канал",
+        "read": "Читает каналы",
+        "react": "Ставит реакции",
+        "extras": "Листает приложение",
+        "send_dm": "Пишет в личку"
+      },
+      "stepOf": "шаг {{at}} из {{total}}",
+      "kind": {
+        "reads": "Чтение",
+        "reactions": "Реакции",
+        "joins": "Вступления",
+        "dms": "Личные сообщения"
+      },
+      "todayUnit_one": "действие",
+      "todayUnit_few": "действия",
+      "todayUnit_many": "действий",
+      "stepDone": "было: {{step}}",
+      "stepNext": "дальше: {{step}}"
     },
     "actions": {
       "stopShort": "Стоп"

@@ -71,6 +71,19 @@ async def list_warming_daily_stats(account_id: str, since_day: str) -> list[Warm
     return await asyncio.to_thread(_list_warming_daily_stats, account_id, since_day)
 
 
+def _list_fleet_warming_daily_stats(since_day: str) -> list[WarmingDailyStats]:
+    table = _warming_daily_stats
+    statement = select(table).where(table.c.day >= since_day)
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_daily_stats(cast("Mapping[str, object]", row)) for row in rows]
+
+
+async def list_fleet_warming_daily_stats(since_day: str) -> list[WarmingDailyStats]:
+    """Every account's rows from ``since_day`` (inclusive), in one read for the board."""
+    return await asyncio.to_thread(_list_fleet_warming_daily_stats, since_day)
+
+
 def _sum_warming_daily_stats_by_day(since_day: str) -> list[FleetDailyStats]:
     table = _warming_daily_stats
     sums = [func.sum(table.c[name]).label(name) for name in _COUNTERS]

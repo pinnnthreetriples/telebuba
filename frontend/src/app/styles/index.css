@@ -288,6 +288,159 @@
   .tb-ovfade {
     animation: ovfade --theme(--transition-duration-enter) --theme(--ease-out);
   }
+  /* Warming card (redesign): the dials fill on arrival instead of popping in. Each
+   keyframe names only its FROM, so it animates to whatever the element already says —
+   the ring to its own dash offset, the track to its own width, the knob to its own
+   `left` — and one keyframe serves every card without a per-card length. */
+  @keyframes ringdraw {
+    from {
+      stroke-dashoffset: 100;
+    }
+  }
+  @keyframes tickon {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes dotpop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+  }
+  @keyframes trackgrow {
+    from {
+      width: 0;
+    }
+  }
+  @keyframes knobslide {
+    from {
+      left: 0;
+    }
+  }
+  .tb-ring {
+    animation: ringdraw --theme(--transition-duration-roll) --theme(--ease-out) both;
+  }
+  .tb-tick {
+    animation: tickon --theme(--transition-duration-swap) --theme(--ease-out) both;
+  }
+  .tb-dot {
+    animation: dotpop --theme(--transition-duration-swap) --theme(--ease-spring) both;
+  }
+  .tb-grow {
+    animation: trackgrow --theme(--transition-duration-roll) --theme(--ease-out) both;
+  }
+  .tb-slide {
+    animation: knobslide --theme(--transition-duration-roll) --theme(--ease-out) both;
+  }
+  /* The warming path: pale first contact, the app's blue through the middle, green once
+   warmed — the same three meanings the card's dials use, laid end to end. */
+  .tb-phase-gradient {
+    background-image: linear-gradient(
+      to right,
+      --theme(--color-info-line),
+      --theme(--color-action-primary),
+      --theme(--color-success)
+    );
+  }
+  /* The live visit card. Its colour IS the step the account is on — reading is the
+   app's blue, reacting amber, joining green, stories coral, writing a DM deep blue,
+   going online and the small things dark — so a glance at the board says what every
+   account is doing right now. The glow drifts slowly behind the content; the colours
+   are the palette's own, mixed, never new ones. */
+  .tb-visit {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: --theme(--color-on-fill);
+    background: linear-gradient(135deg, var(--visit-a), var(--visit-b));
+  }
+  .tb-visit::before {
+    content: '';
+    position: absolute;
+    inset: -40%;
+    z-index: -1;
+    background: radial-gradient(
+      circle at 65% 35%,
+      color-mix(in srgb, var(--visit-glow) 75%, transparent),
+      transparent 45%
+    );
+    animation: visitglow --theme(--transition-duration-roll) --theme(--ease-breathe) infinite
+      alternate;
+    animation-duration: calc(--theme(--transition-duration-roll) * 5);
+  }
+  @keyframes visitglow {
+    from {
+      transform: translate(-8%, 4%) scale(0.95);
+      opacity: 0.75;
+    }
+    to {
+      transform: translate(8%, -4%) scale(1.08);
+      opacity: 1;
+    }
+  }
+  .tb-visit[data-tone='read'] {
+    --visit-a: --theme(--color-info-strong);
+    --visit-b: --theme(--color-action-primary);
+    --visit-glow: --theme(--color-term-link);
+  }
+  .tb-visit[data-tone='react'] {
+    --visit-a: --theme(--color-warning-deep);
+    --visit-b: --theme(--color-warning-press);
+    --visit-glow: --theme(--color-term-warning);
+  }
+  .tb-visit[data-tone='join'] {
+    --visit-a: --theme(--color-success-press);
+    --visit-b: --theme(--color-success);
+    --visit-glow: --theme(--color-term-success);
+  }
+  .tb-visit[data-tone='stories'] {
+    --visit-a: --theme(--color-danger-deep);
+    --visit-b: --theme(--color-danger);
+    --visit-glow: --theme(--color-term-error);
+  }
+  .tb-visit[data-tone='dm'] {
+    --visit-a: --theme(--color-term);
+    --visit-b: --theme(--color-info-strong);
+    --visit-glow: --theme(--color-term-link);
+  }
+  .tb-visit[data-tone='calm'] {
+    --visit-a: --theme(--color-term);
+    --visit-b: --theme(--color-term-thumb);
+    --visit-glow: --theme(--color-term-dim);
+  }
+  /* Secondary words on the coloured card: the white, quieter. */
+  .tb-visit-sub {
+    color: color-mix(in srgb, --theme(--color-on-fill) 72%, transparent);
+  }
+  .tb-visit-dim {
+    color: color-mix(in srgb, --theme(--color-on-fill) 45%, transparent);
+  }
+  /* The glass track at the bottom of the visit card and its glowing fill. */
+  .tb-glass {
+    background: color-mix(in srgb, --theme(--color-on-fill) 16%, transparent);
+    border-color: color-mix(in srgb, --theme(--color-on-fill) 35%, transparent);
+  }
+  .tb-glass-fill {
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in srgb, --theme(--color-on-fill) 12%, transparent),
+      color-mix(in srgb, --theme(--color-on-fill) 55%, transparent),
+      color-mix(in srgb, --theme(--color-on-fill) 12%, transparent)
+    );
+    background-size: 200% 100%;
+    animation:
+      trackgrow --theme(--transition-duration-roll) --theme(--ease-out) both,
+      shimmer calc(--theme(--transition-duration-roll) * 2) --theme(--ease-linear) infinite;
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
   /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */
   .tb-typing-dot {

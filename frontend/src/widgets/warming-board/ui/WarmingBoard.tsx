@@ -9,20 +9,14 @@ import { SurvivalBadge } from '@/entities/warming';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import {
-  Badge,
-  Button,
-  Card,
-  CardHeader,
-  FeedbackMark,
-  Icon,
-  ProgressBar,
-  TerminalPane,
-} from '@/shared/ui';
+import { Badge, Button, Card, CardHeader, FeedbackMark, Icon, TerminalPane } from '@/shared/ui';
 
+import { CardChips } from './card/CardChips';
+import { PhaseTrack } from './card/PhaseTrack';
+import { TodayBlock } from './card/TodayBlock';
+import { VisitSteps } from './card/VisitSteps';
 import { FloodMemoryLine } from './FloodMemoryLine';
-import { AttentionRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
-import { WarmDayCount } from './WarmDayCount';
+import { AttentionRow } from './WarmingCardRows';
 import { WarmStopModal } from './WarmStopModal';
 
 interface WarmingBoardProps {
@@ -44,7 +38,6 @@ interface WarmingBoardProps {
 
 type WarmingState = WarmingAccountState['state'];
 
-const DAY_SEGMENTS = 42;
 // The target a card falls back to when the board has not answered yet.
 const TWO_WEEK_DAYS = 14;
 
@@ -182,15 +175,19 @@ function WarmingCard({
   const primaryId = accountDisplayName(account);
 
   return (
-    <div className="rounded-md border border-info-line bg-info-tint px-6 py-4">
+    <div className="tb-arrive flex flex-col gap-4 rounded-lg border border-line bg-surface-card p-4 shadow-ring">
       {/* header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <AccountAvatar
-            account={account}
-            className="size-icon shrink-0 rounded-full"
-            fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
-          />
+          {/* A live visit glows around the face: the one place on the card that says
+              "this account is in Telegram right now" before any word is read. */}
+          <span className={`shrink-0 rounded-full ${account.state === 'active' ? 'pl-pulse' : ''}`}>
+            <AccountAvatar
+              account={account}
+              className="size-thumbnail shrink-0 rounded-full"
+              fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
+            />
+          </span>
           <div className="min-w-0">
             {/* Telegram supplies this name, so it can be one 90-char word with nowhere
                 to break: measured, it painted straight out through the card's right
@@ -236,7 +233,11 @@ function WarmingCard({
         </div>
       </div>
 
-      <PhaseRow account={account} />
+      {/* The headline: what today was made of, and how far the stint is. */}
+      <TodayBlock account={account} days={days} target={target} idle={account.idle_days ?? 0} />
+      <VisitSteps account={account} />
+      <PhaseTrack account={account} />
+      <CardChips account={account} />
       <FloodMemoryLine account={account} />
 
       {stopOpen ? (
@@ -253,35 +254,13 @@ function WarmingCard({
           }}
         />
       ) : null}
-      {/* pipeline */}
-      {/* The hairline, not a bare fill: this panel is the one place the two pale
-          blues used to meet, and with them collapsed it would paint its parent's
-          colour and have no edge at all. `primary-hairline` is the rung for exactly
-          this — faint enough to double as a divider fill. */}
-      <div className="rounded-md border border-info-hairline bg-info-tint px-4 pb-3 pt-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="type-small-medium">{t('warming.inProgress.days')}</span>
-          <WarmDayCount days={days} target={target} idle={account.idle_days ?? 0} />
-        </div>
-
-        {/* day bar: days done, the day in progress, days to come */}
-        <ProgressBar
-          segments={DAY_SEGMENTS}
-          value={days}
-          max={target}
-          label={t('warming.inProgress.days')}
-        />
-      </div>
-
-      {!complete ? <TodayRow account={account} /> : null}
-      <VisitRow account={account} />
       <AttentionRow account={account} />
 
       {/* The backend decides when @SpamBot has been silent long enough to say so. */}
       {account.spam_check_warning ? (
         <div
           role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
+          className="flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
         >
           <Icon name="alert-triangle" size={14} className="shrink-0" />
           {t('warming.card.spamUnknown')}
@@ -296,7 +275,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-3 flex w-full items-center justify-center gap-1 border-t border-canvas pt-3 text-small text-content-muted"
+            className="flex w-full items-center justify-center gap-1 border-t border-canvas pt-3 text-small text-content-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -372,7 +351,7 @@ function WarmingCard({
       ) : (
         <>
           {/* complete */}
-          <div className="mt-3 flex items-center gap-3 rounded-md border border-success-line bg-success-tint px-3 py-3">
+          <div className="flex items-center gap-3 rounded-md border border-success-line bg-success-tint px-3 py-3">
             <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
               <Icon name="check" size={14} className="stroke-on-fill" />
             </span>
@@ -393,7 +372,7 @@ function WarmingCard({
               </div>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <FeedbackMark result={result} />
             <Button
               variant="primary"

@@ -7591,6 +7591,7 @@ export type WarmingAccountState = {
    * Cycle Plan
    */
   cycle_plan?: Array<'set_online' | 'join' | 'read' | 'react' | 'stories' | 'send_dm' | 'extras'>;
+  today?: WarmingTodayActions | null;
   /**
    * Account Id
    */
@@ -8257,6 +8258,30 @@ export type WarmingSummary = {
    * Trust Risk
    */
   trust_risk?: number;
+};
+
+/**
+ * WarmingTodayActions
+ *
+ * What today's settled cycles did, by kind — the card's dot columns.
+ */
+export type WarmingTodayActions = {
+  /**
+   * Reads
+   */
+  reads?: number;
+  /**
+   * Reactions
+   */
+  reactions?: number;
+  /**
+   * Joins
+   */
+  joins?: number;
+  /**
+   * Dms
+   */
+  dms?: number;
 };
 
 /**

@@ -140,7 +140,7 @@ export function AttentionRow({ account }: { account: WarmingAccountState }) {
   const text = attentionText(t, account);
   if (!text) return null;
   return (
-    <div className="mt-3">
+    <div>
       <Notice tone="warning" role="status" className="flex items-center gap-2 py-2 type-small">
         <Icon name="alert-triangle" size={14} className="shrink-0" />
         {text}
