@@ -150,6 +150,7 @@ test('a click opens the panel with counters, rows, cohorts, causes and history',
 
 test('a death found later names both the day it died and the day it was found', async () => {
   const [first, ...rest] = REPORT.lives ?? [];
+  if (first === undefined) throw new Error('the fixture has a dead life first');
   routeSurvival({ week: { ...REPORT, lives: [{ ...first, found_day: 22 }, ...rest] } });
   renderWithClient(<TileAndPanel />);
 
