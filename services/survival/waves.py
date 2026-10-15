@@ -14,7 +14,7 @@ from core.repositories.lifecycle import list_lifecycle_events
 from core.repositories.warming import fetch_warming_state
 from schemas._warming_waves import WarmingWave, WarmingWaveList
 from services.lifecycle_journal import current_life
-from services.survival._stints import build_life
+from services.survival._stints import build_life, parse_moment
 
 if TYPE_CHECKING:
     from schemas._warming_waves import WaveEndReason
@@ -50,10 +50,13 @@ def _end(event: LifecycleEvent) -> tuple[WaveEndReason, int | None] | None:
 
 def _ended_at(event: LifecycleEvent) -> str:
     """A death ends its wave when it was first shown, not when a check found it."""
-    evidence = event.extra.get("evidence_at")
-    if event.kind == "session_dead" and isinstance(evidence, str):
-        return min(evidence, event.created_at)
-    return event.created_at
+    raw = event.extra.get("evidence_at")
+    if event.kind != "session_dead" or not isinstance(raw, str):
+        return event.created_at
+    evidence, found = parse_moment(raw), parse_moment(event.created_at)
+    if evidence is None or found is None or evidence >= found:
+        return event.created_at
+    return raw
 
 
 def _wave(wave: Stint, following: Stint | None, record: WarmingStateRecord | None) -> WarmingWave:
