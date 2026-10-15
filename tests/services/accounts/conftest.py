@@ -138,6 +138,22 @@ def avatar_refresh_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return calls
 
 
+@pytest.fixture(autouse=True)
+def typing_shows(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, float, float]]:
+    """Stub the bulk run's "typing…", which is on by default.
+
+    It would call the patched gateway and sleep for real. Tests that care read the
+    recorded ``(account, peer, min, max)``.
+    """
+    shows: list[tuple[str, str, float, float]] = []
+
+    async def _record(account_id: str, peer: str, low: float, high: float) -> None:
+        shows.append((account_id, peer, low, high))
+
+    monkeypatch.setattr(bulk_messages, "_show_typing", _record)
+    return shows
+
+
 @pytest.fixture
 def empty_bulk_jobs() -> Iterator[None]:
     """Live bulk runs are tracked in module-level dicts; start and end each test empty."""

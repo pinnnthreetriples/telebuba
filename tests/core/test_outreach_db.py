@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import update
 
+from core._schema_outreach import _outreach_limits
+from core.db import _get_engine
 from core.repositories.outreach import (
     PresetNameTakenError,
     add_outreach_usage,
@@ -18,6 +21,7 @@ from core.repositories.outreach import (
 )
 from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits, OutreachLimitsUpdate
 from schemas.outreach_presets import OutreachPresetWrite
+from schemas.outreach_protection import OutreachProtection
 from schemas.run_schedule import RunSchedule
 
 
@@ -163,3 +167,15 @@ async def test_the_default_run_schedule_is_saved_with_the_limits() -> None:
         3,
     )
     assert schedule.operator_timezone == "Europe/Moscow"
+
+
+@pytest.mark.asyncio
+async def test_a_row_saved_before_protection_existed_loads_the_protection_defaults() -> None:
+    await save_outreach_limits(
+        OutreachLimitsUpdate(protection=OutreachProtection(typing=False, rest_hours=3))
+    )
+    assert (await load_outreach_limits()).protection.rest_hours == 3
+    with _get_engine().begin() as connection:
+        connection.execute(update(_outreach_limits).values(protection_json=None))
+
+    assert (await load_outreach_limits()).protection == OutreachProtection()

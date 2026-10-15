@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from core.repositories import outreach
 from schemas.outreach_limits import OutreachUsageList
 from schemas.outreach_presets import MAX_PRESETS, OutreachPresetList
+from services.accounts._outreach_protection import skipped_accounts, young_account_ids
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,10 +32,22 @@ async def save_outreach_limits(data: OutreachLimitsUpdate) -> OutreachLimits:
 
 
 async def list_outreach_usage_today(account_ids: Sequence[str]) -> OutreachUsageList:
-    """What each account already spent today (UTC), for the "left today" chips."""
-    day = datetime.now(UTC).date().isoformat()
-    usage = await outreach.list_outreach_usage(list(dict.fromkeys(account_ids)), day)
-    return OutreachUsageList(day=day, items=list(usage.values()))
+    """What each account already spent today (UTC), for the "left today" chips.
+
+    Also which of them the saved protection makes young (half caps) and which a run
+    starting now would leave out, so the chips can say so before the run starts.
+    """
+    now = datetime.now(UTC)
+    day = now.date().isoformat()
+    ids = list(dict.fromkeys(account_ids))
+    usage = await outreach.list_outreach_usage(ids, day)
+    protection = (await outreach.load_outreach_limits()).protection
+    return OutreachUsageList(
+        day=day,
+        items=list(usage.values()),
+        young_account_ids=sorted(await young_account_ids(ids, protection, now)),
+        skipped_accounts=await skipped_accounts(ids, protection, now),
+    )
 
 
 async def list_outreach_presets() -> OutreachPresetList:

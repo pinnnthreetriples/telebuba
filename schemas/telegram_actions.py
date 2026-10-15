@@ -62,11 +62,8 @@ from schemas.telegram_actions_chat import (
 # ``PostMediaKind`` went with it, being a classification of what a comment could use.
 from schemas.telegram_actions_comments import CommentOnPost, ReadPostComments
 
-# The contact-lookup read (phone -> Telegram user, via ``contacts.ImportContacts``)
-# is a sibling module too; the read union below references the action, so importing
-# it here keeps ``from schemas.telegram_actions import LookupContactsByPhone`` working.
-# Its result models stay in that module (like the discovery matches), read straight
-# from there by the dispatcher.
+# The contact-lookup read (phone -> Telegram user, via ``contacts.ImportContacts``) and
+# the outreach writes are siblings too; their result models stay in their modules.
 from schemas.telegram_actions_contacts import LookupContactsByPhone
 
 # The channel-discovery read cluster likewise lives in a sibling module; the read
@@ -96,6 +93,7 @@ from schemas.telegram_actions_media import (
     ToggleStoryPinned,
     WatchPeerStories,
 )
+from schemas.telegram_actions_outreach import OutreachSetTyping
 from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
 from schemas.telegram_actions_rights import CheckWriteRights
 from schemas.telegram_actions_twofa import (
@@ -398,7 +396,8 @@ TelegramAction = Annotated[
     | BroadcastSendMessage
     | BroadcastForwardPost
     | BroadcastJoinChatlist
-    | MasstagToggleTtl,
+    | MasstagToggleTtl
+    | OutreachSetTyping,
     Field(discriminator="action_type"),
 ]
 

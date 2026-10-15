@@ -11,7 +11,7 @@ import {
   outreachPresetsQueryOptions,
   updateOutreachPresetMutation,
 } from '@/entities/account';
-import type { OutreachDailyUsage, OutreachPreset } from '@/shared/api';
+import type { OutreachDailyUsage, OutreachPreset, SkippedAccount } from '@/shared/api';
 import {
   Button,
   CollapsibleCard,
@@ -33,6 +33,7 @@ import {
   type Zone,
   zoneOf,
 } from '../model/pacing';
+import { youngCap } from '../model/protection';
 
 const HINT: Record<Zone, string> = {
   ok: 'text-success-deep',
@@ -237,8 +238,8 @@ function Presets({
 }
 
 // The "pace and limits" block: presets, one slider per value with a zone-coloured hint,
-// how much each selected account has left today, the caller's forecast, and an
-// "Advanced" section for anything finer.
+// how much each selected account has left today (half the cap for a young one, or why
+// the run will leave it out), the caller's forecast, and an "Advanced" section.
 export function PacingBlock({
   keys,
   values,
@@ -247,6 +248,8 @@ export function PacingBlock({
   accountIds,
   usage,
   leftKind,
+  young = new Set<string>(),
+  skipped = new Map<string, SkippedAccount>(),
   forecast,
   advanced,
 }: {
@@ -258,6 +261,9 @@ export function PacingBlock({
   usage: Map<string, OutreachDailyUsage>;
   // Which daily cap the "left today" chips count down.
   leftKind: 'messages' | 'contacts';
+  // Accounts whose caps are halved, and accounts the run would leave out.
+  young?: ReadonlySet<string>;
+  skipped?: ReadonlyMap<string, SkippedAccount>;
   forecast?: ReactNode;
   advanced?: ReactNode;
 }) {
@@ -309,17 +315,27 @@ export function PacingBlock({
             {accountIds.map((id) => {
               const used = usage.get(id);
               const spent = leftKind === 'messages' ? used?.first_messages : used?.contact_imports;
-              const left = Math.max(cap - (spent ?? 0), 0);
+              const isYoung = young.has(id);
+              const accountCap = isYoung ? youngCap(cap) : cap;
+              const left = Math.max(accountCap - (spent ?? 0), 0);
+              const name = accountDisplayName(byId.get(id) ?? { account_id: id });
+              const leftOut = skipped.get(id);
               return (
                 <li
                   key={id}
-                  className={`rounded-full px-3 py-1 type-small tabular-nums ${left === 0 ? 'bg-danger-tint text-danger-deep' : 'bg-canvas'}`}
+                  className={`rounded-full px-3 py-1 type-small tabular-nums ${left === 0 || leftOut ? 'bg-danger-tint text-danger-deep' : 'bg-canvas'}`}
                 >
-                  {t('accounts.messages.pacing.leftChip', {
-                    name: accountDisplayName(byId.get(id) ?? { account_id: id }),
-                    left,
-                    cap,
-                  })}
+                  {leftOut
+                    ? t('accounts.messages.pacing.leftChipSkipped', {
+                        name,
+                        reason: t(`accounts.messages.code.${leftOut.reason}`),
+                      })
+                    : t(
+                        isYoung
+                          ? 'accounts.messages.pacing.leftChipYoung'
+                          : 'accounts.messages.pacing.leftChip',
+                        { name, left, cap: accountCap },
+                      )}
                 </li>
               );
             })}

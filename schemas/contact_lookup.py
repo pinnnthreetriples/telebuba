@@ -18,6 +18,7 @@ from schemas.outreach_limits import (
     MAX_LOOKUP_BATCH,
     MAX_PAUSE_SECONDS,
 )
+from schemas.outreach_protection import OutreachProtection, SkippedAccount  # noqa: TC001
 
 MAX_PHONES = 1000
 MAX_LOOKUP_ACCOUNTS = 20
@@ -34,6 +35,8 @@ class ContactLookupRequest(BaseModel):
     daily_cap: int | None = Field(default=None, ge=1, le=MAX_CONTACT_IMPORTS_PER_DAY)
     min_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
     max_delay_seconds: float | None = Field(default=None, ge=0, le=MAX_PAUSE_SECONDS)
+    # Account protection for this run; left out, the saved defaults.
+    protection: OutreachProtection | None = None
 
     @model_validator(mode="after")
     def validate_batch(self) -> ContactLookupRequest:
@@ -82,3 +85,5 @@ class ContactLookupJob(BaseModel):
     total: int
     completed: int
     results: list[ContactLookupOutcome]
+    # Accounts the run left out before checking anything, and why.
+    skipped_accounts: list[SkippedAccount] = Field(default_factory=list)

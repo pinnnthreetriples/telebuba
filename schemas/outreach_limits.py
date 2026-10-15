@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from schemas.outreach_protection import OutreachProtection, SkippedAccount
 from schemas.run_schedule import RunSchedule
 
 # Both run forms and these settings share one ceiling for a pause between calls.
@@ -36,6 +37,8 @@ class OutreachLimitsUpdate(BaseModel):
     bulk_max_delay_seconds: float = Field(default=180, ge=0, le=MAX_PAUSE_SECONDS)
     # Default sending window and spreading of a bulk-message run.
     schedule: RunSchedule = Field(default_factory=RunSchedule)
+    # Young-account caps, rest after a limit, skipping injured accounts, typing.
+    protection: OutreachProtection = Field(default_factory=OutreachProtection)
 
     @model_validator(mode="after")
     def validate_pauses(self) -> OutreachLimitsUpdate:
@@ -68,3 +71,7 @@ class OutreachUsageList(BaseModel):
 
     day: str
     items: list[OutreachDailyUsage]
+    # Accounts young enough for half caps under the saved protection settings.
+    young_account_ids: list[str] = Field(default_factory=list)
+    # Accounts a run would leave out right now (resting, spam block, recent flood).
+    skipped_accounts: list[SkippedAccount] = Field(default_factory=list)
