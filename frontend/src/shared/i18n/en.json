@@ -548,7 +548,8 @@
         "premium_wait": "temporarily limited by Telegram",
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
-        "failed": "Telegram rejected the message"
+        "failed": "Telegram rejected the message",
+        "account_busy": "another module is using the account (warming, a campaign or a channel search), so it sent nothing in this run"
       },
       "pacing": {
         "title": "Pace and limits",
@@ -1234,7 +1235,9 @@
       "caption_too_long": "A photo caption is over 1024 characters — Telegram will not send it. Shorten the text or remove the photo.",
       "collection_name_taken": "A category with this name already exists. Pick another name.",
       "account_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign, then start warming.",
+      "account_busy_bulk_messages": "A bulk message run is sending from this account right now. Stop the run, then start warming.",
       "listener_busy_masstagging": "Mass tagging is working with this account right now. Pause the campaign or pick another listener account.",
+      "listener_busy_bulk_messages": "A bulk message run is sending from this account right now. Stop the run or pick another listener account.",
       "masstagging_no_accounts": "The campaign has no account. Add accounts in the settings.",
       "masstagging_no_free_accounts": "No account of the campaign can work: a spam block, an inactive session or another module holds it.",
       "masstagging_no_targets": "Add at least one person to tag.",
@@ -1883,6 +1886,7 @@
     "removed": "removed from the list",
     "errors_in_a_row": "too many errors in a row",
     "busy_masstagging": "the account is busy with a running mass-tagging campaign",
+    "busy_bulk_messages": "the account is busy with a running bulk message run",
     "busy_channel_search": "the account is busy with a warming channel search",
     "already_tagged": "already tagged",
     "username_not_found": "no such username",
@@ -2948,7 +2952,8 @@
           "neurocomment": "held by neurocomment",
           "chat_broadcast": "busy with a chat broadcast",
           "user_parser": "busy with the user parser",
-          "masstagging": "busy with mass tagging"
+          "masstagging": "busy with mass tagging",
+          "bulk_messages": "busy with a bulk message run"
         },
         "busyNamed": "{{owner}} — {{name}}"
       },
@@ -3620,7 +3625,8 @@
         "neurocomment": "is commenting (neurocomment)",
         "neuroshilling": "is working in neuroshilling",
         "chat_broadcast": "is running a chat broadcast",
-        "masstagging": "is working in mass tagging"
+        "masstagging": "is working in mass tagging",
+        "bulk_messages": "is sending bulk messages"
       },
       "refillTitle": "An account is needed to search channels",
       "refillHint": "The pool is short of {{language}} channels and the automatic search found no free account. Pick the account to search with.",
@@ -3790,7 +3796,8 @@
       "chat_broadcast": "another broadcast",
       "discovery": "channel search",
       "user_parser": "user parser",
-      "masstagging": "mass tagging"
+      "masstagging": "mass tagging",
+      "bulk_messages": "bulk messages"
     },
     "board": {
       "title": "Work board",

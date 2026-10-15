@@ -3,7 +3,9 @@
 A run is stored (``core.repositories.bulk_runs``) and driven by
 :class:`services.accounts._bulk_runner.BulkRun`, so it may span days: it sends only
 inside the working window, waits out each account's daily cap instead of dropping
-recipients, and resumes after a restart. One run is live at a time.
+recipients, and resumes after a restart. One run is live at a time. While its loop runs
+it holds its accounts in ``services._account_owner`` (``_bulk_claims``), and leaves out
+an account another feature is driving.
 
 Every send that may have reached Telegram counts as one first message of the
 account's UTC day (``outreach_daily_usage``): the tool cannot tell an answered chat
@@ -35,6 +37,12 @@ from schemas.bulk_runs import BulkRunAccount, BulkRunRecord
 from schemas.run_schedule import RunSchedule
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from services._text_llm import text_llm
+from services.accounts._bulk_claims import (
+    BUSY_CODE,
+    claim_accounts,
+    release_accounts,
+    send_locked,
+)
 from services.accounts._bulk_plan import plan_items
 from services.accounts._bulk_runner import BulkRun, Lane
 from services.accounts._result import AccountActionError, raise_for_result
@@ -216,8 +224,10 @@ async def _send_one(account_id: str, recipient: str, peer: str, text: str) -> Bu
 
 
 async def _send(account_id: str, recipient: str, peer: str, text: str) -> BulkMessageOutcome:
-    # Looked up at call time, so tests can patch ``execute`` on this module.
-    return await _send_one(account_id, recipient, peer, text)
+    # Under the lifecycle lock, so a channel search that pulled the account pauses
+    # this send instead of sharing the session. ``_send_one`` is looked up at call
+    # time, so tests can patch ``execute`` on this module.
+    return await send_locked(account_id, lambda: _send_one(account_id, recipient, peer, text))
 
 
 async def _load_run(record: BulkRunRecord) -> BulkRun:
@@ -253,8 +263,14 @@ async def run_bulk_message_job(job_id: str) -> None:
     if record is None or record.status != "running":
         return
     run = await _load_run(record)
+    if job_id in _RUNS:
+        # Already driven by this process: a second loop would send every item twice,
+        # and its end would release the claims the first one still sends under.
+        return
     _RUNS[job_id] = run
     try:
+        live = [account_id for account_id, lane in run.lanes.items() if lane.row.stop_code is None]
+        await run.leave_out(await claim_accounts(job_id, live), BUSY_CODE)
         cancelled = await run.run()
     except Exception as exc:  # noqa: BLE001 - a broken run must not stay live forever
         logger.warning("bulk message run failed: %s", type(exc).__name__)
@@ -262,7 +278,10 @@ async def run_bulk_message_job(job_id: str) -> None:
         await repo.unconfirm_sending_items(job_id)
         cancelled = True
     finally:
+        # Every end lands here — done, failed, cancelled by the operator or by
+        # shutdown — so no claim outlives the loop that sends under it.
         _RUNS.pop(job_id, None)
+        release_accounts(job_id)
     await repo.update_bulk_run(
         job_id,
         status="cancelled" if cancelled else "completed",
