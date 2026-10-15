@@ -5,8 +5,12 @@ have its number) is permanent. Warming asks @SpamBot again once after a quaranti
 rest; an account still limited then stops in ``spam_blocked`` — not a generic error —
 and waits for the operator: «Удалить» (the ordinary account delete) or «Оставить».
 
-Keeping it moves the account back to the idle column with ``spam_blocked_at`` set for
-the rest of its life. From then on the block is known, not news: DMs stay shut, a
+Keeping it puts the account on the warmed card (idle, graduated, ``spam_blocked_at`` set
+for the rest of its life), where both of its ways on are: the hand-off to neurocomment
+and «Вернуть в прогрев» (a new wave). The graduation is a placement only: no
+``promoted`` row is journalled, so the survival counter sees no release.
+
+From then on the block is known, not news: DMs stay shut, a
 ``limited`` answer neither quarantines it nor refuses its start or hand-off, and the
 card wears a «Спамблок» badge. A block is "known" from the stop itself, so even the
 parked account never re-enters the quarantine ladder.
@@ -17,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from core.db import mark_promoted_to_nc
 from core.logging import log_event
 from schemas.warming import WarmingCycleResult, spam_block_known
 from services.warming._state import _set_state
@@ -64,7 +69,7 @@ async def stop_spam_blocked(
 
 
 async def keep_spam_blocked(record: WarmingStateRecord | None, account_id: str) -> None:
-    """«Оставить»: off the problem list into the idle column, the block remembered.
+    """«Оставить»: off the problem list onto the warmed card, the block remembered.
 
     Run under the caller's per-account lock with ``record`` read inside it. Idempotent
     for an account already kept; refuses one that never stopped for a spam block.
@@ -83,4 +88,5 @@ async def keep_spam_blocked(record: WarmingStateRecord | None, account_id: str) 
         spam_blocked_at=record.spam_blocked_at or now,
         current=record,
     )
+    await mark_promoted_to_nc(account_id)
     await log_event("INFO", "warming_spam_block_kept", account_id=account_id)

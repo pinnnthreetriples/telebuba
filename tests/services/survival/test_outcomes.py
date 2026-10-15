@@ -11,7 +11,7 @@ from services.survival._stints import build_lives
 from tests.services.survival._support import GRACE, at, clean, limited, released_life, row
 
 if TYPE_CHECKING:
-    from schemas.lifecycle import LifecycleEvent
+    from schemas.lifecycle import LifecycleEvent, LifecycleEventKind
     from schemas.survival import SurvivalOutcome
     from services.survival._outcomes import LifeFacts
 
@@ -90,6 +90,24 @@ def test_a_written_off_account_is_censored_not_dead() -> None:
 
 def test_deleting_a_spam_blocked_account_is_a_write_off() -> None:
     events = [*released_life(14), limited(15), row("deleted", 18, reason="retired")]
+
+    assert _outcomes(events, 60) == ["alive", "censored", "censored"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "extra"),
+    [
+        ("spambot_verdict", {"status": "limited"}),
+        ("warming_stopped", {"reason": "spam_blocked"}),
+    ],
+)
+def test_deleting_a_spam_blocked_account_as_dead_is_still_a_write_off(
+    kind: LifecycleEventKind, extra: dict[str, object]
+) -> None:
+    events = [*released_life(14), clean(15)]
+    events.append(row(kind, 16).model_copy(update={"extra": extra}))
+    dead = {"reason": "dead", "reason_source": "operator"}
+    events.append(row("deleted", 18).model_copy(update={"extra": dead}))
 
     assert _outcomes(events, 60) == ["alive", "censored", "censored"]
 

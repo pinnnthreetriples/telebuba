@@ -100,13 +100,17 @@ def test_the_wave_is_backfilled_from_the_current_life(v92_engine: Engine) -> Non
     _journal(engine, "a2", "warming_started", "2026-09-05", "2026-09-05")
     _journal(engine, "a2", "deleted", "2026-09-06", "2026-09-05")
     _journal(engine, "a2", "warming_started", "2026-09-10", "2026-09-10")
-    # a3: never warmed.
+    # a3: history rebuilt from the logs (each restart its own stamp) plus one live start.
+    for day in ("2026-09-02", "2026-09-03", "2026-09-04"):
+        _journal(engine, "a3", "warming_started", day, day)
+    _sql(engine, "UPDATE account_lifecycle_events SET backfilled = 1 WHERE account_id = 'a3'")
+    _journal(engine, "a3", "warming_started", "2026-09-20", "2026-09-20")
 
     _migrate(engine)
 
     rows = _sql(engine, "SELECT account_id, wave FROM warming_account_state")
     waves = {str(row[0]): row[1] for row in rows}
-    assert waves == {"a1": 2, "a2": 1, "a3": 1}
+    assert waves == {"a1": 2, "a2": 1, "a3": 2}
 
 
 def test_a_row_the_old_ladder_parked_becomes_spam_blocked(v92_engine: Engine) -> None:

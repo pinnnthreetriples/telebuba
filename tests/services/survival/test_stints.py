@@ -93,6 +93,31 @@ def test_rows_before_the_first_wave_stay_out_of_the_life_events() -> None:
     assert early in life.all_events
 
 
+def test_history_rebuilt_from_the_logs_is_one_wave() -> None:
+    # Migration 74 stamped every logged start (restarts too) with its own moment.
+    rebuilt = [
+        row("warming_started", 0, stint=0).model_copy(update={"backfilled": True}),
+        row("warming_started", 3, stint=3).model_copy(update={"backfilled": True}),
+        row("warmed", 14, stint=3).model_copy(update={"backfilled": True}),
+    ]
+    live = row("warming_started", 20, stint=20, wave=2)
+
+    [life] = build_lives([*rebuilt, live])
+
+    assert [wave.wave for wave in life.waves] == [1, 2]
+
+
+def test_rows_before_the_live_account_row_are_an_earlier_life() -> None:
+    # The old life's ``deleted`` row never landed (it is best-effort).
+    events = [*released_life(14), row("warming_started", 40, stint=40, wave=1)]
+
+    old, new = build_lives(events, {"acc-1": iso(30)})
+
+    assert [wave.wave for wave in old.waves] == [1]
+    assert [wave.wave for wave in new.waves] == [1]
+    assert new.started_at == at(40)
+
+
 def test_a_start_without_a_stamp_opens_at_its_own_moment() -> None:
     start = row("warming_started", 5, stint=None)
 

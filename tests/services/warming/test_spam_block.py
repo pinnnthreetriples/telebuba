@@ -24,7 +24,7 @@ from core.repositories.logs import list_recent_logs
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.warming import StartWarmingRequest, WarmingStateWrite
 from services import _account_owner, dialogues, warming
-from services.warming import _runtime, _seams, _spam_check
+from services.warming import _graduation, _runtime, _seams, _spam_check
 from tests.services.warming._support import _fake_loop, _seed_ready_account
 
 _BLOCKED_AT = "2026-10-01T00:00:00+00:00"
@@ -89,6 +89,12 @@ async def test_keep_moves_the_account_to_idle_and_remembers_the_block() -> None:
     assert (card.state, card.spam_blocked_at) == ("idle", _BLOCKED_AT)
     assert card.attention is None, "kept: off the problem list"
     assert again.state == "idle"
+    # On the warmed card, where both ways on are: hand-off and «Вернуть в прогрев».
+    board = await warming.load_board()
+    assert [acc.account_id for acc in board.warmed] == ["acc-1"]
+    assert board.warmed[0].spam_blocked_at == _BLOCKED_AT
+    # A placement, not a graduation: survival must see no release.
+    assert "promoted" not in [e.kind for e in await list_lifecycle_events("acc-1")]
     events = [entry.event for entry in await list_recent_logs()]
     assert events.count("warming_spam_block_kept") == 1
 
@@ -229,6 +235,47 @@ async def test_the_spam_block_stop_journals_the_wave_end(monkeypatch: pytest.Mon
     assert [e.extra for e in stops] == [{"reason": "spam_blocked", "wave": 3, "worked_days": 2}]
     events = [entry.event for entry in await list_recent_logs()]
     assert "warming_spam_blocked" in events
+
+
+@pytest.mark.asyncio
+async def test_a_kept_account_rewarms_from_the_warmed_card() -> None:
+    await _blocked()
+    await warming.keep_spam_blocked("acc-1")
+
+    card = await warming.rewarm_account(StartWarmingRequest(account_id="acc-1"))
+
+    assert (card.state, card.wave, card.warmed_days) == ("active", 2, 0)
+    assert card.dm_allowed is False
+
+
+@pytest.mark.asyncio
+async def test_a_spam_block_racing_a_stop_still_waits_for_the_operator() -> None:
+    """Stop read a running row; by the time it settled, the loop had blocked the account."""
+    await _blocked(state="sleeping")
+    current = await fetch_warming_state("acc-1")
+    assert current is not None
+    before = current.model_copy(update={"spam_blocked_at": None})
+    after = current.model_copy(update={"state": "idle"})
+
+    await _graduation._settle_stopped_wave(before, after)
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "spam_blocked"
+    kinds = [e.kind for e in await list_lifecycle_events("acc-1")]
+    assert "warming_stopped" not in kinds, "the block, not the Stop, ended this wave"
+
+
+@pytest.mark.asyncio
+async def test_a_stop_that_did_not_land_journals_no_wave_end() -> None:
+    await _blocked(state="sleeping")
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    timed_out = record.model_copy(update={"state": "error", "last_event": "stop_timeout"})
+
+    await _graduation._settle_stopped_wave(record, timed_out)
+
+    assert "warming_stopped" not in [e.kind for e in await list_lifecycle_events("acc-1")]
 
 
 @pytest.mark.asyncio

@@ -63,13 +63,23 @@ def _session_death(life: tuple[LifecycleEvent, ...]) -> bool:
     return any(event.kind == "session_dead" for event in life)
 
 
+def _spam_blocked(life: tuple[LifecycleEvent, ...]) -> bool:
+    return any(
+        _verdict(event) == "limited"
+        or (event.kind == "warming_stopped" and event.extra.get("reason") == "spam_blocked")
+        for event in life
+    )
+
+
 def _deletion_is_death(event: LifecycleEvent, life: tuple[LifecycleEvent, ...]) -> bool:
     """A deletion counts as a death only with evidence the account was really gone."""
     reason = event.extra.get("reason")
     if reason == "retired":
         return False
     if reason == "dead" and event.extra.get("reason_source") != "guess":
-        return True  # the operator said so
+        # The operator said so — except of a spam-blocked account, which still worked:
+        # deleting one is writing it off, whichever reason was picked in the dialog.
+        return _session_death(life) or not _spam_blocked(life)
     # A guess (or no reason at all): dead only on a session that died, never on a spam
     # limit — older guesses called a limited account dead, which it is not (Q11).
     return event.extra.get("evidence") == "session" or _session_death(life)

@@ -67,11 +67,21 @@ class Life:
         return self.waves[0].started_at
 
 
-def split_lives(events: Iterable[LifecycleEvent]) -> list[list[LifecycleEvent]]:
-    """One account's rows (id order) cut after each ``deleted`` row."""
+def split_lives(
+    events: Iterable[LifecycleEvent],
+    born_at: str | None = None,
+) -> list[list[LifecycleEvent]]:
+    """One account's rows (id order) cut after each ``deleted`` row and at ``born_at``.
+
+    The ``deleted`` row is best-effort, so the live account row's creation (``born_at``)
+    is a second boundary: rows older than it belong to an earlier life of the id.
+    """
     lives: list[list[LifecycleEvent]] = []
     current: list[LifecycleEvent] = []
     for event in events:
+        if born_at is not None and current and current[-1].created_at < born_at <= event.created_at:
+            lives.append(current)
+            current = []
         current.append(event)
         if event.kind == "deleted":
             lives.append(current)
@@ -83,6 +93,10 @@ def split_lives(events: Iterable[LifecycleEvent]) -> list[list[LifecycleEvent]]:
 
 def _opening_key(event: LifecycleEvent, open_key: str | None) -> str | None:
     """The stint start this row opens, or ``None`` when it opens nothing."""
+    # Rows rebuilt from the logs (migration 74) cannot tell a restart from a fresh start:
+    # each logged start got its own stamp. So backfilled history is one wave at most.
+    if event.backfilled and open_key is not None:
+        return None
     key = event.stint_started_at
     if event.kind == "warming_started" and key is None:
         key = event.created_at
@@ -146,10 +160,21 @@ def build_life(rows: list[LifecycleEvent]) -> Life | None:
     )
 
 
-def build_lives(events: Iterable[LifecycleEvent]) -> list[Life]:
-    """Every warmed life in the journal, grouped per account id in journal order."""
+def build_lives(
+    events: Iterable[LifecycleEvent],
+    born: dict[str, str] | None = None,
+) -> list[Life]:
+    """Every warmed life in the journal, grouped per account id in journal order.
+
+    ``born`` maps a live account id to its row's creation, the second life boundary.
+    """
     by_account: dict[str, list[LifecycleEvent]] = {}
     for event in sorted(events, key=lambda row: row.id):
         by_account.setdefault(event.account_id, []).append(event)
-    lives = (build_life(rows) for account in by_account.values() for rows in split_lives(account))
+    births = born or {}
+    lives = (
+        build_life(rows)
+        for account_id, rows_of_id in by_account.items()
+        for rows in split_lives(rows_of_id, births.get(account_id))
+    )
     return [life for life in lives if life is not None]

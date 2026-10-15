@@ -4,9 +4,11 @@
 
 * ``wave`` — the account's warming wave: 1 for its first stint, +1 for every fresh stint
   of the same account life. Existing rows are backfilled from the lifecycle journal:
-  the number of distinct stints its ``warming_started`` rows opened in the account's
-  current life (after its last ``deleted`` row and not before the live account row was
-  created — the same two boundaries ``services.lifecycle_journal`` draws), at least 1.
+  the number of distinct stints its live ``warming_started`` rows opened in the
+  account's current life (after its last ``deleted`` row and not before the live account
+  row was created — the boundaries ``services.lifecycle_journal`` draws), plus one for
+  any history rebuilt from the logs, which cannot tell a restart from a fresh start
+  (``services.survival._stints`` reads it as one wave too), at least 1.
 * ``spam_blocked_at`` — when @SpamBot confirmed a spam block on the quarantine re-check.
   A row parked by the old three-strikes ladder (``error`` with ``quarantine_exhausted``)
   is exactly that confirmation, so it moves into the new ``spam_blocked`` state, stamped
@@ -36,7 +38,9 @@ _JOURNAL = "account_lifecycle_events"
 _WAVE_BACKFILL = """
 UPDATE warming_account_state
    SET wave = MAX(1, (
-       SELECT COUNT(DISTINCT COALESCE(e.stint_started_at, e.created_at))
+       SELECT COUNT(DISTINCT CASE WHEN e.backfilled = 0
+                                  THEN COALESCE(e.stint_started_at, e.created_at) END)
+              + COALESCE(MAX(e.backfilled), 0)
          FROM account_lifecycle_events e
          JOIN accounts a ON a.account_id = e.account_id
         WHERE e.account_id = warming_account_state.account_id

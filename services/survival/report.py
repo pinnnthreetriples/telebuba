@@ -36,7 +36,8 @@ async def load_survival(
     events = await list_all_lifecycle_events()
     accounts = {account.account_id: account for account in (await list_accounts()).accounts}
     records = {record.account_id: record for record in await list_warming_states()}
-    judged = judge_lives(build_lives(events), accounts, records)
+    born = {account_id: account.created_at for account_id, account in accounts.items()}
+    judged = judge_lives(build_lives(events, born), accounts, records)
     newest_first = sorted(judged, key=lambda item: item.life.started_at, reverse=True)
     since_day = (clock.now - timedelta(days=settings.survival.history_days - 1)).date()
     first_day = min(event.created_at for event in events)[:_DAY_LENGTH] if events else None

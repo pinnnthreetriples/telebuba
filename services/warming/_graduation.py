@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from schemas.warming import (
         StopWarmingRequest,
         WarmingAccountState,
+        WarmingStateRecord,
     )
 
 
@@ -98,14 +99,32 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
         before = await fetch_warming_state(data.account_id)
         with suppress(_runtime.WarmingTaskNotQuiescentError):
             await _stop_warming_locked(data.account_id)
-        # The operator ended a wave unreleased (an errored one included: the next start
-        # is a new wave). A Stop on an idle account ends nothing, and a spam-blocked one's
-        # wave was already journalled when the block stopped it.
-        if before is not None and is_warming(before.state) and before.state != "spam_blocked":
-            await record_wave_end(before, "operator")
+        await _settle_stopped_wave(before, await fetch_warming_state(data.account_id))
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
     await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable seam, reached via the module.
     return await _current_card(data.account_id)
+
+
+async def _settle_stopped_wave(
+    before: WarmingStateRecord | None,
+    after: WarmingStateRecord | None,
+) -> None:
+    """Journal the wave a Stop ended — or hand a spam block that raced it to the operator.
+
+    The operator ended a wave unreleased (an errored one included: the next start is a
+    new wave) only when the row really reached idle on the same stint. A spam-blocked
+    wave was journalled by the stop that blocked it; a block that landed while this Stop
+    cancelled the loop must still wait for the operator's call, not pass as kept.
+    """
+    if before is None or after is None or not is_warming(before.state):
+        return
+    if before.state == "spam_blocked":
+        return
+    if after.spam_blocked_at is not None and before.spam_blocked_at is None:
+        await _set_state(after.account_id, "spam_blocked", last_event="spam_blocked", current=after)
+        return
+    if after.state == "idle" and after.started_at == before.started_at:
+        await record_wave_end(before, "operator")
 
 
 async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
