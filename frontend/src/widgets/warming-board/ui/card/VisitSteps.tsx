@@ -65,7 +65,7 @@ export function VisitSteps({ account }: { account: WarmingAccountState }) {
       role="status"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="tb-glass flex size-tile shrink-0 items-center justify-center rounded-full border text-on-fill">
+        <span className="tb-glass flex size-tile shrink-0 items-center justify-center rounded-full text-on-fill">
           <Icon name={STEP_ICON[current]} size={16} />
         </span>
         <div className="min-w-0">
@@ -82,7 +82,7 @@ export function VisitSteps({ account }: { account: WarmingAccountState }) {
         <Neighbour step={plan[at + 1]} kind="next" />
       </div>
 
-      <div className="tb-glass relative mt-4 flex h-control items-center overflow-hidden rounded-full border px-4">
+      <div className="tb-glass relative mt-4 flex h-control items-center overflow-hidden rounded-full px-4">
         <div
           className="tb-glass-fill absolute inset-y-0 left-0 rounded-full"
           style={{ width: `${String(percent)}%` }}

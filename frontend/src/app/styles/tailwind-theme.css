@@ -63,6 +63,7 @@
   --channel-glow: 91 163 255;
   --channel-ink: 11 11 12;
   --channel-black: 0 0 0;
+  --channel-white: 255 255 255;
 
   /* Шрифты */
   --font-sans: Inter, system-ui, sans-serif;

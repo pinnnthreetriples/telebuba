@@ -140,7 +140,7 @@ export function TodayBlock({
           <TickDial
             size={96}
             share={share}
-            tone={share >= 1 ? 'text-success' : 'text-action-primary'}
+            tone={share >= 1 ? 'text-success-deep' : 'text-info-strong'}
             label={t('warming.card.dayProgress', { days, target, count: target })}
           >
             <span className="type-h1 tabular-nums text-content-primary">{days}</span>

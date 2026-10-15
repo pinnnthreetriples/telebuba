@@ -360,10 +360,12 @@
     position: absolute;
     inset: -40%;
     z-index: -1;
-    background: radial-gradient(
+    /* A solid glow faded to nothing by a mask: alpha only ever rides a palette channel. */
+    background: var(--visit-glow);
+    mask-image: radial-gradient(
       circle at 65% 35%,
-      color-mix(in srgb, var(--visit-glow) 75%, transparent),
-      transparent 45%
+      rgb(--theme(--channel-black) / 0.8),
+      rgb(--theme(--channel-black) / 0) 45%
     );
     animation: visitglow --theme(--transition-duration-roll) --theme(--ease-breathe) infinite
       alternate;
@@ -411,22 +413,22 @@
   }
   /* Secondary words on the coloured card: the white, quieter. */
   .tb-visit-sub {
-    color: color-mix(in srgb, --theme(--color-on-fill) 72%, transparent);
-  }
-  .tb-visit-dim {
-    color: color-mix(in srgb, --theme(--color-on-fill) 45%, transparent);
+    color: --theme(--color-on-fill);
+    opacity: 0.78;
   }
   /* The glass track at the bottom of the visit card and its glowing fill. */
   .tb-glass {
-    background: color-mix(in srgb, --theme(--color-on-fill) 16%, transparent);
-    border-color: color-mix(in srgb, --theme(--color-on-fill) 35%, transparent);
+    background: rgb(--theme(--channel-white) / 0.16);
+    /* design-token-exception: a hairline drawn as an inset ring, because a border colour
+       must be a solid palette paint and the glass edge is white under alpha */
+    box-shadow: inset 0 0 0 1px rgb(--theme(--channel-white) / 0.35);
   }
   .tb-glass-fill {
     background-image: linear-gradient(
       90deg,
-      color-mix(in srgb, --theme(--color-on-fill) 12%, transparent),
-      color-mix(in srgb, --theme(--color-on-fill) 55%, transparent),
-      color-mix(in srgb, --theme(--color-on-fill) 12%, transparent)
+      rgb(--theme(--channel-white) / 0.12),
+      rgb(--theme(--channel-white) / 0.55),
+      rgb(--theme(--channel-white) / 0.12)
     );
     background-size: 200% 100%;
     animation:

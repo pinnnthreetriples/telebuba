@@ -42,7 +42,7 @@ export function PhaseTrack({ account }: { account: WarmingAccountState }) {
         {nextPhase ? (
           <div className="shrink-0 text-right">
             <div className="type-small text-content-muted">{t('warming.card.phaseNext')}</div>
-            <div className="type-small-medium text-action-primary">
+            <div className="type-small-medium text-info-strong">
               {t(`warming.console.phase.${nextPhase}`)}
               {days != null ? ` · ${t('warming.card.inDays', { days })}` : ''}
             </div>
@@ -74,7 +74,7 @@ export function PhaseTrack({ account }: { account: WarmingAccountState }) {
                 <span
                   title={t(`warming.console.phase.${PHASES[phaseIndex] ?? 'intro'}`)}
                   className={`type-small tabular-nums ${
-                    current ? 'type-small-medium text-action-primary' : 'text-content-subtle'
+                    current ? 'type-small-medium text-info-strong' : 'text-content-subtle'
                   }`}
                 >
                   {phaseIndex + 1}

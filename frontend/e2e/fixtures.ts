@@ -166,6 +166,7 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
     days_to_next_phase: 4,
     warming_days: 8,
     warmed_days: 6,
+    today: { reads: 5, reactions: 2, joins: 1, dms: 0 },
     target_days: 15,
     activity_persona: 'normal',
     readiness: null,
