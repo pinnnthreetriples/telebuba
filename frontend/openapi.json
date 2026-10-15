@@ -32643,6 +32643,18 @@
             ],
             "title": "Death Day"
           },
+          "found_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found Day"
+          },
           "cause": {
             "anyOf": [
               {

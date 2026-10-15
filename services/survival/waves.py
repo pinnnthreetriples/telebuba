@@ -14,7 +14,7 @@ from core.repositories.lifecycle import list_lifecycle_events
 from core.repositories.warming import fetch_warming_state
 from schemas._warming_waves import WarmingWave, WarmingWaveList
 from services.lifecycle_journal import current_life
-from services.survival._stints import build_life
+from services.survival._stints import build_life, parse_moment
 
 if TYPE_CHECKING:
     from schemas._warming_waves import WaveEndReason
@@ -48,6 +48,17 @@ def _end(event: LifecycleEvent) -> tuple[WaveEndReason, int | None] | None:
     return None
 
 
+def _ended_at(event: LifecycleEvent) -> str:
+    """A death ends its wave when it was first shown, not when a check found it."""
+    raw = event.extra.get("evidence_at")
+    if event.kind != "session_dead" or not isinstance(raw, str):
+        return event.created_at
+    evidence, found = parse_moment(raw), parse_moment(event.created_at)
+    if evidence is None or found is None or evidence >= found:
+        return event.created_at
+    return raw
+
+
 def _wave(wave: Stint, following: Stint | None, record: WarmingStateRecord | None) -> WarmingWave:
     opening = wave.events[0].extra if wave.events[0].kind == "warming_started" else {}
     own = record if record is not None and record.started_at == wave.start_key else None
@@ -57,7 +68,7 @@ def _wave(wave: Stint, following: Stint | None, record: WarmingStateRecord | Non
     for event in wave.events:
         found = _end(event)
         if found is not None:
-            ended_at, (reason, worked) = event.created_at, found
+            ended_at, (reason, worked) = _ended_at(event), found
             break
     if reason is None and following is not None:
         ended_at, reason = following.start_key, "replaced"

@@ -17,6 +17,7 @@ from core.logging import log_event
 from core.telegram_client import check_spam_status
 from schemas.spam_status import SpamStatusKind, SpamStatusProbe, SpamStatusVerdict
 from services.lifecycle_journal import record_lifecycle_event
+from services.spam_block_lift import lift_on_clean
 
 _SECONDS_PER_HOUR = 3600
 
@@ -239,6 +240,8 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
         await record_lifecycle_event(
             account_id, "spambot_verdict", {"status": status, "detail": detail}
         )
+        # A clean answer ends a confirmed spam block, whoever asked (``spam_block_lift``).
+        await lift_on_clean(account_id, saved)
         return saved
 
 

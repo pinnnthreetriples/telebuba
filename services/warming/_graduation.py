@@ -177,7 +177,7 @@ async def handoff_to_neurocomment(
 
 
 async def keep_spam_blocked(account_id: str) -> WarmingAccountState:
-    """«Оставить»: keep a spam-blocked account — idle, its block remembered for good.
+    """«Оставить»: keep a spam-blocked account — idle, its block remembered until lifted.
 
     Raises ``NotSpamBlockedError`` (a ``ValueError``) for an account that never stopped
     on a confirmed spam block, ``UnknownAccountError`` for one that does not exist.
