@@ -7,9 +7,11 @@ plus pure predicates over it — no I/O.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
 
 WarmingState = Literal[
@@ -51,12 +53,34 @@ def is_parked(state: WarmingState) -> bool:
     return state in _PARKED_STATES
 
 
-def spam_block_known(record: WarmingStateRecord | None) -> bool:
-    """True once @SpamBot confirmed this account life's spam block.
+def _moment(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
-    From the stop itself (``spam_blocked``), and for good once the operator kept the
-    account (``spam_blocked_at``): see ``services.warming._spam_block``.
+
+def lifts_spam_block(verdict: SpamStatusVerdict | None, blocked_at: str | None) -> bool:
+    """True for a ``clean`` @SpamBot answer read after the block was confirmed."""
+    if verdict is None or blocked_at is None or verdict.status != "clean":
+        return False
+    answered, blocked = _moment(verdict.checked_at), _moment(blocked_at)
+    return answered is not None and blocked is not None and answered > blocked
+
+
+def spam_block_known(
+    record: WarmingStateRecord | None,
+    spam: SpamStatusVerdict | None = None,
+) -> bool:
+    """True while @SpamBot's confirmed spam block on this account stands.
+
+    From the stop itself (``spam_blocked``), and on after the operator kept the account
+    (``spam_blocked_at``), until a ``clean`` answer lifts it
+    (``services.spam_block_lift`` clears the mark). ``spam``: a reading the caller holds
+    that may be newer than ``record`` — a ``clean`` one read after the mark already
+    lifts the block, before the row says so.
     """
-    if record is None:
+    if record is None or lifts_spam_block(spam, record.spam_blocked_at):
         return False
     return record.state == "spam_blocked" or record.spam_blocked_at is not None

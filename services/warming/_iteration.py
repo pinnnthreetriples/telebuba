@@ -157,8 +157,9 @@ async def _plan_iteration(
         intensity.daily_cap,
         daily,
         remaining,
-        # A confirmed spam block shuts DMs for good: the account cannot write to strangers.
-        intensity.dm_allowed and not spam_block_known(record),
+        # A confirmed spam block shuts DMs while it stands: the account cannot write to
+        # strangers. A clean answer this cycle's spam step just read lifts it already.
+        intensity.dm_allowed and not spam_block_known(record, spam),
         persona,
         intensity.phase,
     )

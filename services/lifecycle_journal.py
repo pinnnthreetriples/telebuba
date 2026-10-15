@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import fetch_account
+from core.repositories.death_evidence import first_failure_after, latest_telegram_success_at
 from core.repositories.lifecycle import (
     append_lifecycle_event,
     fetch_lifecycle_snapshot,
@@ -38,6 +39,11 @@ logger = logging.getLogger(__name__)
 DEAD_SESSION_STATUSES: frozenset[AccountStatus] = frozenset(
     {"unauthorized", "account_error", "frozen"},
 )
+# The gateway's stable refusal codes that show the same death on an action.
+_FROZEN_CODES = ("account_frozen",)
+_GONE_CODES = ("session_dead", "account_deactivated")
+_DEATH_CODES = (*_FROZEN_CODES, *_GONE_CODES)
+_ANSWERS = frozenset({"clean", "limited"})
 
 
 async def record_lifecycle_event(
@@ -98,20 +104,65 @@ async def record_session_death(account: AccountRead, status: AccountStatus) -> N
     Written on the transition into a dead status, and also when the account already
     wears one with no death on its life's record: a Telegram action can mark an account
     ``frozen`` without any session check seeing it. A ``new`` import never lived.
-    Never raises (the journal never breaks its caller).
+    The row's ``created_at`` is when the death was found; ``extra.evidence_at`` (when
+    one is on record, see :func:`death_evidence`) is when it was first shown, which the
+    survival counter dates the death by. Never raises (the journal never breaks its
+    caller).
     """
     if status not in DEAD_SESSION_STATUSES or account.status == "new":
         return
-    if account.status in DEAD_SESSION_STATUSES:
-        try:
-            events = await list_lifecycle_events(account.account_id)
-        except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
-            logger.warning("lifecycle journal read failed: %s", type(exc).__name__, exc_info=exc)
-            return
-        life = current_life(events, account.created_at)
-        if any(event.kind == "session_dead" for event in life):
-            return
-    await record_lifecycle_event(account.account_id, "session_dead", {"status": status})
+    try:
+        life = current_life(await list_lifecycle_events(account.account_id), account.created_at)
+    except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
+        logger.warning("lifecycle journal read failed: %s", type(exc).__name__, exc_info=exc)
+        if account.status in DEAD_SESSION_STATUSES:
+            return  # cannot tell whether this death is already on the record
+        life = []
+    if account.status in DEAD_SESSION_STATUSES and any(
+        event.kind == "session_dead" for event in life
+    ):
+        return
+    codes = _FROZEN_CODES if status == "frozen" else _GONE_CODES
+    extra: dict[str, object] = {"status": status}
+    extra |= await death_evidence(account.account_id, codes, alive_floor(life, account.created_at))
+    await record_lifecycle_event(account.account_id, "session_dead", extra)
+
+
+def alive_floor(life: list[LifecycleEvent], born_at: str | None) -> str | None:
+    """The latest moment the journal proves this life alive: its start or an answer."""
+    moments = [born_at] if born_at else []
+    moments += [
+        event.created_at
+        for event in life
+        if event.kind == "spambot_verdict" and event.extra.get("status") in _ANSWERS
+    ]
+    return max(moments, default=None)
+
+
+async def death_evidence(
+    account_id: str,
+    codes: tuple[str, ...],
+    floor: str | None,
+) -> dict[str, object]:
+    """When a death found only now was first recorded: ``evidence_at`` and its event.
+
+    The earliest logged Telegram refusal that showed the death (one of ``codes``), but
+    never one at or before the last thing that proved the account alive: a logged
+    action that succeeded, an @SpamBot answer or the life's start (``floor``). Without
+    such a refusal the death is dated by its detection, so nothing is returned and the
+    journal row's own ``created_at`` stands. Never raises: the journal never breaks its
+    caller, and a death without evidence is still a death.
+    """
+    try:
+        success = await latest_telegram_success_at(account_id)
+        after = max((m for m in (success, floor) if m is not None), default=None)
+        row = await first_failure_after(account_id, codes, after)
+    except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
+        logger.warning("death evidence read failed: %s", type(exc).__name__, exc_info=exc)
+        return {}
+    if row is None:
+        return {}
+    return {"evidence_at": row.created_at, "evidence_event": row.event}
 
 
 class PendingDeletion(NamedTuple):
@@ -150,7 +201,21 @@ async def prepare_account_deleted(
         # Guessed dead only ever on a dead session now; survival trusts a guess with this
         # evidence and treats older guesses (made on a spam limit) as write-offs.
         extra["evidence"] = "session"
+    if resolved == "dead":
+        extra |= await _deletion_evidence(account_id)
     return PendingDeletion(account_id, extra, snapshot)
+
+
+async def _deletion_evidence(account_id: str) -> dict[str, object]:
+    """A death the operator states by deleting is dated like one a check found later."""
+    try:
+        account = await fetch_account(account_id)
+        born_at = account.created_at if account is not None else None
+        life = current_life(await list_lifecycle_events(account_id), born_at)
+    except Exception as exc:  # noqa: BLE001 - the journal must never break the delete.
+        logger.warning("lifecycle journal read failed: %s", type(exc).__name__, exc_info=exc)
+        return {}
+    return await death_evidence(account_id, _DEATH_CODES, alive_floor(life, born_at))
 
 
 async def record_account_deleted(pending: PendingDeletion | None) -> None:

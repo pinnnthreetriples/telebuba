@@ -15,7 +15,7 @@ from services.survival._tally import (
     swimmer_row,
     tally_windows,
 )
-from tests.services.survival._support import GRACE, at, clean, limited, released_life, row
+from tests.services.survival._support import GRACE, at, clean, iso, limited, released_life, row
 
 if TYPE_CHECKING:
     from schemas.lifecycle import LifecycleEvent
@@ -185,9 +185,22 @@ def test_a_swimmer_row_places_release_wounds_and_death_in_days() -> None:
     life = swimmer_row(item, _CLOCK)
 
     assert (life.release_day, life.death_day, life.end_day) == (14, 19, 19)
+    assert life.found_day == 19, "no earlier evidence: found when it died"
     assert life.wound_days == [16, 17]
     assert life.status == "dead"
     assert life.cause == "session_dead"
+
+
+def test_a_death_found_later_is_placed_on_its_evidence_and_its_finding() -> None:
+    events = [
+        *released_life(14),
+        row("session_dead", 25.5, status="frozen", evidence_at=iso(19.2)),
+    ]
+    [item] = _judged(events)
+
+    life = swimmer_row(item, _CLOCK)
+
+    assert (life.death_day, life.found_day, life.end_day) == (19, 25, 19)
 
 
 def test_a_swimmer_row_shows_every_wave_on_one_bar() -> None:

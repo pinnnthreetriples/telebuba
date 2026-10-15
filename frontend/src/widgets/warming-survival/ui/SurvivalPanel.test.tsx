@@ -148,6 +148,19 @@ test('a click opens the panel with counters, rows, cohorts, causes and history',
   expect(screen.getByRole('button', { name: /7 из 9/ })).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('a death found later names both the day it died and the day it was found', async () => {
+  const [first, ...rest] = REPORT.lives ?? [];
+  if (first === undefined) throw new Error('the fixture has a dead life first');
+  routeSurvival({ week: { ...REPORT, lives: [{ ...first, found_day: 22 }, ...rest] } });
+  renderWithClient(<TileAndPanel />);
+
+  await userEvent.click(await screen.findByRole('button', { name: /7 из 9/ }));
+
+  expect(
+    await screen.findByTitle('Смерть на 19-й день, обнаружена на 22-й: аккаунт заморожен'),
+  ).toBeInTheDocument();
+});
+
 test('another cohort cut asks the backend for it', async () => {
   routeSurvival({
     persona: {

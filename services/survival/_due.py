@@ -7,6 +7,10 @@ outcome rule uses). Only the latest closed window counts, so an account asks twi
 its whole life at most, and an old release asks once. A probe that got no answer is not
 retried before ``retry``, and an account is skipped while another account behind the
 same proxy was asked within ``spacing``. The most overdue account goes first.
+
+A pass with no probe due may instead re-ask about one account whose confirmed spam
+block is on record (``pick_block_recheck``), so a block Telegram has lifted is noticed
+even on an account no warming cycle asks about: the same retry and spacing apply.
 """
 
 from __future__ import annotations
@@ -105,3 +109,39 @@ def pick_due_probe(
             continue
         due.append(DueProbe(candidate.account_id, candidate.proxy_key, window[0], window[1]))
     return min(due, key=lambda probe: probe.window_end, default=None)
+
+
+@dataclass(frozen=True)
+class BlockRecheckCandidate:
+    """An account with a confirmed spam block on record, free to be asked about."""
+
+    account_id: str
+    proxy_key: str
+    # The latest @SpamBot answer of the account's current life, of any kind.
+    last_answer: datetime | None
+
+
+def pick_block_recheck(
+    candidates: list[BlockRecheckCandidate],
+    asked_by_proxy: dict[str, datetime],
+    attempts: dict[str, datetime],
+    pacing: ProbePacing,
+    interval: timedelta,
+) -> BlockRecheckCandidate | None:
+    """The spam-blocked account a pass with no probe due may re-ask about, or ``None``.
+
+    Due once its last answer is ``interval`` old (or it has none); the probes' retry and
+    per-proxy spacing apply unchanged. The longest-unasked account goes first.
+    """
+    due = [
+        candidate
+        for candidate in candidates
+        if (candidate.last_answer is None or pacing.now - candidate.last_answer >= interval)
+        and not _recent(attempts.get(candidate.account_id), pacing.now, pacing.retry)
+        and not _recent(asked_by_proxy.get(candidate.proxy_key), pacing.now, pacing.spacing)
+    ]
+    return min(
+        due,
+        key=lambda c: (c.last_answer is not None, c.last_answer or pacing.now),
+        default=None,
+    )

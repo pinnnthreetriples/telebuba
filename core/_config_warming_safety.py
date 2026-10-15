@@ -24,8 +24,9 @@ class WarmingSafetySettings(BaseModel):
     spam_unknown_warn_streak: int = Field(default=3, ge=1)
     # Quarantine (a peer flood, or @SpamBot answering "limited"): how long an account
     # rests before @SpamBot is asked again, and how many still-limited answers end
-    # warming. A spam block is permanent, so one re-check is the default: still limited
-    # stops warming in ``spam_blocked`` for the operator to delete or keep the account.
+    # warming. A spam block rarely passes within a rest, so one re-check is the default:
+    # still limited stops warming in ``spam_blocked`` for the operator to delete or keep
+    # the account (a later clean answer lifts the block, ``services.spam_block_lift``).
     # Unreadable answers say nothing about the block and do not spend a re-check; they
     # are bounded on their own and park the account in ``error`` past that bound.
     quarantine_hours: float = Field(default=48.0, gt=0.0)
