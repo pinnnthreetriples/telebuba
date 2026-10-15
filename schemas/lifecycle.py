@@ -22,6 +22,12 @@ from pydantic import BaseModel, Field
 # warming_stopped — a wave ended without a graduation: ``extra.reason`` is ``operator``
 #                   (the Stop button) or ``spam_blocked`` (@SpamBot confirmed the block);
 #                   ``extra`` also carries the wave and its worked days (migration 95).
+# spam_block_lifted — @SpamBot answered ``clean`` for an account with a confirmed spam
+#                   block: the mark is cleared (migration 96); ``extra.blocked_at`` is the
+#                   lifted mark, ``extra.from_state`` the warming state it was in.
+# A ``session_dead`` (or a ``deleted`` as dead) row's ``created_at`` is when the death was
+# found; ``extra.evidence_at`` / ``extra.evidence_event`` name the earliest logged refusal
+# that showed it, when one is on record.
 LifecycleEventKind = Literal[
     "warming_started",
     "warmed",
@@ -32,6 +38,7 @@ LifecycleEventKind = Literal[
     "session_dead",
     "deleted",
     "warming_stopped",
+    "spam_block_lifted",
 ]
 LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "warming_started",
@@ -43,6 +50,7 @@ LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "session_dead",
     "deleted",
     "warming_stopped",
+    "spam_block_lifted",
 )
 
 # Why an account left the fleet: ``dead`` — Telegram took it (limited, banned, the

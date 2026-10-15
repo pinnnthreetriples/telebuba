@@ -48,6 +48,14 @@ def _end(event: LifecycleEvent) -> tuple[WaveEndReason, int | None] | None:
     return None
 
 
+def _ended_at(event: LifecycleEvent) -> str:
+    """A death ends its wave when it was first shown, not when a check found it."""
+    evidence = event.extra.get("evidence_at")
+    if event.kind == "session_dead" and isinstance(evidence, str):
+        return min(evidence, event.created_at)
+    return event.created_at
+
+
 def _wave(wave: Stint, following: Stint | None, record: WarmingStateRecord | None) -> WarmingWave:
     opening = wave.events[0].extra if wave.events[0].kind == "warming_started" else {}
     own = record if record is not None and record.started_at == wave.start_key else None
@@ -57,7 +65,7 @@ def _wave(wave: Stint, following: Stint | None, record: WarmingStateRecord | Non
     for event in wave.events:
         found = _end(event)
         if found is not None:
-            ended_at, (reason, worked) = event.created_at, found
+            ended_at, (reason, worked) = _ended_at(event), found
             break
     if reason is None and following is not None:
         ended_at, reason = following.start_key, "replaced"

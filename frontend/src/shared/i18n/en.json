@@ -1541,6 +1541,7 @@
     "warming_phase_advanced": "Advanced to next phase",
     "spam_status_refreshed": "Spam status refreshed",
     "survival_probe": "@SpamBot asked for the survival counter",
+    "survival_spam_block_recheck": "@SpamBot asked again about a spam block",
     "survival_probe_failed": "Survival check pass failed",
     "telegram_spam_status_probe_failed": "Spam-status probe failed",
     "telegram_pool_connect_failed": "Telegram connection failed",
@@ -1770,6 +1771,7 @@
     "warming_self_search_done": "The account searched channels itself",
     "warming_spam_blocked": "Spam block confirmed by @SpamBot — warming stopped",
     "warming_spam_block_kept": "Spam-blocked account kept",
+    "warming_spam_block_lifted": "@SpamBot says the account is clean again — spam block lifted",
     "warming_rewarmed": "Account back in warming — a new wave from zero"
   },
   "logEventReason": {
@@ -3560,6 +3562,7 @@
         "legend": "Blue — warming, green — after release, dot — a wound (spam block or flood), tick — a new wave, cross — death",
         "row": "{{label}}: {{status}}, {{days}} d",
         "death": "Died on day {{day}}: {{cause}}",
+        "deathFound": "Died on day {{day}}, found on day {{found}}: {{cause}}",
         "wound": "Wound on day {{day}}",
         "wave": "Wave {{wave}} from day {{day}}"
       },
@@ -3628,7 +3631,7 @@
     },
     "spamBlock": {
       "badge": "Spam block",
-      "badgeHint": "@SpamBot confirmed a spam block: the account cannot message strangers. Warming DMs stay off for it for good.",
+      "badgeHint": "@SpamBot confirmed a spam block: the account cannot message strangers. Warming DMs stay off until @SpamBot says the account is clean again — then the mark goes away by itself. Channel search, joins, reads and reactions are not affected.",
       "title": "Spam block",
       "body": "Warming stopped: @SpamBot confirmed a spam block. The account works but cannot message strangers. Delete it, or keep it — then it can warm again (without DMs) or go to neurocommenting.",
       "delete": "Delete",

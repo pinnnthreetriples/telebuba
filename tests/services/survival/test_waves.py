@@ -58,6 +58,17 @@ def test_an_operator_stop_and_a_dead_session_end_a_wave_too() -> None:
     assert (dead.end_reason, dead.wave) == ("session_dead", 2)
 
 
+def test_a_death_found_later_ends_its_wave_when_it_was_first_shown() -> None:
+    events = [
+        row("warming_started", 0),
+        row("session_dead", 9, status="frozen", evidence_at=iso(6)),
+    ]
+
+    (dead,) = account_waves(events, None)
+
+    assert (dead.end_reason, dead.ended_at) == ("session_dead", iso(6))
+
+
 def test_history_from_before_wave_journalling_ends_at_the_next_start() -> None:
     events = [row("warming_started", 0), row("warming_started", 6, stint=6)]
 

@@ -85,7 +85,7 @@ class WarmedAccount(BaseModel):
     # The wave the account graduated in and when that wave began (the card names it).
     wave: int = Field(default=1, ge=1)
     started_at: str | None = None
-    # A kept spam block (permanent «Спамблок» badge).
+    # A kept spam block («Спамблок» badge until a clean @SpamBot answer lifts it).
     spam_blocked_at: str | None = None
 
 

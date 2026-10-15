@@ -50,6 +50,7 @@ from schemas._warming_states import (  # noqa: F401, TC001 - runtime re-export, 
     WarmingState,
     is_parked,
     is_warming,
+    lifts_spam_block,
     spam_block_known,
     warming_health,
 )
