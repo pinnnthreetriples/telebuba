@@ -7,7 +7,7 @@ fetched once here — there is no per-card N+1.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from core.config import settings
@@ -19,7 +19,7 @@ from core.db import (
     list_warming_states,
 )
 from core.phone_geo import country_for_phone
-from core.repositories.warming_daily_stats import list_fleet_warming_daily_stats
+from core.repositories.warming_daily_stats import list_warming_daily_stats_for
 from core.repositories.warming_floods import (
     list_warming_flood_summaries,
 )
@@ -61,6 +61,8 @@ from services.warming.pacing import (
 from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.accounts import AccountRead
     from schemas.survival import AccountSurvival
     from schemas.warming import WarmingReadiness, WarmingStateRecord
@@ -140,14 +142,21 @@ def _to_card(
     )
 
 
-async def _daily_rows(now: datetime) -> dict[tuple[str, str], WarmingDailyStats]:
-    """Today's totals for the whole fleet in one read, keyed by ``(account, day)``.
+async def _daily_rows(
+    records: Mapping[str, WarmingStateRecord],
+) -> dict[tuple[str, str], WarmingDailyStats]:
+    """Each card's budget-day totals in one read, keyed by ``(account, day)``.
 
-    A day back from UTC covers every account's local "today"; each card then picks the
-    row of its own budget day.
+    Read by the exact pair, not by a date range: a parked account keeps its last budget
+    day across midnight, and a range wide enough for it would read the whole fleet's
+    history back to that day.
     """
-    since = (now - timedelta(days=1)).date().isoformat()
-    return {(row.account_id, row.day): row for row in await list_fleet_warming_daily_stats(since)}
+    keys = [
+        (record.account_id, record.daily_count_date)
+        for record in records.values()
+        if record.daily_count_date is not None
+    ]
+    return {(row.account_id, row.day): row for row in await list_warming_daily_stats_for(keys)}
 
 
 def _copy_identity(card: WarmingAccountState, account: AccountRead) -> None:
@@ -178,7 +187,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     survivals = await load_account_survivals(accounts.accounts)
     channel_count = len(channels.channels)
     now = datetime.now(UTC)
-    daily_rows = await _daily_rows(now)
+    daily_rows = await _daily_rows(records)
     cards: list[WarmingAccountState] = []
     for account in accounts.accounts:
         record = records.get(account.account_id)

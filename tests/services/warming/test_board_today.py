@@ -9,7 +9,7 @@ import pytest
 from core.db import create_account, upsert_warming_state
 from core.repositories.warming_daily_stats import (
     add_warming_daily_stats,
-    list_fleet_warming_daily_stats,
+    list_warming_daily_stats_for,
 )
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
@@ -65,13 +65,26 @@ async def test_a_row_of_another_day_is_not_shown_as_today() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_fleet_read_returns_every_account_from_the_day_on() -> None:
-    for account, day in (("a", "2026-10-13"), ("b", "2026-10-14"), ("c", "2026-10-12")):
+async def test_a_parked_account_keeps_the_breakdown_of_its_budget_day() -> None:
+    # Asleep across midnight: the budget day is days old, and its row is still the one.
+    await _seed("acc-1", budget_day="2020-01-01", stats_day="2020-01-01")
+
+    board = await warming.load_board()
+
+    card = next(c for c in board.warming if c.account_id == "acc-1")
+    assert card.today is not None
+    assert card.today.reads == 5
+
+
+@pytest.mark.asyncio
+async def test_the_board_read_returns_exactly_the_asked_pairs() -> None:
+    for account, day in (("a", "2026-10-13"), ("b", "2026-10-14"), ("a", "2026-10-14")):
         await add_warming_daily_stats(WarmingDailyStats(account_id=account, day=day, reads=1))
 
-    rows = await list_fleet_warming_daily_stats("2026-10-13")
+    rows = await list_warming_daily_stats_for([("a", "2026-10-13"), ("b", "2026-10-14")])
 
     assert sorted((row.account_id, row.day) for row in rows) == [
         ("a", "2026-10-13"),
         ("b", "2026-10-14"),
     ]
+    assert await list_warming_daily_stats_for([]) == []
