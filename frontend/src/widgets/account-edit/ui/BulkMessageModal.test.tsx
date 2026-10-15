@@ -232,6 +232,7 @@ test('sends every selected account to every distinct recipient and shows progres
       concurrency: 2,
     },
     protection: DEFAULT_PROTECTION,
+    recipient_rules: { no_repeat_days: 30, one_account_per_client: true, recheck_not_found: true },
     recipient_phones: {},
     mode: 'each',
   });
@@ -537,6 +538,7 @@ test('starts on the saved limits and sends the slider pace as a jittered range',
       concurrency: 2,
     },
     protection: DEFAULT_PROTECTION,
+    recipient_rules: { no_repeat_days: 30, one_account_per_client: true, recheck_not_found: true },
     recipient_phones: {},
     mode: 'each',
   });

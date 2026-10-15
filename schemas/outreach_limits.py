@@ -12,6 +12,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.outreach_protection import OutreachProtection, SkippedAccount
+from schemas.recipient_rules import RecipientRules
 from schemas.run_schedule import RunSchedule
 
 # Both run forms and these settings share one ceiling for a pause between calls.
@@ -37,6 +38,8 @@ class OutreachLimitsUpdate(BaseModel):
     bulk_max_delay_seconds: float = Field(default=180, ge=0, le=MAX_PAUSE_SECONDS)
     # Default sending window and spreading of a bulk-message run.
     schedule: RunSchedule = Field(default_factory=RunSchedule)
+    # Default history rules: no repeat, one account per client, re-check of "not found".
+    recipients: RecipientRules = Field(default_factory=RecipientRules)
     # Young-account caps, rest after a limit, skipping injured accounts, typing.
     protection: OutreachProtection = Field(default_factory=OutreachProtection)
 

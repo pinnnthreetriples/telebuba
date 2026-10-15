@@ -35,10 +35,16 @@ import {
   windowMinutes,
 } from '../model/pacing';
 import { type FullProtection, fullProtection, leftOut, youngCap } from '../model/protection';
+import {
+  type FullRecipientRules,
+  fullRecipientRules,
+  HISTORY_SKIP_CODES,
+} from '../model/recipientRules';
 import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
 import { PacingBlock } from './PacingBlock';
 import { ProtectionSection } from './ProtectionSection';
+import { RecipientRulesSection } from './RecipientRulesSection';
 import { RunForecast } from './RunForecast';
 import { ScheduleSection } from './ScheduleSection';
 import { SkippedAccounts } from './SkippedAccounts';
@@ -65,6 +71,8 @@ export type BulkMessageDraft = {
   schedule: FullSchedule | null;
   // null: the saved account protection.
   protection: FullProtection | null;
+  // null: the saved default recipient rules.
+  rules: FullRecipientRules | null;
   // A `datetime-local` value; empty starts at once.
   startAt: string;
   // The phone each looked-up recipient was found by (for the client's time zone).
@@ -129,6 +137,7 @@ export function BulkMessageModal({
   const [protectionEdit, setProtection] = useState<FullProtection | null>(
     initialDraft?.protection ?? null,
   );
+  const [rulesEdit, setRules] = useState<FullRecipientRules | null>(initialDraft?.rules ?? null);
   const [startAt, setStartAt] = useState(initialDraft?.startAt ?? '');
   const [phones, setPhones] = useState<Record<string, string>>(initialDraft?.phones ?? {});
   const [generatorOpen, setGeneratorOpen] = useState(initialDraft?.generatorOpen ?? false);
@@ -143,6 +152,7 @@ export function BulkMessageModal({
   const limits = useQuery(outreachLimitsQueryOptions());
   const pacing = pacingEdit ?? pacingFromLimits(limits.data);
   const schedule = scheduleEdit ?? fullSchedule(limits.data?.schedule);
+  const rules = rulesEdit ?? fullRecipientRules(limits.data?.recipients);
   const usageToday = useQuery({
     ...outreachUsageTodayQueryOptions({ query: { account_ids: ids } }),
     enabled: ids.length > 0 && jobId === null,
@@ -198,7 +208,13 @@ export function BulkMessageModal({
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
   const stale = job.isError && errorCode(job.error) === 'not_found';
   const results = job.data?.results ?? [];
-  const attention = results.filter((result) => result.status !== 'ok' && !result.handed_over);
+  // Skipped because of whom earlier runs wrote to: by design, not a failure.
+  const historySkipped = results.filter(
+    (result) => result.status === 'skipped' && HISTORY_SKIP_CODES.has(result.error_code ?? ''),
+  );
+  const attention = results.filter(
+    (result) => result.status !== 'ok' && !result.handed_over && !historySkipped.includes(result),
+  );
   const handedOver = results.filter((result) => result.handed_over);
   // Sends whose window followed the client's own zone; the rest used the operator's clock.
   const clientTimed = results.filter((result) => result.time_basis === 'client').length;
@@ -232,6 +248,7 @@ export function BulkMessageModal({
           daily_cap: pacing.messages,
           schedule,
           protection,
+          recipient_rules: rules,
           ...(startAt !== '' && { start_at: new Date(startAt).toISOString() }),
           recipient_phones: Object.fromEntries(
             Object.entries(phones).filter(([recipient]) => recipientList.includes(recipient)),
@@ -345,6 +362,7 @@ export function BulkMessageModal({
         pacing: pacingEdit,
         schedule: scheduleEdit,
         protection: protectionEdit,
+        rules: rulesEdit,
         startAt,
         phones,
         generatorOpen,
@@ -462,6 +480,26 @@ export function BulkMessageModal({
                                   })}
                                 </span>
                               )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {historySkipped.length > 0 && (
+                    <div>
+                      <h3 className="type-body-medium text-content-secondary">
+                        {t('accounts.messages.historySkippedTitle', {
+                          count: historySkipped.length,
+                        })}
+                      </h3>
+                      <ul className="mt-2 space-y-2">
+                        {historySkipped.map((result) => (
+                          <li
+                            key={`${result.account_id}:${result.recipient}`}
+                            className="rounded-sm bg-canvas px-3 py-2 type-small"
+                          >
+                            {result.recipient}:{' '}
+                            {t(`accounts.messages.history.${result.error_code ?? ''}`)}
                           </li>
                         ))}
                       </ul>
@@ -602,6 +640,7 @@ export function BulkMessageModal({
                     onAppendRecipients={appendRecipients}
                     pacing={pacing}
                     onPacingChange={setPacing}
+                    recheckNotFound={rules.recheck_not_found}
                   />
                 </section>
 
@@ -705,6 +744,7 @@ export function BulkMessageModal({
                           startAt={startAt}
                           onStartAtChange={setStartAt}
                         />
+                        <RecipientRulesSection rules={rules} onChange={setRules} />
                         {schedule.work_start >= schedule.work_end && (
                           <p role="alert" className="type-small text-danger">
                             {t('accounts.messages.schedule.invalidHours')}

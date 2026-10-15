@@ -18,7 +18,7 @@ function respond(body: unknown, status = 200): Response {
   });
 }
 
-function renderPanel(accountIds: string[]) {
+function renderPanel(accountIds: string[], recheckNotFound = true) {
   const appended: [string[], Record<string, string>, Record<string, string>][] = [];
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function Harness() {
@@ -36,6 +36,7 @@ function renderPanel(accountIds: string[]) {
         }}
         pacing={pacing}
         onPacingChange={setPacing}
+        recheckNotFound={recheckNotFound}
       />
     );
   }
@@ -67,6 +68,7 @@ function mockApi(
     running?: boolean;
     sent?: unknown[];
     importedToday?: number;
+    rechecks?: { waiting: number; due: number };
   } = {},
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -87,6 +89,9 @@ function mockApi(
           first_messages: 0,
         })),
       });
+    }
+    if (path === '/api/v1/accounts/contact-lookup/rechecks' && request.method === 'GET') {
+      return respond(options.rechecks ?? { waiting: 0, due: 0 });
     }
     if (path === '/api/v1/accounts/contact-lookup/active' && request.method === 'GET') {
       return respond(
@@ -263,7 +268,13 @@ test('runs the lookup with the shared batch size and daily cap', async () => {
 
   expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
   expect(sent).toEqual([
-    { account_ids: ['a1'], phones: ['+15551110000'], batch_size: 3, daily_cap: 15 },
+    {
+      account_ids: ['a1'],
+      phones: ['+15551110000'],
+      batch_size: 3,
+      daily_cap: 15,
+      recheck_not_found: true,
+    },
   ]);
 });
 
@@ -338,4 +349,49 @@ test('separates daily-limit and re-check numbers and puts them back for later', 
 
   expect(screen.getByLabelText('Номера телефонов')).toHaveValue('+15550000003\n+15550000004');
   expect(screen.getByRole('button', { name: 'Найти' })).toBeEnabled();
+});
+
+test('runs the due "not found" re-checks with no numbers typed', async () => {
+  const sent: unknown[] = [];
+  mockApi({
+    sent,
+    rechecks: { waiting: 3, due: 2 },
+    results: [
+      {
+        phone: '+15551110000',
+        account_id: 'a2',
+        status: 'found',
+        username: 'bob',
+        rechecked: true,
+      },
+      { phone: '+15552220000', account_id: 'a2', status: 'not_found', rechecked: true },
+    ],
+  });
+  renderPanel(['a1', 'a2']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  expect(
+    await screen.findByText(/3 номера «не найден» ждут перепроверки другим аккаунтом.*войдёт: 2/),
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/2 перепроверено другим аккаунтом/)).toBeInTheDocument();
+  expect(sent).toEqual([expect.objectContaining({ phones: [], recheck_not_found: true })]);
+});
+
+test('switched-off re-checks hide the queue and need typed numbers', async () => {
+  const sent: unknown[] = [];
+  mockApi({ sent, rechecks: { waiting: 3, due: 2 } });
+  renderPanel(['a1', 'a2'], false);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+  expect(screen.queryByText(/ждут перепроверки/)).not.toBeInTheDocument();
+  await userEvent.clear(screen.getByLabelText('Номера телефонов'));
+  expect(screen.getByRole('button', { name: 'Найти' })).toBeDisabled();
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
+  expect(sent).toEqual([expect.objectContaining({ recheck_not_found: false })]);
 });

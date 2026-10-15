@@ -495,6 +495,12 @@
       "attention_other": "{{count}} results need attention",
       "handedOverTitle_one": "{{count}} recipient handed to another account",
       "handedOverTitle_other": "{{count}} recipients handed to another account",
+      "historySkippedTitle_one": "{{count}} recipient skipped by history",
+      "historySkippedTitle_other": "{{count}} recipients skipped by history",
+      "history": {
+        "recently_messaged": "already messaged recently, not writing again",
+        "owned_by_other_account": "another account already talks to this client, and it is not in this run"
+      },
       "handedOver": "{{account}} → {{recipient}}: {{reason}}, handed to another account",
       "unconfirmed": "Delivery is unconfirmed. Check the chat before sending again.",
       "skipped": "Skipped: {{reason}}.",
@@ -531,6 +537,10 @@
         "pacingInvalid": "Check the pause.",
         "recheck_one": "{{count}} needs a re-check",
         "recheck_other": "{{count}} need a re-check",
+        "rechecked_one": "{{count}} re-checked by another account",
+        "rechecked_other": "{{count}} re-checked by another account",
+        "rechecksWaiting_one": "{{count}} “not found” number waits for a re-check by another account; {{due}} will join today's search within the daily limit left.",
+        "rechecksWaiting_other": "{{count}} “not found” numbers wait for a re-check by another account; {{due}} will join today's search within the daily limit left.",
         "dailyLimit_one": "{{count}} not checked — daily limit",
         "dailyLimit_other": "{{count}} not checked — daily limit",
         "retryLater_one": "Put {{count}} unchecked number back",
@@ -642,6 +652,15 @@
         "startAt": "Scheduled start",
         "concurrency": "Accounts sending at once",
         "invalidHours": "The working day must end after it starts."
+      },
+      "recipientRules": {
+        "title": "Who and how often",
+        "noRepeat": "Don't write again",
+        "within": "if messaged within",
+        "noRepeatDays": "Don't write again, days",
+        "days": "days",
+        "oneAccount": "One client — one account",
+        "recheck": "“Not found” — re-check tomorrow with another account"
       },
       "waiting": {
         "schedule": "Starts at {{time}}.",

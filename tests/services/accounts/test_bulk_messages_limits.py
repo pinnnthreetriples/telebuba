@@ -95,7 +95,7 @@ async def test_pauses_left_out_of_the_form_come_from_the_saved_limits(
         monkeypatch,
         bulk_clock,
         account_ids=["a1"],
-        recipients=["@rcpt1"],
+        recipients=["@rcpt2"],
         min_delay_seconds=None,
         max_delay_seconds=None,
     )

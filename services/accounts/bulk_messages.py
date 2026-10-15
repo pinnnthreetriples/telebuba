@@ -53,6 +53,7 @@ from services.accounts._bulk_claims import (
 from services.accounts._bulk_plan import plan_items
 from services.accounts._bulk_runner import BulkRun, Lane
 from services.accounts._outreach_protection import skipped_accounts, young_account_ids
+from services.accounts._recipient_history import screen_recipients, skip_by_history
 from services.accounts._result import AccountActionError, raise_for_result
 
 _MAX_RETAINED_JOBS = 20
@@ -98,6 +99,7 @@ async def _resolve(data: BulkMessageRequest) -> tuple[BulkMessageRequest, RunSch
             "daily_cap": data.daily_cap or limits.first_messages_per_day,
             "schedule": schedule,
             "protection": data.protection or limits.protection,
+            "recipient_rules": data.recipient_rules or limits.recipients,
         }
     )
     return resolved, schedule
@@ -113,6 +115,8 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
         msg = "duplicate recipients"
         raise ValueError(msg)
     resolved, schedule = await _resolve(data)
+    now = datetime.now(UTC)
+    resolved, verdicts = await screen_recipients(resolved, recipients, now)
     run_id = uuid4().hex
     now = datetime.now(UTC)
     record = BulkRunRecord(
@@ -130,9 +134,11 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
     split_live = resolved.mode == "split" and live
     planned = resolved.model_copy(update={"account_ids": live}) if split_live else resolved
     items = plan_items(run_id, planned, schedule, recipients)
+    skip_by_history(items, verdicts)
     for item in items:
         left_out = skipped.get(item.account_id)
-        if left_out is not None:
+        if left_out is not None and item.status == "pending":
+            # A client this account owns stays with it: skipped, never handed on.
             item.status = "skipped"
             item.error_code = left_out.reason
             item.retry_after_seconds = left_out.retry_after_seconds

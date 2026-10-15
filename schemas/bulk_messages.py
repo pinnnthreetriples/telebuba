@@ -11,6 +11,7 @@ from schemas.accounts import _ACCOUNT_ID_PATTERN
 from schemas.bulk_runs import TimeBasis, WaitReason  # noqa: TC001
 from schemas.outreach_limits import MAX_FIRST_MESSAGES_PER_DAY, MAX_PAUSE_SECONDS
 from schemas.outreach_protection import OutreachProtection, SkippedAccount  # noqa: TC001
+from schemas.recipient_rules import RecipientRules  # noqa: TC001
 from schemas.run_schedule import RunSchedule  # noqa: TC001
 
 _MAX_SENDS = 500
@@ -35,6 +36,8 @@ class BulkMessageRequest(BaseModel):
     recipient_accounts: dict[str, str] = Field(default_factory=dict, max_length=_MAX_SENDS)
     # When and how the run spreads its sends; left out, the saved default schedule.
     schedule: RunSchedule | None = None
+    # Who may be written to given earlier runs; left out, the saved default rules.
+    recipient_rules: RecipientRules | None = None
     # Account protection and typing for this run; left out, the saved defaults.
     protection: OutreachProtection | None = None
     # No send before this moment; left out, the run starts at once.

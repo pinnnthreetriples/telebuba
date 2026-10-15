@@ -31,11 +31,20 @@ async def test_outreach_limits_read_save_and_validate(app: FastAPI) -> None:
         assert body["contact_imports_per_day"] == 15
         assert body["first_messages_per_day"] == 25
         assert body["updated_at"] is None
+        assert body["recipients"] == {
+            "no_repeat_days": 30,
+            "one_account_per_client": True,
+            "recheck_not_found": True,
+        }
 
         body.pop("updated_at")
-        saved = await client.put(_URL, json={**body, "contact_imports_per_day": 10})
+        rules = {"no_repeat_days": None, "one_account_per_client": False, "recheck_not_found": True}
+        saved = await client.put(
+            _URL, json={**body, "contact_imports_per_day": 10, "recipients": rules}
+        )
         assert saved.status_code == 200
         assert saved.json()["contact_imports_per_day"] == 10
+        assert saved.json()["recipients"] == rules
         assert (await client.get(_URL)).json() == saved.json()
 
         rejected = await client.put(

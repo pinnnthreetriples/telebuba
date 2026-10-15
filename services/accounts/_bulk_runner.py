@@ -30,6 +30,7 @@ from schemas.outreach_limits import OutreachDailyUsage
 from schemas.outreach_protection import RUN_STOPPED_CODE
 from services.accounts._bulk_plan import next_open, next_utc_day
 from services.accounts._outreach_protection import LIMIT_CODES, halve, note_limit
+from services.accounts._recipient_history import record_first_message
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -311,6 +312,7 @@ class BulkRun:
                     account_id=item.account_id, day=now.date().isoformat(), first_messages=1
                 )
             )
+            await record_first_message(item, self.data.recipient_phones.get(item.recipient), now)
             if lane.left is not None:
                 lane.left -= 1
             lane.row.series_count += 1

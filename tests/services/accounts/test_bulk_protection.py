@@ -9,9 +9,11 @@ import pytest
 
 from core.db import create_account, upsert_spam_status
 from core.repositories.outreach_rests import list_outreach_rests, record_outreach_rest
+from core.repositories.recipient_history import add_recipient_contact
 from schemas.accounts import AccountCreate
 from schemas.bulk_messages import BulkMessageJob, BulkMessageRequest
 from schemas.outreach_protection import OutreachProtection, OutreachRest, SkippedAccount
+from schemas.recipient_history import RecipientContact
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from schemas.telegram_actions_outreach import OutreachSetTyping
@@ -332,3 +334,34 @@ async def test_show_typing_waits_only_after_telegram_showed_it(
     # Typing off calls nothing; a refused typing waits for nothing.
     assert [action.recipient for action in sent] == ["123", "123"]
     assert waits == [3]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("bulk_clock")
+async def test_a_client_owned_by_a_left_out_account_is_skipped_not_handed_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_account(AccountCreate(account_id="a1"))
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="a1", status="limited", checked_at=datetime.now(UTC).isoformat()
+        )
+    )
+    # a1 wrote to rcpt1 long enough ago for "no repeat", so only ownership applies.
+    await add_recipient_contact(
+        RecipientContact(
+            peer="rcpt1",
+            account_id="a1",
+            sent_at=(datetime.now(UTC) - timedelta(days=60)).isoformat(),
+        )
+    )
+
+    job, calls = await _run(
+        monkeypatch,
+        account_ids=["a1", "a2"],
+        recipients=["@rcpt1", "@rcpt2"],
+        mode="split",
+    )
+
+    assert calls == [("a2", "rcpt2")]
+    assert ("a1", "@rcpt1", "skipped", "account_spam_blocked") in _rows(job)
