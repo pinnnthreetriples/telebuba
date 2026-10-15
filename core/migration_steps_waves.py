@@ -1,6 +1,6 @@
-"""Migrations 93-94 — warming waves and the confirmed spam block (Прогрев 2.0 follow-up).
+"""Migrations 94-95 — warming waves and the confirmed spam block (Прогрев 2.0 follow-up).
 
-93 adds two columns to ``warming_account_state``:
+94 adds two columns to ``warming_account_state``:
 
 * ``wave`` — the account's warming wave: 1 for its first stint, +1 for every fresh stint
   of the same account life. Existing rows are backfilled from the lifecycle journal:
@@ -12,7 +12,7 @@
   is exactly that confirmation, so it moves into the new ``spam_blocked`` state, stamped
   with the moment it was parked.
 
-94 lets the journal hold ``warming_stopped`` (a wave ended without a graduation: the
+95 lets the journal hold ``warming_stopped`` (a wave ended without a graduation: the
 operator's stop, or the spam-block stop). SQLite cannot alter a CHECK, so the table is
 rebuilt under the new constraint with every row, id and index carried over.
 
@@ -57,12 +57,12 @@ UPDATE warming_account_state
 
 # Frozen here on purpose, not read from ``schemas.lifecycle``: a migration body must
 # keep producing the same schema whatever the live vocabulary grows into later.
-_KINDS_94 = (
+_KINDS_95 = (
     "'warming_started','warmed','promoted','handed_off','quarantined',"
     "'spambot_verdict','session_dead','deleted','warming_stopped'"
 )
 _NEW_JOURNAL = (
-    "CREATE TABLE account_lifecycle_events_v94 ("
+    "CREATE TABLE account_lifecycle_events_v95 ("
     " id INTEGER NOT NULL,"
     " account_id VARCHAR NOT NULL,"
     " tg_user_id BIGINT,"
@@ -73,10 +73,10 @@ _NEW_JOURNAL = (
     " backfilled INTEGER DEFAULT 0 NOT NULL,"
     " source_log_id INTEGER,"
     " PRIMARY KEY (id),"
-    f" CHECK (kind IN ({_KINDS_94})))"
+    f" CHECK (kind IN ({_KINDS_95})))"
 )
 _COPY_ROWS = (
-    "INSERT INTO account_lifecycle_events_v94"
+    "INSERT INTO account_lifecycle_events_v95"
     " (id, account_id, tg_user_id, stint_started_at, kind, created_at, extra,"
     " backfilled, source_log_id)"
     " SELECT id, account_id, tg_user_id, stint_started_at, kind, created_at, extra,"
@@ -125,7 +125,7 @@ def _allow_lifecycle_warming_stopped(connection: Connection) -> None:
     connection.exec_driver_sql(_COPY_ROWS)
     connection.exec_driver_sql("DROP TABLE account_lifecycle_events")
     connection.exec_driver_sql(
-        "ALTER TABLE account_lifecycle_events_v94 RENAME TO account_lifecycle_events"
+        "ALTER TABLE account_lifecycle_events_v95 RENAME TO account_lifecycle_events"
     )
     for statement in _JOURNAL_INDEXES:
         connection.exec_driver_sql(statement)

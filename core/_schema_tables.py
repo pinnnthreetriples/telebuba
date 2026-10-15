@@ -144,6 +144,8 @@ _warming_channels = Table(
     Column("last_post_at", String, nullable=True),
     Column("source", String, nullable=False, server_default="manual"),
     Column("status", String, nullable=False, server_default="approved"),
+    # The warming account whose own search found it (migration #93).
+    Column("found_by", String, nullable=True),
 )
 _warming_joined_channels = Table(
     "warming_joined_channels",
@@ -253,7 +255,7 @@ _warming_account_state = Table(
     # The device this stint warms through; desktop unless the operator chose mobile.
     Column("device_mode", String, nullable=False, server_default="desktop"),
     # The stint's warming wave and the confirmed spam block; see
-    # schemas._warming_console.WarmingStateMarks. Migration 93.
+    # schemas._warming_console.WarmingStateMarks. Migration 94.
     Column("wave", Integer, nullable=False, server_default="1"),
     Column("spam_blocked_at", String, nullable=True),
 )

@@ -153,6 +153,7 @@ _BLOCK_PRIORITY = (
     "busy_chat_broadcast",
     "busy_user_parser",
     "busy_masstagging",
+    "busy_channel_search",
     "quota_hour",
     "quota_day",
     "quota_soft_day",
@@ -182,6 +183,10 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
     owner = _account_owner.owner_of(account_id)
     if owner in {"neuroshilling", "chat_broadcast", "user_parser", "masstagging"}:
         return f"busy_{owner}"
+    # Warming's channel-pool search is reading with it for a few minutes; another
+    # account takes the post instead of this one waiting at the send for the search.
+    if _account_owner.is_lent(account_id):
+        return "busy_channel_search"
     if _state.in_cooldown(account_id, now, channel):
         return "cooldown"
     account = pool.accounts.get(account_id)

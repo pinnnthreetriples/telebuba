@@ -83,7 +83,7 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
 def test_created_and_migrated_schemas_match(
     created_engine: Engine, migrated_engine: Engine
 ) -> None:
-    # 94 widened the kind CHECK by rebuilding the table; 74 + 94 is today's schema.
+    # 95 widened the kind CHECK by rebuilding the table; 74 + 95 is today's schema.
     with migrated_engine.begin() as connection:
         _allow_lifecycle_warming_stopped(connection)
     assert _shape(created_engine, _TABLE) == _shape(migrated_engine, _TABLE)

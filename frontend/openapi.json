@@ -11732,7 +11732,7 @@
           "warming"
         ],
         "summary": "Find Warming Channels",
-        "description": "Search channels for the pool with an account outside warming; propose the fits.",
+        "description": "Search channels with an account outside warming; the fits join the pool at once.",
         "operationId": "findWarmingChannels",
         "parameters": [
           {
@@ -11769,235 +11769,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PoolFillResult"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warming/channels/proposals": {
-      "get": {
-        "tags": [
-          "warming"
-        ],
-        "summary": "List Warming Channel Proposals",
-        "operationId": "listWarmingChannelProposals",
-        "parameters": [
-          {
-            "name": "tb_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tb Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warming/channels/proposals/approve": {
-      "post": {
-        "tags": [
-          "warming"
-        ],
-        "summary": "Approve Warming Channel Proposals",
-        "description": "Move the ticked proposals into the pool; returns the proposals still waiting.",
-        "operationId": "approveWarmingChannelProposals",
-        "parameters": [
-          {
-            "name": "tb_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tb Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChannelBatchRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/warming/channels/proposals/reject": {
-      "post": {
-        "tags": [
-          "warming"
-        ],
-        "summary": "Reject Warming Channel Proposals",
-        "description": "Drop the ticked proposals; returns the proposals still waiting.",
-        "operationId": "rejectWarmingChannelProposals",
-        "parameters": [
-          {
-            "name": "tb_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tb Session"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChannelBatchRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WarmingChannelList"
                 }
               }
             }
@@ -23896,25 +23667,6 @@
         "type": "object",
         "title": "ChannelBanCheckList"
       },
-      "ChannelBatchRequest": {
-        "properties": {
-          "channels": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 200,
-            "minItems": 1,
-            "title": "Channels"
-          }
-        },
-        "type": "object",
-        "required": [
-          "channels"
-        ],
-        "title": "ChannelBatchRequest",
-        "description": "Body of the approve/reject calls: the proposals the operator ticked."
-      },
       "ChannelCreateRequest": {
         "properties": {
           "title": {
@@ -30734,17 +30486,45 @@
             },
             "type": "array",
             "maxItems": 5,
-            "minItems": 1,
             "title": "Topics"
+          },
+          "pull_account_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pull Account Id"
+          },
+          "pull_busy_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "neurocomment",
+                  "neuroshilling",
+                  "chat_broadcast",
+                  "masstagging"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pull Busy With"
           }
         },
         "type": "object",
         "required": [
-          "language",
-          "topics"
+          "language"
         ],
         "title": "PoolFillRequest",
-        "description": "\u00ab\u041d\u0430\u0439\u0442\u0438 \u043a\u0430\u043d\u0430\u043b\u044b\u00bb: what to look for, in which language and country."
+        "description": "\u00ab\u041d\u0430\u0439\u0442\u0438 \u043a\u0430\u043d\u0430\u043b\u044b\u00bb: what to look for, in which language and country.\n\nWithout topics the search takes them from the interests of that language's\naccounts. ``pull_account_id`` is the operator's consent to take that busy account\noff its work for the search; it is checked again before anything is taken."
       },
       "PoolFillResult": {
         "properties": {
@@ -30752,7 +30532,12 @@
             "type": "string",
             "enum": [
               "ok",
-              "no_search_account"
+              "no_search_account",
+              "needs_consent",
+              "no_topics",
+              "already_running",
+              "flooded",
+              "failed"
             ],
             "title": "Status"
           },
@@ -30768,11 +30553,21 @@
             "title": "Checked",
             "default": 0
           },
-          "proposed": {
+          "added": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Proposed",
+            "title": "Added",
             "default": 0
+          },
+          "pull_candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolSearchCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -30780,7 +30575,57 @@
           "status"
         ],
         "title": "PoolFillResult",
-        "description": "How a search went: hits seen, channels checked, proposals added for approval."
+        "description": "How a search went: hits seen, channels checked, channels added to the pool."
+      },
+      "PoolRefillRequest": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$",
+            "title": "Language"
+          },
+          "requested_at": {
+            "type": "string",
+            "title": "Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "requested_at"
+        ],
+        "title": "PoolRefillRequest",
+        "description": "The automatic refill wanted to search this language and found no free account."
+      },
+      "PoolSearchCandidate": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "busy_with": {
+            "type": "string",
+            "enum": [
+              "neurocomment",
+              "neuroshilling",
+              "chat_broadcast",
+              "masstagging"
+            ],
+            "title": "Busy With"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "name",
+          "busy_with"
+        ],
+        "title": "PoolSearchCandidate",
+        "description": "The busy account a search would take, and what it would stop doing for it."
       },
       "PrivacySettingsResult": {
         "properties": {
@@ -34950,6 +34795,16 @@
             },
             "type": "array",
             "title": "Cadence Preview"
+          },
+          "pool_refill_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolRefillRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -35051,7 +34906,8 @@
             "type": "string",
             "enum": [
               "manual",
-              "discovery"
+              "discovery",
+              "self_search"
             ],
             "title": "Source",
             "default": "manual"
@@ -35060,10 +34916,21 @@
             "type": "string",
             "enum": [
               "approved",
-              "pending"
+              "removed"
             ],
             "title": "Status",
             "default": "approved"
+          },
+          "found_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
           }
         },
         "type": "object",

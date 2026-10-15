@@ -33,6 +33,11 @@ from schemas._warming_channels import (  # noqa: F401, TC001 - runtime re-export
     WarmingChannelObservation,
 )
 from schemas._warming_console import SoftStartPlan, WarmingCardConsole, WarmingStateMarks
+from schemas._warming_cycle import (  # noqa: F401 - runtime re-export, not type-only
+    CycleStatus,
+    WarmingCycleResult,
+)
+from schemas._warming_pool import PoolRefillRequest  # noqa: TC001 - a pydantic field type
 from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
     CaptchaLlmProvider,
     WarmingSettings,
@@ -374,6 +379,8 @@ class WarmingBoardState(BaseModel):
     soft_start: SoftStartPlan = Field(default_factory=SoftStartPlan)
     # Real visits a day per persona and phase, for the start dialog's persona hint.
     cadence_preview: list[CadencePreview] = Field(default_factory=list)
+    # The refill found no free account: the channels card asks the operator for one.
+    pool_refill_request: PoolRefillRequest | None = None
 
 
 class StartWarmingRequest(StartWindow):
@@ -406,24 +413,3 @@ class WarmingCycleRequest(BaseModel):
     activity_persona: ActivityPersona = "normal"
     # This visit's kind and order (4.4); ``None`` = a normal visit in the classic order.
     visit: VisitPlan | None = None
-
-
-CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]
-
-
-class WarmingCycleResult(BaseModel):
-    """Outcome of one warming cycle — drives counters and the activity log."""
-
-    account_id: str = Field(min_length=1)
-    status: CycleStatus
-    channels_joined: int = Field(default=0, ge=0)
-    channels_read: int = Field(default=0, ge=0)
-    reactions_sent: int = Field(default=0, ge=0)
-    messages_sent: int = Field(default=0, ge=0)
-    detail: str | None = None
-    flood_wait_seconds: int | None = Field(default=None, ge=0)
-    flood_wait_until: str | None = None
-    failures: int = Field(default=0, ge=0)
-    attempted_actions: int = Field(default=0, ge=0)
-    last_failed_action: str | None = None
-    last_failed_channel: str | None = None

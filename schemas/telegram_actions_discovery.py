@@ -98,6 +98,8 @@ class TelegramChannelMatch(BaseModel):
     participants_count: int | None = None
     kind: Literal["channel", "group"] = "channel"
     join_request: bool | None = None
+    # Telegram itself marks the chat as a scam or an impersonation (``scam``/``fake``).
+    flagged: bool = False
 
     @model_validator(mode="after")
     def _addressable(self) -> TelegramChannelMatch:

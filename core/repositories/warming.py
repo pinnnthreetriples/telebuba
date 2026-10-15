@@ -67,13 +67,14 @@ def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
             "last_post_at": _optional_str(mapping.get("last_post_at")),
             "source": _optional_str(mapping.get("source")) or "manual",
             "status": _optional_str(mapping.get("status")) or "approved",
+            "found_by": _optional_str(mapping.get("found_by")),
         },
     )
 
 
 def _list_warming_channels() -> WarmingChannelList:
-    # Proposals awaiting the operator (``status='pending'``, 4.5) live in warming_pool.
-    approved = _warming_channels.c.status != "pending"
+    # A found channel the operator removed stays as ``removed`` and is never listed.
+    approved = _warming_channels.c.status == "approved"
     statement = select(_warming_channels).where(approved).order_by(_warming_channels.c.id.asc())
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
@@ -104,13 +105,20 @@ async def add_warming_channel(channel: str, label: str | None = None) -> Warming
 
 
 def _remove_warming_channel(channel: str) -> WarmingChannelList:
+    """Drop an operator's own channel; keep a found one as ``removed``.
+
+    A search would otherwise find the removed channel again and put it straight back,
+    since nothing waits for approval any more.
+    """
+    row = _warming_channels.c.channel == channel
     with _get_engine().begin() as connection:
         connection.execute(
             delete(_warming_joined_channels).where(_warming_joined_channels.c.channel == channel),
         )
         connection.execute(
-            delete(_warming_channels).where(_warming_channels.c.channel == channel),
+            delete(_warming_channels).where(row, _warming_channels.c.source == "manual")
         )
+        connection.execute(update(_warming_channels).where(row).values(status="removed"))
     return _list_warming_channels()
 
 

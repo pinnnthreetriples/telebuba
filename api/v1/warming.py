@@ -307,7 +307,7 @@ async def get_warming_survival(cohort: SurvivalCohortKind = "week") -> SurvivalR
     return await survival_service.load_survival(cohort)
 
 
-# «Найти каналы» and the approval of its proposals (Прогрев 2.0, item 4.5).
+# «Найти каналы»: the channel-pool search (Прогрев 2.0, item 4.5 and its follow-up).
 router.include_router(pool_router)
 # «Темп прогрева»: the pace presets (Прогрев 2.0, item 5.2).
 router.include_router(tuning_router)

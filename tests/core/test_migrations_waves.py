@@ -1,7 +1,7 @@
-"""Migrations 93-94: the warming wave, the confirmed spam block, the ``warming_stopped`` kind.
+"""Migrations 94-95: the warming wave, the confirmed spam block, the ``warming_stopped`` kind.
 
-93 adds ``wave`` (backfilled from the journal's current life) and ``spam_blocked_at``,
-and moves rows the old three-strikes ladder parked into ``spam_blocked``. 94 rebuilds
+94 adds ``wave`` (backfilled from the journal's current life) and ``spam_blocked_at``,
+and moves rows the old three-strikes ladder parked into ``spam_blocked``. 95 rebuilds
 the journal so its CHECK admits ``warming_stopped``, carrying every row and id.
 """
 
@@ -83,8 +83,8 @@ def _migrate(engine: Engine) -> None:
 
 
 def test_the_registry_carries_both_migrations_once_in_order() -> None:
-    versions = [(v, body) for v, _name, body in MIGRATIONS if v in {93, 94}]
-    assert versions == [(93, _add_warming_state_wave), (94, _allow_lifecycle_warming_stopped)]
+    versions = [(v, body) for v, _name, body in MIGRATIONS if v in {94, 95}]
+    assert versions == [(94, _add_warming_state_wave), (95, _allow_lifecycle_warming_stopped)]
     numbers = [entry[0] for entry in MIGRATIONS]
     assert numbers == sorted(numbers)
 

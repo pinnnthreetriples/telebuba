@@ -51,7 +51,7 @@ class WarmingAttention(BaseModel):
 
 
 class WarmingStateMarks(BaseModel):
-    """Row columns written outside the main upsert (migrations 82-84, 93)."""
+    """Row columns written outside the main upsert (migrations 82-84, 94)."""
 
     # Geo consent as "PHONE>PROXY" ("MX>US"): it covers only that pair, so a new proxy
     # country asks again without anything having to clear it.
@@ -64,7 +64,7 @@ class WarmingStateMarks(BaseModel):
     # The visit the booked cycle runs and its step order (4.4, migration 87).
     visit_kind: VisitKind | None = None
     cycle_plan: list[VisitStep] = Field(default_factory=list)
-    # The account's warming wave (migration 93): 1 for its first stint, +1 for every
+    # The account's warming wave (migration 94): 1 for its first stint, +1 for every
     # fresh stint of the same account life («Вернуть в прогрев» included). A deletion
     # takes the row with it, so a re-imported account starts again at 1.
     wave: int = Field(default=1, ge=1)

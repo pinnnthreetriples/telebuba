@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import _metadata
+from core.migration_steps_channel_search import _add_warming_channel_search
 from core.migration_steps_warming_channels import _add_warming_channel_labels
 from core.migrations import MIGRATIONS
 from tests.core.test_migrations_scheduled_posts import _shape
@@ -34,6 +35,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
             "INSERT INTO warming_channels (channel, created_at) VALUES ('alpha', 'then')",
         )
         _add_warming_channel_labels(connection)
+        _add_warming_channel_search(connection)
     return engine
 
 

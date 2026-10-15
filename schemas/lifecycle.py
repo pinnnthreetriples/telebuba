@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 # deleted         — the operator deleted the account; ``extra`` carries the reason.
 # warming_stopped — a wave ended without a graduation: ``extra.reason`` is ``operator``
 #                   (the Stop button) or ``spam_blocked`` (@SpamBot confirmed the block);
-#                   ``extra`` also carries the wave and its worked days (migration 94).
+#                   ``extra`` also carries the wave and its worked days (migration 95).
 LifecycleEventKind = Literal[
     "warming_started",
     "warmed",
