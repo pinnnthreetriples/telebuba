@@ -79,6 +79,33 @@ def _ready(configured: LeadQueueSettings) -> bool:
     return not configured.paused and bool(configured.account_ids) and bool(configured.text.strip())
 
 
+def _sendable(found: list[LeadQueueItem], resting: dict[str, datetime]) -> list[LeadQueueItem]:
+    """Found leads whose account may send now, within one run's account limit."""
+    leads: list[LeadQueueItem] = []
+    accounts: set[str] = set()
+    for lead in found:
+        account_id = lead.account_id
+        if account_id is None or lead.user_id is None or account_id in resting:
+            continue
+        if account_id not in accounts and len(accounts) >= _MAX_RUN_ACCOUNTS:
+            continue
+        accounts.add(account_id)
+        leads.append(lead)
+    return leads
+
+
+def _run_request(leads: list[LeadQueueItem], text: str) -> BulkMessageRequest:
+    """Split mode, each lead pinned to the account that found it."""
+    return BulkMessageRequest(
+        account_ids=list(dict.fromkeys(str(lead.account_id) for lead in leads)),
+        recipients=[str(lead.user_id) for lead in leads],
+        text=text,
+        mode="split",
+        recipient_accounts={str(lead.user_id): str(lead.account_id) for lead in leads},
+        recipient_phones={str(lead.user_id): lead.phone for lead in leads},
+    )
+
+
 class LeadQueueRunner:
     def __init__(self) -> None:
         self.wakeup = asyncio.Event()
@@ -157,16 +184,7 @@ class LeadQueueRunner:
             return []
         found = await repo.list_leads(["found"], limit=_MAX_RUN_LEADS)
         resting = {a: until for a, until in self.send_rest.items() if until > now}
-        leads: list[LeadQueueItem] = []
-        accounts: dict[str, None] = {}
-        for lead in found:
-            account_id = lead.account_id
-            if account_id is None or lead.user_id is None or account_id in resting:
-                continue
-            if account_id not in accounts and len(accounts) >= _MAX_RUN_ACCOUNTS:
-                continue
-            accounts[account_id] = None
-            leads.append(lead)
+        leads = _sendable(found, resting)
         if not leads:
             return [min(resting.values())] if found and resting else []
         run_id = uuid4().hex
@@ -176,23 +194,16 @@ class LeadQueueRunner:
             return [now]
         for lead in leads:
             lead.status, lead.run_id = "messaging", run_id
-        request = BulkMessageRequest(
-            account_ids=list(dict.fromkeys(str(lead.account_id) for lead in leads)),
-            recipients=[str(lead.user_id) for lead in leads],
-            text=configured.text,
-            mode="split",
-            recipient_accounts={str(lead.user_id): str(lead.account_id) for lead in leads},
-            recipient_phones={str(lead.user_id): lead.phone for lead in leads},
-        )
+        owner = configured.owner_user_id or ""
         try:
             await bulk_messages.start_bulk_message_job(
-                request, configured.owner_user_id or "", kind="lead_queue", run_id=run_id
+                _run_request(leads, configured.text), owner, kind="lead_queue", run_id=run_id
             )
         except ValueError:
             await self._back_to_found(leads)
             raise
         if not _ready(await repo.load_lead_queue_settings()):
-            await bulk_messages.cancel_bulk_message_job(run_id, configured.owner_user_id or "")
+            await bulk_messages.cancel_bulk_message_job(run_id, owner)
         bulk_messages.launch_bulk_message_job(run_id)
         return [now + timedelta(seconds=SYNC_SECONDS)]
 
