@@ -262,10 +262,13 @@ async def run_bulk_message_job(job_id: str) -> None:
     record = await repo.get_bulk_run(job_id)
     if record is None or record.status != "running":
         return
-    run = await _load_run(record)
     if job_id in _RUNS:
         # Already driven by this process: a second loop would send every item twice,
         # and its end would release the claims the first one still sends under.
+        return
+    run = await _load_run(record)
+    if job_id in _RUNS:
+        # A concurrent call got past the check above while this one loaded the run.
         return
     _RUNS[job_id] = run
     try:

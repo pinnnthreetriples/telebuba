@@ -29,6 +29,8 @@ from tests.services.warming._pool_support import seed_account
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas.bulk_runs import BulkRunRecord
+
     Probe = Callable[[str], Awaitable[None]]
 
 pytestmark = pytest.mark.usefixtures("empty_bulk_jobs", "bulk_clock")
@@ -302,7 +304,9 @@ async def test_the_claim_is_released_when_shutdown_cancels_the_loop(telegram: _T
 
 
 @pytest.mark.asyncio
-async def test_a_second_loop_over_the_same_run_does_nothing(telegram: _Telegram) -> None:
+async def test_a_second_loop_over_the_same_run_does_nothing(
+    telegram: _Telegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
     sending = asyncio.Event()
     go_on = asyncio.Event()
 
@@ -314,12 +318,35 @@ async def test_a_second_loop_over_the_same_run_does_nothing(telegram: _Telegram)
     job_id = await _start()
     first = asyncio.create_task(bulk_messages.run_bulk_message_job(job_id))
     await sending.wait()
+    loads: list[str] = []
+    load = bulk_messages._load_run
+
+    async def counting_load(record: BulkRunRecord) -> _bulk_runner.BulkRun:
+        loads.append(record.id)
+        return await load(record)
+
+    monkeypatch.setattr(bulk_messages, "_load_run", counting_load)
 
     await bulk_messages.run_bulk_message_job(job_id)
 
-    # The duplicate neither sent nor dropped the claim the first loop sends under.
+    # The duplicate did not even load the run, neither sent nor dropped the claim.
+    assert loads == []
     assert _account_owner.owner_of("a1") == "bulk_messages"
     go_on.set()
     await first
+    assert telegram.sent == [("a1", "rcpt1")]
+    assert _account_owner.owners() == {}
+
+
+@pytest.mark.asyncio
+async def test_two_loops_started_together_send_once(telegram: _Telegram) -> None:
+    job_id = await _start()
+
+    # Both pass the first check before either has loaded the run.
+    await asyncio.gather(
+        bulk_messages.run_bulk_message_job(job_id),
+        bulk_messages.run_bulk_message_job(job_id),
+    )
+
     assert telegram.sent == [("a1", "rcpt1")]
     assert _account_owner.owners() == {}
