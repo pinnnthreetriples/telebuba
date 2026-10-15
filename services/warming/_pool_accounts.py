@@ -2,7 +2,10 @@
 
 A pool search («Найти каналы» or the automatic refill) never reads with an account in
 warming: a warming account only ever searches for itself, inside its own visit
-(``_self_search``). Every other account falls into one of three groups:
+(``_self_search``). An account warming stopped on a confirmed spam block is not in
+warming — no loop runs for it — and a spam block only shuts messages to strangers, never
+searching, joining or reading channels, so it searches like any other account (the
+«Спамблок» mark stays on its card). Every other account falls into one of three groups:
 
 - **free**: alive, with a session, and nothing else is using it — no campaign of any
   feature holds it, it serves no active neurocomment campaign, it is not the running
@@ -11,8 +14,8 @@ warming: a warming account only ever searches for itself, inside its own visit
   neuroshilling, a chat broadcast or masstagging is using it. Such an account is only
   ever taken after the operator agreed in the consent dialog, and is given back when
   the search ends;
-- **unusable**: everything else — in warming, the listener, a discovery or parser run,
-  cooling, dead. Never taken, not even with consent.
+- **unusable**: everything else — in warming (a spam-block stop aside), the listener, a
+  discovery or parser run, cooling, dead. Never taken, not even with consent.
 
 The pull order puts the work that suffers least from a pause first: a skipped post or
 two of commenting, a bulk run's next message a few minutes late, then masstagging and
@@ -90,6 +93,11 @@ async def _fleet() -> _Fleet:
     )
 
 
+def _in_warming(state: WarmingStateRecord) -> bool:
+    """A warming loop owns the account; a spam-block stop does not (no loop runs)."""
+    return is_warming(state.state) and state.state != "spam_blocked"
+
+
 def _usable(account_id: str, fleet: _Fleet) -> bool:
     """Alive, with a session, outside warming, and no reader that cannot be paused."""
     account = fleet.accounts.get(account_id)
@@ -97,7 +105,7 @@ def _usable(account_id: str, fleet: _Fleet) -> bool:
         return False
     state = fleet.states.get(account_id)
     if state is not None and (
-        is_warming(state.state) or flood_active(state.flood_wait_until, fleet.now)
+        _in_warming(state) or flood_active(state.flood_wait_until, fleet.now)
     ):
         return False
     owner = _account_owner.owner_of(account_id)

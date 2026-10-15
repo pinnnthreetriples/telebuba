@@ -7,7 +7,9 @@ The unit is the account life, not the wave, so a re-warmed account is counted on
   every window is measured from it, whatever wave it came in;
 * death — a session that died for good (revoked, deactivated, banned, or frozen), or a
   deletion the operator made as dead. An old deletion without such evidence is a
-  write-off, never a death (Q11, revised: a spam limit alone is not evidence);
+  write-off, never a death (Q11, revised: a spam limit alone is not evidence). A death
+  found later is dated by its earliest recorded evidence (the logged refusal that first
+  showed it, ``extra.evidence_at``), else by its finding; the finding is kept beside it;
 * censoring — a write-off: the life leaves the count without dying. A re-warm does NOT
   censor: the post-release windows run on through a later wave and count what happened
   in it, since censoring the accounts the operator chose to re-warm would bias the
@@ -45,7 +47,10 @@ class LifeFacts:
     """The moments that decide a life's outcomes."""
 
     released_at: datetime | None
+    # When the death was first shown (the earliest recorded evidence), and when it was
+    # found (the journal row); the same moment when nothing earlier was on record.
     died_at: datetime | None
+    found_at: datetime | None
     cause: DeathCause | None
     # Written off by the operator.
     censored_at: datetime | None
@@ -63,12 +68,23 @@ def _session_death(life: tuple[LifecycleEvent, ...]) -> bool:
     return any(event.kind == "session_dead" for event in life)
 
 
-def _spam_blocked(life: tuple[LifecycleEvent, ...]) -> bool:
-    return any(
-        _verdict(event) == "limited"
-        or (event.kind == "warming_stopped" and event.extra.get("reason") == "spam_blocked")
-        for event in life
-    )
+def _spam_blocked(life: tuple[LifecycleEvent, ...], until: LifecycleEvent) -> bool:
+    """A spam block still stood when ``until`` was written.
+
+    Set by a ``limited`` answer or the spam-block stop, cleared by a later ``clean``
+    answer or the block's lift: a block @SpamBot has since lifted is not one.
+    """
+    blocked = False
+    for event in life:
+        if event.id == until.id:
+            break
+        if event.kind == "spam_block_lifted" or _verdict(event) == "clean":
+            blocked = False
+        elif _verdict(event) == "limited" or (
+            event.kind == "warming_stopped" and event.extra.get("reason") == "spam_blocked"
+        ):
+            blocked = True
+    return blocked
 
 
 def _deletion_is_death(event: LifecycleEvent, life: tuple[LifecycleEvent, ...]) -> bool:
@@ -79,7 +95,7 @@ def _deletion_is_death(event: LifecycleEvent, life: tuple[LifecycleEvent, ...]) 
     if reason == "dead" and event.extra.get("reason_source") != "guess":
         # The operator said so — except of a spam-blocked account, which still worked:
         # deleting one is writing it off, whichever reason was picked in the dialog.
-        return _session_death(life) or not _spam_blocked(life)
+        return _session_death(life) or not _spam_blocked(life, event)
     # A guess (or no reason at all): dead only on a session that died, never on a spam
     # limit — older guesses called a limited account dead, which it is not (Q11).
     return event.extra.get("evidence") == "session" or _session_death(life)
@@ -95,6 +111,15 @@ def _ending(life: Life) -> tuple[LifecycleEvent | None, DeathCause | None]:
             dead = _deletion_is_death(event, life.all_events)
             return event, "deleted_dead" if dead else None
     return None, None
+
+
+def _died_at(ending: LifecycleEvent | None, found_at: datetime | None) -> datetime | None:
+    """The death's earliest recorded evidence, never later than its finding."""
+    raw = ending.extra.get("evidence_at") if ending is not None else None
+    evidence = parse_moment(raw) if isinstance(raw, str) else None
+    if evidence is None or found_at is None:
+        return found_at
+    return min(evidence, found_at)
 
 
 def _moments(events: list[LifecycleEvent]) -> tuple[datetime, ...]:
@@ -122,16 +147,17 @@ def life_facts(life: Life) -> LifeFacts:
     """Release, death or write-off, wounds and @SpamBot answers of one life."""
     ending, cause = _ending(life)
     ended_at = parse_moment(ending.created_at) if ending is not None else None
+    died_at = _died_at(ending, ended_at) if cause is not None else None
     # Rows after the life ended say nothing about it.
     events = list(life.events)
     if ending is not None:
         events = events[: events.index(ending) + 1]
     releases = _moments([event for event in events if event.kind in _RELEASE_KINDS])
     verdicts = [event for event in events if event.kind == "spambot_verdict"]
-    died_at = ended_at if cause is not None else None
     return LifeFacts(
         released_at=min(releases) if releases else None,
         died_at=died_at,
+        found_at=ended_at if cause is not None else None,
         cause=cause,
         censored_at=ended_at if ending is not None and cause is None else None,
         wounds=_moments(_wound_rows(events)),

@@ -26,6 +26,9 @@ class SurvivalSettings(BaseSettings):
     probe_proxy_spacing_seconds: float = Field(default=3600.0, ge=0.0)
     # An account whose probe got no answer is not asked again for this long.
     probe_retry_hours: float = Field(default=24.0, ge=0.0)
+    # A pass with no probe due re-asks one account with a confirmed spam block once its
+    # last @SpamBot answer is this old; a clean answer lifts the block.
+    block_recheck_hours: float = Field(default=72.0, gt=0.0)
     # Days of fleet-wide daily history the panel charts.
     history_days: int = Field(default=30, ge=1, le=366)
     # Most stints the swimmer plot lists, newest start first.

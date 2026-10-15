@@ -180,6 +180,7 @@ def swimmer_row(item: Judged, clock: Clock) -> SurvivalLife:
         end_day=_day(item, end),
         release_day=_day(item, facts.released_at) if facts.released_at else None,
         death_day=_day(item, facts.died_at) if facts.died_at else None,
+        found_day=_day(item, facts.found_at) if facts.found_at else None,
         cause=facts.cause,
         wound_days=[_day(item, wound) for wound in facts.wounds],
         waves=_waves(item),

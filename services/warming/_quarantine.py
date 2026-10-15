@@ -5,7 +5,7 @@ quarantine window has elapsed: re-ask @SpamBot, then
 
 * ``clean`` — back to warming, with the cap ramping up and DMs shut for a while (so
   is a ``limited`` answer for an account whose block is already known and kept);
-* ``limited`` — a spam block is permanent, so after ``quarantine_max_repeats``
+* ``limited`` — a spam block rarely passes within a rest, so after ``quarantine_max_repeats``
   still-limited answers (one by default) warming stops in ``spam_blocked``
   (``services.warming._spam_block``) for the operator to delete or keep the account;
   below that count the account rests another window;

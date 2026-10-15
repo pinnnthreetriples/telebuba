@@ -7,7 +7,8 @@ import { EmptyState, Icon } from '@/shared/ui';
 // One row per account life on a shared day axis (a swimmer plot): the warming stretch
 // blue, the life after its first release green, a dot on each wound (a spam block or a
 // flood), a tick where a new wave began («Вернуть в прогрев»), a cross on the day of
-// death. A written-off row is grey from its release on: it left the count.
+// death — the day its earliest recorded evidence shows, with the day a check found it
+// in the hint when that came later. A written-off row is grey from its release on.
 const AFTER: Record<SurvivalLife['status'], string> = {
   warming: 'bg-action-primary',
   alive: 'bg-success',
@@ -25,6 +26,8 @@ function LifeBar({ stint, span }: { stint: SurvivalLife; span: number }) {
   const { t } = useTranslation();
   const release = stint.release_day ?? stint.end_day;
   const cause = stint.cause ? t(`warming.survival.causes.${stint.cause}`) : '';
+  const foundLater =
+    stint.death_day != null && stint.found_day != null && stint.found_day > stint.death_day;
   return (
     <div className="relative h-badge">
       <div className="absolute inset-x-0 top-1/2 h-meter -translate-y-1/2 rounded-full bg-canvas" />
@@ -61,7 +64,15 @@ function LifeBar({ stint, span }: { stint: SurvivalLife; span: number }) {
       ))}
       {stint.death_day == null ? null : (
         <span
-          title={t('warming.survival.swimmer.death', { day: stint.death_day, cause })}
+          title={
+            foundLater
+              ? t('warming.survival.swimmer.deathFound', {
+                  day: stint.death_day,
+                  found: stint.found_day,
+                  cause,
+                })
+              : t('warming.survival.swimmer.death', { day: stint.death_day, cause })
+          }
           className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-danger"
           style={{ left: pct(stint.death_day, span) }}
         >
