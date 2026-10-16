@@ -174,3 +174,25 @@ async def test_a_client_the_history_rules_refuse_is_skipped_not_failed(
 
     lead = (await _by_phone())[phones[0]]
     assert (lead.status, lead.error_code) == ("skipped", "recently_messaged")
+
+
+@pytest.mark.asyncio
+async def test_a_pause_signals_the_loop_before_it_cancels_the_live_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _setup(monkeypatch, _Telegram())
+    await _queue_run()
+    runner = LeadQueueRunner()
+    monkeypatch.setattr(lead_queue._LOOP, "runner", runner)
+    seen: list[bool] = []
+    cancel = bulk_messages.cancel_bulk_message_job
+
+    async def watching_cancel(job_id: str, owner_user_id: str) -> object:
+        seen.append(runner.cancel.is_set())
+        return await cancel(job_id, owner_user_id)
+
+    monkeypatch.setattr(bulk_messages, "cancel_bulk_message_job", watching_cancel)
+
+    await lead_queue.update_lead_queue_settings(LeadQueueSettingsUpdate(paused=True), "owner-1")
+
+    assert seen == [True]

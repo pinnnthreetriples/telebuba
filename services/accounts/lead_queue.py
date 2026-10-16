@@ -10,6 +10,7 @@ from it after a restart (see ``_lead_queue_runner``).
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
@@ -37,6 +38,8 @@ _REMOVABLE = frozenset({"pending", "found"})
 class _Loop:
     runner: LeadQueueRunner | None = None
     task: asyncio.Task[None] | None = None
+    # Serialises settings saves, so an older pause never lands after a newer resume.
+    settings_lock: asyncio.Lock | None = None
 
 
 # This process's queue loop, so a change wakes it and shutdown can stop it.
@@ -99,26 +102,30 @@ async def update_lead_queue_settings(
     """Save the queue's accounts, message and pause; a pause also stops the live send run.
 
     A run already sending keeps the message it started with; the next one uses the new.
+    The loop is signalled right after the save, before the run is cancelled, so a lookup
+    in flight stops at once.
     """
-    saved = await repo.save_lead_queue_settings(
-        LeadQueueSettings(**data.model_dump(), owner_user_id=owner_user_id)
-    )
-    if saved.paused:
-        for record in await runs_repo.list_live_bulk_runs("lead_queue"):
-            await bulk_messages.cancel_bulk_message_job(record.id, record.owner_user_id)
-    _wake(paused=saved.paused)
+    async with _LOOP.settings_lock or nullcontext():
+        saved = await repo.save_lead_queue_settings(
+            LeadQueueSettings(**data.model_dump(), owner_user_id=owner_user_id)
+        )
+        _wake(paused=saved.paused)
+        if saved.paused:
+            for record in await runs_repo.list_live_bulk_runs("lead_queue"):
+                await bulk_messages.cancel_bulk_message_job(record.id, record.owner_user_id)
     return saved
 
 
 async def start_lead_queue_on_startup() -> None:
     """Start the queue's loop; its live send run resumes with the other bulk runs."""
     _LOOP.runner = LeadQueueRunner()
+    _LOOP.settings_lock = asyncio.Lock()
     _LOOP.task = asyncio.create_task(_LOOP.runner.run_forever())
 
 
 async def shutdown_lead_queue_on_shutdown() -> None:
     """Stop the loop; a lookup in flight is cancelled and its leads stay pending."""
-    task, _LOOP.task, _LOOP.runner = _LOOP.task, None, None
+    task, _LOOP.task, _LOOP.runner, _LOOP.settings_lock = _LOOP.task, None, None, None
     if task is not None:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
