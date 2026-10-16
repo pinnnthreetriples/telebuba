@@ -3562,6 +3562,172 @@ export type HealthStatus = {
 };
 
 /**
+ * LeadInput
+ */
+export type LeadInput = {
+  /**
+   * Phone
+   */
+  phone: string;
+  /**
+   * Name
+   */
+  name?: string | null;
+};
+
+/**
+ * LeadQueueAddRequest
+ */
+export type LeadQueueAddRequest = {
+  /**
+   * Leads
+   */
+  leads: Array<LeadInput>;
+};
+
+/**
+ * LeadQueueAddResult
+ */
+export type LeadQueueAddResult = {
+  /**
+   * Added
+   */
+  added: number;
+  /**
+   * Duplicates
+   */
+  duplicates: number;
+  /**
+   * Invalid
+   */
+  invalid: number;
+};
+
+/**
+ * LeadQueueItem
+ */
+export type LeadQueueItem = {
+  /**
+   * Id
+   */
+  id?: number | null;
+  /**
+   * Phone
+   */
+  phone: string;
+  /**
+   * Phone Key
+   */
+  phone_key: string;
+  /**
+   * Client Name
+   */
+  client_name?: string | null;
+  /**
+   * Status
+   */
+  status?:
+    'pending' | 'found' | 'messaging' | 'sent' | 'not_found' | 'failed' | 'unconfirmed' | 'skipped';
+  /**
+   * Account Id
+   */
+  account_id?: string | null;
+  /**
+   * User Id
+   */
+  user_id?: number | null;
+  /**
+   * Recheck Account Id
+   */
+  recheck_account_id?: string | null;
+  /**
+   * Run Id
+   */
+  run_id?: string | null;
+  /**
+   * Error Code
+   */
+  error_code?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Looked Up At
+   */
+  looked_up_at?: string | null;
+  /**
+   * Finished At
+   */
+  finished_at?: string | null;
+};
+
+/**
+ * LeadQueueSettings
+ */
+export type LeadQueueSettings = {
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Paused
+   */
+  paused?: boolean;
+  /**
+   * Owner User Id
+   */
+  owner_user_id?: string | null;
+};
+
+/**
+ * LeadQueueSettingsUpdate
+ */
+export type LeadQueueSettingsUpdate = {
+  /**
+   * Account Ids
+   */
+  account_ids?: Array<string>;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Paused
+   */
+  paused?: boolean;
+};
+
+/**
+ * LeadQueueView
+ */
+export type LeadQueueView = {
+  settings: LeadQueueSettings;
+  /**
+   * Counts
+   */
+  counts: {
+    [key: string]: number;
+  };
+  /**
+   * Items
+   */
+  items: Array<LeadQueueItem>;
+  /**
+   * Wait Reason
+   */
+  wait_reason?: 'schedule' | 'hours' | 'daily_cap' | 'pause' | 'series_break' | null;
+  /**
+   * Next Send At
+   */
+  next_send_at?: string | null;
+};
+
+/**
  * LinkChannelRequest
  *
  * Attach a channel to a campaign (the campaign id is the route path param).
@@ -12365,6 +12531,158 @@ export type UpdateOutreachPresetResponses = {
 
 export type UpdateOutreachPresetResponse =
   UpdateOutreachPresetResponses[keyof UpdateOutreachPresetResponses];
+
+export type GetLeadQueueData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/accounts/lead-queue';
+};
+
+export type GetLeadQueueErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetLeadQueueError = GetLeadQueueErrors[keyof GetLeadQueueErrors];
+
+export type GetLeadQueueResponses = {
+  /**
+   * Successful Response
+   */
+  200: LeadQueueView;
+};
+
+export type GetLeadQueueResponse = GetLeadQueueResponses[keyof GetLeadQueueResponses];
+
+export type AddLeadsToQueueData = {
+  body: LeadQueueAddRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/lead-queue/leads';
+};
+
+export type AddLeadsToQueueErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AddLeadsToQueueError = AddLeadsToQueueErrors[keyof AddLeadsToQueueErrors];
+
+export type AddLeadsToQueueResponses = {
+  /**
+   * Successful Response
+   */
+  200: LeadQueueAddResult;
+};
+
+export type AddLeadsToQueueResponse = AddLeadsToQueueResponses[keyof AddLeadsToQueueResponses];
+
+export type RemoveQueuedLeadData = {
+  body?: never;
+  path: {
+    /**
+     * Lead Id
+     */
+    lead_id: number;
+  };
+  query?: never;
+  url: '/api/v1/accounts/lead-queue/leads/{lead_id}';
+};
+
+export type RemoveQueuedLeadErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type RemoveQueuedLeadError = RemoveQueuedLeadErrors[keyof RemoveQueuedLeadErrors];
+
+export type RemoveQueuedLeadResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RemoveQueuedLeadResponse = RemoveQueuedLeadResponses[keyof RemoveQueuedLeadResponses];
+
+export type UpdateLeadQueueSettingsData = {
+  body: LeadQueueSettingsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/lead-queue/settings';
+};
+
+export type UpdateLeadQueueSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateLeadQueueSettingsError =
+  UpdateLeadQueueSettingsErrors[keyof UpdateLeadQueueSettingsErrors];
+
+export type UpdateLeadQueueSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LeadQueueSettings;
+};
+
+export type UpdateLeadQueueSettingsResponse =
+  UpdateLeadQueueSettingsResponses[keyof UpdateLeadQueueSettingsResponses];
 
 export type UploadScheduledMediaData = {
   body: BodyUploadScheduledMedia;

@@ -31,7 +31,7 @@ _outreach_limits = Table(
     Column("bulk_max_delay_seconds", Float, nullable=False),
     # ``RunSchedule`` as JSON (migration #91); NULL means its defaults.
     Column("schedule_json", String, nullable=True),
-    # ``RecipientRules`` as JSON (migration #97); NULL means its defaults.
+    # ``RecipientRules`` as JSON (migration #98); NULL means its defaults.
     Column("recipients_json", String, nullable=True),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_outreach_limits_single_row"),

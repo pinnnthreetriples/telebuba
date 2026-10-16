@@ -2,6 +2,7 @@
 // options (data access only through shared/api, per the FSD ADR).
 export {
   addAccountDeviceMutation,
+  addLeadsToQueueMutation,
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,
@@ -30,6 +31,7 @@ export {
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
   removeAccountTwofaMutation,
+  removeQueuedLeadMutation,
   sendBulkMessagesMutation,
   requestLoginCodeMutation,
   rescheduleScheduledPostMutation,
@@ -52,6 +54,7 @@ export {
   submitLoginCodeMutation,
   updateAccountChannelMutation,
   updateAccountProfileMutation,
+  updateLeadQueueSettingsMutation,
   updateOutreachPresetMutation,
   uploadScheduledMediaMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

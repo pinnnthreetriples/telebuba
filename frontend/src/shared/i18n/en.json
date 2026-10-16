@@ -548,6 +548,44 @@
         "overflow_one": "{{count}} number will not be checked today — the accounts' daily limits are used up.",
         "overflow_other": "{{count}} numbers will not be checked today — the accounts' daily limits are used up."
       },
+      "queue": {
+        "toggle": "Lead queue",
+        "hint": "Add numbers at any time. During working hours the queue looks them up on Telegram a little at a time across the selected accounts and sends the first message from the account that found the client. Whatever does not fit today's limits waits for the next day.",
+        "running": "Running · accounts: {{n}}",
+        "paused": "Paused",
+        "start": "Start with these accounts and text",
+        "update": "Use the form's accounts and text",
+        "pause": "Pause",
+        "needForm": "To start the queue, pick accounts and write the message above.",
+        "saveError": "Could not save the queue settings.",
+        "leads": "Numbers",
+        "leadsPlaceholder": "+1 555 123-4567, John\n+44 20 7946 0000",
+        "add": "Add to queue",
+        "added": "Added: {{n}} · already queued: {{duplicates}} · invalid: {{invalid}}",
+        "addError": "Could not add the numbers.",
+        "list": "Latest leads",
+        "remove": "Remove {{phone}} from the queue",
+        "removeBusy": "Could not remove the lead: it is already being sent.",
+        "removeError": "Could not remove the lead.",
+        "count": {
+          "pending": "to look up: {{n}}",
+          "found": "found: {{n}}",
+          "messaging": "sending: {{n}}",
+          "sent": "sent: {{n}}",
+          "not_found": "not on Telegram: {{n}}",
+          "failed": "errors: {{n}}"
+        },
+        "status": {
+          "pending": "to look up",
+          "found": "found",
+          "messaging": "sending",
+          "sent": "sent",
+          "not_found": "not on Telegram",
+          "failed": "error",
+          "unconfirmed": "unconfirmed",
+          "skipped": "already contacted"
+        }
+      },
       "code": {
         "account_not_found": "account not found",
         "session_dead": "account session is no longer valid",

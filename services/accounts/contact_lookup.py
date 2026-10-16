@@ -62,7 +62,11 @@ from services.accounts._contact_rechecks import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from schemas.contact_lookup import ContactLookupRequest, ContactRecheckSummary
+    from schemas.contact_lookup import (
+        ContactLookupOutcome,
+        ContactLookupRequest,
+        ContactRecheckSummary,
+    )
     from schemas.outreach_limits import OutreachLimits
     from schemas.telegram_actions_contacts import ContactLookupBatchResult
 
@@ -79,7 +83,7 @@ _PHONE = re.compile(r"\+?[0-9]{5,15}")
 logger = logging.getLogger(__name__)
 
 
-def _normalize(phone: str) -> str | None:
+def normalize_phone(phone: str) -> str | None:
     """Canonicalise one phone for matching, or ``None`` if unusable.
 
     Strips only formatting: separators (spaces, brackets, dots, dashes) and the
@@ -96,7 +100,7 @@ def _normalize_unique(phones: Sequence[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for raw in phones:
-        canon = _normalize(raw)
+        canon = normalize_phone(raw)
         if canon is None:
             continue
         # parse_phone drops the "+", so "+7999…" and "7999…" are one lookup.
@@ -109,14 +113,24 @@ def _normalize_unique(phones: Sequence[str]) -> list[str]:
 
 
 @dataclass(frozen=True)
-class _Pacing:
+class LookupPacing:
     batch_size: int
     min_delay_seconds: float
     max_delay_seconds: float
     silent_limit_streak: int
 
     @classmethod
-    def resolve(cls, data: ContactLookupRequest, limits: OutreachLimits) -> _Pacing:
+    def from_limits(cls, limits: OutreachLimits) -> LookupPacing:
+        """The saved limits alone: the lead queue has no per-run form."""
+        return cls(
+            batch_size=limits.lookup_batch_size,
+            min_delay_seconds=limits.lookup_min_delay_seconds,
+            max_delay_seconds=limits.lookup_max_delay_seconds,
+            silent_limit_streak=limits.silent_limit_streak,
+        )
+
+    @classmethod
+    def resolve(cls, data: ContactLookupRequest, limits: OutreachLimits) -> LookupPacing:
         """The run's own pacing where the form sent it, the saved limits otherwise."""
         if data.min_delay_seconds is None or data.max_delay_seconds is None:
             delays = (limits.lookup_min_delay_seconds, limits.lookup_max_delay_seconds)
@@ -274,7 +288,7 @@ async def _check_batch(lane: Lane, batch: list[str], job: ContactLookupJob) -> b
 
 async def _run_lanes(
     lanes: list[Lane],
-    pacing: _Pacing,
+    pacing: LookupPacing,
     job: ContactLookupJob,
     cancel_event: asyncio.Event,
 ) -> None:
@@ -300,6 +314,25 @@ async def _run_lanes(
         )
 
 
+async def lookup_in_lanes(
+    lanes: list[Lane], pacing: LookupPacing, cancel_event: asyncio.Event
+) -> list[ContactLookupOutcome]:
+    """Check lanes the caller planned, outside any job: the lead queue's lookup pass.
+
+    The same calls, usage counting, stop codes and silent-limit hand-over as a run;
+    the outcomes come back instead of landing in a stored job.
+    """
+    job = ContactLookupJob(
+        job_id="",
+        status="running",
+        total=sum(len(lane.queue) for lane in lanes),
+        completed=0,
+        results=[],
+    )
+    await _run_lanes(lanes, pacing, job, cancel_event)
+    return job.results
+
+
 async def run_contact_lookup_job(job_id: str) -> None:
     """Check each account's share within its daily allowance; found users end up in the results."""
     data, phones = _pending[job_id]
@@ -321,7 +354,7 @@ async def run_contact_lookup_job(job_id: str) -> None:
         if recheck:
             # The operator's own numbers first; due re-checks take the room left over.
             job.total += len(place_rechecks(lanes, queued.values(), phones, datetime.now(UTC)))
-        await _run_lanes(lanes, _Pacing.resolve(data, limits), job, cancel_event)
+        await _run_lanes(lanes, LookupPacing.resolve(data, limits), job, cancel_event)
         await settle_rechecks(job, queued, enabled=recheck, now=datetime.now(UTC))
     finally:
         job.status = (
