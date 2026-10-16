@@ -10,6 +10,7 @@ from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from schemas.accounts import _ACCOUNT_ID_PATTERN
 from schemas.bulk_runs import TimeBasis, WaitReason  # noqa: TC001
 from schemas.outreach_limits import MAX_FIRST_MESSAGES_PER_DAY, MAX_PAUSE_SECONDS
+from schemas.outreach_protection import OutreachProtection, SkippedAccount  # noqa: TC001
 from schemas.recipient_rules import RecipientRules  # noqa: TC001
 from schemas.run_schedule import RunSchedule  # noqa: TC001
 
@@ -37,6 +38,8 @@ class BulkMessageRequest(BaseModel):
     schedule: RunSchedule | None = None
     # Who may be written to given earlier runs; left out, the saved default rules.
     recipient_rules: RecipientRules | None = None
+    # Account protection and typing for this run; left out, the saved defaults.
+    protection: OutreachProtection | None = None
     # No send before this moment; left out, the run starts at once.
     start_at: AwareDatetime | None = None
     # The phone a lookup found each recipient by, so the window can follow the
@@ -114,6 +117,8 @@ class BulkMessageJob(BaseModel):
     # While running but idle: why, and when the next send may go out.
     wait_reason: WaitReason | None = None
     next_send_at: str | None = None
+    # Accounts the run left out before sending anything, and why.
+    skipped_accounts: list[SkippedAccount] = Field(default_factory=list)
 
 
 class BulkMessageGenerateRequest(BaseModel):

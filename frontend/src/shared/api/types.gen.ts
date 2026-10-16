@@ -1198,6 +1198,10 @@ export type BulkMessageJob = {
    * Next Send At
    */
   next_send_at?: string | null;
+  /**
+   * Skipped Accounts
+   */
+  skipped_accounts?: Array<SkippedAccount>;
 };
 
 /**
@@ -1274,6 +1278,7 @@ export type BulkMessageRequest = {
   };
   schedule?: RunSchedule | null;
   recipient_rules?: RecipientRules | null;
+  protection?: OutreachProtection | null;
   /**
    * Start At
    */
@@ -2642,6 +2647,10 @@ export type ContactLookupJob = {
    * Results
    */
   results: Array<ContactLookupOutcome>;
+  /**
+   * Skipped Accounts
+   */
+  skipped_accounts?: Array<SkippedAccount>;
 };
 
 /**
@@ -2722,6 +2731,7 @@ export type ContactLookupRequest = {
    * Recheck Not Found
    */
   recheck_not_found?: boolean | null;
+  protection?: OutreachProtection | null;
 };
 
 /**
@@ -5533,6 +5543,7 @@ export type OutreachLimits = {
   bulk_max_delay_seconds?: number;
   schedule?: RunSchedule;
   recipients?: RecipientRules;
+  protection?: OutreachProtection;
   /**
    * Updated At
    */
@@ -5579,6 +5590,7 @@ export type OutreachLimitsUpdate = {
   bulk_max_delay_seconds?: number;
   schedule?: RunSchedule;
   recipients?: RecipientRules;
+  protection?: OutreachProtection;
 };
 
 /**
@@ -5652,6 +5664,52 @@ export type OutreachPresetWrite = {
 };
 
 /**
+ * OutreachProtection
+ */
+export type OutreachProtection = {
+  /**
+   * Young Half Caps
+   */
+  young_half_caps?: boolean;
+  /**
+   * Young Account Days
+   */
+  young_account_days?: number;
+  /**
+   * Rest After Limit
+   */
+  rest_after_limit?: boolean;
+  /**
+   * Rest Hours
+   */
+  rest_hours?: number;
+  /**
+   * Stop Run On Limits
+   */
+  stop_run_on_limits?: boolean;
+  /**
+   * Stop Run After Accounts
+   */
+  stop_run_after_accounts?: number;
+  /**
+   * Skip Injured
+   */
+  skip_injured?: boolean;
+  /**
+   * Typing
+   */
+  typing?: boolean;
+  /**
+   * Typing Min Seconds
+   */
+  typing_min_seconds?: number;
+  /**
+   * Typing Max Seconds
+   */
+  typing_max_seconds?: number;
+};
+
+/**
  * OutreachUsageList
  *
  * Today's (UTC) totals for the requested accounts, zeros where nothing was spent.
@@ -5665,6 +5723,14 @@ export type OutreachUsageList = {
    * Items
    */
   items: Array<OutreachDailyUsage>;
+  /**
+   * Young Account Ids
+   */
+  young_account_ids?: Array<string>;
+  /**
+   * Skipped Accounts
+   */
+  skipped_accounts?: Array<SkippedAccount>;
 };
 
 /**
@@ -6628,6 +6694,26 @@ export type SetCampaignStatusRequest = {
    * Status
    */
   status: 'active' | 'paused';
+};
+
+/**
+ * SkippedAccount
+ *
+ * An account a run left out before sending anything, and for how long it would wait.
+ */
+export type SkippedAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Reason
+   */
+  reason: 'account_resting' | 'account_spam_blocked' | 'account_recent_flood';
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
 };
 
 /**

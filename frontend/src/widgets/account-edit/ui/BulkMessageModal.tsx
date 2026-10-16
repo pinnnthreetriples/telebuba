@@ -34,6 +34,7 @@ import {
   pauseRange,
   windowMinutes,
 } from '../model/pacing';
+import { type FullProtection, fullProtection, leftOut, youngCap } from '../model/protection';
 import {
   type FullRecipientRules,
   fullRecipientRules,
@@ -43,9 +44,11 @@ import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
 import { LeadQueuePanel } from './LeadQueuePanel';
 import { PacingBlock } from './PacingBlock';
+import { ProtectionSection } from './ProtectionSection';
 import { RecipientRulesSection } from './RecipientRulesSection';
 import { RunForecast } from './RunForecast';
 import { ScheduleSection } from './ScheduleSection';
+import { SkippedAccounts } from './SkippedAccounts';
 
 const MAX_ACCOUNTS = 50;
 const MAX_EACH_RECIPIENTS = 50;
@@ -67,6 +70,8 @@ export type BulkMessageDraft = {
   pacing: PacingValues | null;
   // null: the saved default schedule.
   schedule: FullSchedule | null;
+  // null: the saved account protection.
+  protection: FullProtection | null;
   // null: the saved default recipient rules.
   rules: FullRecipientRules | null;
   // A `datetime-local` value; empty starts at once.
@@ -130,6 +135,9 @@ export function BulkMessageModal({
   const [maxDelay, setMaxDelay] = useState<string | null>(initialDraft?.maxDelay ?? null);
   const [pacingEdit, setPacing] = useState<PacingValues | null>(initialDraft?.pacing ?? null);
   const [scheduleEdit, setSchedule] = useState<FullSchedule | null>(initialDraft?.schedule ?? null);
+  const [protectionEdit, setProtection] = useState<FullProtection | null>(
+    initialDraft?.protection ?? null,
+  );
   const [rulesEdit, setRules] = useState<FullRecipientRules | null>(initialDraft?.rules ?? null);
   const [startAt, setStartAt] = useState(initialDraft?.startAt ?? '');
   const [phones, setPhones] = useState<Record<string, string>>(initialDraft?.phones ?? {});
@@ -151,6 +159,11 @@ export function BulkMessageModal({
     enabled: ids.length > 0 && jobId === null,
   });
   const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
+  const protection = protectionEdit ?? fullProtection(limits.data?.protection);
+  const young = new Set(
+    protection.young_half_caps ? (usageToday.data?.young_account_ids ?? []) : [],
+  );
+  const skippedNow = leftOut(usageToday.data?.skipped_accounts, protection);
   const send = useMutation(sendBulkMessagesMutation());
   const generate = useMutation(generateBulkMessageMutation());
   const cancel = useMutation(cancelBulkMessageJobMutation());
@@ -208,11 +221,15 @@ export function BulkMessageModal({
   const clientTimed = results.filter((result) => result.time_basis === 'client').length;
 
   const averagePause = delayEdited ? (minSeconds + maxSeconds) / 2 : pacing.pause;
+  // Accounts protection leaves out send nothing; the others each keep their own cap.
+  const sending = ids.filter((id) => !skippedNow.has(id));
+  const capOf = (id: string) => (young.has(id) ? youngCap(pacing.messages) : pacing.messages);
   const forecast = forecastSends({
     mode,
     recipients: recipientList.length,
-    left: ids.map((id) => pacing.messages - (usage.get(id)?.first_messages ?? 0)),
+    left: sending.map((id) => capOf(id) - (usage.get(id)?.first_messages ?? 0)),
     cap: pacing.messages,
+    caps: sending.map(capOf),
     pause: averagePause,
     concurrency: schedule.concurrency,
     windowMinutes: windowMinutes(schedule.work_start, schedule.work_end),
@@ -230,6 +247,9 @@ export function BulkMessageModal({
           max_delay_seconds: maxSeconds,
           daily_cap: pacing.messages,
           schedule,
+          // Only the operator's own edit: before the saved limits load, the shown
+          // defaults must not override the saved protection.
+          ...(protectionEdit !== null && { protection: protectionEdit }),
           recipient_rules: rules,
           ...(startAt !== '' && { start_at: new Date(startAt).toISOString() }),
           recipient_phones: Object.fromEntries(
@@ -321,6 +341,10 @@ export function BulkMessageModal({
       case 'premium_wait':
       case 'peer_flood':
       case 'unavailable':
+      case 'account_resting':
+      case 'account_spam_blocked':
+      case 'account_recent_flood':
+      case 'run_stopped_on_limits':
         return t(`accounts.messages.code.${code}`);
       default:
         return t('accounts.messages.code.failed');
@@ -339,6 +363,7 @@ export function BulkMessageModal({
         maxDelay,
         pacing: pacingEdit,
         schedule: scheduleEdit,
+        protection: protectionEdit,
         rules: rulesEdit,
         startAt,
         phones,
@@ -423,6 +448,7 @@ export function BulkMessageModal({
                       {t('accounts.messages.stopError')}
                     </p>
                   )}
+                  <SkippedAccounts accounts={job.data?.skipped_accounts ?? []} />
                   {attention.length > 0 && (
                     <div>
                       <h3 className="type-body-medium text-content-secondary">
@@ -710,6 +736,8 @@ export function BulkMessageModal({
                     accountIds={ids}
                     usage={usage}
                     leftKind="messages"
+                    young={young}
+                    skipped={skippedNow}
                     forecast={<RunForecast forecast={forecast} />}
                     advanced={
                       <div className="space-y-4">
@@ -725,6 +753,7 @@ export function BulkMessageModal({
                             {t('accounts.messages.schedule.invalidHours')}
                           </p>
                         )}
+                        <ProtectionSection protection={protection} onChange={setProtection} />
                         <p className="type-small">{t('accounts.messages.delayHint')}</p>
                         <div className="grid grid-cols-2 gap-3">
                           {(

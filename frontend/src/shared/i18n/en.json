@@ -597,6 +597,10 @@
         "peer_flood": "Telegram limited messages to new contacts",
         "unavailable": "Telegram connection unavailable",
         "failed": "Telegram rejected the message",
+        "account_resting": "the account is resting after a limit",
+        "account_spam_blocked": "the account has a spam block",
+        "account_recent_flood": "the account met a flood in the last 24 h",
+        "run_stopped_on_limits": "run stopped: several accounts hit a limit",
         "account_busy": "another module is using the account (warming, a campaign or a channel search), so it sent nothing in this run"
       },
       "pacing": {
@@ -657,7 +661,9 @@
           "days_one": "≈ {{count}} day",
           "days_other": "≈ {{count}} days"
         },
-        "forecastSpread": "Today's limits do not fit them all — the run spreads over several days. Add accounts to finish sooner."
+        "forecastSpread": "Today's limits do not fit them all — the run spreads over several days. Add accounts to finish sooner.",
+        "leftChipYoung": "{{name}} · {{left}} of {{cap}} (young)",
+        "leftChipSkipped": "{{name}} · will be skipped: {{reason}}"
       },
       "schedule": {
         "title": "When to send",
@@ -701,7 +707,26 @@
         "pause": "Pausing — next send at {{time}}.",
         "series_break": "Break after a series — next send at {{time}}."
       },
-      "timeBasis": "By the client's time: {{client}} · by the operator's (client's zone unknown): {{operator}}"
+      "timeBasis": "By the client's time: {{client}} · by the operator's (client's zone unknown): {{operator}}",
+      "protection": {
+        "title": "Account protection",
+        "young": "Young accounts (under {{days}} days) get half the limits",
+        "rest": "Rest an account after it hits a limit",
+        "restHours": "Rest after a limit, hours",
+        "hours": "h",
+        "stop": "Stop the run once accounts hit a limit",
+        "stopAfter": "Limited accounts before the run stops",
+        "accounts": "acc.",
+        "skipInjured": "Skip accounts with a spam block or a flood in the last 24 h",
+        "humanTitle": "Like a human",
+        "typing": "Show “typing…” for {{min}}–{{max}} s before each message"
+      },
+      "skippedAccounts": {
+        "title_one": "Protection left out {{count}} account",
+        "title_other": "Protection left out {{count}} accounts",
+        "item": "{{name}}: {{reason}}",
+        "restLeft": "~{{hours}} h left"
+      }
     },
     "bulk": {
       "open": "Bulk edit",
@@ -2134,7 +2159,8 @@
       "warm_read_discussion": "Post comments read",
       "warm_dm_react": "DM reaction",
       "warm_dm_sticker": "DM sticker",
-      "warm_dm_forward": "Post forwarded in DM"
+      "warm_dm_forward": "Post forwarded in DM",
+      "outreach_set_typing": "“Typing…” before a message"
     },
     "status": {
       "failed": "failed",

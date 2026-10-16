@@ -23598,6 +23598,13 @@
               }
             ],
             "title": "Next Send At"
+          },
+          "skipped_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedAccount"
+            },
+            "type": "array",
+            "title": "Skipped Accounts"
           }
         },
         "type": "object",
@@ -23777,6 +23784,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RecipientRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutreachProtection"
               },
               {
                 "type": "null"
@@ -26064,6 +26081,13 @@
             },
             "type": "array",
             "title": "Results"
+          },
+          "skipped_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedAccount"
+            },
+            "type": "array",
+            "title": "Skipped Accounts"
           }
         },
         "type": "object",
@@ -26251,6 +26275,16 @@
               }
             ],
             "title": "Recheck Not Found"
+          },
+          "protection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutreachProtection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -30766,6 +30800,9 @@
           "recipients": {
             "$ref": "#/components/schemas/RecipientRules"
           },
+          "protection": {
+            "$ref": "#/components/schemas/OutreachProtection"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -30851,6 +30888,9 @@
           },
           "recipients": {
             "$ref": "#/components/schemas/RecipientRules"
+          },
+          "protection": {
+            "$ref": "#/components/schemas/OutreachProtection"
           }
         },
         "type": "object",
@@ -30969,6 +31009,72 @@
         ],
         "title": "OutreachPresetWrite"
       },
+      "OutreachProtection": {
+        "properties": {
+          "young_half_caps": {
+            "type": "boolean",
+            "title": "Young Half Caps",
+            "default": true
+          },
+          "young_account_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Young Account Days",
+            "default": 30
+          },
+          "rest_after_limit": {
+            "type": "boolean",
+            "title": "Rest After Limit",
+            "default": true
+          },
+          "rest_hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Rest Hours",
+            "default": 12
+          },
+          "stop_run_on_limits": {
+            "type": "boolean",
+            "title": "Stop Run On Limits",
+            "default": true
+          },
+          "stop_run_after_accounts": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Stop Run After Accounts",
+            "default": 2
+          },
+          "skip_injured": {
+            "type": "boolean",
+            "title": "Skip Injured",
+            "default": true
+          },
+          "typing": {
+            "type": "boolean",
+            "title": "Typing",
+            "default": true
+          },
+          "typing_min_seconds": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Typing Min Seconds",
+            "default": 2
+          },
+          "typing_max_seconds": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Typing Max Seconds",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "title": "OutreachProtection"
+      },
       "OutreachUsageList": {
         "properties": {
           "day": {
@@ -30981,6 +31087,20 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "young_account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Young Account Ids"
+          },
+          "skipped_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedAccount"
+            },
+            "type": "array",
+            "title": "Skipped Accounts"
           }
         },
         "type": "object",
@@ -32731,6 +32851,41 @@
         ],
         "title": "SetCampaignStatusRequest",
         "description": "Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148)."
+      },
+      "SkippedAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "account_resting",
+              "account_spam_blocked",
+              "account_recent_flood"
+            ],
+            "title": "Reason"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "reason"
+        ],
+        "title": "SkippedAccount",
+        "description": "An account a run left out before sending anything, and for how long it would wait."
       },
       "SoftStartPlan": {
         "properties": {

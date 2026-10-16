@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
+from core.db import create_account
 from core.repositories.outreach import add_outreach_usage
+from core.repositories.outreach_rests import record_outreach_rest
+from schemas.accounts import AccountCreate
 from schemas.outreach_limits import OutreachDailyUsage
 from schemas.outreach_presets import MAX_PRESETS
+from schemas.outreach_protection import OutreachRest
 from tests.api.accounts_helpers import client as _client
 
 if TYPE_CHECKING:
@@ -119,3 +123,77 @@ async def test_usage_today_lists_each_requested_account(app: FastAPI) -> None:
         ("a1", 6, 2),
         ("a2", 0, 0),
     ]
+
+
+@pytest.mark.asyncio
+async def test_protection_defaults_round_trip_through_the_saved_limits(app: FastAPI) -> None:
+    async with _client(app) as client:
+        body = (await client.get(_URL)).json()
+        assert body["protection"] == {
+            "young_half_caps": True,
+            "young_account_days": 30,
+            "rest_after_limit": True,
+            "rest_hours": 12,
+            "stop_run_on_limits": True,
+            "stop_run_after_accounts": 2,
+            "skip_injured": True,
+            "typing": True,
+            "typing_min_seconds": 2,
+            "typing_max_seconds": 5,
+        }
+        body.pop("updated_at")
+        changed = {**body["protection"], "typing": False, "rest_hours": 24}
+        saved = await client.put(_URL, json={**body, "protection": changed})
+        assert saved.status_code == 200
+        assert (await client.get(_URL)).json()["protection"] == changed
+
+        upside_down = {**changed, "typing_min_seconds": 9, "typing_max_seconds": 3}
+        rejected = await client.put(_URL, json={**body, "protection": upside_down})
+        assert rejected.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_usage_today_names_young_and_left_out_accounts(app: FastAPI) -> None:
+    await create_account(AccountCreate(account_id="young"))
+    await record_outreach_rest(
+        OutreachRest(
+            account_id="resting",
+            reason="peer_flood",
+            limited_at=datetime.now(UTC).isoformat(),
+            rest_until=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        )
+    )
+    async with _client(app) as client:
+        response = await client.get(
+            "/api/v1/accounts/outreach-usage", params={"account_ids": ["young", "resting"]}
+        )
+    body = response.json()
+    assert body["young_account_ids"] == ["young"]
+    assert [(s["account_id"], s["reason"]) for s in body["skipped_accounts"]] == [
+        ("resting", "account_resting")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_usage_today_reports_status_even_with_the_saved_switches_off(app: FastAPI) -> None:
+    await create_account(AccountCreate(account_id="young"))
+    await record_outreach_rest(
+        OutreachRest(
+            account_id="resting",
+            reason="flood_wait",
+            limited_at=datetime.now(UTC).isoformat(),
+            rest_until=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        )
+    )
+    async with _client(app) as client:
+        body = (await client.get(_URL)).json()
+        body.pop("updated_at")
+        off = {**body["protection"], "young_half_caps": False, "rest_after_limit": False}
+        assert (await client.put(_URL, json={**body, "protection": off})).status_code == 200
+        response = await client.get(
+            "/api/v1/accounts/outreach-usage", params={"account_ids": ["young", "resting"]}
+        )
+    usage = response.json()
+    # A run may switch these back on, so the window still learns both.
+    assert usage["young_account_ids"] == ["young"]
+    assert [s["account_id"] for s in usage["skipped_accounts"]] == ["resting"]

@@ -8,9 +8,10 @@ UTC-day cap, and the recipient's window open — and starts it, up to
 ``concurrency`` sends at once. With nothing sendable it sleeps until the earliest
 moment something becomes sendable, and says why on the run row.
 
-A daily cap no longer drops a recipient: the account waits for the next UTC day.
-An account that hits a stop code is done for the run: each mode skips its
-remaining recipients, split mode hands them to the accounts still live.
+A daily cap (half for a young account) no longer drops a recipient: the account
+waits for the next UTC day. An account that hits a stop code is done for the run:
+each mode skips its remaining recipients, split mode hands them to the accounts
+still live; a limit also starts its rest, and enough of them stop the whole run.
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ from core.repositories import bulk_runs as repo
 from core.repositories.outreach import add_outreach_usage, list_outreach_usage
 from schemas.bulk_messages import BulkMessageOutcome
 from schemas.outreach_limits import OutreachDailyUsage
+from schemas.outreach_protection import RUN_STOPPED_CODE
 from services.accounts._bulk_plan import next_open, next_utc_day
+from services.accounts._outreach_protection import LIMIT_CODES, halve, note_limit
 from services.accounts._recipient_history import record_first_message
 
 if TYPE_CHECKING:
@@ -34,9 +37,12 @@ if TYPE_CHECKING:
 
     from schemas.bulk_messages import BulkMessageRequest
     from schemas.bulk_runs import BulkRunAccount, BulkRunItem, WaitReason
+    from schemas.outreach_protection import OutreachProtection
     from schemas.run_schedule import RunSchedule
 
     Send = Callable[[str, str, str, str], Awaitable[BulkMessageOutcome]]
+    # ``(account_id, peer, protection)``: "typing…" when the protection wants it; never raises.
+    ShowTyping = Callable[[str, str, OutreachProtection], Awaitable[None]]
 
 # Statuses where the message may have left the account.
 SENT_STATUSES = frozenset({"ok", "unconfirmed"})
@@ -67,6 +73,7 @@ class Lane:
     # First messages left in ``day``; ``None`` when the run has no daily cap.
     left: int | None = None
     day: str = ""
+    young: bool = False  # half of the run's daily cap
 
     def ready_at(self) -> datetime | None:
         return None if self.row.ready_at is None else datetime.fromisoformat(self.row.ready_at)
@@ -90,6 +97,8 @@ class BulkRun:
     items: list[BulkRunItem]
     lanes: dict[str, Lane]
     send: Send
+    show_typing: ShowTyping
+    protection: OutreachProtection
     cancel: asyncio.Event
     start_at: datetime | None
     seq: int = 0
@@ -238,7 +247,8 @@ class BulkRun:
         for account_id in stale:
             lane = self.lanes[account_id]
             lane.day = day
-            lane.left = self.data.daily_cap - usage[account_id].first_messages
+            cap = halve(self.data.daily_cap) if lane.young else self.data.daily_cap
+            lane.left = cap - usage[account_id].first_messages
 
     def _start(self, item: BulkRunItem) -> None:
         lane = self.lanes[item.account_id]
@@ -256,6 +266,8 @@ class BulkRun:
 
     async def _send(self, item: BulkRunItem, lane: Lane) -> None:
         try:
+            # Before the item is stored as sending: a typing cut short sent nothing.
+            await self.show_typing(item.account_id, item.peer, self.protection)
             try:
                 await repo.save_bulk_run_item(item)
             except Exception:
@@ -315,6 +327,12 @@ class BulkRun:
         if outcome.error_code in STOP_CODES:
             await self._stop(lane, item, outcome)
         await repo.save_bulk_run_account(lane.row)
+        if outcome.error_code in LIMIT_CODES:
+            limited = sum(lane.row.stop_code in LIMIT_CODES for lane in self.lanes.values())
+            code, wait = outcome.error_code, outcome.retry_after_seconds
+            if await note_limit(item.account_id, code, wait, self.protection, limited):
+                for pending in [i for i in self.items if i.status == "pending"]:
+                    await self._finish(pending, status="skipped", error_code=RUN_STOPPED_CODE)
 
     async def leave_out(self, account_ids: list[str], code: str) -> None:
         """Take accounts out before the run sends: they send nothing, ``code`` says why.

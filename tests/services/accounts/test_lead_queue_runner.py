@@ -8,13 +8,16 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.db import create_account, upsert_spam_status
 from core.repositories import bulk_runs as runs_repo
 from core.repositories import lead_queue as repo
 from core.repositories.outreach import add_outreach_usage, save_outreach_limits
+from schemas.accounts import AccountCreate
 from schemas.bulk_messages import BulkMessageRequest
 from schemas.lead_queue import LeadInput, LeadQueueAddRequest, LeadQueueSettings
 from schemas.outreach_limits import OutreachDailyUsage, OutreachLimits, OutreachLimitsUpdate
 from schemas.run_schedule import RunSchedule
+from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, SendChatMessage
 from schemas.telegram_actions_contacts import ContactLookupBatchResult, ContactLookupMatch
 from services.accounts import _lead_queue_runner, bulk_messages, contact_lookup, lead_queue
@@ -400,3 +403,31 @@ async def test_startup_runs_the_loop_and_shutdown_stops_it() -> None:
 
     assert task.done()
     assert lead_queue._LOOP.runner is None
+
+
+@pytest.mark.asyncio
+async def test_a_pass_halves_a_young_accounts_allowance_and_skips_a_spam_blocked_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    telegram = _Telegram()
+    await _setup(
+        monkeypatch,
+        telegram,
+        accounts=("young", "spam"),
+        phones=_phones(4),
+        contact_imports_per_day=6,
+    )
+    now = _now()
+    await create_account(AccountCreate(account_id="young"))
+    await create_account(AccountCreate(account_id="spam"))
+    await upsert_spam_status(
+        SpamStatusVerdict(account_id="spam", status="limited", checked_at=now.isoformat())
+    )
+    # Half of 6 is 3, two already spent today: room for one number.
+    await add_outreach_usage(
+        OutreachDailyUsage(account_id="young", day=now.date().isoformat(), contact_imports=2)
+    )
+
+    await LeadQueueRunner().tick(now)
+
+    assert telegram.batches == [("young", [_phones(4)[0]])]

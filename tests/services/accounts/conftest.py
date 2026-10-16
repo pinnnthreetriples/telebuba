@@ -13,6 +13,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from schemas.outreach_protection import OutreachProtection  # noqa: TC001
 from services import warming
 from services.accounts import _bulk_runner, bulk_messages
 from services.accounts import privacy as privacy_module
@@ -136,6 +137,22 @@ def avatar_refresh_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     monkeypatch.setattr("services.accounts.media.refresh_account_avatar", _record)
     return calls
+
+
+@pytest.fixture(autouse=True)
+def typing_shows(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, OutreachProtection]]:
+    """Stub the bulk run's "typing…", which is on by default.
+
+    It would call the patched gateway and sleep for real. Tests that care read the
+    recorded ``(account, peer, protection)``.
+    """
+    shows: list[tuple[str, str, OutreachProtection]] = []
+
+    async def _record(account_id: str, peer: str, protection: OutreachProtection) -> None:
+        shows.append((account_id, peer, protection))
+
+    monkeypatch.setattr(bulk_messages, "_show_typing", _record)
+    return shows
 
 
 @pytest.fixture

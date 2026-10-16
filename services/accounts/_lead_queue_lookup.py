@@ -10,6 +10,10 @@ from its own rows: an account's newest lookups that all came back "not on
 Telegram". When that streak looks like a silent import ban (the lanes module's
 rule), those leads go back to pending for another account to re-check, and the
 account rests until the next UTC day — as does any account a pass stopped.
+
+Account protection applies as in a lookup run: accounts resting after a limit,
+spam-blocked or flooded in the last day check nothing, and a young account gets
+half the daily allowance.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from typing import TYPE_CHECKING
 from core.repositories import lead_queue as repo
 from core.repositories.outreach import list_accounts_with_contact_matches, list_outreach_usage
 from services.accounts._contact_lookup_lanes import Lane, looks_silently_limited
+from services.accounts._outreach_protection import halve, skipped_accounts, young_account_ids
 from services.accounts.contact_lookup import LookupPacing, lookup_in_lanes
 
 if TYPE_CHECKING:
@@ -149,10 +154,15 @@ async def run_lookup_pass(
 ) -> tuple[int, set[str]]:
     """Look up one batch per account with room; return (numbers checked, accounts to rest)."""
     pacing = LookupPacing.from_limits(limits)
+    left_out = {s.account_id for s in await skipped_accounts(account_ids, pacing.protection, now)}
+    account_ids = [account_id for account_id in account_ids if account_id not in left_out]
+    young = await young_account_ids(account_ids, pacing.protection, now)
     usage = await list_outreach_usage(account_ids, now.date().isoformat())
+    cap = limits.contact_imports_per_day
     room = {
         account_id: min(
-            pacing.batch_size, limits.contact_imports_per_day - usage[account_id].contact_imports
+            pacing.batch_size,
+            (halve(cap) if account_id in young else cap) - usage[account_id].contact_imports,
         )
         for account_id in account_ids
     }

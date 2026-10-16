@@ -14,12 +14,21 @@ import {
 import { Button, HelpHint, Icon, IconButton, Input, Textarea } from '@/shared/ui';
 
 import { lookupOverflow, type PacingValues } from '../model/pacing';
+import { fullProtection, leftOut, youngCap } from '../model/protection';
 import { PacingBlock } from './PacingBlock';
+import { SkippedAccounts } from './SkippedAccounts';
 
 const MAX_PHONES = 1000;
 const MAX_DELAY_SECONDS = 3600;
 // Never checked because of the account's state: re-run these later, not as "not on Telegram".
-const RETRY_LATER = new Set(['daily_limit', 'silent_limit']);
+const RETRY_LATER = new Set([
+  'daily_limit',
+  'silent_limit',
+  'account_resting',
+  'account_spam_blocked',
+  'account_recent_flood',
+  'run_stopped_on_limits',
+]);
 
 // Pasted lists are often comma-, semicolon- or tab-separated (a spreadsheet column
 // pair); split on those too, so two numbers on one line are never sent fused.
@@ -92,6 +101,12 @@ export function ContactLookupPanel({
     enabled: open && accountIds.length > 0,
   });
   const usage = new Map((usageToday.data?.items ?? []).map((row) => [row.account_id, row]));
+  // A lookup runs under the saved protection; the chips say what it will do.
+  const protection = fullProtection(limits.data?.protection);
+  const young = new Set(
+    protection.young_half_caps ? (usageToday.data?.young_account_ids ?? []) : [],
+  );
+  const skippedNow = leftOut(usageToday.data?.skipped_accounts, protection);
   const rechecks = useQuery({ ...contactRechecksQueryOptions(), enabled: open && jobId === null });
   const dueRechecks = recheckNotFound ? (rechecks.data?.due ?? 0) : 0;
   const start = useMutation(startContactLookupMutation());
@@ -141,7 +156,12 @@ export function ContactLookupPanel({
     delayReady;
   const overflow = lookupOverflow(
     phoneList.length,
-    accountIds.map((id) => pacing.contacts - (usage.get(id)?.contact_imports ?? 0)),
+    accountIds.map((id) =>
+      skippedNow.has(id)
+        ? 0
+        : (young.has(id) ? youngCap(pacing.contacts) : pacing.contacts) -
+          (usage.get(id)?.contact_imports ?? 0),
+    ),
   );
 
   const started = jobId !== null;
@@ -309,6 +329,8 @@ export function ContactLookupPanel({
                 accountIds={accountIds}
                 usage={usage}
                 leftKind="contacts"
+                young={young}
+                skipped={skippedNow}
                 forecast={
                   overflow > 0
                     ? t('accounts.messages.lookup.overflow', { count: overflow })
@@ -416,6 +438,7 @@ export function ContactLookupPanel({
                   {t('accounts.messages.progressError')}
                 </p>
               )}
+              <SkippedAccounts accounts={job.data?.skipped_accounts ?? []} />
               {complete && idOnly > 0 && (
                 <p className="type-small">
                   {t('accounts.messages.lookup.idOnly', { count: idOnly })}

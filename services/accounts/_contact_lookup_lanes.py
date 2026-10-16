@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from schemas.contact_lookup import ContactLookupOutcome
+from services.accounts._outreach_protection import LIMIT_CODES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -45,6 +46,8 @@ class Lane:
     # so a second miss says nothing about this one.
     rechecks: set[str] = field(default_factory=set)
     stopped: bool = False
+    # The Telegram limit (code, wait) that stopped this lane, if one did.
+    limit: tuple[str, int | None] | None = None
 
     def spare(self) -> int:
         return self.capacity - len(self.queue)
@@ -131,6 +134,8 @@ def stop_lane(
 ) -> None:
     """Skip ``extra`` and the lane's queue; the lane sends nothing more this run."""
     lane.stopped = True
+    if error_code in LIMIT_CODES:
+        lane.limit = (error_code, retry_after)
     skip_phones(
         lane.account_id,
         [*extra, *lane.queue],

@@ -39,12 +39,14 @@ def _load_outreach_limits() -> OutreachLimits:
         return OutreachLimits()
     values = dict(cast("Mapping[str, object]", row))
     values.pop("id")
-    schedule = values.pop("schedule_json")
-    if schedule is not None:
-        values["schedule"] = json.loads(str(schedule))
-    recipients = values.pop("recipients_json")
-    if recipients is not None:
-        values["recipients"] = json.loads(str(recipients))
+    for column, field in (
+        ("schedule_json", "schedule"),
+        ("recipients_json", "recipients"),
+        ("protection_json", "protection"),
+    ):
+        stored = values.pop(column)
+        if stored is not None:
+            values[field] = json.loads(str(stored))
     return OutreachLimits.model_validate(values)
 
 
@@ -55,9 +57,10 @@ async def load_outreach_limits() -> OutreachLimits:
 
 def _save_outreach_limits(data: OutreachLimitsUpdate) -> OutreachLimits:
     values = {
-        **data.model_dump(exclude={"schedule", "recipients"}),
+        **data.model_dump(exclude={"schedule", "recipients", "protection"}),
         "schedule_json": data.schedule.model_dump_json(),
         "recipients_json": data.recipients.model_dump_json(),
+        "protection_json": data.protection.model_dump_json(),
         "updated_at": _now_iso(),
     }
     with _get_engine().begin() as connection:

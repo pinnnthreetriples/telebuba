@@ -14,6 +14,11 @@ it has left; numbers no account has room for are reported ``daily_limit``. A
 rate-limited account (a FloodWait, or numbers Telegram deferred via
 ``retry_contacts``) stops and its remaining numbers are reported skipped; a
 silently limited one hands its numbers on (see ``_contact_lookup_lanes``).
+
+Account protection (``_outreach_protection``): accounts resting after a limit,
+spam-blocked or flooded in the last day are left out before the run plans
+anything; a young account's allowance is half; a rate-limited account starts its
+rest, and once enough of them did the run skips every number still queued.
 """
 
 from __future__ import annotations
@@ -42,6 +47,7 @@ from core.telegram_client import (
 )
 from schemas.contact_lookup import ContactLookupJob
 from schemas.outreach_limits import OutreachDailyUsage
+from schemas.outreach_protection import RUN_STOPPED_CODE
 from schemas.telegram_actions_contacts import LookupContactsByPhone
 from services.accounts._contact_lookup_lanes import (
     Lane,
@@ -58,6 +64,12 @@ from services.accounts._contact_rechecks import (
     settle_rechecks,
     summarize_contact_rechecks,
 )
+from services.accounts._outreach_protection import (
+    halve,
+    note_limit,
+    skipped_accounts,
+    young_account_ids,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -68,6 +80,7 @@ if TYPE_CHECKING:
         ContactRecheckSummary,
     )
     from schemas.outreach_limits import OutreachLimits
+    from schemas.outreach_protection import OutreachProtection
     from schemas.telegram_actions_contacts import ContactLookupBatchResult
 
 _jobs: dict[str, ContactLookupJob] = {}
@@ -118,6 +131,7 @@ class LookupPacing:
     min_delay_seconds: float
     max_delay_seconds: float
     silent_limit_streak: int
+    protection: OutreachProtection
 
     @classmethod
     def from_limits(cls, limits: OutreachLimits) -> LookupPacing:
@@ -127,6 +141,7 @@ class LookupPacing:
             min_delay_seconds=limits.lookup_min_delay_seconds,
             max_delay_seconds=limits.lookup_max_delay_seconds,
             silent_limit_streak=limits.silent_limit_streak,
+            protection=limits.protection,
         )
 
     @classmethod
@@ -141,6 +156,7 @@ class LookupPacing:
             min_delay_seconds=delays[0],
             max_delay_seconds=delays[1],
             silent_limit_streak=limits.silent_limit_streak,
+            protection=data.protection or limits.protection,
         )
 
 
@@ -305,6 +321,8 @@ async def _run_lanes(
             if cancel_event.is_set():
                 return
         if not await _check_batch(lane, lane.take(pacing.batch_size), job):
+            if lane.limit is not None:
+                await _limited(lane, lanes, pacing.protection, job)
             continue
         if looks_silently_limited(lane, lanes, pacing.silent_limit_streak):
             hand_over_silent_lane(lane, lanes, job)
@@ -312,6 +330,19 @@ async def _run_lanes(
         lane.ready_at = loop.time() + random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
             pacing.min_delay_seconds, pacing.max_delay_seconds
         )
+
+
+async def _limited(
+    lane: Lane, lanes: list[Lane], protection: OutreachProtection, job: ContactLookupJob
+) -> None:
+    """Start the lane's rest; past the threshold, skip every number still queued."""
+    code, retry_after = lane.limit or ("", None)
+    limited = sum(other.limit is not None for other in lanes)
+    if not await note_limit(lane.account_id, code, retry_after, protection, limited):
+        return
+    for other in lanes:
+        if not other.stopped:
+            stop_lane(other, [], job, error_code=RUN_STOPPED_CODE, retry_after=None)
 
 
 async def lookup_in_lanes(
@@ -340,11 +371,31 @@ async def run_contact_lookup_job(job_id: str) -> None:
     cancel_event = _cancel_events[job_id]
     try:
         limits = await load_outreach_limits()
-        usage = await list_outreach_usage(data.account_ids, _utc_day())
+        pacing = LookupPacing.resolve(data, limits)
+        now = datetime.now(UTC)
+        job.skipped_accounts = await skipped_accounts(data.account_ids, pacing.protection, now)
+        left_out = {skipped.account_id for skipped in job.skipped_accounts}
+        account_ids = [account_id for account_id in data.account_ids if account_id not in left_out]
+        if not account_ids:
+            for index, phone in enumerate(phones):
+                why = job.skipped_accounts[index % len(job.skipped_accounts)]
+                skip_phones(
+                    why.account_id,
+                    [phone],
+                    job,
+                    error_code=why.reason,
+                    retry_after=why.retry_after_seconds,
+                )
+            return
+        young = await young_account_ids(account_ids, pacing.protection, now)
+        usage = await list_outreach_usage(account_ids, _utc_day())
         cap = data.daily_cap or limits.contact_imports_per_day
-        allowances = {account_id: cap - row.contact_imports for account_id, row in usage.items()}
-        found_before = await list_accounts_with_contact_matches(data.account_ids)
-        lanes, overflow = plan_lanes(phones, data.account_ids, allowances, found_before)
+        allowances = {
+            account_id: (halve(cap) if account_id in young else cap) - row.contact_imports
+            for account_id, row in usage.items()
+        }
+        found_before = await list_accounts_with_contact_matches(account_ids)
+        lanes, overflow = plan_lanes(phones, account_ids, allowances, found_before)
         for account_id, phone in overflow:
             skip_phones(account_id, [phone], job, error_code="daily_limit")
         recheck = limits.recipients.recheck_not_found
@@ -354,7 +405,7 @@ async def run_contact_lookup_job(job_id: str) -> None:
         if recheck:
             # The operator's own numbers first; due re-checks take the room left over.
             job.total += len(place_rechecks(lanes, queued.values(), phones, datetime.now(UTC)))
-        await _run_lanes(lanes, LookupPacing.resolve(data, limits), job, cancel_event)
+        await _run_lanes(lanes, pacing, job, cancel_event)
         await settle_rechecks(job, queued, enabled=recheck, now=datetime.now(UTC))
     finally:
         job.status = (

@@ -81,6 +81,7 @@ export function forecastSends({
   recipients,
   left,
   cap,
+  caps,
   pause,
   concurrency,
   windowMinutes,
@@ -91,6 +92,8 @@ export function forecastSends({
   left: number[];
   // The daily cap per account; null when there is none.
   cap: number | null;
+  // Each account's own cap where it differs (a young account's is half), in `left` order.
+  caps?: number[];
   pause: number;
   concurrency: number;
   windowMinutes: number;
@@ -100,7 +103,10 @@ export function forecastSends({
   if (accounts === 0 || sends === 0) return { sends, days: 0, seconds: 0 };
   // An account sends at most this many a day: its cap, or as many pauses as fit the window.
   const byWindow = Math.max(Math.floor((windowMinutes * 60) / Math.max(pause, 1)), 1);
-  const perDay = cap === null ? byWindow : Math.min(cap, byWindow);
+  const perDay = (index: number) => {
+    const own = cap === null ? null : (caps?.[index] ?? cap);
+    return own === null ? byWindow : Math.min(own, byWindow);
+  };
   const shares = left.map((_, index) =>
     mode === 'each'
       ? recipients
@@ -108,8 +114,8 @@ export function forecastSends({
   );
   const days = Math.max(
     ...shares.map((share, index) => {
-      const today = Math.min(Math.max(left[index] ?? 0, 0), perDay);
-      return share <= today ? 1 : 1 + Math.ceil((share - today) / Math.max(perDay, 1));
+      const today = Math.min(Math.max(left[index] ?? 0, 0), perDay(index));
+      return share <= today ? 1 : 1 + Math.ceil((share - today) / Math.max(perDay(index), 1));
     }),
   );
   const longest = Math.max(...shares) * pause;

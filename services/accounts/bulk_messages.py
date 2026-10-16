@@ -10,14 +10,19 @@ an account another feature is driving.
 Every send that may have reached Telegram counts as one first message of the
 account's UTC day (``outreach_daily_usage``): the tool cannot tell an answered chat
 from a cold one, and its recipients are mostly fresh lookup finds.
+
+A run leaves out, once when it starts, the accounts its protection settings rule
+out (resting after a limit, spam-blocked, flooded in the last day): split mode
+plans their recipients onto the others, each mode skips their sends.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast, get_args
 from uuid import uuid4
 
 from core.channel_tokens import normalize_channel
@@ -34,8 +39,10 @@ from schemas.bulk_messages import (
     BulkMessageRequest,
 )
 from schemas.bulk_runs import BulkRunAccount, BulkRunRecord, RunKind
+from schemas.outreach_protection import OutreachProtection, SkippedAccount, SkipReason
 from schemas.run_schedule import RunSchedule
 from schemas.telegram_actions import ActionResult, SendChatMessage
+from schemas.telegram_actions_outreach import OutreachSetTyping
 from services._text_llm import text_llm
 from services.accounts._bulk_claims import (
     BUSY_CODE,
@@ -45,6 +52,7 @@ from services.accounts._bulk_claims import (
 )
 from services.accounts._bulk_plan import plan_items
 from services.accounts._bulk_runner import BulkRun, Lane
+from services.accounts._outreach_protection import skipped_accounts, young_account_ids
 from services.accounts._recipient_history import screen_recipients, skip_by_history
 from services.accounts._result import AccountActionError, raise_for_result
 
@@ -56,6 +64,7 @@ _OUTCOME_STATUS: dict[str, Literal["ok", "failed", "skipped", "unconfirmed"]] = 
     "unconfirmed": "unconfirmed",
 }
 _FINAL = frozenset(_OUTCOME_STATUS)
+_SKIP_REASONS = frozenset(get_args(SkipReason))
 # Live runs of this process, so a cancel reaches the loop and shutdown can stop it.
 _RUNS: dict[str, BulkRun] = {}
 _TASKS: dict[str, asyncio.Task[None]] = {}
@@ -89,6 +98,7 @@ async def _resolve(data: BulkMessageRequest) -> tuple[BulkMessageRequest, RunSch
             ),
             "daily_cap": data.daily_cap or limits.first_messages_per_day,
             "schedule": schedule,
+            "protection": data.protection or limits.protection,
             "recipient_rules": data.recipient_rules or limits.recipients,
         }
     )
@@ -119,6 +129,7 @@ async def start_bulk_message_job(
     now = datetime.now(UTC)
     resolved, verdicts = await screen_recipients(resolved, recipients, now)
     run_id = run_id or uuid4().hex
+    now = datetime.now(UTC)
     record = BulkRunRecord(
         id=run_id,
         owner_user_id=owner_user_id,
@@ -127,14 +138,36 @@ async def start_bulk_message_job(
         created_at=now.isoformat(),
         kind=kind,
     )
-    items = plan_items(run_id, resolved, schedule, recipients)
+    protection = resolved.protection or OutreachProtection()
+    skipped = {s.account_id: s for s in await skipped_accounts(data.account_ids, protection, now)}
+    live = [account_id for account_id in resolved.account_ids if account_id not in skipped]
+    # Split mode spreads its recipients over the accounts the run keeps; each mode
+    # plans every pair, so a left-out account's sends show as skipped.
+    split_live = resolved.mode == "split" and live
+    planned = resolved.model_copy(update={"account_ids": live}) if split_live else resolved
+    items = plan_items(run_id, planned, schedule, recipients)
     skip_by_history(items, verdicts)
-    try:
-        await repo.create_bulk_run(
-            record,
-            items,
-            [BulkRunAccount(run_id=run_id, account_id=a) for a in resolved.account_ids],
+    for item in items:
+        left_out = skipped.get(item.account_id)
+        if left_out is not None and item.status == "pending":
+            # A client this account owns stays with it: skipped, never handed on.
+            item.status = "skipped"
+            item.error_code = left_out.reason
+            item.retry_after_seconds = left_out.retry_after_seconds
+            item.finished_at = now.isoformat()
+    accounts = [
+        BulkRunAccount(
+            run_id=run_id,
+            account_id=account_id,
+            stop_code=skipped[account_id].reason if account_id in skipped else None,
+            retry_after_seconds=(
+                skipped[account_id].retry_after_seconds if account_id in skipped else None
+            ),
         )
+        for account_id in resolved.account_ids
+    ]
+    try:
+        await repo.create_bulk_run(record, items, accounts)
     except repo.BulkRunActiveError as exc:
         # Another start won the race the check above cannot close on its own.
         msg = "bulk_message_run_active"
@@ -169,6 +202,15 @@ async def _job_view(record: BulkRunRecord) -> BulkMessageJob:
         ],
         wait_reason=record.wait_reason if record.status == "running" else None,
         next_send_at=record.next_send_at if record.status == "running" else None,
+        skipped_accounts=[
+            SkippedAccount(
+                account_id=row.account_id,
+                reason=cast("SkipReason", row.stop_code),
+                retry_after_seconds=row.retry_after_seconds,
+            )
+            for row in await repo.list_bulk_run_accounts(record.id)
+            if row.stop_code in _SKIP_REASONS
+        ],
     )
 
 
@@ -248,10 +290,33 @@ async def _send(account_id: str, recipient: str, peer: str, text: str) -> BulkMe
     return await send_locked(account_id, lambda: _send_one(account_id, recipient, peer, text))
 
 
+async def _show_typing(account_id: str, peer: str, protection: OutreachProtection) -> None:
+    """Show "typing…" for a moment in the protection's range; a failure only skips the show.
+
+    Never raises: the send that follows must go out exactly as it would without it.
+    """
+    if not protection.typing:
+        return
+    typing = OutreachSetTyping(recipient=peer)
+    try:
+        # Under the lifecycle lock, like the send it announces.
+        result = await send_locked(
+            account_id, lambda: execute(account_id, typing, domain="bulk_messages")
+        )
+    except Exception as exc:  # noqa: BLE001 - typing must never stop or repeat the send
+        logger.warning("bulk message typing failed: %s", type(exc).__name__)
+        return
+    if result.status == "ok":
+        low, high = protection.typing_min_seconds, protection.typing_max_seconds
+        await asyncio.sleep(random.uniform(low, high))  # noqa: S311  # nosec B311 - timing jitter, not a secret
+
+
 async def _load_run(record: BulkRunRecord) -> BulkRun:
     data = BulkMessageRequest.model_validate_json(record.request_json)
     # Stored requests are resolved, so the fallback only guards a hand-edited row.
     schedule = data.schedule or RunSchedule()
+    protection = data.protection or OutreachProtection()
+    young = await young_account_ids(data.account_ids, protection, datetime.now(UTC))
     accounts = {a.account_id: a for a in await repo.list_bulk_run_accounts(record.id)}
     cancel = asyncio.Event()
     if record.cancel_requested:
@@ -264,11 +329,14 @@ async def _load_run(record: BulkRunRecord) -> BulkRun:
         lanes={
             account_id: Lane(
                 row=accounts.get(account_id)
-                or BulkRunAccount(run_id=record.id, account_id=account_id)
+                or BulkRunAccount(run_id=record.id, account_id=account_id),
+                young=account_id in young,
             )
             for account_id in data.account_ids
         },
         send=_send,
+        show_typing=_show_typing,
+        protection=protection,
         cancel=cancel,
         start_at=data.start_at,
         seq=await repo.max_finished_seq(record.id),

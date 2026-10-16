@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from schemas.outreach_protection import OutreachProtection, SkippedAccount
 from schemas.recipient_rules import RecipientRules
 from schemas.run_schedule import RunSchedule
 
@@ -39,6 +40,8 @@ class OutreachLimitsUpdate(BaseModel):
     schedule: RunSchedule = Field(default_factory=RunSchedule)
     # Default history rules: no repeat, one account per client, re-check of "not found".
     recipients: RecipientRules = Field(default_factory=RecipientRules)
+    # Young-account caps, rest after a limit, skipping injured accounts, typing.
+    protection: OutreachProtection = Field(default_factory=OutreachProtection)
 
     @model_validator(mode="after")
     def validate_pauses(self) -> OutreachLimitsUpdate:
@@ -71,3 +74,7 @@ class OutreachUsageList(BaseModel):
 
     day: str
     items: list[OutreachDailyUsage]
+    # Accounts young enough for half caps (the saved age threshold), whatever the switch.
+    young_account_ids: list[str] = Field(default_factory=list)
+    # Accounts a run with every switch on would leave out right now, and why.
+    skipped_accounts: list[SkippedAccount] = Field(default_factory=list)
