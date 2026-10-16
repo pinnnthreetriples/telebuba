@@ -172,3 +172,28 @@ async def test_usage_today_names_young_and_left_out_accounts(app: FastAPI) -> No
     assert [(s["account_id"], s["reason"]) for s in body["skipped_accounts"]] == [
         ("resting", "account_resting")
     ]
+
+
+@pytest.mark.asyncio
+async def test_usage_today_reports_status_even_with_the_saved_switches_off(app: FastAPI) -> None:
+    await create_account(AccountCreate(account_id="young"))
+    await record_outreach_rest(
+        OutreachRest(
+            account_id="resting",
+            reason="flood_wait",
+            limited_at=datetime.now(UTC).isoformat(),
+            rest_until=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        )
+    )
+    async with _client(app) as client:
+        body = (await client.get(_URL)).json()
+        body.pop("updated_at")
+        off = {**body["protection"], "young_half_caps": False, "rest_after_limit": False}
+        assert (await client.put(_URL, json={**body, "protection": off})).status_code == 200
+        response = await client.get(
+            "/api/v1/accounts/outreach-usage", params={"account_ids": ["young", "resting"]}
+        )
+    usage = response.json()
+    # A run may switch these back on, so the window still learns both.
+    assert usage["young_account_ids"] == ["young"]
+    assert [s["account_id"] for s in usage["skipped_accounts"]] == ["resting"]

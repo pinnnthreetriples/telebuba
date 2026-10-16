@@ -221,16 +221,15 @@ export function BulkMessageModal({
   const clientTimed = results.filter((result) => result.time_basis === 'client').length;
 
   const averagePause = delayEdited ? (minSeconds + maxSeconds) / 2 : pacing.pause;
+  // Accounts protection leaves out send nothing; the others each keep their own cap.
+  const sending = ids.filter((id) => !skippedNow.has(id));
+  const capOf = (id: string) => (young.has(id) ? youngCap(pacing.messages) : pacing.messages);
   const forecast = forecastSends({
     mode,
     recipients: recipientList.length,
-    left: ids.map((id) =>
-      skippedNow.has(id)
-        ? 0
-        : (young.has(id) ? youngCap(pacing.messages) : pacing.messages) -
-          (usage.get(id)?.first_messages ?? 0),
-    ),
+    left: sending.map((id) => capOf(id) - (usage.get(id)?.first_messages ?? 0)),
     cap: pacing.messages,
+    caps: sending.map(capOf),
     pause: averagePause,
     concurrency: schedule.concurrency,
     windowMinutes: windowMinutes(schedule.work_start, schedule.work_end),
@@ -248,7 +247,9 @@ export function BulkMessageModal({
           max_delay_seconds: maxSeconds,
           daily_cap: pacing.messages,
           schedule,
-          protection,
+          // Only the operator's own edit: before the saved limits load, the shown
+          // defaults must not override the saved protection.
+          ...(protectionEdit !== null && { protection: protectionEdit }),
           recipient_rules: rules,
           ...(startAt !== '' && { start_at: new Date(startAt).toISOString() }),
           recipient_phones: Object.fromEntries(

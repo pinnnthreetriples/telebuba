@@ -74,7 +74,7 @@ class OutreachUsageList(BaseModel):
 
     day: str
     items: list[OutreachDailyUsage]
-    # Accounts young enough for half caps under the saved protection settings.
+    # Accounts young enough for half caps (the saved age threshold), whatever the switch.
     young_account_ids: list[str] = Field(default_factory=list)
-    # Accounts a run would leave out right now (resting, spam block, recent flood).
+    # Accounts a run with every switch on would leave out right now, and why.
     skipped_accounts: list[SkippedAccount] = Field(default_factory=list)

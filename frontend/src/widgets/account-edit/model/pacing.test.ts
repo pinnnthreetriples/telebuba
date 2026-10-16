@@ -78,6 +78,10 @@ test('the forecast spreads sends that do not fit today over working days', () =>
     }).days,
   ).toBe(3);
   expect(forecastSends({ ...base, mode: 'split', recipients: 0, left: [5] }).days).toBe(0);
+  // A young account's half cap stretches its share: 6 sends at 2 a day are 3 days.
+  expect(
+    forecastSends({ ...base, mode: 'each', recipients: 6, left: [2, 4], caps: [2, 4] }).days,
+  ).toBe(3);
   expect(windowMinutes('09:00', '20:00')).toBe(660);
   expect(lookupOverflow(10, [3, -2, 4])).toBe(3);
   expect(lookupOverflow(2, [5])).toBe(0);

@@ -34,14 +34,17 @@ async def save_outreach_limits(data: OutreachLimitsUpdate) -> OutreachLimits:
 async def list_outreach_usage_today(account_ids: Sequence[str]) -> OutreachUsageList:
     """What each account already spent today (UTC), for the "left today" chips.
 
-    Also which of them the saved protection makes young (half caps) and which a run
-    starting now would leave out, so the chips can say so before the run starts.
+    Also which of them are young and which a run starting now would leave out, so
+    the chips can say so before the run starts. Reported with every switch on, since
+    a run may turn on what the saved settings have off; the window applies its own.
     """
     now = datetime.now(UTC)
     day = now.date().isoformat()
     ids = list(dict.fromkeys(account_ids))
     usage = await outreach.list_outreach_usage(ids, day)
-    protection = (await outreach.load_outreach_limits()).protection
+    protection = (await outreach.load_outreach_limits()).protection.model_copy(
+        update={"young_half_caps": True, "rest_after_limit": True, "skip_injured": True}
+    )
     return OutreachUsageList(
         day=day,
         items=list(usage.values()),
