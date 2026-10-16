@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from core._schema_bulk_runs import _bulk_run_accounts, _bulk_run_items, _bulk_runs
 from core.db import _get_engine, _now_iso
-from schemas.bulk_runs import BulkRunAccount, BulkRunItem, BulkRunRecord
+from schemas.bulk_runs import BulkRunAccount, BulkRunItem, BulkRunRecord, RunKind
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -79,16 +79,20 @@ async def get_bulk_run(run_id: str) -> BulkRunRecord | None:
     return runs[0] if runs else None
 
 
-async def list_live_bulk_runs() -> list[BulkRunRecord]:
-    """Runs still sending or waiting — what a restart resumes."""
-    return await asyncio.to_thread(
-        _select_runs,
-        select(_bulk_runs).where(_bulk_runs.c.status == _LIVE).order_by(_bulk_runs.c.created_at),
+async def list_live_bulk_runs(kind: RunKind | None = None) -> list[BulkRunRecord]:
+    """Runs still sending or waiting — what a restart resumes; ``kind`` narrows it."""
+    statement = select(_bulk_runs).where(_bulk_runs.c.status == _LIVE)
+    if kind is not None:
+        statement = statement.where(_bulk_runs.c.kind == kind)
+    return await asyncio.to_thread(_select_runs, statement.order_by(_bulk_runs.c.created_at))
+
+
+async def latest_bulk_run(
+    owner_user_id: str, *, live_only: bool, kind: RunKind = "manual"
+) -> BulkRunRecord | None:
+    statement = select(_bulk_runs).where(
+        (_bulk_runs.c.owner_user_id == owner_user_id) & (_bulk_runs.c.kind == kind)
     )
-
-
-async def latest_bulk_run(owner_user_id: str, *, live_only: bool) -> BulkRunRecord | None:
-    statement = select(_bulk_runs).where(_bulk_runs.c.owner_user_id == owner_user_id)
     if live_only:
         statement = statement.where(_bulk_runs.c.status == _LIVE)
     runs = await asyncio.to_thread(
@@ -197,10 +201,10 @@ async def unconfirm_sending_items(run_id: str) -> int:
     return await asyncio.to_thread(_unconfirm_sending, run_id)
 
 
-def _prune(keep: int) -> int:
+def _prune(keep: int, kind: RunKind) -> int:
     finished = (
         select(_bulk_runs.c.id)
-        .where(_bulk_runs.c.status != _LIVE)
+        .where((_bulk_runs.c.status != _LIVE) & (_bulk_runs.c.kind == kind))
         .order_by(_bulk_runs.c.created_at.desc())
         .offset(keep)
     )
@@ -215,9 +219,9 @@ def _prune(keep: int) -> int:
     return len(ids)
 
 
-async def prune_bulk_runs(keep: int) -> int:
-    """Delete finished runs beyond the newest ``keep``; returns how many went."""
-    return await asyncio.to_thread(_prune, keep)
+async def prune_bulk_runs(keep: int, kind: RunKind = "manual") -> int:
+    """Delete finished runs of ``kind`` beyond its newest ``keep``; returns how many went."""
+    return await asyncio.to_thread(_prune, keep, kind)
 
 
 def _max_finished_seq(run_id: str) -> int:

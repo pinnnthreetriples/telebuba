@@ -1,4 +1,4 @@
-"""Migration 97 — recipient history, "not found" re-checks and the default rules.
+"""Migration 98 — recipient history, "not found" re-checks and the default rules.
 
 ``CREATE ... IF NOT EXISTS`` and a guarded ``ADD COLUMN``: ``create_all`` runs BEFORE
 ``apply_migrations``, so on a fresh database the schema comes from

@@ -1,4 +1,4 @@
-"""SQLAlchemy tables for persistent bulk-message runs (migration #91).
+"""SQLAlchemy tables for persistent bulk-message runs (migrations #91 and #98).
 
 A run outlives a restart: ``bulk_runs`` holds what was asked for, one
 ``bulk_run_items`` row per planned send (a hand-over adds a row, the refused one
@@ -31,11 +31,14 @@ _bulk_runs = Table(
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
     Column("finished_at", String, nullable=True),
+    # "manual" (the operator's send window) or "lead_queue" (migration #98).
+    Column("kind", String, nullable=False, server_default=text("'manual'")),
     Index("ix_bulk_runs_status", "status"),
-    # At most one live run: two starts racing past the service's check meet here.
+    # At most one live run of each kind: two starts racing past the service's check
+    # meet here.
     Index(
         "ux_bulk_runs_live",
-        "status",
+        "kind",
         unique=True,
         sqlite_where=text("status = 'running'"),
     ),

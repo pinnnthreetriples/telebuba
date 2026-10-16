@@ -42,7 +42,9 @@ from services.accounts import (
     close_orphaned_web_windows,
     reconcile_bulk_messages_on_startup,
     shutdown_bulk_messages_on_shutdown,
+    shutdown_lead_queue_on_shutdown,
     shutdown_web_login,
+    start_lead_queue_on_startup,
 )
 from services.auth import seed_admin_if_empty
 from services.chat_broadcast import (
@@ -172,6 +174,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_neuroshilling_on_startup()
     await reconcile_chat_broadcast_on_startup()
     await reconcile_bulk_messages_on_startup()
+    # After the bulk runs: the queue's own send run resumes with them, the loop reads it.
+    await start_lead_queue_on_startup()
     await reconcile_masstagging_on_startup()
     await reconcile_user_parser_on_startup()
     await reconcile_inboxes_on_startup()
@@ -194,6 +198,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("chat_broadcast", shutdown_chat_broadcast_on_shutdown)
+        # Before the pool: a lookup in flight uses a pooled client; leads stay queued.
+        await _shutdown_step("lead_queue", shutdown_lead_queue_on_shutdown)
         # Before the pool: a send in flight uses a pooled client; the run stays live.
         await _shutdown_step("bulk_messages", shutdown_bulk_messages_on_shutdown)
         await _shutdown_step("masstagging", shutdown_masstagging_on_shutdown)

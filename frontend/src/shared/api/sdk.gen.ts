@@ -31,6 +31,9 @@ import type {
   AddAccountsToFolderData,
   AddAccountsToFolderErrors,
   AddAccountsToFolderResponses,
+  AddLeadsToQueueData,
+  AddLeadsToQueueErrors,
+  AddLeadsToQueueResponses,
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
@@ -244,6 +247,9 @@ import type {
   GetLatestContactLookupJobData,
   GetLatestContactLookupJobErrors,
   GetLatestContactLookupJobResponses,
+  GetLeadQueueData,
+  GetLeadQueueErrors,
+  GetLeadQueueResponses,
   GetMasstaggingBoardData,
   GetMasstaggingBoardErrors,
   GetMasstaggingBoardResponses,
@@ -466,6 +472,9 @@ import type {
   RemoveCampaignChannelData,
   RemoveCampaignChannelErrors,
   RemoveCampaignChannelResponses,
+  RemoveQueuedLeadData,
+  RemoveQueuedLeadErrors,
+  RemoveQueuedLeadResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
@@ -640,6 +649,9 @@ import type {
   UpdateCampaignPromptData,
   UpdateCampaignPromptErrors,
   UpdateCampaignPromptResponses,
+  UpdateLeadQueueSettingsData,
+  UpdateLeadQueueSettingsErrors,
+  UpdateLeadQueueSettingsResponses,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsErrors,
   UpdateNeurocommentSettingsResponses,
@@ -1954,6 +1966,63 @@ export const updateOutreachPreset = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/outreach-presets/{preset_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Lead Queue
+ */
+export const getLeadQueue = <ThrowOnError extends boolean = false>(
+  options?: Options<GetLeadQueueData, ThrowOnError>,
+): RequestResult<GetLeadQueueResponses, GetLeadQueueErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetLeadQueueResponses, GetLeadQueueErrors, ThrowOnError>({
+    url: '/api/v1/accounts/lead-queue',
+    ...options,
+  });
+
+/**
+ * Add Leads To Queue
+ */
+export const addLeadsToQueue = <ThrowOnError extends boolean = false>(
+  options: Options<AddLeadsToQueueData, ThrowOnError>,
+): RequestResult<AddLeadsToQueueResponses, AddLeadsToQueueErrors, ThrowOnError> =>
+  (options.client ?? client).post<AddLeadsToQueueResponses, AddLeadsToQueueErrors, ThrowOnError>({
+    url: '/api/v1/accounts/lead-queue/leads',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Queued Lead
+ */
+export const removeQueuedLead = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveQueuedLeadData, ThrowOnError>,
+): RequestResult<RemoveQueuedLeadResponses, RemoveQueuedLeadErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveQueuedLeadResponses,
+    RemoveQueuedLeadErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/lead-queue/leads/{lead_id}', ...options });
+
+/**
+ * Update Lead Queue Settings
+ */
+export const updateLeadQueueSettings = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateLeadQueueSettingsData, ThrowOnError>,
+): RequestResult<UpdateLeadQueueSettingsResponses, UpdateLeadQueueSettingsErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateLeadQueueSettingsResponses,
+    UpdateLeadQueueSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/lead-queue/settings',
     ...options,
     headers: {
       'Content-Type': 'application/json',

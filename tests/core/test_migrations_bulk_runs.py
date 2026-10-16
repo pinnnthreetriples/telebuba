@@ -8,6 +8,7 @@ import pytest
 
 from core.db import _metadata
 from core.migration_steps_bulk_runs import _add_bulk_runs
+from core.migration_steps_lead_queue import _add_lead_queue
 from core.migration_steps_outreach import _add_outreach_tables
 from core.migrations import MIGRATIONS
 from tests.core.test_migrations_scheduled_posts import _shape
@@ -34,6 +35,8 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     engine = legacy_engine("migrated.db")
     with engine.begin() as connection:
         _add_bulk_runs(connection)
+        # Migration 98 adds ``bulk_runs.kind``, which ``create_all`` already has.
+        _add_lead_queue(connection)
     return engine
 
 

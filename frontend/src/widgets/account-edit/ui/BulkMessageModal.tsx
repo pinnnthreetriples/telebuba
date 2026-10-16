@@ -42,6 +42,7 @@ import {
 } from '../model/recipientRules';
 import { type FullSchedule, fullSchedule } from '../model/schedule';
 import { ContactLookupPanel } from './ContactLookupPanel';
+import { LeadQueuePanel } from './LeadQueuePanel';
 import { PacingBlock } from './PacingBlock';
 import { ProtectionSection } from './ProtectionSection';
 import { RecipientRulesSection } from './RecipientRulesSection';
@@ -642,6 +643,7 @@ export function BulkMessageModal({
                     onPacingChange={setPacing}
                     recheckNotFound={rules.recheck_not_found}
                   />
+                  <LeadQueuePanel accountIds={ids} message={message} />
                 </section>
 
                 <section className="space-y-2">

@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import BaseModel
 
 RunStatus = Literal["running", "completed", "cancelled"]
+# "manual": started from the send window; "lead_queue": the lead queue's own run.
+RunKind = Literal["manual", "lead_queue"]
 ItemStatus = Literal["pending", "sending", "ok", "failed", "skipped", "unconfirmed"]
 # Why a running run is not sending right now.
 WaitReason = Literal["schedule", "hours", "daily_cap", "pause", "series_break"]
@@ -23,6 +25,7 @@ class BulkRunRecord(BaseModel):
     wait_reason: WaitReason | None = None
     created_at: str
     finished_at: str | None = None
+    kind: RunKind = "manual"
 
 
 class BulkRunItem(BaseModel):

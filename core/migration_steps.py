@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 _ALLOWED_TABLES = frozenset(
     {
         "accounts",
+        "bulk_runs",
         "account_proxies",
         "warming_account_state",
         "warming_channels",

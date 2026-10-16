@@ -1,4 +1,4 @@
-"""SQLAlchemy tables for recipient history and "not found" re-checks (migration #97).
+"""SQLAlchemy tables for recipient history and "not found" re-checks (migration #98).
 
 ``recipient_history`` has one row per first message the bulk-message tool sent (or
 may have sent): the recipient's key, the account and the time — no text, no name.

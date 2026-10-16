@@ -78,6 +78,7 @@ from core.migration_steps_humanlike import (
     _add_warming_state_visit,
 )
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
+from core.migration_steps_lead_queue import _add_lead_queue
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
@@ -264,7 +265,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (95, "allow_lifecycle_warming_stopped", _allow_lifecycle_warming_stopped),
     (96, "allow_lifecycle_spam_block_lifted", _allow_lifecycle_spam_block_lifted),
     (97, "add_recipient_history", _add_recipient_history),
-    (98, "add_outreach_protection", _add_outreach_protection),
+    (98, "add_lead_queue", _add_lead_queue),
+    (99, "add_outreach_protection", _add_outreach_protection),
 )
 
 

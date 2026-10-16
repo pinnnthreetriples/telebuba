@@ -71,6 +71,10 @@ from services.accounts.chats import (
     send_chat_message,
 )
 from services.accounts.devices import DeviceRefusedError, add_account_device
+from services.accounts.lead_queue import (
+    shutdown_lead_queue_on_shutdown,
+    start_lead_queue_on_startup,
+)
 from services.accounts.lifecycle import (
     add_account,
     evaluate_account_geo,
@@ -217,7 +221,9 @@ __all__ = [
     "set_account_twofa_email",
     "set_registered_at",
     "shutdown_bulk_messages_on_shutdown",
+    "shutdown_lead_queue_on_shutdown",
     "shutdown_web_login",
+    "start_lead_queue_on_startup",
     "start_phone_login",
     "submit_login_code",
     "update_account_channel",

@@ -38,7 +38,7 @@ from schemas.bulk_messages import (
     BulkMessageOutcome,
     BulkMessageRequest,
 )
-from schemas.bulk_runs import BulkRunAccount, BulkRunRecord
+from schemas.bulk_runs import BulkRunAccount, BulkRunRecord, RunKind
 from schemas.outreach_protection import OutreachProtection, SkippedAccount, SkipReason
 from schemas.run_schedule import RunSchedule
 from schemas.telegram_actions import ActionResult, SendChatMessage
@@ -105,9 +105,20 @@ async def _resolve(data: BulkMessageRequest) -> tuple[BulkMessageRequest, RunSch
     return resolved, schedule
 
 
-async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -> BulkMessageJob:
-    """Validate all targets and store the run; one live run prevents duplicates."""
-    if await repo.list_live_bulk_runs():
+async def start_bulk_message_job(
+    data: BulkMessageRequest,
+    owner_user_id: str,
+    *,
+    kind: RunKind = "manual",
+    run_id: str | None = None,
+) -> BulkMessageJob:
+    """Validate all targets and store the run; one live run of a kind prevents duplicates.
+
+    The lead queue passes its own ``run_id``: it marks its leads with it first, so a
+    crash between the two writes leaves leads pointing at no run (safe to resend)
+    rather than a run whose leads look unsent.
+    """
+    if await repo.list_live_bulk_runs(kind):
         msg = "bulk_message_run_active"
         raise ValueError(msg)
     recipients = [(recipient, _recipient_peer(recipient)) for recipient in data.recipients]
@@ -117,7 +128,7 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
     resolved, schedule = await _resolve(data)
     now = datetime.now(UTC)
     resolved, verdicts = await screen_recipients(resolved, recipients, now)
-    run_id = uuid4().hex
+    run_id = run_id or uuid4().hex
     now = datetime.now(UTC)
     record = BulkRunRecord(
         id=run_id,
@@ -125,6 +136,7 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
         status="running",
         request_json=resolved.model_dump_json(),
         created_at=now.isoformat(),
+        kind=kind,
     )
     protection = resolved.protection or OutreachProtection()
     skipped = {s.account_id: s for s in await skipped_accounts(data.account_ids, protection, now)}
@@ -160,7 +172,7 @@ async def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -
         # Another start won the race the check above cannot close on its own.
         msg = "bulk_message_run_active"
         raise ValueError(msg) from exc
-    await repo.prune_bulk_runs(_MAX_RETAINED_JOBS)
+    await repo.prune_bulk_runs(_MAX_RETAINED_JOBS, kind)
     return await _job_view(record)
 
 
@@ -366,6 +378,11 @@ async def run_bulk_message_job(job_id: str) -> None:
         next_send_at=None,
         wait_reason=None,
     )
+
+
+def is_bulk_message_job_driven(job_id: str) -> bool:
+    """Whether this process runs the job's loop; a live row without one was orphaned."""
+    return job_id in _TASKS or job_id in _RUNS
 
 
 def launch_bulk_message_job(job_id: str) -> None:

@@ -1,4 +1,4 @@
-"""Migration 97 — recipient history and re-checks, and their parity with ``create_all``."""
+"""Migration 98 — recipient history and re-checks, and their parity with ``create_all``."""
 
 from __future__ import annotations
 

@@ -376,7 +376,7 @@ async def test_a_second_live_run_is_refused_even_past_the_services_check(
 ) -> None:
     await bulk_messages.start_bulk_message_job(_one_recipient(), "owner-1")
 
-    async def nothing_live() -> list[object]:
+    async def nothing_live(_kind: str | None = None) -> list[object]:
         return []
 
     # Two starts racing: both pass the check before either has written its run.
@@ -452,6 +452,7 @@ async def test_a_failed_send_stops_the_other_sends_in_flight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     hold = asyncio.Event()
+    slow_started = asyncio.Event()
     stopped: list[str] = []
 
     async def fake_execute(
@@ -461,11 +462,16 @@ async def test_a_failed_send_stops_the_other_sends_in_flight(
         domain: str,  # noqa: ARG001
     ) -> ActionResult:
         if action.recipient == "slow":
+            slow_started.set()
             try:
                 await hold.wait()
             except asyncio.CancelledError:
                 stopped.append(action.recipient)
                 raise
+        else:
+            # Each send first awaits threaded DB writes, so without this the fast one
+            # could fail the run before the slow one is in flight at all.
+            await slow_started.wait()
         return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
 
     monkeypatch.setattr(bulk_messages, "execute", fake_execute)
