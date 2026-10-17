@@ -111,6 +111,29 @@ The container is a real phone (`core/emulator/_profile.py`):
 - A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
   country moves the timezone and carrier; a running one is left alone.
 
+## First-boot data
+
+A fresh container has no contacts and no photos. After its first boot (and the SDK check),
+before the app is started, `core/emulator/_seeder.py` gives it both, drawn from the container's
+serial so a container made again for the account gets the same ones:
+
+- **Contacts**: 25–40 people with names of the proxy country's language
+  (`configs/contact_names.json`, `en_US` for a country it lacks) and that country's valid mobile
+  numbers (`phonenumbers`), 70% written internationally; about a fifth have an e-mail and a
+  company. They go in through the Contacts Provider (`content insert`), tagged `sync1=telebuba`.
+- **Photos**: 12–20 JPEGs in `/sdcard/DCIM/Camera`, named the way the phone's camera app names
+  them (the blueprint's `camera.file_style`), with that phone's EXIF: `Make`/`Model`, the build's
+  incremental as `Software`, the main lens's `FNumber`/`FocalLength` (the blueprint's `camera`),
+  ISO, exposure and a capture time 5–45 days back at a daytime hour in the container's timezone.
+  Each file's mtime is set to that time (`touch -t`), then MediaStore is asked to index the volume
+  (`content call … scan_volume`, the scan broadcast when that fails).
+
+Both run on the device as one `sh` script each (`content` starts an app_process per row). Only
+when both are in is `/data/local/tmp/.telebuba_seeded` written; a container that has it is never
+seeded again. A seeding that fails is logged (`account_mobile_seed_failed`) and the sign-in goes
+on; the next boot redoes it, deleting the tagged contacts first and overwriting photos by name.
+Android keeps `/data` across stop/start, so only a container made again is seeded again.
+
 ## Host setup (Windows, Docker Desktop on WSL2)
 
 redroid needs binder in the kernel, and Android's netd needs the legacy iptables filter tables

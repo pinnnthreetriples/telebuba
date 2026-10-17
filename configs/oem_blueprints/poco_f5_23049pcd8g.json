@@ -12,6 +12,11 @@
     "height": 1600,
     "dpi": 293
   },
+  "camera": {
+    "f_number": 1.79,
+    "focal_length_mm": 5.43,
+    "file_style": "xiaomi"
+  },
   "builds": {
     "33": {
       "release": "13",
