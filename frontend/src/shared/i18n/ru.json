@@ -1400,6 +1400,8 @@
       "emulator_phone_invalid": "Номер телефона аккаунта не распознан.",
       "emulator_code_timeout": "Код входа не пришёл в основную сессию вовремя.",
       "emulator_twofa_missing": "Аккаунт защищён облачным паролем, а он не сохранён.",
+      "emulator_not_running": "Telegram в контейнере не запущен на текущем прокси аккаунта — сначала откройте его.",
+      "emulator_not_signed_in": "Telegram в контейнере не вошёл в аккаунт — сначала завершите вход.",
       "not_graduated": "Аккаунт уже не в прогретых — обновите страницу",
       "not_spam_blocked": "Аккаунт уже не остановлен из-за спамблока — обновите страницу"
     },
@@ -1880,6 +1882,8 @@
     "account_mobile_opened": "Открыт на телефоне",
     "account_mobile_open_failed": "Не открылся на телефоне",
     "account_mobile_seed_failed": "Контакты и фото на телефон не добавлены",
+    "account_mobile_activity_done": "Активность на телефоне",
+    "account_mobile_activity_failed": "Активность на телефоне не удалась",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
     "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",
@@ -2055,6 +2059,8 @@
     "emulator_phone_invalid": "номер телефона не распознан",
     "emulator_code_timeout": "код входа не пришёл",
     "emulator_twofa_missing": "облачный пароль не сохранён",
+    "emulator_not_running": "контейнер не запущен",
+    "emulator_not_signed_in": "Telegram не вошёл в аккаунт",
     "no_discussion": "у поста нет комментариев",
     "no_message": "нет сообщения собеседника",
     "no_sticker": "нет подходящего стикера"

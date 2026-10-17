@@ -27,6 +27,7 @@ _EMULATOR_BOOT_TIMEOUT: EmulatorRefusalCode = "emulator_boot_timeout"
 _EMULATOR_INSTALL_FAILED: EmulatorRefusalCode = "emulator_install_failed"
 _EMULATOR_SDK_MISMATCH: EmulatorRefusalCode = "emulator_sdk_mismatch"
 
+KEYCODE_BACK = 4
 KEYCODE_ENTER = 66
 KEYCODE_DEL = 67
 KEYCODE_MOVE_END = 123
@@ -220,3 +221,30 @@ async def human_swipe(
             script.append(";")
         script += ["input", "motionevent", action, str(x), str(y)]
     await shell(serial, *script)
+
+
+async def human_fling(
+    serial: str,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Flick from ``start`` towards ``end`` fast enough for Android's scroll inertia."""
+    event = (engine or _default_input_engine).sample_fling(start, end)
+    (x1, y1), (x2, y2) = event.start, event.end
+    await shell(
+        serial, "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(event.duration_ms)
+    )
+
+
+async def double_tap(
+    serial: str,
+    node: UiNode,
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Tap one sampled point of ``node`` twice in a single ``adb shell`` script."""
+    event = (engine or _default_input_engine).sample_gaussian_tap(node.bounds)
+    x, y = str(event.x), str(event.y)
+    await shell(serial, "input", "tap", x, y, ";", "input", "tap", x, y)

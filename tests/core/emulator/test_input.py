@@ -385,3 +385,25 @@ def test_a_tap_and_its_release_stay_on_the_elements_pixels(
         assert y1 <= tap.y < y2
         assert x1 <= tap.release_x < x2
         assert y1 <= tap.release_y < y2
+
+
+def test_a_fling_is_quick_and_nudged_sideways_only() -> None:
+    engine = HumanInputEngine(rng=random.Random(5))  # noqa: S311
+    for _ in range(100):
+        fling = engine.sample_fling((540, 700), (540, 1700))
+        assert fling.start == (540, 700)
+        assert fling.end[1] == 1700, "a vertical flick is nudged across, not along"
+        assert 3 <= abs(fling.end[0] - 540) <= 12
+        assert 120 <= fling.duration_ms <= 180
+
+
+def test_a_zero_length_fling_stays_on_its_point() -> None:
+    fling = HumanInputEngine(rng=random.Random(5)).sample_fling((10, 10), (10, 10))  # noqa: S311
+    assert fling.end == (10, 10)
+
+
+def test_story_view_time_stays_in_range() -> None:
+    engine = HumanInputEngine(rng=random.Random(9))  # noqa: S311
+    samples = [engine.sample_story_view_sec() for _ in range(300)]
+    assert all(2.0 <= s <= 9.0 for s in samples)
+    assert len(set(samples)) > 10

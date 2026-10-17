@@ -1,0 +1,169 @@
+"""An activity session in a mobile account's pod: only a running pod, one at a time.
+
+Reuses the scripted container of ``test_mobile_emulator``; the playbook itself is a
+fake that records where it ran (its gestures are pinned in
+``tests/core/emulator/test_playbook.py``).
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
+
+import pytest
+
+from core.config import settings
+from core.emulator import EmulatorError
+from core.emulator.redroid import Instance
+from schemas.emulator import PlaybookResult
+from services.accounts import mobile_emulator as emulator_module
+from services.accounts.mobile_emulator import (
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    run_mobile_activity,
+)
+from tests.services.accounts.test_mobile_emulator import (  # noqa: F401 - fixtures
+    _account,
+    _Container,
+    _enabled,
+    container,
+)
+
+if TYPE_CHECKING:
+    from schemas.emulator import EmulatorRefusalCode
+
+
+class _Playbook:
+    """Stands in for ``TelegramMobilePlaybook``; every instance reports to the class."""
+
+    runs: list[tuple[str, int]]
+    started: asyncio.Event
+    fail: EmulatorRefusalCode | None = None
+    gate: asyncio.Event | None = None
+
+    async def run_session(self, serial: str, duration_sec: int) -> PlaybookResult:
+        cls = type(self)
+        cls.runs.append((serial, duration_sec))
+        cls.started.set()
+        gate, fail = cls.gate, cls.fail
+        if gate is not None:
+            await gate.wait()
+        if fail is not None:
+            raise EmulatorError(fail)
+        return PlaybookResult(channels_read=1, scrolls=4)
+
+
+@pytest.fixture
+def playbook(monkeypatch: pytest.MonkeyPatch) -> type[_Playbook]:
+    _Playbook.runs = []
+    _Playbook.started = asyncio.Event()
+    _Playbook.fail = None
+    _Playbook.gate = None
+    monkeypatch.setattr(emulator_module, "TelegramMobilePlaybook", _Playbook)
+    emulator_module._ACTIVE.clear()
+    return _Playbook
+
+
+@pytest.mark.asyncio
+async def test_a_running_pod_on_the_current_proxy_gets_its_session(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+
+    result = await run_mobile_activity("acc", 120)
+
+    assert result == PlaybookResult(channels_read=1, scrolls=4)
+    assert playbook.runs == [("127.0.0.1:5601", 120)]
+    assert container.steps == ["find:telebuba-acc", "proxy?:10.0.0.5", "connect", "front"]
+    assert "acc" not in emulator_module._ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_a_session_is_capped(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+
+    await run_mobile_activity("acc", 10**6)
+
+    assert playbook.runs == [("127.0.0.1:5601", settings.emulator.activity_max_seconds)]
+
+
+@pytest.mark.parametrize("state", ["missing", "stopped", "other_proxy"])
+@pytest.mark.asyncio
+async def test_a_pod_that_is_not_running_is_never_started(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+    state: str,
+) -> None:
+    await _account()
+    if state != "missing":
+        container.instance = Instance(1, "telebuba-acc", running=state != "stopped")
+    container.on_current_proxy = state != "other_proxy"
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await run_mobile_activity("acc", 60)
+
+    assert refused.value.code == "emulator_not_running"
+    assert playbook.runs == []
+    assert not any(step.startswith(("pod:", "connect", "boot")) for step in container.steps)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_session_answers_its_code_and_frees_the_account(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    playbook.fail = "emulator_not_signed_in"
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await run_mobile_activity("acc", 60)
+
+    assert refused.value.code == "emulator_not_signed_in"
+    assert "acc" not in emulator_module._ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_one_session_at_a_time_and_none_during_a_start(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    playbook.gate = asyncio.Event()
+
+    first = asyncio.create_task(run_mobile_activity("acc", 60))
+    await playbook.started.wait()
+    with pytest.raises(EmulatorBusyError):
+        await run_mobile_activity("acc", 60)
+    playbook.gate.set()
+    await first
+
+    start = emulator_module._LOCKS.setdefault("acc", asyncio.Lock())
+    async with start:
+        with pytest.raises(EmulatorBusyError):
+            await run_mobile_activity("acc", 60)
+    assert len(playbook.runs) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_feature_switch_refuses_a_session(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account()
+    monkeypatch.setattr(settings.emulator, "enabled", False)
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await run_mobile_activity("acc", 60)
+
+    assert refused.value.code == "mobile_emulator_disabled"
+    assert container.steps == []
+    assert playbook.runs == []
