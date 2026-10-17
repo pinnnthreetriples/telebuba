@@ -1,0 +1,31 @@
+{
+  "brand": "Xiaomi",
+  "manufacturer": "Xiaomi",
+  "model": "2211133G",
+  "product": "fuxi_global",
+  "device": "fuxi",
+  "serial_prefix": "",
+  "serial_length": 8,
+  "serial_charset": "hex",
+  "screen": {
+    "width": 720,
+    "height": 1600,
+    "dpi": 293
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TKQ1.220905.001",
+      "incremental": "V14.0.9.0.TMCMIXM",
+      "security_patch": "2023-08-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/xiaomi/fuxi/missi_phone_global-user-13-TKQ1.220905.001-V14.0.9.0.TMCMIXM-release-keys"
+    },
+    "34": {
+      "release": "14",
+      "build_id": "UKQ1.230804.001",
+      "incremental": "V816.0.5.0.UMCMIXM",
+      "security_patch": "2024-05-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/xiaomi/fuxi/missi_phone_global-user-14-UKQ1.230804.001-V816.0.5.0.UMCMIXM-release-keys"
+    }
+  }
+}

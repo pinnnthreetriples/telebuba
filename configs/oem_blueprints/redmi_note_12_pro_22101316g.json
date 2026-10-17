@@ -1,0 +1,25 @@
+{
+  "brand": "Redmi",
+  "manufacturer": "Xiaomi",
+  "model": "22101316G",
+  "product": "ruby_global",
+  "device": "ruby",
+  "serial_prefix": "",
+  "serial_length": 8,
+  "serial_charset": "hex",
+  "screen": {
+    "width": 720,
+    "height": 1600,
+    "dpi": 293
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TP1A.220624.014",
+      "incremental": "V14.0.6.0.TMOMIXM",
+      "security_patch": "2023-11-01",
+      "description": "missi_phone_global-user 13 TP1A.220624.014 V14.0.6.0.TMOMIXM release-keys",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/redmi/ruby/missi_phone_global-user-13-TP1A.220624.014-V14.0.6.0.TMOMIXM-release-keys"
+    }
+  }
+}

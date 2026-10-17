@@ -17,10 +17,10 @@ import pytest
 from core.config import settings
 from core.emulator import EmulatorError
 from core.emulator.redroid import Instance
-from core.repositories.proxies import create_and_assign_proxy
+from core.repositories.proxies import create_and_assign_proxy, update_proxy_check
 from core.telegram_client import TelegramClientPoolError
 from schemas.accounts import AccountCreate
-from schemas.proxy import ProxyCreateAssignment
+from schemas.proxy import ProxyCheckUpdate, ProxyCreateAssignment
 from services.accounts import _emulator_sign_in, add_account, remove_account
 from services.accounts import devices as devices_module
 from services.accounts import mobile_emulator as emulator_module
@@ -56,6 +56,7 @@ class _Container:
         self.password: str | None = "cloud-pass"
         self.remove_gate: asyncio.Event | None = None
         self.removing = asyncio.Event()
+        self.specs: list[ContainerSpec] = []
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -82,8 +83,13 @@ class _Container:
         spec: ContainerSpec,
     ) -> Instance:
         self.step(f"create:{spec.manufacturer}{spec.model}:{spec.sdk}")
+        self.specs.append(spec)
         self.instance = Instance(1, name, running=False)
         return self.instance
+
+    async def refresh_identity(self, name: str, spec: ContainerSpec) -> None:
+        self.step(f"refresh:{name}")
+        self.specs.append(spec)
 
     async def bring_app_to_front(self, serial: str) -> None:
         self.on_serial(serial, "front")
@@ -165,6 +171,7 @@ class _Container:
 _SERVICE_FAKES = (
     "find_instance",
     "create_instance",
+    "refresh_identity",
     "launch_instance",
     "set_container_network",
     "wait_for_boot",
@@ -215,7 +222,12 @@ def _enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     emulator_module._LOCKS.clear()
 
 
-async def _account(*, session_device: str = "mobile", proxy_type: str | None = "socks5") -> None:
+async def _account(
+    *,
+    session_device: str = "mobile",
+    proxy_type: str | None = "socks5",
+    proxy_country: str | None = None,
+) -> None:
     await add_account(
         AccountCreate(
             account_id="acc",
@@ -225,7 +237,7 @@ async def _account(*, session_device: str = "mobile", proxy_type: str | None = "
         ),
     )
     if proxy_type is not None:
-        await create_and_assign_proxy(
+        proxy = await create_and_assign_proxy(
             ProxyCreateAssignment(
                 proxy_type=proxy_type,  # ty: ignore[invalid-argument-type]
                 host="10.0.0.5",
@@ -233,6 +245,12 @@ async def _account(*, session_device: str = "mobile", proxy_type: str | None = "
                 account_id="acc",
             ),
         )
+        if proxy_country is not None:
+            await update_proxy_check(
+                ProxyCheckUpdate(
+                    proxy_id=proxy.id, status="tcp_working", country_code=proxy_country
+                ),
+            )
 
 
 @pytest.mark.asyncio
@@ -399,6 +417,8 @@ async def test_every_boot_of_an_existing_container_reapplies_the_current_proxy_o
         "net:True",
     ]
     assert not any(step.startswith("create:") for step in container.steps)
+    refresh = container.steps.index("refresh:telebuba-acc")
+    assert refresh < container.steps.index("launch:1"), "rewritten before it boots"
 
 
 @pytest.mark.asyncio
@@ -575,3 +595,51 @@ async def test_the_host_cuts_the_network_before_android_boots(container: _Contai
     assert steps.index("launch:1") < steps.index("host:1:False") < steps.index("boot")
     sdk = next(step for step in steps if step.startswith("sdk:"))
     assert steps.index("boot") < steps.index("show:1") < steps.index(sdk), "shown once it is up"
+
+
+@pytest.mark.asyncio
+async def test_the_container_takes_the_proxy_countrys_timezone_and_carrier(
+    container: _Container,
+) -> None:
+    await _account(proxy_country="DE")
+
+    await open_account_mobile("acc")
+
+    (spec,) = container.specs
+    assert spec.region.timezone == "Europe/Berlin"
+    assert spec.region.country == "de"
+    assert spec.region.carrier is not None
+    assert spec.region.carrier.mcc == "262"
+
+
+@pytest.mark.asyncio
+async def test_without_a_proxy_country_the_phone_numbers_country_decides(
+    container: _Container,
+) -> None:
+    await _account()  # +52: Mexico
+
+    await open_account_mobile("acc")
+
+    (spec,) = container.specs
+    assert (spec.region.country, spec.region.timezone) == ("mx", "America/Mexico_City")
+
+
+@pytest.mark.asyncio
+async def test_a_proxy_that_moved_country_moves_a_stopped_containers_region(
+    container: _Container,
+) -> None:
+    await _account(proxy_country="DE")
+    container.instance = Instance(1, "telebuba-acc", running=False)
+    await open_account_mobile("acc")
+    proxy_id = (await emulator_module.require_account("acc")).proxy_id
+    assert proxy_id is not None
+    await update_proxy_check(
+        ProxyCheckUpdate(proxy_id=proxy_id, status="tcp_working", country_code="PL"),
+    )
+    container.instance = Instance(1, "telebuba-acc", running=False)
+
+    await open_account_mobile("acc")
+
+    first, second = container.specs
+    assert (first.region.timezone, second.region.timezone) == ("Europe/Berlin", "Europe/Warsaw")
+    assert (first.serial, first.imei) == (second.serial, second.imei), "the same phone"

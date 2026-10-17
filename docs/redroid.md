@@ -11,11 +11,11 @@ Docker has no window, so the phone is shown in a scrcpy window opened by the pho
 - **Found again** by name (`EMULATOR__INSTANCE_PREFIX` + account id) among containers labelled
   `telebuba.emulator`; its **index** is the `telebuba.index` label, the lowest free one at create.
 - **adb** is published on `127.0.0.1:(EMULATOR__REDROID_FIRST_ADB_PORT + index)` only.
-- **Identity**: `ro.product.manufacturer` / `ro.product.model` in a `build.prop` copied to
-  `/system_dlkm/etc/` before the first boot (not on the command line: redroid's init re-splits it
-  on spaces, so `Pixel 7` would become `Pixel`); the image is the one
-  `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK. redroid has no telephony, so the
-  generated IMEI is not given to the container.
+- **Identity**: a block appended to the image's `/product/etc/build.prop` (read last by init, so it
+  wins over `/vendor`'s own) before every cold boot (not on the
+  command line: redroid's init re-splits it on spaces, so `Pixel 7` would become `Pixel`); the
+  image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK. See
+  [Identity and region](#identity-and-region).
 - **Offline first start**: `docker exec` adds an iptables chain dropping all output except loopback
   and adbd's replies, before Android is up; it is removed once the app's proxy is set. It cannot
   land before `docker start` (the image runs nothing before init, and a network attached once
@@ -24,6 +24,31 @@ Docker has no window, so the phone is shown in a scrcpy window opened by the pho
 - **Window**: `scrcpy --serial … --window-title <container>`, one per container.
 
 A container keeps its `/data` across stop/start; deleting the account runs `docker rm --force`.
+
+## Identity and region
+
+The container is a real phone (`core/emulator/_profile.py`):
+
+- **Firmware**: `configs/oem_blueprints/*.json` holds one file per phone of the catalogue
+  (`core/device_fingerprint_android.py`), with one real build per Android SDK it ran, taken from
+  public firmware listings. `ro.product.*` (every partition), `ro.build.*` and
+  `ro.build.fingerprint` / `ro.build.description` (put together from the build's fields) name
+  that phone and build. `ro.sf.lcd_density` and the screen (`androidboot.redroid_width/height/dpi`)
+  are the phone's container screen. Left to the image: `ro.build.version.sdk` (the SDK check
+  reads it), `ro.hardware` / `ro.board.platform` (they pick the HALs it boots with) and the
+  security flags adbd depends on.
+- **Serial and IMEI** are derived from the account id, so the account keeps its phone when its
+  container is made again. The serial goes on the command line (`androidboot.serialno`): init
+  sets `ro.serialno` from it before any `build.prop` is read. redroid has no telephony, so the
+  IMEI (the model's TAC + Luhn) is not given to the container.
+- **Region**: the timezone (`persist.sys.timezone`, `core/country_zones.py`, the web window's
+  table too) and the SIM operator (`gsm.sim.operator.*`, `gsm.operator.*`, from
+  `configs/carriers_mcc_mnc.json`, one carrier per account) follow the proxy's country, or the
+  phone number's while the proxy has none on record. A country without carriers gets no SIM
+  properties; one without a zone gets `Etc/UTC`. The language (`persist.sys.locale`) is the
+  mobile fingerprint's `system_lang_code`, which the app sends Telegram as that same field.
+- A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
+  country moves the timezone and carrier; a running one is left alone.
 
 ## Host setup (Windows, Docker Desktop on WSL2)
 
@@ -69,4 +94,4 @@ EMULATOR__ADB_PATH=C:/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/Genymo
 EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # an x86_64-capable APK: redroid has no ARM translation
 ```
 
-`EMULATOR__RESOLUTION`, `EMULATOR__CPU_CORES` and `EMULATOR__MEMORY_MB` size new containers.
+`EMULATOR__CPU_CORES` and `EMULATOR__MEMORY_MB` size new containers; the screen is the phone's.

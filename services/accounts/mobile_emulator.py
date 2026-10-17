@@ -10,6 +10,9 @@ in ``core.emulator``; the policy lives here:
   password ``input text`` cannot type (found out at the 2FA screen, it would cost a
   login code already sent);
 * one start at a time per account (a second one answers ``emulator_busy``);
+* the container is a real phone's firmware with the proxy country's timezone and
+  carrier (the phone number's country while the proxy has none on record); a
+  stopped container gets them rewritten before it boots, as the proxy may have moved;
 * every boot a start makes has its network cut (from the host right after launch,
   then inside Android) and gets it back only once the app's proxy is set, so its
   first connection already goes through the proxy; the setting is the app's own and
@@ -49,6 +52,7 @@ from core.emulator import (
     launch_instance,
     quit_instance,
     read_screen,
+    refresh_identity,
     remove_container,
     set_container_network,
     set_network,
@@ -56,6 +60,7 @@ from core.emulator import (
     wait_for_boot,
 )
 from core.logging import log_event
+from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
 from services.accounts._emulator_sign_in import sign_in
 from services.accounts._result import AccountActionError
@@ -153,7 +158,9 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
 
 
 async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMobileResult:
-    spec = container_spec(fingerprint)
+    spec = container_spec(
+        fingerprint, account.proxy_country_code or country_for_phone(account.phone)
+    )
     name = _container_name(account.account_id)
     instance = await find_instance(name)
     if instance is not None and instance.running:
@@ -177,6 +184,8 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
     try:
         if instance is None:
             instance = await create_instance(name, spec)
+        else:
+            await refresh_identity(name, spec)
         serial = adb_serial(instance.index)
         await launch_instance(instance.index)
         # Every boot this call makes goes offline until the app's own SOCKS5 setting

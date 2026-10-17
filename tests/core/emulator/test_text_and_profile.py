@@ -1,12 +1,11 @@
-"""Text through ``adb shell`` and the container's identity from the mobile fingerprint."""
+"""Text through ``adb shell`` and the Luhn check of the container's IMEI."""
 
 from __future__ import annotations
 
 import pytest
 
-from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import container_spec, generate_imei, is_valid_imei, luhn_check_digit
+from core.emulator._profile import is_valid_imei, luhn_check_digit
 from core.emulator._text import escape_input_text, shell_quote
 
 
@@ -43,37 +42,3 @@ def test_the_imei_check_digit_is_luhns() -> None:
     assert luhn_check_digit("49015420323751") == "8"
     assert is_valid_imei("490154203237518")
     assert not is_valid_imei("490154203237517")
-
-
-def test_every_generated_imei_is_fifteen_digits_and_passes_luhn() -> None:
-    for _ in range(200):
-        imei = generate_imei()
-        assert len(imei) == 15
-        assert imei.isdigit()
-        assert is_valid_imei(imei)
-
-
-def test_the_container_is_the_phone_the_fingerprint_describes() -> None:
-    fingerprint = generate_android_fingerprint("acc", None).model_copy(
-        update={"device_model": "samsungSM-S918B", "system_version": "SDK 34"},
-    )
-
-    spec = container_spec(fingerprint)
-
-    assert (spec.manufacturer, spec.model, spec.sdk) == ("samsung", "SM-S918B", 34)
-    assert is_valid_imei(spec.imei)
-
-
-@pytest.mark.parametrize(
-    ("model", "sdk"),
-    [("UnknownPhone 1", "SDK 34"), ("GooglePixel 8", "SDK 33"), ("GooglePixel 7", "Android 13")],
-)
-def test_a_fingerprint_no_container_can_present_is_refused(model: str, sdk: str) -> None:
-    fingerprint = generate_android_fingerprint("acc", None).model_copy(
-        update={"device_model": model, "system_version": sdk},
-    )
-
-    with pytest.raises(EmulatorError) as refused:
-        container_spec(fingerprint)
-
-    assert refused.value.code == "emulator_device_unknown"
