@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, NamedTuple
 import pytest
 
 from core.emulator import _seeder
-from core.emulator._seeder import _SCRIPT_HEAD, Contact, Photo, contacts_script, gallery_prep_script
+from core.emulator._seed_data import Contact, Photo
+from core.emulator._seeder import _SCRIPT_HEAD, contacts_script, gallery_prep_script
 
 if TYPE_CHECKING:
     from pathlib import Path

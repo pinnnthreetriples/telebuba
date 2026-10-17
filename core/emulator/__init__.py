@@ -6,6 +6,7 @@
 - ``ui_dump``   — the one parser of ``uiautomator dump`` and the screen classifier
 - ``telegram_app`` — the Telegram app's screens, driven only through dumped nodes
 - ``_seeder``   — a fresh container's contacts and camera roll, written once
+- ``_seed_data`` — what it is seeded with: the country's people, the phone's photos
 - ``_profile``  — the container's identity from the mobile fingerprint: a real phone's
   firmware (``_blueprints``) and the proxy country's region (``_geo``)
 """

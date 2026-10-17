@@ -15,19 +15,16 @@ from PIL import Image
 from PIL.ExifTags import IFD, Base
 
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _seeder
+from core.emulator import _seed_data, _seeder
 from core.emulator._blueprints import load_blueprints
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import container_spec
+from core.emulator._seed_data import locale_for, make_contacts, make_photos, photo_name
 from core.emulator._seeder import (
     CAMERA_DIR,
     MARKER,
     contacts_script,
     gallery_script,
-    locale_for,
-    make_contacts,
-    make_photos,
-    photo_name,
     seed_device_if_needed,
 )
 
@@ -68,7 +65,7 @@ def test_contacts_are_the_countrys_people_with_its_mobile_numbers(
     country: str | None, locale: str, region: str
 ) -> None:
     assert locale_for(country) == locale
-    pack = _seeder.load_name_packs()[locale]
+    pack = _seed_data.load_name_packs()[locale]
 
     contacts = make_contacts(country, _random(7), 40)
 
@@ -80,7 +77,7 @@ def test_contacts_are_the_countrys_people_with_its_mobile_numbers(
         number = phonenumbers.parse(contact.phone, region)
         assert phonenumbers.is_valid_number(number), contact.phone
         assert phonenumbers.region_code_for_number(number) == region
-        assert phonenumbers.number_type(number) in _seeder._MOBILE_TYPES
+        assert phonenumbers.number_type(number) in _seed_data._MOBILE_TYPES
         numbers.add(phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164))
         if contact.email is not None:
             assert contact.email.isascii()
@@ -101,8 +98,8 @@ def test_a_default_address_book_has_25_to_40_people_and_some_extras() -> None:
 
 def test_the_contacts_script_replaces_only_this_seedings_rows() -> None:
     contacts = [
-        _seeder.Contact("Jürgen", "O'Neil", "+49 1511 2345678", "j.oneil@gmx.de", "Bäckerei"),
-        _seeder.Contact("Anna", "Koch", "01512 3456789", None, None),
+        _seed_data.Contact("Jürgen", "O'Neil", "+49 1511 2345678", "j.oneil@gmx.de", "Bäckerei"),
+        _seed_data.Contact("Anna", "Koch", "01512 3456789", None, None),
     ]
 
     lines = contacts_script(contacts)
@@ -170,7 +167,7 @@ def test_photos_carry_the_phones_exif_and_a_local_capture_time(
         assert str(photo.taken.tzinfo) == spec.region.timezone
         image, exif = _exif(photo.jpeg)
         assert image.format == "JPEG"
-        assert image.size == _seeder._PHOTO_SIZE
+        assert image.size == _seed_data._PHOTO_SIZE
         stamp = photo.taken.strftime("%Y:%m:%d %H:%M:%S")
         assert exif[Base.Make] == spec.manufacturer
         assert exif[Base.Model] == spec.model
@@ -185,14 +182,20 @@ def test_photos_carry_the_phones_exif_and_a_local_capture_time(
             assert sub[tag] == f"{offset[:3]}:{offset[3:]}"
         assert float(sub[Base.FNumber]) == pytest.approx(spec.camera.f_number)
         assert float(sub[Base.FocalLength]) == pytest.approx(spec.camera.focal_length_mm)
-        assert sub[Base.ISOSpeedRatings] in _seeder._ISO
+        assert sub[Base.ISOSpeedRatings] in _seed_data._ISO
 
 
 def test_the_same_account_gets_the_same_photos_and_people() -> None:
     spec = _spec()
 
-    first = _seeder._rng(spec, "gallery").random(), _seeder._rng(spec, "contacts").random()
-    again = _seeder._rng(spec, "gallery").random(), _seeder._rng(spec, "contacts").random()
+    first = (
+        _seed_data.rng_for(spec, "gallery").random(),
+        _seed_data.rng_for(spec, "contacts").random(),
+    )
+    again = (
+        _seed_data.rng_for(spec, "gallery").random(),
+        _seed_data.rng_for(spec, "contacts").random(),
+    )
 
     assert first == again
     assert first[0] != first[1]
@@ -315,7 +318,7 @@ def test_a_country_with_too_few_numbers_gets_fewer_contacts_not_a_hang(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     only = phonenumbers.parse("+4915112345678")
-    monkeypatch.setattr(_seeder, "mobile_number", lambda _country, _rng: only)
+    monkeypatch.setattr(_seed_data, "mobile_number", lambda _country, _rng: only)
 
     contacts = make_contacts("DE", _random(1), 30)
 

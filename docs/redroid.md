@@ -114,8 +114,9 @@ The container is a real phone (`core/emulator/_profile.py`):
 ## First-boot data
 
 A fresh container has no contacts and no photos. After its first boot (and the SDK check),
-before the app is started, `core/emulator/_seeder.py` gives it both, drawn from the container's
-serial so a container made again for the account gets the same ones:
+before the app is started, `core/emulator/_seeder.py` gives it both (what they are comes from
+`_seed_data.py`), drawn from the container's serial so a container made again for the account
+gets the same ones:
 
 - **Contacts**: 25–40 people with names of the proxy country's language
   (`configs/contact_names.json`, `en_US` for a country it lacks) and that country's valid mobile
