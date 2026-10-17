@@ -31,6 +31,7 @@ from schemas.proxy import (
     ProxyRead,
     ProxySettings,
 )
+from services.accounts.mobile_emulator import stop_account_pod
 
 __all__ = [
     "ProxyCapacityError",
@@ -84,8 +85,10 @@ async def add_proxy(data: ProxyCreate) -> ProxyRead:
 
 async def assign_proxy(proxy_id: str, account_id: str) -> ProxyRead:
     proxy = await assign_account_to_proxy(proxy_id, account_id)
-    # Rebuild the pooled client with the new proxy on next use (no-op if none cached).
+    # Rebuild the pooled client with the new proxy on next use (no-op if none cached),
+    # and stop the mobile pod still tunnelling through the old one.
     await evict_client(account_id)
+    await stop_account_pod(account_id)
     await log_event("INFO", "proxy_assigned", account_id=account_id, extra={"proxy_id": proxy_id})
     return proxy
 
@@ -93,6 +96,7 @@ async def assign_proxy(proxy_id: str, account_id: str) -> ProxyRead:
 async def assign_proxy_by_endpoint(data: ProxyCreateAssignment) -> ProxyRead:
     proxy = await create_and_assign_proxy(data)
     await evict_client(data.account_id)
+    await stop_account_pod(data.account_id)
     await log_event(
         "INFO",
         "proxy_assigned",
@@ -104,8 +108,10 @@ async def assign_proxy_by_endpoint(data: ProxyCreateAssignment) -> ProxyRead:
 
 async def unassign_proxy(account_id: str) -> None:
     await unassign_account_from_proxy(account_id)
-    # Rebuild the pooled client without a proxy (direct) on next use.
+    # Rebuild the pooled client without a proxy (direct) on next use; a mobile pod
+    # cannot run without one.
     await evict_client(account_id)
+    await stop_account_pod(account_id)
     await log_event("INFO", "proxy_unassigned", account_id=account_id)
 
 
@@ -117,6 +123,7 @@ async def remove_proxy(proxy_id: str) -> None:
     await delete_proxy(proxy_id)
     for account_id in account_ids:
         await evict_client(account_id)
+        await stop_account_pod(account_id)
     await log_event("INFO", "proxy_removed", extra={"proxy_id": proxy_id})
 
 

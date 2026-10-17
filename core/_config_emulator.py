@@ -31,6 +31,8 @@ class EmulatorSettings(BaseSettings):
         }
     )
     redroid_first_adb_port: int = Field(default=5600, ge=1024, le=65000)
+    # The pod's network side, built from docker/net-gateway (docs/redroid.md).
+    gateway_image: str = Field(default="telebuba/net-gateway:1", min_length=1)
     # Installed into a container that lacks the package; refused when the file is missing.
     telegram_apk_path: Path = Path("emulator/telegram.apk")
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
@@ -40,9 +42,11 @@ class EmulatorSettings(BaseSettings):
     resolution: str = Field(default="720,1280,320", pattern=r"^\d{3,4},\d{3,4},\d{3}$")
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
-    # One docker/adb call; an APK install; the Android boot; one screen to appear;
-    # the login code to reach the account's existing session; the screen poll interval.
+    # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android
+    # boot; one screen to appear; the login code to reach the account's existing
+    # session; the screen poll interval.
     command_timeout_seconds: float = Field(default=60.0, gt=0)
+    tunnel_timeout_seconds: float = Field(default=30.0, gt=0)
     install_timeout_seconds: float = Field(default=300.0, gt=0)
     boot_timeout_seconds: float = Field(default=180.0, gt=0)
     ui_timeout_seconds: float = Field(default=30.0, gt=0)

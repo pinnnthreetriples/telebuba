@@ -7,6 +7,7 @@ import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.emulator._errors import EmulatorError
 
 if TYPE_CHECKING:
@@ -62,3 +63,12 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
         logger.warning("emulator step %s exited with %s", step, process.returncode)
         raise EmulatorError(_EMULATOR_COMMAND_FAILED)
     return stdout.decode("utf-8", errors="replace")
+
+
+async def docker(*args: str) -> str:
+    """One docker CLI call, bounded like every other console step."""
+    return await run_command(
+        [str(settings.emulator.docker_path), *args],
+        seconds=settings.emulator.command_timeout_seconds,
+        step=f"docker {args[0]}",
+    )

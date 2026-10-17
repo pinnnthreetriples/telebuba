@@ -1,10 +1,8 @@
-"""redroid under Docker: labelled containers, loopback adb ports, the offline chain, scrcpy."""
+"""redroid under Docker: labelled Android containers in a gateway's namespace, scrcpy."""
 
 from __future__ import annotations
 
 import asyncio
-import shutil
-import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,9 +14,8 @@ from core.emulator._errors import EmulatorError
 from core.emulator._profile import ContainerSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
 
-    from schemas.emulator import EmulatorRefusalCode
     from tests.core.emulator.conftest import Console
 
 _SPEC = ContainerSpec("Google", "Pixel 7", 34, "490154203237518")
@@ -58,7 +55,7 @@ async def test_a_container_is_found_by_name_among_the_apps_own(ps: Console) -> N
 
 
 @pytest.mark.asyncio
-async def test_a_new_container_takes_the_lowest_free_index_and_presents_the_phone(
+async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     ps: Console,
 ) -> None:
     copied: list[str] = []
@@ -70,11 +67,14 @@ async def test_a_new_container_takes_the_lowest_free_index_and_presents_the_phon
 
     ps.answer = answer
 
-    instance = await redroid.create_instance("telebuba-new", _SPEC)
+    instance = await redroid.create_instance(
+        "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net"
+    )
 
     assert instance == (1, "telebuba-new", False)
     create = _docker_calls(ps, "create")[0]
-    assert create[create.index("--publish") + 1] == "127.0.0.1:5601:5555", "loopback only"
+    assert create[create.index("--network") + 1] == "container:telebuba-new-net"
+    assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
     assert "--privileged" in create
     image = create.index("redroid/redroid:14.0.0-latest")
@@ -97,7 +97,9 @@ async def test_an_sdk_without_an_image_is_refused_before_anything_is_created(
     ps: Console,
 ) -> None:
     with pytest.raises(EmulatorError) as refused:
-        await redroid.create_instance("telebuba-new", _SPEC._replace(sdk=31))
+        await redroid.create_instance(
+            "telebuba-new", _SPEC._replace(sdk=31), index=1, gateway="telebuba-new-net"
+        )
 
     assert refused.value.code == "emulator_sdk_mismatch"
     assert ps.calls == []
@@ -106,7 +108,12 @@ async def test_an_sdk_without_an_image_is_refused_before_anything_is_created(
 @pytest.mark.asyncio
 async def test_an_identity_that_would_add_properties_is_refused(ps: Console) -> None:
     with pytest.raises(EmulatorError) as refused:
-        await redroid.create_instance("telebuba-new", _SPEC._replace(model="X\nro.secure=0"))
+        await redroid.create_instance(
+            "telebuba-new",
+            _SPEC._replace(model="X\nro.secure=0"),
+            index=1,
+            gateway="telebuba-new-net",
+        )
 
     assert refused.value.code == "emulator_device_unknown"
     assert ps.calls == []
@@ -129,148 +136,6 @@ async def test_an_unknown_index_is_a_failed_command() -> None:
         await redroid.launch_instance(7)
 
     assert failed.value.code == "emulator_command_failed"
-
-
-@pytest.mark.parametrize("online", [False, True])
-@pytest.mark.asyncio
-async def test_the_network_is_switched_inside_the_containers_namespace(
-    ps: Console,
-    online: bool,  # noqa: FBT001 - a parametrised switch
-) -> None:
-    await redroid.set_container_network(0, online=online)
-
-    execute = _docker_calls(ps, "exec")[0]
-    assert execute[2:5] == ["telebuba-acc-1", "/system/bin/sh", "-c"]
-    script = execute[5]
-    if online:
-        assert "-D OUTPUT -j telebuba_offline" in script
-    else:
-        assert "-I OUTPUT 1 -j telebuba_offline" in script
-        assert "--sport 5555 -j ACCEPT" in script, "adb keeps working offline"
-        assert script.index("-o lo -j ACCEPT") < script.index("-j DROP")
-
-
-_SH = shutil.which("sh")
-
-
-def _run_offline_script(
-    tmp_path: Path,
-    fail_on: str,
-    zygote: str = "",
-) -> tuple[int, str]:
-    """``_GO_OFFLINE`` under a real ``sh``: iptables fails on ``fail_on``, zygote is ``zygote``."""
-    log = tmp_path / "calls.log"
-    fake = tmp_path / "iptables"
-    fake.write_text(
-        "#!/bin/sh\n"
-        f'echo "$*" >> "{log.as_posix()}"\n'
-        'case "$*" in -w\\ -N*) exit 1 ;; esac\n'  # the chain exists already
-        'case "$*" in -w\\ -C*) exit 1 ;; esac\n'  # its jump does not, so -I runs
-        f'case "$*" in *"{fail_on}"*) exit 4 ;; esac\n'
-        "exit 0\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    fake.chmod(0o755)
-    getprop = tmp_path / "getprop"
-    getprop.write_text(f"#!/bin/sh\necho {zygote}\n", encoding="utf-8", newline="\n")
-    getprop.chmod(0o755)
-    script = (
-        redroid._GO_OFFLINE.replace("/system/bin/ip6tables", fake.as_posix())
-        .replace("/system/bin/iptables", fake.as_posix())
-        .replace("/system/bin/getprop", getprop.as_posix())
-    )
-    assert _SH is not None
-    done = subprocess.run([_SH, "-c", script], check=False)  # noqa: S603 - test-owned argv
-    return done.returncode, log.read_text(encoding="utf-8") if log.exists() else ""
-
-
-@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
-@pytest.mark.parametrize("step", ["-o lo -j ACCEPT", "--sport 5555", "-j DROP", "-I OUTPUT"])
-def test_the_offline_script_fails_when_a_required_rule_fails(tmp_path: Path, step: str) -> None:
-    status, calls = _run_offline_script(tmp_path, step)
-
-    assert status != 0, "a half-built chain must not read as offline"
-    assert calls.count("-N telebuba_offline") == 1, "it stops at the first family"
-
-
-@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
-def test_the_offline_script_succeeds_over_an_existing_chain(tmp_path: Path) -> None:
-    status, calls = _run_offline_script(tmp_path, "never-matches")
-
-    assert status == 0
-    assert calls.count("-I OUTPUT 1 -j telebuba_offline") == 2
-    assert calls.count("-j DROP") == 2, "both families, though -N failed on each"
-
-
-@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
-@pytest.mark.parametrize(("zygote", "ok"), [("", True), ("stopped", True), ("running", False)])
-def test_a_cut_that_lands_once_zygote_runs_fails(
-    tmp_path: Path,
-    zygote: str,
-    ok: bool,  # noqa: FBT001 - a parametrised expectation
-) -> None:
-    status, _calls = _run_offline_script(tmp_path, "never-matches", zygote)
-
-    assert (status == 0) is ok, "an app may have connected before the rules landed"
-
-
-def _exec_failing(
-    times: int,
-    code: EmulatorRefusalCode = "emulator_command_failed",
-) -> Callable[[list[str]], str]:
-    left = {"n": times}
-
-    def answer(argv: list[str]) -> str:
-        if argv[1] == "exec" and left["n"] > 0:
-            left["n"] -= 1
-            raise EmulatorError(code)
-        return _PS if argv[1] == "ps" else ""
-
-    return answer
-
-
-@pytest.fixture
-def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(redroid, "_NETWORK_RETRY_SECONDS", 0)
-
-
-@pytest.mark.usefixtures("no_retry_wait")
-@pytest.mark.asyncio
-async def test_a_failed_network_switch_is_run_again(ps: Console) -> None:
-    ps.answer = _exec_failing(2)
-
-    await redroid.set_container_network(0, online=False)
-
-    assert len(_docker_calls(ps, "exec")) == 3
-
-
-@pytest.mark.usefixtures("no_retry_wait")
-@pytest.mark.asyncio
-async def test_a_network_switch_that_keeps_failing_is_not_hidden(ps: Console) -> None:
-    ps.answer = _exec_failing(99)
-
-    with pytest.raises(EmulatorError) as failed:
-        await redroid.set_container_network(0, online=False)
-
-    assert failed.value.code == "emulator_command_failed"
-    assert len(_docker_calls(ps, "exec")) == redroid._NETWORK_ATTEMPTS
-
-
-def test_the_retries_end_well_before_zygote_starts() -> None:
-    """Zygote ran at ~1.4 s after start at the earliest on this host (redroid 14)."""
-    budget = (redroid._NETWORK_ATTEMPTS - 1) * redroid._NETWORK_RETRY_SECONDS
-    assert budget <= 1.4
-
-
-@pytest.mark.asyncio
-async def test_a_timed_out_network_switch_is_not_run_again(ps: Console) -> None:
-    ps.answer = _exec_failing(1, "emulator_command_timeout")
-
-    with pytest.raises(EmulatorError):
-        await redroid.set_container_network(0, online=False)
-
-    assert len(_docker_calls(ps, "exec")) == 1
 
 
 class _Viewer:
@@ -360,49 +225,6 @@ async def test_a_scrcpy_that_cannot_start_is_a_failed_command(
         await redroid.show_instance(0)
 
     assert refused.value.code == "emulator_command_failed"
-
-
-@pytest.mark.usefixtures("viewers")
-@pytest.mark.asyncio
-async def test_quitting_closes_the_window_then_stops_the_container(ps: Console) -> None:
-    await redroid.show_instance(0)
-    viewer = redroid._VIEWERS["telebuba-acc-1"]
-
-    await redroid.quit_instance(0)
-
-    assert isinstance(viewer, _Viewer)
-    assert viewer.killed
-    assert _docker_calls(ps, "stop")[0][2] == "telebuba-acc-1"
-
-
-@pytest.mark.asyncio
-async def test_removing_a_container_forces_it_out(ps: Console) -> None:
-    assert await redroid.remove_container("telebuba-acc-2") is True
-    assert _docker_calls(ps, "rm")[0][2:] == ["--force", "telebuba-acc-2"]
-    assert await redroid.remove_container("telebuba-gone") is False
-
-
-@pytest.mark.asyncio
-async def test_a_host_without_docker_has_no_container_to_remove(console: Console) -> None:
-    def missing(_argv: list[str]) -> str:
-        code = "emulator_not_found"
-        raise EmulatorError(code)
-
-    console.answer = missing
-
-    assert await redroid.remove_container("telebuba-acc-1") is False
-
-
-@pytest.mark.asyncio
-async def test_a_failing_docker_is_not_hidden_from_a_removal(console: Console) -> None:
-    def failing(_argv: list[str]) -> str:
-        code = "emulator_command_failed"
-        raise EmulatorError(code)
-
-    console.answer = failing
-
-    with pytest.raises(EmulatorError):
-        await redroid.remove_container("telebuba-acc-1")
 
 
 @pytest.mark.asyncio

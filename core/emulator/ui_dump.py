@@ -21,7 +21,6 @@ _PHONE_FIELDS = 2
 
 START_LABELS = frozenset({"start messaging", "начать общение"})
 YES_LABELS = frozenset({"yes", "да"})
-CONNECT_PROXY_LABELS = frozenset({"connect proxy", "подключить прокси"})
 _CHATS_MARKERS = frozenset(
     {"open navigation menu", "открыть меню навигации", "new message", "новое сообщение"}
 )
