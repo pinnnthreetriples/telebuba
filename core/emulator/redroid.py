@@ -190,13 +190,13 @@ async def refresh_identity(name: str, spec: ContainerSpec) -> None:
     await _give_identity(name, build_prop(spec))
 
 
-async def launch_instance(index: int) -> None:
-    """Start the container; adb forgets its old connection to the port first.
+async def launch_instance(name: str, index: int) -> None:
+    """Start the container ``name``; adb forgets its old connection to ``index``'s port.
 
     A connection kept from the container's previous run stays ``offline`` and is
     never retried by itself; ``adb.wait_for_boot`` connects afresh.
     """
-    await docker("start", await _name_of(index))
+    await docker("start", name)
     with suppress(EmulatorError):
         await run_command(
             [str(settings.emulator.adb_path), "disconnect", adb_serial(index)],

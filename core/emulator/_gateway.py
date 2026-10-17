@@ -5,13 +5,16 @@ its namespace leaves through tun0 to the account's SOCKS5 proxy, DNS included (t
 tunnel's mapped DNS, so the proxy resolves the names), or not at all: its kill-switch
 drops all egress before the tunnel is up and after it dies, and IPv6 is off.
 
+Gateways join their own bridge network (``EMULATOR__GATEWAY_NETWORK``) with
+inter-container traffic off: no other container can reach a pod's unauthenticated adb.
+
 The proxy reaches the gateway as a FILE copied into the stopped container from a
 scratch directory deleted right after, never in an env var (``docker inspect`` shows
 env, and ``docker create -e`` puts it in argv), argv, a log line or an error. What
 ``docker inspect`` shows of a gateway: image, labels, NET_ADMIN, /dev/net/tun, the IPv6
 sysctls and the adb port binding, nothing of the proxy. The file stays inside the
-container (``/etc/net-gateway/proxy``, plus the tunnel config rendered from it under
-``/run``), readable by whoever may ``docker exec`` (root on the Docker host anyway).
+container (``/etc/net-gateway/proxy``; the tunnel config rendered from it lives in a
+tmpfs), readable by whoever may ``docker exec`` (root on the Docker host anyway).
 The proxy's host is resolved here, on the host, so a hostname works and the gateway
 needs no DNS before its tunnel is up.
 """
@@ -71,13 +74,46 @@ async def resolve_address(host: str) -> str:
     return str(infos[0][4][0])
 
 
+async def ensure_network() -> None:
+    """Create the gateways' bridge network when it is missing (another start may race)."""
+    network = settings.emulator.gateway_network
+    try:
+        await docker("network", "inspect", network)
+    except EmulatorError as exc:
+        if exc.code != _EMULATOR_COMMAND_FAILED:
+            raise
+    else:
+        return
+    try:
+        await docker(
+            "network",
+            "create",
+            "--driver",
+            "bridge",
+            "--opt",
+            "com.docker.network.bridge.enable_icc=false",
+            network,
+        )
+    except EmulatorError as exc:
+        if exc.code != _EMULATOR_COMMAND_FAILED:
+            raise
+        await docker("network", "inspect", network)  # made by the race's winner, or raises
+
+
 async def create_gateway(gateway: str, index: int) -> None:
-    """A new, stopped gateway: it holds the pod's index and publishes Android's adb."""
+    """A new, stopped gateway: it holds the pod's index and publishes Android's adb.
+
+    ``/run`` is a tmpfs, so the tunnel config rendered there never reaches a layer.
+    """
     port = settings.emulator.redroid_first_adb_port + index
     await docker(
         "create",
         "--name",
         gateway,
+        "--network",
+        settings.emulator.gateway_network,
+        "--tmpfs",
+        "/run",
         "--label",
         f"{GATEWAY_LABEL}=1",
         "--label",

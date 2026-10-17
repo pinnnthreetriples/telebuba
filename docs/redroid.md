@@ -18,7 +18,11 @@ phone is shown in a scrcpy window opened by the phone button.
   `telebuba.emulator` (Android) and `telebuba.gateway` (gateways); both carry the pod's
   **index** in `telebuba.index`, the lowest index free in either list at create.
 - **adb** is published by the GATEWAY on `127.0.0.1:(EMULATOR__REDROID_FIRST_ADB_PORT + index)`
-  only: Android has no ports of its own, its adbd listens in the gateway's namespace.
+  only: Android has no ports of its own, its adbd listens in the gateway's namespace. redroid's
+  adbd takes no key (`ro.debuggable=1`, no `ro.adb.secure`), so no other container may reach it:
+  gateways join their own bridge network (`EMULATOR__GATEWAY_NETWORK`, created when missing with
+  `com.docker.network.bridge.enable_icc=false`), and the gateway drops 5555 on eth0 from anything
+  but the Docker gateway, which is where the published loopback port arrives from.
 - **Start**: create what is missing (gateway first), stop whatever of the pod runs, copy the
   account's current proxy into the gateway, start it, wait until `net-gateway ready` (tun0 up,
   tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`), then create/start Android.
@@ -34,6 +38,10 @@ phone is shown in a scrcpy window opened by the phone button.
 Android keeps its `/data` across stop/start (it is re-created only when its gateway is gone, since
 its namespace went with it); deleting the account runs `docker rm --force` on both.
 
+**Coming from #551** (one container per account, no gateway): such a container has no gateway, so
+the first start after the upgrade removes it and makes the pod anew. Its `/data` goes with it,
+the Telegram app's sign-in included: the next open signs the app in again with a login code.
+
 ## The gateway's network
 
 - **Tunnel**: [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) (version and
@@ -44,7 +52,10 @@ its namespace went with it); deleting the account runs `docker rm --force` on bo
   and puts its rules back every second.
 - **Kill-switch** (nf_tables via `iptables-nft`, which Android's legacy `iptables` cannot touch):
   all egress is dropped before anything else runs; only loopback, tun0, replies to connections
-  from outside (adb) and the proxy's own address (its port, and UDP for the relay) are let out.
+  from outside (adb; matched as conntrack's REPLY direction, so a flow Android opened through
+  tun0 cannot leave by eth0 while netd has flushed the routing rules) and the proxy's own
+  address (its port, and UDP for the relay) are let out. Any rule that fails stops the gateway
+  before its tunnel starts.
   A packet sent before the tunnel is up, while the rules are being put back, or after the tunnel
   dies is dropped, never sent direct; a dead tunnel stops the gateway.
 - **DNS**: every UDP query to port 53 is sent to the tunnel's mapped DNS, which answers with a
@@ -62,16 +73,18 @@ They are written to a scratch directory (owner-only) on the host, `docker cp`'d 
 gateway as `/etc/net-gateway/proxy`, and the scratch copy is deleted right after. They are never
 in an env var (`docker inspect` shows env, `docker create -e` puts them in argv), an argv, a log
 line or an error. `docker inspect` of a gateway shows its image, labels, NET_ADMIN,
-`/dev/net/tun`, the IPv6 sysctls and the adb port binding, nothing of the proxy. The file, and
-the tunnel config rendered from it under `/run/net-gateway`, stay readable inside the container
-to whoever may `docker exec` (root on the Docker host anyway).
+`/dev/net/tun`, the IPv6 sysctls and the adb port binding, nothing of the proxy. The file stays
+in the container's layer and the tunnel config rendered from it in a tmpfs on `/run`; both are
+readable to whoever may `docker exec` (root on the Docker host anyway).
 
 ### Changing an account's proxy
 
 Assigning, unassigning or removing the proxy stops the account's pod (after a start in flight,
 which may have read the old proxy). Opening a running pod first compares its gateway's proxy file
 with the account's current proxy by sha256 (`docker exec … sha256sum`, so the credentials never
-leave the container); a pod on another proxy, or whose gateway died, is stopped and started again.
+leave the container); a pod on another proxy, whose gateway died, or whose gateway was started
+again after Android (`State.StartedAt`: Android is then left in the old namespace, cut off) is
+stopped and started again.
 
 ## Identity and region
 

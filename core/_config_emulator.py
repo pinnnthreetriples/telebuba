@@ -31,8 +31,10 @@ class EmulatorSettings(BaseSettings):
         }
     )
     redroid_first_adb_port: int = Field(default=5600, ge=1024, le=65000)
-    # The pod's network side, built from docker/net-gateway (docs/redroid.md).
+    # The pod's network side, built from docker/net-gateway (docs/redroid.md), and the
+    # bridge network its gateways join (created when missing, containers isolated).
     gateway_image: str = Field(default="telebuba/net-gateway:1", min_length=1)
+    gateway_network: str = Field(default="telebuba-emulator", min_length=1)
     # Installed into a container that lacks the package; refused when the file is missing.
     telegram_apk_path: Path = Path("emulator/telegram.apk")
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)

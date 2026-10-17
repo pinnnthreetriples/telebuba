@@ -155,20 +155,21 @@ async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -
 
 
 @pytest.mark.asyncio
-async def test_a_launch_starts_the_container_and_drops_adbs_stale_connection(
+async def test_a_launch_starts_the_named_container_and_drops_adbs_stale_connection(
     ps: Console,
 ) -> None:
-    await redroid.launch_instance(2)
+    await redroid.launch_instance("telebuba-acc-2", 2)
 
     assert _docker_calls(ps, "start")[0][2] == "telebuba-acc-2"
     assert ps.calls[-1][1:] == ["disconnect", "127.0.0.1:5602"]
+    assert not _docker_calls(ps, "ps"), "started by its name, not looked up by its index"
 
 
 @pytest.mark.usefixtures("ps")
 @pytest.mark.asyncio
 async def test_an_unknown_index_is_a_failed_command() -> None:
     with pytest.raises(EmulatorError) as failed:
-        await redroid.launch_instance(7)
+        await redroid.show_instance(7)
 
     assert failed.value.code == "emulator_command_failed"
 

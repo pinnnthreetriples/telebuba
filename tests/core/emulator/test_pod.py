@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,7 +17,7 @@ from core.emulator._profile import container_spec
 from schemas.proxy import ProxySettings
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from tests.core.emulator.conftest import Console
 
@@ -32,49 +33,71 @@ _PROXY = ProxySettings(
 _PROXY_TEXT = "203.0.113.7\n1080\ntb-user\ns3cr'et pw\n"
 _ANDROIDS = "0|telebuba-acc-0|running\n2|telebuba-acc-2|exited\n"
 _GATEWAYS = "0|telebuba-acc-0-net|running\n2|telebuba-acc-2-net|exited\n"
+_GATEWAY_STARTED = "2026-10-17T08:00:00.1Z"
+_ANDROID_STARTED = "2026-10-17T08:00:04.123456789Z"
 
 
 def _docker(
     androids: str = _ANDROIDS,
     gateways: str = _GATEWAYS,
     fail: Callable[[list[str]], bool] = lambda _argv: False,
+    *,
+    network: bool = True,
+    gateway_started: str = _GATEWAY_STARTED,
 ) -> Callable[[list[str]], str]:
     """A docker holding ``androids`` / ``gateways`` (``ps`` lines) that fails what ``fail`` picks.
 
     ``create`` adds a container to its list and ``rm`` takes it out, so a pod it made
-    is found again by the next listing.
+    is found again by the next listing. The gateways' network exists when ``network``
+    (or once created); ``inspect`` answers each gateway's and Android's start time.
     """
     lists = {"android": androids.splitlines(), "gateway": gateways.splitlines()}
+    networks = {"exists": network}
 
     def answer(argv: list[str]) -> str:
         if fail(argv):
             code = "emulator_command_failed"
             raise EmulatorError(code)
+        if argv[1:3] == ["network", "inspect"] and not networks["exists"]:
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        if argv[1:3] == ["network", "create"]:
+            networks["exists"] = True
+        if argv[1] == "inspect":
+            return "".join(
+                f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n"
+                for name in argv[4:]
+            )
         if argv[1] == "ps":
             role = "gateway" if argv[4] == "label=telebuba.gateway" else "android"
             return "".join(f"{line}\n" for line in lists[role])
-        if argv[1] == "create":
-            role = "gateway" if "telebuba.gateway=1" in argv else "android"
-            index = next(a for a in argv if a.startswith("telebuba.index=")).split("=")[1]
-            lists[role].append(f"{index}|{argv[argv.index('--name') + 1]}|created")
-        if argv[1] == "cp" and argv[2].endswith(":/product/etc/build.prop"):
-            Path(argv[3]).write_text("ro.product.model=redroid\n", encoding="utf-8")
-        if argv[1] == "rm":
-            for role, lines in lists.items():
-                lists[role] = [line for line in lines if line.split("|")[1] != argv[-1]]
+        _track(lists, argv)
         return ""
 
     return answer
 
 
+def _track(lists: dict[str, list[str]], argv: list[str]) -> None:
+    """What ``create`` / ``cp`` / ``rm`` do to the fake docker's containers."""
+    if argv[1] == "create":
+        role = "gateway" if "telebuba.gateway=1" in argv else "android"
+        index = next(a for a in argv if a.startswith("telebuba.index=")).split("=")[1]
+        lists[role].append(f"{index}|{argv[argv.index('--name') + 1]}|created")
+    if argv[1] == "cp" and argv[2].endswith(":/product/etc/build.prop"):
+        Path(argv[3]).write_text("ro.product.model=redroid\n", encoding="utf-8")
+    if argv[1] == "rm":
+        for role, lines in lists.items():
+            lists[role] = [line for line in lines if line.split("|")[1] != argv[-1]]
+
+
 def _verbs(console: Console) -> list[str]:
-    """Each docker call as ``verb target`` (``ps`` calls left out)."""
+    """Each docker call as ``verb target`` (listings and the network left out)."""
     docker = str(settings.emulator.docker_path)
     targets = {"start": -1, "stop": -1, "create": 3}
     return [
         f"{call[1]} {call[targets.get(call[1], 2)]}"
         for call in console.calls
-        if call[0] == docker and call[1] != "ps"
+        if call[0] == docker and call[1] not in {"ps", "network", "inspect"}
     ]
 
 
@@ -119,6 +142,8 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
     assert gateway[gateway.index("--publish") + 1] == "127.0.0.1:5601:5555", "adb, loopback"
     assert gateway[-1] == settings.emulator.gateway_image
     assert {"NET_ADMIN", "/dev/net/tun", "net.ipv6.conf.all.disable_ipv6=1"} <= set(gateway)
+    assert gateway[gateway.index("--network") + 1] == "telebuba-emulator"
+    assert gateway[gateway.index("--tmpfs") + 1] == "/run", "the rendered config stays in RAM"
     assert "telebuba.gateway=1" in gateway
     assert "telebuba.index=1" in gateway
     android = _call(console, "create", "telebuba-new")
@@ -326,6 +351,137 @@ async def test_a_pod_runs_a_proxy_only_while_its_gateway_was_given_it(
     assert await pod.pod_runs_proxy("telebuba-acc-0", _PROXY) is runs
     execs = [call for call in console.calls if call[1] == "exec"]
     assert all(call[3:] == ["sha256sum", "/etc/net-gateway/proxy"] for call in execs)
+
+
+@pytest.mark.asyncio
+async def test_android_left_in_a_restarted_gateways_old_namespace_is_not_running_it(
+    console: Console,
+) -> None:
+    listed = _docker(gateway_started="2026-10-17T08:00:09Z")
+    console.answer = lambda argv: (
+        hashlib.sha256(_PROXY_TEXT.encode()).hexdigest() if argv[1] == "exec" else listed(argv)
+    )
+
+    assert await pod.pod_runs_proxy("telebuba-acc-0", _PROXY) is False
+    assert not [call for call in console.calls if call[1] == "exec"]
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_android_does_not_run_the_proxy(console: Console) -> None:
+    console.answer = _docker(androids="0|telebuba-acc-0|exited\n")
+
+    assert await pod.pod_runs_proxy("telebuba-acc-0", _PROXY) is False
+
+
+@pytest.mark.asyncio
+async def test_the_gateways_network_is_made_with_containers_isolated_when_missing(
+    console: Console,
+) -> None:
+    console.answer = _docker(network=False)
+
+    await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    networks = [call[1:] for call in console.calls if call[1] == "network"]
+    assert networks[:2] == [
+        ["network", "inspect", "telebuba-emulator"],
+        [
+            "network",
+            "create",
+            "--driver",
+            "bridge",
+            "--opt",
+            "com.docker.network.bridge.enable_icc=false",
+            "telebuba-emulator",
+        ],
+    ]
+    made = next(i for i, c in enumerate(console.calls) if c[1:3] == ["network", "create"])
+    assert made < console.calls.index(_call(console, "create", "telebuba-new-net"))
+
+
+@pytest.mark.asyncio
+async def test_a_network_another_start_made_first_is_used(console: Console) -> None:
+    tries = {"inspect": 0}
+    docker = _docker()
+
+    def answer(argv: list[str]) -> str:
+        if argv[1:3] == ["network", "inspect"]:
+            tries["inspect"] += 1
+            if tries["inspect"] == 1:
+                code = "emulator_command_failed"
+                raise EmulatorError(code)
+        if argv[1:3] == ["network", "create"]:
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        return docker(argv)
+
+    console.answer = answer
+
+    await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    assert tries["inspect"] == 2
+
+
+@pytest.mark.asyncio
+async def test_two_pods_started_at_once_take_different_indexes(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    console.answer = _docker(androids="", gateways="")
+
+    async def yielding(argv: Sequence[str], *, seconds: float, step: str) -> str:
+        await asyncio.sleep(0)  # each docker call lets the other start run
+        return await console(argv, seconds=seconds, step=step)
+
+    monkeypatch.setattr("core.emulator._process.run_command", yielding)
+    monkeypatch.setattr("core.emulator.redroid.run_command", yielding)
+
+    first, second = await asyncio.gather(
+        pod.start_pod("telebuba-a", _SPEC, _PROXY),
+        pod.start_pod("telebuba-b", _SPEC, _PROXY),
+    )
+
+    assert {first.index, second.index} == {0, 1}
+
+
+@pytest.mark.asyncio
+async def test_a_proxy_that_cannot_be_copied_in_removes_the_new_gateway(
+    console: Console,
+) -> None:
+    console.answer = _docker(fail=lambda argv: argv[1] == "cp" and argv[3].endswith(":/etc/"))
+
+    with pytest.raises(EmulatorError):
+        await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    assert _verbs(console)[-1] == "rm --force"
+    assert console.calls[-1][2:] == ["--force", "telebuba-new-net"]
+    assert "start telebuba-new-net" not in _verbs(console)
+
+
+@pytest.mark.asyncio
+async def test_a_start_cancelled_midway_still_undoes_itself(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.emulator, "tunnel_timeout_seconds", 60.0)
+    probing = asyncio.Event()
+    docker = _docker()
+
+    def answer(argv: list[str]) -> str:
+        if argv[1] == "exec":
+            probing.set()
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        return docker(argv)
+
+    console.answer = answer
+    start = asyncio.create_task(pod.start_pod("telebuba-new", _SPEC, _PROXY))
+    await probing.wait()
+
+    start.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await start
+
+    assert console.calls[-1][1:] == ["rm", "--force", "telebuba-new-net"]
 
 
 @pytest.mark.asyncio

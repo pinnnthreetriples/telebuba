@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
     create_gateway,
+    ensure_network,
     gateway_name,
     give_proxy,
     proxy_file,
@@ -92,8 +94,9 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
                 android = None
             if current is None:
                 index = await _free_index()
+                await ensure_network()
+                created.add(gateway)  # before: a cancelled create may have made it
                 await create_gateway(gateway, index)
-                created.add(gateway)
             else:
                 index = current.index
         for container in (android, current):
@@ -109,7 +112,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             await create_instance(name, spec, index=index, gateway=gateway)
         else:
             await refresh_identity(name, spec)  # the proxy may have moved country
-        await launch_instance(index)
+        await launch_instance(name, index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))
         raise
@@ -126,10 +129,24 @@ async def _undo(containers: tuple[str, ...], *, found: set[str], created: set[st
                 logger.warning("pod cleanup of %s failed (%s)", container, exc.code)
 
 
+def _started_at(stamp: str) -> datetime:
+    """A ``State.StartedAt`` from docker (RFC 3339, nanoseconds) as a datetime."""
+    seconds, _, fraction = stamp.strip().removesuffix("Z").partition(".")
+    return datetime.fromisoformat(f"{seconds}.{fraction[:6].ljust(6, '0')}+00:00")
+
+
 async def pod_runs_proxy(name: str, proxy: ProxySettings) -> bool:
-    """Whether the pod's gateway is running and was started on ``proxy``."""
-    _android, gateway = await _find(name)
-    if gateway is None or not gateway.running:
+    """Whether the pod runs, Android inside its gateway's CURRENT namespace, on ``proxy``.
+
+    A gateway started again on its own makes a new namespace while Android stays in
+    the old one, cut off: Android must have started after the gateway did.
+    """
+    android, gateway = await _find(name)
+    if android is None or gateway is None or not (android.running and gateway.running):
+        return False
+    stamps = await docker("inspect", "--format", "{{.State.StartedAt}}", gateway.name, name)
+    gateway_started, android_started = (_started_at(s) for s in stamps.split())
+    if android_started <= gateway_started:
         return False
     return await runs_proxy(gateway.name, proxy_file(proxy))
 
