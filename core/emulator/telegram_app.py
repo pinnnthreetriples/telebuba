@@ -98,7 +98,7 @@ def split_phone(phone: str) -> tuple[str, str]:
 
 
 async def press_start(serial: str, nodes: list[UiNode]) -> None:
-    await adb.tap(serial, _require(find(nodes, START_LABELS)))
+    await adb.human_tap(serial, _require(find(nodes, START_LABELS)))
 
 
 async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
@@ -108,25 +108,25 @@ async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
     if len(boxes) < 2:  # noqa: PLR2004 - country code + number
         raise EmulatorError(_EMULATOR_FIELD_MISSING)
     for box, value in ((boxes[0], country_code), (boxes[1], national)):
-        await adb.tap(serial, box)
+        await adb.human_tap(serial, box)
         await adb.press(serial, adb.KEYCODE_MOVE_END, *([adb.KEYCODE_DEL] * _CLEAR_KEYS))
-        await adb.type_text(serial, value)
+        await adb.human_type(serial, value)
     await adb.press(serial, adb.KEYCODE_ENTER)
 
 
 async def confirm_number(serial: str, nodes: list[UiNode]) -> None:
-    await adb.tap(serial, _require(find(nodes, YES_LABELS)))
+    await adb.human_tap(serial, _require(find(nodes, YES_LABELS)))
 
 
 async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:
     boxes = fields(nodes)
-    await adb.tap(serial, _require(boxes[0] if boxes else None))
-    await adb.type_text(serial, code)
+    await adb.human_tap(serial, _require(boxes[0] if boxes else None))
+    await adb.human_type(serial, code)
 
 
 async def enter_password(serial: str, nodes: list[UiNode], password: str) -> None:
     """Type the cloud password into the field the dump marks ``password``, then submit."""
     escape_input_text(password)  # refuse an untypeable password before touching the screen
-    await adb.tap(serial, _require(password_field(nodes)))
-    await adb.type_text(serial, password)
+    await adb.human_tap(serial, _require(password_field(nodes)))
+    await adb.human_type(serial, password)
     await adb.press(serial, adb.KEYCODE_ENTER)
