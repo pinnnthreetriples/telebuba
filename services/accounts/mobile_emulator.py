@@ -1,4 +1,4 @@
-"""Open a mobile account in its local Android container (LDPlayer 9).
+"""Open a mobile account in its local Android container (redroid under Docker).
 
 The container is the account's MOBILE device made visible: it is created with the
 mobile fingerprint's manufacturer and model, refused when its Android SDK differs,
@@ -13,7 +13,7 @@ in ``core.emulator``; the policy lives here:
 * every boot a start makes has its network cut (from the host right after launch,
   then inside Android) and gets it back only once the app's proxy is set, so its
   first connection already goes through the proxy; the setting is the app's own and
-  outlives the container's window being closed;
+  outlives the container's scrcpy window being closed;
 * the sign-in state is read off the screen every time, never remembered;
 * a running container that shows the app's intro or phone screen is signed in where
   it stands; one showing the chat list, or anything else, is left alone;
@@ -40,6 +40,7 @@ from core.emulator import (
     apply_account_proxy,
     assert_sdk,
     bring_app_to_front,
+    connect_device,
     container_spec,
     create_instance,
     ensure_app,
@@ -51,6 +52,7 @@ from core.emulator import (
     remove_container,
     set_container_network,
     set_network,
+    show_instance,
     wait_for_boot,
 )
 from core.logging import log_event
@@ -159,6 +161,8 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
         # applies the proxy offline before the network comes back: it is not booted
         # or reconfigured again. Only an entry screen is acted on, through its nodes.
         serial = adb_serial(instance.index)
+        await connect_device(serial)
+        await show_instance(instance.index)
         await bring_app_to_front(serial)
         screen, _nodes = await read_screen(serial)
         signed_in = screen == "chats"
@@ -172,7 +176,7 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
     created = instance is None
     try:
         if instance is None:
-            instance = await create_instance(name, spec, settings.emulator.templates.get(spec.sdk))
+            instance = await create_instance(name, spec)
         serial = adb_serial(instance.index)
         await launch_instance(instance.index)
         # Every boot this call makes goes offline until the app's own SOCKS5 setting
@@ -182,6 +186,7 @@ async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMob
         # app the boot starts by itself cannot connect; ``svc`` follows once it can.
         await set_container_network(instance.index, online=False)
         await wait_for_boot(serial)
+        await show_instance(instance.index)
         await assert_sdk(serial, spec.sdk)
         await set_network(serial, enabled=False)
         await ensure_app(serial)

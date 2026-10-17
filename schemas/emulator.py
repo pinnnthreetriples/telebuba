@@ -1,4 +1,4 @@
-"""Contracts for opening a mobile account in the local Android container (LDPlayer 9).
+"""Contracts for opening a mobile account in the local Android container (redroid under Docker).
 
 The container is the account's MOBILE device made visible: its manufacturer, model and
 SDK are the mobile fingerprint's, and the Telegram app inside it connects straight to

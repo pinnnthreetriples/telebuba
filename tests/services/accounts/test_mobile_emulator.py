@@ -16,7 +16,7 @@ import pytest
 
 from core.config import settings
 from core.emulator import EmulatorError
-from core.emulator.ldconsole import Instance
+from core.emulator.redroid import Instance
 from core.repositories.proxies import create_and_assign_proxy
 from core.telegram_client import TelegramClientPoolError
 from schemas.accounts import AccountCreate
@@ -39,7 +39,7 @@ _PHONE = "+5215550001111"
 
 
 class _Container:
-    """A scripted LDPlayer + Telegram app: records every step, shows ``screens`` in turn.
+    """A scripted redroid container + Telegram app: records every step, shows ``screens`` in turn.
 
     Its methods stand in for the container layer's functions on the two service modules.
     """
@@ -66,7 +66,7 @@ class _Container:
             raise EmulatorError(code)
 
     def on_serial(self, serial: str, label: str) -> None:
-        assert serial == "emulator-5556", "instance 1's own serial, never emulator-5554"
+        assert serial == "127.0.0.1:5601", "instance 1's own port, never index 0's"
         self.step(label)
 
     def next_screen(self) -> Screen:
@@ -80,9 +80,8 @@ class _Container:
         self,
         name: str,
         spec: ContainerSpec,
-        template: str | None,
     ) -> Instance:
-        self.step(f"create:{spec.manufacturer}{spec.model}:{spec.sdk}:{template}")
+        self.step(f"create:{spec.manufacturer}{spec.model}:{spec.sdk}")
         self.instance = Instance(1, name, running=False)
         return self.instance
 
@@ -100,6 +99,12 @@ class _Container:
 
     async def wait_for_boot(self, serial: str) -> None:
         self.on_serial(serial, "boot")
+
+    async def connect_device(self, serial: str) -> None:
+        self.on_serial(serial, "connect")
+
+    async def show_instance(self, index: int) -> None:
+        self.step(f"show:{index}")
 
     async def assert_sdk(self, serial: str, sdk: int) -> None:
         self.on_serial(serial, f"sdk:{sdk}")
@@ -163,6 +168,8 @@ _SERVICE_FAKES = (
     "launch_instance",
     "set_container_network",
     "wait_for_boot",
+    "connect_device",
+    "show_instance",
     "assert_sdk",
     "set_network",
     "ensure_app",
@@ -278,7 +285,7 @@ async def test_a_new_container_starts_offline_until_the_apps_proxy_is_set(
     assert result.status == "started"
     assert result.signed_in is True
     created = next(step for step in container.steps if step.startswith("create:"))
-    assert created.endswith((":33:None", ":34:None"))
+    assert created.endswith((":33", ":34"))
     order = [
         s for s in container.steps if s.split(":")[0] in {"host", "net", "app", "proxy", "launch"}
     ]
@@ -344,7 +351,7 @@ async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
     result = await open_account_mobile("acc")
 
     assert (result.status, result.signed_in) == ("already_running", signed_in)
-    assert container.steps == ["find:telebuba-acc", "front", "read"]
+    assert container.steps == ["find:telebuba-acc", "connect", "show:1", "front", "read"]
 
 
 @pytest.mark.parametrize("entry", ["intro", "phone"])
@@ -395,25 +402,11 @@ async def test_every_boot_of_an_existing_container_reapplies_the_current_proxy_o
 
 
 @pytest.mark.asyncio
-async def test_a_configured_template_of_the_fingerprints_sdk_is_copied(
-    container: _Container,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    await _account()
-    monkeypatch.setattr(settings.emulator, "templates", {33: "tpl-a13", 34: "tpl-a14"})
-
-    await open_account_mobile("acc")
-
-    created = next(step for step in container.steps if step.startswith("create:"))
-    assert created.endswith((":33:tpl-a13", ":34:tpl-a14"))
-
-
-@pytest.mark.asyncio
 async def test_a_failed_creation_still_removes_the_half_made_container(
     container: _Container,
 ) -> None:
     await _account()
-    container.fail_at = "create:samsungSM-S918B:33:None"
+    container.fail_at = "create:samsungSM-S918B:33"
     container.fail_at_prefix = "create:"
 
     with pytest.raises(EmulatorRefusedError):
@@ -580,3 +573,5 @@ async def test_the_host_cuts_the_network_before_android_boots(container: _Contai
 
     steps = container.steps
     assert steps.index("launch:1") < steps.index("host:1:False") < steps.index("boot")
+    sdk = next(step for step in steps if step.startswith("sdk:"))
+    assert steps.index("boot") < steps.index("show:1") < steps.index(sdk), "shown once it is up"

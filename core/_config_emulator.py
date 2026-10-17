@@ -1,4 +1,4 @@
-"""The local Android container (LDPlayer 9) a mobile account can be opened in.
+"""The local Android container (redroid under Docker) a mobile account can be opened in.
 
 Split out of ``core.config`` for the file-size budget; re-exported there.
 """
@@ -17,22 +17,30 @@ class EmulatorSettings(BaseSettings):
     # Off unless the operator turns it on: the open-mobile endpoint then answers
     # ``mobile_emulator_disabled`` and the button stays disabled.
     enabled: bool = False
-    # LDPlayer's console and the adb it ships with (same folder on a stock install).
-    ldconsole_path: Path = Path("C:/LDPlayer/LDPlayer9/ldconsole.exe")
-    adb_path: Path = Path("C:/LDPlayer/LDPlayer9/adb.exe")
+    # redroid needs a kernel with binder (docs/redroid.md). Point ``adb_path`` at the
+    # adb scrcpy ships with: two adb versions on one host keep killing each other's server.
+    adb_path: Path = Path("adb")
+    # The docker CLI, the scrcpy viewer, the image per Android SDK, and the host port
+    # of container index 0's adb (index N listens on that port + N, on 127.0.0.1 only).
+    docker_path: Path = Path("docker")
+    scrcpy_path: Path = Path("scrcpy")
+    redroid_images: dict[int, str] = Field(
+        default_factory=lambda: {
+            33: "redroid/redroid:13.0.0-latest",
+            34: "redroid/redroid:14.0.0-latest",
+        }
+    )
+    redroid_first_adb_port: int = Field(default=5600, ge=1024, le=65000)
     # Installed into a container that lacks the package; refused when the file is missing.
     telegram_apk_path: Path = Path("emulator/telegram.apk")
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
-    # ``width,height,dpi`` as ldconsole takes it; CPU cores and RAM of a new container.
-    # Android SDK -> a clean template container of that version to copy (``{"34": "tpl-a14"}``);
-    # an SDK without one is created from LDPlayer's default image and checked after boot.
-    templates: dict[int, str] = Field(default_factory=dict)
+    # ``width,height,dpi`` of the screen; CPU cores and RAM of a new container.
     resolution: str = Field(default="720,1280,320", pattern=r"^\d{3,4},\d{3,4},\d{3}$")
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
-    # One ldconsole/adb call; an APK install; the Android boot; one screen to appear;
+    # One docker/adb call; an APK install; the Android boot; one screen to appear;
     # the login code to reach the account's existing session; the screen poll interval.
     command_timeout_seconds: float = Field(default=60.0, gt=0)
     install_timeout_seconds: float = Field(default=300.0, gt=0)

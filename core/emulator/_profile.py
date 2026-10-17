@@ -2,7 +2,8 @@
 
 The container must BE the phone the mobile fingerprint describes: the same
 ``Build.MANUFACTURER`` and ``Build.MODEL`` and the same Android SDK. The IMEI is a
-test identifier: 15 digits whose last is the Luhn check digit of the other 14.
+test identifier: 15 digits whose last is the Luhn check digit of the other 14 (kept
+with the spec; redroid has no telephony to give it to).
 """
 
 from __future__ import annotations

@@ -34,7 +34,7 @@ async def test_a_failing_command_has_its_own_code() -> None:
 @pytest.mark.asyncio
 async def test_a_missing_console_is_not_found(tmp_path) -> None:
     with pytest.raises(EmulatorError) as failed:
-        await run_command([str(tmp_path / "ldconsole.exe"), "list2"], seconds=5, step="list2")
+        await run_command([str(tmp_path / "docker.exe"), "ps"], seconds=5, step="ps")
 
     assert failed.value.code == "emulator_not_found"
 
@@ -88,7 +88,7 @@ async def test_a_cancelled_caller_kills_the_child(monkeypatch: pytest.MonkeyPatc
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    assert started[0].returncode is not None, "an abandoned adb/ldconsole call must not linger"
+    assert started[0].returncode is not None, "an abandoned adb/docker call must not linger"
 
 
 @pytest.mark.asyncio
@@ -99,6 +99,6 @@ async def test_a_console_that_cannot_be_started_is_a_code(monkeypatch: pytest.Mo
     monkeypatch.setattr(_process.asyncio, "create_subprocess_exec", refuse)
 
     with pytest.raises(EmulatorError) as failed:
-        await run_command(["ldconsole.exe", "list2"], seconds=5, step="list2")
+        await run_command(["docker.exe", "ps"], seconds=5, step="ps")
 
     assert failed.value.code == "emulator_command_failed"

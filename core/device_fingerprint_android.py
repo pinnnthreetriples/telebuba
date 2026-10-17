@@ -10,7 +10,7 @@ Every field is what the official Telegram Android app itself sends in
 
 A device is listed only with the Android releases it really ran (shipped with or
 was updated to), and only Android 13/14 (SDK 33/34): those are the releases the
-LDPlayer emulator images offer, and the emulator refuses to sign in when its real
+configured redroid images offer, and the emulator refuses to sign in when its real
 SDK differs from the account's fingerprint. App versions are official releases with
 their build numbers as published by Telegram's own APK channel (t.me/TAndroidAPK).
 

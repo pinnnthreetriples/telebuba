@@ -1,7 +1,7 @@
 ---
 name: account-devices
 description: Change an account's devices (desktop/mobile), the second sign-in or the mobile container.
-last_updated: 2026-10-12
+last_updated: 2026-10-17
 edges:
   - target: context/runtime-telegram.md
     condition: sessions, proxies or the client pool
@@ -16,5 +16,5 @@ edges:
 3. Mobile connects with the Android app's own api credentials and `lang_pack="android"`; without them it is refused, never faked on the desktop credentials. Desktop is the default everywhere; mobile only by the operator's pick. A warming stint keeps the device it started on across restarts.
 4. A second device signs in with the code the existing session reads from 777000, taken only from a message newer than the id read right before the request — never a host-clock cut-off. Phone and user id come from that session. Code requests are paced per account. A failure revokes and deletes the new session and stores nothing.
 5. Logout/reset also end the second device and forget it; removal deletes both sessions under the account's auth lock.
-6. The mobile LDPlayer container (off unless `EMULATOR__ENABLED`) presents the mobile fingerprint's maker, model and SDK; its app connects straight to the account's SOCKS5 proxy through its own setting (HTTPS is refused), and every boot it makes stays offline (cut from the host right after launch, then inside Android) until that is set to the current proxy. A running container is never rebooted or reconfigured, only signed in when its app shows intro or phone. Device commands go through `adb shell` as argv lists; text is escaped or refused (a stored 2FA password it cannot type is refused before the number is sent); nothing is tapped that the UI dump did not show; sign-in state is read off the screen. A failed start undoes what it started; deleting the account removes its container.
+6. The mobile redroid container under Docker (off unless `EMULATOR__ENABLED`; needs a WSL kernel with binder, `docs/redroid.md`) presents the mobile fingerprint's maker and model through a `build.prop` copied in before the first boot (never the command line, which redroid re-splits on spaces) and runs the image of its SDK; its app connects straight to the account's SOCKS5 proxy through its own setting (HTTPS is refused), and every boot it makes stays offline (an iptables chain via `docker exec` right after start, adb replies still allowed, then `svc` inside Android) until that is set to the current proxy. adb is published on 127.0.0.1 at the first port + the container's label index; the phone is shown in one scrcpy window per container. A running container is never rebooted or reconfigured, only signed in when its app shows intro or phone. Device commands go through `adb shell` as argv lists; text is escaped or refused (a stored 2FA password it cannot type is refused before the number is sent); nothing is tapped that the UI dump did not show; sign-in state is read off the screen. A failed start undoes what it started; deleting the account removes its container.
 7. Test both device shapes (desktop-first, mobile-first) and the refusal codes; i18n parity covers `DeviceRefusalCode`.

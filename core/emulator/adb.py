@@ -9,6 +9,7 @@ dump showed.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -44,8 +45,25 @@ async def getprop(serial: str, key: str) -> str:
     return (await shell(serial, "getprop", key)).strip()
 
 
+async def connect_device(serial: str) -> None:
+    """Make adb see the container's network serial (``host:port``); others need nothing.
+
+    A refused connection is not an error here: the next adb call against the serial
+    fails on its own, and a booting container's adbd is simply not up yet.
+    """
+    if ":" not in serial:
+        return
+    with suppress(EmulatorError):
+        await run_command(
+            [str(settings.emulator.adb_path), "connect", serial],
+            seconds=settings.emulator.command_timeout_seconds,
+            step="adb connect",
+        )
+
+
 async def _boot_completed(serial: str) -> bool:
     """``False`` while booting — including while adb does not see the device at all yet."""
+    await connect_device(serial)
     try:
         return await getprop(serial, "sys.boot_completed") == _BOOTED
     except EmulatorError as exc:
