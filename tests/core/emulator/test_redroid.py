@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -146,6 +148,50 @@ async def test_the_network_is_switched_inside_the_containers_namespace(
         assert "-I OUTPUT 1 -j telebuba_offline" in script
         assert "--sport 5555 -j ACCEPT" in script, "adb keeps working offline"
         assert script.index("-o lo -j ACCEPT") < script.index("-j DROP")
+
+
+_SH = shutil.which("sh")
+
+
+def _run_offline_script(tmp_path: Path, fail_on: str) -> tuple[int, str]:
+    """``_GO_OFFLINE`` under a real ``sh``, its iptables faked to fail on ``fail_on``."""
+    log = tmp_path / "calls.log"
+    fake = tmp_path / "iptables"
+    fake.write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> "{log.as_posix()}"\n'
+        'case "$*" in -w\\ -N*) exit 1 ;; esac\n'  # the chain exists already
+        'case "$*" in -w\\ -C*) exit 1 ;; esac\n'  # its jump does not, so -I runs
+        f'case "$*" in *"{fail_on}"*) exit 4 ;; esac\n'
+        "exit 0\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    fake.chmod(0o755)
+    script = redroid._GO_OFFLINE.replace("/system/bin/ip6tables", fake.as_posix()).replace(
+        "/system/bin/iptables", fake.as_posix()
+    )
+    assert _SH is not None
+    done = subprocess.run([_SH, "-c", script], check=False)  # noqa: S603 - test-owned argv
+    return done.returncode, log.read_text(encoding="utf-8") if log.exists() else ""
+
+
+@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
+@pytest.mark.parametrize("step", ["-o lo -j ACCEPT", "--sport 5555", "-j DROP", "-I OUTPUT"])
+def test_the_offline_script_fails_when_a_required_rule_fails(tmp_path: Path, step: str) -> None:
+    status, calls = _run_offline_script(tmp_path, step)
+
+    assert status != 0, "a half-built chain must not read as offline"
+    assert calls.count("-N telebuba_offline") == 1, "it stops at the first family"
+
+
+@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
+def test_the_offline_script_succeeds_over_an_existing_chain(tmp_path: Path) -> None:
+    status, calls = _run_offline_script(tmp_path, "never-matches")
+
+    assert status == 0
+    assert calls.count("-I OUTPUT 1 -j telebuba_offline") == 2
+    assert calls.count("-j DROP") == 2, "both families, though -N failed on each"
 
 
 def _exec_failing(

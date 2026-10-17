@@ -40,15 +40,20 @@ _ADB_PORT = 5555
 # Where the container's identity goes: init reads ``/system_dlkm/etc/build.prop``.
 _IDENTITY_DIR = "/system_dlkm/"
 _NETWORK_ATTEMPTS = 3  # see ``set_container_network``: docker exec can exit 255 at start
-# Our own chain, jumped to first from OUTPUT: loopback and adbd's replies only.
+# Our own chain, jumped to first from OUTPUT: loopback and adbd's replies only. Only
+# creating the chain may fail (it exists after an earlier run); any other failed step
+# exits non-zero, so a half-built chain is never reported as offline.
 _OFFLINE_CHAIN = "telebuba_offline"
 _GO_OFFLINE = (
     f"for t in /system/bin/iptables /system/bin/ip6tables; do "
-    f"$t -w -N {_OFFLINE_CHAIN} 2>/dev/null; $t -w -F {_OFFLINE_CHAIN}; "
-    f"$t -w -A {_OFFLINE_CHAIN} -o lo -j ACCEPT; "
-    f"$t -w -A {_OFFLINE_CHAIN} -p tcp --sport {_ADB_PORT} -j ACCEPT; "
-    f"$t -w -A {_OFFLINE_CHAIN} -j DROP; "
-    f"$t -w -C OUTPUT -j {_OFFLINE_CHAIN} 2>/dev/null || $t -w -I OUTPUT 1 -j {_OFFLINE_CHAIN}; "
+    f"$t -w -N {_OFFLINE_CHAIN} 2>/dev/null; "
+    f"$t -w -F {_OFFLINE_CHAIN} "
+    f"&& $t -w -A {_OFFLINE_CHAIN} -o lo -j ACCEPT "
+    f"&& $t -w -A {_OFFLINE_CHAIN} -p tcp --sport {_ADB_PORT} -j ACCEPT "
+    f"&& $t -w -A {_OFFLINE_CHAIN} -j DROP "
+    f"&& {{ $t -w -C OUTPUT -j {_OFFLINE_CHAIN} 2>/dev/null "
+    f"|| $t -w -I OUTPUT 1 -j {_OFFLINE_CHAIN}; }} "
+    f"|| exit 1; "
     f"done"
 )
 _GO_ONLINE = (
