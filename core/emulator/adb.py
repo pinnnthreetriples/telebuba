@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
+from core.emulator._input import HumanInputEngine
 from core.emulator._process import run_command
 from core.emulator._text import escape_input_text
 
@@ -139,3 +140,71 @@ async def press(serial: str, *keycodes: int) -> None:
 
 async def type_text(serial: str, text: str) -> None:
     await shell(serial, "input", "text", escape_input_text(text))
+
+
+_default_input_engine = HumanInputEngine()
+
+
+async def human_tap(
+    serial: str,
+    node: UiNode,
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Sample a Gaussian tap inside ``node.bounds`` and execute via swipe micro-slip."""
+    eng = engine or _default_input_engine
+    event = eng.sample_gaussian_tap(node.bounds)
+    await shell(
+        serial,
+        "input",
+        "swipe",
+        str(event.x),
+        str(event.y),
+        str(event.release_x),
+        str(event.release_y),
+        str(event.hold_ms),
+    )
+
+
+async def human_type(
+    serial: str,
+    text: str,
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Type ``text`` with stochastic keystroke intervals and realistic typo-correction."""
+    escape_input_text(text)
+    eng = engine or _default_input_engine
+    for event in eng.generate_keystroke_sequence(text):
+        delay_ms = event.get("delay_ms", 0)
+        if delay_ms > 0:
+            await asyncio.sleep(delay_ms / 1000.0)
+        action = event.get("action")
+        if action == "char":
+            await type_text(serial, event["value"])
+        elif action == "KEYCODE_DEL":
+            await press(serial, KEYCODE_DEL)
+
+
+async def human_swipe(
+    serial: str,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    duration_ms: int | None = None,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Perform a human-like swipe with natural curvature and ease-in/ease-out timing."""
+    eng = engine or _default_input_engine
+    trajectory = eng.generate_bezier_swipe(start, end)
+    dur = duration_ms if duration_ms is not None else trajectory.total_duration_ms
+    await shell(
+        serial,
+        "input",
+        "swipe",
+        str(trajectory.points[0][0]),
+        str(trajectory.points[0][1]),
+        str(trajectory.points[-1][0]),
+        str(trajectory.points[-1][1]),
+        str(dur),
+    )

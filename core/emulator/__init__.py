@@ -12,9 +12,17 @@
 from __future__ import annotations
 
 from core.emulator._errors import EmulatorError
+from core.emulator._input import HumanInputEngine, SwipeTrajectory, TapEvent
 from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._text import escape_input_text
-from core.emulator.adb import assert_sdk, connect_device, wait_for_boot
+from core.emulator.adb import (
+    assert_sdk,
+    connect_device,
+    human_swipe,
+    human_tap,
+    human_type,
+    wait_for_boot,
+)
 from core.emulator.pod import pod_runs_proxy, remove_pod, start_pod, stop_pod
 from core.emulator.redroid import Instance, adb_serial, find_instance, show_instance
 from core.emulator.telegram_app import (
@@ -32,7 +40,10 @@ from core.emulator.telegram_app import (
 __all__ = [
     "ContainerSpec",
     "EmulatorError",
+    "HumanInputEngine",
     "Instance",
+    "SwipeTrajectory",
+    "TapEvent",
     "adb_serial",
     "assert_sdk",
     "bring_app_to_front",
@@ -45,6 +56,9 @@ __all__ = [
     "enter_phone",
     "escape_input_text",
     "find_instance",
+    "human_swipe",
+    "human_tap",
+    "human_type",
     "pod_runs_proxy",
     "press_start",
     "read_screen",
