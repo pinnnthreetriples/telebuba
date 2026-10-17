@@ -30,6 +30,7 @@ from schemas.telegram_actions_masstagging import (
     ResolveMasstagTarget,
 )
 from services import masstagging as service
+from services.masstagging.pace import next_day_start
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -41,7 +42,9 @@ if TYPE_CHECKING:
 
 class Clock:
     def __init__(self) -> None:
-        self.value = int(time.time())
+        # Starts as a masstagging day begins: from the wall clock, a run shortly before
+        # DAY_START_HOUR split one day's work across two (CI near 09:00 failed).
+        self.value = next_day_start(int(time.time()))
 
     def now(self) -> int:
         return self.value
