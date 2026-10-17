@@ -17,7 +17,10 @@ Docker has no window, so the phone is shown in a scrcpy window opened by the pho
   `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK. redroid has no telephony, so the
   generated IMEI is not given to the container.
 - **Offline first start**: `docker exec` adds an iptables chain dropping all output except loopback
-  and adbd's replies, before Android is up; it is removed once the app's proxy is set.
+  and adbd's replies, before Android is up; it is removed once the app's proxy is set. It cannot
+  land before `docker start` (the image runs nothing before init, and a network attached once
+  netd owns routing gets no gateway), so it must land before zygote, and fails otherwise: here
+  `docker exec` works ~0.3 s after start and zygote runs at ~1.4–2 s.
 - **Window**: `scrcpy --serial … --window-title <container>`, one per container.
 
 A container keeps its `/data` across stop/start; deleting the account runs `docker rm --force`.

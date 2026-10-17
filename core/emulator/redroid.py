@@ -8,6 +8,11 @@ scrcpy one.
 The network is cut inside the container's own network namespace, through
 ``docker exec`` (root, no adb, so it works before Android is up): every outgoing
 packet is dropped except loopback and adbd's replies, so adb keeps working offline.
+It cannot be cut before ``docker start`` (nothing runs in the image before init sets up
+its libraries, and once netd owns routing a network attached later cannot get a
+gateway), so the cut must land before zygote: no app runs before it. ``docker exec``
+works ~0.3 s after start, zygote runs at ~1.4-2 s (redroid 13/14 on this host); a cut
+that lands later fails, and the start is undone.
 """
 
 from __future__ import annotations
@@ -39,10 +44,14 @@ _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
 _ADB_PORT = 5555
 # Where the container's identity goes: init reads ``/system_dlkm/etc/build.prop``.
 _IDENTITY_DIR = "/system_dlkm/"
-_NETWORK_ATTEMPTS = 3  # see ``set_container_network``: docker exec can exit 255 at start
+# ``docker exec`` can exit 255 while the container is still coming up; the retries
+# stay well inside the time before zygote starts.
+_NETWORK_ATTEMPTS = 5
+_NETWORK_RETRY_SECONDS = 0.3
 # Our own chain, jumped to first from OUTPUT: loopback and adbd's replies only. Only
 # creating the chain may fail (it exists after an earlier run); any other failed step
-# exits non-zero, so a half-built chain is never reported as offline.
+# exits non-zero, so a half-built chain is never reported as offline. So does a cut
+# that lands once zygote runs: an app could have connected before it.
 _OFFLINE_CHAIN = "telebuba_offline"
 _GO_OFFLINE = (
     f"for t in /system/bin/iptables /system/bin/ip6tables; do "
@@ -54,7 +63,8 @@ _GO_OFFLINE = (
     f"&& {{ $t -w -C OUTPUT -j {_OFFLINE_CHAIN} 2>/dev/null "
     f"|| $t -w -I OUTPUT 1 -j {_OFFLINE_CHAIN}; }} "
     f"|| exit 1; "
-    f"done"
+    f"done; "
+    f'[ "$(/system/bin/getprop init.svc.zygote)" != running ]'
 )
 _GO_ONLINE = (
     f"for t in /system/bin/iptables /system/bin/ip6tables; do "
@@ -206,9 +216,8 @@ async def launch_instance(index: int) -> None:
 async def set_container_network(index: int, *, online: bool) -> None:
     """Cut or restore the container's network inside its own namespace (see module doc).
 
-    Both scripts are idempotent, so a failed run is retried: ``docker exec`` right after
-    ``docker start`` can exit 255 while the container is still coming up. One that keeps
-    failing raises, and the start is undone.
+    Both scripts are idempotent, so a failed run is retried, briefly (see
+    ``_NETWORK_ATTEMPTS``). One that keeps failing raises, and the start is undone.
     """
     script = _GO_ONLINE if online else _GO_OFFLINE
     name = await _name_of(index)
@@ -218,7 +227,7 @@ async def set_container_network(index: int, *, online: bool) -> None:
         except EmulatorError as exc:
             if exc.code != _EMULATOR_COMMAND_FAILED or attempt == _NETWORK_ATTEMPTS - 1:
                 raise
-            await asyncio.sleep(settings.emulator.poll_seconds)
+            await asyncio.sleep(_NETWORK_RETRY_SECONDS)
         else:
             return
 

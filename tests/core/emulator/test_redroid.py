@@ -153,8 +153,12 @@ async def test_the_network_is_switched_inside_the_containers_namespace(
 _SH = shutil.which("sh")
 
 
-def _run_offline_script(tmp_path: Path, fail_on: str) -> tuple[int, str]:
-    """``_GO_OFFLINE`` under a real ``sh``, its iptables faked to fail on ``fail_on``."""
+def _run_offline_script(
+    tmp_path: Path,
+    fail_on: str,
+    zygote: str = "",
+) -> tuple[int, str]:
+    """``_GO_OFFLINE`` under a real ``sh``: iptables fails on ``fail_on``, zygote is ``zygote``."""
     log = tmp_path / "calls.log"
     fake = tmp_path / "iptables"
     fake.write_text(
@@ -168,8 +172,13 @@ def _run_offline_script(tmp_path: Path, fail_on: str) -> tuple[int, str]:
         newline="\n",
     )
     fake.chmod(0o755)
-    script = redroid._GO_OFFLINE.replace("/system/bin/ip6tables", fake.as_posix()).replace(
-        "/system/bin/iptables", fake.as_posix()
+    getprop = tmp_path / "getprop"
+    getprop.write_text(f"#!/bin/sh\necho {zygote}\n", encoding="utf-8", newline="\n")
+    getprop.chmod(0o755)
+    script = (
+        redroid._GO_OFFLINE.replace("/system/bin/ip6tables", fake.as_posix())
+        .replace("/system/bin/iptables", fake.as_posix())
+        .replace("/system/bin/getprop", getprop.as_posix())
     )
     assert _SH is not None
     done = subprocess.run([_SH, "-c", script], check=False)  # noqa: S603 - test-owned argv
@@ -194,6 +203,18 @@ def test_the_offline_script_succeeds_over_an_existing_chain(tmp_path: Path) -> N
     assert calls.count("-j DROP") == 2, "both families, though -N failed on each"
 
 
+@pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
+@pytest.mark.parametrize(("zygote", "ok"), [("", True), ("stopped", True), ("running", False)])
+def test_a_cut_that_lands_once_zygote_runs_fails(
+    tmp_path: Path,
+    zygote: str,
+    ok: bool,  # noqa: FBT001 - a parametrised expectation
+) -> None:
+    status, _calls = _run_offline_script(tmp_path, "never-matches", zygote)
+
+    assert (status == 0) is ok, "an app may have connected before the rules landed"
+
+
 def _exec_failing(
     times: int,
     code: EmulatorRefusalCode = "emulator_command_failed",
@@ -209,6 +230,12 @@ def _exec_failing(
     return answer
 
 
+@pytest.fixture
+def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(redroid, "_NETWORK_RETRY_SECONDS", 0)
+
+
+@pytest.mark.usefixtures("no_retry_wait")
 @pytest.mark.asyncio
 async def test_a_failed_network_switch_is_run_again(ps: Console) -> None:
     ps.answer = _exec_failing(2)
@@ -218,15 +245,22 @@ async def test_a_failed_network_switch_is_run_again(ps: Console) -> None:
     assert len(_docker_calls(ps, "exec")) == 3
 
 
+@pytest.mark.usefixtures("no_retry_wait")
 @pytest.mark.asyncio
 async def test_a_network_switch_that_keeps_failing_is_not_hidden(ps: Console) -> None:
-    ps.answer = _exec_failing(9)
+    ps.answer = _exec_failing(99)
 
     with pytest.raises(EmulatorError) as failed:
         await redroid.set_container_network(0, online=False)
 
     assert failed.value.code == "emulator_command_failed"
-    assert len(_docker_calls(ps, "exec")) == 3
+    assert len(_docker_calls(ps, "exec")) == redroid._NETWORK_ATTEMPTS
+
+
+def test_the_retries_end_well_before_zygote_starts() -> None:
+    """Zygote ran at ~1.4 s after start at the earliest on this host (redroid 14)."""
+    budget = (redroid._NETWORK_ATTEMPTS - 1) * redroid._NETWORK_RETRY_SECONDS
+    assert budget <= 1.4
 
 
 @pytest.mark.asyncio
