@@ -18,6 +18,9 @@ from core.emulator._input import HumanInputEngine
 from core.emulator.ui_dump import classify, parse_dump, password_field
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from core.emulator.ui_dump import UiNode
     from tests.core.emulator.conftest import Console
 
 
@@ -209,3 +212,32 @@ async def test_an_untypeable_code_is_refused_before_the_screen_is_touched(
 
     assert refused.value.code == "emulator_text_unsupported"
     assert console.calls == []
+
+
+class _AlwaysTypo(random.Random):
+    def random(self) -> float:
+        return 0.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("screen", "step", "secret"),
+    [(PASSWORD, telegram_app.enter_password, "s3cret!"), (CODE, telegram_app.enter_code, "12345")],
+    ids=["password", "code"],
+)
+async def test_secrets_are_typed_without_simulated_typos(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+    screen: str,
+    step: Callable[[str, list[UiNode], str], Awaitable[None]],
+    secret: str,
+) -> None:
+    monkeypatch.setattr(
+        "core.emulator.adb._default_input_engine",
+        HumanInputEngine(_AlwaysTypo(0)),
+    )
+    await step("emulator-5554", parse_dump(screen), secret)
+
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert "".join(typed).replace("\\", "") == secret
+    assert ["input", "keyevent", "67"] not in console.shell_calls()

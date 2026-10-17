@@ -205,12 +205,12 @@ def test_generate_keystroke_sequence_without_typos() -> None:
     text = "Hello World!"
     seq = engine.generate_keystroke_sequence(text, typo_probability=0.0)
 
-    typed_chars = [event["value"] for event in seq if event["action"] == "char"]
+    typed_chars = [event.char for event in seq if event.key_event is None]
     assert "".join(typed_chars) == text
-    assert not any(event["action"] == "KEYCODE_DEL" for event in seq)
+    assert not any(event.key_event is not None for event in seq)
 
     for event in seq:
-        assert event["delay_ms"] > 0
+        assert event.delay_ms > 0
 
 
 def test_generate_keystroke_sequence_with_typos() -> None:
@@ -219,15 +219,15 @@ def test_generate_keystroke_sequence_with_typos() -> None:
     seq = engine.generate_keystroke_sequence("a", typo_probability=1.0)
 
     assert len(seq) == 3
-    assert seq[0]["action"] == "char"
-    assert seq[0]["value"] in QWERTY_NEIGHBORS["a"]
-    assert 80 <= seq[0]["delay_ms"] <= 190
+    assert seq[0].key_event is None
+    assert seq[0].char in QWERTY_NEIGHBORS["a"]
+    assert 80 <= seq[0].delay_ms <= 190
 
-    assert seq[1]["action"] == "KEYCODE_DEL"
-    assert 300 <= seq[1]["delay_ms"] <= 550
+    assert seq[1].key_event == 67
+    assert 300 <= seq[1].delay_ms <= 550
 
-    assert seq[2]["action"] == "char"
-    assert seq[2]["value"] == "a"
+    assert seq[2].key_event is None
+    assert seq[2].char == "a"
 
 
 def test_generate_keystroke_sequence_uppercase_typo() -> None:
@@ -235,9 +235,9 @@ def test_generate_keystroke_sequence_uppercase_typo() -> None:
     engine = HumanInputEngine(rng=rng)
     seq = engine.generate_keystroke_sequence("A", typo_probability=1.0)
 
-    assert seq[0]["action"] == "char"
-    assert seq[0]["value"].isupper()
-    assert seq[0]["value"].lower() in QWERTY_NEIGHBORS["a"]
+    assert seq[0].key_event is None
+    assert seq[0].char.isupper()
+    assert seq[0].char.lower() in QWERTY_NEIGHBORS["a"]
 
 
 def test_module_level_generate_keystroke_sequence() -> None:
@@ -351,31 +351,6 @@ async def test_adb_human_swipe_custom_duration(console: Console) -> None:
     assert calls[0] == ["input", "swipe", "200", "600", "200", "200", "750"]
 
 
-def test_keystroke_event_dataclass_and_dict_compatibility() -> None:
-    event = KeystrokeEvent(char="a", delay_ms=100)
-    assert event.char == "a"
-    assert event.delay_ms == 100
-    assert event.key_event is None
-    assert event["action"] == "char"
-    assert event["value"] == "a"
-    assert event["delay_ms"] == 100
-    assert event["key_event"] is None
-    assert event["char"] == "a"
-    assert event.get("delay_ms") == 100
-    assert event.get("nonexistent", "default") == "default"
-
-    del_event = KeystrokeEvent(char="", delay_ms=350, key_event=67)
-    assert del_event.char == ""
-    assert del_event.delay_ms == 350
-    assert del_event.key_event == 67
-    assert del_event["action"] == "KEYCODE_DEL"
-    assert del_event["value"] == "BACKSPACE"
-    assert del_event.get("action") == "KEYCODE_DEL"
-
-    with pytest.raises(KeyError):
-        _ = event["unknown_key"]
-
-
 def test_module_level_generate_keystroke_sequence_typo_probability() -> None:
     seq = generate_keystroke_sequence("test", typo_probability=0.0)
     assert all(isinstance(e, KeystrokeEvent) for e in seq)
@@ -401,3 +376,21 @@ async def test_adb_human_type_typo_probability_zero(
     typed = [call[2] for call in text_calls]
     assert typed == list("testing")
     assert del_calls == []
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [(10, 10, 11, 11), (11, 11, 12, 12), (0, 0, 1, 1), (0, 0, 2, 2), (5, 5, 8, 40)],
+)
+def test_a_tap_and_its_release_stay_on_the_elements_pixels(
+    bounds: tuple[int, int, int, int],
+) -> None:
+    """Android bounds are half-open: the right and bottom edges belong to the next view."""
+    engine = HumanInputEngine(rng=random.Random(3))  # noqa: S311
+    x1, y1, x2, y2 = bounds
+    for _ in range(200):
+        tap = engine.sample_gaussian_tap(bounds)
+        assert x1 <= tap.x < x2
+        assert y1 <= tap.y < y2
+        assert x1 <= tap.release_x < x2
+        assert y1 <= tap.release_y < y2
