@@ -12,6 +12,11 @@
     "height": 1544,
     "dpi": 300
   },
+  "camera": {
+    "f_number": 1.7,
+    "focal_length_mm": 6.3,
+    "file_style": "samsung"
+  },
   "builds": {
     "33": {
       "release": "13",

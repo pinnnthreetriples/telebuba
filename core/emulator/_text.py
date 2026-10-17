@@ -38,3 +38,8 @@ def escape_input_text(text: str) -> str:
         else:
             escaped.append(char)
     return "".join(escaped)
+
+
+def shell_quote(value: str) -> str:
+    """``value`` single-quoted for ``sh`` (a quote inside closes, escapes, reopens)."""
+    return "'" + value.replace("'", "'\\''") + "'"

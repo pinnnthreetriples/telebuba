@@ -5,6 +5,7 @@
 - ``adb``       — device-side commands, always through ``adb shell``
 - ``ui_dump``   — the one parser of ``uiautomator dump`` and the screen classifier
 - ``telegram_app`` — the Telegram app's screens, driven only through dumped nodes
+- ``_seeder``   — a fresh container's contacts and camera roll, written once
 - ``_profile``  — the container's identity from the mobile fingerprint: a real phone's
   firmware (``_blueprints``) and the proxy country's region (``_geo``)
 """
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import ContainerSpec, container_spec
+from core.emulator._seeder import seed_device_if_needed
 from core.emulator._text import escape_input_text
 from core.emulator.adb import assert_sdk, connect_device, wait_for_boot
 from core.emulator.pod import pod_runs_proxy, remove_pod, start_pod, stop_pod
@@ -49,6 +51,7 @@ __all__ = [
     "press_start",
     "read_screen",
     "remove_pod",
+    "seed_device_if_needed",
     "show_instance",
     "start_pod",
     "stop_pod",

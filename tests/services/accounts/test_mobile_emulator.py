@@ -113,6 +113,10 @@ class _Container:
     async def ensure_app(self, serial: str) -> None:
         self.on_serial(serial, "app")
 
+    async def seed_device_if_needed(self, serial: str, spec: ContainerSpec) -> bool:
+        self.on_serial(serial, f"seed:{spec.serial}")
+        return True
+
     async def read_screen(self, serial: str) -> tuple[Screen, list[object]]:
         self.on_serial(serial, "read")
         return self.next_screen(), []
@@ -166,6 +170,7 @@ _SERVICE_FAKES = (
     "show_instance",
     "assert_sdk",
     "ensure_app",
+    "seed_device_if_needed",
     "bring_app_to_front",
     "read_screen",
     "stop_pod",
@@ -291,8 +296,10 @@ async def test_a_new_pod_starts_on_the_accounts_proxy_before_android_is_used(
     started = next(step for step in steps if step.startswith("pod:"))
     assert started.endswith((":33:10.0.0.5", ":34:10.0.0.5"))
     sdk = next(step for step in steps if step.startswith("sdk:"))
-    order = [steps.index(s) for s in (started, "boot", "show:1", sdk, "app")]
-    assert order == sorted(order), "shown once it is up, the app once its SDK is checked"
+    seed = next(step for step in steps if step.startswith("seed:"))
+    assert seed == f"seed:{container.specs[0].serial}"
+    order = [steps.index(s) for s in (started, "boot", "show:1", sdk, seed, "app")]
+    assert order == sorted(order), "shown once up, seeded once its SDK is checked, then the app"
 
 
 @pytest.mark.asyncio
@@ -374,7 +381,7 @@ async def test_a_running_signed_out_app_is_signed_in_where_it_stands(
     assert (result.status, result.signed_in) == ("already_running", True)
     assert f"phone:{_PHONE}" in container.steps
     assert "code:12345" in container.steps
-    booted = {"pod", "boot", "app", "stop", "remove"}
+    booted = {"pod", "boot", "seed", "app", "stop", "remove"}
     assert not [step for step in container.steps if step.split(":")[0] in booted]
 
 
