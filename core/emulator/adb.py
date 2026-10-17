@@ -195,24 +195,19 @@ async def human_swipe(
     start: tuple[int, int],
     end: tuple[int, int],
     *,
-    duration_ms: int | None = None,
     engine: HumanInputEngine | None = None,
 ) -> None:
-    """Swipe from ``start`` to ``end`` over a sampled duration (or ``duration_ms``).
+    """Drag the finger along a sampled Bezier curve from ``start`` to ``end``.
 
-    ``input swipe`` moves in a straight line at constant speed: only the trajectory's
-    end points and ``total_duration_ms`` reach the device, its arc and easing do not.
+    Every point goes out as one ``input motionevent`` (DOWN, MOVEs, UP) in a single
+    ``adb shell`` script that the device's ``sh`` runs command by command.
     """
     eng = engine or _default_input_engine
-    trajectory = eng.generate_bezier_swipe(start, end)
-    dur = duration_ms if duration_ms is not None else trajectory.total_duration_ms
-    await shell(
-        serial,
-        "input",
-        "swipe",
-        str(trajectory.points[0][0]),
-        str(trajectory.points[0][1]),
-        str(trajectory.points[-1][0]),
-        str(trajectory.points[-1][1]),
-        str(dur),
-    )
+    points = eng.generate_bezier_swipe(start, end).points
+    actions = ["DOWN"] + ["MOVE"] * (len(points) - 2) + ["UP"]
+    script: list[str] = []
+    for action, (x, y) in zip(actions, points, strict=True):
+        if script:
+            script.append(";")
+        script += ["input", "motionevent", action, str(x), str(y)]
+    await shell(serial, *script)

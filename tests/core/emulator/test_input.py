@@ -323,32 +323,23 @@ async def test_adb_human_type_with_typo_correction(
 
 
 @pytest.mark.asyncio
-async def test_adb_human_swipe_calls_shell_swipe(console: Console) -> None:
+async def test_adb_human_swipe_replays_the_whole_curve_in_one_shell_call(
+    console: Console,
+) -> None:
+    curve = HumanInputEngine(rng=random.Random(123)).generate_bezier_swipe((100, 500), (100, 100))  # noqa: S311
     engine = HumanInputEngine(rng=random.Random(123))  # noqa: S311
 
     await adb.human_swipe("emulator-5554", (100, 500), (100, 100), engine=engine)
 
     calls = console.shell_calls()
-    assert len(calls) == 1
-    call = calls[0]
-    assert call[:2] == ["input", "swipe"]
-    assert call[2] == "100"
-    assert call[3] == "500"
-    assert call[4] == "100"
-    assert call[5] == "100"
-    duration = int(call[6])
-    assert duration > 0
-
-
-@pytest.mark.asyncio
-async def test_adb_human_swipe_custom_duration(console: Console) -> None:
-    engine = HumanInputEngine(rng=random.Random(123))  # noqa: S311
-
-    await adb.human_swipe("emulator-5554", (200, 600), (200, 200), duration_ms=750, engine=engine)
-
-    calls = console.shell_calls()
-    assert len(calls) == 1
-    assert calls[0] == ["input", "swipe", "200", "600", "200", "200", "750"]
+    assert len(calls) == 1, "one adb shell for the whole gesture"
+    commands = " ".join(calls[0]).split(" ; ")
+    assert commands == [
+        "input motionevent DOWN 100 500",
+        *(f"input motionevent MOVE {x} {y}" for x, y in curve.points[1:-1]),
+        "input motionevent UP 100 100",
+    ]
+    assert any(x != 100 for x, _y in curve.points[1:-1]), "the finger arcs off the straight line"
 
 
 def test_module_level_generate_keystroke_sequence_typo_probability() -> None:
