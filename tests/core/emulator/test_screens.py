@@ -11,11 +11,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from core.config import settings
 from core.emulator import telegram_app
 from core.emulator._errors import EmulatorError
 from core.emulator.ui_dump import classify, parse_dump, password_field
-from schemas.proxy import ProxySettings
 
 if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
@@ -137,51 +135,6 @@ async def test_the_password_goes_only_into_the_dumps_password_field(console: Con
         ["input", "text", "s3cret\\!"],
         ["input", "keyevent", "66"],
     ]
-
-
-@pytest.mark.asyncio
-async def test_the_proxy_is_the_apps_own_socks5_setting(
-    console: Console,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def proxy(_account_id: str) -> ProxySettings:
-        return ProxySettings(
-            proxy_type="socks5", host="10.0.0.5", port=1080, username="u", password="p&w"
-        )
-
-    monkeypatch.setattr(telegram_app, "fetch_account_proxy_settings", proxy)
-    _serve(console, _dump(_node("Connect Proxy", cls="android.widget.Button")))
-
-    await telegram_app.apply_account_proxy("emulator-5554", "acc")
-
-    link = next(call for call in console.shell_calls() if call[:2] == ["am", "start"])
-    assert link == [
-        "am",
-        "start",
-        "-a",
-        "android.intent.action.VIEW",
-        "-d",
-        "'tg://socks?server=10.0.0.5&port=1080&user=u&pass=p%26w'",
-        settings.emulator.telegram_package,
-    ]
-    assert console.shell_calls()[-1] == ["input", "tap", "50", "25"]
-
-
-@pytest.mark.asyncio
-async def test_an_https_proxy_is_refused_the_app_speaks_socks5_only(
-    console: Console,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def proxy(_account_id: str) -> ProxySettings:
-        return ProxySettings(proxy_type="https", host="10.0.0.5", port=443)
-
-    monkeypatch.setattr(telegram_app, "fetch_account_proxy_settings", proxy)
-
-    with pytest.raises(EmulatorError) as refused:
-        await telegram_app.apply_account_proxy("emulator-5554", "acc")
-
-    assert refused.value.code == "emulator_proxy_unsupported"
-    assert console.calls == []
 
 
 @pytest.mark.asyncio

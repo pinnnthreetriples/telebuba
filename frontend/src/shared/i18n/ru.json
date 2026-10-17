@@ -1881,6 +1881,7 @@
     "account_mobile_open_failed": "Не открылся на телефоне",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
+    "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",
     "warming_dialogue_live_reply": "Ответ реакцией или стикером",
     "warming_dialogue_live_opener": "Переслал пост собеседнику",
     "warming_pool_fill_done": "Поиск каналов завершён",
