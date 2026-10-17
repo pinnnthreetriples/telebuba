@@ -9,7 +9,6 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Literal, overload
 
 QWERTY_NEIGHBORS: dict[str, str] = {
     "a": "qwsz",
@@ -67,35 +66,13 @@ class KeystrokeEvent:
     delay_ms: int
     key_event: int | None = None
 
-    @overload
-    def __getitem__(self, item: Literal["action", "value", "char"]) -> str: ...
-    @overload
-    def __getitem__(self, item: Literal["delay_ms"]) -> int: ...
-    @overload
-    def __getitem__(self, item: Literal["key_event"]) -> int | None: ...
-    @overload
-    def __getitem__(self, item: str) -> str | int | None: ...
-    def __getitem__(self, item: str) -> str | int | None:
-        if item == "action":
-            return "KEYCODE_DEL" if self.key_event is not None else "char"
-        if item == "value":
-            return "BACKSPACE" if self.key_event is not None else self.char
-        if item == "delay_ms":
-            return self.delay_ms
-        if item == "key_event":
-            return self.key_event
-        if item == "char":
-            return self.char
-        raise KeyError(item)
-
-    def get(self, item: str, default: str | int | None = None) -> str | int | None:
-        try:
-            return self[item]
-        except KeyError:
-            return default
-
 
 _KEYCODE_DEL: int = 67
+
+
+def _on_element(value: int, low: int, high: int) -> int:
+    """Clamp to ``[low, high)``: Android bounds leave the right and bottom edge out."""
+    return max(low, min(high - 1, value)) if high > low else low
 
 
 class HumanInputEngine:
@@ -115,41 +92,15 @@ class HumanInputEngine:
         bx1, by1, bx2, by2 = bounds
         x1, x2 = min(bx1, bx2), max(bx1, bx2)
         y1, y2 = min(by1, by2), max(by1, by2)
-        w = x2 - x1
-        h = y2 - y1
-
-        if w <= 0:
-            tap_x = x1
-        else:
-            mu_x = x1 + 0.52 * w
-            sigma_x = w / 6.0
-            margin_x = min(max(1.0, 0.15 * w), w / 2.0)
-            min_x, max_x = x1 + margin_x, x2 - margin_x
-            if min_x > max_x:
-                min_x = max_x = (x1 + x2) / 2.0
-            raw_x = self.rng.gauss(mu_x, sigma_x)
-            tap_x = round(max(min_x, min(max_x, raw_x)))
-        tap_x = max(x1, min(x2, tap_x))
-
-        if h <= 0:
-            tap_y = y1
-        else:
-            mu_y = y1 + 0.54 * h
-            sigma_y = h / 6.0
-            margin_y = min(max(1.0, 0.15 * h), h / 2.0)
-            min_y, max_y = y1 + margin_y, y2 - margin_y
-            if min_y > max_y:
-                min_y = max_y = (y1 + y2) / 2.0
-            raw_y = self.rng.gauss(mu_y, sigma_y)
-            tap_y = round(max(min_y, min(max_y, raw_y)))
-        tap_y = max(y1, min(y2, tap_y))
+        tap_x = self._sample_axis(x1, x2, 0.52)
+        tap_y = self._sample_axis(y1, y2, 0.54)
 
         # Log-normal hold duration clamped to [48, 115] ms
         hold_raw = math.exp(self.rng.gauss(math.log(74.0), 0.22))
         hold_ms = round(max(48.0, min(115.0, hold_raw)))
 
-        slip_x = max(0, tap_x + self.rng.choice([-1, 0, 1, 2]))
-        slip_y = max(0, tap_y + self.rng.choice([-1, 0, 1, 2]))
+        slip_x = _on_element(tap_x + self.rng.choice([-1, 0, 1, 2]), x1, x2)
+        slip_y = _on_element(tap_y + self.rng.choice([-1, 0, 1, 2]), y1, y2)
 
         return TapEvent(
             x=tap_x,
@@ -159,6 +110,15 @@ class HumanInputEngine:
             hold_ms=hold_ms,
             bounds=bounds,
         )
+
+    def _sample_axis(self, low: int, high: int, bias: float) -> int:
+        """One coordinate on the element's pixels: Gaussian around ``bias``, 15% margin."""
+        size = high - low
+        if size <= 1:
+            return low
+        margin = min(max(1.0, 0.15 * size), size / 2.0)
+        raw = self.rng.gauss(low + bias * size, size / 6.0)
+        return _on_element(round(max(low + margin, min(high - margin, raw))), low, high)
 
     @staticmethod
     def _cubic_bezier(

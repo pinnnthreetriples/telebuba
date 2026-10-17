@@ -122,12 +122,12 @@ async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:
     escape_input_text(code)  # refuse untypeable text before touching the screen
     boxes = fields(nodes)
     await adb.human_tap(serial, _require(boxes[0] if boxes else None))
-    await adb.human_type(serial, code)
+    await adb.human_type(serial, code, typo_probability=0.0)
 
 
 async def enter_password(serial: str, nodes: list[UiNode], password: str) -> None:
     """Type the cloud password into the field the dump marks ``password``, then submit."""
     escape_input_text(password)  # refuse an untypeable password before touching the screen
     await adb.human_tap(serial, _require(password_field(nodes)))
-    await adb.human_type(serial, password)
+    await adb.human_type(serial, password, typo_probability=0.0)
     await adb.press(serial, adb.KEYCODE_ENTER)

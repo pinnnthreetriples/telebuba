@@ -207,11 +207,10 @@ async def human_swipe(
     duration_ms: int | None = None,
     engine: HumanInputEngine | None = None,
 ) -> None:
-    """Perform a human-like swipe with natural curvature and ease-in/ease-out timing.
+    """Swipe from ``start`` to ``end`` over a sampled duration (or ``duration_ms``).
 
-    The ADB endpoint swipe executes over biologically sampled duration
-    ``total_duration_ms`` derived from the Bézier ease curve (unless an explicit
-    ``duration_ms`` override is provided).
+    ``input swipe`` moves in a straight line at constant speed: only the trajectory's
+    end points and ``total_duration_ms`` reach the device, its arc and easing do not.
     """
     eng = engine or _default_input_engine
     trajectory = eng.generate_bezier_swipe(start, end)
