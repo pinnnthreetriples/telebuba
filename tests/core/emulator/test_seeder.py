@@ -171,7 +171,10 @@ def test_photos_carry_the_phones_exif_and_a_local_capture_time(
         stamp = photo.taken.strftime("%Y:%m:%d %H:%M:%S")
         assert exif[Base.Make] == spec.manufacturer
         assert exif[Base.Model] == spec.model
-        assert exif[Base.Software] == spec.build.incremental
+        if spec.manufacturer == "samsung":
+            assert exif[Base.Software] == spec.build.incremental
+        else:
+            assert Base.Software not in exif, "no made-up camera app version"
         assert exif[Base.DateTime] == stamp
         sub = exif.get_ifd(IFD.Exif)
         assert sub[Base.DateTimeOriginal] == stamp
