@@ -14,11 +14,14 @@ On its first boot it gets both, from the container's identity so they agree with
 The data is drawn from the container's serial, so a container made again for the same
 account gets the same people and photos. A marker in ``/data/local/tmp`` is written
 once both are in: a container with it is never seeded again, and a seeding cut short
-is redone at the next boot (contacts this seeding wrote are deleted first, photos
-overwritten by name).
+is redone at the next boot (contacts this seeding wrote are deleted first, and so are
+the photos an earlier try listed, whatever day they were dated).
 
 Contacts take one ``content`` call each (an app_process start), so the scripts run
-on the device as one ``sh`` file, not one ``adb shell`` per row.
+on the device as one ``sh`` file, not one ``adb shell`` per row. ``content`` exits 0
+even when the provider refused a row, so every call goes through a wrapper that fails
+on the error it prints, and a script stops at its first failure: the marker is never
+written over a half-filled address book.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ import random
 import string
 import tempfile
 import unicodedata
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
@@ -45,6 +49,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.config import settings
 from core.emulator import adb
 from core.emulator._blueprints import CONFIGS_DIR
+from core.emulator._errors import EmulatorError
 from core.emulator._text import shell_quote
 
 if TYPE_CHECKING:
@@ -57,7 +62,19 @@ _DEFAULT_PHONE_REGION = "US"
 
 MARKER = "/data/local/tmp/.telebuba_seeded"
 _SCRIPT = "/data/local/tmp/telebuba_seed.sh"
+# The photos the latest try put in, so a redo removes them even when dated otherwise.
+_PHOTO_LIST = "/data/local/tmp/.telebuba_photos"
 CAMERA_DIR = "/sdcard/DCIM/Camera"
+
+# ``content`` prints a provider's refusal (or its own usage error) and still exits 0:
+# ``c`` is ``content`` failing on that. Every script starts with it.
+_SCRIPT_HEAD = (
+    "c() {",
+    '  out=$(content "$@" 2>&1) || { printf \'%s\\n\' "$out" >&2; return 1; }',
+    "  case $out in *rror*|*xception*) printf '%s\\n' \"$out\" >&2; return 1 ;; esac",
+    '  [ -z "$out" ] || printf \'%s\\n\' "$out"',
+    "}",
+)
 
 _CONTACTS = "content://com.android.contacts"
 # Every raw contact this seeding writes carries it, so a redo can delete exactly those.
@@ -87,6 +104,7 @@ _JPEG_QUALITY = (88, 95)
 _ISO = (50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 640)
 _EXPOSURE_DENOMINATORS = (30, 50, 60, 100, 120, 200, 250, 500, 1000)
 _EXIF_TIME = "%Y:%m:%d %H:%M:%S"
+_EXIF_VERSION = b"0232"
 
 
 class _NamePack(BaseModel):
@@ -142,13 +160,15 @@ def mobile_number(country: str | None, rng: random.Random) -> phonenumbers.Phone
     # Drawn whole first, so operator prefixes vary like a real address book's; a country
     # whose valid numbers are too sparse for that keeps more of the example's prefix. A
     # shared calling code (+1, +7) must still land in ``region``.
+    # Valid *for the region*, not "its region is": a territory sharing a calling code
+    # (+358 Åland, +39 Vatican, +44 Isle of Man) has numbers ``region_code_for_number``
+    # names the main country for, which left it one contact after seconds of tries.
     for keep in _PHONE_PREFIX_KEPT:
         for _ in range(_PHONE_TRIES):
             tail = "".join(rng.choice(string.digits) for _ in range(len(known) - keep))
             number = phonenumbers.parse(f"+{example.country_code}{known[:keep]}{tail}")
             if (
-                phonenumbers.is_valid_number(number)
-                and phonenumbers.region_code_for_number(number) == region
+                phonenumbers.is_valid_number_for_region(number, region)
                 and phonenumbers.number_type(number) in _MOBILE_TYPES
             ):
                 return number
@@ -205,27 +225,38 @@ def _bind(column: str, kind: str, value: str) -> str:
 def _data_row(mimetype: str, *binds: str) -> str:
     return " ".join(
         (
-            f"content insert --uri {_CONTACTS}/data --bind raw_contact_id:i:$id",
+            f"c insert --uri {_CONTACTS}/data --bind raw_contact_id:i:$id",
             _bind("mimetype", "s", f"vnd.android.cursor.item/{mimetype}"),
             *binds,
+            "|| exit 1",
         )
     )
 
 
+def _fail(why: str) -> str:
+    return "{ echo " + shell_quote(f"telebuba: {why}") + " >&2; exit 1; }"
+
+
 def contacts_script(contacts: list[Contact]) -> list[str]:
-    """The ``sh`` lines that replace this seeding's contacts with ``contacts``."""
+    """The ``sh`` lines that replace this seeding's contacts with ``contacts``.
+
+    Every line stops the script when it fails, and the last one counts the tagged
+    rows: nothing ``content`` refused goes unnoticed.
+    """
     tagged = shell_quote(f"sync1='{_SYNC_TAG}'")
+    query = f"c query --uri {_CONTACTS}/raw_contacts --projection _id --where {tagged}"
     lines = [
-        f"content delete --uri '{_CONTACTS}/raw_contacts?caller_is_syncadapter=true'"
-        f" --where {tagged}"
+        f"c delete --uri '{_CONTACTS}/raw_contacts?caller_is_syncadapter=true'"
+        f" --where {tagged} || exit 1"
     ]
     for contact in contacts:
         lines += [
-            f"content insert --uri {_CONTACTS}/raw_contacts --bind account_type:n:"
-            f" --bind account_name:n: {_bind('sync1', 's', _SYNC_TAG)}",
+            f"c insert --uri {_CONTACTS}/raw_contacts --bind account_type:n:"
+            f" --bind account_name:n: {_bind('sync1', 's', _SYNC_TAG)} || exit 1",
             # The raw contact just written: the newest one carrying the tag.
-            f"id=$(content query --uri {_CONTACTS}/raw_contacts --projection _id"
-            f" --where {tagged} --sort '_id DESC' | head -n 1 | sed 's/.*_id=//')",
+            f"id=$({query} --sort '_id DESC') || exit 1",
+            """id=$(printf '%s\\n' "$id" | head -n 1 | sed 's/.*_id=//')""",
+            f"case $id in ''|*[!0-9]*) {_fail('no raw contact id')} ;; esac",
             _data_row(
                 "name",
                 _bind("data1", "s", f"{contact.first} {contact.last}"),
@@ -254,6 +285,11 @@ def contacts_script(contacts: list[Contact]) -> list[str]:
                     _bind("data2", "i", str(_ORG_WORK)),
                 )
             )
+    lines += [
+        f"rows=$({query}) || exit 1",
+        f"""[ "$(printf '%s\\n' "$rows" | grep -c '^Row:')" -eq {len(contacts)} ]"""
+        f" || {_fail('contacts missing')}",
+    ]
     return lines
 
 
@@ -288,9 +324,12 @@ def photo_exif(spec: ContainerSpec, taken: datetime, rng: random.Random) -> Imag
     exif[Base.DateTime] = stamp
     exif[Base.Orientation] = 1
     sub = exif.get_ifd(IFD.Exif)
+    sub[Base.ExifVersion] = _EXIF_VERSION
     sub[Base.DateTimeOriginal] = stamp
     sub[Base.DateTimeDigitized] = stamp
-    sub[Base.OffsetTimeOriginal] = f"{offset[:3]}:{offset[3:]}"
+    # An offset for each time above; MediaStore dates the photo by the original's.
+    for tag in (Base.OffsetTime, Base.OffsetTimeOriginal, Base.OffsetTimeDigitized):
+        sub[tag] = f"{offset[:3]}:{offset[3:]}"
     sub[Base.FNumber] = _rational(spec.camera.f_number)
     sub[Base.FocalLength] = _rational(spec.camera.focal_length_mm)
     sub[Base.ISOSpeedRatings] = rng.choice(_ISO)
@@ -344,36 +383,66 @@ def make_photos(
     return photos
 
 
+def gallery_prep_script(photos: list[Photo]) -> list[str]:
+    """The ``sh`` lines run before the push: an earlier try's photos out, these listed.
+
+    The list is written before any file is pushed, so a try cut short anywhere leaves
+    a list naming everything it may have put in.
+    """
+    names = " ".join(shell_quote(photo.name) for photo in photos)
+    return [
+        f"mkdir -p {CAMERA_DIR} || exit 1",
+        f"if [ -f {_PHOTO_LIST} ]; then"
+        f' while read -r f; do rm -f "{CAMERA_DIR}/$f"; done < {_PHOTO_LIST}; fi',
+        f"printf '%s\\n' {names} > {_PHOTO_LIST} || exit 1",
+    ]
+
+
 def gallery_script(photos: list[Photo]) -> list[str]:
     """The ``sh`` lines that date the pushed photos and have MediaStore index them."""
-    lines = [
-        f"touch -t {photo.taken.strftime('%Y%m%d%H%M.%S')} {CAMERA_DIR}/{photo.name}"
-        for photo in photos
-    ]
-    # ``scan_volume`` (Android 11+) indexes the whole volume; the broadcast is the fallback.
+    # Stamped in UTC under ``TZ=UTC0``, so the mtime is right whatever zone the device
+    # is set to. ``-c`` creates nothing: a photo missing (or empty) fails the script.
+    lines = []
+    for photo in photos:
+        path = f"{CAMERA_DIR}/{photo.name}"
+        stamp = photo.taken.astimezone(UTC).strftime("%Y%m%d%H%M.%S")
+        lines.append(f"TZ=UTC0 touch -c -t {stamp} {path} && [ -s {path} ] || exit 1")
+    # ``scan_volume`` (MediaProvider's own call) indexes the volume; ``c`` fails when the
+    # provider refuses it, and the per-file scan broadcast is the fallback.
     scan_files = " ".join(f"{CAMERA_DIR}/{photo.name}" for photo in photos)
     lines.append(
-        "content call --uri content://media --method scan_volume --arg external_primary"
-        f" || for f in {scan_files}; do"
-        " am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://$f; done"
+        "c call --uri content://media --method scan_volume --arg external_primary"
+        f" >/dev/null || for f in {scan_files}; do"
+        " am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://$f"
+        " >/dev/null || exit 1; done"
     )
     return lines
 
 
 async def _run_script(serial: str, lines: list[str]) -> None:
-    with tempfile.TemporaryDirectory(prefix="telebuba-seed-") as scratch:
-        local = Path(scratch) / "seed.sh"
-        local.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-        await adb.push(serial, str(local), remote=_SCRIPT)
+    """Push ``lines`` as one ``sh`` file, run it, and remove it whatever happened.
+
+    The removal is best effort: on a device gone mid-script it fails too, and its error
+    must not hide the script's own.
+    """
     try:
+        with tempfile.TemporaryDirectory(prefix="telebuba-seed-") as scratch:
+            local = Path(scratch) / "seed.sh"
+            script = "\n".join((*_SCRIPT_HEAD, *lines)) + "\n"
+            local.write_text(script, encoding="utf-8", newline="\n")
+            await adb.push(serial, str(local), remote=_SCRIPT)
         await adb.shell(serial, "sh", _SCRIPT, seconds=settings.emulator.install_timeout_seconds)
     finally:
-        await adb.shell(serial, "rm", "-f", _SCRIPT)
+        with suppress(EmulatorError):
+            await adb.shell(serial, "rm", "-f", _SCRIPT)
 
 
 async def seed_contacts(serial: str, spec: ContainerSpec, count: int | None = None) -> None:
     """Write the contacts of ``spec``'s proxy country into the container's address book."""
-    contacts = make_contacts(spec.region.country, _rng(spec, "contacts"), count)
+    # Off the event loop: a sparse numbering plan keeps ``phonenumbers`` busy a while.
+    contacts = await asyncio.to_thread(
+        make_contacts, spec.region.country, _rng(spec, "contacts"), count
+    )
     await _run_script(serial, contacts_script(contacts))
 
 
@@ -392,7 +461,7 @@ async def seed_gallery(
     """Put ``spec``'s phone's photos into ``DCIM/Camera``, dated, and have them indexed."""
     rng = _rng(spec, "gallery")
     photos = await asyncio.to_thread(make_photos, spec, rng, now or datetime.now(UTC), count)
-    await adb.shell(serial, "mkdir", "-p", CAMERA_DIR)
+    await _run_script(serial, gallery_prep_script(photos))
     with tempfile.TemporaryDirectory(prefix="telebuba-gallery-") as scratch:
         paths = await asyncio.to_thread(_write_photos, Path(scratch), photos)
         await adb.push(serial, *paths, remote=f"{CAMERA_DIR}/")

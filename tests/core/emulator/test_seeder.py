@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
 
 _SERIAL = "127.0.0.1:5600"
+_SCRIPT = _seeder._SCRIPT
 _NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 
 
@@ -106,7 +107,7 @@ def test_the_contacts_script_replaces_only_this_seedings_rows() -> None:
 
     lines = contacts_script(contacts)
 
-    assert lines[0].startswith("content delete --uri ")
+    assert lines[0].startswith("c delete --uri ")
     assert "caller_is_syncadapter=true" in lines[0]
     raw = [line for line in lines if "/raw_contacts --bind" in line]
     assert len(raw) == 2
@@ -114,9 +115,14 @@ def test_the_contacts_script_replaces_only_this_seedings_rows() -> None:
     data = [line for line in lines if "/data --bind raw_contact_id:i:$id" in line]
     assert len(data) == 2 + 2 + 1 + 1  # name and phone each, then Jürgen's e-mail and company
     # A quote in a name closes, escapes and reopens; nothing else is interpreted by sh.
-    assert "--bind 'data1:s:Jürgen O'\\''Neil'" in lines[3]
-    assert "'mimetype:s:vnd.android.cursor.item/phone_v2'" in lines[4]
-    assert "'data2:i:2'" in lines[4]
+    assert "--bind 'data1:s:Jürgen O'\\''Neil'" in lines[5]
+    assert "'mimetype:s:vnd.android.cursor.item/phone_v2'" in lines[6]
+    assert "'data2:i:2'" in lines[6]
+    # ``content`` exits 0 on a refusal: every call is the failing wrapper, and stops.
+    calls = [line for line in lines if line.startswith(("c ", "id=$(c ", "rows=$(c "))]
+    assert len(calls) == 1 + 2 * 2 + len(data) + 1
+    assert all(line.endswith("|| exit 1") for line in calls)
+    assert "-eq 2 ]" in lines[-1], "the script ends by counting every contact in"
     assert any("email_v2" in line and "j.oneil@gmx.de" in line for line in lines)
     assert any("organization" in line and "Bäckerei" in line for line in lines)
 
@@ -173,6 +179,10 @@ def test_photos_carry_the_phones_exif_and_a_local_capture_time(
         sub = exif.get_ifd(IFD.Exif)
         assert sub[Base.DateTimeOriginal] == stamp
         assert sub[Base.DateTimeDigitized] == stamp
+        assert sub[Base.ExifVersion] == b"0232"
+        offset = photo.taken.strftime("%z")
+        for tag in (Base.OffsetTime, Base.OffsetTimeOriginal, Base.OffsetTimeDigitized):
+            assert sub[tag] == f"{offset[:3]}:{offset[3:]}"
         assert float(sub[Base.FNumber]) == pytest.approx(spec.camera.f_number)
         assert float(sub[Base.FocalLength]) == pytest.approx(spec.camera.focal_length_mm)
         assert sub[Base.ISOSpeedRatings] in _seeder._ISO
@@ -194,9 +204,11 @@ def test_the_gallery_script_dates_every_file_then_has_mediastore_index_them() ->
     lines = gallery_script(photos)
 
     for photo, line in zip(photos, lines, strict=False):
-        stamp = photo.taken.strftime("%Y%m%d%H%M.%S")
-        assert line == f"touch -t {stamp} {CAMERA_DIR}/{photo.name}"
-    assert "--method scan_volume --arg external_primary" in lines[-1]
+        # Stamped in UTC under TZ=UTC0: right whatever zone the device is set to.
+        stamp = photo.taken.astimezone(UTC).strftime("%Y%m%d%H%M.%S")
+        path = f"{CAMERA_DIR}/{photo.name}"
+        assert line == f"TZ=UTC0 touch -c -t {stamp} {path} && [ -s {path} ] || exit 1"
+    assert lines[-1].startswith("c call --uri content://media --method scan_volume")
     assert "MEDIA_SCANNER_SCAN_FILE" in lines[-1], "the broadcast when scan_volume fails"
 
 
@@ -228,13 +240,14 @@ async def test_a_fresh_container_is_seeded_then_marked(
     shells = console.shell_calls()
     assert shells[0] == ["ls", "-a", "/data/local/tmp"]
     assert shells[-1] == ["touch", MARKER], "marked only once both are in"
-    assert ["mkdir", "-p", CAMERA_DIR] in shells
-    assert shells.count(["sh", _seeder._SCRIPT]) == 2  # contacts, then the gallery's dates
+    # Contacts, then the gallery's prep (an earlier try's photos out), then its dates.
+    assert shells.count(["sh", _SCRIPT]) == 3
     pushes = [call for call in console.calls if "push" in call]
-    assert pushes[1][-1] == f"{CAMERA_DIR}/"
-    assert 12 <= len(pushes[1]) - 5 <= 20  # adb -s <serial> push <files...> <dir>
+    assert [push[-1] for push in pushes] == [_SCRIPT, _SCRIPT, f"{CAMERA_DIR}/", _SCRIPT]
+    photos = pushes[2]
+    assert 12 <= len(photos) - 5 <= 20  # adb -s <serial> push <files...> <dir>
     jpeg_start = bytes.fromhex("ffd8")
-    assert heads.count(jpeg_start) == len(pushes[1]) - 5, "the photos pushed are JPEGs"
+    assert heads.count(jpeg_start) == len(photos) - 5, "the photos pushed are JPEGs"
 
 
 @pytest.mark.asyncio
@@ -262,7 +275,40 @@ async def test_a_failed_seeding_leaves_no_marker_and_no_script(console: Console)
 
     shells = console.shell_calls()
     assert ["touch", MARKER] not in shells
-    assert shells[-1] == ["rm", "-f", _seeder._SCRIPT]
+    assert shells[-1] == ["rm", "-f", _SCRIPT]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failing", ["push", "sh"])
+async def test_the_script_is_removed_and_its_own_error_kept_whatever_failed(
+    console: Console, failing: str
+) -> None:
+    def answer(argv: list[str]) -> str:
+        if failing in argv:
+            code = "emulator_command_timeout"
+            raise EmulatorError(code)
+        if argv[-3:] == ["rm", "-f", _SCRIPT]:
+            code = "emulator_command_failed"  # the device is gone by now
+            raise EmulatorError(code)
+        return _device(seeded=False)(argv)
+
+    console.answer = answer
+
+    with pytest.raises(EmulatorError) as raised:
+        await seed_device_if_needed(_SERIAL, _spec())
+
+    assert raised.value.code == "emulator_command_timeout"
+    assert console.shell_calls()[-1] == ["rm", "-f", _SCRIPT]
+
+
+@pytest.mark.parametrize("country", ["AX", "VA", "IM", "CC"])
+def test_a_territory_sharing_its_calling_code_gets_a_full_address_book(country: str) -> None:
+    contacts = make_contacts(country, _random(11), 30)
+
+    assert len(contacts) == 30
+    for contact in contacts:
+        number = phonenumbers.parse(contact.phone, country)
+        assert phonenumbers.is_valid_number_for_region(number, country), contact.phone
 
 
 def test_a_country_with_too_few_numbers_gets_fewer_contacts_not_a_hang(

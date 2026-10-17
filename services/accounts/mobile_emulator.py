@@ -217,15 +217,18 @@ async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
 
     Seeding only makes the phone look used: a failure is logged and the sign-in goes
     on. The marker is written only once both are in, so the next boot tries again.
+    Anything but a cancellation is caught: a broken name file or a full host disk
+    must not stop the sign-in either.
     """
     try:
         await seed_device_if_needed(serial, spec)
-    except EmulatorError as exc:
+    except Exception as exc:  # noqa: BLE001 - seeding must never fail the open
+        reason = exc.code if isinstance(exc, EmulatorError) else type(exc).__name__
         await log_event(
             "WARNING",
             "account_mobile_seed_failed",
             account_id=account_id,
-            extra={"reason": exc.code},
+            extra={"reason": reason},
         )
 
 
