@@ -198,3 +198,14 @@ async def test_enter_code_calls_human_tap_and_human_type(console: Console) -> No
     assert len(swipes) == 1
     typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
     assert "".join(typed) == "12345"
+
+
+@pytest.mark.asyncio
+async def test_an_untypeable_code_is_refused_before_the_screen_is_touched(
+    console: Console,
+) -> None:
+    with pytest.raises(EmulatorError) as refused:
+        await telegram_app.enter_code("emulator-5554", parse_dump(CODE), "100%пароль")
+
+    assert refused.value.code == "emulator_text_unsupported"
+    assert console.calls == []

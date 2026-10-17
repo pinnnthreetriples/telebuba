@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 from core.emulator._errors import EmulatorError
-from core.emulator._input import HumanInputEngine, SwipeTrajectory, TapEvent
+from core.emulator._input import HumanInputEngine, KeystrokeEvent, SwipeTrajectory, TapEvent
 from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
 from core.emulator._text import escape_input_text
@@ -45,6 +45,7 @@ __all__ = [
     "EmulatorError",
     "HumanInputEngine",
     "Instance",
+    "KeystrokeEvent",
     "SwipeTrajectory",
     "TapEvent",
     "adb_serial",
