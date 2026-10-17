@@ -40,6 +40,7 @@ from core.emulator.redroid import (
     image_for,
     launch_instance,
     list_containers,
+    refresh_identity,
 )
 
 if TYPE_CHECKING:
@@ -106,6 +107,8 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
             await create_instance(name, spec, index=index, gateway=gateway)
+        else:
+            await refresh_identity(name, spec)  # the proxy may have moved country
         await launch_instance(index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._process import docker, run_command
+from core.emulator._profile import aosp_boot_properties
 
 if TYPE_CHECKING:
     from core.emulator._profile import ContainerSpec
@@ -36,8 +37,9 @@ GATEWAY_LABEL = "telebuba.gateway"
 INDEX_LABEL = "telebuba.index"
 ADB_PORT = 5555
 _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
-# Where the container's identity goes: init reads ``/system_dlkm/etc/build.prop``.
-_IDENTITY_DIR = "/system_dlkm/"
+# Where the container's identity goes (see ``_give_identity``), after this mark.
+_IDENTITY_FILE = "/product/etc/build.prop"
+_IDENTITY_MARK = "# telebuba: the phone this container presents\n"
 
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
@@ -91,33 +93,46 @@ async def _name_of(index: int) -> str:
 
 
 def build_prop(spec: ContainerSpec) -> str:
-    """The ``build.prop`` that makes Android report ``spec``'s maker and model.
+    """The ``build.prop`` that makes Android report ``spec``'s phone, firmware and region.
 
-    ``Build.MANUFACTURER`` / ``Build.MODEL`` read these two properties; set here, they
-    win over the image's own (``redroid``). They cannot go on the container's command
-    line: redroid's first-stage init re-splits it on spaces (``Pixel 7`` -> ``Pixel``).
+    ``Build.*`` read these properties (``core.emulator._profile.aosp_boot_properties``);
+    set here, they win over the image's own (``redroid``). They cannot go on the
+    container's command line: redroid's first-stage init re-splits it on spaces
+    (``Pixel 7`` -> ``Pixel``).
     """
-    lines = (f"ro.product.manufacturer={spec.manufacturer}", f"ro.product.model={spec.model}")
+    lines = [f"{key}={value}" for key, value in aosp_boot_properties(spec).items()]
     if any(char in line for line in lines for char in "\r\n"):
         raise EmulatorError(_EMULATOR_DEVICE_UNKNOWN)
     return "\n".join(lines) + "\n"
 
 
-def _write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+def with_identity(image_prop: str, identity: str) -> str:
+    """The product ``build.prop``: the image's own lines, then ``identity`` (ours replaced)."""
+    own = image_prop.split(_IDENTITY_MARK, 1)[0]
+    if own and not own.endswith("\n"):
+        own += "\n"
+    return own + _IDENTITY_MARK + identity
+
+
+def _rewrite(path: Path, identity: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    path.write_text(with_identity(text, identity), encoding="utf-8", newline="\n")
 
 
 async def _give_identity(name: str, identity: str) -> None:
-    """Copy ``identity`` (a ``build_prop``) into the stopped container, before its first boot.
+    """Write ``identity`` (a ``build_prop``) into the stopped container, before it boots.
 
-    ``/system_dlkm/etc/build.prop`` is read by init at boot and is absent from the
-    images, so nothing of the image's is replaced.
+    init reads the product partition's ``build.prop`` LAST of all, and a property read
+    later wins over the same one read earlier: only there do ours beat the image's own
+    ``ro.product.vendor.*`` / ``ro.vendor.build.*`` (read from ``/vendor``, after
+    ``/system``). The image's lines are kept; our block after the mark replaces the one
+    an earlier start wrote.
     """
     with tempfile.TemporaryDirectory(prefix="telebuba-redroid-") as scratch:
-        etc = Path(scratch) / "etc"
-        await asyncio.to_thread(_write_text, etc / "build.prop", identity)
-        await docker("cp", str(etc), f"{name}:{_IDENTITY_DIR}")
+        local = Path(scratch) / "build.prop"
+        await docker("cp", f"{name}:{_IDENTITY_FILE}", str(local))
+        await asyncio.to_thread(_rewrite, local, identity)
+        await docker("cp", str(local), f"{name}:{_IDENTITY_FILE}")
 
 
 def image_for(spec: ContainerSpec) -> str:
@@ -133,12 +148,12 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
 
     It takes the pod's ``index`` and joins the network namespace of the container
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
-    without one is refused before anything is created. Maker and model go in through
-    ``build_prop``. redroid has no telephony, so ``spec.imei`` has nowhere to go.
+    without one is refused before anything is created. The phone goes in through
+    ``build_prop``; its screen and serial number on the command line (neither has a
+    space). redroid has no telephony, so ``spec.imei`` has nowhere to go.
     """
     image = image_for(spec)
     identity = build_prop(spec)  # refused before anything is created
-    width, height, dpi = settings.emulator.resolution.split(",")
     await docker(
         "create",
         "--name",
@@ -155,13 +170,24 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
         "--memory",
         f"{settings.emulator.memory_mb}m",
         image,
-        f"androidboot.redroid_width={width}",
-        f"androidboot.redroid_height={height}",
-        f"androidboot.redroid_dpi={dpi}",
+        f"androidboot.redroid_width={spec.screen.width}",
+        f"androidboot.redroid_height={spec.screen.height}",
+        f"androidboot.redroid_dpi={spec.screen.dpi}",
+        f"androidboot.serialno={spec.serial}",
         "androidboot.use_memfd=true",
     )
     await _give_identity(name, identity)
     return Instance(index, name, running=False)
+
+
+async def refresh_identity(name: str, spec: ContainerSpec) -> None:
+    """Rewrite a stopped container's ``build_prop`` before it boots again.
+
+    The phone is the same (its serial and IMEI follow the account id), but the
+    account's proxy may have changed country since, and the timezone and carrier
+    follow it.
+    """
+    await _give_identity(name, build_prop(spec))
 
 
 async def launch_instance(index: int) -> None:

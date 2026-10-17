@@ -38,8 +38,7 @@ class EmulatorSettings(BaseSettings):
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
-    # ``width,height,dpi`` of the screen; CPU cores and RAM of a new container.
-    resolution: str = Field(default="720,1280,320", pattern=r"^\d{3,4},\d{3,4},\d{3}$")
+    # CPU cores and RAM of a new container (its screen is its phone's, ``configs/``).
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
     # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android

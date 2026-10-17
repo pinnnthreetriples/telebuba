@@ -37,9 +37,6 @@ async def test_the_soft_start_reaches_six_people_a_day(
     telegram: FakeTelegram, clock: Clock
 ) -> None:
     people = tuple(f"@person{index}" for index in range(8))
-    # Starts as a day begins: from the wall clock, a run just before DAY_START_HOUR
-    # spread the six across two days (CI at 08:37 UTC failed with 4 == 6).
-    clock.value = next_day_start(clock.now())
     campaign_id = await seed(
         mode="priming", media=[], targets=people, ramp_up=True, dialogs_per_day=40
     )

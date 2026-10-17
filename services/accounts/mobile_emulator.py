@@ -12,6 +12,9 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
   password ``input text`` cannot type (found out at the 2FA screen, it would cost a
   login code already sent);
 * one start at a time per account (a second one answers ``emulator_busy``);
+* the container is a real phone's firmware with the proxy country's timezone and
+  carrier (the phone number's country while the proxy has none on record); a
+  stopped container gets them rewritten before it boots, as the proxy may have moved;
 * every start gives the gateway the account's CURRENT proxy before Android runs;
 * a running pod is used as it stands only while its gateway runs the current proxy;
   one on another proxy (or whose gateway died) is stopped and started again, and a
@@ -59,6 +62,7 @@ from core.emulator import (
     wait_for_boot,
 )
 from core.logging import log_event
+from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
 from services.accounts._emulator_sign_in import sign_in
 from services.accounts._result import AccountActionError
@@ -165,7 +169,9 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
 async def _open(
     account: AccountRead, fingerprint: DeviceFingerprint, proxy: ProxySettings
 ) -> OpenMobileResult:
-    spec = container_spec(fingerprint)
+    spec = container_spec(
+        fingerprint, account.proxy_country_code or country_for_phone(account.phone)
+    )
     name = _container_name(account.account_id)
     instance = await find_instance(name)
     if instance is not None and instance.running:

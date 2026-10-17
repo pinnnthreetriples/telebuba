@@ -1,0 +1,24 @@
+{
+  "brand": "samsung",
+  "manufacturer": "samsung",
+  "model": "SM-A556B",
+  "product": "a55xnaxx",
+  "device": "a55x",
+  "serial_prefix": "R5C",
+  "serial_length": 11,
+  "serial_charset": "alnum",
+  "screen": {
+    "width": 720,
+    "height": 1560,
+    "dpi": 300
+  },
+  "builds": {
+    "34": {
+      "release": "14",
+      "build_id": "UP1A.231005.007",
+      "incremental": "A556BXXS2AXD3",
+      "security_patch": "2024-04-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/a55x/a55xnaxx-user-14-UP1A.231005.007-A556BXXS2AXD3-release-keys"
+    }
+  }
+}

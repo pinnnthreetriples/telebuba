@@ -9,17 +9,37 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
+from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator import adb, redroid
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import ContainerSpec
+from core.emulator._profile import aosp_boot_properties, container_spec
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from tests.core.emulator.conftest import Console
 
-_SPEC = ContainerSpec("Google", "Pixel 7", 34, "490154203237518")
+_SPEC = container_spec(
+    generate_android_fingerprint("acc", None).model_copy(
+        update={"device_model": "GooglePixel 7", "system_version": "SDK 33"},
+    ),
+    "DE",
+)
 _PS = "0|telebuba-acc-1|running\n2|telebuba-acc-2|exited\n|stray|running\n"
+_IMAGE_PROP = "ro.product.product.model=redroid13_x86_64\nro.build.characteristics=default"
+
+
+def _product_prop(image_prop: str, written: list[str]) -> Callable[[list[str]], str]:
+    """``docker cp`` out hands over ``image_prop``; ``docker cp`` in records what came back."""
+
+    def answer(argv: list[str]) -> str:
+        if argv[1] == "cp" and argv[2].startswith("telebuba-"):  # container -> host
+            Path(argv[3]).write_text(image_prop, encoding="utf-8")
+        elif argv[1] == "cp":  # read while the scratch copy still exists
+            written.append(Path(argv[2]).read_text(encoding="utf-8"))
+        return _PS if argv[1] == "ps" else ""
+
+    return answer
 
 
 @pytest.fixture
@@ -59,13 +79,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     ps: Console,
 ) -> None:
     copied: list[str] = []
-
-    def answer(argv: list[str]) -> str:
-        if argv[1] == "cp":  # read while the scratch copy still exists
-            copied.append((Path(argv[2]) / "build.prop").read_text(encoding="utf-8"))
-        return _PS if argv[1] == "ps" else ""
-
-    ps.answer = answer
+    ps.answer = _product_prop(_IMAGE_PROP, copied)
 
     instance = await redroid.create_instance(
         "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net"
@@ -77,19 +91,25 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
     assert "--privileged" in create
-    image = create.index("redroid/redroid:14.0.0-latest")
+    image = create.index("redroid/redroid:13.0.0-latest")
     assert create[image + 1 :] == [
-        "androidboot.redroid_width=720",
-        "androidboot.redroid_height=1280",
-        "androidboot.redroid_dpi=320",
+        f"androidboot.redroid_width={_SPEC.screen.width}",
+        f"androidboot.redroid_height={_SPEC.screen.height}",
+        f"androidboot.redroid_dpi={_SPEC.screen.dpi}",
+        f"androidboot.serialno={_SPEC.serial}",
         "androidboot.use_memfd=true",
     ]
-    copy = _docker_calls(ps, "cp")[0]
-    assert copy[3] == "telebuba-new:/system_dlkm/"
-    assert copied == ["ro.product.manufacturer=Google\nro.product.model=Pixel 7\n"], (
+    take, give = _docker_calls(ps, "cp")
+    assert take[2] == give[3] == "telebuba-new:/product/etc/build.prop", "read last by init"
+    ours = "".join(f"{key}={value}\n" for key, value in aosp_boot_properties(_SPEC).items())
+    (written,) = copied
+    assert written.startswith(_IMAGE_PROP + "\n"), "the image's own lines are kept"
+    assert written.endswith(ours), "ours come after them, so they win"
+    assert "ro.product.product.model=Pixel 7\n" in ours
+    assert "ro.product.model=Pixel 7\n" in ours, (
         "a model with a space survives: it is not on the command line"
     )
-    assert ps.calls.index(copy) > ps.calls.index(create), "copied before the first boot"
+    assert ps.calls.index(give) > ps.calls.index(create), "written before the first boot"
 
 
 @pytest.mark.asyncio
@@ -117,6 +137,21 @@ async def test_an_identity_that_would_add_properties_is_refused(ps: Console) -> 
 
     assert refused.value.code == "emulator_device_unknown"
     assert ps.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -> None:
+    first = redroid.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC))
+    copied: list[str] = []
+    ps.answer = _product_prop(first, copied)
+    moved = _SPEC._replace(region=_SPEC.region._replace(timezone="Europe/Warsaw"))
+
+    await redroid.refresh_identity("telebuba-acc-2", moved)
+
+    (written,) = copied
+    assert written == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(moved))
+    assert "persist.sys.timezone=Europe/Warsaw\n" in written
+    assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
 
 
 @pytest.mark.asyncio

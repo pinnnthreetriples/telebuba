@@ -1,19 +1,27 @@
-"""The container's identity, taken from the account's mobile fingerprint.
+"""The container's identity, taken from the account's mobile fingerprint and proxy country.
 
 The container must BE the phone the mobile fingerprint describes: the same
-``Build.MANUFACTURER`` and ``Build.MODEL`` and the same Android SDK. The IMEI is a
-test identifier: 15 digits whose last is the Luhn check digit of the other 14 (kept
-with the spec; redroid has no telephony to give it to).
+``Build.MANUFACTURER`` and ``Build.MODEL``, the same Android SDK, and that phone's real
+firmware for the SDK (``core.emulator._blueprints``), so every ``ro.product.*`` and
+``ro.build.*`` an app can read names one real device. Its timezone and carrier follow
+the proxy country, its language the fingerprint (``core.emulator._geo``).
+
+The serial number and the IMEI are derived from the account id, so the account keeps
+its phone when its container is made again. The IMEI is a test identifier: 15 digits
+whose last is the Luhn check digit of the other 14 (kept with the spec; redroid has no
+telephony to give it to).
 """
 
 from __future__ import annotations
 
-import secrets
+import hashlib
 import string
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.device_fingerprint_android import ANDROID_DEVICES, android_device_model
+from core.emulator._blueprints import OemBuild, Screen, find_build
 from core.emulator._errors import EmulatorError
+from core.emulator._geo import Region, region_for
 
 if TYPE_CHECKING:
     from schemas.device_fingerprint import DeviceFingerprint
@@ -22,8 +30,11 @@ if TYPE_CHECKING:
 _EMULATOR_DEVICE_UNKNOWN: EmulatorRefusalCode = "emulator_device_unknown"
 
 _IMEI_LENGTH = 15
-# "35" is a GSMA reporting-body prefix; the rest of the body is random.
+_SERIAL_ALPHABETS = {"alnum": string.digits + string.ascii_uppercase, "hex": "0123456789abcdef"}
+# "35" is a GSMA reporting-body prefix; the rest of the body is derived.
 _IMEI_PREFIX = "35"
+# Every partition a ``ro.product.<partition>.*`` / ``ro.<partition>.build.*`` exists for.
+_PARTITIONS = ("", "system.", "system_ext.", "product.", "vendor.", "odm.")
 
 
 class ContainerSpec(NamedTuple):
@@ -31,6 +42,13 @@ class ContainerSpec(NamedTuple):
     model: str
     sdk: int
     imei: str
+    brand: str
+    product: str
+    device: str
+    serial: str
+    screen: Screen
+    build: OemBuild
+    region: Region
 
 
 def luhn_check_digit(body: str) -> str:
@@ -46,19 +64,37 @@ def luhn_check_digit(body: str) -> str:
     return str((10 - total % 10) % 10)
 
 
-def generate_imei() -> str:
-    body = _IMEI_PREFIX + "".join(
-        secrets.choice(string.digits) for _ in range(_IMEI_LENGTH - len(_IMEI_PREFIX) - 1)
-    )
-    return body + luhn_check_digit(body)
-
-
 def is_valid_imei(imei: str) -> bool:
     return len(imei) == _IMEI_LENGTH and imei.isdigit() and luhn_check_digit(imei[:-1]) == imei[-1]
 
 
-def container_spec(fingerprint: DeviceFingerprint) -> ContainerSpec:
-    """The container for this mobile fingerprint, or ``emulator_device_unknown``."""
+def _derived(seed: str, purpose: str) -> int:
+    return int.from_bytes(hashlib.sha256(f"{purpose}:{seed}".encode()).digest(), "big")
+
+
+def derive_imei(seed: str) -> str:
+    """A Luhn-valid IMEI, the same every time for ``seed``."""
+    digits = _IMEI_LENGTH - 1 - len(_IMEI_PREFIX)
+    body = _IMEI_PREFIX + str(_derived(seed, "imei") % 10**digits).zfill(digits)
+    return body + luhn_check_digit(body)
+
+
+def derive_serial(prefix: str, length: int, charset: Literal["alnum", "hex"], seed: str) -> str:
+    """``ro.serialno``: ``prefix`` then characters of ``charset``, stable for ``seed``."""
+    alphabet = _SERIAL_ALPHABETS[charset]
+    number = _derived(seed, "serial")
+    tail = ""
+    while len(prefix) + len(tail) < length:
+        number, digit = divmod(number, len(alphabet))
+        tail += alphabet[digit]
+    return prefix + tail
+
+
+def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> ContainerSpec:
+    """The container for this mobile fingerprint, or ``emulator_device_unknown``.
+
+    ``country`` is the account's proxy country (ISO-3166 alpha-2), ``None`` when unknown.
+    """
     device = next(
         (d for d in ANDROID_DEVICES if android_device_model(d) == fingerprint.device_model),
         None,
@@ -66,4 +102,78 @@ def container_spec(fingerprint: DeviceFingerprint) -> ContainerSpec:
     sdk = fingerprint.system_version.removeprefix("SDK ")
     if device is None or not sdk.isdigit() or int(sdk) not in device.sdk_levels:
         raise EmulatorError(_EMULATOR_DEVICE_UNKNOWN)
-    return ContainerSpec(device.manufacturer, device.model, int(sdk), generate_imei())
+    found = find_build(device.manufacturer, device.model, int(sdk))
+    if found is None:
+        raise EmulatorError(_EMULATOR_DEVICE_UNKNOWN)
+    blueprint, build = found
+    seed = fingerprint.account_id
+    return ContainerSpec(
+        manufacturer=blueprint.manufacturer,
+        model=blueprint.model,
+        sdk=int(sdk),
+        imei=derive_imei(seed),
+        brand=blueprint.brand,
+        product=blueprint.product,
+        device=blueprint.device,
+        serial=derive_serial(
+            blueprint.serial_prefix, blueprint.serial_length, blueprint.serial_charset, seed
+        ),
+        screen=blueprint.screen,
+        build=build,
+        region=region_for(country, fingerprint.system_lang_code, seed=seed),
+    )
+
+
+def build_fingerprint(spec: ContainerSpec) -> str:
+    build = spec.build
+    return (
+        f"{spec.brand}/{spec.product}/{spec.device}:{build.release}/"
+        f"{build.build_id}/{build.incremental}:user/release-keys"
+    )
+
+
+def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
+    """The system properties that make Android report ``spec``'s phone, firmware and region.
+
+    Left out on purpose: ``ro.build.version.sdk`` (the image's own, which the SDK check
+    reads), ``ro.hardware`` / ``ro.board.platform`` (they pick the HALs the image boots
+    with), the security flags (``ro.debuggable``, ``ro.secure``: adbd depends on them)
+    and ``ro.serialno`` (init sets it from ``androidboot.serialno`` before any
+    ``build.prop`` is read, so it goes on the command line).
+    """
+    build = spec.build
+    fingerprint = build_fingerprint(spec)
+    props: dict[str, str] = {}
+    for partition in _PARTITIONS:
+        props[f"ro.product.{partition}brand"] = spec.brand
+        props[f"ro.product.{partition}manufacturer"] = spec.manufacturer
+        props[f"ro.product.{partition}model"] = spec.model
+        props[f"ro.product.{partition}name"] = spec.product
+        props[f"ro.product.{partition}device"] = spec.device
+        props[f"ro.{partition}build.fingerprint"] = fingerprint
+        props[f"ro.{partition}build.id"] = build.build_id
+        props[f"ro.{partition}build.version.incremental"] = build.incremental
+        props[f"ro.{partition}build.version.release"] = build.release
+        props[f"ro.{partition}build.tags"] = "release-keys"
+        props[f"ro.{partition}build.type"] = "user"
+    props |= {
+        "ro.bootimage.build.fingerprint": fingerprint,
+        "ro.build.display.id": build.display_id or build.build_id,
+        "ro.build.version.release_or_codename": build.release,
+        "ro.build.version.security_patch": build.security_patch,
+        "ro.vendor.build.security_patch": build.security_patch,
+        "ro.build.description": build.description
+        or f"{spec.product}-user {build.release} {build.build_id} {build.incremental} release-keys",
+        "ro.build.flavor": f"{spec.product}-user",
+        "ro.build.product": spec.device,
+        "ro.sf.lcd_density": str(spec.screen.dpi),
+        "persist.sys.timezone": spec.region.timezone,
+        "persist.sys.locale": spec.region.locale,
+    }
+    carrier = spec.region.carrier
+    if carrier is not None and spec.region.country is not None:
+        for side in ("gsm.sim.operator", "gsm.operator"):
+            props[f"{side}.numeric"] = carrier.numeric
+            props[f"{side}.alpha"] = carrier.alpha
+            props[f"{side}.iso-country"] = spec.region.country
+    return props

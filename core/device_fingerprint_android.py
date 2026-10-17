@@ -11,7 +11,8 @@ Every field is what the official Telegram Android app itself sends in
 A device is listed only with the Android releases it really ran (shipped with or
 was updated to), and only Android 13/14 (SDK 33/34): those are the releases the
 configured redroid images offer, and the emulator refuses to sign in when its real
-SDK differs from the account's fingerprint. App versions are official releases with
+SDK differs from the account's fingerprint. Every device and release here has a real build in
+``configs/oem_blueprints`` that the container presents. App versions are official releases with
 their build numbers as published by Telegram's own APK channel (t.me/TAndroidAPK).
 
 The fingerprint is immutable, so an account keeps the app version it was minted
@@ -42,6 +43,9 @@ ANDROID_DEVICES: tuple[AndroidDevice, ...] = (
     AndroidDevice("Google", "Pixel 7", (33, 34)),
     AndroidDevice("Google", "Pixel 8", (34,)),
     AndroidDevice("Xiaomi", "2211133G", (33, 34)),  # Xiaomi 13
+    AndroidDevice("Xiaomi", "23049PCD8G", (33,)),  # POCO F5
+    AndroidDevice("Xiaomi", "22101316G", (33,)),  # Redmi Note 12 Pro 5G
+    AndroidDevice("OnePlus", "CPH2449", (33,)),  # OnePlus 11
 )
 
 ANDROID_APP_VERSIONS: tuple[str, ...] = (

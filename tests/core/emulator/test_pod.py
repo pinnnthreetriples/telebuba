@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
+from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator import _gateway, pod
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import ContainerSpec
+from core.emulator._profile import container_spec
 from schemas.proxy import ProxySettings
 
 if TYPE_CHECKING:
@@ -19,7 +20,12 @@ if TYPE_CHECKING:
 
     from tests.core.emulator.conftest import Console
 
-_SPEC = ContainerSpec("Google", "Pixel 7", 34, "490154203237518")
+_SPEC = container_spec(
+    generate_android_fingerprint("acc", None).model_copy(
+        update={"device_model": "GooglePixel 8", "system_version": "SDK 34"},
+    ),
+    "DE",
+)
 _PROXY = ProxySettings(
     proxy_type="socks5", host="203.0.113.7", port=1080, username="tb-user", password="s3cr'et pw"
 )
@@ -51,6 +57,8 @@ def _docker(
             role = "gateway" if "telebuba.gateway=1" in argv else "android"
             index = next(a for a in argv if a.startswith("telebuba.index=")).split("=")[1]
             lists[role].append(f"{index}|{argv[argv.index('--name') + 1]}|created")
+        if argv[1] == "cp" and argv[2].endswith(":/product/etc/build.prop"):
+            Path(argv[3]).write_text("ro.product.model=redroid\n", encoding="utf-8")
         if argv[1] == "rm":
             for role, lines in lists.items():
                 lists[role] = [line for line in lines if line.split("|")[1] != argv[-1]]
@@ -72,6 +80,12 @@ def _verbs(console: Console) -> list[str]:
 
 def _call(console: Console, verb: str, target: str) -> list[str]:
     return next(c for c in console.calls if c[1] == verb and target in c)
+
+
+def _identity_written(console: Console, name: str) -> list[str]:
+    """The ``docker cp`` that writes the phone's ``build.prop`` back into ``name``."""
+    target = f"{name}:/product/etc/build.prop"
+    return next(c for c in console.calls if c[1] == "cp" and c[3] == target)
 
 
 @pytest.mark.asyncio
@@ -97,7 +111,8 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
         "start telebuba-new-net",
         "exec telebuba-new-net",
         "create telebuba-new",
-        "cp " + _call(console, "cp", "telebuba-new:/system_dlkm/")[2],
+        "cp telebuba-new:/product/etc/build.prop",
+        "cp " + _identity_written(console, "telebuba-new")[2],
         "start telebuba-new",
     ]
     gateway = _call(console, "create", "telebuba-new-net")
@@ -171,8 +186,10 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
     assert verbs[3:] == [
         "start telebuba-acc-0-net",
         "exec telebuba-acc-0-net",
+        "cp telebuba-acc-0:/product/etc/build.prop",
+        "cp " + _identity_written(console, "telebuba-acc-0")[2],
         "start telebuba-acc-0",
-    ]
+    ], "its phone is written again before it boots: the proxy may have moved country"
 
 
 @pytest.mark.asyncio
@@ -244,7 +261,7 @@ async def test_a_failed_start_stops_what_it_found_and_removes_what_it_created(
     console.answer = _docker(
         androids="0|telebuba-acc-0|running\n",
         gateways="0|telebuba-acc-0-net|running\n3|telebuba-new-net|exited\n",
-        fail=lambda argv: argv[1] == "cp" and argv[3].endswith("dlkm/"),
+        fail=lambda argv: argv[1] == "cp" and argv[3].endswith(":/product/etc/build.prop"),
     )
 
     with pytest.raises(EmulatorError):
