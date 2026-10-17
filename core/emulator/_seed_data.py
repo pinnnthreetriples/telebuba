@@ -60,6 +60,7 @@ _ISO = (50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 640)
 _EXPOSURE_DENOMINATORS = (30, 50, 60, 100, 120, 200, 250, 500, 1000)
 _EXIF_TIME = "%Y:%m:%d %H:%M:%S"
 _EXIF_VERSION = b"0232"
+_SAMSUNG = "samsung"
 
 
 class _NamePack(BaseModel):
@@ -201,7 +202,10 @@ def photo_exif(spec: ContainerSpec, taken: datetime, rng: random.Random) -> Imag
     exif = Image.Exif()
     exif[Base.Make] = spec.manufacturer
     exif[Base.Model] = spec.model
-    exif[Base.Software] = spec.build.incremental
+    # Samsung's camera writes the firmware's incremental; Google's, Xiaomi's and
+    # OnePlus's write their own app's version or nothing, so no guess goes in for them.
+    if spec.manufacturer == _SAMSUNG:
+        exif[Base.Software] = spec.build.incremental
     exif[Base.DateTime] = stamp
     exif[Base.Orientation] = 1
     sub = exif.get_ifd(IFD.Exif)

@@ -124,7 +124,8 @@ gets the same ones:
   company. They go in through the Contacts Provider (`content insert`), tagged `sync1=telebuba`.
 - **Photos**: 12–20 JPEGs in `/sdcard/DCIM/Camera`, named the way the phone's camera app names
   them (the blueprint's `camera.file_style`), with that phone's EXIF: `Make`/`Model`, the build's
-  incremental as `Software`, the main lens's `FNumber`/`FocalLength` (the blueprint's `camera`),
+  incremental as `Software` on a Samsung (other makers' camera apps write their own version or
+  none, so it is left out), the main lens's `FNumber`/`FocalLength` (the blueprint's `camera`),
   ISO, exposure and a capture time 5–45 days back at a daytime hour in the container's timezone.
   Each file's mtime is set to that time (`touch -t`, stamped in UTC under `TZ=UTC0`), then
   MediaStore is asked to index the volume (`content call … scan_volume`, the per-file scan
