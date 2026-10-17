@@ -20,8 +20,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
-    monkeypatch.setattr(settings.emulator, "ldconsole_path", tmp_path / "ldconsole.exe")
     monkeypatch.setattr(settings.emulator, "adb_path", tmp_path / "adb.exe")
+    monkeypatch.setattr(settings.emulator, "docker_path", tmp_path / "docker.exe")
+    monkeypatch.setattr(settings.emulator, "scrcpy_path", tmp_path / "scrcpy.exe")
     monkeypatch.setattr(settings.emulator, "poll_seconds", 0.01)
     monkeypatch.setattr(settings.emulator, "boot_timeout_seconds", 0.1)
     monkeypatch.setattr(settings.emulator, "ui_timeout_seconds", 0.1)
@@ -52,6 +53,6 @@ class Console:
 @pytest.fixture
 def console(monkeypatch: pytest.MonkeyPatch) -> Console:
     fake = Console()
-    monkeypatch.setattr("core.emulator.ldconsole.run_command", fake)
     monkeypatch.setattr("core.emulator.adb.run_command", fake)
+    monkeypatch.setattr("core.emulator.redroid.run_command", fake)
     return fake

@@ -1,0 +1,31 @@
+{
+  "brand": "samsung",
+  "manufacturer": "samsung",
+  "model": "SM-S918B",
+  "product": "dm3qxxx",
+  "device": "dm3q",
+  "serial_prefix": "R5C",
+  "serial_length": 11,
+  "serial_charset": "alnum",
+  "screen": {
+    "width": 720,
+    "height": 1544,
+    "dpi": 300
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TP1A.220624.014",
+      "incremental": "S918BXXS3AWHR",
+      "security_patch": "2023-09-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm3q/dm3qxxx-user-13-TP1A.220624.014-S918BXXS3AWHR-release-keys"
+    },
+    "34": {
+      "release": "14",
+      "build_id": "UP1A.231005.007",
+      "incremental": "S918BXXS6CXFE",
+      "security_patch": "2024-07-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm3q/dm3qxxx-user-14-UP1A.231005.007-S918BXXS6CXFE-release-keys"
+    }
+  }
+}

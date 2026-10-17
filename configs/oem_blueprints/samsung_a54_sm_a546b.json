@@ -1,0 +1,31 @@
+{
+  "brand": "samsung",
+  "manufacturer": "samsung",
+  "model": "SM-A546B",
+  "product": "a54xnaxx",
+  "device": "a54x",
+  "serial_prefix": "R5C",
+  "serial_length": 11,
+  "serial_charset": "alnum",
+  "screen": {
+    "width": 720,
+    "height": 1560,
+    "dpi": 300
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TP1A.220624.014",
+      "incremental": "A546BXXS4AWF7",
+      "security_patch": "2023-07-01",
+      "source": "https://github.com/leddaz-dump-stash/samsung_a54x_dump/tree/a54xnaxx-user-13-TP1A.220624.014-A546BXXS4AWF7-release-keys"
+    },
+    "34": {
+      "release": "14",
+      "build_id": "UP1A.231005.007",
+      "incremental": "A546BXXS8CXF1",
+      "security_patch": "2024-06-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/a54x/a54xnaxx-user-14-UP1A.231005.007-A546BXXS8CXF1-release-keys"
+    }
+  }
+}

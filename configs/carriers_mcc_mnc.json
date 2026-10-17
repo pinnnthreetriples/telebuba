@@ -1,0 +1,261 @@
+{
+  "BR": [
+    {
+      "mcc": "724",
+      "mnc": "05",
+      "alpha": "Claro BR"
+    },
+    {
+      "mcc": "724",
+      "mnc": "10",
+      "alpha": "Vivo"
+    },
+    {
+      "mcc": "724",
+      "mnc": "02",
+      "alpha": "TIM Brasil"
+    }
+  ],
+  "BY": [
+    {
+      "mcc": "257",
+      "mnc": "01",
+      "alpha": "A1"
+    },
+    {
+      "mcc": "257",
+      "mnc": "02",
+      "alpha": "MTS BY"
+    },
+    {
+      "mcc": "257",
+      "mnc": "04",
+      "alpha": "life:)"
+    }
+  ],
+  "DE": [
+    {
+      "mcc": "262",
+      "mnc": "01",
+      "alpha": "Telekom.de"
+    },
+    {
+      "mcc": "262",
+      "mnc": "02",
+      "alpha": "Vodafone.de"
+    },
+    {
+      "mcc": "262",
+      "mnc": "03",
+      "alpha": "o2 - de"
+    }
+  ],
+  "ES": [
+    {
+      "mcc": "214",
+      "mnc": "07",
+      "alpha": "Movistar"
+    },
+    {
+      "mcc": "214",
+      "mnc": "01",
+      "alpha": "Vodafone ES"
+    }
+  ],
+  "FR": [
+    {
+      "mcc": "208",
+      "mnc": "01",
+      "alpha": "Orange F"
+    },
+    {
+      "mcc": "208",
+      "mnc": "10",
+      "alpha": "SFR"
+    },
+    {
+      "mcc": "208",
+      "mnc": "20",
+      "alpha": "Bouygues Telecom"
+    }
+  ],
+  "GB": [
+    {
+      "mcc": "234",
+      "mnc": "30",
+      "alpha": "EE"
+    },
+    {
+      "mcc": "234",
+      "mnc": "15",
+      "alpha": "Vodafone UK"
+    },
+    {
+      "mcc": "234",
+      "mnc": "10",
+      "alpha": "O2 - UK"
+    }
+  ],
+  "ID": [
+    {
+      "mcc": "510",
+      "mnc": "10",
+      "alpha": "Telkomsel"
+    },
+    {
+      "mcc": "510",
+      "mnc": "11",
+      "alpha": "XL Axiata"
+    }
+  ],
+  "IN": [
+    {
+      "mcc": "405",
+      "mnc": "874",
+      "alpha": "Jio 4G"
+    },
+    {
+      "mcc": "404",
+      "mnc": "45",
+      "alpha": "Airtel"
+    }
+  ],
+  "IT": [
+    {
+      "mcc": "222",
+      "mnc": "01",
+      "alpha": "TIM"
+    },
+    {
+      "mcc": "222",
+      "mnc": "10",
+      "alpha": "Vodafone IT"
+    }
+  ],
+  "KZ": [
+    {
+      "mcc": "401",
+      "mnc": "02",
+      "alpha": "Kcell"
+    },
+    {
+      "mcc": "401",
+      "mnc": "01",
+      "alpha": "Beeline KZ"
+    },
+    {
+      "mcc": "401",
+      "mnc": "77",
+      "alpha": "Tele2.kz"
+    },
+    {
+      "mcc": "401",
+      "mnc": "07",
+      "alpha": "ALTEL"
+    }
+  ],
+  "MX": [
+    {
+      "mcc": "334",
+      "mnc": "020",
+      "alpha": "Telcel"
+    },
+    {
+      "mcc": "334",
+      "mnc": "050",
+      "alpha": "AT&T MX"
+    }
+  ],
+  "NL": [
+    {
+      "mcc": "204",
+      "mnc": "08",
+      "alpha": "KPN"
+    },
+    {
+      "mcc": "204",
+      "mnc": "04",
+      "alpha": "Vodafone NL"
+    }
+  ],
+  "PL": [
+    {
+      "mcc": "260",
+      "mnc": "02",
+      "alpha": "T-Mobile.pl"
+    },
+    {
+      "mcc": "260",
+      "mnc": "03",
+      "alpha": "Orange PL"
+    },
+    {
+      "mcc": "260",
+      "mnc": "06",
+      "alpha": "PLAY"
+    }
+  ],
+  "RU": [
+    {
+      "mcc": "250",
+      "mnc": "01",
+      "alpha": "MTS RUS"
+    },
+    {
+      "mcc": "250",
+      "mnc": "02",
+      "alpha": "MegaFon"
+    },
+    {
+      "mcc": "250",
+      "mnc": "20",
+      "alpha": "t2"
+    },
+    {
+      "mcc": "250",
+      "mnc": "99",
+      "alpha": "Beeline"
+    }
+  ],
+  "TR": [
+    {
+      "mcc": "286",
+      "mnc": "01",
+      "alpha": "Turkcell"
+    },
+    {
+      "mcc": "286",
+      "mnc": "02",
+      "alpha": "Vodafone TR"
+    }
+  ],
+  "UA": [
+    {
+      "mcc": "255",
+      "mnc": "03",
+      "alpha": "Kyivstar"
+    },
+    {
+      "mcc": "255",
+      "mnc": "01",
+      "alpha": "Vodafone UA"
+    }
+  ],
+  "US": [
+    {
+      "mcc": "310",
+      "mnc": "260",
+      "alpha": "T-Mobile"
+    },
+    {
+      "mcc": "310",
+      "mnc": "410",
+      "alpha": "AT&T"
+    },
+    {
+      "mcc": "311",
+      "mnc": "480",
+      "alpha": "Verizon"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-"""Run one console command (ldconsole / adb) as an argv list, bounded and killable."""
+"""Run one console command (docker / adb) as an argv list, bounded and killable."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
 
     A missing binary, a timeout and a non-zero exit each raise ``EmulatorError`` with
     their own code. A cancelled caller kills the child before the cancellation goes on:
-    an abandoned ``adb install`` or ``ldconsole launch`` must not keep running.
+    an abandoned ``adb install`` or ``docker start`` must not keep running.
     """
     try:
         process = await asyncio.create_subprocess_exec(  # nosec B603 - argv list, no shell

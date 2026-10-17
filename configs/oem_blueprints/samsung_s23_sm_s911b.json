@@ -1,0 +1,31 @@
+{
+  "brand": "samsung",
+  "manufacturer": "samsung",
+  "model": "SM-S911B",
+  "product": "dm1qxxx",
+  "device": "dm1q",
+  "serial_prefix": "R5C",
+  "serial_length": 11,
+  "serial_charset": "alnum",
+  "screen": {
+    "width": 720,
+    "height": 1560,
+    "dpi": 320
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TP1A.220624.014",
+      "incremental": "S911BXXS1AWD1",
+      "security_patch": "2023-05-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm1q/dm1qxxx-user-13-TP1A.220624.014-S911BXXS1AWD1-release-keys"
+    },
+    "34": {
+      "release": "14",
+      "build_id": "UP1A.231005.007",
+      "incremental": "S911BXXU3CXD3",
+      "security_patch": "2024-04-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm1q/dm1qxxx-user-14-UP1A.231005.007-S911BXXU3CXD3-release-keys"
+    }
+  }
+}

@@ -1,1 +1,1 @@
-"""Tests for the LDPlayer container layer."""
+"""Tests for the redroid container layer."""
