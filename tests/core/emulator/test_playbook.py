@@ -387,3 +387,117 @@ async def test_a_session_with_nothing_to_do_ends_at_once(
     assert result.skipped == ["no_channel", "no_stories"]
     assert console.shell_calls() == []
     assert clock.slept == []
+
+
+CHATS_XML = (
+    "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\">"
+    '<node text="" content-desc="" class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">'
+    '<node text="" content-desc="Open navigation menu" class="android.widget.ImageView"'
+    ' bounds="[0,60][140,200]" />'
+    '<node text="" content-desc="My story" class="android.view.View" bounds="[20,220][160,360]" />'
+    '<node text="" content-desc="Stories by Anna" class="android.view.View"'
+    ' bounds="[180,220][320,360]" />'
+    '<node text="Channel. Tech News. 3 unread messages" content-desc=""'
+    ' class="android.view.ViewGroup" bounds="[0,400][1080,560]" />'
+    "</node></hierarchy>"
+)
+CHANNEL_XML = (
+    "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\">"
+    '<node text="" content-desc="" class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">'
+    '<node text="Tech News" content-desc="" class="android.widget.TextView"'
+    ' bounds="[0,60][1080,260]" />'
+    '<node text="A long post about phones" content-desc="" class="android.view.ViewGroup"'
+    ' bounds="[40,700][1040,1200]" />'
+    "</node></hierarchy>"
+)
+
+
+def _serve_dumps(console: Console) -> list[str]:
+    """Answer the real ``uiautomator dump`` + ``cat``; return the screens served, in order.
+
+    A tap on the channel row opens the channel; BACK returns to the chat list.
+    """
+    state = {"xml": CHANNEL_XML}
+    served: list[str] = []
+
+    def answer(argv: list[str]) -> str:
+        device = argv[argv.index("shell") + 1 :]
+        if device[:2] == ["cat", "/sdcard/telebuba_ui.xml"]:
+            served.append("chats" if state["xml"] is CHATS_XML else "channel")
+            return state["xml"]
+        if device[:2] == ["uiautomator", "dump"]:
+            return "UI hierchary dumped to: /sdcard/telebuba_ui.xml"
+        if device[:3] == ["input", "keyevent", "4"]:
+            state["xml"] = CHATS_XML
+        elif (
+            device[:2] == ["input", "swipe"]
+            and state["xml"] is CHATS_XML
+            and 400 <= int(device[3]) < 560
+        ):
+            state["xml"] = CHANNEL_XML
+        return ""
+
+    console.answer = answer
+    return served
+
+
+def _gestures(console: Console) -> list[list[str]]:
+    return [call for call in console.shell_calls() if call[0] == "input"]
+
+
+@pytest.mark.asyncio
+async def test_real_dumps_a_lost_channel_screen_backs_out_to_the_chat_list(
+    console: Console, clock: _Clock
+) -> None:
+    served = _serve_dumps(console)
+
+    await _playbook().return_to_chats(SERIAL)
+
+    assert _gestures(console) == [["input", "keyevent", "4"]]
+    assert served == ["channel", "chats"]
+    assert len(clock.slept) == 1
+
+
+@pytest.mark.asyncio
+async def test_real_dumps_a_channel_is_opened_read_and_reacted_to(
+    console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
+    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 1.0)
+    monkeypatch.setattr(playbook, "_FEED_SCROLLS", (1, 1))
+    _serve_dumps(console).clear()
+    session = _playbook()
+
+    result = await session.run_session(SERIAL, 1)
+
+    gestures = _gestures(console)
+    back, open_row, react, read, back_again = gestures
+    assert back == ["input", "keyevent", "4"], "the session starts on the chat list"
+    assert open_row[:2] == ["input", "swipe"]
+    assert 400 <= int(open_row[3]) < 560, "the channel row the dump showed"
+    assert react[:2] == ["input", "tap"]
+    assert 700 <= int(react[3]) < 1200, "the post, not the header"
+    assert read[:3] == ["input", "motionevent", "DOWN"]
+    assert back_again == ["input", "keyevent", "4"]
+    assert result.channels_read == 1
+    assert result.reactions == 1
+    assert clock.now >= 1
+
+
+@pytest.mark.asyncio
+async def test_real_dumps_stories_open_others_never_the_own_story(
+    console: Console, clock: _Clock
+) -> None:
+    served = _serve_dumps(console)
+    await _playbook().return_to_chats(SERIAL)
+    served.clear()
+    console.calls.clear()
+
+    await _playbook().watch_stories(SERIAL, max_stories=1)
+
+    opened = _gestures(console)[0]
+    assert opened[:2] == ["input", "swipe"]
+    assert 180 <= int(opened[2]) < 320, "Anna's story, not the own-story button"
+    assert 220 <= int(opened[3]) < 360
+    assert clock.slept
