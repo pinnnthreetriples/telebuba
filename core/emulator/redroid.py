@@ -39,8 +39,7 @@ _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
 _ADB_PORT = 5555
 # Where the container's identity goes: init reads ``/system_dlkm/etc/build.prop``.
 _IDENTITY_DIR = "/system_dlkm/"
-# Runs of a network script before a failure is final.
-_NETWORK_ATTEMPTS = 3
+_NETWORK_ATTEMPTS = 3  # see ``set_container_network``: docker exec can exit 255 at start
 # Our own chain, jumped to first from OUTPUT: loopback and adbd's replies only.
 _OFFLINE_CHAIN = "telebuba_offline"
 _GO_OFFLINE = (
