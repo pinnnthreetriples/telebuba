@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Any
+from typing import Literal, overload
 
 QWERTY_NEIGHBORS: dict[str, str] = {
     "a": "qwsz",
@@ -61,6 +61,43 @@ class SwipeTrajectory:
     control_points: list[tuple[float, float]]
 
 
+@dataclass(frozen=True, slots=True)
+class KeystrokeEvent:
+    char: str
+    delay_ms: int
+    key_event: int | None = None
+
+    @overload
+    def __getitem__(self, item: Literal["action", "value", "char"]) -> str: ...
+    @overload
+    def __getitem__(self, item: Literal["delay_ms"]) -> int: ...
+    @overload
+    def __getitem__(self, item: Literal["key_event"]) -> int | None: ...
+    @overload
+    def __getitem__(self, item: str) -> str | int | None: ...
+    def __getitem__(self, item: str) -> str | int | None:
+        if item == "action":
+            return "KEYCODE_DEL" if self.key_event is not None else "char"
+        if item == "value":
+            return "BACKSPACE" if self.key_event is not None else self.char
+        if item == "delay_ms":
+            return self.delay_ms
+        if item == "key_event":
+            return self.key_event
+        if item == "char":
+            return self.char
+        raise KeyError(item)
+
+    def get(self, item: str, default: str | int | None = None) -> str | int | None:
+        try:
+            return self[item]
+        except KeyError:
+            return default
+
+
+_KEYCODE_DEL: int = 67
+
+
 class HumanInputEngine:
     """Mathematical synthesizer for human-like touch and typing biomechanics."""
 
@@ -75,35 +112,44 @@ class HumanInputEngine:
         - Clamped to inner safe zone (15% padding from element edges)
         - Log-normal hold duration in [48, 115] ms with 1-2px micro-slip on release
         """
-        x1, y1, x2, y2 = bounds
-        w = max(4, x2 - x1)
-        h = max(4, y2 - y1)
+        bx1, by1, bx2, by2 = bounds
+        x1, x2 = min(bx1, bx2), max(bx1, bx2)
+        y1, y2 = min(by1, by2), max(by1, by2)
+        w = x2 - x1
+        h = y2 - y1
 
-        mu_x = x1 + 0.52 * w
-        mu_y = y1 + 0.54 * h
-        sigma_x = w / 6.0
-        sigma_y = h / 6.0
+        if w <= 0:
+            tap_x = x1
+        else:
+            mu_x = x1 + 0.52 * w
+            sigma_x = w / 6.0
+            margin_x = min(max(1.0, 0.15 * w), w / 2.0)
+            min_x, max_x = x1 + margin_x, x2 - margin_x
+            if min_x > max_x:
+                min_x = max_x = (x1 + x2) / 2.0
+            raw_x = self.rng.gauss(mu_x, sigma_x)
+            tap_x = round(max(min_x, min(max_x, raw_x)))
+        tap_x = max(x1, min(x2, tap_x))
 
-        margin_x = max(1.0, 0.15 * w)
-        margin_y = max(1.0, 0.15 * h)
-        min_x, max_x = x1 + margin_x, x2 - margin_x
-        min_y, max_y = y1 + margin_y, y2 - margin_y
-        if min_x > max_x:
-            min_x = max_x = x1 + w / 2.0
-        if min_y > max_y:
-            min_y = max_y = y1 + h / 2.0
-
-        raw_x = self.rng.gauss(mu_x, sigma_x)
-        raw_y = self.rng.gauss(mu_y, sigma_y)
-        tap_x = round(max(min_x, min(max_x, raw_x)))
-        tap_y = round(max(min_y, min(max_y, raw_y)))
+        if h <= 0:
+            tap_y = y1
+        else:
+            mu_y = y1 + 0.54 * h
+            sigma_y = h / 6.0
+            margin_y = min(max(1.0, 0.15 * h), h / 2.0)
+            min_y, max_y = y1 + margin_y, y2 - margin_y
+            if min_y > max_y:
+                min_y = max_y = (y1 + y2) / 2.0
+            raw_y = self.rng.gauss(mu_y, sigma_y)
+            tap_y = round(max(min_y, min(max_y, raw_y)))
+        tap_y = max(y1, min(y2, tap_y))
 
         # Log-normal hold duration clamped to [48, 115] ms
         hold_raw = math.exp(self.rng.gauss(math.log(74.0), 0.22))
         hold_ms = round(max(48.0, min(115.0, hold_raw)))
 
-        slip_x = tap_x + self.rng.choice([-1, 0, 1, 2])
-        slip_y = tap_y + self.rng.choice([-1, 0, 1, 2])
+        slip_x = max(0, tap_x + self.rng.choice([-1, 0, 1, 2]))
+        slip_y = max(0, tap_y + self.rng.choice([-1, 0, 1, 2]))
 
         return TapEvent(
             x=tap_x,
@@ -152,23 +198,45 @@ class HumanInputEngine:
         - Sigmoid Ease-In / Ease-Out parameterization (25-45 points)
         - 8-16ms per-segment intervals
         """
-        steps = num_steps if num_steps is not None else self.rng.randint(25, 45)
+        steps = max(2, num_steps if num_steps is not None else self.rng.randint(25, 45))
         p0 = (float(start[0]), float(start[1]))
         p3 = (float(end[0]), float(end[1]))
 
         dx = p3[0] - p0[0]
         dy = p3[1] - p0[1]
-        arc_dir = self.rng.choice([-1.0, 1.0])
-        arc_mag1 = self.rng.uniform(15.0, 45.0) * arc_dir
-        arc_mag2 = self.rng.uniform(15.0, 45.0) * arc_dir
+        dist = math.hypot(dx, dy)
 
-        p1 = (p0[0] + 0.30 * dx + arc_mag1, p0[1] + 0.30 * dy + self.rng.uniform(-10.0, 10.0))
-        p2 = (p0[0] + 0.72 * dx + arc_mag2, p0[1] + 0.72 * dy + self.rng.uniform(-10.0, 10.0))
+        if dist < 1.0:
+            nx, ny = 0.0, 0.0
+            tx, ty = 0.0, 0.0
+            arc_mag1 = 0.0
+            arc_mag2 = 0.0
+            jitter1 = 0.0
+            jitter2 = 0.0
+        else:
+            nx = -dy / dist
+            ny = dx / dist
+            tx = dx / dist
+            ty = dy / dist
+            arc_dir = self.rng.choice([-1.0, 1.0])
+            arc_mag1 = self.rng.uniform(15.0, 45.0) * arc_dir
+            arc_mag2 = self.rng.uniform(15.0, 45.0) * arc_dir
+            jitter1 = self.rng.uniform(-10.0, 10.0)
+            jitter2 = self.rng.uniform(-10.0, 10.0)
+
+        p1 = (
+            p0[0] + 0.30 * dx + arc_mag1 * nx + jitter1 * tx,
+            p0[1] + 0.30 * dy + arc_mag1 * ny + jitter1 * ty,
+        )
+        p2 = (
+            p0[0] + 0.72 * dx + arc_mag2 * nx + jitter2 * tx,
+            p0[1] + 0.72 * dy + arc_mag2 * ny + jitter2 * ty,
+        )
 
         points: list[tuple[int, int]] = []
         intervals: list[int] = []
         for k in range(steps):
-            u = k / float(max(1, steps - 1))
+            u = k / float(steps - 1)
             t = self._sigmoid_ease(u, steepness=5.8)
             bx, by = self._cubic_bezier(t, p0, p1, p2, p3)
             points.append((round(bx), round(by)))
@@ -193,14 +261,14 @@ class HumanInputEngine:
         self,
         text: str,
         typo_probability: float = 0.035,
-    ) -> list[dict[str, Any]]:
+    ) -> list[KeystrokeEvent]:
         """Generate a stochastic character-by-character typing sequence.
 
         - Inter-key delay: 75-230ms (250-480ms at word boundaries, uppercase, or symbols)
         - 3-4% probability of typing an adjacent QWERTY key, pausing 300-550ms,
           sending KEYCODE_DEL, and typing the intended character.
         """
-        events: list[dict[str, Any]] = []
+        events: list[KeystrokeEvent] = []
         for idx, ch in enumerate(text):
             low_ch = ch.lower()
             is_boundary = idx > 0 and (ch.isupper() or not ch.isalnum() or text[idx - 1] == " ")
@@ -210,18 +278,21 @@ class HumanInputEngine:
                 if ch.isupper():
                     wrong_ch = wrong_ch.upper()
                 events.append(
-                    {"action": "char", "value": wrong_ch, "delay_ms": self.rng.randint(80, 190)}
+                    KeystrokeEvent(
+                        char=wrong_ch,
+                        delay_ms=self.rng.randint(80, 190),
+                    )
                 )
                 events.append(
-                    {
-                        "action": "KEYCODE_DEL",
-                        "value": "BACKSPACE",
-                        "delay_ms": self.rng.randint(300, 550),
-                    }
+                    KeystrokeEvent(
+                        char="",
+                        delay_ms=self.rng.randint(300, 550),
+                        key_event=_KEYCODE_DEL,
+                    )
                 )
 
             delay = self.rng.randint(250, 480) if is_boundary else self.rng.randint(75, 230)
-            events.append({"action": "char", "value": ch, "delay_ms": delay})
+            events.append(KeystrokeEvent(char=ch, delay_ms=delay))
 
         return events
 
@@ -245,5 +316,8 @@ def sample_reading_pause_sec() -> tuple[float, bool]:
     return _DEFAULT_ENGINE.sample_reading_pause_sec()
 
 
-def generate_keystroke_sequence(text: str) -> list[dict[str, Any]]:
-    return _DEFAULT_ENGINE.generate_keystroke_sequence(text)
+def generate_keystroke_sequence(
+    text: str,
+    typo_probability: float = 0.035,
+) -> list[KeystrokeEvent]:
+    return _DEFAULT_ENGINE.generate_keystroke_sequence(text, typo_probability=typo_probability)

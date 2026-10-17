@@ -170,20 +170,24 @@ async def human_type(
     serial: str,
     text: str,
     *,
+    typo_probability: float | None = None,
     engine: HumanInputEngine | None = None,
 ) -> None:
     """Type ``text`` with stochastic keystroke intervals and realistic typo-correction."""
     escape_input_text(text)
     eng = engine or _default_input_engine
-    for event in eng.generate_keystroke_sequence(text):
-        delay_ms = event.get("delay_ms", 0)
-        if delay_ms > 0:
-            await asyncio.sleep(delay_ms / 1000.0)
-        action = event.get("action")
-        if action == "char":
-            await type_text(serial, event["value"])
-        elif action == "KEYCODE_DEL":
-            await press(serial, KEYCODE_DEL)
+    events = (
+        eng.generate_keystroke_sequence(text, typo_probability=typo_probability)
+        if typo_probability is not None
+        else eng.generate_keystroke_sequence(text)
+    )
+    for event in events:
+        if event.delay_ms > 0:
+            await asyncio.sleep(event.delay_ms / 1000.0)
+        if event.key_event is not None:
+            await press(serial, event.key_event)
+        else:
+            await type_text(serial, event.char)
 
 
 async def human_swipe(
@@ -194,7 +198,12 @@ async def human_swipe(
     duration_ms: int | None = None,
     engine: HumanInputEngine | None = None,
 ) -> None:
-    """Perform a human-like swipe with natural curvature and ease-in/ease-out timing."""
+    """Perform a human-like swipe with natural curvature and ease-in/ease-out timing.
+
+    The ADB endpoint swipe executes over biologically sampled duration
+    ``total_duration_ms`` derived from the Bézier ease curve (unless an explicit
+    ``duration_ms`` override is provided).
+    """
     eng = engine or _default_input_engine
     trajectory = eng.generate_bezier_swipe(start, end)
     dur = duration_ms if duration_ms is not None else trajectory.total_duration_ms

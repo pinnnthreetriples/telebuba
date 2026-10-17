@@ -119,6 +119,7 @@ async def confirm_number(serial: str, nodes: list[UiNode]) -> None:
 
 
 async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:
+    escape_input_text(code)  # refuse untypeable text before touching the screen
     boxes = fields(nodes)
     await adb.human_tap(serial, _require(boxes[0] if boxes else None))
     await adb.human_type(serial, code)

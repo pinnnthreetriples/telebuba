@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,6 +13,7 @@ from core.emulator._errors import EmulatorError
 from core.emulator._input import (
     QWERTY_NEIGHBORS,
     HumanInputEngine,
+    KeystrokeEvent,
     generate_bezier_swipe,
     generate_keystroke_sequence,
     sample_gaussian_tap,
@@ -50,12 +51,29 @@ def test_sample_gaussian_tap_bounds_clamping_and_distribution() -> None:
     assert avg_y > 300
 
 
-def test_sample_gaussian_tap_degenerate_bounds() -> None:
-    engine = HumanInputEngine(rng=random.Random(1))  # noqa: S311
-    tap = engine.sample_gaussian_tap((10, 10, 11, 11))
-    assert tap.x >= 10
-    assert tap.y >= 10
-    assert 48 <= tap.hold_ms <= 115
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        (10, 10, 11, 11),
+        (10, 10, 10, 10),
+        (100, 100, 50, 50),
+        (0, 0, 1, 1),
+    ],
+)
+def test_sample_gaussian_tap_degenerate_and_inverted_bounds(
+    bounds: tuple[int, int, int, int],
+) -> None:
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+    min_x, max_x = min(bounds[0], bounds[2]), max(bounds[0], bounds[2])
+    min_y, max_y = min(bounds[1], bounds[3]), max(bounds[1], bounds[3])
+    for _ in range(50):
+        tap = engine.sample_gaussian_tap(bounds)
+        assert min_x <= tap.x <= max_x
+        assert min_y <= tap.y <= max_y
+        assert tap.release_x >= 0
+        assert tap.release_y >= 0
+        assert 48 <= tap.hold_ms <= 115
+        assert tap.bounds == bounds
 
 
 def test_module_level_sample_gaussian_tap() -> None:
@@ -97,6 +115,63 @@ def test_generate_bezier_swipe_explicit_num_steps() -> None:
     traj = engine.generate_bezier_swipe((50, 50), (100, 100), num_steps=20)
     assert len(traj.points) == 20
     assert len(traj.step_intervals_ms) == 19
+
+
+def test_generate_bezier_swipe_lateral_curvature_horizontal() -> None:
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+    start = (100, 500)
+    end = (600, 500)  # dy == 0
+    traj = engine.generate_bezier_swipe(start, end)
+
+    assert traj.points[0] == start
+    assert traj.points[-1] == end
+    # Normal is perpendicular to horizontal swipe, so lateral displacement is in y
+    p1 = traj.control_points[1]
+    p2 = traj.control_points[2]
+    assert abs(p1[1] - 500.0) >= 10.0
+    assert abs(p2[1] - 500.0) >= 10.0
+    # At least some intermediate points curve laterally off y=500
+    assert any(pt[1] != 500 for pt in traj.points[1:-1])
+
+
+def test_generate_bezier_swipe_lateral_curvature_vertical() -> None:
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+    start = (500, 100)
+    end = (500, 600)  # dx == 0
+    traj = engine.generate_bezier_swipe(start, end)
+
+    assert traj.points[0] == start
+    assert traj.points[-1] == end
+    # Normal is perpendicular to vertical swipe, so lateral displacement is in x
+    p1 = traj.control_points[1]
+    p2 = traj.control_points[2]
+    assert abs(p1[0] - 500.0) >= 10.0
+    assert abs(p2[0] - 500.0) >= 10.0
+    # At least some intermediate points curve laterally off x=500
+    assert any(pt[0] != 500 for pt in traj.points[1:-1])
+
+
+def test_generate_bezier_swipe_zero_distance() -> None:
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+    point = (200, 200)
+    traj = engine.generate_bezier_swipe(point, point)
+
+    assert traj.points[0] == point
+    assert traj.points[-1] == point
+    assert all(pt == point for pt in traj.points)
+    assert len(traj.points) >= 2
+    assert traj.total_duration_ms > 0
+
+
+def test_generate_bezier_swipe_min_steps_enforced() -> None:
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+    traj1 = engine.generate_bezier_swipe((10, 10), (100, 100), num_steps=1)
+    assert len(traj1.points) == 2
+    assert len(traj1.step_intervals_ms) == 1
+    assert traj1.total_duration_ms > 0
+
+    traj0 = engine.generate_bezier_swipe((10, 10), (100, 100), num_steps=0)
+    assert len(traj0.points) == 2
 
 
 def test_module_level_generate_bezier_swipe() -> None:
@@ -232,7 +307,7 @@ async def test_adb_human_type_with_typo_correction(
     class _TypoEngine(HumanInputEngine):
         def generate_keystroke_sequence(
             self, text: str, typo_probability: float = 0.035
-        ) -> list[dict[str, Any]]:
+        ) -> list[KeystrokeEvent]:
             _ = typo_probability
             return super().generate_keystroke_sequence(text, typo_probability=1.0)
 
@@ -274,3 +349,55 @@ async def test_adb_human_swipe_custom_duration(console: Console) -> None:
     calls = console.shell_calls()
     assert len(calls) == 1
     assert calls[0] == ["input", "swipe", "200", "600", "200", "200", "750"]
+
+
+def test_keystroke_event_dataclass_and_dict_compatibility() -> None:
+    event = KeystrokeEvent(char="a", delay_ms=100)
+    assert event.char == "a"
+    assert event.delay_ms == 100
+    assert event.key_event is None
+    assert event["action"] == "char"
+    assert event["value"] == "a"
+    assert event["delay_ms"] == 100
+    assert event["key_event"] is None
+    assert event["char"] == "a"
+    assert event.get("delay_ms") == 100
+    assert event.get("nonexistent", "default") == "default"
+
+    del_event = KeystrokeEvent(char="", delay_ms=350, key_event=67)
+    assert del_event.char == ""
+    assert del_event.delay_ms == 350
+    assert del_event.key_event == 67
+    assert del_event["action"] == "KEYCODE_DEL"
+    assert del_event["value"] == "BACKSPACE"
+    assert del_event.get("action") == "KEYCODE_DEL"
+
+    with pytest.raises(KeyError):
+        _ = event["unknown_key"]
+
+
+def test_module_level_generate_keystroke_sequence_typo_probability() -> None:
+    seq = generate_keystroke_sequence("test", typo_probability=0.0)
+    assert all(isinstance(e, KeystrokeEvent) for e in seq)
+    assert [e.char for e in seq] == list("test")
+    assert not any(e.key_event is not None for e in seq)
+
+
+@pytest.mark.asyncio
+async def test_adb_human_type_typo_probability_zero(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _mock_sleep(_sec: float) -> None:
+        return
+
+    monkeypatch.setattr("core.emulator.adb.asyncio.sleep", _mock_sleep)
+    engine = HumanInputEngine(rng=random.Random(42))  # noqa: S311
+
+    await adb.human_type("emulator-5554", "testing", typo_probability=0.0, engine=engine)
+
+    text_calls = [call for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    del_calls = [call for call in console.shell_calls() if call[:2] == ["input", "keyevent"]]
+    typed = [call[2] for call in text_calls]
+    assert typed == list("testing")
+    assert del_calls == []
