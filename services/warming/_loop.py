@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.db import fetch_warming_state
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
@@ -20,6 +21,7 @@ from services.warming._dm_breaker import note_dm_flood
 from services.warming._fleet import _is_quiet_day
 from services.warming._flood_memory import remember_flood
 from services.warming._local_day import _next_local_wake
+from services.warming._mobile_cycle import run_mobile_cycle
 from services.warming._reservation import _reconcile_reservation, _Reservation
 from services.warming._snapshot import refresh_after_cycle
 from services.warming._state import READ_CURRENT, _set_state
@@ -246,7 +248,12 @@ async def _execute_cycle(
     on_step: Callable[[str], Awaitable[None]],
     tally: _ChannelTally,
 ) -> WarmingCycleResult:
-    """Patch-friendly indirection retained for tests and engine instrumentation."""
+    """The stint's cycle: Telethon, or the Redroid pod for a mobile stint with the emulator on.
+
+    Also the patch-friendly indirection tests and engine instrumentation rely on.
+    """
+    if _seams.bound_device() == "mobile" and settings.emulator.enabled:
+        return await run_mobile_cycle(request, on_step=on_step)
     return await run_one_cycle(request, on_step=on_step, tally=tally)
 
 

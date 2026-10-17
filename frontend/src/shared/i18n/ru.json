@@ -1884,6 +1884,8 @@
     "account_mobile_seed_failed": "Контакты и фото на телефон не добавлены",
     "account_mobile_activity_done": "Активность на телефоне",
     "account_mobile_activity_failed": "Активность на телефоне не удалась",
+    "warming_mobile_cycle_done": "Прогрев на телефоне",
+    "warming_mobile_cycle_failed": "Прогрев на телефоне не удался",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
     "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",

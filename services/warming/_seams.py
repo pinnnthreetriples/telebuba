@@ -104,6 +104,11 @@ def bind_device(device_type: DeviceType) -> None:
     _DEVICE.set(device_type)
 
 
+def bound_device() -> DeviceType | None:
+    """The device the calling loop task warms through; ``None`` outside a loop task."""
+    return _DEVICE.get()
+
+
 def _assert_live_lease(account_id: str, error: type[WarmingLeaseRevokedError]) -> None:
     lease = _LEASE.get()
     # Direct/test calls to ``run_one_cycle`` do not own a long-running runtime

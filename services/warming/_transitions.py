@@ -44,6 +44,12 @@ if TYPE_CHECKING:
         WarmingStateRecord,
     )
 
+# ``last_failed_action`` of a failed mobile cycle (``_mobile_cycle``).
+MOBILE_SESSION_ACTION = "mobile_session"
+# A failed cycle that did no work but stopped on one of these sleeps it off and
+# retries instead of parking the account in ``error``.
+_RETRYABLE_ACTIONS = frozenset({"set_online", MOBILE_SESSION_ACTION})
+
 
 class _PhaseEvent(NamedTuple):
     """A pending ``warming_phase_advanced`` log entry, emitted only if the write lands."""
@@ -240,10 +246,11 @@ async def _calculate_next_run(
         )
         if work_actions > 0:
             next_state = "sleeping"
-        elif result.last_failed_action == "set_online":
+        elif result.last_failed_action in _RETRYABLE_ACTIONS:
             # A lone presence-flip failure (network/proxy blip on the very first
             # action) is not evidence the account is broken — sleep and retry
-            # next cycle instead of parking it in the terminal error column.
+            # next cycle instead of parking it in the terminal error column. A
+            # mobile pod that would not open or whose session failed is the same.
             next_state = "sleeping"
         else:
             next_state = "error"
