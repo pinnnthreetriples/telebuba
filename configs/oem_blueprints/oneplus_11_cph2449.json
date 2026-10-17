@@ -12,6 +12,11 @@
     "height": 1608,
     "dpi": 280
   },
+  "camera": {
+    "f_number": 1.8,
+    "focal_length_mm": 5.59,
+    "file_style": "oneplus"
+  },
   "builds": {
     "33": {
       "release": "13",

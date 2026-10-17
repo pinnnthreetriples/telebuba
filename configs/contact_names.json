@@ -1,0 +1,86 @@
+{
+  "en_US": {
+    "countries": ["US", "CA", "AU", "NZ"],
+    "first": ["James", "Michael", "Robert", "David", "William", "Ethan", "Mason", "Daniel", "Olivia", "Emma", "Charlotte", "Amelia", "Sophia", "Rachel", "Lauren", "Megan"],
+    "last": ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Taylor", "Anderson", "Thomas", "Moore"],
+    "companies": ["Apex Logistics", "Summit Dental", "Metro Fitness", "BlueRidge Tech", "Hudson Realty", "Main Street Auto"],
+    "domains": ["gmail.com", "icloud.com", "outlook.com", "yahoo.com"]
+  },
+  "en_GB": {
+    "countries": ["GB", "IE"],
+    "first": ["Oliver", "George", "Noah", "Arthur", "Harry", "Jack", "Charlie", "Thomas", "Olivia", "Amelia", "Isla", "Ava", "Freya", "Poppy", "Evie", "Grace"],
+    "last": ["Smith", "Jones", "Taylor", "Brown", "Williams", "Wilson", "Johnson", "Davies", "Patel", "Robinson", "Wright", "Thompson", "Evans", "Walker"],
+    "companies": ["Kensington Clinic", "High Street Pharmacy", "Northside Plumbing", "Riverside Dental", "Oak Lettings"],
+    "domains": ["btinternet.com", "sky.com", "gmail.com", "outlook.com", "hotmail.co.uk"]
+  },
+  "de_DE": {
+    "countries": ["DE", "AT", "CH", "LI"],
+    "first": ["Lukas", "Maximilian", "Felix", "Jonas", "Leon", "Paul", "Elias", "Tobias", "Hannah", "Emma", "Mia", "Sophia", "Lina", "Julia", "Laura", "Katharina"],
+    "last": ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann", "Koch", "Richter", "Bauer", "Klein"],
+    "companies": ["AutoHaus Süd", "Bäckerei Schmidt", "Zahnarztpraxis Weber", "Elektro Becker", "Fahrschule Koch"],
+    "domains": ["gmx.de", "web.de", "t-online.de", "gmail.com"]
+  },
+  "fr_FR": {
+    "countries": ["FR", "BE", "LU", "MC"],
+    "first": ["Lucas", "Hugo", "Louis", "Gabriel", "Arthur", "Jules", "Thomas", "Nicolas", "Emma", "Jade", "Louise", "Alice", "Chloé", "Léa", "Camille", "Manon"],
+    "last": ["Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel"],
+    "companies": ["Boulangerie Martin", "Garage Durand", "Cabinet Dentaire Leroy", "Pharmacie du Centre", "Immobilier Moreau"],
+    "domains": ["orange.fr", "free.fr", "gmail.com", "laposte.net", "hotmail.fr"]
+  },
+  "es_ES": {
+    "countries": ["ES", "MX", "AR", "CO", "CL", "PE"],
+    "first": ["Hugo", "Martín", "Lucas", "Mateo", "Pablo", "Daniel", "Alejandro", "Javier", "Lucía", "Sofía", "Martina", "María", "Paula", "Laura", "Carmen", "Elena"],
+    "last": ["García", "Rodríguez", "González", "Fernández", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Martín", "Jiménez", "Ruiz", "Hernández", "Díaz"],
+    "companies": ["Taller Ruiz", "Clínica Dental Sol", "Farmacia Central", "Inmobiliaria Pérez", "Panadería López"],
+    "domains": ["gmail.com", "hotmail.com", "yahoo.es", "outlook.es"]
+  },
+  "it_IT": {
+    "countries": ["IT", "SM"],
+    "first": ["Leonardo", "Francesco", "Alessandro", "Lorenzo", "Mattia", "Andrea", "Marco", "Luca", "Sofia", "Giulia", "Aurora", "Alice", "Ginevra", "Chiara", "Martina", "Sara"],
+    "last": ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "Costa"],
+    "companies": ["Officina Rossi", "Studio Dentistico Bianchi", "Farmacia Centrale", "Panificio Greco", "Immobiliare Conti"],
+    "domains": ["gmail.com", "libero.it", "virgilio.it", "hotmail.it"]
+  },
+  "nl_NL": {
+    "countries": ["NL"],
+    "first": ["Noah", "Sem", "Liam", "Lucas", "Daan", "Finn", "Levi", "Bram", "Emma", "Julia", "Mila", "Tess", "Sophie", "Zoë", "Sara", "Anna"],
+    "last": ["de Jong", "Jansen", "de Vries", "van den Berg", "van Dijk", "Bakker", "Janssen", "Visser", "Smit", "Meijer", "de Boer", "Mulder", "Bos", "Vos"],
+    "companies": ["Garage Bakker", "Tandartspraktijk Visser", "Bakkerij de Boer", "Installatiebedrijf Smit", "Makelaardij Mulder"],
+    "domains": ["gmail.com", "ziggo.nl", "kpnmail.nl", "hotmail.com", "outlook.com"]
+  },
+  "pl_PL": {
+    "countries": ["PL"],
+    "first": ["Jan", "Aleksander", "Antoni", "Jakub", "Stanisław", "Piotr", "Krzysztof", "Tomasz", "Zuzanna", "Zofia", "Hanna", "Maja", "Julia", "Agnieszka", "Karolina", "Anna"],
+    "last": ["Nowak", "Kowalski", "Wiśniewski", "Wójcik", "Kowalczyk", "Kamiński", "Lewandowski", "Zieliński", "Szymański", "Woźniak", "Dąbrowski", "Kozłowski"],
+    "companies": ["Serwis Auto-Max", "Stomatologia Centrum", "Piekarnia Nowak", "Apteka Zdrowie", "Biuro Rachunkowe Kowalski"],
+    "domains": ["wp.pl", "onet.pl", "interia.pl", "gmail.com", "o2.pl"]
+  },
+  "pt_BR": {
+    "countries": ["BR", "PT"],
+    "first": ["Miguel", "Arthur", "Gael", "Heitor", "Theo", "Lucas", "Gabriel", "Rafael", "Helena", "Alice", "Laura", "Maria", "Valentina", "Beatriz", "Mariana", "Ana"],
+    "last": ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Lima", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho"],
+    "companies": ["Clínica Paulista", "Padaria Central", "Studio Pilates", "Oficina do Carlos", "Farmácia Popular"],
+    "domains": ["gmail.com", "uol.com.br", "bol.com.br", "hotmail.com", "outlook.com"]
+  },
+  "ru_RU": {
+    "countries": ["RU", "BY", "KZ", "KG"],
+    "first": ["Александр", "Дмитрий", "Максим", "Сергей", "Андрей", "Алексей", "Иван", "Михаил", "Анна", "Мария", "Елена", "Ольга", "Наталья", "Екатерина", "Татьяна", "Юлия"],
+    "last": ["Иванов", "Смирнов", "Кузнецов", "Попов", "Васильев", "Петров", "Соколов", "Михайлов", "Новиков", "Фёдоров", "Морозов", "Волков", "Лебедев", "Козлов"],
+    "companies": ["Автосервис", "Стоматология", "Аптека", "Салон красоты", "Шиномонтаж"],
+    "domains": ["mail.ru", "yandex.ru", "gmail.com", "bk.ru", "inbox.ru"]
+  },
+  "uk_UA": {
+    "countries": ["UA"],
+    "first": ["Олександр", "Дмитро", "Максим", "Андрій", "Іван", "Сергій", "Михайло", "Богдан", "Анна", "Марія", "Олена", "Ольга", "Наталія", "Катерина", "Юлія", "Софія"],
+    "last": ["Мельник", "Шевченко", "Бойко", "Коваленко", "Бондаренко", "Ткаченко", "Кравченко", "Олійник", "Шевчук", "Коваль", "Поліщук", "Бондар", "Ткачук", "Марченко"],
+    "companies": ["Автосервіс", "Стоматологія", "Аптека", "Салон краси", "Нова пошта"],
+    "domains": ["ukr.net", "gmail.com", "i.ua", "meta.ua"]
+  },
+  "tr_TR": {
+    "countries": ["TR"],
+    "first": ["Yusuf", "Eymen", "Mustafa", "Ömer", "Emir", "Ahmet", "Mehmet", "Can", "Zeynep", "Elif", "Defne", "Asel", "Ayşe", "Fatma", "Ecrin", "Meryem"],
+    "last": ["Yılmaz", "Kaya", "Demir", "Çelik", "Şahin", "Yıldız", "Yıldırım", "Öztürk", "Aydın", "Özdemir", "Arslan", "Doğan", "Kılıç", "Aslan"],
+    "companies": ["Oto Servis", "Diş Kliniği", "Eczane", "Kuaför Salonu", "Emlak Ofisi"],
+    "domains": ["gmail.com", "hotmail.com", "yandex.com", "outlook.com"]
+  }
+}

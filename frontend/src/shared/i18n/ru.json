@@ -1879,6 +1879,7 @@
     "account_second_device_remove_failed": "Второе устройство не удалось отключить",
     "account_mobile_opened": "Открыт на телефоне",
     "account_mobile_open_failed": "Не открылся на телефоне",
+    "account_mobile_seed_failed": "Контакты и фото на телефон не добавлены",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
     "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",

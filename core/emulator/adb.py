@@ -112,6 +112,15 @@ async def install_apk(serial: str) -> None:
         raise
 
 
+async def push(serial: str, *local: str, remote: str) -> None:
+    """Copy host files to ``remote`` on the device (a directory when there are several)."""
+    await run_command(
+        [str(settings.emulator.adb_path), "-s", serial, "push", *local, remote],
+        seconds=settings.emulator.install_timeout_seconds,
+        step="adb push",
+    )
+
+
 async def start_app(serial: str, package: str) -> None:
     await shell(serial, "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
 

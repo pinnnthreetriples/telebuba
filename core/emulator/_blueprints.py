@@ -1,7 +1,7 @@
 """The real phones a container can be, read from ``configs/oem_blueprints``.
 
 One JSON per phone: who made it (brand, maker, model, product, device), how its
-serial numbers look, the container's screen, and one real build per Android SDK it
+serial numbers look, the container's screen, its main camera, and one real build per Android SDK it
 ran. A build is copied from a public firmware listing, never made up, and the
 container claims exactly it. ``ro.build.fingerprint`` and ``ro.build.description``
 are not stored: they are put together from these fields, so they cannot disagree.
@@ -47,6 +47,20 @@ class Screen(_Frozen):
     dpi: int = Field(ge=120, le=640)
 
 
+class Camera(_Frozen):
+    """The main rear camera as its photos' EXIF reports it, and how the phone names them.
+
+    Aperture and focal length are the maker's spec-sheet values for that lens.
+    ``file_style`` is the stock camera app's file name: Samsung ``20240512_143022``,
+    Pixel ``PXL_20240512_143022123`` (UTC), Xiaomi ``IMG_20240512_143022``, OnePlus
+    ``IMG20240512143022``.
+    """
+
+    f_number: float = Field(ge=1.0, le=4.0)
+    focal_length_mm: float = Field(ge=1.0, le=15.0)
+    file_style: Literal["samsung", "pixel", "xiaomi", "oneplus"]
+
+
 class OemBlueprint(_Frozen):
     brand: str = Field(pattern=r"^[A-Za-z0-9]+$")
     manufacturer: str = Field(pattern=r"^[A-Za-z0-9]+$")
@@ -59,6 +73,7 @@ class OemBlueprint(_Frozen):
     serial_length: int = Field(ge=8, le=20)
     serial_charset: Literal["alnum", "hex"]
     screen: Screen
+    camera: Camera
     builds: dict[int, OemBuild] = Field(min_length=1)
 
 
