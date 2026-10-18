@@ -12,6 +12,11 @@
     "height": 1600,
     "dpi": 280
   },
+  "camera": {
+    "f_number": 1.68,
+    "focal_length_mm": 6.9,
+    "file_style": "pixel"
+  },
   "builds": {
     "34": {
       "release": "14",

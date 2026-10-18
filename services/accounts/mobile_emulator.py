@@ -19,6 +19,8 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * a running pod is used as it stands only while its gateway runs the current proxy;
   one on another proxy (or whose gateway died) is stopped and started again, and a
   proxy change stops the account's pod at once (``stop_account_pod``);
+* a container's first boot gives it contacts and photos (``core.emulator._seeder``)
+  before the app starts; a seeding that fails is logged, never fails the open;
 * the sign-in state is read off the screen every time, never remembered;
 * a running app that shows its intro or phone screen is signed in where it stands;
   one showing the chat list, or anything else, is left alone;
@@ -56,6 +58,7 @@ from core.emulator import (
     pod_runs_proxy,
     read_screen,
     remove_pod,
+    seed_device_if_needed,
     show_instance,
     start_pod,
     stop_pod,
@@ -70,6 +73,7 @@ from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
 if TYPE_CHECKING:
+    from core.emulator import ContainerSpec
     from core.emulator.ui_dump import Screen
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
@@ -199,12 +203,33 @@ async def _open(
         await wait_for_boot(serial)
         await show_instance(instance.index)
         await assert_sdk(serial, spec.sdk)
+        await _seed(account.account_id, serial, spec)
         await ensure_app(serial)
         signed_in = await sign_in(account, serial)
     except BaseException:
         await asyncio.shield(_undo(name, created=created))
         raise
     return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
+
+
+async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
+    """Give a never-seeded container its contacts and photos; never fails the open.
+
+    Seeding only makes the phone look used: a failure is logged and the sign-in goes
+    on. The marker is written only once both are in, so the next boot tries again.
+    Anything but a cancellation is caught: a broken name file or a full host disk
+    must not stop the sign-in either.
+    """
+    try:
+        await seed_device_if_needed(serial, spec)
+    except Exception as exc:  # noqa: BLE001 - seeding must never fail the open
+        reason = exc.code if isinstance(exc, EmulatorError) else type(exc).__name__
+        await log_event(
+            "WARNING",
+            "account_mobile_seed_failed",
+            account_id=account_id,
+            extra={"reason": reason},
+        )
 
 
 async def _undo(name: str, *, created: bool) -> None:

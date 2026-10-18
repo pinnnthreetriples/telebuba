@@ -19,7 +19,7 @@ import string
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.device_fingerprint_android import ANDROID_DEVICES, android_device_model
-from core.emulator._blueprints import OemBuild, Screen, find_build
+from core.emulator._blueprints import Camera, OemBuild, Screen, find_build
 from core.emulator._errors import EmulatorError
 from core.emulator._geo import Region, region_for
 
@@ -47,6 +47,7 @@ class ContainerSpec(NamedTuple):
     device: str
     serial: str
     screen: Screen
+    camera: Camera
     build: OemBuild
     region: Region
 
@@ -119,6 +120,7 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
             blueprint.serial_prefix, blueprint.serial_length, blueprint.serial_charset, seed
         ),
         screen=blueprint.screen,
+        camera=blueprint.camera,
         build=build,
         region=region_for(country, fingerprint.system_lang_code, seed=seed),
     )
