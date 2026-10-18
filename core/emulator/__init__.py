@@ -26,6 +26,7 @@ from core.emulator.adb import (
     human_type,
     wait_for_boot,
 )
+from core.emulator.playbook import BaseMobilePlaybook, TelegramMobilePlaybook
 from core.emulator.pod import pod_runs_proxy, remove_pod, start_pod, stop_pod
 from core.emulator.redroid import Instance, adb_serial, find_instance, show_instance
 from core.emulator.telegram_app import (
@@ -41,6 +42,7 @@ from core.emulator.telegram_app import (
 )
 
 __all__ = [
+    "BaseMobilePlaybook",
     "ContainerSpec",
     "EmulatorError",
     "HumanInputEngine",
@@ -48,6 +50,7 @@ __all__ = [
     "KeystrokeEvent",
     "SwipeTrajectory",
     "TapEvent",
+    "TelegramMobilePlaybook",
     "adb_serial",
     "assert_sdk",
     "bring_app_to_front",

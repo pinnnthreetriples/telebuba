@@ -61,6 +61,13 @@ class SwipeTrajectory:
 
 
 @dataclass(frozen=True, slots=True)
+class FlingEvent:
+    start: tuple[int, int]
+    end: tuple[int, int]
+    duration_ms: int
+
+
+@dataclass(frozen=True, slots=True)
 class KeystrokeEvent:
     char: str
     delay_ms: int
@@ -216,6 +223,27 @@ class HumanInputEngine:
         pause_sec = round(max(1.8, min(9.5, raw)), 2)
         scroll_back_up = self.rng.random() < _SCROLL_BACK_UP_PROBABILITY
         return pause_sec, scroll_back_up
+
+    def sample_fling(self, start: tuple[int, int], end: tuple[int, int]) -> FlingEvent:
+        """A quick flick Android turns into scroll inertia.
+
+        - 120-180 ms from start to end (a slower ``input swipe`` scrolls without a fling)
+        - End point nudged 3-12 px sideways, so no two flicks land on the same line
+        """
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        dist = math.hypot(dx, dy)
+        nudge = self.rng.uniform(3.0, 12.0) * self.rng.choice([-1.0, 1.0])
+        nx, ny = (-dy / dist, dx / dist) if dist >= 1.0 else (0.0, 0.0)
+        return FlingEvent(
+            start=start,
+            end=(round(end[0] + nudge * nx), round(end[1] + nudge * ny)),
+            duration_ms=self.rng.randint(120, 180),
+        )
+
+    def sample_story_view_sec(self) -> float:
+        """Sample how long one story is looked at: log-normal around 4 s, in [2.0, 9.0]."""
+        raw = math.exp(self.rng.gauss(math.log(4.0), 0.35))
+        return round(max(2.0, min(9.0, raw)), 2)
 
     def generate_keystroke_sequence(
         self,

@@ -25,7 +25,9 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * a running app that shows its intro or phone screen is signed in where it stands;
   one showing the chat list, or anything else, is left alone;
 * on any failure the pod this call started is stopped again, and removed when this
-  call created it.
+  call created it;
+* an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
+  stands and never starts one.
 
 The per-account locks are process-local, like the rest of the runtime state (one
 uvicorn worker). A start takes the lock before it reads the account, and only the
@@ -47,6 +49,7 @@ from core.db import (
 )
 from core.emulator import (
     EmulatorError,
+    TelegramMobilePlaybook,
     adb_serial,
     assert_sdk,
     bring_app_to_front,
@@ -78,10 +81,11 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
-    from schemas.emulator import EmulatorRefusalCode
+    from schemas.emulator import EmulatorRefusalCode, PlaybookResult
     from schemas.proxy import ProxySettings
 
 _DEVICE_MISSING: DeviceRefusalCode = "device_missing"
+_EMULATOR_NOT_RUNNING: EmulatorRefusalCode = "emulator_not_running"
 _EMULATOR_PROXY_MISSING: EmulatorRefusalCode = "emulator_proxy_missing"
 _EMULATOR_PROXY_UNSUPPORTED: EmulatorRefusalCode = "emulator_proxy_unsupported"
 _MOBILE_EMULATOR_DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
@@ -91,6 +95,7 @@ __all__ = [
     "EmulatorRefusedError",
     "open_account_mobile",
     "remove_account_container",
+    "run_mobile_activity",
     "stop_account_pod",
 ]
 
@@ -98,6 +103,8 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 _LOCKS: dict[str, asyncio.Lock] = {}
+# Accounts with an activity session running.
+_ACTIVE: set[str] = set()
 
 # A running app on one of these still needs signing in; anything else is left as is.
 _ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
@@ -210,6 +217,49 @@ async def _open(
         await asyncio.shield(_undo(name, created=created))
         raise
     return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
+
+
+async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookResult:
+    """Spend up to ``duration_sec`` (capped) in the account's running Telegram app.
+
+    The pod is used as it stands: one that is down, or whose gateway runs another
+    proxy, answers ``emulator_not_running``. The session does not hold the account's
+    lock, so a proxy change or a deletion stops the pod at once and the session fails
+    on its next command. One session per account, none while a start is in flight.
+    """
+    lock = _LOCKS.get(account_id)
+    if (lock is not None and lock.locked()) or account_id in _ACTIVE:
+        raise EmulatorBusyError
+    _ACTIVE.add(account_id)
+    try:
+        account = await require_account(account_id)
+        _fingerprint, proxy = await _refuse_what_cannot_work(account)
+        name = _container_name(account_id)
+        instance = await find_instance(name)
+        if instance is None or not instance.running or not await pod_runs_proxy(name, proxy):
+            raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
+        serial = adb_serial(instance.index)
+        await connect_device(serial)
+        await bring_app_to_front(serial)
+        seconds = min(duration_sec, settings.emulator.activity_max_seconds)
+        result = await TelegramMobilePlaybook().run_session(serial, seconds)
+    except EmulatorError as exc:
+        await log_event(
+            "WARNING",
+            "account_mobile_activity_failed",
+            account_id=account_id,
+            extra={"reason": exc.code},
+        )
+        raise EmulatorRefusedError(exc.code) from exc
+    finally:
+        _ACTIVE.discard(account_id)
+    await log_event(
+        "INFO",
+        "account_mobile_activity_done",
+        account_id=account_id,
+        extra=result.model_dump(mode="json"),
+    )
+    return result
 
 
 async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:

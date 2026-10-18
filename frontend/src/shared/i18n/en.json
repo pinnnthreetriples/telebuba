@@ -1365,6 +1365,8 @@
       "emulator_phone_invalid": "The account's phone number could not be read.",
       "emulator_code_timeout": "The login code did not reach the existing session in time.",
       "emulator_twofa_missing": "The account has a cloud password that is not stored.",
+      "emulator_not_running": "The container's Telegram app is not running on the account's current proxy — open it first.",
+      "emulator_not_signed_in": "Telegram in the container is not signed in — finish the sign-in first.",
       "not_graduated": "The account is no longer warmed — refresh the page",
       "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page"
     },
@@ -1845,6 +1847,8 @@
     "account_mobile_opened": "Opened on phone",
     "account_mobile_open_failed": "Could not open on phone",
     "account_mobile_seed_failed": "Phone contacts and photos not added",
+    "account_mobile_activity_done": "Activity on phone",
+    "account_mobile_activity_failed": "Activity on phone failed",
     "account_mobile_container_removed": "Container removed",
     "account_mobile_container_remove_failed": "Container not removed",
     "account_mobile_pod_stop_failed": "Phone not stopped after a proxy change",
@@ -2020,6 +2024,8 @@
     "emulator_phone_invalid": "the phone number could not be read",
     "emulator_code_timeout": "the login code never arrived",
     "emulator_twofa_missing": "the cloud password is not stored",
+    "emulator_not_running": "the container is not running",
+    "emulator_not_signed_in": "Telegram is not signed in",
     "no_discussion": "the post has no comments",
     "no_message": "no message from the partner",
     "no_sticker": "no matching sticker installed"
