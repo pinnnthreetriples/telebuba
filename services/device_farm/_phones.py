@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import fetch_device_fingerprint, list_accounts
+from core.device_fingerprint_android import android_device_for
 from core.emulator import EmulatorError, list_instances
 from core.logging import log_event
 from schemas.device_farm import (
@@ -74,6 +75,14 @@ def _status(account_id: str, container: Instance | None) -> PhoneStatus:
     return "free" if container is not None and container.running else "asleep"
 
 
+def _names(device_model: str) -> tuple[str, str]:
+    """The maker and the sales name of a catalogue phone; the raw model otherwise."""
+    device = android_device_for(device_model)
+    if device is None:
+        return "", device_model
+    return device.manufacturer[:1].upper() + device.manufacturer[1:], device.name
+
+
 def _phone(
     account: AccountRead, fingerprint: DeviceFingerprint, container: Instance | None
 ) -> Phone:
@@ -86,10 +95,13 @@ def _phone(
             country_code=account.proxy_country_code,
             status=account.proxy_status,
         )
+    maker, model_name = _names(fingerprint.device_model)
     return Phone(
         phone_id=container_name(account.account_id),
         created=container is not None,
         status=_status(account.account_id, container),
+        maker=maker,
+        model_name=model_name,
         device_model=fingerprint.device_model,
         system_version=fingerprint.system_version,
         app_version=fingerprint.app_version,

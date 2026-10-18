@@ -24,7 +24,11 @@ export function phoneActions(status: PhoneStatus) {
   };
 }
 
-// The maker the mockup's chin shows: the model's first word ("Samsung Galaxy S23").
-export function phoneBrand(model: string): string {
-  return model.trim().split(/\s+/)[0] ?? model;
+// "SDK 34" as the Android release an operator knows it by; anything else as given.
+const ANDROID_RELEASE: Record<number, number> = { 31: 12, 32: 12, 33: 13, 34: 14, 35: 15, 36: 16 };
+
+export function androidVersion(systemVersion: string): string {
+  const sdk = /^SDK (\d+)$/.exec(systemVersion.trim())?.[1];
+  const release = sdk === undefined ? undefined : ANDROID_RELEASE[Number(sdk)];
+  return release === undefined ? systemVersion : `Android ${String(release)}`;
 }

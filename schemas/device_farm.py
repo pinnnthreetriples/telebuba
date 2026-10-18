@@ -60,6 +60,10 @@ class Phone(BaseModel):
     phone_id: str = Field(pattern=PHONE_ID_PATTERN)
     created: bool
     status: PhoneStatus
+    # How the operator reads the phone ("Samsung", "Galaxy S23 Ultra"); ``device_model``
+    # is what Telegram is told ("samsungSM-S918B").
+    maker: str
+    model_name: str
     device_model: str
     system_version: str
     app_version: str

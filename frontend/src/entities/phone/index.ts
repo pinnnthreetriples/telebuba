@@ -4,5 +4,5 @@ export {
   startPhoneMutation,
   stopPhoneMutation,
 } from './api/phone.queries';
-export { PHONE_STATUS_TONE, phoneActions, phoneBrand, type PhoneStatus } from './model/status';
+export { androidVersion, PHONE_STATUS_TONE, phoneActions, type PhoneStatus } from './model/status';
 export { PhoneMockup } from './ui/PhoneMockup';

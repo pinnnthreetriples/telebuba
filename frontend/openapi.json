@@ -31578,6 +31578,14 @@
             ],
             "title": "Status"
           },
+          "maker": {
+            "type": "string",
+            "title": "Maker"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
           "device_model": {
             "type": "string",
             "title": "Device Model"
@@ -31617,6 +31625,8 @@
           "phone_id",
           "created",
           "status",
+          "maker",
+          "model_name",
           "device_model",
           "system_version",
           "app_version",

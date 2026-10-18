@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
+from core.device_fingerprint_android import android_device_for
 from core.emulator import EmulatorError
 from core.emulator.redroid import Instance
 from schemas.accounts import AccountCreate
@@ -69,6 +70,11 @@ async def test_a_mobile_account_is_a_sleeping_phone_until_its_pod_runs(farm: _Fa
     [phone] = asleep.phones
     assert phone.phone_id == "telebuba-acc"
     assert (phone.created, phone.status) == (False, "asleep")
+    device = android_device_for(phone.device_model)
+    assert device is not None
+    assert phone.model_name == device.name
+    assert phone.maker[0].isupper()
+    assert phone.maker.casefold() == device.manufacturer.casefold()
     assert phone.apps[0].platform == "telegram"
     assert phone.apps[0].account_id == "acc"
     assert phone.proxy is not None
@@ -201,3 +207,7 @@ async def test_stop_leaves_a_warming_phone_to_the_warming_board(farm: _Farm) -> 
         await stop_phone("telebuba-acc")
 
     assert farm.stopped == []
+
+
+def test_a_phone_outside_the_catalogue_shows_its_raw_model() -> None:
+    assert _phones._names("SomeVendorX1") == ("", "SomeVendorX1")

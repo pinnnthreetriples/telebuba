@@ -5820,6 +5820,14 @@ export type Phone = {
    */
   status: 'asleep' | 'starting' | 'free' | 'warming' | 'manual';
   /**
+   * Maker
+   */
+  maker: string;
+  /**
+   * Model Name
+   */
+  model_name: string;
+  /**
    * Device Model
    */
   device_model: string;

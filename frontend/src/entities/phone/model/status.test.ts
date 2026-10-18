@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { phoneActions, phoneBrand } from './status';
+import { androidVersion, phoneActions } from './status';
 
 describe('phoneActions', () => {
   it('starts only a sleeping phone and stops only an idle or hand-held one', () => {
@@ -30,9 +30,14 @@ describe('phoneActions', () => {
   });
 });
 
-describe('phoneBrand', () => {
-  it('is the model name first word', () => {
-    expect(phoneBrand('Samsung Galaxy S23')).toBe('Samsung');
-    expect(phoneBrand('  Pixel 7')).toBe('Pixel');
+describe('androidVersion', () => {
+  it('names the Android release behind an SDK level', () => {
+    expect(androidVersion('SDK 34')).toBe('Android 14');
+    expect(androidVersion('SDK 33')).toBe('Android 13');
+  });
+
+  it('keeps anything it does not know as it is', () => {
+    expect(androidVersion('SDK 99')).toBe('SDK 99');
+    expect(androidVersion('Android 14')).toBe('Android 14');
   });
 });

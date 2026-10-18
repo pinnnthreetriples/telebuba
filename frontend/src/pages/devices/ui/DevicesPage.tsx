@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  androidVersion,
   PHONE_STATUS_TONE,
   phoneActions,
-  phoneBrand,
   PhoneMockup,
   phonesQueryKey,
   phonesQueryOptions,
@@ -74,12 +74,12 @@ export function DevicesPage() {
           const pending = busy === phone.phone_id;
           return (
             <li key={phone.phone_id} className="flex flex-col gap-2">
-              <PhoneMockup brand={phoneBrand(phone.device_model)}>
+              <PhoneMockup brand={phone.maker}>
                 <Badge tone={PHONE_STATUS_TONE[phone.status]} dot size="sm">
                   {t(`devices.status.${phone.status}`)}
                 </Badge>
-                <span className="type-body-medium">{phone.device_model}</span>
-                <span className="type-small">{phone.system_version}</span>
+                <span className="type-body-medium">{phone.model_name}</span>
+                <span className="type-small">{androidVersion(phone.system_version)}</span>
                 {app && (
                   <span className="type-small truncate">
                     {t(`devices.platform.${app.platform}`)} ·{' '}
@@ -138,13 +138,13 @@ export function DevicesPage() {
       {open && (
         <Modal
           size={open.mode === 'details' ? 'form' : 'panel'}
-          label={open.phone.device_model}
+          label={open.phone.model_name}
           onClose={() => {
             setOpen(null);
             void queryClient.invalidateQueries({ queryKey: phonesQueryKey() });
           }}
         >
-          <ModalHeader title={open.phone.device_model} subtitle={t(`devices.modal.${open.mode}`)} />
+          <ModalHeader title={open.phone.model_name} subtitle={t(`devices.modal.${open.mode}`)} />
           <div className="p-6">
             {open.mode === 'details' ? (
               <PhoneDetails phone={open.phone} />

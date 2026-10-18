@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { androidVersion } from '@/entities/phone';
 import type { Phone } from '@/shared/api';
 
 // What the phone presents and where its traffic goes. The proxy is shown by its
@@ -8,8 +9,12 @@ export function PhoneDetails({ phone }: { phone: Phone }) {
   const { t } = useTranslation();
   const proxy = phone.proxy;
   const rows: [string, string][] = [
-    [t('devices.details.model'), phone.device_model],
-    [t('devices.details.system'), phone.system_version],
+    [t('devices.details.model'), `${phone.maker} ${phone.model_name}`.trim()],
+    [t('devices.details.telegramModel'), phone.device_model],
+    [
+      t('devices.details.system'),
+      `${androidVersion(phone.system_version)} (${phone.system_version})`,
+    ],
     [t('devices.details.app'), phone.app_version],
     [t('devices.details.lang'), phone.lang_code],
     [

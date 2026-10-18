@@ -5058,6 +5058,7 @@
     },
     "details": {
       "model": "Модель",
+      "telegramModel": "Модель для Telegram",
       "system": "Android",
       "app": "Версия приложения",
       "lang": "Язык системы",
