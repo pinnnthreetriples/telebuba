@@ -19,7 +19,6 @@ from core.device_fingerprint_android import generate_android_fingerprint
 from core.repositories.device_fingerprint import record_second_device
 from core.telegram_client import _pool, account_auth_lock
 from schemas.accounts import AccountCheckRequest, AccountCreate, AccountSessionFileImport
-from schemas.devices import SecondDeviceResult, SecondDeviceSignIn
 from schemas.telegram_session import TelegramSessionCheckRequest, TelegramSessionCheckResult
 from services.accounts import (
     DeviceRefusedError,
@@ -34,6 +33,7 @@ from services.accounts import (
 )
 from services.accounts import devices as devices_module
 from services.accounts._import_rollback import discard_imported_session
+from tests.services.accounts._mobile_support import _fake_sign_in
 
 if TYPE_CHECKING:
     from schemas.device_fingerprint import TelegramClientRequest
@@ -50,31 +50,6 @@ def _mobile_configured(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _session_file(name: str) -> Path:
     return Path(settings.telegram.session_dir) / f"{name}.session"
-
-
-def _fake_sign_in(
-    monkeypatch: pytest.MonkeyPatch,
-    code: str | None = None,
-    flood: int | None = None,
-) -> list[SecondDeviceSignIn]:
-    calls: list[SecondDeviceSignIn] = []
-
-    async def fake(request: SecondDeviceSignIn) -> SecondDeviceResult:
-        calls.append(request)
-        if code is None:
-            await record_second_device(
-                request.session_name,
-                generate_android_fingerprint(request.account_id, _PHONE),
-            )
-        return SecondDeviceResult(
-            account_id=request.account_id,
-            device_type=request.device_type,
-            code=code,  # ty: ignore[invalid-argument-type]
-            flood_wait_seconds=flood,
-        )
-
-    monkeypatch.setattr(devices_module, "authorize_second_device", fake)
-    return calls
 
 
 async def _desktop(account_id: str = "acc", phone: str | None = _PHONE) -> None:
@@ -388,3 +363,23 @@ async def test_removal_holds_the_accounts_auth_lock_while_it_unlinks(
 
     assert held == [True]
     assert await fetch_account("acc") is None
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "left"),
+    [(179.0, 1), (179.5, 1), (179.999, 1), (180.0, None), (181.0, None)],
+)
+def test_the_code_pause_ends_on_its_second_and_rounds_what_is_left_up(
+    monkeypatch: pytest.MonkeyPatch, elapsed: float, left: int | None
+) -> None:
+    monkeypatch.setattr(settings.telegram, "second_device_code_cooldown_seconds", 180)
+    devices_module._LAST_CODE_REQUEST["acc"] = 1000.0
+    monkeypatch.setattr(devices_module.time, "monotonic", lambda: 1000.0 + elapsed)
+
+    if left is None:
+        devices_module.claim_code_request("acc")
+        assert devices_module._LAST_CODE_REQUEST["acc"] == 1000.0 + elapsed
+        return
+    with pytest.raises(DeviceRefusedError) as refused:
+        devices_module.claim_code_request("acc")
+    assert refused.value.retry_after_seconds == left

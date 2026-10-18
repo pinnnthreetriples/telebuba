@@ -6,12 +6,9 @@ import pytest
 
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import open_account_mobile
-from tests.services.accounts import test_mobile_emulator as opening
-from tests.services.accounts.test_mobile_emulator import _account, _Container
+from tests.services.accounts._mobile_support import _account, _Container
 
-# The opening tests' scripted pod and their switched-on feature, by their fixture names.
-container = opening.container
-_enabled = opening._enabled
+pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 
 @pytest.mark.asyncio

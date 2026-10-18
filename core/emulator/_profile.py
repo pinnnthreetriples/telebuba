@@ -29,10 +29,8 @@ if TYPE_CHECKING:
 
 _EMULATOR_DEVICE_UNKNOWN: EmulatorRefusalCode = "emulator_device_unknown"
 
-_IMEI_LENGTH = 15
 _SERIAL_ALPHABETS = {"alnum": string.digits + string.ascii_uppercase, "hex": "0123456789abcdef"}
 # "35" is a GSMA reporting-body prefix; the rest of the body is derived.
-_IMEI_PREFIX = "35"
 # Every partition a ``ro.product.<partition>.*`` / ``ro.<partition>.build.*`` exists for.
 _PARTITIONS = ("", "system.", "system_ext.", "product.", "vendor.", "odm.")
 
@@ -41,7 +39,6 @@ class ContainerSpec(NamedTuple):
     manufacturer: str
     model: str
     sdk: int
-    imei: str
     brand: str
     product: str
     device: str
@@ -52,32 +49,8 @@ class ContainerSpec(NamedTuple):
     region: Region
 
 
-def luhn_check_digit(body: str) -> str:
-    """The digit that makes ``body + digit`` pass the Luhn check."""
-    total = 0
-    for position, char in enumerate(reversed(body)):
-        digit = int(char)
-        if position % 2 == 0:
-            digit *= 2
-            if digit > 9:  # noqa: PLR2004 - Luhn folds a doubled digit back to one
-                digit -= 9
-        total += digit
-    return str((10 - total % 10) % 10)
-
-
-def is_valid_imei(imei: str) -> bool:
-    return len(imei) == _IMEI_LENGTH and imei.isdigit() and luhn_check_digit(imei[:-1]) == imei[-1]
-
-
 def _derived(seed: str, purpose: str) -> int:
     return int.from_bytes(hashlib.sha256(f"{purpose}:{seed}".encode()).digest(), "big")
-
-
-def derive_imei(seed: str) -> str:
-    """A Luhn-valid IMEI, the same every time for ``seed``."""
-    digits = _IMEI_LENGTH - 1 - len(_IMEI_PREFIX)
-    body = _IMEI_PREFIX + str(_derived(seed, "imei") % 10**digits).zfill(digits)
-    return body + luhn_check_digit(body)
 
 
 def derive_serial(prefix: str, length: int, charset: Literal["alnum", "hex"], seed: str) -> str:
@@ -112,7 +85,6 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
         manufacturer=blueprint.manufacturer,
         model=blueprint.model,
         sdk=int(sdk),
-        imei=derive_imei(seed),
         brand=blueprint.brand,
         product=blueprint.product,
         device=blueprint.device,

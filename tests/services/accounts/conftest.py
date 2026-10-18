@@ -15,12 +15,18 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.outreach_protection import OutreachProtection  # noqa: TC001
 from services import warming
-from services.accounts import _bulk_runner, bulk_messages
+from services.accounts import _bulk_runner, _emulator_sign_in, bulk_messages
 from services.accounts import devices as devices_module
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
+from tests.services.accounts._mobile_support import (
+    _SCREEN_ACTIONS,
+    _SERVICE_FAKES,
+    _SIGN_IN_FAKES,
+    _Container,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -200,3 +206,23 @@ def bulk_clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
     monkeypatch.setattr(_bulk_runner, "_now", lambda: clock.now)
     monkeypatch.setattr(_bulk_runner, "_sleep", fake_sleep)
     return clock
+
+
+@pytest.fixture
+def mobile_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The emulator switched on, containers named ``telebuba-<account>``."""
+    monkeypatch.setattr(settings.emulator, "enabled", True)
+    monkeypatch.setattr(settings.emulator, "instance_prefix", "telebuba-")
+
+
+@pytest.fixture
+def container(monkeypatch: pytest.MonkeyPatch) -> _Container:
+    """The scripted pod on the service modules' own names."""
+    fake = _Container()
+    for name in _SERVICE_FAKES:
+        monkeypatch.setattr(emulator_module, name, getattr(fake, name))
+    for name in _SIGN_IN_FAKES:
+        monkeypatch.setattr(_emulator_sign_in, name, getattr(fake, name))
+    for name, label in _SCREEN_ACTIONS.items():
+        monkeypatch.setattr(_emulator_sign_in, name, fake.ui(label))
+    return fake

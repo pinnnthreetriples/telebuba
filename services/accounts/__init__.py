@@ -70,7 +70,8 @@ from services.accounts.chats import (
     mark_chat_read,
     send_chat_message,
 )
-from services.accounts.devices import DeviceRefusedError, add_account_device
+from services.accounts.device_setup import add_account_device
+from services.accounts.devices import DeviceRefusedError
 from services.accounts.lead_queue import (
     shutdown_lead_queue_on_shutdown,
     start_lead_queue_on_startup,

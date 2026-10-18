@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
-from core.emulator._process import run_command
+from core.emulator._process import adb_command
 from core.emulator._text import escape_input_text
 
 if TYPE_CHECKING:
@@ -46,10 +46,8 @@ _BOOTED = "1"
 
 
 async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
-    return await run_command(
-        [str(settings.emulator.adb_path), "-s", serial, "shell", *args],
-        seconds=seconds or settings.emulator.command_timeout_seconds,
-        step=f"adb shell {args[0]}",
+    return await adb_command(
+        "-s", serial, "shell", *args, seconds=seconds, step=f"adb shell {args[0]}"
     )
 
 
@@ -66,11 +64,7 @@ async def connect_device(serial: str) -> None:
     if ":" not in serial:
         return
     with suppress(EmulatorError):
-        await run_command(
-            [str(settings.emulator.adb_path), "connect", serial],
-            seconds=settings.emulator.command_timeout_seconds,
-            step="adb connect",
-        )
+        await adb_command("connect", serial, step="adb connect")
 
 
 async def _boot_completed(serial: str) -> bool:
@@ -113,8 +107,12 @@ async def install_apk(serial: str) -> None:
     if not apk.is_file():
         raise EmulatorError(_EMULATOR_APK_MISSING)
     try:
-        await run_command(
-            [str(settings.emulator.adb_path), "-s", serial, "install", "-r", str(apk)],
+        await adb_command(
+            "-s",
+            serial,
+            "install",
+            "-r",
+            str(apk),
             seconds=settings.emulator.install_timeout_seconds,
             step="adb install",
         )
@@ -126,8 +124,12 @@ async def install_apk(serial: str) -> None:
 
 async def push(serial: str, *local: str, remote: str) -> None:
     """Copy host files to ``remote`` on the device (a directory when there are several)."""
-    await run_command(
-        [str(settings.emulator.adb_path), "-s", serial, "push", *local, remote],
+    await adb_command(
+        "-s",
+        serial,
+        "push",
+        *local,
+        remote,
         seconds=settings.emulator.install_timeout_seconds,
         step="adb push",
     )
@@ -156,11 +158,6 @@ async def dump_ui(serial: str) -> str:
         if xml:
             return xml
     return ""
-
-
-async def tap(serial: str, node: UiNode) -> None:
-    x, y = node.center
-    await shell(serial, "input", "tap", str(x), str(y))
 
 
 async def press(serial: str, *keycodes: int) -> None:

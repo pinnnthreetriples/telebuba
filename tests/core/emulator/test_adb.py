@@ -9,7 +9,6 @@ import pytest
 from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
-from core.emulator.ui_dump import UiNode
 
 if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
@@ -17,9 +16,7 @@ if TYPE_CHECKING:
 
 @pytest.mark.asyncio
 async def test_every_device_command_goes_through_adb_shell(console: Console) -> None:
-    node = UiNode("", "", "android.widget.EditText", password=False, bounds=(0, 100, 200, 140))
 
-    await adb.tap("emulator-5556", node)
     await adb.type_text("emulator-5556", "a b$c")
     await adb.press("emulator-5556", adb.KEYCODE_ENTER)
     await adb.getprop("emulator-5556", "sys.boot_completed")
@@ -27,7 +24,6 @@ async def test_every_device_command_goes_through_adb_shell(console: Console) -> 
     for call in console.calls:
         assert call[:4] == [str(settings.emulator.adb_path), "-s", "emulator-5556", "shell"]
     assert console.shell_calls() == [
-        ["input", "tap", "100", "120"],
         ["input", "text", "a%sb\\$c"],
         ["input", "keyevent", "66"],
         ["getprop", "sys.boot_completed"],

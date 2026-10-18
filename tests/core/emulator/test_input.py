@@ -14,10 +14,6 @@ from core.emulator._input import (
     QWERTY_NEIGHBORS,
     HumanInputEngine,
     KeystrokeEvent,
-    generate_bezier_swipe,
-    generate_keystroke_sequence,
-    sample_gaussian_tap,
-    sample_reading_pause_sec,
 )
 from core.emulator.ui_dump import UiNode
 
@@ -74,13 +70,6 @@ def test_sample_gaussian_tap_degenerate_and_inverted_bounds(
         assert tap.release_y >= 0
         assert 48 <= tap.hold_ms <= 115
         assert tap.bounds == bounds
-
-
-def test_module_level_sample_gaussian_tap() -> None:
-    tap = sample_gaussian_tap((0, 0, 100, 100))
-    assert 0 <= tap.x <= 100
-    assert 0 <= tap.y <= 100
-    assert 48 <= tap.hold_ms <= 115
 
 
 def test_generate_bezier_swipe_continuity_and_endpoints() -> None:
@@ -174,12 +163,6 @@ def test_generate_bezier_swipe_min_steps_enforced() -> None:
     assert len(traj0.points) == 2
 
 
-def test_module_level_generate_bezier_swipe() -> None:
-    traj = generate_bezier_swipe((0, 0), (10, 10), num_steps=5)
-    assert traj.points[0] == (0, 0)
-    assert traj.points[-1] == (10, 10)
-
-
 def test_sample_reading_pause_sec_ranges() -> None:
     rng = random.Random(7)  # noqa: S311
     engine = HumanInputEngine(rng=rng)
@@ -192,12 +175,6 @@ def test_sample_reading_pause_sec_ranges() -> None:
     scroll_backs = [s for _, s in samples]
     assert any(scroll_backs)
     assert not all(scroll_backs)
-
-
-def test_module_level_sample_reading_pause_sec() -> None:
-    pause_sec, scroll_back = sample_reading_pause_sec()
-    assert 1.8 <= pause_sec <= 9.5
-    assert isinstance(scroll_back, bool)
 
 
 def test_generate_keystroke_sequence_without_typos() -> None:
@@ -238,11 +215,6 @@ def test_generate_keystroke_sequence_uppercase_typo() -> None:
     assert seq[0].key_event is None
     assert seq[0].char.isupper()
     assert seq[0].char.lower() in QWERTY_NEIGHBORS["a"]
-
-
-def test_module_level_generate_keystroke_sequence() -> None:
-    seq = generate_keystroke_sequence("test")
-    assert len(seq) >= 4
 
 
 @pytest.mark.asyncio
@@ -342,13 +314,6 @@ async def test_adb_human_swipe_replays_the_whole_curve_in_one_shell_call(
         "input motionevent UP 100 100",
     ]
     assert any(x != 100 for x, _y in curve.points[1:-1]), "the finger arcs off the straight line"
-
-
-def test_module_level_generate_keystroke_sequence_typo_probability() -> None:
-    seq = generate_keystroke_sequence("test", typo_probability=0.0)
-    assert all(isinstance(e, KeystrokeEvent) for e in seq)
-    assert [e.char for e in seq] == list("test")
-    assert not any(e.key_event is not None for e in seq)
 
 
 @pytest.mark.asyncio

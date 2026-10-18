@@ -11,6 +11,7 @@ The cooldown is process-local, like the rest of the login state: one uvicorn wor
 
 from __future__ import annotations
 
+import math
 import time
 from typing import TYPE_CHECKING
 
@@ -27,11 +28,11 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DeviceRefusedError",
-    "add_account_device",
     "assert_device_configured",
     "claim_code_request",
     "forget_device_cooldown",
     "second_session_name",
+    "sign_in_account_device",
 ]
 
 _LAST_CODE_REQUEST: dict[str, float] = {}
@@ -80,17 +81,16 @@ def claim_code_request(account_id: str) -> None:
     now = time.monotonic()
     last = _LAST_CODE_REQUEST.get(account_id)
     if last is not None:
-        left = int(last + settings.telegram.second_device_code_cooldown_seconds - now + 0.999)
+        left = math.ceil(last + settings.telegram.second_device_code_cooldown_seconds - now)
         if left > 0:
             raise DeviceRefusedError(_COOLDOWN, retry_after_seconds=left)
     _LAST_CODE_REQUEST[account_id] = now
 
 
-async def add_account_device(account_id: str, device_type: DeviceType) -> AccountRead:
+async def sign_in_account_device(account_id: str, device_type: DeviceType) -> AccountRead:
     """Sign ``device_type`` in as the account's second authorization, or refuse with a code.
 
-    Only by the operator's explicit request: nothing calls this on its own. With the
-    emulator on, a mobile device then gets its pod ready; the app signs in later.
+    The device is recorded once signed in; a phone's pod is ``device_setup``'s.
     """
     account = await fetch_account(account_id)
     if account is None:
@@ -119,28 +119,10 @@ async def add_account_device(account_id: str, device_type: DeviceType) -> Accoun
     await log_event(
         "INFO", "account_device_added", account_id=account_id, extra={"device": device_type}
     )
-    if device_type == "mobile" and settings.emulator.enabled:
-        await _prepare_mobile_pod(account_id)
     saved = await fetch_account(account_id)
     if saved is None:
         raise AccountNotFoundError(account_id)
     return saved
-
-
-async def _prepare_mobile_pod(account_id: str) -> None:
-    """Boot the account's pod on the new mobile fingerprint, without signing the app in.
-
-    The app's sign-in asks Telegram for another login code, and the one just spent
-    still holds the pacing: two requests seconds apart are what earns "too many
-    attempts". So the pod is only made ready here (first boot, seeding, the APK), and
-    the operator's own open signs the app in once the pause allows (a refusal before
-    then says how long). The mobile device is already recorded: a pod that fails
-    answers its own code and the device stays, to be opened again from the account.
-    """
-    # Deferred: ``mobile_emulator`` imports this module for its refusal and pacing.
-    from services.accounts.mobile_emulator import open_account_mobile  # noqa: PLC0415
-
-    await open_account_mobile(account_id, background=True)
 
 
 def forget_device_cooldown(account_id: str) -> None:
