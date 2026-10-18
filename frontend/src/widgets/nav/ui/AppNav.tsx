@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
-import { SURFACE } from '@/shared/design-system';
+import { breakpoint, SURFACE } from '@/shared/design-system';
 import { queryClient, useLogEventStream, type SseStatus } from '@/shared/lib';
 import { IconButton } from '@/shared/ui';
 
@@ -106,12 +106,12 @@ export function AppNav() {
     setDrawerOpen(false);
   }, [pathname]);
 
-  // …and close it when the viewport reaches `lg`, where the hamburger that opened it
-  // is display:none and the horizontal nav is back. A 1024x768 tablet crosses this
-  // on rotation, which would otherwise leave a full-screen backdrop over the desktop
-  // nav with page scroll still locked.
+  // …and close it when the viewport reaches `xl` (`breakpoint.nav`), where the hamburger
+  // that opened it is display:none and the horizontal nav is back. A resized window or a
+  // rotated tablet crosses this, which would otherwise leave a full-screen backdrop over
+  // the desktop nav with page scroll still locked.
   useEffect(() => {
-    const mql = window.matchMedia('(min-width: 1024px)');
+    const mql = window.matchMedia(`(min-width: ${String(breakpoint.nav)}px)`);
     const close = () => {
       if (mql.matches) setDrawerOpen(false);
     };
@@ -131,7 +131,7 @@ export function AppNav() {
           onClick={() => {
             setDrawerOpen(true);
           }}
-          className="lg:hidden"
+          className="xl:hidden"
         >
           <svg
             width="18"
@@ -160,7 +160,7 @@ export function AppNav() {
 
         <nav
           ref={navRef}
-          className="relative hidden flex-1 items-center gap-4 self-stretch lg:flex"
+          className="relative hidden flex-1 items-center gap-4 self-stretch xl:flex"
         >
           {LINKS.map((link, index) => (
             <Link

@@ -385,6 +385,9 @@ import type {
   ListOutreachPresetsData,
   ListOutreachPresetsErrors,
   ListOutreachPresetsResponses,
+  ListPhonesData,
+  ListPhonesErrors,
+  ListPhonesResponses,
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
@@ -604,9 +607,12 @@ import type {
   StartNeuroshillingCampaignData,
   StartNeuroshillingCampaignErrors,
   StartNeuroshillingCampaignResponses,
+  StartPhoneData,
+  StartPhoneErrors,
   StartPhoneLoginData,
   StartPhoneLoginErrors,
   StartPhoneLoginResponses,
+  StartPhoneResponses,
   StartUserParserRunData,
   StartUserParserRunErrors,
   StartUserParserRunResponses,
@@ -625,6 +631,9 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignErrors,
   StopNeuroshillingCampaignResponses,
+  StopPhoneData,
+  StopPhoneErrors,
+  StopPhoneResponses,
   StopUserParserRunData,
   StopUserParserRunErrors,
   StopUserParserRunResponses,
@@ -4506,3 +4515,42 @@ export const sendTestNotification = <ThrowOnError extends boolean = false>(
     SendTestNotificationErrors,
     ThrowOnError
   >({ url: '/api/v1/notifications/test', ...options });
+
+/**
+ * List Phones
+ *
+ * Every phone (mobile account pod) with its status; never starts one.
+ */
+export const listPhones = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPhonesData, ThrowOnError>,
+): RequestResult<ListPhonesResponses, ListPhonesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListPhonesResponses, ListPhonesErrors, ThrowOnError>({
+    url: '/api/v1/devices',
+    ...options,
+  });
+
+/**
+ * Start Phone
+ *
+ * Start the phone and sign its app in, in the background (``starting`` at once).
+ */
+export const startPhone = <ThrowOnError extends boolean = false>(
+  options: Options<StartPhoneData, ThrowOnError>,
+): RequestResult<StartPhoneResponses, StartPhoneErrors, ThrowOnError> =>
+  (options.client ?? client).post<StartPhoneResponses, StartPhoneErrors, ThrowOnError>({
+    url: '/api/v1/devices/{phone_id}/start',
+    ...options,
+  });
+
+/**
+ * Stop Phone
+ *
+ * Put the phone to sleep; 409 ``emulator_busy`` while it starts or warms.
+ */
+export const stopPhone = <ThrowOnError extends boolean = false>(
+  options: Options<StopPhoneData, ThrowOnError>,
+): RequestResult<StopPhoneResponses, StopPhoneErrors, ThrowOnError> =>
+  (options.client ?? client).post<StopPhoneResponses, StopPhoneErrors, ThrowOnError>({
+    url: '/api/v1/devices/{phone_id}/stop',
+    ...options,
+  });

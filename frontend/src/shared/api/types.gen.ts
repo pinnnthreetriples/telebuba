@@ -5804,6 +5804,91 @@ export type PageLogEntry = {
 };
 
 /**
+ * Phone
+ */
+export type Phone = {
+  /**
+   * Phone Id
+   */
+  phone_id: string;
+  /**
+   * Created
+   */
+  created: boolean;
+  /**
+   * Status
+   */
+  status: 'asleep' | 'starting' | 'free' | 'warming' | 'manual';
+  /**
+   * Maker
+   */
+  maker: string;
+  /**
+   * Model Name
+   */
+  model_name: string;
+  /**
+   * Device Model
+   */
+  device_model: string;
+  /**
+   * System Version
+   */
+  system_version: string;
+  /**
+   * App Version
+   */
+  app_version: string;
+  /**
+   * Lang Code
+   */
+  lang_code: string;
+  proxy?: PhoneProxy | null;
+  /**
+   * Apps
+   */
+  apps: Array<PhoneApp>;
+};
+
+/**
+ * PhoneActionResult
+ */
+export type PhoneActionResult = {
+  /**
+   * Phone Id
+   */
+  phone_id: string;
+  /**
+   * Status
+   */
+  status: 'asleep' | 'starting' | 'free' | 'warming' | 'manual';
+};
+
+/**
+ * PhoneApp
+ *
+ * One account an app on the phone is signed in as.
+ */
+export type PhoneApp = {
+  /**
+   * Platform
+   */
+  platform: 'telegram';
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
+   * Username
+   */
+  username?: string | null;
+};
+
+/**
  * PhoneCodeOption
  *
  * A calling code present in the fleet's phone numbers.
@@ -5837,6 +5922,75 @@ export type PhoneCodeRequestResult = {
    * Phone
    */
   phone: string;
+};
+
+/**
+ * PhoneList
+ */
+export type PhoneList = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
+  /**
+   * Problem
+   */
+  problem?:
+    | 'mobile_emulator_disabled'
+    | 'emulator_busy'
+    | 'emulator_not_found'
+    | 'emulator_command_failed'
+    | 'emulator_command_timeout'
+    | 'emulator_boot_timeout'
+    | 'emulator_sdk_mismatch'
+    | 'emulator_device_unknown'
+    | 'emulator_apk_missing'
+    | 'emulator_install_failed'
+    | 'emulator_proxy_missing'
+    | 'emulator_proxy_unsupported'
+    | 'emulator_text_unsupported'
+    | 'emulator_field_missing'
+    | 'emulator_phone_invalid'
+    | 'emulator_code_timeout'
+    | 'emulator_twofa_missing'
+    | 'emulator_not_running'
+    | 'emulator_not_signed_in'
+    | 'emulator_capacity'
+    | 'emulator_scrcpy_missing'
+    | 'emulator_screen_timeout'
+    | null;
+  /**
+   * Phones
+   */
+  phones: Array<Phone>;
+};
+
+/**
+ * PhoneProxy
+ *
+ * Where the phone's traffic goes; never its credentials.
+ */
+export type PhoneProxy = {
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
+   * Host
+   */
+  host?: string | null;
+  /**
+   * Port
+   */
+  port?: number | null;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Status
+   */
+  status?: string | null;
 };
 
 /**
@@ -8180,6 +8334,14 @@ export type WarmingAccountState = {
    * Devices
    */
   devices?: Array<'desktop' | 'mobile'>;
+  /**
+   * Device Mode
+   */
+  device_mode?: 'desktop' | 'mobile';
+  /**
+   * Live Phone Id
+   */
+  live_phone_id?: string | null;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -18663,3 +18825,144 @@ export type SendTestNotificationResponses = {
 
 export type SendTestNotificationResponse =
   SendTestNotificationResponses[keyof SendTestNotificationResponses];
+
+export type ListPhonesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/devices';
+};
+
+export type ListPhonesErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListPhonesError = ListPhonesErrors[keyof ListPhonesErrors];
+
+export type ListPhonesResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneList;
+};
+
+export type ListPhonesResponse = ListPhonesResponses[keyof ListPhonesResponses];
+
+export type StartPhoneData = {
+  body?: never;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/devices/{phone_id}/start';
+};
+
+export type StartPhoneErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type StartPhoneError = StartPhoneErrors[keyof StartPhoneErrors];
+
+export type StartPhoneResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneActionResult;
+};
+
+export type StartPhoneResponse = StartPhoneResponses[keyof StartPhoneResponses];
+
+export type StopPhoneData = {
+  body?: never;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/devices/{phone_id}/stop';
+};
+
+export type StopPhoneErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type StopPhoneError = StopPhoneErrors[keyof StopPhoneErrors];
+
+export type StopPhoneResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneActionResult;
+};
+
+export type StopPhoneResponse = StopPhoneResponses[keyof StopPhoneResponses];

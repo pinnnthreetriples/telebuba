@@ -25,6 +25,9 @@ class EmulatorSettings(BaseSettings):
     # of container index 0's adb (index N listens on that port + N, on 127.0.0.1 only).
     docker_path: Path = Path("docker")
     scrcpy_path: Path = Path("scrcpy")
+    # The desktop scrcpy window on every open. Off by default: it encodes video for as
+    # long as it is open (warming stints included); the web screen does that on demand.
+    desktop_viewer: bool = False
     redroid_images: dict[int, str] = Field(
         default_factory=lambda: {
             33: "redroid/redroid:13.0.0-latest",
@@ -57,6 +60,16 @@ class EmulatorSettings(BaseSettings):
     ui_timeout_seconds: float = Field(default=30.0, gt=0)
     code_wait_seconds: float = Field(default=90.0, gt=0)
     poll_seconds: float = Field(default=2.0, gt=0)
+    # The web screen (``core.emulator.scrcpy``): the scrcpy-server file pushed to the
+    # phone and its EXACT version (the SPA's decoder speaks that protocol, 3.3.1 at most);
+    # the longest video side, frame rate and bit rate it encodes at; how long the server
+    # may take to accept its sockets.
+    scrcpy_server_path: Path = Path("emulator/scrcpy-server-v3.3.1")
+    scrcpy_server_version: str = Field(default="3.3.1", pattern=r"^\d+\.\d+(\.\d+)?$")
+    stream_max_size: int = Field(default=1280, ge=320, le=4096)
+    stream_max_fps: int = Field(default=30, ge=5, le=60)
+    stream_bit_rate: int = Field(default=4_000_000, ge=500_000, le=20_000_000)
+    stream_connect_timeout_seconds: float = Field(default=10.0, gt=0)
     # Longest activity session (``run_mobile_activity``) in seconds.
     activity_max_seconds: int = Field(default=900, gt=0)
     # Pods warming may run at once; a mobile stint finding none free skips its cycle

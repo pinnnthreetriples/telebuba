@@ -124,6 +124,14 @@ const masstaggingRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/masstagging'), 'MasstaggingPage'),
 });
 
+// No preload: the phone list is one cheap query the page polls itself.
+const devicesRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/devices',
+  errorComponent: PageErrorPanel,
+  component: lazyRouteComponent(() => import('@/pages/devices'), 'DevicesPage'),
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   protectedRoute.addChildren([
@@ -133,6 +141,7 @@ const routeTree = rootRoute.addChildren([
     neuroshillingRoute,
     broadcastRoute,
     masstaggingRoute,
+    devicesRoute,
     logsRoute,
     settingsRoute,
   ]),

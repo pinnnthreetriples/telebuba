@@ -79,6 +79,7 @@ function themeBlock() {
         sm: tokens.breakpoint.card,
         md: tokens.breakpoint.split,
         lg: tokens.breakpoint.wide,
+        xl: tokens.breakpoint.nav,
       }).map(([name, px]) => `--breakpoint-${name}: ${String(px)}px;`),
     ),
     '',

@@ -33,20 +33,21 @@ class AndroidDevice(NamedTuple):
     manufacturer: str  # ``Build.MANUFACTURER``, exact case
     model: str  # ``Build.MODEL``
     sdk_levels: tuple[int, ...]
+    name: str  # what the phone is sold as, for the operator's eyes only
 
 
 ANDROID_DEVICES: tuple[AndroidDevice, ...] = (
-    AndroidDevice("samsung", "SM-S911B", (33, 34)),  # Galaxy S23
-    AndroidDevice("samsung", "SM-S918B", (33, 34)),  # Galaxy S23 Ultra
-    AndroidDevice("samsung", "SM-A546B", (33, 34)),  # Galaxy A54 5G
-    AndroidDevice("samsung", "SM-S921B", (34,)),  # Galaxy S24
-    AndroidDevice("samsung", "SM-A556B", (34,)),  # Galaxy A55 5G
-    AndroidDevice("Google", "Pixel 7", (33, 34)),
-    AndroidDevice("Google", "Pixel 8", (34,)),
-    AndroidDevice("Xiaomi", "2211133G", (33, 34)),  # Xiaomi 13
-    AndroidDevice("Xiaomi", "23049PCD8G", (33,)),  # POCO F5
-    AndroidDevice("Xiaomi", "22101316G", (33,)),  # Redmi Note 12 Pro 5G
-    AndroidDevice("OnePlus", "CPH2449", (33,)),  # OnePlus 11
+    AndroidDevice("samsung", "SM-S911B", (33, 34), "Galaxy S23"),
+    AndroidDevice("samsung", "SM-S918B", (33, 34), "Galaxy S23 Ultra"),
+    AndroidDevice("samsung", "SM-A546B", (33, 34), "Galaxy A54 5G"),
+    AndroidDevice("samsung", "SM-S921B", (34,), "Galaxy S24"),
+    AndroidDevice("samsung", "SM-A556B", (34,), "Galaxy A55 5G"),
+    AndroidDevice("Google", "Pixel 7", (33, 34), "Pixel 7"),
+    AndroidDevice("Google", "Pixel 8", (34,), "Pixel 8"),
+    AndroidDevice("Xiaomi", "2211133G", (33, 34), "Xiaomi 13"),
+    AndroidDevice("Xiaomi", "23049PCD8G", (33,), "POCO F5"),
+    AndroidDevice("Xiaomi", "22101316G", (33,), "Redmi Note 12 Pro 5G"),
+    AndroidDevice("OnePlus", "CPH2449", (33,), "OnePlus 11"),
 )
 
 ANDROID_APP_VERSIONS: tuple[str, ...] = (
@@ -75,6 +76,11 @@ def android_app_version() -> str:
     Only new fingerprints use it: a stored one keeps the version it was minted with.
     """
     return settings.emulator.telegram_app_version or secrets.choice(ANDROID_APP_VERSIONS)
+
+
+def android_device_for(device_model: str) -> AndroidDevice | None:
+    """The catalogue phone a fingerprint's ``device_model`` names, if it is one."""
+    return next((d for d in ANDROID_DEVICES if android_device_model(d) == device_model), None)
 
 
 def generate_android_fingerprint(account_id: str, phone: str | None) -> DeviceFingerprint:

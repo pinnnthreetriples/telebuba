@@ -18,7 +18,10 @@ if TYPE_CHECKING:
     from api._middleware import ASGIApp, Receive, Scope, Send
 
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+# The origin a WebSocket handshake is addressed to is the page's http(s) origin.
+_HTTP_SCHEME = {"ws": "http", "wss": "https"}
 _HTTP_FORBIDDEN = 403
+_POLICY_VIOLATION = 1008
 _ORIGIN_FORBIDDEN = (
     ErrorEnvelope(error=ErrorDetail(code="forbidden", message="untrusted_origin"))
     .model_dump_json(exclude_none=True)
@@ -41,6 +44,11 @@ class OriginProtectionMiddleware:
     to>"``. Fail-closed is deliberate; a missing Origin is exactly what a CSRF
     request from an old browser looks like, and there is no second credential that
     could tell the two apart. Reads (``GET``/``HEAD``/``OPTIONS``) are untouched.
+
+    A WebSocket handshake is a GET the browser sends with the cookie from ANY page
+    (cross-site WebSocket hijacking), and the socket then reads and writes: every
+    handshake needs exactly one trusted Origin, cookie or not, or it is closed
+    before it is accepted (the client sees a 403).
     """
 
     def __init__(self, app: ASGIApp, *, cookie_name: str, allowed_origins: Sequence[str]) -> None:
@@ -51,6 +59,12 @@ class OriginProtectionMiddleware:
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "websocket":
+            if self._trusted_origin(scope):
+                await self.app(scope, receive, send)
+            else:
+                await send({"type": "websocket.close", "code": _POLICY_VIOLATION})
+            return
         if scope["type"] != "http" or str(scope.get("method", "")).upper() in _SAFE_METHODS:
             await self.app(scope, receive, send)
             return
@@ -64,6 +78,13 @@ class OriginProtectionMiddleware:
             await _send_json(send, _HTTP_FORBIDDEN, _ORIGIN_FORBIDDEN)
             return
 
+        if not self._trusted_origin(scope):
+            await _send_json(send, _HTTP_FORBIDDEN, _ORIGIN_FORBIDDEN)
+            return
+        await self.app(scope, receive, send)
+
+    def _trusted_origin(self, scope: Scope) -> bool:
+        """Exactly one Origin header, naming the request's own origin or a configured one."""
         host_values = _header_values(scope, b"host")
         request_origin = _request_origin(scope, host_values[0] if len(host_values) == 1 else None)
         allowed = self._allowed_origins | ({request_origin} if request_origin else set())
@@ -71,16 +92,15 @@ class OriginProtectionMiddleware:
         candidate = (
             _normalise_origin(origins[0].decode(errors="ignore")) if len(origins) == 1 else ""
         )
-        if not candidate or candidate not in allowed:
-            await _send_json(send, _HTTP_FORBIDDEN, _ORIGIN_FORBIDDEN)
-            return
-        await self.app(scope, receive, send)
+        return bool(candidate) and candidate in allowed
 
 
 def _request_origin(scope: Scope, host: bytes | None) -> str:
     if host is None:
         return ""
-    return _normalise_origin(f"{scope.get('scheme', 'http')}://{host.decode(errors='ignore')}")
+    scheme = str(scope.get("scheme", "http"))
+    scheme = _HTTP_SCHEME.get(scheme, scheme)
+    return _normalise_origin(f"{scheme}://{host.decode(errors='ignore')}")
 
 
 def _normalise_origin(value: str, *, allow_path: bool = False) -> str:

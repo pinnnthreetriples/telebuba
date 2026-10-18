@@ -23,7 +23,8 @@ export default defineConfig({
     // появилась cookie сессии, отбивается 403 `untrusted_origin` — включая сам вход,
     // который на странице читается как «Неверные учётные данные».
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8080' },
+      // `ws`: the phone screen's WebSocket (`/api/v1/devices/{id}/screen`) goes the same way.
+      '/api': { target: 'http://127.0.0.1:8080', ws: true },
     },
   },
 });

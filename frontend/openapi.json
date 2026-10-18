@@ -21492,6 +21492,316 @@
           }
         }
       }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "List Phones",
+        "description": "Every phone (mobile account pod) with its status; never starts one.",
+        "operationId": "listPhones",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{phone_id}/start": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "Start Phone",
+        "description": "Start the phone and sign its app in, in the background (``starting`` at once).",
+        "operationId": "startPhone",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneActionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{phone_id}/stop": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "Stop Phone",
+        "description": "Put the phone to sleep; 409 ``emulator_busy`` while it starts or warms.",
+        "operationId": "stopPhone",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneActionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -31246,6 +31556,154 @@
         ],
         "title": "Page[LogEntry]"
       },
+      "Phone": {
+        "properties": {
+          "phone_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+            "title": "Phone Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "asleep",
+              "starting",
+              "free",
+              "warming",
+              "manual"
+            ],
+            "title": "Status"
+          },
+          "maker": {
+            "type": "string",
+            "title": "Maker"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "device_model": {
+            "type": "string",
+            "title": "Device Model"
+          },
+          "system_version": {
+            "type": "string",
+            "title": "System Version"
+          },
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "lang_code": {
+            "type": "string",
+            "title": "Lang Code"
+          },
+          "proxy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhoneProxy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/PhoneApp"
+            },
+            "type": "array",
+            "title": "Apps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_id",
+          "created",
+          "status",
+          "maker",
+          "model_name",
+          "device_model",
+          "system_version",
+          "app_version",
+          "lang_code",
+          "apps"
+        ],
+        "title": "Phone"
+      },
+      "PhoneActionResult": {
+        "properties": {
+          "phone_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+            "title": "Phone Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "asleep",
+              "starting",
+              "free",
+              "warming",
+              "manual"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_id",
+          "status"
+        ],
+        "title": "PhoneActionResult"
+      },
+      "PhoneApp": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "const": "telegram",
+            "title": "Platform"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "account_id"
+        ],
+        "title": "PhoneApp",
+        "description": "One account an app on the phone is signed in as."
+      },
       "PhoneCodeOption": {
         "properties": {
           "calling_code": {
@@ -31297,6 +31755,124 @@
         ],
         "title": "PhoneCodeRequestResult",
         "description": "API response after a code is sent \u2014 confirmation only, no secrets."
+      },
+      "PhoneList": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mobile_emulator_disabled",
+                  "emulator_busy",
+                  "emulator_not_found",
+                  "emulator_command_failed",
+                  "emulator_command_timeout",
+                  "emulator_boot_timeout",
+                  "emulator_sdk_mismatch",
+                  "emulator_device_unknown",
+                  "emulator_apk_missing",
+                  "emulator_install_failed",
+                  "emulator_proxy_missing",
+                  "emulator_proxy_unsupported",
+                  "emulator_text_unsupported",
+                  "emulator_field_missing",
+                  "emulator_phone_invalid",
+                  "emulator_code_timeout",
+                  "emulator_twofa_missing",
+                  "emulator_not_running",
+                  "emulator_not_signed_in",
+                  "emulator_capacity",
+                  "emulator_scrcpy_missing",
+                  "emulator_screen_timeout"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "phones": {
+            "items": {
+              "$ref": "#/components/schemas/Phone"
+            },
+            "type": "array",
+            "title": "Phones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "phones"
+        ],
+        "title": "PhoneList"
+      },
+      "PhoneProxy": {
+        "properties": {
+          "proxy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Type"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "PhoneProxy",
+        "description": "Where the phone's traffic goes; never its credentials."
       },
       "PhotoMainRequest": {
         "properties": {
@@ -35567,6 +36143,26 @@
             },
             "type": "array",
             "title": "Devices"
+          },
+          "device_mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "mobile"
+            ],
+            "title": "Device Mode",
+            "default": "desktop"
+          },
+          "live_phone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Phone Id"
           },
           "readiness": {
             "anyOf": [

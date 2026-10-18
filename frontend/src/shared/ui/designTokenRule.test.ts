@@ -22,6 +22,8 @@ if (rule) {
       // The named set, which is the whole point.
       'const a = "bg-action-primary text-on-fill px-6 py-3 rounded-full text-body";',
       'const b = "gap-3 mb-4 border-canvas shadow-pop duration-state";',
+      // `xl` is a rung of the closed breakpoint scale (`breakpoint.nav`).
+      'const nav = "hidden xl:flex xl:hidden";',
       // The written exceptions.
       {
         // Единственная пара имён с одним значением: белая поверхность и чернила на
@@ -197,7 +199,7 @@ if (rule) {
         ],
       },
       {
-        code: 'const bp = "xl:flex-row";',
+        code: 'const bp = "2xl:flex-row";',
         errors: [{ message: /breakpoint scale is closed/ }],
       },
       {
