@@ -17,7 +17,7 @@ import pytest_asyncio
 from core.config import settings
 from core.db import fetch_warming_state, upsert_warming_state
 from core.repositories.warming_daily_stats import list_warming_daily_stats
-from schemas._warming_visits import VisitPlan
+from schemas._warming_visits import VisitKind, VisitPlan
 from schemas.emulator import OpenMobileResult, PlaybookPlan, PlaybookResult
 from schemas.warming import WarmingCycleRequest, WarmingStateWrite
 from services import warming
@@ -506,6 +506,43 @@ async def test_the_session_plan_takes_the_visits_shape_and_the_stories_switch(
 
     assert (plan.channels, plan.stories_first, plan.stories) == (1, True, False)
     assert plan.max_actions is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "draw", "query"), [("normal", 0.0, "news"), ("binge", 0.99, None)]
+)
+async def test_a_visit_beyond_a_glance_looks_at_media_and_may_search(
+    monkeypatch: pytest.MonkeyPatch, kind: VisitKind, draw: float, query: str | None
+) -> None:
+    async def controls() -> _Controls:
+        return _Controls(reactions=True)
+
+    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(settings.emulator, "search_queries", ["news"])
+    monkeypatch.setattr(_seams.rng, "random", lambda: draw)
+    request = WarmingCycleRequest(account_id="acc-1", visit=VisitPlan(kind=kind))
+
+    plan = await _mobile_cycle.session_plan(request)
+
+    assert plan.media
+    assert plan.search_queries == ([query] if query else [])
+    assert (plan.join_channels, plan.folders, plan.webapp_bot) == (False, False, None)
+
+
+@pytest.mark.asyncio
+async def test_a_glance_neither_searches_nor_plays_media(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def controls() -> _Controls:
+        return _Controls(reactions=True)
+
+    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
+    request = WarmingCycleRequest(account_id="acc-1", visit=VisitPlan(kind="glance"))
+
+    plan = await _mobile_cycle.session_plan(request)
+
+    assert not plan.media
+    assert plan.search_queries == []
 
 
 @pytest.mark.asyncio

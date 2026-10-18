@@ -6,8 +6,9 @@ Split out of ``core.config`` for the file-size budget; re-exported there.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -64,3 +65,20 @@ class EmulatorSettings(BaseSettings):
     # A warming pod is paused, not stopped, after a visit, and stopped once paused this
     # long: a visit within it skips the Android boot. 0 stops it after every visit.
     pause_ttl_seconds: int = Field(default=1200, ge=0)
+    # Words a warming session may type into the app's global search, one a visit at
+    # most: letters, digits and spaces only, as ``input text`` types nothing else.
+    search_queries: list[
+        Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ]{1,31}$")]
+    ] = Field(
+        min_length=1,
+        default_factory=lambda: [
+            "news",
+            "music",
+            "travel",
+            "recipes",
+            "football",
+            "movies",
+            "books",
+            "weather",
+        ],
+    )

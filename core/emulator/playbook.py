@@ -11,7 +11,10 @@ yet been checked against a live container's dump.
 A session follows its ``PlaybookPlan``: the warming visit's channels and action
 budget, the persona's reaction chance (one reaction per channel at most: a second
 quick reaction takes the first back), whether stories are watched, and in which
-order. A channel is read once a session, the stories row is opened once.
+order. A channel is read once a session, the stories row is opened once. The plan's
+other scenarios (a search, a photo or note, a folder, a Mini App: ``_scenarios``) are
+mixed in at random, each within the session's time. An error dialog or an app that
+stays offline ends the session early with what it did.
 
 Gestures follow one rule: a slow read is ``human_swipe`` (the Bezier curve as
 ``input motionevent``), a quick flick is ``human_fling`` (a short ``input swipe``
@@ -29,13 +32,19 @@ from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
+from core.emulator._scenarios import ScenarioSteps
+from core.emulator._selectors import channel_rows, node_label, offline, screen_size
 from core.emulator.telegram_app import read_screen
 from core.emulator.ui_dump import UiNode, labels
 from schemas.emulator import PlaybookPlan, PlaybookResult
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from core.emulator.ui_dump import Screen
-    from schemas.emulator import EmulatorRefusalCode, PlaybookSkip
+    from schemas.emulator import EmulatorRefusalCode
+
+__all__ = ["TelegramMobilePlaybook", "channel_rows", "posts", "story_avatars"]
 
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_NOT_SIGNED_IN: EmulatorRefusalCode = "emulator_not_signed_in"
@@ -45,6 +54,10 @@ _SIGN_IN_SCREENS: frozenset[Screen] = frozenset({"intro", "phone", "confirm", "c
 _MAX_BACKS = 5
 
 _STORIES_SHARE = 0.35
+# The chance a turn starts with one of the plan's other scenarios, not stories or a
+# channel; and that a channel read ends on a photo or note.
+_SCENARIO_SHARE = 0.3
+_MEDIA_SHARE = 0.4
 _FLING_CHANCE = 0.2
 _FEED_SCROLLS = (3, 8)
 # Where a read drags from and how far (shares of the screen height); a scroll back
@@ -70,23 +83,6 @@ def _now() -> float:
     return asyncio.get_running_loop().time()
 
 
-def _label(node: UiNode) -> str:
-    return f"{node.text} {node.description}".strip().casefold()
-
-
-def _screen_size(nodes: list[UiNode]) -> tuple[int, int]:
-    """The screen's width and height as the dump's outermost box gives them."""
-    if not nodes:
-        raise EmulatorError(_EMULATOR_FIELD_MISSING)
-    return max(node.bounds[2] for node in nodes), max(node.bounds[3] for node in nodes)
-
-
-def channel_rows(nodes: list[UiNode]) -> list[UiNode]:
-    """Chat-list rows whose accessibility text says they are channels."""
-    prefixes = tuple(f"{word}." for word in labels().channel)
-    return [node for node in nodes if _label(node).startswith(prefixes)]
-
-
 def story_avatars(nodes: list[UiNode]) -> list[UiNode]:
     """Other people's stories in the row above the chat list; never the own-story button.
 
@@ -95,7 +91,7 @@ def story_avatars(nodes: list[UiNode]) -> list[UiNode]:
     """
     if not nodes:
         return []
-    _width, height = _screen_size(nodes)
+    _width, height = screen_size(nodes)
     words = labels()
     rows = set(channel_rows(nodes))
     return [
@@ -103,14 +99,14 @@ def story_avatars(nodes: list[UiNode]) -> list[UiNode]:
         for node in nodes
         if node not in rows
         and node.bounds[3] <= _STORIES_BAND * height
-        and any(word in _label(node) for word in words.story)
-        and not any(word in _label(node) for word in words.own_story)
+        and any(word in node_label(node) for word in words.story)
+        and not any(word in node_label(node) for word in words.own_story)
     ]
 
 
 def posts(nodes: list[UiNode]) -> list[UiNode]:
     """Text nodes tall enough to be a post, inside the feed between header and bottom bar."""
-    width, height = _screen_size(nodes)
+    width, height = screen_size(nodes)
     return [
         node
         for node in nodes
@@ -124,11 +120,11 @@ def posts(nodes: list[UiNode]) -> list[UiNode]:
 
 def _channel_key(row: UiNode) -> str:
     """The channel's title in its row ("Channel. <title>. ..."): unread counts change."""
-    parts = _label(row).split(". ")
+    parts = node_label(row).split(". ")
     return parts[1] if len(parts) > 1 else parts[0]
 
 
-class TelegramMobilePlaybook:
+class TelegramMobilePlaybook(ScenarioSteps):
     """Telegram: channel feeds read with pauses, stories watched, an occasional reaction."""
 
     def __init__(self, engine: HumanInputEngine | None = None) -> None:
@@ -141,6 +137,7 @@ class TelegramMobilePlaybook:
         self._stories_left = True
         # The chat list the last dump showed, good until the next gesture.
         self._chats: list[UiNode] | None = None
+        self._start_scenarios(self.plan)
 
     async def run_session(
         self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
@@ -156,21 +153,42 @@ class TelegramMobilePlaybook:
         self._deadline = _now() + duration_sec
         self._read = set()
         self._stories_left = self.plan.stories
+        self._start_scenarios(self.plan)
         await self.return_to_chats(serial)
-        if self.plan.stories_first and await self._open_stories(serial):
+        if self.plan.stories_first and not self._halted and await self._open_stories(serial):
             await self.return_to_chats(serial)
-        while self._time_left() and not self._actions_spent():
-            first, second = self._open_stories, self._open_channel
-            if self.engine.rng.random() >= _STORIES_SHARE:
-                first, second = second, first
-            if not await first(serial) and not await second(serial):
+        while self._time_left() and not self._actions_spent() and not self._halted:
+            if not await self._take_turn(serial):
                 break
             await self.return_to_chats(serial)
-            if not self._time_left():
+            if not self._time_left() or self._halted:
                 break
             pause, _scroll_back = self.engine.sample_reading_pause_sec()
             await asyncio.sleep(pause)
         return self.result
+
+    async def _take_turn(self, serial: str) -> bool:
+        """Stories or a channel, the other one when the first finds nothing.
+
+        The plan's other scenarios come first now and then, else as the last resort.
+        """
+        rng = self.engine.rng
+        turn: list[Callable[[str], Awaitable[bool]]] = [self._open_stories, self._open_channel]
+        if rng.random() >= _STORIES_SHARE:
+            turn.reverse()
+        scenarios = self._scenarios()
+        if scenarios:
+            rng.shuffle(scenarios)
+            turn = [*scenarios, *turn] if rng.random() < _SCENARIO_SHARE else [*turn, *scenarios]
+        for activity in turn:
+            if await activity(serial):
+                return True
+            if self._halted:
+                return False
+        return False
+
+    async def _screen(self, serial: str) -> tuple[Screen, list[UiNode]]:
+        return await read_screen(serial)
 
     async def _chat_list(self, serial: str) -> list[UiNode]:
         """The chat list ``return_to_chats`` just dumped, or a fresh dump."""
@@ -179,9 +197,8 @@ class TelegramMobilePlaybook:
         _screen, nodes = await read_screen(serial)
         return nodes
 
-    def _skip(self, reason: PlaybookSkip) -> None:
-        if reason not in self.result.skipped:
-            self.result.skipped.append(reason)
+    def _seconds_left(self) -> float:
+        return self._deadline - _now()
 
     def _time_left(self) -> bool:
         return _now() < self._deadline
@@ -206,6 +223,8 @@ class TelegramMobilePlaybook:
         self.result.channels_read += 1
         scrolls = self.engine.rng.randint(*_FEED_SCROLLS)
         await self.read_channel_feed(serial, scrolls, react=react)
+        if self.plan.media and self._time_left() and self.engine.rng.random() < _MEDIA_SHARE:
+            await self.consume_feed_media(serial)
         return True
 
     async def _open_stories(self, serial: str) -> bool:
@@ -252,10 +271,8 @@ class TelegramMobilePlaybook:
                     react_at = None
                 else:
                     self._skip("no_post")
-            screen_size = _screen_size(nodes)
-            top, bottom = self.engine.sample_scroll(
-                screen_size, _READ_START, _READ_LENGTH, downward=True
-            )
+            size = screen_size(nodes)
+            top, bottom = self.engine.sample_scroll(size, _READ_START, _READ_LENGTH, downward=True)
             if self.engine.rng.random() < _FLING_CHANCE:
                 await adb.human_fling(serial, top, bottom, engine=self.engine)
             else:
@@ -263,7 +280,7 @@ class TelegramMobilePlaybook:
             self.result.scrolls += 1
             if scroll_back:
                 back_from, back_to = self.engine.sample_scroll(
-                    screen_size, _BACK_START, _BACK_LENGTH, downward=False
+                    size, _BACK_START, _BACK_LENGTH, downward=False
                 )
                 await adb.human_swipe(serial, back_from, back_to, engine=self.engine)
 
@@ -282,7 +299,7 @@ class TelegramMobilePlaybook:
             screen, nodes = await read_screen(serial)
             if screen == "chats":  # the viewer never opened, or the stories ran out
                 return
-            width, height = _screen_size(nodes)
+            width, height = screen_size(nodes)
             # The viewer's right third moves to the next story.
             next_zone = (round(width * 0.7), round(height * 0.3), width, round(height * 0.7))
             await adb.human_tap(
@@ -296,15 +313,33 @@ class TelegramMobilePlaybook:
         self.result.reactions += 1
 
     async def return_to_chats(self, serial: str) -> None:
-        """Press BACK until the chat list shows; never on a sign-in screen."""
+        """Press BACK until the chat list shows; never on a sign-in screen.
+
+        An error dialog on the way is closed and ends the session (``app_error``); a
+        chat list that keeps waiting for the network past ``ui_timeout_seconds`` ends
+        it too (``app_offline``).
+        """
         self._chats = None
         for _ in range(_MAX_BACKS + 1):
             screen, nodes = await read_screen(serial)
+            if await self._dismiss_error(serial, nodes):
+                continue
             if screen == "chats":
-                self._chats = nodes
+                self._chats = await self._wait_online(serial, nodes)
                 return
             if screen in _SIGN_IN_SCREENS:
                 raise EmulatorError(_EMULATOR_NOT_SIGNED_IN)
             await adb.press(serial, adb.KEYCODE_BACK)
             await asyncio.sleep(settings.emulator.poll_seconds)
         raise EmulatorError(_EMULATOR_FIELD_MISSING)
+
+    async def _wait_online(self, serial: str, nodes: list[UiNode]) -> list[UiNode]:
+        """The chat list once it is online; ends the session if it stays offline."""
+        deadline = _now() + settings.emulator.ui_timeout_seconds
+        while offline(nodes):
+            if _now() >= deadline:
+                self._halt("app_offline")
+                break
+            await asyncio.sleep(settings.emulator.poll_seconds)
+            _screen, nodes = await read_screen(serial)
+        return nodes

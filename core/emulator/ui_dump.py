@@ -48,12 +48,18 @@ class Labels(NamedTuple):
 
 
 @cache
+def _raw_labels() -> dict[str, list[str]]:
+    return json.loads(_LABELS_PATH.read_text(encoding="utf-8"))
+
+
+def label_words(key: str) -> list[str]:
+    """``key``'s strings in every language, casefolded, deduplicated and sorted."""
+    return sorted({value.strip().casefold() for value in _raw_labels()[key] if value.strip()})
+
+
+@cache
 def labels() -> Labels:
-    raw: dict[str, list[str]] = json.loads(_LABELS_PATH.read_text(encoding="utf-8"))
-
-    def words(key: str) -> list[str]:
-        return sorted({value.strip().casefold() for value in raw[key] if value.strip()})
-
+    words = label_words
     return Labels(
         start=frozenset(words("start")),
         yes=frozenset(words("yes")),
