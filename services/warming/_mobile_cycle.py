@@ -44,6 +44,7 @@ from services.accounts.mobile_emulator import (
     stop_account_pod,
 )
 from services.accounts.mobile_pods import park_account_pod, stop_parked_pod
+from services.warming import _seams
 from services.warming._phases import persona_reaction_probability
 from services.warming._snapshot import current_snapshot
 from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_ACTION
@@ -74,6 +75,9 @@ _FAILURE_LIMIT = 5
 # the floor, and never more than the emulator's session cap.
 _SECONDS_PER_ACTION = 30
 _MIN_SECONDS = 60
+# The chance a visit searches the app for a channel, by persona; a glance never does,
+# nor looks at photos and notes.
+_SEARCH_CHANCE = {"calm": 0.15, "normal": 0.3, "active": 0.5}
 
 _STREAKS: dict[str, int] = {}
 # Accounts whose warming pod holds a slot, running or parked, until its stop is done.
@@ -98,18 +102,25 @@ async def session_plan(request: WarmingCycleRequest) -> PlaybookPlan:
 
     Its channels and stories order, the persona's reaction chance (none while the
     operator turned reactions off), stories only while story viewing is on, and the
-    visit's action budget as the session's cap.
+    visit's action budget as the session's cap. Beyond a glance it looks at photos and
+    notes, and with the persona's ``_SEARCH_CHANCE`` searches for one of the
+    configured words. It never joins, makes folders or opens a Mini App: those
+    change the account and stay off until the operator asks for them.
     """
     snapshot = current_snapshot(request.account_id)
     controls = snapshot.controls if snapshot else await load_warming_settings()
     visit = request.visit
     reaction = persona_reaction_probability(request.activity_persona)
+    glance = visit is not None and visit.kind == "glance"
+    searching = not glance and _seams.rng.random() < _SEARCH_CHANCE[request.activity_persona]
     return PlaybookPlan(
         channels=visit.channels if visit else None,
         reaction_probability=reaction if controls.reactions_enabled else 0.0,
         stories=settings.warming.story_view_enabled,
         stories_first=visit.stories_first if visit else False,
         max_actions=request.remaining_actions,
+        media=not glance,
+        search_queries=[_seams.rng.choice(settings.emulator.search_queries)] if searching else [],
     )
 
 
@@ -155,7 +166,13 @@ async def run_mobile_cycle(
         account_id=account_id,
         extra={"seconds": seconds, **activity.model_dump(mode="json")},
     )
-    if not (activity.channels_read or activity.reactions or activity.stories_watched):
+    if not (
+        activity.channels_read
+        or activity.reactions
+        or activity.stories_watched
+        or activity.searches_done
+        or activity.media_consumed
+    ):
         # Nothing to do in the app: not a warming day, and not the account's failure.
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="no activity")
     return WarmingCycleResult(

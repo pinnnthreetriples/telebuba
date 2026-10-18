@@ -7,9 +7,9 @@ the account's SOCKS5 proxy. No behaviour, no I/O.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 # Stable codes the API returns verbatim and the SPA translates (``shell.code.*``).
 EmulatorRefusalCode = Literal[
@@ -35,6 +35,9 @@ EmulatorRefusalCode = Literal[
     "emulator_capacity",
 ]
 
+# A search query ``input text`` can type: 2-32 letters, digits and spaces.
+_TYPEABLE = r"^[A-Za-z0-9][A-Za-z0-9 ]{1,31}$"
+
 # ``started``: the container was booted (and signed in when it could be);
 # ``already_running``: it was up already on the current proxy, so it was not booted or
 # reconfigured again (only signed in where it stood, when its app showed the intro or
@@ -57,8 +60,21 @@ class EmulatorStatus(BaseModel):
 
 
 # What an activity session meant to do but the screen did not show: no channel row in
-# the chat list, no stories row, no post to react to. Skipped, never guessed at.
-PlaybookSkip = Literal["no_channel", "no_stories", "no_post"]
+# the chat list, no stories row, no post to react to, no search button or result, no
+# photo or note to play, no folder to add, no Mini App. Skipped, never guessed at.
+# ``app_error`` (an error dialog: too many attempts, too many communities) and
+# ``app_offline`` (the app kept waiting for the network) end the session early.
+PlaybookSkip = Literal[
+    "no_channel",
+    "no_stories",
+    "no_post",
+    "no_search",
+    "no_media",
+    "no_folder",
+    "no_webapp",
+    "app_error",
+    "app_offline",
+]
 
 
 class PlaybookPlan(BaseModel):
@@ -67,6 +83,13 @@ class PlaybookPlan(BaseModel):
     ``channels`` caps the channels opened (``None``: as many as time allows),
     ``reaction_probability`` is the chance of one reaction per channel read (0 turns
     reactions off), ``max_actions`` caps channels read plus reactions (``None``: no cap).
+
+    The scenarios a session mixes in are off unless asked for: ``media`` opens a photo
+    or plays a note in a channel read, each of ``search_queries`` is typed into the
+    global search once (printable ASCII: ``input text`` types nothing else). Account
+    changes have switches of their own: ``join_channels`` joins (and sometimes mutes)
+    a channel the search opened, ``folders`` adds a recommended folder or creates
+    ``folder_name``, and ``webapp_bot`` names the bot whose Mini App is opened.
     """
 
     channels: int | None = Field(default=None, ge=0)
@@ -74,6 +97,15 @@ class PlaybookPlan(BaseModel):
     stories: bool = True
     stories_first: bool = False
     max_actions: int | None = Field(default=None, ge=0)
+    media: bool = False
+    search_queries: list[Annotated[str, StringConstraints(pattern=_TYPEABLE)]] = Field(
+        default_factory=list
+    )
+    join_channels: bool = False
+    folders: bool = False
+    # Telegram caps a folder's name at 12 characters.
+    folder_name: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9 ]{0,11}$")
+    webapp_bot: str | None = Field(default=None, pattern=r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
 
 
 class PlaybookResult(BaseModel):
@@ -83,4 +115,9 @@ class PlaybookResult(BaseModel):
     scrolls: int = Field(default=0, ge=0)
     stories_watched: int = Field(default=0, ge=0)
     reactions: int = Field(default=0, ge=0)
+    searches_done: int = Field(default=0, ge=0)
+    media_consumed: int = Field(default=0, ge=0)
+    channels_joined: int = Field(default=0, ge=0)
+    folders_created: int = Field(default=0, ge=0)
+    webapps_opened: int = Field(default=0, ge=0)
     skipped: list[PlaybookSkip] = Field(default_factory=list)
