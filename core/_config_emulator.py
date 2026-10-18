@@ -53,3 +53,5 @@ class EmulatorSettings(BaseSettings):
     ui_timeout_seconds: float = Field(default=30.0, gt=0)
     code_wait_seconds: float = Field(default=90.0, gt=0)
     poll_seconds: float = Field(default=2.0, gt=0)
+    # Longest activity session (``run_mobile_activity``) in seconds.
+    activity_max_seconds: int = Field(default=900, gt=0)

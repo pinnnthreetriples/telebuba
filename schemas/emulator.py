@@ -30,6 +30,8 @@ EmulatorRefusalCode = Literal[
     "emulator_phone_invalid",
     "emulator_code_timeout",
     "emulator_twofa_missing",
+    "emulator_not_running",
+    "emulator_not_signed_in",
 ]
 
 # ``started``: the container was booted (and signed in when it could be);
@@ -51,3 +53,18 @@ class EmulatorStatus(BaseModel):
     """Whether the container feature is switched on (the SPA disables the button if not)."""
 
     enabled: bool
+
+
+# What an activity session meant to do but the screen did not show: no channel row in
+# the chat list, no stories row, no post to react to. Skipped, never guessed at.
+PlaybookSkip = Literal["no_channel", "no_stories", "no_post"]
+
+
+class PlaybookResult(BaseModel):
+    """What one activity session in the container's app did."""
+
+    channels_read: int = Field(default=0, ge=0)
+    scrolls: int = Field(default=0, ge=0)
+    stories_watched: int = Field(default=0, ge=0)
+    reactions: int = Field(default=0, ge=0)
+    skipped: list[PlaybookSkip] = Field(default_factory=list)
