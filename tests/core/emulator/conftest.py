@@ -55,4 +55,5 @@ def console(monkeypatch: pytest.MonkeyPatch) -> Console:
     fake = Console()
     monkeypatch.setattr("core.emulator.adb.run_command", fake)
     monkeypatch.setattr("core.emulator.redroid.run_command", fake)
+    monkeypatch.setattr("core.emulator._process.run_command", fake)
     return fake
