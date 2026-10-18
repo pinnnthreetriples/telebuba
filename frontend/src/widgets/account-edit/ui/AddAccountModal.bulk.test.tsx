@@ -218,6 +218,26 @@ test('pool step distributes the batch and moves on from Done', async () => {
   expect(onClose).not.toHaveBeenCalled();
 });
 
+test('pool step: Done stays locked until a proxy is picked', async () => {
+  routeApi();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSessions('a.session');
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Выбрать из пула'));
+  const row = await screen.findByText('nl-1.proxyhub.net:1080');
+  // "Done" with nothing assigned moved on as if the proxy had been set.
+  expect(screen.getByText('Готово').closest('button')).toBeDisabled();
+
+  await userEvent.click(row);
+
+  await expectCloudPasswordStep();
+  expect(await requests('/proxies/pool-1/assign')).toHaveLength(1);
+});
+
 async function reachManualForm(): Promise<void> {
   await userEvent.click(screen.getByText('Файл .session'));
   pickSessions('a.session', 'b.session');
@@ -233,7 +253,7 @@ async function reachManualForm(): Promise<void> {
   });
 }
 
-test('manual proxy: a refused create moves the wizard on without assigning anything', async () => {
+test('manual proxy: a refused create stays on the form and says so', async () => {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
@@ -250,14 +270,14 @@ test('manual proxy: a refused create moves the wizard on without assigning anyth
   renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
   await reachManualForm();
   await userEvent.click(screen.getByText('Готово'));
-  // Same outcome as any other proxy ending (afterProxy in `finally`) — and no
-  // unhandled rejection escaping `void createAndAssign()`.
-  await expectCloudPasswordStep();
+  // Moving on here left the accounts without a proxy and nobody noticed.
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не все аккаунты получили прокси');
+  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
   expect(onClose).not.toHaveBeenCalled();
   expect(await requests('/assign')).toHaveLength(0);
 });
 
-test('manual proxy: one refused assign does not stop the others or the wizard', async () => {
+test('manual proxy: one refused assign does not stop the others, and the form says so', async () => {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
@@ -278,7 +298,8 @@ test('manual proxy: one refused assign does not stop the others or the wizard', 
   renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
   await reachManualForm();
   await userEvent.click(screen.getByText('Готово'));
-  await expectCloudPasswordStep();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не все аккаунты получили прокси');
+  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
   const bodies = await Promise.all(
     (await requests('/assign')).map(async (request) => request.clone().json()),
   );

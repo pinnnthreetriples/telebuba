@@ -92,6 +92,7 @@ export function AddAccountModal({
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [proxyValid, setProxyValid] = useState(false);
+  const [proxyFailed, setProxyFailed] = useState(false);
   // The id of the account the PHONE method created in step 1; file methods keep
   // theirs in the bulk import. `accountIds` below is what later steps act on.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
@@ -218,16 +219,18 @@ export function AddAccountModal({
   };
 
   // Step 2 manual: create the entered proxy (idempotent), assign it to every
-  // created account, then close. Sequential `mutateAsync` — one useMutation
+  // created account, then move on. Sequential `mutateAsync` — one useMutation
   // observer is a single callback slot, and the pool has a capacity the server
-  // enforces per assign. The close waits for the batch to settle so the observer
-  // is still attached when `onImported` runs; a refused assign does not block
-  // the close (the operator assigns the rest from the Proxies page).
+  // enforces per assign. A refused create or assign keeps the form up with the
+  // alert: moving on silently left accounts without a proxy nobody noticed.
+  // "Done" again retries (create and assign are idempotent); "Back" → "Skip" leaves.
   const createAndAssign = async () => {
     if (accountIds.length === 0) {
       onClose();
       return;
     }
+    setProxyFailed(false);
+    let refused = false;
     try {
       const created = await createProxy.mutateAsync({
         body: {
@@ -245,15 +248,16 @@ export function AddAccountModal({
             body: { account_id: accountId },
           });
         } catch {
-          // Reported by the Proxies page; the remaining accounts still get theirs.
+          // The remaining accounts still get theirs; the alert reports the rest.
+          refused = true;
         }
       }
       onImported();
     } catch {
-      // Create refused: close like the pre-bulk wizard did; the Proxies page reports it.
-    } finally {
-      afterProxy();
+      refused = true;
     }
+    if (refused) setProxyFailed(true);
+    else afterProxy();
   };
 
   // Input not yet handed to the server: a number typed but not started, a proxy typed
@@ -562,6 +566,15 @@ export function AddAccountModal({
                 onChange={setProxyValue}
                 onValidityChange={setProxyValid}
               />
+              {proxyFailed && (
+                <div role="alert" className="mt-4 type-small text-danger-deep">
+                  {t(
+                    accountIds.length > 1
+                      ? 'accounts.addWizard.proxyAssignPartial'
+                      : 'accounts.addWizard.proxyAssignError',
+                  )}
+                </div>
+              )}
               <div className="mt-6 flex justify-between gap-2">
                 <Button
                   onClick={() => {

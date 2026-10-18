@@ -158,7 +158,7 @@ test('a refused assign shows the alert and keeps that account without a proxy', 
   });
 });
 
-test('single-account distribute button is absent; Back and Done call through', async () => {
+test('single-account distribute button is absent; Back calls through, Done waits for a pick', async () => {
   routePool([POOL_PROXY]);
   const onBack = vi.fn();
   const onDone = vi.fn();
@@ -169,8 +169,9 @@ test('single-account distribute button is absent; Back and Done call through', a
   expect(screen.queryByText('Распределить автоматически')).not.toBeInTheDocument();
   await userEvent.click(screen.getByText('Назад'));
   expect(onBack).toHaveBeenCalledTimes(1);
-  await userEvent.click(screen.getByText('Готово'));
-  expect(onDone).toHaveBeenCalledTimes(1);
+  // Nothing assigned yet: "Done" would move on as if the account had a proxy.
+  expect(screen.getByText('Готово').closest('button')).toBeDisabled();
+  expect(onDone).not.toHaveBeenCalled();
 });
 
 test('an empty pool shows the empty state', async () => {
