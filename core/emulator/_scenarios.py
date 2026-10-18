@@ -25,6 +25,7 @@ from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._selectors import (
     app_error,
+    channel_key,
     channel_rows,
     photos,
     playable,
@@ -57,13 +58,15 @@ _SEARCH_SCROLLS = (2, 4)
 _PREFIX_MIN = 3
 _MUTE_CHANCE = 0.65
 # A photo is looked at this long, the next one swiped to with this chance; a note is
-# played for this share of its length.
+# played for this share of its length, never longer than a video note's minute. With
+# both in the feed, a photo is picked with this chance.
 _PHOTO_DWELL = (2.5, 5.0)
 _NEXT_PHOTO_CHANCE = 0.4
 _NOTE_SHARE = (0.9, 1.0)
-# A new folder takes this many chats; the folder tabs are swiped this many times.
+_NOTE_MAX_SECONDS = 60.0
+_PHOTO_CHANCE = 0.5
+# A new folder takes this many chats.
 _FOLDER_CHATS = (2, 3)
-_TAB_SWIPES = (1, 3)
 # A Mini App is used this long, in this many scrolls; it opens only with that much left.
 _WEBAPP_SECONDS = (30.0, 45.0)
 _WEBAPP_STEPS = (4, 6)
@@ -186,11 +189,13 @@ class ScenarioSteps:
         )
         await adb.human_swipe(serial, start, end, engine=self.engine)
         _screen, nodes = await self._screen(serial)
-        results = channel_rows(nodes) or rows_below(nodes, box)
+        results = [row for row in channel_rows(nodes) if channel_key(row) not in self._read]
         if not results:
             self._skip("no_channel")
             return True
-        await self._tap(serial, rng.choice(results))
+        row = rng.choice(results)
+        self._read.add(channel_key(row))
+        await self._tap(serial, row)
         self.result.channels_read += 1
         await self._settle()
         await self.read_channel_feed(serial, rng.randint(*_SEARCH_SCROLLS))
@@ -207,7 +212,7 @@ class ScenarioSteps:
         await self._tap(serial, join)
         await self._settle()
         _screen, nodes = await self._screen(serial)
-        if await self._dismiss_error(serial, nodes):
+        if await self._dismiss_error(serial, nodes) or find(nodes, labels.join) is not None:
             return
         self.result.channels_joined += 1
         mute = find(nodes, labels.mute)
@@ -222,12 +227,12 @@ class ScenarioSteps:
             self._skip("no_media")
             return
         rng = self.engine.rng
-        if pictures and (not notes or rng.random() < 0.5):  # noqa: PLR2004 - either kind
+        if pictures and (not notes or rng.random() < _PHOTO_CHANCE):
             await self._view_photo(serial, rng.choice(pictures), screen_size(nodes))
         else:
             button, seconds = rng.choice(notes)
             await self._tap(serial, button)
-            listen = seconds * rng.uniform(*_NOTE_SHARE)
+            listen = min(seconds * rng.uniform(*_NOTE_SHARE), _NOTE_MAX_SECONDS)
             await asyncio.sleep(max(0.0, min(listen, self._seconds_left())))
         self.result.media_consumed += 1
 
@@ -317,18 +322,21 @@ class ScenarioSteps:
         return True
 
     async def _swipe_folder_tabs(self, serial: str) -> None:
-        """Flick across the chat list to the next folders and back again."""
+        """Flick across the chat list to the next folder and back again.
+
+        One tab each way: the new folder makes a second tab, and a flick past the last
+        one could land on a chat row's swipe action (archive) instead.
+        """
         width, height = screen_size(await self._chat_list(serial))
         self._chats = None
         row = round(height * _FLICK_Y)
         forward = (round(width * _FLICK_FROM), row), (round(width * _FLICK_TO), row)
         for start, end in (forward, forward[::-1]):
-            for _ in range(self.engine.rng.randint(*_TAB_SWIPES)):
-                if not self._time_left():
-                    return
-                await adb.human_fling(serial, start, end, engine=self.engine)
-                pause, _back = self.engine.sample_reading_pause_sec()
-                await asyncio.sleep(pause)
+            if not self._time_left():
+                return
+            await adb.human_fling(serial, start, end, engine=self.engine)
+            pause, _back = self.engine.sample_reading_pause_sec()
+            await asyncio.sleep(pause)
 
     async def interact_with_webapp(self, serial: str, bot_username: str) -> bool:
         """Open ``bot_username``'s Mini App, scroll through it for a while, close it."""

@@ -42,9 +42,9 @@ class ScenarioLabels(NamedTuple):
     ``folders_create`` (``CreateNewFilter``), ``folders_add`` (``Add``, a recommended
     folder's button), ``folder_add_chats`` (``FilterAddChats``), ``folder_chats_header``
     (``FilterChats``), ``save`` (``Save``, ``Done``), ``launch`` (``ProfileBotOpenApp``,
-    ``BotOpen``, ``BotWebAppInstantViewOpen``, ``BotStart``), ``close_anyway``
-    (``BotWebViewCloseAnyway``), ``ok`` (``OK``). ``photo`` is contained in a media
-    message's label; an ``app_error`` dialog's text starts with one of its prefixes.
+    ``BotOpen``, ``BotWebAppInstantViewOpen``; never ``BotStart``, which sends /start),
+    ``close_anyway`` (``BotWebViewCloseAnyway``), ``ok`` (``OK``). ``photo`` is a whole
+    word in a media message's label; an ``app_error`` dialog's text starts with one of its prefixes.
     """
 
     search: frozenset[str]
@@ -93,6 +93,12 @@ def channel_rows(nodes: list[UiNode]) -> list[UiNode]:
     return [node for node in nodes if node_label(node).startswith(prefixes)]
 
 
+def channel_key(row: UiNode) -> str:
+    """The channel's title in its row ("Channel. <title>. ..."): unread counts change."""
+    parts = node_label(row).split(". ")
+    return parts[1] if len(parts) > 1 else parts[0]
+
+
 def search_field(nodes: list[UiNode]) -> UiNode | None:
     """The editable box at the top of the screen: the search field has no label of its own."""
     if not nodes:
@@ -119,16 +125,23 @@ def offline(nodes: list[UiNode]) -> bool:
     return any(node.says(scenario_labels().offline) for node in nodes)
 
 
+@cache
+def _photo_word() -> re.Pattern[str]:
+    """``photo`` as a whole word: "Photo, ..." is a photo, "photography" is not."""
+    words = "|".join(re.escape(word) for word in scenario_labels().photo)
+    return re.compile(rf"(?<!\w)(?:{words})(?!\w)")
+
+
 def photos(nodes: list[UiNode]) -> list[UiNode]:
     """Photo messages in the feed: tall enough, inside it, labelled a photo."""
     if not nodes:
         return []
     _width, height = screen_size(nodes)
-    words = scenario_labels().photo
+    word = _photo_word()
     return [
         node
         for node in nodes
-        if any(word in node_label(node) for word in words)
+        if word.search(node_label(node))
         and node.bounds[3] - node.bounds[1] >= _MEDIA_MIN_HEIGHT * height
         and node.bounds[1] >= _CONTENT_TOP * height
         and node.bounds[3] <= _CONTENT_BOTTOM * height
@@ -143,15 +156,24 @@ def duration_seconds(text: str) -> int | None:
 
 
 def playable(nodes: list[UiNode]) -> list[tuple[UiNode, int]]:
-    """Play buttons with the duration printed on their row: voice and video notes."""
+    """Play buttons with the duration printed on their row: voice and video notes.
+
+    The duration is the one nearest the button: a message's sending time ("12:05")
+    sits on the same row too, at the bubble's far end.
+    """
+    durations = [
+        (node, seconds) for node in nodes if node.text and (seconds := duration_seconds(node.text))
+    ]
     found: list[tuple[UiNode, int]] = []
     for button in (node for node in nodes if node.says(scenario_labels().play)):
-        top, bottom = button.bounds[1], button.bounds[3]
-        for node in nodes:
-            seconds = duration_seconds(node.text) if node.text else None
-            if seconds and node.bounds[1] < bottom and node.bounds[3] > top:
-                found.append((button, seconds))
-                break
+        left, top, right, bottom = button.bounds
+        row = [
+            (min(abs(node.bounds[0] - right), abs(left - node.bounds[2])), seconds)
+            for node, seconds in durations
+            if node.bounds[1] < bottom and node.bounds[3] > top
+        ]
+        if row:
+            found.append((button, min(row)[1]))
     return found
 
 

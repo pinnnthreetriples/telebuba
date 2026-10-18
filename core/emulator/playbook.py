@@ -33,7 +33,13 @@ from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator._scenarios import ScenarioSteps
-from core.emulator._selectors import channel_rows, node_label, offline, screen_size
+from core.emulator._selectors import (
+    channel_key,
+    channel_rows,
+    node_label,
+    offline,
+    screen_size,
+)
 from core.emulator.telegram_app import read_screen
 from core.emulator.ui_dump import UiNode, labels
 from schemas.emulator import PlaybookPlan, PlaybookResult
@@ -116,12 +122,6 @@ def posts(nodes: list[UiNode]) -> list[UiNode]:
         and node.bounds[3] <= _CONTENT_BOTTOM * height
         and node.bounds[2] <= width
     ]
-
-
-def _channel_key(row: UiNode) -> str:
-    """The channel's title in its row ("Channel. <title>. ..."): unread counts change."""
-    parts = node_label(row).split(". ")
-    return parts[1] if len(parts) > 1 else parts[0]
 
 
 class TelegramMobilePlaybook(ScenarioSteps):
@@ -211,13 +211,13 @@ class TelegramMobilePlaybook(ScenarioSteps):
         if self.plan.channels is not None and self.result.channels_read >= self.plan.channels:
             return False
         nodes = await self._chat_list(serial)
-        rows = [row for row in channel_rows(nodes) if _channel_key(row) not in self._read]
+        rows = [row for row in channel_rows(nodes) if channel_key(row) not in self._read]
         if not rows:
             self._skip("no_channel")
             return False
         row = self.engine.rng.choice(rows)
         self._chats = None
-        self._read.add(_channel_key(row))
+        self._read.add(channel_key(row))
         react = self.engine.rng.random() < self.plan.reaction_probability
         await adb.human_tap(serial, row, engine=self.engine)
         self.result.channels_read += 1

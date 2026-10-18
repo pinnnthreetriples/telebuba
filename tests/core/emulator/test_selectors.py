@@ -163,6 +163,31 @@ def test_a_play_button_counts_with_the_duration_on_its_row(play: str) -> None:
     assert seconds == 42, "the second button has no duration: it is no note"
 
 
+def test_the_duration_next_to_the_button_wins_over_the_sending_time() -> None:
+    nodes = parse_dump(
+        _dump(
+            _node("[900,960][1040,1000]", text="12:05"),
+            _node("[60,900][180,1020]", desc="Play", cls="android.view.View"),
+            _node("[200,960][320,1000]", text="0:42"),
+        )
+    )
+
+    assert playable(nodes)[0][1] == 42
+
+
+@pytest.mark.parametrize("text", ["Photography tips for the weekend", "Фотограф года"])
+def test_a_tall_post_merely_mentioning_photos_is_no_photo(text: str) -> None:
+    nodes = parse_dump(_dump(_node("[40,700][1040,1300]", text=text)))
+
+    assert photos(nodes) == []
+
+
+@pytest.mark.parametrize("word", ["start", "iniciar", "starten", "begin"])
+def test_a_mini_app_is_never_launched_with_the_bots_start_button(word: str) -> None:
+    assert word not in scenario_labels().launch
+    assert "open app" in scenario_labels().launch
+
+
 @pytest.mark.parametrize(
     ("text", "seconds"), [("0:42", 42), ("12:05", 725), ("1:2", None), ("12:30:00", None)]
 )

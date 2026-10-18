@@ -170,6 +170,37 @@ async def test_a_search_never_joins_without_the_plans_switch(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_join_tap_that_leaves_the_button_is_no_join(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _searching_app(monkeypatch, console)
+    app.moves = [move for move in app.moves if move[2] != "joined"]
+    session = _playbook()
+    session.plan = PlaybookPlan(join_channels=True)
+
+    assert await session.search_and_discover_channel(SERIAL, "space")
+
+    assert any(tapped(JOIN)(call) for call in console.shell_calls())
+    assert session.result.channels_joined == 0, "a request to join, or a tap that missed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_search_never_reopens_a_channel_read_this_session(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _searching_app(monkeypatch, console)
+    session = _playbook()
+    session._read = {"space daily"}
+
+    assert await session.search_and_discover_channel(SERIAL, "space")
+
+    assert not any(tapped(RESULT)(call) for call in console.shell_calls())
+    assert session.result.skipped == ["no_channel"]
+
+
+@pytest.mark.asyncio
 async def test_a_chat_list_without_a_search_button_is_skipped(
     console: Console,
     monkeypatch: pytest.MonkeyPatch,
@@ -262,6 +293,22 @@ async def test_a_note_longer_than_the_session_is_cut_at_its_end(
 
 
 @pytest.mark.asyncio
+async def test_a_long_voice_note_is_listened_to_for_a_minute_at_most(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+    clock: _Clock,  # noqa: F811
+) -> None:
+    long_note = _text("9:30", DURATION.bounds)
+    _app(monkeypatch, console, {"feed": [PLAY, long_note]}, "feed")
+    session = _playbook()
+    session._deadline = 3600
+
+    await session.consume_feed_media(SERIAL)
+
+    assert clock.slept == [60.0]
+
+
+@pytest.mark.asyncio
 async def test_a_feed_without_photos_or_notes_is_skipped(
     console: Console,
     monkeypatch: pytest.MonkeyPatch,
@@ -302,9 +349,10 @@ async def test_a_recommended_folder_is_added_then_the_tabs_are_swiped(
     calls = console.shell_calls()
     assert calls[0][:2] == ["am", "start"]
     assert tapped(ADD)(calls[1]), "the recommended folder, not a new one"
-    flicks = [call for call in calls[2:] if call[:2] == ["input", "swipe"]]
-    assert flicks, "the folder tabs are swiped"
-    assert all(abs(int(c[3]) - int(c[5])) < 20 for c in flicks), "sideways flicks"
+    there, back_again = (call for call in calls[2:] if call[:2] == ["input", "swipe"])
+    assert int(there[2]) > int(there[4]), "one tab on, never past the last one"
+    assert int(back_again[2]) < int(back_again[4]), "and back"
+    assert all(abs(int(c[3]) - int(c[5])) < 20 for c in (there, back_again)), "sideways"
     assert app.at == "chats"
     assert session.result.folders_created == 1
 
