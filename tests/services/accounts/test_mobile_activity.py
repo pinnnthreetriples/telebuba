@@ -41,9 +41,13 @@ class _Playbook:
     fail: EmulatorRefusalCode | None = None
     gate: asyncio.Event | None = None
 
+    def __init__(self) -> None:
+        self.result = PlaybookResult()
+
     async def run_session(self, serial: str, duration_sec: int) -> PlaybookResult:
         cls = type(self)
         cls.runs.append((serial, duration_sec))
+        self.result = PlaybookResult(channels_read=1)  # what it did before any gate
         cls.started.set()
         gate, fail = cls.gate, cls.fail
         if gate is not None:
@@ -61,6 +65,7 @@ def playbook(monkeypatch: pytest.MonkeyPatch) -> type[_Playbook]:
     _Playbook.gate = None
     monkeypatch.setattr(emulator_module, "TelegramMobilePlaybook", _Playbook)
     emulator_module._ACTIVE.clear()
+    emulator_module._OPERATOR.clear()
     return _Playbook
 
 
@@ -126,7 +131,58 @@ async def test_a_failed_session_answers_its_code_and_frees_the_account(
         await run_mobile_activity("acc", 60)
 
     assert refused.value.code == "emulator_not_signed_in"
+    assert refused.value.partial == PlaybookResult(channels_read=1), "what it did goes with it"
     assert "acc" not in emulator_module._ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_before_the_session_carries_nothing_it_did(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    container.fail_at = "connect"
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await run_mobile_activity("acc", 60)
+
+    assert refused.value.partial is None
+    assert playbook.runs == []
+
+
+@pytest.mark.asyncio
+async def test_a_session_past_its_time_ends_with_what_it_did(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    playbook.gate = asyncio.Event()  # never set: the session would run forever
+    monkeypatch.setattr(emulator_module, "_SESSION_GRACE_SECONDS", 0.05)
+
+    result = await run_mobile_activity("acc", 0)
+
+    assert result == PlaybookResult(channels_read=1)
+    assert "acc" not in emulator_module._ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_no_session_while_the_operator_holds_the_pod(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    emulator_module._OPERATOR.add("acc")
+    monkeypatch.setattr(emulator_module, "viewer_open", lambda name: name == "telebuba-acc")
+
+    with pytest.raises(EmulatorBusyError):
+        await run_mobile_activity("acc", 60)
+
+    assert playbook.runs == []
 
 
 @pytest.mark.asyncio

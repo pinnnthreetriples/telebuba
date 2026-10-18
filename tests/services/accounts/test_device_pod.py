@@ -1,8 +1,9 @@
-"""With the emulator on, a new mobile device also signs the official app in, in its pod.
+"""With the emulator on, a new mobile device also gets its pod ready, without a sign-in.
 
 The Telethon second-device sign-in and the pod are both fakes: what is pinned is the
-order (the device is recorded first), the pacing stamp handed to the app's own code
-request, and that nothing but a mobile device with the emulator on reaches a pod.
+order (the device is recorded first), that the pod is opened in the background (no
+second login code seconds after the first: the pacing stamp stays), and that nothing
+but a mobile device with the emulator on reaches a pod.
 """
 
 from __future__ import annotations
@@ -31,14 +32,16 @@ class _Pod:
         self.opened: list[str] = []
         # The pacing stamp each open found: ``None`` means the app may ask for a code.
         self.stamps: list[float | None] = []
+        self.background: list[bool] = []
         self.error: EmulatorRefusedError | None = None
 
-    async def open(self, account_id: str) -> OpenMobileResult:
+    async def open(self, account_id: str, *, background: bool = False) -> OpenMobileResult:
         self.opened.append(account_id)
         self.stamps.append(devices_module._LAST_CODE_REQUEST.get(account_id))
+        self.background.append(background)
         if self.error is not None:
             raise self.error
-        return OpenMobileResult(account_id=account_id, status="started", signed_in=True)
+        return OpenMobileResult(account_id=account_id, status="started", signed_in=False)
 
 
 @pytest.fixture
@@ -61,7 +64,7 @@ async def _account(primary: DeviceType = "desktop") -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_mobile_device_is_signed_in_and_then_opened_in_its_pod(
+async def test_a_mobile_device_is_signed_in_and_its_pod_made_ready_in_the_background(
     pod: _Pod, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     await _account()
@@ -71,8 +74,25 @@ async def test_a_mobile_device_is_signed_in_and_then_opened_in_its_pod(
 
     assert [c.device_type for c in calls] == ["mobile"]
     assert pod.opened == ["acc"]
-    assert pod.stamps == [None], "the app's own code request is not refused as a repeat"
+    assert pod.background == [True], "the app is not signed in: no second code request"
+    assert pod.stamps[0] is not None, "the pause after the device's code still holds"
     assert account.devices == ["desktop", "mobile"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("pod")
+async def test_opening_the_pod_right_after_the_device_waits_out_the_code_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account()
+    _fake_sign_in(monkeypatch)
+    await add_account_device("acc", "mobile")
+
+    with pytest.raises(devices_module.DeviceRefusedError) as refused:
+        devices_module.claim_code_request("acc")
+
+    assert refused.value.code == "device_code_cooldown"
+    assert refused.value.retry_after_seconds
 
 
 @pytest.mark.asyncio

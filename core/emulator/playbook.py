@@ -48,6 +48,10 @@ _STORIES_SHARE = 0.35
 _FLING_CHANCE = 0.2
 _REACTION_CHANCE = 0.08
 _FEED_SCROLLS = (3, 8)
+# Where a read drags from and how far (shares of the screen height); a scroll back
+# to re-read starts lower and goes a shorter way up.
+_READ_START, _READ_LENGTH = 0.3, (0.3, 0.5)
+_BACK_START, _BACK_LENGTH = 0.6, (0.15, 0.25)
 # A post is a text node at least this share of the screen tall, between the header
 # and the bottom bar.
 _POST_MIN_HEIGHT = 0.08
@@ -171,15 +175,19 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
                     await self.react_to_post(serial, self.engine.rng.choice(candidates))
                 else:
                     self._skip("no_post")
-            x = width // 2
-            top, bottom = (x, round(height * 0.32)), (x, round(height * 0.72))
+            screen_size = (width, height)
+            top, bottom = self.engine.sample_scroll(
+                screen_size, _READ_START, _READ_LENGTH, downward=True
+            )
             if self.engine.rng.random() < _FLING_CHANCE:
                 await adb.human_fling(serial, top, bottom, engine=self.engine)
             else:
                 await adb.human_swipe(serial, top, bottom, engine=self.engine)
             self.result.scrolls += 1
             if scroll_back:
-                back_from, back_to = (x, round(height * 0.6)), (x, round(height * 0.42))
+                back_from, back_to = self.engine.sample_scroll(
+                    screen_size, _BACK_START, _BACK_LENGTH, downward=False
+                )
                 await adb.human_swipe(serial, back_from, back_to, engine=self.engine)
 
     async def watch_stories(self, serial: str, max_stories: int = 5) -> None:

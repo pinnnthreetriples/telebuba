@@ -32,6 +32,7 @@ KEYCODE_ENTER = 66
 KEYCODE_DEL = 67
 KEYCODE_MOVE_END = 123
 _DUMP_PATH = "/sdcard/telebuba_ui.xml"
+_DUMP_ATTEMPTS = 3
 _BOOTED = "1"
 
 
@@ -128,15 +129,20 @@ async def start_app(serial: str, package: str) -> None:
 
 
 async def dump_ui(serial: str) -> str:
-    """This moment's UI dump, or ``""`` when uiautomator could not take one.
+    """This moment's UI dump, or ``""`` when uiautomator could not take one in a few tries.
 
     The file is deleted first: a failed dump ("could not get idle state", common on
     animated screens) still exits 0, and ``cat`` would then serve an older screen.
+    A failed dump is taken again after a poll interval: one is no screen at all, and
+    read as one it would send a BACK press or a tap on a guess.
     """
-    await shell(serial, "rm", "-f", _DUMP_PATH)
-    if "dumped to" not in (await shell(serial, "uiautomator", "dump", _DUMP_PATH)).lower():
-        return ""
-    return await shell(serial, "cat", _DUMP_PATH)
+    for attempt in range(_DUMP_ATTEMPTS):
+        if attempt:
+            await asyncio.sleep(settings.emulator.poll_seconds)
+        await shell(serial, "rm", "-f", _DUMP_PATH)
+        if "dumped to" in (await shell(serial, "uiautomator", "dump", _DUMP_PATH)).lower():
+            return await shell(serial, "cat", _DUMP_PATH)
+    return ""
 
 
 async def tap(serial: str, node: UiNode) -> None:

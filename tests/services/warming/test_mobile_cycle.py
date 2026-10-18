@@ -15,10 +15,12 @@ import pytest
 import pytest_asyncio
 
 from core.config import settings
-from core.db import fetch_warming_state
+from core.db import fetch_warming_state, upsert_warming_state
 from core.repositories.warming_daily_stats import list_warming_daily_stats
 from schemas.emulator import OpenMobileResult, PlaybookResult
+from schemas.warming import WarmingStateWrite
 from services import warming
+from services.accounts.devices import DeviceRefusedError
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
 from services.warming import _mobile_cycle, _seams
 from services.warming._mobile_cycle import session_seconds
@@ -26,8 +28,12 @@ from services.warming.daily_stats import stats_day
 from tests.services.warming._support import _no_quiet_days, _ok, _seed_warming_account
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from schemas.device_fingerprint import DeviceType
     from schemas.telegram_actions import ActionResult, TelegramAction
+    from schemas.warming import WarmingStateRecord
+    from schemas.warming_daily_stats import WarmingDailyStats
 
 
 class _Pod:
@@ -39,9 +45,11 @@ class _Pod:
         self.open_error: Exception | None = None
         self.run_error: BaseException | None = None
         self.activity = PlaybookResult(channels_read=2, scrolls=9, stories_watched=3, reactions=1)
+        # Set to hold the stop until the test releases it.
+        self.stop_gate: asyncio.Event | None = None
 
-    async def open(self, account_id: str) -> OpenMobileResult:
-        self.calls.append("open")
+    async def open(self, account_id: str, *, background: bool = False) -> OpenMobileResult:
+        self.calls.append("open:background" if background else "open")
         if self.open_error is not None:
             raise self.open_error
         return OpenMobileResult(account_id=account_id, status="started", signed_in=self.signed_in)
@@ -55,11 +63,13 @@ class _Pod:
 
     async def stop(self, account_id: str) -> None:
         del account_id
+        if self.stop_gate is not None:
+            await self.stop_gate.wait()
         self.calls.append("stop")
 
 
 @pytest_asyncio.fixture
-async def pod(monkeypatch: pytest.MonkeyPatch) -> _Pod:
+async def pod(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Pod]:
     """The fake pod, the emulator on, and one warming account ready for a cycle."""
     _no_quiet_days(monkeypatch)
     await _seed_warming_account()
@@ -68,7 +78,17 @@ async def pod(monkeypatch: pytest.MonkeyPatch) -> _Pod:
     monkeypatch.setattr(_mobile_cycle, "open_account_mobile", fake.open)
     monkeypatch.setattr(_mobile_cycle, "run_mobile_activity", fake.run)
     monkeypatch.setattr(_mobile_cycle, "stop_account_pod", fake.stop)
-    return fake
+    monkeypatch.setattr(_mobile_cycle, "_STREAKS", {})
+    monkeypatch.setattr(_mobile_cycle, "_RUNNING", set())
+    yield fake
+    if fake.stop_gate is not None:
+        fake.stop_gate.set()
+    await _stops_done()
+
+
+async def _stops_done() -> None:
+    """Let the detached pod stops finish."""
+    await asyncio.gather(*_mobile_cycle._DETACHED)
 
 
 @pytest.fixture
@@ -93,6 +113,24 @@ async def _iterate_on(device: DeviceType) -> None:
     await asyncio.create_task(body())
 
 
+async def _record() -> WarmingStateRecord:
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    return record
+
+
+async def _today() -> WarmingDailyStats | None:
+    day = await stats_day("acc-1", datetime.now(UTC))
+    rows = await list_warming_daily_stats("acc-1", day)
+    return rows[0] if rows else None
+
+
+def _refusal(code: str) -> EmulatorRefusedError:
+    error = EmulatorRefusedError("emulator_not_running")
+    error.code = code
+    return error
+
+
 @pytest.mark.asyncio
 async def test_a_desktop_stint_warms_through_telethon_and_never_touches_a_pod(
     pod: _Pod, telethon: list[str]
@@ -108,18 +146,20 @@ async def test_a_mobile_stint_opens_its_pod_spends_the_visit_and_stops_it(
     pod: _Pod, telethon: list[str]
 ) -> None:
     await _iterate_on("mobile")
+    await _stops_done()
 
-    assert pod.calls[0] == "open"
+    assert pod.calls[0] == "open:background", "a warming open never asks for a login code"
     assert pod.calls[1].startswith("run:")
     assert pod.calls[2:] == ["stop"]
     assert telethon == [], "no MTProto action on a mobile stint"
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
+    record = await _record()
     assert record.state == "sleeping"
     assert record.last_event == "cycle:ok"
     assert record.cycles_completed == 1
-    day = await stats_day("acc-1", datetime.now(UTC))
-    [stats] = await list_warming_daily_stats("acc-1", day)
+    assert record.daily_actions == 3, "channels read and reactions spend the day's budget"
+    assert record.warmed_days == 1
+    stats = await _today()
+    assert stats is not None
     assert (stats.cycles, stats.reads, stats.reactions, stats.failures) == (1, 2, 1, 0)
 
 
@@ -136,72 +176,253 @@ async def test_a_mobile_stint_with_the_emulator_off_stays_on_telethon(
 
 
 @pytest.mark.asyncio
-async def test_a_pod_that_will_not_open_fails_the_cycle_and_the_loop_goes_on(
-    pod: _Pod, telethon: list[str]
+@pytest.mark.parametrize(
+    "code",
+    ["emulator_command_timeout", "emulator_boot_timeout", "emulator_not_running"],
+)
+async def test_a_passing_cause_fails_the_cycle_and_the_loop_retries(
+    pod: _Pod, telethon: list[str], code: str
 ) -> None:
-    pod.open_error = EmulatorRefusedError("emulator_proxy_missing")
+    pod.run_error = _refusal(code)
 
     await _iterate_on("mobile")
+    await _stops_done()
 
-    assert pod.calls == ["open", "stop"]
+    assert pod.calls[-1] == "stop"
     assert telethon == [], "no fallback to Telethon"
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.state == "sleeping", "retried next cycle, not parked in error"
-    assert record.last_event == "cycle:failed"
-    assert record.last_error == "emulator_proxy_missing"
+    record = await _record()
+    assert (record.state, record.last_event, record.last_error) == (
+        "sleeping",
+        "cycle:failed",
+        code,
+    )
     assert record.next_run_at is not None
+    assert record.daily_actions == 0, "a failed visit spends none of the day's budget"
+    assert record.warmed_days == 0, "a failed visit is no warming day"
+    stats = await _today()
+    assert stats is not None
+    assert (stats.cycles, stats.reads, stats.failures) == (1, 0, 1)
 
 
 @pytest.mark.asyncio
-async def test_an_app_left_signed_out_fails_the_cycle_without_a_session(
+@pytest.mark.parametrize(
+    "code",
+    [
+        "emulator_proxy_missing",
+        "emulator_proxy_unsupported",
+        "emulator_twofa_missing",
+        "emulator_sdk_mismatch",
+        "emulator_field_missing",
+    ],
+)
+async def test_a_cause_a_retry_cannot_fix_parks_the_account_in_error(
+    pod: _Pod, telethon: list[str], code: str
+) -> None:
+    pod.open_error = _refusal(code)
+
+    await _iterate_on("mobile")
+    await _stops_done()
+
+    assert pod.calls == ["open:background", "stop"]
+    record = await _record()
+    assert (record.state, record.last_error) == ("error", code)
+    assert telethon == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_missing_device_parks_the_account_in_error(pod: _Pod) -> None:
+    pod.open_error = DeviceRefusedError("device_missing")
+
+    await _iterate_on("mobile")
+
+    record = await _record()
+    assert (record.state, record.last_error) == ("error", "device_missing")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_code_pause_is_a_passing_cause(pod: _Pod) -> None:
+    pod.open_error = DeviceRefusedError("device_code_cooldown", retry_after_seconds=60)
+
+    await _iterate_on("mobile")
+
+    record = await _record()
+    assert (record.state, record.last_error) == ("sleeping", "device_code_cooldown")
+
+
+@pytest.mark.asyncio
+async def test_an_app_left_signed_out_parks_the_account_without_asking_for_a_code(
     pod: _Pod, telethon: list[str]
 ) -> None:
     pod.signed_in = False
 
     await _iterate_on("mobile")
+    await _stops_done()
 
-    assert pod.calls == ["open", "stop"]
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.last_error == "emulator_not_signed_in"
+    assert pod.calls == ["open:background", "stop"]
+    record = await _record()
+    assert (record.state, record.last_error) == ("error", "emulator_not_signed_in")
     assert telethon == []
 
 
+async def _cycles(count: int) -> None:
+    """``count`` iterations, the row put back in ``active`` after each like the loop's wake."""
+    for _ in range(count):
+        await _iterate_on("mobile")
+        await _stops_done()
+        await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+
 @pytest.mark.asyncio
-async def test_a_failed_session_still_stops_the_pod(pod: _Pod, telethon: list[str]) -> None:
-    pod.run_error = EmulatorRefusedError("emulator_field_missing")
+@pytest.mark.usefixtures("telethon")
+async def test_too_many_failures_in_a_row_park_the_account_in_error(pod: _Pod) -> None:
+    pod.run_error = _refusal("emulator_not_running")
+    limit = _mobile_cycle._FAILURE_LIMIT
+
+    await _cycles(limit - 1)
+    await _iterate_on("mobile")
+
+    record = await _record()
+    assert (record.state, record.last_error) == ("error", "emulator_not_running")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_good_visit_starts_the_failure_count_again(pod: _Pod) -> None:
+    limit = _mobile_cycle._FAILURE_LIMIT
+    pod.run_error = _refusal("emulator_not_running")
+    await _cycles(limit - 1)
+    pod.run_error = None
+    await _cycles(1)
+    pod.run_error = _refusal("emulator_not_running")
 
     await _iterate_on("mobile")
 
-    assert pod.calls[0] == "open"
-    assert pod.calls[-1] == "stop"
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert (record.state, record.last_error) == ("sleeping", "emulator_field_missing")
-    assert telethon == []
+    assert (await _record()).state == "sleeping"
 
 
 @pytest.mark.asyncio
-async def test_a_pod_busy_with_the_operator_is_left_running(pod: _Pod, telethon: list[str]) -> None:
+@pytest.mark.usefixtures("telethon")
+async def test_a_failed_session_keeps_what_it_did_before_failing(pod: _Pod) -> None:
+    pod.run_error = EmulatorRefusedError(
+        "emulator_not_running", partial=PlaybookResult(channels_read=3, reactions=1)
+    )
+
+    await _iterate_on("mobile")
+    await _stops_done()
+
+    assert pod.calls[-1] == "stop"
+    record = await _record()
+    assert (record.state, record.last_error) == ("sleeping", "emulator_not_running")
+    assert record.daily_actions == 4, "what was done is spent from the budget"
+    stats = await _today()
+    assert stats is not None
+    assert (stats.reads, stats.reactions, stats.failures) == (3, 1, 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_session_with_nothing_to_do_is_no_warming_day(pod: _Pod) -> None:
+    pod.activity = PlaybookResult(skipped=["no_channel", "no_stories"])
+
+    await _iterate_on("mobile")
+    await _stops_done()
+
+    assert pod.calls[-1] == "stop"
+    record = await _record()
+    assert (record.state, record.last_event) == ("sleeping", "cycle:skipped")
+    assert (record.cycles_completed, record.warmed_days) == (0, 0)
+    stats = await _today()
+    assert stats is None or (stats.cycles, stats.failures) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_a_pod_busy_with_the_operator_is_left_running_and_skipped(
+    pod: _Pod, telethon: list[str]
+) -> None:
     pod.open_error = EmulatorBusyError()
 
     await _iterate_on("mobile")
+    await _stops_done()
 
-    assert pod.calls == ["open"], "the operator's pod is never stopped"
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert (record.state, record.last_error) == ("sleeping", "emulator_busy")
+    assert pod.calls == ["open:background"], "the operator's pod is never stopped"
+    record = await _record()
+    assert (record.state, record.last_event) == ("sleeping", "cycle:skipped")
+    assert record.cycles_completed == 0
+    stats = await _today()
+    assert stats is None or stats.failures == 0, "not the account's failure"
+    assert not _mobile_cycle._RUNNING, "the slot is free again"
     assert telethon == []
 
 
 @pytest.mark.asyncio
-async def test_a_stop_mid_session_still_stops_the_pod(pod: _Pod, telethon: list[str]) -> None:
-    pod.run_error = asyncio.CancelledError()
+@pytest.mark.usefixtures("telethon")
+async def test_a_session_busy_with_the_operator_leaves_the_pod_running(pod: _Pod) -> None:
+    pod.run_error = EmulatorBusyError()
 
-    with pytest.raises(asyncio.CancelledError):
-        await _iterate_on("mobile")
+    await _iterate_on("mobile")
+    await _stops_done()
 
+    assert "stop" not in pod.calls
+    assert (await _record()).last_event == "cycle:skipped"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_no_free_pod_slot_skips_the_cycle_without_a_pod(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "max_running_pods", 1)
+    _mobile_cycle._RUNNING.add("acc-other")
+
+    await _iterate_on("mobile")
+
+    assert pod.calls == []
+    record = await _record()
+    assert (record.state, record.last_event) == ("sleeping", "cycle:skipped")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_slow_pod_stop_holds_its_slot_but_not_the_cycle(pod: _Pod) -> None:
+    pod.stop_gate = asyncio.Event()
+
+    await asyncio.wait_for(_iterate_on("mobile"), timeout=5)
+
+    assert (await _record()).last_event == "cycle:ok", "settled before the pod stopped"
+    assert "stop" not in pod.calls
+    assert "acc-1" in _mobile_cycle._RUNNING, "the pod counts until it stops"
+    pod.stop_gate.set()
+    await _stops_done()
+    assert pod.calls[-1] == "stop"
+    assert not _mobile_cycle._RUNNING
+
+
+@pytest.mark.asyncio
+async def test_a_stop_mid_session_is_not_held_by_the_pod_stop(
+    pod: _Pod, telethon: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pod.stop_gate = asyncio.Event()
+    started = asyncio.Event()
+
+    async def endless(account_id: str, duration_sec: int) -> PlaybookResult:
+        del account_id, duration_sec
+        started.set()
+        await asyncio.Event().wait()
+        raise AssertionError
+
+    monkeypatch.setattr(_mobile_cycle, "run_mobile_activity", endless)
+    task = asyncio.create_task(_iterate_on("mobile"))
+    await started.wait()
+    task.cancel()
+    done, _pending = await asyncio.wait({task}, timeout=1)
+
+    assert done == {task}, "the cancelled cycle ends without waiting for Docker"
+    assert task.cancelled()
+    assert "stop" not in pod.calls, "the stop is still on its way"
+    pod.stop_gate.set()
+    await _stops_done()
     assert pod.calls[-1] == "stop"
     assert telethon == []
 

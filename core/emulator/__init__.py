@@ -27,8 +27,14 @@ from core.emulator.adb import (
     wait_for_boot,
 )
 from core.emulator.playbook import BaseMobilePlaybook, TelegramMobilePlaybook
-from core.emulator.pod import pod_runs_proxy, remove_pod, start_pod, stop_pod
-from core.emulator.redroid import Instance, adb_serial, find_instance, show_instance
+from core.emulator.pod import pod_runs_proxy, remove_pod, start_pod, stop_pod, stop_running_pods
+from core.emulator.redroid import (
+    Instance,
+    adb_serial,
+    find_instance,
+    show_instance,
+    viewer_open,
+)
 from core.emulator.telegram_app import (
     bring_app_to_front,
     confirm_number,
@@ -74,6 +80,8 @@ __all__ = [
     "show_instance",
     "start_pod",
     "stop_pod",
+    "stop_running_pods",
+    "viewer_open",
     "wait_for_boot",
     "wait_screen",
 ]

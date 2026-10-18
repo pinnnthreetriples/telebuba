@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import core.repositories.device_fingerprint as fingerprint_repository
+from core._config_emulator import EmulatorSettings
 from core.config import settings
 from core.db import (
     _get_engine,
@@ -71,6 +72,30 @@ def test_every_listed_device_only_claims_android_13_or_14() -> None:
     assert "samsungSM-S918B" in {f"{d.manufacturer}{d.model}" for d in ANDROID_DEVICES}
 
 
+def test_a_new_android_fingerprint_claims_the_installed_apk_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.emulator, "telegram_app_version", "12.11.0 (7150)")
+
+    fingerprints = [generate_android_fingerprint(f"acc{n}", None) for n in range(20)]
+
+    assert {f.app_version for f in fingerprints} == {"12.11.0 (7150)"}
+
+
+def test_without_an_apk_version_the_android_fingerprint_draws_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.emulator, "telegram_app_version", "")
+
+    assert generate_android_fingerprint("acc", None).app_version in ANDROID_APP_VERSIONS
+
+
+@pytest.mark.parametrize("version", ["12.11.0", "12.11.0 (beta)", "v12.11.0 (7150)"])
+def test_an_apk_version_not_shaped_like_the_app_is_refused(version: str) -> None:
+    with pytest.raises(ValueError, match="telegram_app_version"):
+        EmulatorSettings(telegram_app_version=version)
+
+
 def _profile(tmp_path: Path, device_type: str) -> TelegramClientProfile:
     if device_type == "mobile":
         device = generate_android_fingerprint("acc", None)
@@ -98,7 +123,8 @@ def test_a_mobile_client_connects_as_the_android_app(tmp_path: Path) -> None:
 
     assert (client.api_id, client.api_hash) == (6, "mobile-hash")
     assert client._init_request.lang_pack == "android"
-    assert client._init_request.device_model.startswith(("samsung", "Google", "Xiaomi"))
+    models = {f"{device.manufacturer}{device.model}" for device in ANDROID_DEVICES}
+    assert client._init_request.device_model in models
     client.session.close()  # ty: ignore[unresolved-attribute]
 
 
