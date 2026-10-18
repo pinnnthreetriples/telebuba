@@ -12,7 +12,7 @@ class EmulatorError(RuntimeError):
     """A container step failed; ``code`` is what the operator is shown.
 
     Console and adb output is never put in the message: an adb argv can carry the
-    account's proxy credentials, and LDPlayer's text is unbounded.
+    account's proxy credentials, and docker's text is unbounded.
     """
 
     def __init__(self, code: EmulatorRefusalCode) -> None:

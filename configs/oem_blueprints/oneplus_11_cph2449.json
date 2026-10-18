@@ -1,0 +1,26 @@
+{
+  "brand": "OnePlus",
+  "manufacturer": "OnePlus",
+  "model": "CPH2449",
+  "product": "CPH2449EEA",
+  "device": "OP594DL1",
+  "serial_prefix": "",
+  "serial_length": 8,
+  "serial_charset": "hex",
+  "screen": {
+    "width": 720,
+    "height": 1608,
+    "dpi": 280
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TP1A.220905.001",
+      "incremental": "T.R4T3.110730f_335df-2",
+      "security_patch": "2023-06-05",
+      "description": "qssi-user 13 TP1A.220905.001 1685961336643 release-keys",
+      "display_id": "CPH2449_13.1.0.580(EX01)",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/oneplus/op594dl1/qssi-user-13-TP1A.220905.001-1685961336643-release-keys--EUEX"
+    }
+  }
+}

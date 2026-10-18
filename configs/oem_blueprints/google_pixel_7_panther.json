@@ -1,0 +1,31 @@
+{
+  "brand": "google",
+  "manufacturer": "Google",
+  "model": "Pixel 7",
+  "product": "panther",
+  "device": "panther",
+  "serial_prefix": "",
+  "serial_length": 14,
+  "serial_charset": "alnum",
+  "screen": {
+    "width": 720,
+    "height": 1600,
+    "dpi": 280
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TQ2A.230305.008",
+      "incremental": "9595452",
+      "security_patch": "2023-03-05",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/google/panther/panther-user-13-TQ2A.230305.008-9595452-release-keys"
+    },
+    "34": {
+      "release": "14",
+      "build_id": "AP2A.240605.024",
+      "incremental": "11860263",
+      "security_patch": "2024-06-05",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/google/panther/panther-user-14-AP2A.240605.024-11860263-release-keys"
+    }
+  }
+}

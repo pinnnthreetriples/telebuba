@@ -1,0 +1,24 @@
+{
+  "brand": "POCO",
+  "manufacturer": "Xiaomi",
+  "model": "23049PCD8G",
+  "product": "marble_global",
+  "device": "marble",
+  "serial_prefix": "",
+  "serial_length": 8,
+  "serial_charset": "hex",
+  "screen": {
+    "width": 720,
+    "height": 1600,
+    "dpi": 293
+  },
+  "builds": {
+    "33": {
+      "release": "13",
+      "build_id": "TKQ1.221114.001",
+      "incremental": "V14.0.7.0.TMRMIXM",
+      "security_patch": "2023-09-01",
+      "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/poco/marble/missi_phone_global-user-13-TKQ1.221114.001-V14.0.7.0.TMRMIXM-release-keys"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-"""ldconsole and adb: argv lists, ``shell`` on every device command, serials from list2."""
+"""adb: argv lists, ``shell`` on every device command, boot and SDK checks, the APK."""
 
 from __future__ import annotations
 
@@ -9,104 +9,10 @@ import pytest
 from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import ContainerSpec
-from core.emulator.ldconsole import (
-    adb_serial,
-    create_instance,
-    find_instance,
-    parse_list2,
-    remove_container,
-    set_container_network,
-)
 from core.emulator.ui_dump import UiNode
 
 if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
-
-_LIST2 = (
-    "0,LDPlayer,0,0,0,-1,-1,960,540,240\n"
-    "1,telebuba-acc-1,1312,1314,1,4242,4243,720,1280,320\n"
-    "2,telebuba-acc-2,0,0,0,-1,-1,720,1280,320\n"
-)
-
-
-@pytest.mark.parametrize(
-    ("index", "serial"), [(0, "emulator-5554"), (1, "emulator-5556"), (5, "emulator-5564")]
-)
-def test_the_adb_serial_follows_the_instance_index(index: int, serial: str) -> None:
-    assert adb_serial(index) == serial
-
-
-def test_list2_is_parsed_into_indexed_named_instances() -> None:
-    instances = parse_list2(_LIST2 + "garbage line\n")
-
-    assert [(i.index, i.name, i.running) for i in instances] == [
-        (0, "LDPlayer", False),
-        (1, "telebuba-acc-1", True),
-        (2, "telebuba-acc-2", False),
-    ]
-
-
-@pytest.mark.asyncio
-async def test_a_container_is_found_by_name_and_its_serial_by_its_own_index(
-    console: Console,
-) -> None:
-    console.answer = lambda argv: _LIST2 if argv[1] == "list2" else ""
-
-    instance = await find_instance("telebuba-acc-2")
-
-    assert instance is not None
-    assert adb_serial(instance.index) == "emulator-5558", "never the first emulator's serial"
-
-
-@pytest.mark.asyncio
-async def test_a_new_container_presents_the_mobile_fingerprints_phone(console: Console) -> None:
-    created = {"done": False}
-
-    def answer(argv: list[str]) -> str:
-        if argv[1] == "add":
-            created["done"] = True
-        if argv[1] == "list2":
-            return _LIST2 + ("3,telebuba-new,0,0,0,-1,-1,720,1280,320\n" if created["done"] else "")
-        return ""
-
-    console.answer = answer
-    spec = ContainerSpec("samsung", "SM-S918B", 34, "490154203237518")
-
-    instance = await create_instance("telebuba-new", spec, None)
-
-    assert instance.index == 3
-    modify = next(call for call in console.calls if call[1] == "modify")
-    assert modify[0] == str(settings.emulator.ldconsole_path)
-    assert modify[2:4] == ["--index", "3"]
-    options = dict(zip(modify[4::2], modify[5::2], strict=True))
-    assert options == {
-        "--resolution": settings.emulator.resolution,
-        "--cpu": str(settings.emulator.cpu_cores),
-        "--memory": str(settings.emulator.memory_mb),
-        "--manufacturer": "samsung",
-        "--model": "SM-S918B",
-        "--imei": "490154203237518",
-    }
-
-
-@pytest.mark.asyncio
-async def test_removing_a_running_container_quits_it_first(console: Console, tmp_path) -> None:
-    (tmp_path / "ldconsole.exe").write_bytes(b"")
-    console.answer = lambda argv: _LIST2 if argv[1] == "list2" else ""
-
-    assert await remove_container("telebuba-acc-1") is True
-
-    assert [call[1:] for call in console.calls if call[1] != "list2"] == [
-        ["quit", "--index", "1"],
-        ["remove", "--index", "1"],
-    ]
-
-
-@pytest.mark.asyncio
-async def test_a_host_without_ldplayer_has_no_container_to_remove(console: Console) -> None:
-    assert await remove_container("telebuba-acc-1") is False
-    assert console.calls == []
 
 
 @pytest.mark.asyncio
@@ -223,19 +129,6 @@ async def test_a_missing_adb_is_not_waited_out_as_a_slow_boot(console: Console) 
 
 
 @pytest.mark.asyncio
-async def test_a_template_is_copied_instead_of_the_default_image(console: Console) -> None:
-    def answer(argv: list[str]) -> str:
-        return "4,telebuba-new,0,0,0,-1,-1,720,1280,320\n" if argv[1] == "list2" else ""
-
-    console.answer = answer
-
-    spec = ContainerSpec("Google", "Pixel 8", 34, "490154203237518")
-    await create_instance("telebuba-new", spec, "tpl")
-
-    assert console.calls[0][1:] == ["copy", "--name", "telebuba-new", "--from", "tpl"]
-
-
-@pytest.mark.asyncio
 async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
     answers = iter(["", "ERROR: could not get idle state.", ""])
     console.answer = lambda _argv: next(answers)
@@ -253,14 +146,3 @@ async def test_a_taken_dump_is_read_back(console: Console) -> None:
     console.answer = lambda _argv: next(answers)
 
     assert await adb.dump_ui("emulator-5554") == "<hierarchy/>"
-
-
-@pytest.mark.asyncio
-async def test_the_host_side_network_switch_is_one_console_action(console: Console) -> None:
-    await set_container_network(1, online=False)
-    await set_container_network(1, online=True)
-
-    assert [call[1:] for call in console.calls] == [
-        ["action", "--index", "1", "--key", "call.network", "--value", "offline"],
-        ["action", "--index", "1", "--key", "call.network", "--value", "connect"],
-    ]
