@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
-from core.emulator._process import docker, run_command
+from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
 
 if TYPE_CHECKING:
@@ -155,7 +155,7 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
     ``build_prop``; its screen and serial number on the command line (neither has a
-    space). redroid has no telephony, so ``spec.imei`` has nowhere to go.
+    space).
     """
     image = image_for(spec)
     identity = build_prop(spec)  # refused before anything is created
@@ -203,11 +203,7 @@ async def launch_instance(name: str, index: int) -> None:
     """
     await docker("start", name)
     with suppress(EmulatorError):
-        await run_command(
-            [str(settings.emulator.adb_path), "disconnect", adb_serial(index)],
-            seconds=settings.emulator.command_timeout_seconds,
-            step="adb disconnect",
-        )
+        await adb_command("disconnect", adb_serial(index), step="adb disconnect")
 
 
 async def show_instance(name: str, index: int) -> None:

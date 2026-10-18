@@ -448,7 +448,6 @@ async def test_two_pods_started_at_once_take_different_indexes(
         return await console(argv, seconds=seconds, step=step)
 
     monkeypatch.setattr("core.emulator._process.run_command", yielding)
-    monkeypatch.setattr("core.emulator.redroid.run_command", yielding)
 
     first, second = await asyncio.gather(
         pod.start_pod("telebuba-a", _SPEC, _PROXY),

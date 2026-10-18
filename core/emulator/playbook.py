@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -123,34 +122,18 @@ def posts(nodes: list[UiNode]) -> list[UiNode]:
     ]
 
 
-class BaseMobilePlaybook(ABC):
-    """One app's activity scenarios; ``run_session`` spends ``duration_sec`` in it."""
-
-    def __init__(self, engine: HumanInputEngine | None = None) -> None:
-        self.engine = engine or HumanInputEngine()
-        self.result = PlaybookResult()
-
-    @abstractmethod
-    async def run_session(
-        self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
-    ) -> PlaybookResult: ...
-
-    def _skip(self, reason: PlaybookSkip) -> None:
-        if reason not in self.result.skipped:
-            self.result.skipped.append(reason)
-
-
 def _channel_key(row: UiNode) -> str:
     """The channel's title in its row ("Channel. <title>. ..."): unread counts change."""
     parts = _label(row).split(". ")
     return parts[1] if len(parts) > 1 else parts[0]
 
 
-class TelegramMobilePlaybook(BaseMobilePlaybook):
+class TelegramMobilePlaybook:
     """Telegram: channel feeds read with pauses, stories watched, an occasional reaction."""
 
     def __init__(self, engine: HumanInputEngine | None = None) -> None:
-        super().__init__(engine)
+        self.engine = engine or HumanInputEngine()
+        self.result = PlaybookResult()
         self.plan = PlaybookPlan()
         # No end until a session sets one: a feed read on its own runs its scrolls.
         self._deadline = math.inf
@@ -195,6 +178,10 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
             return self._chats
         _screen, nodes = await read_screen(serial)
         return nodes
+
+    def _skip(self, reason: PlaybookSkip) -> None:
+        if reason not in self.result.skipped:
+            self.result.skipped.append(reason)
 
     def _time_left(self) -> bool:
         return _now() < self._deadline

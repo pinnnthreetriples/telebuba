@@ -194,11 +194,11 @@ async def _run_script(serial: str, lines: list[str]) -> None:
             await adb.shell(serial, "rm", "-f", _SCRIPT)
 
 
-async def seed_contacts(serial: str, spec: ContainerSpec, count: int | None = None) -> None:
+async def seed_contacts(serial: str, spec: ContainerSpec) -> None:
     """Write the contacts of ``spec``'s proxy country into the container's address book."""
     # Off the event loop: a sparse numbering plan keeps ``phonenumbers`` busy a while.
     contacts = await asyncio.to_thread(
-        make_contacts, spec.region.country, rng_for(spec, "contacts"), count
+        make_contacts, spec.region.country, rng_for(spec, "contacts")
     )
     await _run_script(serial, contacts_script(contacts))
 
@@ -212,12 +212,10 @@ def _write_photos(folder: Path, photos: list[Photo]) -> list[str]:
     return paths
 
 
-async def seed_gallery(
-    serial: str, spec: ContainerSpec, count: int | None = None, *, now: datetime | None = None
-) -> None:
+async def seed_gallery(serial: str, spec: ContainerSpec) -> None:
     """Put ``spec``'s phone's photos into ``DCIM/Camera``, dated, and have them indexed."""
     rng = rng_for(spec, "gallery")
-    photos = await asyncio.to_thread(make_photos, spec, rng, now or datetime.now(UTC), count)
+    photos = await asyncio.to_thread(make_photos, spec, rng, datetime.now(UTC))
     await _run_script(serial, gallery_prep_script(photos))
     with tempfile.TemporaryDirectory(prefix="telebuba-gallery-") as scratch:
         paths = await asyncio.to_thread(_write_photos, Path(scratch), photos)

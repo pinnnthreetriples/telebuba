@@ -1,11 +1,10 @@
-"""Text through ``adb shell`` and the Luhn check of the container's IMEI."""
+"""Text through ``adb shell``: what ``input text`` can type, escaped for the device's sh."""
 
 from __future__ import annotations
 
 import pytest
 
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import is_valid_imei, luhn_check_digit
 from core.emulator._text import escape_input_text
 
 
@@ -30,10 +29,3 @@ def test_text_input_text_cannot_type_is_refused(text: str) -> None:
         escape_input_text(text)
 
     assert refused.value.code == "emulator_text_unsupported"
-
-
-def test_the_imei_check_digit_is_luhns() -> None:
-    # The textbook example: 49015420323751 + check digit 8.
-    assert luhn_check_digit("49015420323751") == "8"
-    assert is_valid_imei("490154203237518")
-    assert not is_valid_imei("490154203237517")

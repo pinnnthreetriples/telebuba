@@ -315,29 +315,3 @@ class HumanInputEngine:
             events.append(KeystrokeEvent(char=ch, delay_ms=delay))
 
         return events
-
-
-_DEFAULT_ENGINE = HumanInputEngine()
-
-
-def sample_gaussian_tap(bounds: tuple[int, int, int, int]) -> TapEvent:
-    return _DEFAULT_ENGINE.sample_gaussian_tap(bounds)
-
-
-def generate_bezier_swipe(
-    start: tuple[int, int],
-    end: tuple[int, int],
-    num_steps: int | None = None,
-) -> SwipeTrajectory:
-    return _DEFAULT_ENGINE.generate_bezier_swipe(start, end, num_steps=num_steps)
-
-
-def sample_reading_pause_sec() -> tuple[float, bool]:
-    return _DEFAULT_ENGINE.sample_reading_pause_sec()
-
-
-def generate_keystroke_sequence(
-    text: str,
-    typo_probability: float = 0.035,
-) -> list[KeystrokeEvent]:
-    return _DEFAULT_ENGINE.generate_keystroke_sequence(text, typo_probability=typo_probability)

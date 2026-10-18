@@ -22,12 +22,9 @@ from services.accounts.mobile_emulator import (
     EmulatorRefusedError,
     run_mobile_activity,
 )
-from tests.services.accounts.test_mobile_emulator import (  # noqa: F401 - fixtures
-    _account,
-    _Container,
-    _enabled,
-    container,
-)
+from tests.services.accounts._mobile_support import _account, _Container
+
+pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
@@ -76,7 +73,7 @@ def playbook(monkeypatch: pytest.MonkeyPatch) -> type[_Playbook]:
 
 @pytest.mark.asyncio
 async def test_a_running_pod_on_the_current_proxy_gets_its_session(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -98,7 +95,7 @@ async def test_a_running_pod_on_the_current_proxy_gets_its_session(
 
 @pytest.mark.asyncio
 async def test_a_session_is_capped(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -112,7 +109,7 @@ async def test_a_session_is_capped(
 @pytest.mark.parametrize("state", ["missing", "stopped", "other_proxy"])
 @pytest.mark.asyncio
 async def test_a_pod_that_is_not_running_is_never_started(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
     state: str,
 ) -> None:
@@ -131,7 +128,7 @@ async def test_a_pod_that_is_not_running_is_never_started(
 
 @pytest.mark.asyncio
 async def test_a_failed_session_answers_its_code_and_frees_the_account(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -148,7 +145,7 @@ async def test_a_failed_session_answers_its_code_and_frees_the_account(
 
 @pytest.mark.asyncio
 async def test_a_refusal_before_the_session_carries_nothing_it_did(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -164,7 +161,7 @@ async def test_a_refusal_before_the_session_carries_nothing_it_did(
 
 @pytest.mark.asyncio
 async def test_a_session_past_its_time_ends_with_what_it_did(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -181,7 +178,7 @@ async def test_a_session_past_its_time_ends_with_what_it_did(
 
 @pytest.mark.asyncio
 async def test_no_session_while_the_operator_holds_the_pod(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -198,7 +195,7 @@ async def test_no_session_while_the_operator_holds_the_pod(
 
 @pytest.mark.asyncio
 async def test_one_session_at_a_time_and_none_during_a_start(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -221,7 +218,7 @@ async def test_one_session_at_a_time_and_none_during_a_start(
 
 @pytest.mark.asyncio
 async def test_the_feature_switch_refuses_a_session(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -238,7 +235,7 @@ async def test_the_feature_switch_refuses_a_session(
 
 @pytest.mark.asyncio
 async def test_the_plan_reaches_the_playbook(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
@@ -252,7 +249,7 @@ async def test_the_plan_reaches_the_playbook(
 
 @pytest.mark.asyncio
 async def test_a_failed_session_does_not_press_home(
-    container: _Container,  # noqa: F811
+    container: _Container,
     playbook: type[_Playbook],
 ) -> None:
     await _account()
