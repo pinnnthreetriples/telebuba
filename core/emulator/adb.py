@@ -27,6 +27,7 @@ _EMULATOR_BOOT_TIMEOUT: EmulatorRefusalCode = "emulator_boot_timeout"
 _EMULATOR_INSTALL_FAILED: EmulatorRefusalCode = "emulator_install_failed"
 _EMULATOR_SDK_MISMATCH: EmulatorRefusalCode = "emulator_sdk_mismatch"
 
+KEYCODE_HOME = 3
 KEYCODE_BACK = 4
 KEYCODE_ENTER = 66
 KEYCODE_DEL = 67

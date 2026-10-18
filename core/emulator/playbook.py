@@ -4,19 +4,25 @@ The same rule as ``telegram_app``: every tap goes to a node the current dump sho
 A target the screen does not show (no channel row in the chat list, no stories row,
 no post to react to) is skipped and named in the result, never guessed at; the one
 area tapped without a node of its own is the right third of the full-screen story
-viewer, and only while the chat list is not showing. The labels
-are Telegram's accessibility text in English and Russian; they have not yet been
-checked against a live container's dump.
+viewer, and only while the chat list is not showing. The labels are Telegram's own
+strings in every language a container may run (``ui_dump.labels``); they have not
+yet been checked against a live container's dump.
+
+A session follows its ``PlaybookPlan``: the warming visit's channels and action
+budget, the persona's reaction chance (one reaction per channel at most: a second
+quick reaction takes the first back), whether stories are watched, and in which
+order. A channel is read once a session, the stories row is opened once.
 
 Gestures follow one rule: a slow read is ``human_swipe`` (the Bezier curve as
 ``input motionevent``), a quick flick is ``human_fling`` (a short ``input swipe``
 Android turns into scroll inertia). Pauses between reads come from
-``sample_reading_pause_sec``.
+``sample_reading_pause_sec``, stretched by how much text the screen shows.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -25,8 +31,8 @@ from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator.telegram_app import read_screen
-from core.emulator.ui_dump import UiNode
-from schemas.emulator import PlaybookResult
+from core.emulator.ui_dump import UiNode, labels
+from schemas.emulator import PlaybookPlan, PlaybookResult
 
 if TYPE_CHECKING:
     from core.emulator.ui_dump import Screen
@@ -39,14 +45,8 @@ _SIGN_IN_SCREENS: frozenset[Screen] = frozenset({"intro", "phone", "confirm", "c
 # BACK presses that bring any channel, story or menu back to the chat list.
 _MAX_BACKS = 5
 
-_CHANNEL_PREFIXES = ("channel", "канал")
-_STORY_WORDS = ("story", "stories", "истори")
-# The own-story button opens the camera: never tapped.
-_OWN_STORY_WORDS = ("my story", "add story", "моя история", "добавить историю")
-
 _STORIES_SHARE = 0.35
 _FLING_CHANCE = 0.2
-_REACTION_CHANCE = 0.08
 _FEED_SCROLLS = (3, 8)
 # Where a read drags from and how far (shares of the screen height); a scroll back
 # to re-read starts lower and goes a shorter way up.
@@ -56,6 +56,12 @@ _BACK_START, _BACK_LENGTH = 0.6, (0.15, 0.25)
 # and the bottom bar.
 _POST_MIN_HEIGHT = 0.08
 _CONTENT_TOP, _CONTENT_BOTTOM = 0.12, 0.9
+# The stories row sits above the chat list, in this top share of the screen.
+_STORIES_BAND = 0.3
+# A reading pause times this factor: a picture is glanced at, a long text read;
+# every this many characters on screen add one to the factor, up to the cap.
+_TEXT_FACTOR_MIN, _TEXT_FACTOR_MAX = 0.6, 2.0
+_CHARS_PER_FACTOR = 500
 
 
 def _now() -> float:
@@ -75,16 +81,28 @@ def _screen_size(nodes: list[UiNode]) -> tuple[int, int]:
 
 def channel_rows(nodes: list[UiNode]) -> list[UiNode]:
     """Chat-list rows whose accessibility text says they are channels."""
-    return [node for node in nodes if _label(node).startswith(_CHANNEL_PREFIXES)]
+    prefixes = tuple(f"{word}." for word in labels().channel)
+    return [node for node in nodes if _label(node).startswith(prefixes)]
 
 
 def story_avatars(nodes: list[UiNode]) -> list[UiNode]:
-    """Other people's stories in the row above the chat list; never the own-story button."""
+    """Other people's stories in the row above the chat list; never the own-story button.
+
+    Only inside the top band, and never a chat row: a channel called "History" is
+    no story.
+    """
+    if not nodes:
+        return []
+    _width, height = _screen_size(nodes)
+    words = labels()
+    rows = set(channel_rows(nodes))
     return [
         node
         for node in nodes
-        if any(word in _label(node) for word in _STORY_WORDS)
-        and not any(word in _label(node) for word in _OWN_STORY_WORDS)
+        if node not in rows
+        and node.bounds[3] <= _STORIES_BAND * height
+        and any(word in _label(node) for word in words.story)
+        and not any(word in _label(node) for word in words.own_story)
     ]
 
 
@@ -110,72 +128,128 @@ class BaseMobilePlaybook(ABC):
         self.result = PlaybookResult()
 
     @abstractmethod
-    async def run_session(self, serial: str, duration_sec: int) -> PlaybookResult: ...
+    async def run_session(
+        self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
+    ) -> PlaybookResult: ...
 
     def _skip(self, reason: PlaybookSkip) -> None:
         if reason not in self.result.skipped:
             self.result.skipped.append(reason)
 
 
+def _channel_key(row: UiNode) -> str:
+    """The channel's title in its row ("Channel. <title>. ..."): unread counts change."""
+    parts = _label(row).split(". ")
+    return parts[1] if len(parts) > 1 else parts[0]
+
+
 class TelegramMobilePlaybook(BaseMobilePlaybook):
     """Telegram: channel feeds read with pauses, stories watched, an occasional reaction."""
 
-    async def run_session(self, serial: str, duration_sec: int) -> PlaybookResult:
-        """Alternate stories and channel reading until ``duration_sec`` runs out.
+    def __init__(self, engine: HumanInputEngine | None = None) -> None:
+        super().__init__(engine)
+        self.plan = PlaybookPlan()
+        # No end until a session sets one: a feed read on its own runs its scrolls.
+        self._deadline = math.inf
+        self._read: set[str] = set()
+        self._stories_left = True
 
-        Starts and ends on the chat list. Stops early when the chat list shows neither
-        a channel nor a stories row: there is nothing left to do.
+    async def run_session(
+        self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
+    ) -> PlaybookResult:
+        """Alternate stories and channel reading until ``duration_sec`` or ``plan`` runs out.
+
+        Starts and ends on the chat list. A channel is read at most once and the
+        stories are watched at most once a session; stops early when there is nothing
+        left to open, or the plan's channels or actions are spent.
         """
         self.result = PlaybookResult()
-        deadline = _now() + duration_sec
+        self.plan = plan or PlaybookPlan()
+        self._deadline = _now() + duration_sec
+        self._read = set()
+        self._stories_left = self.plan.stories
         await self.return_to_chats(serial)
-        while _now() < deadline:
+        if self.plan.stories_first and await self._open_stories(serial):
+            await self.return_to_chats(serial)
+        while self._time_left() and not self._actions_spent():
             first, second = self._open_stories, self._open_channel
             if self.engine.rng.random() >= _STORIES_SHARE:
                 first, second = second, first
             if not await first(serial) and not await second(serial):
                 break
             await self.return_to_chats(serial)
+            if not self._time_left():
+                break
             pause, _scroll_back = self.engine.sample_reading_pause_sec()
             await asyncio.sleep(pause)
         return self.result
 
+    def _time_left(self) -> bool:
+        return _now() < self._deadline
+
+    def _actions_spent(self) -> bool:
+        cap = self.plan.max_actions
+        return cap is not None and self.result.channels_read + self.result.reactions >= cap
+
     async def _open_channel(self, serial: str) -> bool:
+        if self.plan.channels is not None and self.result.channels_read >= self.plan.channels:
+            return False
         _screen, nodes = await read_screen(serial)
-        rows = channel_rows(nodes)
+        rows = [row for row in channel_rows(nodes) if _channel_key(row) not in self._read]
         if not rows:
             self._skip("no_channel")
             return False
-        await adb.human_tap(serial, self.engine.rng.choice(rows), engine=self.engine)
-        await self.read_channel_feed(serial, self.engine.rng.randint(*_FEED_SCROLLS))
+        row = self.engine.rng.choice(rows)
+        self._read.add(_channel_key(row))
+        react = self.engine.rng.random() < self.plan.reaction_probability
+        await adb.human_tap(serial, row, engine=self.engine)
         self.result.channels_read += 1
+        scrolls = self.engine.rng.randint(*_FEED_SCROLLS)
+        await self.read_channel_feed(serial, scrolls, react=react)
         return True
 
     async def _open_stories(self, serial: str) -> bool:
+        if not self._stories_left:
+            return False
+        self._stories_left = False
         before = self.result.stories_watched
         await self.watch_stories(serial)
         return self.result.stories_watched > before
 
-    async def read_channel_feed(self, serial: str, scroll_count: int) -> None:
+    def _reading_pause(self, nodes: list[UiNode]) -> tuple[float, bool]:
+        """The engine's pause, longer for a screen full of text, shorter for a picture."""
+        pause, scroll_back = self.engine.sample_reading_pause_sec()
+        chars = sum(len(node.text) for node in posts(nodes))
+        factor = min(_TEXT_FACTOR_MAX, _TEXT_FACTOR_MIN + chars / _CHARS_PER_FACTOR)
+        return pause * factor, scroll_back
+
+    async def read_channel_feed(
+        self, serial: str, scroll_count: int, *, react: bool = False
+    ) -> None:
         """Read the open channel back through its history, one screen per pause.
 
-        Mostly a slow Bezier drag, sometimes a flick; now and then a short scroll back
-        to re-read, and rarely a reaction to a post on screen.
+        Each screen is read for as long as its text takes, then scrolled: mostly a
+        slow Bezier drag, sometimes a flick, now and then a short scroll back to
+        re-read. With ``react``, one post on one of the screens gets a reaction and
+        never a second: Telegram takes a repeated quick reaction back.
         """
-        for _ in range(scroll_count):
-            pause, scroll_back = self.engine.sample_reading_pause_sec()
-            await asyncio.sleep(pause)
+        react_at = self.engine.rng.randrange(scroll_count) if react and scroll_count else None
+        for scroll in range(scroll_count):
+            if not self._time_left():
+                return
             screen, nodes = await read_screen(serial)
             if screen == "chats":  # the channel did not open, or was left
                 return
-            width, height = _screen_size(nodes)
-            if self.engine.rng.random() < _REACTION_CHANCE:
+            pause, scroll_back = self._reading_pause(nodes)
+            await asyncio.sleep(pause)
+            if react_at is not None and scroll >= react_at and not self._actions_spent():
                 candidates = posts(nodes)
                 if candidates:
                     await self.react_to_post(serial, self.engine.rng.choice(candidates))
+                    react_at = None
                 else:
                     self._skip("no_post")
-            screen_size = (width, height)
+            screen_size = _screen_size(nodes)
             top, bottom = self.engine.sample_scroll(
                 screen_size, _READ_START, _READ_LENGTH, downward=True
             )
@@ -199,6 +273,8 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
             return
         await adb.human_tap(serial, self.engine.rng.choice(avatars), engine=self.engine)
         for _ in range(self.engine.rng.randint(1, max(1, max_stories))):
+            if not self._time_left():
+                return
             await asyncio.sleep(self.engine.sample_story_view_sec())
             screen, nodes = await read_screen(serial)
             if screen == "chats":  # the viewer never opened, or the stories ran out

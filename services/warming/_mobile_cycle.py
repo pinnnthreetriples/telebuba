@@ -27,7 +27,9 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.config import settings
+from core.db import load_warming_settings
 from core.logging import log_event
+from schemas.emulator import PlaybookPlan
 from schemas.warming import WarmingCycleResult
 from services.accounts._result import AccountActionError
 from services.accounts.mobile_emulator import (
@@ -36,6 +38,8 @@ from services.accounts.mobile_emulator import (
     run_mobile_activity,
     stop_account_pod,
 )
+from services.warming._phases import persona_reaction_probability
+from services.warming._snapshot import current_snapshot
 from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_ACTION
 
 if TYPE_CHECKING:
@@ -80,6 +84,26 @@ def session_seconds(budget: int | None) -> int:
     return min(cap, max(_MIN_SECONDS, budget * _SECONDS_PER_ACTION))
 
 
+async def session_plan(request: WarmingCycleRequest) -> PlaybookPlan:
+    """The visit's shape for the app, as the Telethon cycle would walk it.
+
+    Its channels and stories order, the persona's reaction chance (none while the
+    operator turned reactions off), stories only while story viewing is on, and the
+    visit's action budget as the session's cap.
+    """
+    snapshot = current_snapshot(request.account_id)
+    controls = snapshot.controls if snapshot else await load_warming_settings()
+    visit = request.visit
+    reaction = persona_reaction_probability(request.activity_persona)
+    return PlaybookPlan(
+        channels=visit.channels if visit else None,
+        reaction_probability=reaction if controls.reactions_enabled else 0.0,
+        stories=settings.warming.story_view_enabled,
+        stories_first=visit.stories_first if visit else False,
+        max_actions=request.remaining_actions,
+    )
+
+
 async def run_mobile_cycle(
     request: WarmingCycleRequest,
     *,
@@ -100,7 +124,7 @@ async def run_mobile_cycle(
         if not opened.signed_in:
             return await _log_failure(account_id, _NOT_SIGNED_IN, None)
         await on_step("read")
-        activity = await run_mobile_activity(account_id, seconds)
+        activity = await run_mobile_activity(account_id, seconds, await session_plan(request))
     except EmulatorBusyError:
         owned = False
         return await _log_skip(account_id, "emulator_busy")

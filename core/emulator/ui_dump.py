@@ -1,16 +1,22 @@
 """Read Telegram's screen from a ``uiautomator dump`` — the one XML parser for it.
 
 The container's sign-in state is whatever the screen shows NOW: nothing is cached
-between calls. Labels are matched in English and Russian, the two languages the
-operator's containers run in, and a password field is recognised by the dump's own
-``password="true"`` attribute, never by its label.
+between calls. A container runs in its fingerprint's language, so labels are matched
+in every language Telegram has a translation for (``labels``, read from
+``configs/telegram_ui_labels.json``: Telegram Android's own strings for its keys,
+as translations.telegram.org applies them). A password
+field is recognised by the dump's own ``password="true"`` attribute, never by its label.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import xml.etree.ElementTree as ET  # nosec B405 - our own container's uiautomator output
+from functools import cache
 from typing import Literal, NamedTuple
+
+from core.emulator._blueprints import CONFIGS_DIR
 
 Screen = Literal["chats", "intro", "phone", "confirm", "code", "password", "unknown"]
 
@@ -18,16 +24,46 @@ _BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 # The code screen is one box per digit; the phone screen has two fields (code + number).
 _CODE_BOXES = 4
 _PHONE_FIELDS = 2
+_LABELS_PATH = CONFIGS_DIR / "telegram_ui_labels.json"
 
-START_LABELS = frozenset({"start messaging", "начать общение"})
-YES_LABELS = frozenset({"yes", "да"})
-_CHATS_MARKERS = frozenset(
-    {"open navigation menu", "открыть меню навигации", "new message", "новое сообщение"}
-)
-_PHONE_MARKERS = frozenset(
-    {"your phone number", "ваш номер телефона", "phone number", "номер телефона"}
-)
-_CONFIRM_MARKERS = frozenset({"is this the correct number?", "это правильный номер?"})
+
+class Labels(NamedTuple):
+    """Telegram's labels in every language, casefolded.
+
+    Whole labels: ``start`` (the intro's button), ``yes`` (the number confirmation's
+    button), ``chats`` (the chat list's menu and new-message buttons), ``phone`` (the
+    phone screen's title and field), ``confirm`` (the confirmation's question). Words
+    a label starts with or contains: ``channel`` (a chat row's kind), ``story`` and
+    ``own_story`` (the stories row; the own one opens the camera).
+    """
+
+    start: frozenset[str]
+    yes: frozenset[str]
+    chats: frozenset[str]
+    phone: frozenset[str]
+    confirm: frozenset[str]
+    channel: tuple[str, ...]
+    story: tuple[str, ...]
+    own_story: tuple[str, ...]
+
+
+@cache
+def labels() -> Labels:
+    raw: dict[str, list[str]] = json.loads(_LABELS_PATH.read_text(encoding="utf-8"))
+
+    def words(key: str) -> list[str]:
+        return sorted({value.strip().casefold() for value in raw[key] if value.strip()})
+
+    return Labels(
+        start=frozenset(words("start")),
+        yes=frozenset(words("yes")),
+        chats=frozenset(words("chats")),
+        phone=frozenset(words("phone")),
+        confirm=frozenset(words("confirm")),
+        channel=tuple(words("channel")),
+        story=tuple(words("story")),
+        own_story=tuple(words("own_story")),
+    )
 
 
 class UiNode(NamedTuple):
@@ -90,17 +126,18 @@ def password_field(nodes: list[UiNode]) -> UiNode | None:
 
 def classify(nodes: list[UiNode]) -> Screen:  # noqa: PLR0911 - one answer per screen
     """Which Telegram screen ``nodes`` is; the chat list only on positive evidence."""
+    words = labels()
     editable = fields(nodes)
     if password_field(nodes) is not None:
         return "password"
-    if not editable and find(nodes, _CHATS_MARKERS) is not None:
+    if not editable and find(nodes, words.chats) is not None:
         return "chats"
-    if find(nodes, _CONFIRM_MARKERS) is not None and find(nodes, YES_LABELS) is not None:
+    if find(nodes, words.confirm) is not None and find(nodes, words.yes) is not None:
         return "confirm"
-    if find(nodes, START_LABELS) is not None:
+    if find(nodes, words.start) is not None:
         return "intro"
     if len(editable) >= _CODE_BOXES:
         return "code"
-    if len(editable) >= _PHONE_FIELDS and find(nodes, _PHONE_MARKERS) is not None:
+    if len(editable) >= _PHONE_FIELDS and find(nodes, words.phone) is not None:
         return "phone"
     return "unknown"

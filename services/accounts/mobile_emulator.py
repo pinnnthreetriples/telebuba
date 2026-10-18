@@ -63,6 +63,7 @@ from core.emulator import (
     ensure_app,
     escape_input_text,
     find_instance,
+    leave_app,
     pod_runs_proxy,
     read_screen,
     remove_pod,
@@ -88,7 +89,7 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
-    from schemas.emulator import EmulatorRefusalCode, PlaybookResult
+    from schemas.emulator import EmulatorRefusalCode, PlaybookPlan, PlaybookResult
     from schemas.proxy import ProxySettings
 
 _DEVICE_MISSING: DeviceRefusalCode = "device_missing"
@@ -270,8 +271,14 @@ async def _open(
     return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
 
 
-async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookResult:
+async def run_mobile_activity(
+    account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+) -> PlaybookResult:
     """Spend up to ``duration_sec`` (capped) in the account's running Telegram app.
+
+    ``plan`` shapes the session (channels, reactions, stories, an action cap); none is
+    the playbook's default. A finished session leaves the app with HOME and gives it a
+    poll interval to go offline, as a phone put away does, before the pod is stopped.
 
     The pod is used as it stands: one that is down, or whose gateway runs another
     proxy, answers ``emulator_not_running``. The session does not hold the account's
@@ -298,7 +305,9 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
         await bring_app_to_front(serial)
         seconds = min(duration_sec, settings.emulator.activity_max_seconds)
         playbook = TelegramMobilePlaybook()
-        result = await _run_session(playbook, serial, seconds)
+        result = await _run_session(playbook, serial, seconds, plan)
+        await leave_app(serial)
+        await asyncio.sleep(settings.emulator.poll_seconds)
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -320,13 +329,13 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
 
 
 async def _run_session(
-    playbook: TelegramMobilePlaybook, serial: str, seconds: int
+    playbook: TelegramMobilePlaybook, serial: str, seconds: int, plan: PlaybookPlan | None
 ) -> PlaybookResult:
     """The playbook's session, cut ``_SESSION_GRACE_SECONDS`` past its length."""
     timeout = asyncio.timeout(seconds + _SESSION_GRACE_SECONDS)
     try:
         async with timeout:
-            return await playbook.run_session(serial, seconds)
+            return await playbook.run_session(serial, seconds, plan)
     except TimeoutError:
         if not timeout.expired():
             raise
