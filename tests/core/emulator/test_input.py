@@ -326,13 +326,15 @@ async def test_adb_human_type_with_typo_correction(
 async def test_adb_human_swipe_replays_the_whole_curve_in_one_shell_call(
     console: Console,
 ) -> None:
-    curve = HumanInputEngine(rng=random.Random(123)).generate_bezier_swipe((100, 500), (100, 100))  # noqa: S311
+    twin = HumanInputEngine(rng=random.Random(123))  # noqa: S311
+    curve = twin.generate_bezier_swipe((100, 500), (100, 100), twin.rng.randint(8, 12))
     engine = HumanInputEngine(rng=random.Random(123))  # noqa: S311
 
     await adb.human_swipe("emulator-5554", (100, 500), (100, 100), engine=engine)
 
     calls = console.shell_calls()
     assert len(calls) == 1, "one adb shell for the whole gesture"
+    assert 8 <= len(curve.points) <= 12, "a dozen points: each one is a process on the device"
     commands = " ".join(calls[0]).split(" ; ")
     assert commands == [
         "input motionevent DOWN 100 500",

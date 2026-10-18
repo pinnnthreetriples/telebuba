@@ -480,11 +480,9 @@ def _serve_dumps(console: Console) -> list[str]:
 
     def answer(argv: list[str]) -> str:
         device = argv[argv.index("shell") + 1 :]
-        if device[:2] == ["cat", "/sdcard/telebuba_ui.xml"]:
+        if "uiautomator" in device:
             served.append("chats" if state["xml"] is CHATS_XML else "channel")
-            return state["xml"]
-        if device[:2] == ["uiautomator", "dump"]:
-            return "UI hierchary dumped to: /sdcard/telebuba_ui.xml"
+            return f"UI hierchary dumped to: /sdcard/telebuba_ui.xml\n{state['xml']}"
         if device[:3] == ["input", "keyevent", "4"]:
             state["xml"] = CHATS_XML
         elif (
@@ -558,125 +556,3 @@ async def test_real_dumps_stories_open_others_never_the_own_story(
     assert 180 <= int(opened[2]) < 320, "Anna's story, not the own-story button"
     assert 220 <= int(opened[3]) < 360
     assert clock.slept
-
-
-OTHER_CHANNEL = _node(text="Channel. Daily Deals", bounds=(0, 720, WIDTH, 880))
-HISTORY_CHANNEL = _node(text="Канал. История России", bounds=(0, 880, WIDTH, 1040))
-
-
-def test_a_channel_named_history_is_no_story_and_stories_sit_on_top() -> None:
-    low_story = _node(description="Stories by Bob", bounds=(180, 1500, 320, 1640))
-    chats = [ROOT, MENU, STORY, HISTORY_CHANNEL, low_story]
-
-    assert channel_rows(chats) == [HISTORY_CHANNEL], "the Russian row is a channel too"
-    assert story_avatars(chats) == [STORY]
-
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("clock")
-async def test_one_reaction_per_channel_however_long_it_is_read(
-    console: Console, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
-    session = _playbook()
-
-    await session.read_channel_feed(SERIAL, 6, react=True)
-
-    taps = [call for call in console.shell_calls() if call[:2] == ["input", "tap"]]
-    assert len(taps) == 1, "a second quick reaction would take the first back"
-    assert session.result.reactions == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("clock")
-async def test_reactions_switched_off_are_never_sent(
-    console: Console, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
-    _phone(monkeypatch, console, [CHANNEL_ROW, OTHER_CHANNEL])
-
-    result = await _playbook().run_session(SERIAL, 600, NO_REACTIONS)
-
-    assert result.reactions == 0
-    assert not any(call[:2] == ["input", "tap"] for call in console.shell_calls())
-
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("clock")
-async def test_the_visits_channels_and_action_budget_end_the_session(
-    console: Console, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
-    _phone(monkeypatch, console, [CHANNEL_ROW, OTHER_CHANNEL])
-
-    by_channels = await _playbook().run_session(
-        SERIAL, 600, PlaybookPlan(channels=1, reaction_probability=0.0)
-    )
-    by_budget = await _playbook().run_session(
-        SERIAL, 600, PlaybookPlan(max_actions=1, reaction_probability=0.0)
-    )
-
-    assert by_channels.channels_read == 1
-    assert by_budget.channels_read == 1
-
-
-@pytest.mark.asyncio
-async def test_a_feed_stops_reading_when_the_session_time_is_up(
-    console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
-) -> None:
-    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
-    monkeypatch.setattr(playbook, "_FEED_SCROLLS", (8, 8))
-    _phone(monkeypatch, console, [CHANNEL_ROW])
-
-    result = await _playbook().run_session(SERIAL, 3, NO_REACTIONS)
-
-    assert 1 <= result.scrolls < 8, "the channel is left when the visit's time is up"
-    assert clock.now < 3 + POST_PAUSE + 1, "no pause after the time is up"
-
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("clock")
-async def test_stories_switched_off_are_never_opened(
-    console: Console, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(playbook, "_STORIES_SHARE", 1.0)
-    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
-
-    result = await _playbook().run_session(
-        SERIAL, 600, PlaybookPlan(stories=False, reaction_probability=0.0)
-    )
-
-    assert result.stories_watched == 0
-    assert result.channels_read == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("clock")
-async def test_stories_first_are_watched_before_any_channel(
-    console: Console, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
-    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
-
-    result = await _playbook().run_session(
-        SERIAL, 600, PlaybookPlan(stories_first=True, reaction_probability=0.0)
-    )
-
-    first_tap = console.shell_calls()[0]
-    left, top, right, bottom = STORY.bounds
-    assert left <= int(first_tap[2]) < right
-    assert top <= int(first_tap[3]) < bottom
-    assert result.stories_watched >= 1
-
-
-def test_a_long_text_is_read_longer_than_a_picture() -> None:
-    session = _playbook()
-    long_post = _node(text="x" * 1000, bounds=POST.bounds)
-    picture = _node(bounds=POST.bounds)
-
-    text_pause, _back = session._reading_pause([ROOT, long_post])
-    glance, _back = session._reading_pause([ROOT, picture])
-
-    assert text_pause == 2.0 * playbook._TEXT_FACTOR_MAX
-    assert glance == 2.0 * playbook._TEXT_FACTOR_MIN

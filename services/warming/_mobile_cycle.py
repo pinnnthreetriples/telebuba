@@ -5,9 +5,13 @@ Taken only when the loop task is bound to the mobile device and the emulator is 
 keeps the Telethon cycle. One cycle opens the pod in the background (booting it when
 needed, never asking for a login code: an app left signed out is the operator's to
 sign in), spends the visit's time in the app, and stops the pod again, whatever
-happened. The stop runs on its own, so a Stop of the warming never waits for Docker.
-At most ``max_running_pods`` warming pods run at once; a cycle finding none free
-is skipped (``emulator_capacity``): a full host is not the account's failure.
+happened. A visit that went well parks the pod instead (``docker pause``: no CPU, its
+memory kept), and the account's next open thaws it with no boot; a pod parked
+``pause_ttl_seconds`` is stopped, unless someone opened it since. Stops run on their
+own, so a Stop of the warming never waits for Docker. At most ``max_running_pods``
+warming pods run or wait parked at once; a cycle finding none free stops the longest
+parked pod first, and is skipped (``emulator_capacity``) when none is parked: a full
+host is not the account's failure.
 
 A pod that cannot open or a session that fails is a failed cycle with the refusal
 code as its detail, never a fallback to Telethon. A passing cause (a timeout, a
@@ -24,6 +28,7 @@ The failure streaks and slots are process-local, like the rest of the runtime st
 from __future__ import annotations
 
 import asyncio
+import itertools
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -38,12 +43,13 @@ from services.accounts.mobile_emulator import (
     run_mobile_activity,
     stop_account_pod,
 )
+from services.accounts.mobile_pods import park_account_pod, stop_parked_pod
 from services.warming._phases import persona_reaction_probability
 from services.warming._snapshot import current_snapshot
 from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_ACTION
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
 
     from schemas.emulator import PlaybookResult
     from schemas.warming import WarmingCycleRequest
@@ -70,8 +76,11 @@ _SECONDS_PER_ACTION = 30
 _MIN_SECONDS = 60
 
 _STREAKS: dict[str, int] = {}
-# Accounts whose warming pod holds a slot, until its stop is done.
+# Accounts whose warming pod holds a slot, running or parked, until its stop is done.
 _RUNNING: set[str] = set()
+# Parked pods, oldest first, each with the token of the timer that may stop it.
+_PARKED: dict[str, int] = {}
+_TOKENS = itertools.count()
 # Strong references to the detached pod stops; the event loop holds tasks weakly.
 _DETACHED: set[asyncio.Task[None]] = set()
 
@@ -109,32 +118,36 @@ async def run_mobile_cycle(
     *,
     on_step: Callable[[str], Awaitable[None]],
 ) -> WarmingCycleResult:
-    """Open the pod, spend the visit in the app, stop the pod; never raises a refusal.
+    """Open the pod, spend the visit in the app, park or stop the pod; never raises a refusal.
 
     A pod busy with the operator's own open or session is left running: it is theirs.
     """
     account_id = request.account_id
-    if len(_RUNNING) >= settings.emulator.max_running_pods:
+    # Its own parked pod holds its slot already; the open thaws it.
+    holding = _PARKED.pop(account_id, None) is not None or account_id in _RUNNING
+    if not holding and not await _free_slot():
         return await _log_skip(account_id, _CAPACITY)
     _RUNNING.add(account_id)
     seconds = session_seconds(request.remaining_actions)
     owned = True
+    went_well = False
     try:
         opened = await open_account_mobile(account_id, background=True)
         if not opened.signed_in:
             return await _log_failure(account_id, _NOT_SIGNED_IN, None)
         await on_step("read")
         activity = await run_mobile_activity(account_id, seconds, await session_plan(request))
+        went_well = True
     except EmulatorBusyError:
         owned = False
         return await _log_skip(account_id, "emulator_busy")
     except AccountActionError as exc:
         return await _log_failure(account_id, exc.code, getattr(exc, "partial", None))
     finally:
-        if owned:
-            _stop_detached(account_id)
-        else:
+        if not owned:
             _RUNNING.discard(account_id)
+        else:
+            _detach(_park(account_id) if went_well else _stop_and_free(account_id))
     _STREAKS.pop(account_id, None)
     await log_event(
         "INFO",
@@ -154,12 +167,55 @@ async def run_mobile_cycle(
     )
 
 
-def _stop_detached(account_id: str) -> None:
-    """Stop the pod in a task of its own; the slot frees once the stop is done."""
-    task = asyncio.ensure_future(stop_account_pod(account_id))
+async def _free_slot() -> bool:
+    """Whether a pod may start: below the cap, or once the longest parked pod is stopped."""
+    if len(_RUNNING) < settings.emulator.max_running_pods:
+        return True
+    if not _PARKED:
+        return False
+    oldest = next(iter(_PARKED))
+    del _PARKED[oldest]
+    try:
+        await stop_parked_pod(oldest)
+    finally:
+        _RUNNING.discard(oldest)
+    return len(_RUNNING) < settings.emulator.max_running_pods
+
+
+def _detach(work: Coroutine[object, object, None]) -> None:
+    """Run ``work`` in a task of its own, held strongly until it is done."""
+    task = asyncio.ensure_future(work)
     _DETACHED.add(task)
     task.add_done_callback(_DETACHED.discard)
-    task.add_done_callback(lambda _done: _RUNNING.discard(account_id))
+
+
+async def _stop_and_free(account_id: str) -> None:
+    try:
+        await stop_account_pod(account_id)
+    finally:
+        _RUNNING.discard(account_id)
+
+
+async def _park(account_id: str) -> None:
+    """Park the pod for the next visit; stop it once parked ``pause_ttl_seconds``.
+
+    A pod that cannot be parked, or a TTL of 0, is stopped at once. A later visit
+    takes the pod back by popping its token, which this timer then no longer finds.
+    """
+    ttl = settings.emulator.pause_ttl_seconds
+    if not ttl or not await park_account_pod(account_id):
+        await _stop_and_free(account_id)
+        return
+    token = next(_TOKENS)
+    _PARKED[account_id] = token
+    await asyncio.sleep(ttl)
+    if _PARKED.get(account_id) != token:
+        return
+    del _PARKED[account_id]
+    try:
+        await stop_parked_pod(account_id)
+    finally:
+        _RUNNING.discard(account_id)
 
 
 async def _log_skip(account_id: str, code: str) -> WarmingCycleResult:

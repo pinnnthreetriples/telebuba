@@ -62,6 +62,9 @@ _STORIES_BAND = 0.3
 # every this many characters on screen add one to the factor, up to the cap.
 _TEXT_FACTOR_MIN, _TEXT_FACTOR_MAX = 0.6, 2.0
 _CHARS_PER_FACTOR = 500
+# A feed is dumped every this many screens (and always where it reacts): between two
+# dumps the last one stands for the screen, as one swipe moves it less than a page.
+_DUMP_EVERY = 2
 
 
 def _now() -> float:
@@ -153,6 +156,8 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
         self._deadline = math.inf
         self._read: set[str] = set()
         self._stories_left = True
+        # The chat list the last dump showed, good until the next gesture.
+        self._chats: list[UiNode] | None = None
 
     async def run_session(
         self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
@@ -184,6 +189,13 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
             await asyncio.sleep(pause)
         return self.result
 
+    async def _chat_list(self, serial: str) -> list[UiNode]:
+        """The chat list ``return_to_chats`` just dumped, or a fresh dump."""
+        if self._chats is not None:
+            return self._chats
+        _screen, nodes = await read_screen(serial)
+        return nodes
+
     def _time_left(self) -> bool:
         return _now() < self._deadline
 
@@ -194,12 +206,13 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
     async def _open_channel(self, serial: str) -> bool:
         if self.plan.channels is not None and self.result.channels_read >= self.plan.channels:
             return False
-        _screen, nodes = await read_screen(serial)
+        nodes = await self._chat_list(serial)
         rows = [row for row in channel_rows(nodes) if _channel_key(row) not in self._read]
         if not rows:
             self._skip("no_channel")
             return False
         row = self.engine.rng.choice(rows)
+        self._chats = None
         self._read.add(_channel_key(row))
         react = self.engine.rng.random() < self.plan.reaction_probability
         await adb.human_tap(serial, row, engine=self.engine)
@@ -234,12 +247,15 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
         never a second: Telegram takes a repeated quick reaction back.
         """
         react_at = self.engine.rng.randrange(scroll_count) if react and scroll_count else None
+        nodes: list[UiNode] = []
         for scroll in range(scroll_count):
             if not self._time_left():
                 return
-            screen, nodes = await read_screen(serial)
-            if screen == "chats":  # the channel did not open, or was left
-                return
+            reacting = react_at is not None and scroll >= react_at
+            if not nodes or reacting or scroll % _DUMP_EVERY == 0:
+                screen, nodes = await read_screen(serial)
+                if screen == "chats":  # the channel did not open, or was left
+                    return
             pause, scroll_back = self._reading_pause(nodes)
             await asyncio.sleep(pause)
             if react_at is not None and scroll >= react_at and not self._actions_spent():
@@ -266,11 +282,11 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
 
     async def watch_stories(self, serial: str, max_stories: int = 5) -> None:
         """Open a story from the chat list and watch up to ``max_stories``, tapping on."""
-        _screen, nodes = await read_screen(serial)
-        avatars = story_avatars(nodes)
+        avatars = story_avatars(await self._chat_list(serial))
         if not avatars:
             self._skip("no_stories")
             return
+        self._chats = None
         await adb.human_tap(serial, self.engine.rng.choice(avatars), engine=self.engine)
         for _ in range(self.engine.rng.randint(1, max(1, max_stories))):
             if not self._time_left():
@@ -294,9 +310,11 @@ class TelegramMobilePlaybook(BaseMobilePlaybook):
 
     async def return_to_chats(self, serial: str) -> None:
         """Press BACK until the chat list shows; never on a sign-in screen."""
+        self._chats = None
         for _ in range(_MAX_BACKS + 1):
-            screen, _nodes = await read_screen(serial)
+            screen, nodes = await read_screen(serial)
             if screen == "chats":
+                self._chats = nodes
                 return
             if screen in _SIGN_IN_SCREENS:
                 raise EmulatorError(_EMULATOR_NOT_SIGNED_IN)

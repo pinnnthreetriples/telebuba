@@ -49,6 +49,7 @@ class _Pod:
         self.activity = PlaybookResult(channels_read=2, scrolls=9, stories_watched=3, reactions=1)
         # Set to hold the stop until the test releases it.
         self.stop_gate: asyncio.Event | None = None
+        self.parks = True
 
     async def open(self, account_id: str, *, background: bool = False) -> OpenMobileResult:
         self.calls.append("open:background" if background else "open")
@@ -72,6 +73,14 @@ class _Pod:
             await self.stop_gate.wait()
         self.calls.append("stop")
 
+    async def park(self, account_id: str) -> bool:
+        del account_id
+        self.calls.append("park")
+        return self.parks
+
+    async def stop_parked(self, account_id: str) -> None:
+        self.calls.append(f"stop_parked:{account_id}")
+
 
 @pytest_asyncio.fixture
 async def pod(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Pod]:
@@ -85,6 +94,11 @@ async def pod(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Pod]:
     monkeypatch.setattr(_mobile_cycle, "stop_account_pod", fake.stop)
     monkeypatch.setattr(_mobile_cycle, "_STREAKS", {})
     monkeypatch.setattr(_mobile_cycle, "_RUNNING", set())
+    monkeypatch.setattr(_mobile_cycle, "_PARKED", {})
+    monkeypatch.setattr(_mobile_cycle, "park_account_pod", fake.park)
+    monkeypatch.setattr(_mobile_cycle, "stop_parked_pod", fake.stop_parked)
+    # Stopped after every visit unless a test parks it.
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 0)
     yield fake
     if fake.stop_gate is not None:
         fake.stop_gate.set()
@@ -501,3 +515,85 @@ async def test_a_mobile_stint_hands_its_plan_to_the_session(pod: _Pod) -> None:
 
     [plan] = pod.plans
     assert isinstance(plan, PlaybookPlan)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_good_visit_parks_the_pod_and_the_ttl_stops_it(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 1)
+
+    await _iterate_on("mobile")
+    await asyncio.sleep(0)
+
+    assert pod.calls[-1] == "park", "paused, not stopped: the next visit skips the boot"
+    assert "acc-1" in _mobile_cycle._PARKED
+    assert "acc-1" in _mobile_cycle._RUNNING, "a parked pod keeps its memory, and its slot"
+    await _stops_done()
+    assert pod.calls[-1] == "stop_parked:acc-1"
+    assert "acc-1" not in _mobile_cycle._RUNNING
+    assert "acc-1" not in _mobile_cycle._PARKED
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_the_next_visit_takes_its_parked_pod_back(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 1)
+    monkeypatch.setattr(settings.emulator, "max_running_pods", 1)
+    _mobile_cycle._RUNNING.add("acc-1")
+    _mobile_cycle._PARKED["acc-1"] = -1  # an earlier visit's timer
+
+    await _iterate_on("mobile")
+
+    assert pod.calls[0] == "open:background", "its own slot: no capacity skip"
+    assert _mobile_cycle._PARKED.get("acc-1") != -1, "the old timer no longer owns it"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_full_host_stops_the_longest_parked_pod_first(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "max_running_pods", 2)
+    _mobile_cycle._RUNNING.update({"acc-old", "acc-new"})
+    _mobile_cycle._PARKED.update({"acc-old": 1, "acc-new": 2})
+
+    await _iterate_on("mobile")
+
+    assert pod.calls[0] == "stop_parked:acc-old"
+    assert pod.calls[1] == "open:background"
+    assert "acc-old" not in _mobile_cycle._PARKED
+    assert "acc-new" in _mobile_cycle._PARKED
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_pod_that_will_not_park_is_stopped(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 1)
+    pod.parks = False
+
+    await _iterate_on("mobile")
+    await _stops_done()
+
+    assert pod.calls[-2:] == ["park", "stop"]
+    assert "acc-1" not in _mobile_cycle._RUNNING
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_failed_visit_stops_the_pod_never_parks_it(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 1)
+    pod.run_error = EmulatorRefusedError("emulator_field_missing")
+
+    await _iterate_on("mobile")
+    await _stops_done()
+
+    assert "park" not in pod.calls
+    assert pod.calls[-1] == "stop"

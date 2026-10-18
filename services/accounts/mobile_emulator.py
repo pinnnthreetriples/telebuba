@@ -71,6 +71,7 @@ from core.emulator import (
     show_instance,
     start_pod,
     stop_pod,
+    unpause_pod,
     viewer_open,
     wait_for_boot,
     wait_screen,
@@ -211,10 +212,10 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     return result
 
 
-async def _show(index: int) -> None:
+async def _show(name: str, index: int) -> None:
     """Open the pod's window; one that cannot open is logged and the open goes on."""
     try:
-        await show_instance(index)
+        await show_instance(name, index)
     except EmulatorError as exc:
         logger.warning("pod window %s did not open (%s)", index, exc.code)
 
@@ -231,6 +232,10 @@ async def _open(
     )
     name = _container_name(account.account_id)
     instance = await find_instance(name)
+    if instance is not None and instance.paused:
+        # Parked after a close visit: thawed in a moment, then checked like a running one.
+        await unpause_pod(name)
+        instance = instance._replace(running=True, paused=False)
     if instance is not None and instance.running:
         if await pod_runs_proxy(name, proxy):
             # Up already and on the current proxy: not booted or reconfigured again.
@@ -238,7 +243,7 @@ async def _open(
             serial = adb_serial(instance.index)
             await connect_device(serial)
             if not background:
-                await _show(instance.index)
+                await _show(name, instance.index)
             await bring_app_to_front(serial)
             screen, _nodes = await read_screen(serial)
             signed_in = screen == "chats"
@@ -256,7 +261,7 @@ async def _open(
         serial = adb_serial(instance.index)
         await wait_for_boot(serial)
         if not background:
-            await _show(instance.index)
+            await _show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
         await _seed(account.account_id, serial, spec)
         await ensure_app(serial)

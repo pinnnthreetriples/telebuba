@@ -1890,6 +1890,7 @@
     "warming_mobile_cycle_skipped": "Прогрев на телефоне пропущен",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
+    "account_mobile_pod_pause_failed": "Телефон не поставлен на паузу после визита",
     "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",
     "warming_dialogue_live_reply": "Ответ реакцией или стикером",
     "warming_dialogue_live_opener": "Переслал пост собеседнику",
