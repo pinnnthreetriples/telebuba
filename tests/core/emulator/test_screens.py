@@ -135,14 +135,13 @@ def test_a_search_box_open_on_the_chat_list_is_not_the_chat_list() -> None:
 
 
 def _serve(console: Console, *screens: str) -> None:
-    """Answer ``cat`` of the UI dump with ``screens`` in turn (the last one repeats)."""
+    """Answer the UI dump script with ``screens`` in turn (the last one repeats)."""
     queue = list(screens)
 
     def answer(argv: list[str]) -> str:
-        if argv[-2:-1] == ["cat"]:
-            return queue.pop(0) if len(queue) > 1 else queue[0]
         if "uiautomator" in argv:
-            return "UI hierchary dumped to: /sdcard/telebuba_ui.xml"
+            screen = queue.pop(0) if len(queue) > 1 else queue[0]
+            return f"UI hierchary dumped to: /sdcard/telebuba_ui.xml\n{screen}"
         return ""
 
     console.answer = answer

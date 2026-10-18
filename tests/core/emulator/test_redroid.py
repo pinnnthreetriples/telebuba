@@ -54,9 +54,13 @@ def _docker_calls(console: Console, verb: str) -> list[list[str]]:
 
 def test_only_labelled_lines_with_an_index_are_containers() -> None:
     assert redroid.parse_list(_PS + "garbage\n") == [
-        (0, "telebuba-acc-1", True),
-        (2, "telebuba-acc-2", False),
+        (0, "telebuba-acc-1", True, False),
+        (2, "telebuba-acc-2", False, False),
     ]
+
+
+def test_a_paused_container_is_neither_running_nor_gone() -> None:
+    assert redroid.parse_list("1|telebuba-acc-1|paused\n") == [(1, "telebuba-acc-1", False, True)]
 
 
 def test_the_adb_serial_is_the_loopback_port_of_the_index() -> None:
@@ -68,7 +72,7 @@ def test_the_adb_serial_is_the_loopback_port_of_the_index() -> None:
 async def test_a_container_is_found_by_name_among_the_apps_own(ps: Console) -> None:
     instance = await redroid.find_instance("telebuba-acc-2")
 
-    assert instance == (2, "telebuba-acc-2", False)
+    assert instance == (2, "telebuba-acc-2", False, False)
     listing = ps.calls[0]
     assert listing[0] == str(settings.emulator.docker_path)
     assert listing[1:5] == ["ps", "-a", "--filter", "label=telebuba.emulator"]
@@ -85,7 +89,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net"
     )
 
-    assert instance == (1, "telebuba-new", False)
+    assert instance == (1, "telebuba-new", False, False)
     create = _docker_calls(ps, "create")[0]
     assert create[create.index("--network") + 1] == "container:telebuba-new-net"
     assert "--publish" not in create, "adb is the gateway's port"
@@ -166,14 +170,6 @@ async def test_a_launch_starts_the_named_container_and_drops_adbs_stale_connecti
 
 
 @pytest.mark.usefixtures("ps")
-@pytest.mark.asyncio
-async def test_an_unknown_index_is_a_failed_command() -> None:
-    with pytest.raises(EmulatorError) as failed:
-        await redroid.show_instance(7)
-
-    assert failed.value.code == "emulator_command_failed"
-
-
 class _Viewer:
     def __init__(self) -> None:
         self.returncode: int | None = None
@@ -203,8 +199,8 @@ def viewers(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[list[str]]]:
 @pytest.mark.usefixtures("ps")
 @pytest.mark.asyncio
 async def test_the_container_is_shown_in_one_scrcpy_window(viewers: list[list[str]]) -> None:
-    await redroid.show_instance(0)
-    await redroid.show_instance(0)
+    await redroid.show_instance("telebuba-acc-1", 0)
+    await redroid.show_instance("telebuba-acc-1", 0)
 
     assert viewers == [
         [
@@ -222,14 +218,14 @@ async def test_the_container_is_shown_in_one_scrcpy_window(viewers: list[list[st
 @pytest.mark.asyncio
 async def test_a_closed_window_is_opened_again(viewers: list[list[str]]) -> None:
     assert redroid.viewer_open("telebuba-acc-1") is False
-    await redroid.show_instance(0)
+    await redroid.show_instance("telebuba-acc-1", 0)
     viewer = redroid._VIEWERS["telebuba-acc-1"]
     assert isinstance(viewer, _Viewer)
     assert redroid.viewer_open("telebuba-acc-1") is True
     viewer.returncode = 0  # the operator closed the window
     assert redroid.viewer_open("telebuba-acc-1") is False
 
-    await redroid.show_instance(0)
+    await redroid.show_instance("telebuba-acc-1", 0)
 
     assert len(viewers) == 2
 
@@ -245,7 +241,7 @@ async def test_a_missing_scrcpy_is_not_found(
     monkeypatch.setattr(asyncio, "create_subprocess_exec", missing)
 
     with pytest.raises(EmulatorError) as refused:
-        await redroid.show_instance(0)
+        await redroid.show_instance("telebuba-acc-1", 0)
 
     assert refused.value.code == "emulator_not_found"
 
@@ -261,7 +257,7 @@ async def test_a_scrcpy_that_cannot_start_is_a_failed_command(
     monkeypatch.setattr(asyncio, "create_subprocess_exec", denied)
 
     with pytest.raises(EmulatorError) as refused:
-        await redroid.show_instance(0)
+        await redroid.show_instance("telebuba-acc-1", 0)
 
     assert refused.value.code == "emulator_command_failed"
 

@@ -37,6 +37,8 @@ GATEWAY_LABEL = "telebuba.gateway"
 INDEX_LABEL = "telebuba.index"
 ADB_PORT = 5555
 _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
+# Both kinds of a pod in one listing: the last field is set on gateways only.
+_POD_FORMAT = _LIST_FORMAT + '|{{.Label "telebuba.gateway"}}'
 # Where the container's identity goes (see ``_give_identity``), after this mark.
 _IDENTITY_FILE = "/product/etc/build.prop"
 _IDENTITY_MARK = "# telebuba: the phone this container presents\n"
@@ -49,6 +51,8 @@ class Instance(NamedTuple):
     index: int
     name: str
     running: bool
+    # Frozen by ``docker pause`` between close visits (``core.emulator.pod``).
+    paused: bool = False
 
 
 # One scrcpy window per container, process-local like the rest of the runtime state.
@@ -66,7 +70,7 @@ def parse_list(output: str) -> list[Instance]:
         index, _, rest = line.strip().partition("|")
         name, _, state = rest.partition("|")
         if index.isdigit() and name:
-            instances.append(Instance(int(index), name, state == "running"))
+            instances.append(Instance(int(index), name, state == "running", state == "paused"))
     return instances
 
 
@@ -77,19 +81,20 @@ async def list_containers(label: str) -> list[Instance]:
     )
 
 
-async def _list() -> list[Instance]:
-    return await list_containers(ANDROID_LABEL)
+async def list_pods() -> tuple[list[Instance], list[Instance]]:
+    """This app's Android containers and gateways, from one ``docker ps``."""
+    output = await docker("ps", "-a", "--filter", f"label={INDEX_LABEL}", "--format", _POD_FORMAT)
+    androids: list[Instance] = []
+    gateways: list[Instance] = []
+    for line in output.splitlines():
+        head, _, gateway = line.strip().rpartition("|")
+        for instance in parse_list(head):
+            (gateways if gateway else androids).append(instance)
+    return androids, gateways
 
 
 async def find_instance(name: str) -> Instance | None:
-    return next((i for i in await _list() if i.name == name), None)
-
-
-async def _name_of(index: int) -> str:
-    instance = next((i for i in await _list() if i.index == index), None)
-    if instance is None:
-        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
-    return instance.name
+    return next((i for i in await list_containers(ANDROID_LABEL) if i.name == name), None)
 
 
 def build_prop(spec: ContainerSpec) -> str:
@@ -205,9 +210,8 @@ async def launch_instance(name: str, index: int) -> None:
         )
 
 
-async def show_instance(index: int) -> None:
+async def show_instance(name: str, index: int) -> None:
     """Open the container's scrcpy window, unless this process has one open already."""
-    name = await _name_of(index)
     if viewer_open(name):
         return
     argv = [

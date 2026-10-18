@@ -1855,6 +1855,7 @@
     "warming_mobile_cycle_skipped": "Warming on the phone skipped",
     "account_mobile_container_removed": "Container removed",
     "account_mobile_container_remove_failed": "Container not removed",
+    "account_mobile_pod_pause_failed": "Phone not paused after a visit",
     "account_mobile_pod_stop_failed": "Phone not stopped after a proxy change",
     "warming_dialogue_live_reply": "Answered with a reaction or a sticker",
     "warming_dialogue_live_opener": "Forwarded a post to a partner",

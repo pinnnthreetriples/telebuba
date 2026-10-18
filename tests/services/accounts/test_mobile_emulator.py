@@ -107,7 +107,7 @@ class _Container:
     async def connect_device(self, serial: str) -> None:
         self.on_serial(serial, "connect")
 
-    async def show_instance(self, index: int) -> None:
+    async def show_instance(self, _name: str, index: int) -> None:
         self.step(f"show:{index}")
 
     async def assert_sdk(self, serial: str, sdk: int) -> None:
