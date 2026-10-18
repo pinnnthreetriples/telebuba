@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buttonPress,
   closeReason,
+  containedBox,
   framePoint,
   keyCommands,
   parseScreenMessage,
@@ -135,5 +136,34 @@ describe('closeReason', () => {
     expect(closeReason(1008, '')).toBe('screen_forbidden');
     expect(closeReason(1006, '')).toBe('screen_lost');
     expect(closeReason(4000, 'made_up')).toBe('screen_lost');
+  });
+});
+
+describe('containedBox', () => {
+  it('centres a wider frame with bands above and below', () => {
+    expect(
+      containedBox({ left: 0, top: 0, width: 400, height: 800 }, { width: 720, height: 1280 }),
+    ).toEqual({
+      left: 0,
+      top: 44.44444444444446,
+      width: 400,
+      height: 711.1111111111111,
+    });
+  });
+
+  it('centres a taller frame with bands left and right', () => {
+    expect(
+      containedBox({ left: 10, top: 0, width: 400, height: 800 }, { width: 300, height: 1000 }),
+    ).toEqual({
+      left: 90,
+      top: 0,
+      width: 240,
+      height: 800,
+    });
+  });
+
+  it('is the box itself before the first frame', () => {
+    const box = { left: 1, top: 2, width: 3, height: 4 };
+    expect(containedBox(box, { width: 0, height: 0 })).toBe(box);
   });
 });

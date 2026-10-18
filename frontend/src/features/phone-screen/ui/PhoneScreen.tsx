@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Notice, Spinner, toastSuccess } from '@/shared/ui';
+import { Button, Spinner, toastSuccess } from '@/shared/ui';
 
 import {
   buttonPress,
+  containedBox,
   framePoint,
   keyCommands,
   textCommands,
@@ -15,6 +16,12 @@ import {
 import { useScreenStream } from '../model/useScreenStream';
 
 const BUTTONS: PhoneButton[] = ['back', 'home', 'recents'];
+
+// The screen keeps a phone's size and shape from the start — while it connects, and
+// when it cannot open — and the stream is fitted into it (`object-fit: contain`).
+// As tall as the dialog allows once its header, the phone's buttons and the hint
+// have their room (the dialog itself is at most 88dvh tall).
+const SCREEN_FRAME = { height: 'calc(88dvh - 240px)', aspectRatio: '9 / 19.5' } as const;
 
 // A phone's live screen. `view` only watches (a warming stint is never disturbed);
 // `control` also passes the mouse, the keyboard and the clipboard to the phone.
@@ -41,7 +48,8 @@ export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMo
   const point = (event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current;
     if (!canvas || !state.size) return null;
-    return framePoint(event.clientX, event.clientY, canvas.getBoundingClientRect(), state.size);
+    const shown = containedBox(canvas.getBoundingClientRect(), state.size);
+    return framePoint(event.clientX, event.clientY, shown, state.size);
   };
 
   const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -61,9 +69,9 @@ export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMo
     if (!pressed.current) return;
     pressed.current = false;
     const canvas = canvasRef.current;
-    const box = canvas?.getBoundingClientRect();
     const size = state.size;
-    if (!box || !size) return;
+    if (!canvas || !size) return;
+    const box = containedBox(canvas.getBoundingClientRect(), size);
     // A finger lifted outside the canvas lifts at the nearest edge.
     const x = Math.min(Math.max(event.clientX, box.left), box.left + box.width);
     const y = Math.min(Math.max(event.clientY, box.top), box.top + box.height);
@@ -78,12 +86,12 @@ export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMo
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="relative grid place-items-center rounded-lg bg-term p-2">
+      <div style={SCREEN_FRAME} className="relative max-w-full rounded-lg bg-term p-2">
         <canvas
           ref={canvasRef}
           tabIndex={interactive ? 0 : -1}
           aria-label={t(`phoneScreen.canvas.${mode}`)}
-          className="block max-h-dialog w-auto max-w-full touch-none rounded-md outline-none focus-visible:shadow-focus"
+          className="block h-full w-full touch-none rounded-md object-contain outline-none focus-visible:shadow-focus"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -112,16 +120,21 @@ export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMo
             <span className="type-small text-on-fill">{t('phoneScreen.connecting')}</span>
           </div>
         )}
+        {/* Why there is no picture, written on the dark screen itself, the way a phone
+            shows its own messages: nothing below the screen moves when it appears. */}
+        {(state.phase === 'unsupported' || (state.phase === 'closed' && state.reason)) && (
+          <div
+            role="status"
+            className="absolute inset-0 flex items-center justify-center p-6 text-center"
+          >
+            <span className="type-body text-on-fill">
+              {state.phase === 'unsupported'
+                ? t('phoneScreen.unsupported')
+                : t(`phoneScreen.closed.${state.reason ?? 'screen_lost'}`)}
+            </span>
+          </div>
+        )}
       </div>
-
-      {state.phase === 'closed' && state.reason && (
-        <Notice tone={state.reason === 'screen_ended' ? 'info' : 'warning'}>
-          {t(`phoneScreen.closed.${state.reason}`)}
-        </Notice>
-      )}
-      {state.phase === 'unsupported' && (
-        <Notice tone="warning">{t('phoneScreen.unsupported')}</Notice>
-      )}
 
       {mode === 'control' && (
         <div className="flex flex-wrap items-center justify-center gap-2">

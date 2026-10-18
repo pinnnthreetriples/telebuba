@@ -51,6 +51,23 @@ export function screenSocketUrl(phoneId: string, mode: ScreenMode, page: Locatio
   return `${scheme}//${page.host}/api/v1/devices/${encodeURIComponent(phoneId)}/screen?mode=${mode}`;
 }
 
+type Box = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>;
+
+// Where the frame is actually painted inside an element that letterboxes it
+// (`object-fit: contain`): the element keeps a phone's shape, the stream may not.
+export function containedBox(box: Box, frame: { width: number; height: number }): Box {
+  if (box.width <= 0 || box.height <= 0 || frame.width <= 0 || frame.height <= 0) return box;
+  const scale = Math.min(box.width / frame.width, box.height / frame.height);
+  const width = frame.width * scale;
+  const height = frame.height * scale;
+  return {
+    left: box.left + (box.width - width) / 2,
+    top: box.top + (box.height - height) / 2,
+    width,
+    height,
+  };
+}
+
 // A pointer position on the shown canvas as a point on the video frame, or null
 // outside it. The frame size travels along: the phone drops an event whose size is
 // not the one it encodes at, so a click from before a rotation cannot land elsewhere.
