@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
+from core.emulator._input import HumanInputEngine
 from core.emulator._process import run_command
 from core.emulator._text import escape_input_text
 
@@ -148,3 +149,74 @@ async def press(serial: str, *keycodes: int) -> None:
 
 async def type_text(serial: str, text: str) -> None:
     await shell(serial, "input", "text", escape_input_text(text))
+
+
+_default_input_engine = HumanInputEngine()
+
+
+async def human_tap(
+    serial: str,
+    node: UiNode,
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Sample a Gaussian tap inside ``node.bounds`` and execute via swipe micro-slip."""
+    eng = engine or _default_input_engine
+    event = eng.sample_gaussian_tap(node.bounds)
+    await shell(
+        serial,
+        "input",
+        "swipe",
+        str(event.x),
+        str(event.y),
+        str(event.release_x),
+        str(event.release_y),
+        str(event.hold_ms),
+    )
+
+
+async def human_type(
+    serial: str,
+    text: str,
+    *,
+    typo_probability: float | None = None,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Type ``text`` with stochastic keystroke intervals and realistic typo-correction."""
+    escape_input_text(text)
+    eng = engine or _default_input_engine
+    events = (
+        eng.generate_keystroke_sequence(text, typo_probability=typo_probability)
+        if typo_probability is not None
+        else eng.generate_keystroke_sequence(text)
+    )
+    for event in events:
+        if event.delay_ms > 0:
+            await asyncio.sleep(event.delay_ms / 1000.0)
+        if event.key_event is not None:
+            await press(serial, event.key_event)
+        else:
+            await type_text(serial, event.char)
+
+
+async def human_swipe(
+    serial: str,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    engine: HumanInputEngine | None = None,
+) -> None:
+    """Drag the finger along a sampled Bezier curve from ``start`` to ``end``.
+
+    Every point goes out as one ``input motionevent`` (DOWN, MOVEs, UP) in a single
+    ``adb shell`` script that the device's ``sh`` runs command by command.
+    """
+    eng = engine or _default_input_engine
+    points = eng.generate_bezier_swipe(start, end).points
+    actions = ["DOWN"] + ["MOVE"] * (len(points) - 2) + ["UP"]
+    script: list[str] = []
+    for action, (x, y) in zip(actions, points, strict=True):
+        if script:
+            script.append(";")
+        script += ["input", "motionevent", action, str(x), str(y)]
+    await shell(serial, *script)
