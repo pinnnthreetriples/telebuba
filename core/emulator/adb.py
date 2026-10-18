@@ -16,7 +16,7 @@ from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator._process import adb_command
-from core.emulator._text import escape_input_text
+from core.emulator._text import escape_input_text, shell_quote
 
 if TYPE_CHECKING:
     from core.emulator.ui_dump import UiNode
@@ -137,6 +137,15 @@ async def push(serial: str, *local: str, remote: str) -> None:
 
 async def start_app(serial: str, package: str) -> None:
     await shell(serial, "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
+
+
+async def open_uri(serial: str, uri: str, package: str) -> None:
+    """Open ``uri`` in ``package`` as a tapped link does (``tg://settings``, ``tg://resolve``)."""
+    await shell(
+        serial,
+        *("am", "start", "-a", "android.intent.action.VIEW"),
+        *("-d", shell_quote(uri), package),
+    )
 
 
 async def dump_ui(serial: str) -> str:
