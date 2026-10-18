@@ -7,16 +7,33 @@ not show.
 
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.emulator import telegram_app
 from core.emulator._errors import EmulatorError
+from core.emulator._input import HumanInputEngine
 from core.emulator.ui_dump import classify, parse_dump, password_field
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from core.emulator.ui_dump import UiNode
     from tests.core.emulator.conftest import Console
+
+
+@pytest.fixture(autouse=True)
+def _fast_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _instant_sleep(_s: float) -> None:
+        return
+
+    monkeypatch.setattr("core.emulator.adb.asyncio.sleep", _instant_sleep)
+    monkeypatch.setattr(
+        "core.emulator.adb._default_input_engine",
+        HumanInputEngine(random.Random(0)),  # noqa: S311 - reproducible test
+    )
 
 
 def _node(
@@ -100,9 +117,15 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
     await telegram_app.enter_phone("emulator-5554", nodes, "+52 155 5000 1111")
 
     typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
-    taps = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "tap"]]
-    assert typed == ["52", "15550001111"]
-    assert taps == [["40", "125"], ["250", "125"]]
+    swipes = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert "".join(typed) == "5215550001111"
+    assert len(swipes) == 2
+    # First box bounds: [0, 100][80, 150]
+    assert 0 <= int(swipes[0][0]) <= 80
+    assert 100 <= int(swipes[0][1]) <= 150
+    # Second box bounds: [100, 100][400, 150]
+    assert 100 <= int(swipes[1][0]) <= 400
+    assert 100 <= int(swipes[1][1]) <= 150
     assert console.shell_calls()[-1] == ["input", "keyevent", "66"]
 
 
@@ -130,11 +153,16 @@ async def test_an_untypeable_password_is_refused_before_the_screen_is_touched(
 async def test_the_password_goes_only_into_the_dumps_password_field(console: Console) -> None:
     await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
 
-    assert console.shell_calls() == [
-        ["input", "tap", "50", "25"],
-        ["input", "text", "s3cret\\!"],
-        ["input", "keyevent", "66"],
-    ]
+    swipes = [call for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 1
+    # Password field bounds [0, 0][100, 50]
+    x, y = int(swipes[0][2]), int(swipes[0][3])
+    assert 0 <= x <= 100
+    assert 0 <= y <= 50
+
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert typed == ["s", "3", "c", "r", "e", "t", "\\!"]
+    assert console.shell_calls()[-1] == ["input", "keyevent", "66"]
 
 
 @pytest.mark.asyncio
@@ -147,3 +175,69 @@ async def test_waiting_for_a_screen_returns_the_last_one_seen(console: Console) 
     _serve(console, INTRO)
     screen, _nodes = await telegram_app.wait_screen("emulator-5554", {"chats"})
     assert screen == "intro", "time ran out on the intro screen"
+
+
+@pytest.mark.asyncio
+async def test_press_start_calls_human_tap(console: Console) -> None:
+    nodes = parse_dump(INTRO)
+    await telegram_app.press_start("emulator-5554", nodes)
+    swipes = [call for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 1
+
+
+@pytest.mark.asyncio
+async def test_confirm_number_calls_human_tap(console: Console) -> None:
+    nodes = parse_dump(CONFIRM)
+    await telegram_app.confirm_number("emulator-5554", nodes)
+    swipes = [call for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 1
+
+
+@pytest.mark.asyncio
+async def test_enter_code_calls_human_tap_and_human_type(console: Console) -> None:
+    nodes = parse_dump(CODE)
+    await telegram_app.enter_code("emulator-5554", nodes, "12345")
+    swipes = [call for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 1
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert "".join(typed) == "12345"
+
+
+@pytest.mark.asyncio
+async def test_an_untypeable_code_is_refused_before_the_screen_is_touched(
+    console: Console,
+) -> None:
+    with pytest.raises(EmulatorError) as refused:
+        await telegram_app.enter_code("emulator-5554", parse_dump(CODE), "100%пароль")
+
+    assert refused.value.code == "emulator_text_unsupported"
+    assert console.calls == []
+
+
+class _AlwaysTypo(random.Random):
+    def random(self) -> float:
+        return 0.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("screen", "step", "secret"),
+    [(PASSWORD, telegram_app.enter_password, "s3cret!"), (CODE, telegram_app.enter_code, "12345")],
+    ids=["password", "code"],
+)
+async def test_secrets_are_typed_without_simulated_typos(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+    screen: str,
+    step: Callable[[str, list[UiNode], str], Awaitable[None]],
+    secret: str,
+) -> None:
+    monkeypatch.setattr(
+        "core.emulator.adb._default_input_engine",
+        HumanInputEngine(_AlwaysTypo(0)),
+    )
+    await step("emulator-5554", parse_dump(screen), secret)
+
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert "".join(typed).replace("\\", "") == secret
+    assert ["input", "keyevent", "67"] not in console.shell_calls()
