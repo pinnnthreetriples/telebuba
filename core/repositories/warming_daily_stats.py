@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core._schema_warming_daily_stats import _warming_daily_stats
@@ -69,6 +69,21 @@ def _list_warming_daily_stats(account_id: str, since_day: str) -> list[WarmingDa
 async def list_warming_daily_stats(account_id: str, since_day: str) -> list[WarmingDailyStats]:
     """Rows of one account from ``since_day`` (``YYYY-MM-DD``, inclusive), oldest first."""
     return await asyncio.to_thread(_list_warming_daily_stats, account_id, since_day)
+
+
+def _list_warming_daily_stats_for(keys: list[tuple[str, str]]) -> list[WarmingDailyStats]:
+    if not keys:
+        return []
+    table = _warming_daily_stats
+    statement = select(table).where(tuple_(table.c.account_id, table.c.day).in_(keys))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_daily_stats(cast("Mapping[str, object]", row)) for row in rows]
+
+
+async def list_warming_daily_stats_for(keys: list[tuple[str, str]]) -> list[WarmingDailyStats]:
+    """The rows of exactly these ``(account_id, day)`` pairs, in one read for the board."""
+    return await asyncio.to_thread(_list_warming_daily_stats_for, keys)
 
 
 def _sum_warming_daily_stats_by_day(since_day: str) -> list[FleetDailyStats]:

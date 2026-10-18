@@ -35086,6 +35086,16 @@
             "type": "array",
             "title": "Cycle Plan"
           },
+          "today": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingTodayActions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "wave": {
             "type": "integer",
             "minimum": 1.0,
@@ -36484,6 +36494,37 @@
         "type": "object",
         "title": "WarmingSummary",
         "description": "Fleet-level roll-up shown at the top of the warming page."
+      },
+      "WarmingTodayActions": {
+        "properties": {
+          "reads": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads",
+            "default": 0
+          },
+          "reactions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reactions",
+            "default": 0
+          },
+          "joins": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Joins",
+            "default": 0
+          },
+          "dms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Dms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "WarmingTodayActions",
+        "description": "What today's settled cycles did, by kind \u2014 the card's dot columns."
       },
       "WarmingTuning": {
         "properties": {

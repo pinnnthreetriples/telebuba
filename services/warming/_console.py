@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.phone_geo import evaluate_geo
-from schemas._warming_console import WarmingAttention
+from schemas._warming_console import WarmingAttention, WarmingTodayActions
 from services.warming._real_age import dm_open_after_hours
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas._warming_console import DmStatus
     from schemas.accounts import AccountRead
     from schemas.geo import GeoMatch
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
         WarmingSettings,
         WarmingStateRecord,
     )
+    from schemas.warming_daily_stats import WarmingDailyStats
 
 _SECONDS_PER_HOUR = 3600
 # Errors that only mean "the previous loop is still unwinding".
@@ -63,6 +66,25 @@ def settled_today(record: WarmingStateRecord | None) -> int:
     if in_flight and record.cycle_base_actions is not None:
         return min(record.cycle_base_actions, record.daily_actions)
     return record.daily_actions
+
+
+def today_actions(
+    record: WarmingStateRecord | None,
+    rows: Mapping[tuple[str, str], WarmingDailyStats],
+) -> WarmingTodayActions | None:
+    """The day's breakdown under the same day the budget counts (``daily_count_date``).
+
+    Read off the daily totals, which a cycle adds to once it settles — so, like
+    ``settled_today``, the breakdown never counts a running cycle's reservation.
+    """
+    if record is None or record.daily_count_date is None:
+        return None
+    row = rows.get((record.account_id, record.daily_count_date))
+    if row is None:
+        return None
+    return WarmingTodayActions(
+        reads=row.reads, reactions=row.reactions, joins=row.joins, dms=row.dms
+    )
 
 
 def _warming_hours(started_at: str | None, now: datetime) -> float:

@@ -74,6 +74,15 @@ class WarmingStateMarks(BaseModel):
     spam_blocked_at: str | None = None
 
 
+class WarmingTodayActions(BaseModel):
+    """What today's settled cycles did, by kind — the card's dot columns."""
+
+    reads: int = Field(default=0, ge=0)
+    reactions: int = Field(default=0, ge=0)
+    joins: int = Field(default=0, ge=0)
+    dms: int = Field(default=0, ge=0)
+
+
 class WarmingCardConsole(BaseModel):
     """The new card rows: settled actions, DM status, one attention item, geo verdict."""
 
@@ -88,6 +97,8 @@ class WarmingCardConsole(BaseModel):
     # The current (or last) visit and its steps; the card's progress follows this order.
     visit_kind: VisitKind | None = None
     cycle_plan: list[VisitStep] = Field(default_factory=list)
+    # Today's breakdown from the daily totals; ``None`` when the day has no row yet.
+    today: WarmingTodayActions | None = None
     # The stint's wave (the card names it from wave 2 on) and the spam-block mark, which a
     # clean @SpamBot answer clears.
     wave: int = Field(default=1, ge=1)
