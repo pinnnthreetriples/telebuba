@@ -11,7 +11,7 @@ import { Button, EmptyState } from '@/shared/ui';
 // Assigns run one at a time through `mutateAsync` — a useMutation observer has a
 // single callback slot, so firing several `.mutate` at once loses all but the
 // last. Refusals leave the account in `remaining` and raise the alert; the
-// operator may still press Done with accounts unassigned.
+// operator may still press Done with some accounts unassigned, not with none.
 export function ProxyPoolStep({
   accountIds,
   onBack,
@@ -145,7 +145,9 @@ export function ProxyPoolStep({
       </div>
       <div className="mt-6 flex justify-between gap-2">
         <Button onClick={onBack}>{t('accounts.addWizard.back')}</Button>
-        <Button variant="primary" onClick={onDone} disabled={assignProxy.isPending}>
+        {/* Nothing assigned yet: "Done" would leave the step looking like it worked.
+          Skipping a proxy is the choice screen's "Skip", one step back. */}
+        <Button variant="primary" onClick={onDone} disabled={assignProxy.isPending || done === 0}>
           {t('accounts.addWizard.done')}
         </Button>
       </div>
