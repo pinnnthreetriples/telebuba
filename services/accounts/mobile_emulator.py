@@ -82,7 +82,17 @@ from core.logging import log_event
 from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
 from services.accounts._emulator_sign_in import sign_in
-from services.accounts._result import AccountActionError
+from services.accounts._mobile_holds import (
+    _ACTIVE,
+    _LOCKS,
+    _MANUAL,
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    claim_manual,
+    container_name,
+    phone_activity,
+    release_manual,
+)
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
@@ -90,7 +100,6 @@ if TYPE_CHECKING:
     from core.emulator import ContainerSpec
     from core.emulator.ui_dump import Screen
     from schemas.accounts import AccountRead
-    from schemas.device_farm import PhoneStatus
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
     from schemas.emulator import EmulatorRefusalCode, PlaybookPlan, PlaybookResult
@@ -119,10 +128,6 @@ __all__ = [
 # Stdlib sink, codes and step names only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
 
-_LOCKS: dict[str, asyncio.Lock] = {}
-# Accounts with an activity session running; accounts an operator controls by hand.
-_ACTIVE: set[str] = set()
-_MANUAL: set[str] = set()
 # Accounts whose pod the operator opened; theirs while its window stays open.
 _OPERATOR: set[str] = set()
 
@@ -132,51 +137,6 @@ _ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
 _KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
 # A session gets this long past its own length to finish its last read before it is cut.
 _SESSION_GRACE_SECONDS = 60
-
-
-class EmulatorRefusedError(AccountActionError):
-    """The container could not be opened; ``code`` is the stable code the SPA translates.
-
-    ``partial`` is what a failed activity session did before it failed, else ``None``.
-    """
-
-    def __init__(self, code: EmulatorRefusalCode, *, partial: PlaybookResult | None = None) -> None:
-        super().__init__(code)
-        self.partial = partial
-
-
-class EmulatorBusyError(EmulatorRefusedError):
-    """Another start of the same account's container is still running (409)."""
-
-    def __init__(self) -> None:
-        super().__init__("emulator_busy")
-
-
-def container_name(account_id: str) -> str:
-    return f"{settings.emulator.instance_prefix}{account_id}"
-
-
-def phone_activity(account_id: str) -> PhoneStatus | None:
-    """What holds the account's pod right now, as far as this process knows."""
-    lock = _LOCKS.get(account_id)
-    if lock is not None and lock.locked():
-        return "starting"
-    if account_id in _ACTIVE:
-        return "warming"
-    if account_id in _MANUAL:
-        return "manual"
-    return None
-
-
-def claim_manual(account_id: str) -> None:
-    """Hand the pod's controls to an operator; ``emulator_busy`` while anything holds it."""
-    if phone_activity(account_id) is not None:
-        raise EmulatorBusyError
-    _MANUAL.add(account_id)
-
-
-def release_manual(account_id: str) -> None:
-    _MANUAL.discard(account_id)
 
 
 async def running_serial(account_id: str) -> str:

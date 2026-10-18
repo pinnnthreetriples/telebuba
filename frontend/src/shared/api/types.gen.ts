@@ -5955,6 +5955,7 @@ export type PhoneList = {
     | 'emulator_twofa_missing'
     | 'emulator_not_running'
     | 'emulator_not_signed_in'
+    | 'emulator_capacity'
     | 'emulator_scrcpy_missing'
     | 'emulator_screen_timeout'
     | null;
