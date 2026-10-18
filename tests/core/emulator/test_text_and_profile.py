@@ -6,7 +6,7 @@ import pytest
 
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import is_valid_imei, luhn_check_digit
-from core.emulator._text import escape_input_text, shell_quote
+from core.emulator._text import escape_input_text
 
 
 @pytest.mark.parametrize(
@@ -30,11 +30,6 @@ def test_text_input_text_cannot_type_is_refused(text: str) -> None:
         escape_input_text(text)
 
     assert refused.value.code == "emulator_text_unsupported"
-
-
-def test_a_link_is_single_quoted_for_the_device_shell() -> None:
-    assert shell_quote("tg://socks?server=h&port=1") == "'tg://socks?server=h&port=1'"
-    assert shell_quote("it's") == "'it'\\''s'"
 
 
 def test_the_imei_check_digit_is_luhns() -> None:

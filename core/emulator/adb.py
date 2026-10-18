@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._process import run_command
-from core.emulator._text import escape_input_text, shell_quote
+from core.emulator._text import escape_input_text
 
 if TYPE_CHECKING:
     from core.emulator.ui_dump import UiNode
@@ -114,17 +114,6 @@ async def install_apk(serial: str) -> None:
 
 async def start_app(serial: str, package: str) -> None:
     await shell(serial, "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
-
-
-async def open_link(serial: str, url: str, package: str) -> None:
-    await shell(
-        serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", shell_quote(url), package
-    )
-
-
-async def set_network(serial: str, *, enabled: bool) -> None:
-    for service in ("wifi", "data"):
-        await shell(serial, "svc", service, "enable" if enabled else "disable")
 
 
 async def dump_ui(serial: str) -> str:

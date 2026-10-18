@@ -1,0 +1,156 @@
+#!/bin/sh
+# net-gateway run    the container's entrypoint: kill-switch, then the tunnel
+# net-gateway ready  exits 0 once the tunnel carries the namespace's traffic
+#
+# Android shares this container's network namespace, so every rule here is Android's
+# too. All egress is dropped first, before the input is even read; then only loopback,
+# tun0, replies to connections made from outside (adb; matched as the REPLY direction,
+# so a flow Android opened through tun0 can never fall back to eth0 when the routing
+# rules are gone) and the proxy's own address (its port, and UDP for the relay it
+# names) are let out. Anything that runs before the tunnel is up, or after it dies, is
+# cut off, never sent direct. adb (5555) is reachable on eth0 only from the Docker
+# gateway, which is where the published loopback port arrives from.
+#
+# Android's netd uses the legacy iptables tables and these rules live in nf_tables, so
+# it cannot flush them. It does flush the policy routing rules when it starts, which the
+# loop below puts back; until then traffic follows Android's own route to eth0, which
+# the kill-switch drops. The tunnel's sockets carry MARK, which routes them out of eth0
+# instead of back into tun0 (the kill-switch cannot match it: the WSL kernel has no
+# xt_mark).
+#
+# Input, copied in by the app before each start (never in env or argv):
+#   /etc/net-gateway/proxy    host, port, username, password - one per line
+#   /etc/net-gateway/address  the IPv4 address the host resolved the proxy host to
+set -eu
+
+MARK=1593835520 # 0x5f000000, above every bit Android's netd puts in a fwmark
+TABLE=120     # everything else: into tun0
+ETH_TABLE=121 # the tunnel's own sockets and replies to the eth0 subnet: out of eth0
+CONF=/etc/net-gateway
+RUN=/run/net-gateway
+
+# $1 the eth0 subnet (replies to adb stay on it), $2 the docker gateway on it.
+# Kept in tables of our own: Android moves eth0's default route out of main.
+routes() {
+	ip route replace default dev tun0 table "$TABLE"
+	ip route replace "$1" dev eth0 table "$ETH_TABLE"
+	ip route replace default via "$2" dev eth0 table "$ETH_TABLE"
+	ip rule show pref 90 | grep -q . || ip rule add pref 90 fwmark "$MARK" lookup "$ETH_TABLE"
+	ip rule show pref 91 | grep -q . || ip rule add pref 91 to "$1" lookup "$ETH_TABLE"
+	ip rule show pref 92 | grep -q . || ip rule add pref 92 lookup "$TABLE"
+}
+
+ready() {
+	pidof hev-socks5-tunnel >/dev/null &&
+		ip link show tun0 up | grep -q tun0 &&
+		ip rule show pref 92 | grep -q "lookup $TABLE"
+}
+
+# A YAML single-quoted scalar: the value is data, never part of the sed script.
+quote() {
+	printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
+drop_all() {
+	for table in ip6tables iptables; do
+		"$table" -P INPUT ACCEPT
+		"$table" -P FORWARD DROP
+		"$table" -P OUTPUT DROP
+		"$table" -F OUTPUT
+	done
+	ip6tables -P INPUT DROP
+}
+
+# $1 the proxy's address, $2 its port, $3 the Docker gateway on eth0
+allow_tunnel() {
+	iptables -F INPUT
+	iptables -A INPUT -i eth0 -p tcp --dport 5555 ! -s "$3" -j DROP
+	# Docker's embedded DNS on a user-defined network resolves through the host.
+	iptables -A OUTPUT -d 127.0.0.11 -j DROP
+	iptables -A OUTPUT -o lo -j ACCEPT
+	iptables -A OUTPUT -o tun0 -j ACCEPT
+	iptables -A OUTPUT -o eth0 -m conntrack --ctstate ESTABLISHED,RELATED --ctdir REPLY -j ACCEPT
+	iptables -A OUTPUT -o eth0 -d "$1" -p tcp --dport "$2" -j ACCEPT
+	iptables -A OUTPUT -o eth0 -d "$1" -p udp -j ACCEPT
+	# Every DNS query goes to the tunnel's mapped DNS: it answers with a placeholder
+	# address and the proxy resolves the name when the connection is made.
+	iptables -t nat -F OUTPUT
+	iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -p udp --dport 53 -j DNAT --to-destination 198.18.0.2:53
+	# tun0's MTU is 1400: SYNs announce a segment size that fits it.
+	iptables -t mangle -F POSTROUTING
+	iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+}
+
+# $1 address, $2 port, $3 username, $4 password
+write_config() {
+	auth=
+	if [ -n "$3" ]; then
+		auth="  username: $(quote "$3")
+  password: $(quote "$4")"
+	fi
+	umask 077
+	mkdir -p "$RUN"
+	cat >"$RUN/hev.yml" <<EOF
+tunnel:
+  name: tun0
+  mtu: 1400
+  ipv4: 198.18.0.1
+socks5:
+  address: $(quote "$1")
+  port: $2
+  udp: 'udp'
+  mark: $MARK
+$auth
+mapdns:
+  address: 198.18.0.2
+  port: 53
+  network: 100.64.0.0
+  netmask: 255.192.0.0
+  cache-size: 10000
+misc:
+  log-file: stderr
+  log-level: warn
+EOF
+}
+
+fail() {
+	echo "net-gateway: $1" >&2
+	exit 2
+}
+
+run() {
+	drop_all
+	[ -f "$CONF/proxy" ] && [ -f "$CONF/address" ] || fail "no proxy was given"
+	chmod -R go= "$CONF" # docker cp from Windows hands it 0755
+	{
+		IFS= read -r _host
+		IFS= read -r port
+		IFS= read -r user
+		IFS= read -r pass
+	} <"$CONF/proxy"
+	IFS= read -r address <"$CONF/address"
+	case $port in '' | *[!0-9]*) fail "bad proxy port" ;; esac
+	subnet=$(ip -4 route show dev eth0 scope link | awk 'NR == 1 { print $1 }')
+	via=$(ip -4 route show default dev eth0 | awk 'NR == 1 { print $3 }')
+	[ -n "$subnet" ] && [ -n "$via" ] || fail "eth0 has no subnet or gateway"
+	allow_tunnel "$address" "$port" "$via"
+	write_config "$address" "$port" "$user" "$pass"
+	hev-socks5-tunnel "$RUN/hev.yml" &
+	hev=$!
+	trap 'kill "$hev" 2>/dev/null; wait "$hev"; exit 0' TERM INT
+	set +e
+	while kill -0 "$hev" 2>/dev/null; do
+		ip link show tun0 >/dev/null 2>&1 && routes "$subnet" "$via"
+		sleep 1 &
+		wait $!
+	done
+	wait "$hev"
+	echo "net-gateway: the tunnel exited ($?)" >&2
+	exit 1
+}
+
+case ${1:-} in
+run) run ;;
+ready) ready ;;
+*) echo "usage: net-gateway run|ready" >&2 && exit 2 ;;
+esac

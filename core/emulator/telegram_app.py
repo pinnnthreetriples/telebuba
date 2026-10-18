@@ -9,17 +9,14 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
-from urllib.parse import urlencode
 
 import phonenumbers
 
 from core.config import settings
-from core.db import fetch_account_proxy_settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._text import escape_input_text
 from core.emulator.ui_dump import (
-    CONNECT_PROXY_LABELS,
     START_LABELS,
     YES_LABELS,
     classify,
@@ -35,8 +32,6 @@ if TYPE_CHECKING:
 
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
-_EMULATOR_PROXY_MISSING: EmulatorRefusalCode = "emulator_proxy_missing"
-_EMULATOR_PROXY_UNSUPPORTED: EmulatorRefusalCode = "emulator_proxy_unsupported"
 
 # Enough DELs to empty Telegram's country-code box (at most four digits).
 _CLEAR_KEYS = 6
@@ -88,28 +83,6 @@ async def ensure_app(serial: str) -> None:
     if not await adb.package_installed(serial, package):
         await adb.install_apk(serial)
     await adb.start_app(serial, package)
-
-
-async def apply_account_proxy(serial: str, account_id: str) -> None:
-    """Point the app's own SOCKS5 setting at the account's proxy (``tg://socks``).
-
-    Telegram keeps the setting, so it survives the container's window being closed.
-    The credentials are read here, in core, and leave only inside the deep link.
-    """
-    proxy = await fetch_account_proxy_settings(account_id)
-    if proxy is None:
-        raise EmulatorError(_EMULATOR_PROXY_MISSING)
-    if proxy.proxy_type != "socks5":
-        raise EmulatorError(_EMULATOR_PROXY_UNSUPPORTED)
-    query = {"server": proxy.host, "port": str(proxy.port)}
-    if proxy.username:
-        query["user"] = proxy.username
-    if proxy.password:
-        query["pass"] = proxy.password
-    await adb.open_link(
-        serial, f"tg://socks?{urlencode(query)}", settings.emulator.telegram_package
-    )
-    await adb.tap(serial, await _wait_for_button(serial, CONNECT_PROXY_LABELS))
 
 
 def split_phone(phone: str) -> tuple[str, str]:

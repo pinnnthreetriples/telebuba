@@ -1,27 +1,29 @@
-"""Open a mobile account in its local Android container (redroid under Docker).
+"""Open a mobile account in its local Android pod (redroid under Docker).
 
-The container is the account's MOBILE device made visible: it is created with the
-mobile fingerprint's manufacturer and model, refused when its Android SDK differs,
-and its Telegram app connects straight to the account's SOCKS5 proxy. The I/O lives
-in ``core.emulator``; the policy lives here:
+The pod is the account's MOBILE device made visible: its Android container is created
+with the mobile fingerprint's manufacturer and model, refused when its Android SDK
+differs, and lives in the network namespace of a gateway container that sends all of
+its traffic through the account's SOCKS5 proxy, or none (``core.emulator.pod``).
+Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O lives in
+``core.emulator``; the policy lives here:
 
 * refuse what cannot work before any container is touched — the feature switched
-  off, no mobile device, no proxy or a proxy the app cannot use, or a stored 2FA
+  off, no mobile device, no proxy or one the tunnel cannot use, or a stored 2FA
   password ``input text`` cannot type (found out at the 2FA screen, it would cost a
   login code already sent);
 * one start at a time per account (a second one answers ``emulator_busy``);
 * the container is a real phone's firmware with the proxy country's timezone and
   carrier (the phone number's country while the proxy has none on record); a
   stopped container gets them rewritten before it boots, as the proxy may have moved;
-* every boot a start makes has its network cut (from the host right after launch,
-  then inside Android) and gets it back only once the app's proxy is set, so its
-  first connection already goes through the proxy; the setting is the app's own and
-  outlives the container's scrcpy window being closed;
+* every start gives the gateway the account's CURRENT proxy before Android runs;
+* a running pod is used as it stands only while its gateway runs the current proxy;
+  one on another proxy (or whose gateway died) is stopped and started again, and a
+  proxy change stops the account's pod at once (``stop_account_pod``);
 * the sign-in state is read off the screen every time, never remembered;
-* a running container that shows the app's intro or phone screen is signed in where
-  it stands; one showing the chat list, or anything else, is left alone;
-* on any failure the container this call started is stopped again, and removed when
-  this call created it, so the next attempt redoes the network-off first start.
+* a running app that shows its intro or phone screen is signed in where it stands;
+  one showing the chat list, or anything else, is left alone;
+* on any failure the pod this call started is stopped again, and removed when this
+  call created it.
 
 The per-account locks are process-local, like the rest of the runtime state (one
 uvicorn worker). A start takes the lock before it reads the account, and only the
@@ -36,27 +38,27 @@ import logging
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account_twofa_password, fetch_device_fingerprint
+from core.db import (
+    fetch_account_proxy_settings,
+    fetch_account_twofa_password,
+    fetch_device_fingerprint,
+)
 from core.emulator import (
     EmulatorError,
     adb_serial,
-    apply_account_proxy,
     assert_sdk,
     bring_app_to_front,
     connect_device,
     container_spec,
-    create_instance,
     ensure_app,
     escape_input_text,
     find_instance,
-    launch_instance,
-    quit_instance,
+    pod_runs_proxy,
     read_screen,
-    refresh_identity,
-    remove_container,
-    set_container_network,
-    set_network,
+    remove_pod,
     show_instance,
+    start_pod,
+    stop_pod,
     wait_for_boot,
 )
 from core.logging import log_event
@@ -73,6 +75,7 @@ if TYPE_CHECKING:
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
     from schemas.emulator import EmulatorRefusalCode
+    from schemas.proxy import ProxySettings
 
 _DEVICE_MISSING: DeviceRefusalCode = "device_missing"
 _EMULATOR_PROXY_MISSING: EmulatorRefusalCode = "emulator_proxy_missing"
@@ -84,6 +87,7 @@ __all__ = [
     "EmulatorRefusedError",
     "open_account_mobile",
     "remove_account_container",
+    "stop_account_pod",
 ]
 
 # Stdlib sink, codes and step names only (see ``core.emulator._errors``).
@@ -113,8 +117,10 @@ def _container_name(account_id: str) -> str:
     return f"{settings.emulator.instance_prefix}{account_id}"
 
 
-async def _refuse_what_cannot_work(account: AccountRead) -> DeviceFingerprint:
-    """The mobile fingerprint to build the container from, or the reason there is none."""
+async def _refuse_what_cannot_work(
+    account: AccountRead,
+) -> tuple[DeviceFingerprint, ProxySettings]:
+    """The mobile fingerprint and proxy to build the pod from, or why there are none."""
     if not settings.emulator.enabled:
         raise EmulatorRefusedError(_MOBILE_EMULATOR_DISABLED)
     if "mobile" not in account.devices:
@@ -123,6 +129,9 @@ async def _refuse_what_cannot_work(account: AccountRead) -> DeviceFingerprint:
         raise EmulatorRefusedError(_EMULATOR_PROXY_MISSING)
     if account.proxy_type != "socks5":
         raise EmulatorRefusedError(_EMULATOR_PROXY_UNSUPPORTED)
+    proxy = await fetch_account_proxy_settings(account.account_id)
+    if proxy is None:
+        raise EmulatorRefusedError(_EMULATOR_PROXY_MISSING)
     fingerprint = await fetch_device_fingerprint(account.account_id, "mobile")
     if fingerprint is None:
         raise DeviceRefusedError(_DEVICE_MISSING)
@@ -132,7 +141,7 @@ async def _refuse_what_cannot_work(account: AccountRead) -> DeviceFingerprint:
             escape_input_text(password)
         except EmulatorError as exc:
             raise EmulatorRefusedError(exc.code) from exc
-    return fingerprint
+    return fingerprint, proxy
 
 
 async def open_account_mobile(account_id: str) -> OpenMobileResult:
@@ -143,8 +152,8 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
     try:
         async with lock:
             account = await require_account(account_id)
-            fingerprint = await _refuse_what_cannot_work(account)
-            result = await _open(account, fingerprint)
+            fingerprint, proxy = await _refuse_what_cannot_work(account)
+            result = await _open(account, fingerprint, proxy)
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -157,81 +166,91 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
     return result
 
 
-async def _open(account: AccountRead, fingerprint: DeviceFingerprint) -> OpenMobileResult:
+async def _open(
+    account: AccountRead, fingerprint: DeviceFingerprint, proxy: ProxySettings
+) -> OpenMobileResult:
     spec = container_spec(
         fingerprint, account.proxy_country_code or country_for_phone(account.phone)
     )
     name = _container_name(account.account_id)
     instance = await find_instance(name)
     if instance is not None and instance.running:
-        # Up already, so an earlier start booted it, and every boot a start makes
-        # applies the proxy offline before the network comes back: it is not booted
-        # or reconfigured again. Only an entry screen is acted on, through its nodes.
-        serial = adb_serial(instance.index)
-        await connect_device(serial)
-        await show_instance(instance.index)
-        await bring_app_to_front(serial)
-        screen, _nodes = await read_screen(serial)
-        signed_in = screen == "chats"
-        if screen in _ENTRY_SCREENS:
-            signed_in = await sign_in(account, serial)
-        return OpenMobileResult(
-            account_id=account.account_id,
-            status="already_running",
-            signed_in=signed_in,
-        )
+        if await pod_runs_proxy(name, proxy):
+            # Up already and on the current proxy: not booted or reconfigured again.
+            # Only an entry screen is acted on, through its nodes.
+            serial = adb_serial(instance.index)
+            await connect_device(serial)
+            await show_instance(instance.index)
+            await bring_app_to_front(serial)
+            screen, _nodes = await read_screen(serial)
+            signed_in = screen == "chats"
+            if screen in _ENTRY_SCREENS:
+                signed_in = await sign_in(account, serial)
+            return OpenMobileResult(
+                account_id=account.account_id,
+                status="already_running",
+                signed_in=signed_in,
+            )
+        await stop_pod(name)
     created = instance is None
+    instance = await start_pod(name, spec, proxy)  # undoes itself when it fails
     try:
-        if instance is None:
-            instance = await create_instance(name, spec)
-        else:
-            await refresh_identity(name, spec)
         serial = adb_serial(instance.index)
-        await launch_instance(instance.index)
-        # Every boot this call makes goes offline until the app's own SOCKS5 setting
-        # names the account's CURRENT proxy: nothing about an existing container is
-        # trusted, not even that an earlier start got as far as setting it. The host
-        # side is cut at once, before Android is up (adb cannot reach it yet), so an
-        # app the boot starts by itself cannot connect; ``svc`` follows once it can.
-        await set_container_network(instance.index, online=False)
         await wait_for_boot(serial)
         await show_instance(instance.index)
         await assert_sdk(serial, spec.sdk)
-        await set_network(serial, enabled=False)
         await ensure_app(serial)
-        await apply_account_proxy(serial, account.account_id)
-        await set_container_network(instance.index, online=True)
-        await set_network(serial, enabled=True)
         signed_in = await sign_in(account, serial)
     except BaseException:
-        index = instance.index if instance is not None else None
-        await asyncio.shield(_undo(index, name, created=created))
+        await asyncio.shield(_undo(name, created=created))
         raise
     return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
 
 
-async def _undo(index: int | None, name: str, *, created: bool) -> None:
-    """Stop the container this start booted; remove it when this start created it."""
+async def _undo(name: str, *, created: bool) -> None:
+    """Stop the pod this start booted; remove it when this start created it."""
     try:
         if created:
-            await remove_container(name)
-        elif index is not None:
-            await quit_instance(index)
+            await remove_pod(name)
+        else:
+            await stop_pod(name)
     except EmulatorError as exc:
-        logger.warning("container cleanup for %s failed (%s)", name, exc.code)
+        logger.warning("pod cleanup for %s failed (%s)", name, exc.code)
+
+
+async def stop_account_pod(account_id: str) -> None:
+    """Stop the account's pod after its proxy changed; never fails the proxy change.
+
+    Waits for a start in flight, which may have read the old proxy. The next open
+    starts the pod on the new one; ``_open`` also restarts a running pod whose gateway
+    runs another proxy, which covers a change made while this process was down.
+    """
+    if not settings.emulator.enabled:
+        return
+    lock = _LOCKS.setdefault(account_id, asyncio.Lock())
+    try:
+        async with lock:
+            await stop_pod(_container_name(account_id))
+    except EmulatorError as exc:
+        await log_event(
+            "WARNING",
+            "account_mobile_pod_stop_failed",
+            account_id=account_id,
+            extra={"reason": exc.code},
+        )
 
 
 async def remove_account_container(account_id: str) -> None:
-    """Delete a removed account's container, if it has one; never blocks the deletion.
+    """Delete a removed account's pod, if it has one; never blocks the deletion.
 
     Waits for a start of the same account in flight, so that start cannot create a
-    container after this one is gone. It alone drops the account's lock: the account
+    pod after this one is gone. It alone drops the account's lock: the account
     row is already deleted, so a later start finds no account under a fresh lock.
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     try:
         async with lock:
-            removed = await remove_container(_container_name(account_id))
+            removed = await remove_pod(_container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",
