@@ -52,20 +52,6 @@ async def wait_screen(serial: str, wanted: set[Screen]) -> tuple[Screen, list[Ui
         await asyncio.sleep(settings.emulator.poll_seconds)
 
 
-async def _wait_for_button(serial: str, labels: frozenset[str]) -> UiNode:
-    """The button labelled ``labels`` once it shows; ``emulator_field_missing`` if it never does."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + settings.emulator.ui_timeout_seconds
-    while True:
-        _screen, nodes = await read_screen(serial)
-        button = find(nodes, labels)
-        if button is not None:
-            return button
-        if loop.time() >= deadline:
-            raise EmulatorError(_EMULATOR_FIELD_MISSING)
-        await asyncio.sleep(settings.emulator.poll_seconds)
-
-
 def _require(node: UiNode | None) -> UiNode:
     if node is None:
         raise EmulatorError(_EMULATOR_FIELD_MISSING)

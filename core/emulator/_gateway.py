@@ -31,14 +31,13 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
-from core.emulator._process import docker
+from core.emulator._process import docker, docker_or_none
 from core.emulator.redroid import ADB_PORT, GATEWAY_LABEL, INDEX_LABEL
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
     from schemas.proxy import ProxySettings
 
-_EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_COMMAND_TIMEOUT: EmulatorRefusalCode = "emulator_command_timeout"
 _EMULATOR_PROXY_UNSUPPORTED: EmulatorRefusalCode = "emulator_proxy_unsupported"
 
@@ -77,26 +76,18 @@ async def resolve_address(host: str) -> str:
 async def ensure_network() -> None:
     """Create the gateways' bridge network when it is missing (another start may race)."""
     network = settings.emulator.gateway_network
-    try:
-        await docker("network", "inspect", network)
-    except EmulatorError as exc:
-        if exc.code != _EMULATOR_COMMAND_FAILED:
-            raise
-    else:
+    if await docker_or_none("network", "inspect", network) is not None:
         return
-    try:
-        await docker(
-            "network",
-            "create",
-            "--driver",
-            "bridge",
-            "--opt",
-            "com.docker.network.bridge.enable_icc=false",
-            network,
-        )
-    except EmulatorError as exc:
-        if exc.code != _EMULATOR_COMMAND_FAILED:
-            raise
+    created = await docker_or_none(
+        "network",
+        "create",
+        "--driver",
+        "bridge",
+        "--opt",
+        "com.docker.network.bridge.enable_icc=false",
+        network,
+    )
+    if created is None:
         await docker("network", "inspect", network)  # made by the race's winner, or raises
 
 
@@ -158,17 +149,10 @@ async def wait_for_tunnel(gateway: str) -> None:
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + settings.emulator.tunnel_timeout_seconds
-    while True:
-        try:
-            await docker("exec", gateway, "net-gateway", "ready")
-        except EmulatorError as exc:
-            if exc.code != _EMULATOR_COMMAND_FAILED:
-                raise
-            if loop.time() >= deadline:
-                raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT) from exc
-            await asyncio.sleep(settings.emulator.poll_seconds)
-        else:
-            return
+    while await docker_or_none("exec", gateway, "net-gateway", "ready") is None:
+        if loop.time() >= deadline:
+            raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
+        await asyncio.sleep(settings.emulator.poll_seconds)
 
 
 async def runs_proxy(gateway: str, proxy_text: str) -> bool:
@@ -177,10 +161,7 @@ async def runs_proxy(gateway: str, proxy_text: str) -> bool:
     Compared by digest, so the credentials never leave the container; a gateway that
     cannot answer is not running that proxy.
     """
-    try:
-        listing = await docker("exec", gateway, "sha256sum", _PROXY_FILE)
-    except EmulatorError as exc:
-        if exc.code != _EMULATOR_COMMAND_FAILED:
-            raise
+    listing = await docker_or_none("exec", gateway, "sha256sum", _PROXY_FILE)
+    if listing is None:
         return False
     return listing.split(" ", 1)[0] == hashlib.sha256(proxy_text.encode()).hexdigest()

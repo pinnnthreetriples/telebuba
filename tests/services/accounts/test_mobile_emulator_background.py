@@ -22,12 +22,9 @@ from services.accounts.mobile_emulator import (
     stop_account_pod,
 )
 from services.accounts.mobile_pods import shutdown_mobile_pods, stop_orphaned_pods
-from tests.services.accounts.test_mobile_emulator import (  # noqa: F401 - fixtures
-    _account,
-    _Container,
-    _enabled,
-    container,
-)
+from tests.services.accounts._mobile_support import _account, _Container
+
+pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
@@ -36,7 +33,7 @@ _SIGN_IN_STEPS = {"start", "cutoff", "confirm"}
 
 
 @pytest.fixture
-def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:  # noqa: F811
+def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """The containers whose window is open; the background path's screen wait faked too."""
     open_windows: set[str] = set()
     monkeypatch.setattr(emulator_module, "viewer_open", lambda name: name in open_windows)
@@ -48,7 +45,7 @@ def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
 
 @pytest.mark.asyncio
 async def test_a_background_start_shows_no_window_and_signs_nothing_in(
-    container: _Container,  # noqa: F811
+    container: _Container,
     windows: set[str],  # noqa: ARG001 - fakes the screen wait
 ) -> None:
     await _account()
@@ -64,7 +61,7 @@ async def test_a_background_start_shows_no_window_and_signs_nothing_in(
 
 @pytest.mark.asyncio
 async def test_a_background_open_of_a_running_pod_reads_the_screen_as_it_is(
-    container: _Container,  # noqa: F811
+    container: _Container,
     windows: set[str],  # noqa: ARG001 - fakes the screen wait
 ) -> None:
     await _account()
@@ -79,7 +76,7 @@ async def test_a_background_open_of_a_running_pod_reads_the_screen_as_it_is(
 
 @pytest.mark.asyncio
 async def test_a_pod_the_operator_holds_is_busy_for_warming_until_its_window_closes(
-    container: _Container,  # noqa: F811
+    container: _Container,
     windows: set[str],
 ) -> None:
     await _account()
@@ -100,7 +97,7 @@ async def test_a_pod_the_operator_holds_is_busy_for_warming_until_its_window_clo
 
 @pytest.mark.asyncio
 async def test_the_operators_open_is_busy_while_a_session_runs(
-    container: _Container,  # noqa: F811
+    container: _Container,
     windows: set[str],  # noqa: ARG001 - clears the module state
 ) -> None:
     await _account()
@@ -126,7 +123,7 @@ async def test_a_proxy_change_ends_the_operators_hold(
 
 @pytest.mark.asyncio
 async def test_a_window_that_cannot_open_does_not_fail_the_open(
-    container: _Container,  # noqa: F811
+    container: _Container,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await _account()
@@ -201,7 +198,7 @@ async def test_the_shutdown_stops_every_pod_still_running(
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("windows")
 async def test_a_parked_pod_is_thawed_and_used_as_it_stands(
-    container: _Container,  # noqa: F811
+    container: _Container,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def unpause(name: str) -> None:

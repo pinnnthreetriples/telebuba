@@ -597,3 +597,26 @@ async def test_a_failed_visit_stops_the_pod_never_parks_it(
 
     assert "park" not in pod.calls
     assert pod.calls[-1] == "stop"
+
+
+@pytest.mark.asyncio
+async def test_a_cycle_counts_reads_and_reactions_and_reports_the_read_step(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def controls() -> _Controls:
+        return _Controls(reactions=True)
+
+    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    steps: list[str] = []
+
+    async def on_step(step: str) -> None:
+        steps.append(step)
+
+    result = await _mobile_cycle.run_mobile_cycle(
+        WarmingCycleRequest(account_id="acc-1", remaining_actions=4), on_step=on_step
+    )
+    await _stops_done()
+
+    assert (result.channels_read, result.reactions_sent, result.attempted_actions) == (2, 1, 3)
+    assert pod.calls[1] == "run:120", "4 budgeted actions buy 120 s in the app"
+    assert steps == ["read"]

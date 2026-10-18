@@ -17,11 +17,10 @@ from core.db import fetch_account
 from schemas.accounts import AccountCreate
 from schemas.devices import SecondDeviceResult, SecondDeviceSignIn
 from schemas.emulator import OpenMobileResult
-from services.accounts import add_account, add_account_device
+from services.accounts import add_account, add_account_device, device_setup
 from services.accounts import devices as devices_module
-from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import EmulatorRefusedError
-from tests.services.accounts.test_devices import _fake_sign_in
+from tests.services.accounts._mobile_support import _fake_sign_in
 
 if TYPE_CHECKING:
     from schemas.device_fingerprint import DeviceType
@@ -50,7 +49,7 @@ def pod(monkeypatch: pytest.MonkeyPatch) -> _Pod:
     monkeypatch.setattr(settings.telegram, "mobile_api_id", 6)
     monkeypatch.setattr(settings.telegram, "mobile_api_hash", "mobile-hash")
     monkeypatch.setattr(settings.emulator, "enabled", True)
-    monkeypatch.setattr(emulator_module, "open_account_mobile", fake.open)
+    monkeypatch.setattr(device_setup, "open_account_mobile", fake.open)
     devices_module._LAST_CODE_REQUEST.clear()
     return fake
 

@@ -72,3 +72,26 @@ async def docker(*args: str) -> str:
         seconds=settings.emulator.command_timeout_seconds,
         step=f"docker {args[0]}",
     )
+
+
+async def docker_or_none(*args: str) -> str | None:
+    """``docker(*args)``, or ``None`` when docker ran and said no (a non-zero exit).
+
+    For the calls whose refusal is an answer: a network that is not there yet, a
+    probe of a tunnel still coming up. A missing docker or a timeout still raises.
+    """
+    try:
+        return await docker(*args)
+    except EmulatorError as exc:
+        if exc.code != _EMULATOR_COMMAND_FAILED:
+            raise
+        return None
+
+
+async def adb_command(*args: str, seconds: float | None = None, step: str) -> str:
+    """One adb CLI call (``adb <args>``), bounded like every other console step."""
+    return await run_command(
+        [str(settings.emulator.adb_path), *args],
+        seconds=seconds or settings.emulator.command_timeout_seconds,
+        step=step,
+    )

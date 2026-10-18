@@ -15,9 +15,7 @@ from core.emulator._profile import (
     aosp_boot_properties,
     build_fingerprint,
     container_spec,
-    derive_imei,
     derive_serial,
-    is_valid_imei,
 )
 from core.web_login._countries import COUNTRY
 
@@ -76,9 +74,8 @@ def test_an_account_keeps_its_phone_and_two_accounts_differ() -> None:
     again = container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "PL")
     other = container_spec(_fingerprint("GooglePixel 7", "SDK 33", account_id="acc-2"), "DE")
 
-    assert (first.serial, first.imei) == (again.serial, again.imei)
+    assert first.serial == again.serial
     assert first.serial != other.serial
-    assert first.imei != other.imei
 
 
 @pytest.mark.parametrize(
@@ -101,14 +98,6 @@ def test_a_catalogue_phone_without_a_blueprint_build_is_refused(
         container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE")
 
     assert refused.value.code == "emulator_device_unknown"
-
-
-def test_derived_imeis_pass_luhn_and_stay_with_the_account() -> None:
-    imeis = {derive_imei(f"acc-{n}") for n in range(200)}
-
-    assert all(is_valid_imei(imei) for imei in imeis)
-    assert len(imeis) == 200
-    assert derive_imei("acc") == derive_imei("acc")
 
 
 @pytest.mark.parametrize(

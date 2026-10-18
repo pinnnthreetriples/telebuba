@@ -26,7 +26,7 @@ from core.emulator.adb import (
     human_type,
     wait_for_boot,
 )
-from core.emulator.playbook import BaseMobilePlaybook, TelegramMobilePlaybook
+from core.emulator.playbook import TelegramMobilePlaybook
 from core.emulator.pod import (
     pause_pod,
     pod_runs_proxy,
@@ -58,7 +58,6 @@ from core.emulator.telegram_app import (
 )
 
 __all__ = [
-    "BaseMobilePlaybook",
     "ContainerSpec",
     "EmulatorError",
     "HumanInputEngine",
