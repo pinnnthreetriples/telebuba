@@ -216,6 +216,18 @@ async def test_the_container_is_shown_in_one_scrcpy_window(viewers: list[list[st
 
 @pytest.mark.usefixtures("ps")
 @pytest.mark.asyncio
+async def test_no_window_opens_while_the_desktop_viewer_is_off(
+    viewers: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "desktop_viewer", False)
+
+    await redroid.show_instance(0)
+
+    assert viewers == [], "a window would encode video for as long as it stays open"
+
+
+@pytest.mark.usefixtures("ps")
+@pytest.mark.asyncio
 async def test_a_closed_window_is_opened_again(viewers: list[list[str]]) -> None:
     assert redroid.viewer_open("telebuba-acc-1") is False
     await redroid.show_instance("telebuba-acc-1", 0)

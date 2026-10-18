@@ -26,6 +26,7 @@ from schemas.warming import (
     WarmingStateWrite,
 )
 from services import warming
+from services.accounts import mobile_emulator
 from tests.services.warming._support import (
     _seed_ready_account,
     _set_settings,
@@ -219,3 +220,22 @@ async def test_released_cards_carry_their_survival_badge() -> None:
     assert (warmed.survival.days_since_release, warmed.survival.status) == (0, "alive")
     [fresh] = board.idle
     assert fresh.survival is None
+
+
+@pytest.mark.asyncio
+async def test_a_card_says_when_its_phone_is_in_a_visit() -> None:
+    await create_account(AccountCreate(account_id="acc-phone"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-phone", state="active", device_mode="mobile")
+    )
+
+    resting = await warming.load_board()
+    mobile_emulator._ACTIVE.add("acc-phone")
+    try:
+        visiting = await warming.load_board()
+    finally:
+        mobile_emulator._ACTIVE.discard("acc-phone")
+
+    [card] = resting.warming
+    assert (card.device_mode, card.live_phone_id) == ("mobile", None)
+    assert visiting.warming[0].live_phone_id == "telebuba-acc-phone"

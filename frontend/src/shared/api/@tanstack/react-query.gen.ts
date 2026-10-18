@@ -134,6 +134,7 @@ import {
   listNeurocommentComments,
   listNeuroshillingCampaigns,
   listOutreachPresets,
+  listPhones,
   listProxies,
   listUserParserAccounts,
   listUserParserBases,
@@ -208,6 +209,7 @@ import {
   startMasstaggingCampaign,
   startNeurocomment,
   startNeuroshillingCampaign,
+  startPhone,
   startPhoneLogin,
   startUserParserRun,
   startWarming,
@@ -215,6 +217,7 @@ import {
   stopMasstaggingCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
+  stopPhone,
   stopUserParserRun,
   stopWarming,
   submitLoginCode,
@@ -609,6 +612,9 @@ import type {
   ListOutreachPresetsData,
   ListOutreachPresetsError,
   ListOutreachPresetsResponse,
+  ListPhonesData,
+  ListPhonesError,
+  ListPhonesResponse,
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
@@ -828,9 +834,12 @@ import type {
   StartNeuroshillingCampaignData,
   StartNeuroshillingCampaignError,
   StartNeuroshillingCampaignResponse,
+  StartPhoneData,
+  StartPhoneError,
   StartPhoneLoginData,
   StartPhoneLoginError,
   StartPhoneLoginResponse,
+  StartPhoneResponse,
   StartUserParserRunData,
   StartUserParserRunError,
   StartUserParserRunResponse,
@@ -849,6 +858,9 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignError,
   StopNeuroshillingCampaignResponse,
+  StopPhoneData,
+  StopPhoneError,
+  StopPhoneResponse,
   StopUserParserRunData,
   StopUserParserRunError,
   StopUserParserRunResponse,
@@ -7496,6 +7508,83 @@ export const sendTestNotificationMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await sendTestNotification({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listPhonesQueryKey = (options?: Options<ListPhonesData>) =>
+  createQueryKey('listPhones', options);
+
+/**
+ * List Phones
+ *
+ * Every phone (mobile account pod) with its status; never starts one.
+ */
+export const listPhonesOptions = (options?: Options<ListPhonesData>) =>
+  queryOptions<
+    ListPhonesResponse,
+    ListPhonesError,
+    ListPhonesResponse,
+    ReturnType<typeof listPhonesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listPhones({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listPhonesQueryKey(options),
+  });
+
+/**
+ * Start Phone
+ *
+ * Start the phone and sign its app in, in the background (``starting`` at once).
+ */
+export const startPhoneMutation = (
+  options?: Partial<Options<StartPhoneData>>,
+): UseMutationOptions<StartPhoneResponse, StartPhoneError, Options<StartPhoneData>> => {
+  const mutationOptions: UseMutationOptions<
+    StartPhoneResponse,
+    StartPhoneError,
+    Options<StartPhoneData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startPhone({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Phone
+ *
+ * Put the phone to sleep; 409 ``emulator_busy`` while it starts or warms.
+ */
+export const stopPhoneMutation = (
+  options?: Partial<Options<StopPhoneData>>,
+): UseMutationOptions<StopPhoneResponse, StopPhoneError, Options<StopPhoneData>> => {
+  const mutationOptions: UseMutationOptions<
+    StopPhoneResponse,
+    StopPhoneError,
+    Options<StopPhoneData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopPhone({
         ...options,
         ...fnOptions,
         throwOnError: true,

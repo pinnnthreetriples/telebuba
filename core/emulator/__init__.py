@@ -2,6 +2,7 @@
 
 - ``pod``       — start / stop / remove a pod: the net-gateway and Android in its namespace
 - ``redroid``   — find / create / start / show (scrcpy) Android containers
+- ``scrcpy``    — the web screen: scrcpy-server on demand, one viewer's sockets
 - ``adb``       — device-side commands, always through ``adb shell``
 - ``ui_dump``   — the one parser of ``uiautomator dump`` and the screen classifier
 - ``telegram_app`` — the Telegram app's screens, driven only through dumped nodes
@@ -41,9 +42,11 @@ from core.emulator.redroid import (
     Instance,
     adb_serial,
     find_instance,
+    list_instances,
     show_instance,
     viewer_open,
 )
+from core.emulator.scrcpy import ScreenStream, open_screen
 from core.emulator.telegram_app import (
     bring_app_to_front,
     confirm_number,
@@ -63,6 +66,7 @@ __all__ = [
     "HumanInputEngine",
     "Instance",
     "KeystrokeEvent",
+    "ScreenStream",
     "SwipeTrajectory",
     "TapEvent",
     "TelegramMobilePlaybook",
@@ -82,6 +86,8 @@ __all__ = [
     "human_tap",
     "human_type",
     "leave_app",
+    "list_instances",
+    "open_screen",
     "pause_pod",
     "pod_runs_proxy",
     "press_start",

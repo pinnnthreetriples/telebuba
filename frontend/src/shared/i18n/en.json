@@ -1223,7 +1223,8 @@
     "logs": "Logs",
     "settings": "Settings",
     "broadcast": "Broadcast",
-    "masstagging": "Mass tagging"
+    "masstagging": "Mass tagging",
+    "devices": "Emulators"
   },
   "shell": {
     "systemActive": "System active",
@@ -1369,7 +1370,9 @@
       "emulator_not_signed_in": "Telegram in the container is not signed in — finish the sign-in first.",
       "emulator_capacity": "All warming pods are busy — the account retries on its next visit.",
       "not_graduated": "The account is no longer warmed — refresh the page",
-      "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page"
+      "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page",
+      "emulator_scrcpy_missing": "The scrcpy-server file for the screen is missing — put it at EMULATOR__SCRCPY_SERVER_PATH.",
+      "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1868,7 +1871,8 @@
     "warming_spam_blocked": "Spam block confirmed by @SpamBot — warming stopped",
     "warming_spam_block_kept": "Spam-blocked account kept",
     "warming_spam_block_lifted": "@SpamBot says the account is clean again — spam block lifted",
-    "warming_rewarmed": "Account back in warming — a new wave from zero"
+    "warming_rewarmed": "Account back in warming — a new wave from zero",
+    "phone_screen_opened": "Phone screen opened"
   },
   "logEventReason": {
     "retired": "the account was retired",
@@ -2034,7 +2038,9 @@
     "emulator_capacity": "all warming pods are busy",
     "no_discussion": "the post has no comments",
     "no_message": "no message from the partner",
-    "no_sticker": "no matching sticker installed"
+    "no_sticker": "no matching sticker installed",
+    "emulator_scrcpy_missing": "no scrcpy-server",
+    "emulator_screen_timeout": "screen did not open"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -3227,7 +3233,9 @@
       "floodTotal": "Floods total: {{total}}",
       "dmBlockedUntil": "DMs closed until {{date}}",
       "limitShare": "limit {{percent}}",
-      "mediaBytes": "downloaded {{kb}} KB"
+      "mediaBytes": "downloaded {{kb}} KB",
+      "watchPhone": "Watch the phone screen",
+      "watchPhoneTitle": "Warming on the phone — live"
     },
     "actions": {
       "stopShort": "Stop"
@@ -4909,6 +4917,81 @@
         "floodsToRestHint": "This many in a row — and the account rests until tomorrow.",
         "floodsToRestExample": "3"
       }
+    }
+  },
+  "devices": {
+    "title": "Emulators",
+    "subtitle": "The phones mobile accounts live in. A sleeping phone uses no resources, and the screen is encoded only while you watch it.",
+    "loadFailed": "Could not load the phones.",
+    "empty": "No phones yet. Give an account a mobile device and it shows up here.",
+    "notCreated": "not created yet",
+    "status": {
+      "asleep": "Asleep",
+      "starting": "Starting",
+      "free": "Free",
+      "warming": "Warming",
+      "manual": "Manual control"
+    },
+    "platform": {
+      "telegram": "Telegram"
+    },
+    "action": {
+      "start": "Start",
+      "stop": "Sleep",
+      "control": "Control",
+      "watch": "Watch",
+      "details": "Details"
+    },
+    "modal": {
+      "control": "Manual control: mouse, keyboard, clipboard",
+      "view": "View only — warming goes on by itself",
+      "details": "Phone details"
+    },
+    "details": {
+      "model": "Model",
+      "system": "Android",
+      "app": "App version",
+      "lang": "System language",
+      "proxy": "Proxy",
+      "noProxy": "none assigned",
+      "country": "Country",
+      "container": "Container",
+      "apps": "Apps"
+    },
+    "problem": {
+      "mobile_emulator_disabled": "The emulator is off (EMULATOR__ENABLED=false): phones are listed but cannot start.",
+      "emulator_not_found": "Docker is not found on this machine — phones cannot start.",
+      "other": "Docker did not answer — the list shows no container state."
+    }
+  },
+  "phoneScreen": {
+    "connecting": "Connecting to the screen…",
+    "unsupported": "This browser cannot hardware-decode video (WebCodecs). Open the page in a current Chrome or Edge.",
+    "canvas": {
+      "view": "Phone screen",
+      "control": "Phone screen, controlled by mouse and keyboard"
+    },
+    "button": {
+      "back": "Back",
+      "home": "Home",
+      "recents": "Recents"
+    },
+    "copy": "Copy from phone",
+    "copyAgain": "Copy again",
+    "copied": "Phone clipboard copied",
+    "hint": "Click to tap, drag to swipe, wheel to scroll. Type right on the screen, Ctrl+V pastes text, Esc is Back.",
+    "closed": {
+      "screen_ended": "The stream ended: the phone stopped.",
+      "screen_superseded": "The screen was opened in another tab — this one stopped.",
+      "screen_bad_command": "The phone refused a command — the stream closed.",
+      "screen_forbidden": "No access to the screen. Reload the page and sign in again.",
+      "screen_lost": "Lost the connection to the screen.",
+      "emulator_busy": "The phone is busy warming or starting — control is unavailable now.",
+      "emulator_not_running": "The phone is asleep. Start it to see its screen.",
+      "emulator_not_found": "No such phone, or Docker is unavailable.",
+      "emulator_scrcpy_missing": "The server has no scrcpy-server file — the screen cannot be shown.",
+      "emulator_screen_timeout": "The phone did not start showing its screen in time.",
+      "mobile_emulator_disabled": "The emulator is switched off on the server."
     }
   }
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Cookie, HTTPException, Response
+from fastapi import Cookie, HTTPException, Response, WebSocket
 from fastapi import status as http_status
 
 from core.config import settings
@@ -51,3 +51,15 @@ async def get_current_user(
     # Sliding TTL: re-issue the cookie on every authenticated request.
     set_session_cookie(response, await auth_service.issue_session_token(user.id))
     return user
+
+
+async def get_websocket_user(websocket: WebSocket) -> UserRead | None:
+    """The session's user for a WebSocket handshake; ``None`` = close it unaccepted.
+
+    No sliding re-issue: a handshake has no response to set a cookie on. The Origin
+    is checked before this, for every handshake (``OriginProtectionMiddleware``).
+    """
+    session = websocket.cookies.get(_COOKIE_NAME)
+    if not session:
+        return None
+    return await auth_service.resolve_user(session)

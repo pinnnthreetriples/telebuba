@@ -657,3 +657,15 @@ async def test_a_cycle_counts_reads_and_reactions_and_reports_the_read_step(
     assert (result.channels_read, result.reactions_sent, result.attempted_actions) == (2, 1, 3)
     assert pod.calls[1] == "run:120", "4 budgeted actions buy 120 s in the app"
     assert steps == ["read"]
+@pytest.mark.asyncio
+async def test_a_phone_the_operator_took_meanwhile_is_left_running(
+    pod: _Pod, telethon: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pod.signed_in = False
+    # The operator opens Control after the open, while the cycle is failing.
+    monkeypatch.setattr(_mobile_cycle, "phone_activity", lambda _account_id: "manual")
+
+    await _iterate_on("mobile")
+
+    assert pod.calls == ["open"], "the operator's phone is never stopped under them"
+    assert telethon == []

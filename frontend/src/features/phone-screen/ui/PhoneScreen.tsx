@@ -1,0 +1,151 @@
+import { useCallback, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { Button, Notice, Spinner, toastSuccess } from '@/shared/ui';
+
+import {
+  buttonPress,
+  framePoint,
+  keyCommands,
+  textCommands,
+  wheelCommand,
+  type PhoneButton,
+  type ScreenMode,
+} from '../model/commands';
+import { useScreenStream } from '../model/useScreenStream';
+
+const BUTTONS: PhoneButton[] = ['back', 'home', 'recents'];
+
+// A phone's live screen. `view` only watches (a warming stint is never disturbed);
+// `control` also passes the mouse, the keyboard and the clipboard to the phone.
+// Mounted = streaming: closing it closes the socket and the phone stops encoding.
+export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMode }) {
+  const { t } = useTranslation();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pressed = useRef(false);
+  const [copied, setCopied] = useState(false);
+
+  const onClipboard = useCallback(
+    (text: string) => {
+      void navigator.clipboard
+        ?.writeText(text)
+        .then(() => toastSuccess(t('phoneScreen.copied')))
+        .catch(() => undefined);
+      setCopied(true);
+    },
+    [t],
+  );
+  const { state, send } = useScreenStream(phoneId, mode, canvasRef, onClipboard);
+  const interactive = state.phase === 'live' && state.controllable && state.size !== null;
+
+  const point = (event: { clientX: number; clientY: number }) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !state.size) return null;
+    return framePoint(event.clientX, event.clientY, canvas.getBoundingClientRect(), state.size);
+  };
+
+  const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    const at = point(event);
+    if (!interactive || !at || event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.focus();
+    pressed.current = true;
+    send([{ type: 'touch', action: 'down', ...at }]);
+  };
+  const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    const at = point(event);
+    if (!interactive || !pressed.current || !at) return;
+    send([{ type: 'touch', action: 'move', ...at }]);
+  };
+  const onPointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!pressed.current) return;
+    pressed.current = false;
+    const canvas = canvasRef.current;
+    const box = canvas?.getBoundingClientRect();
+    const size = state.size;
+    if (!box || !size) return;
+    // A finger lifted outside the canvas lifts at the nearest edge.
+    const x = Math.min(Math.max(event.clientX, box.left), box.left + box.width);
+    const y = Math.min(Math.max(event.clientY, box.top), box.top + box.height);
+    const at = framePoint(x, y, box, size);
+    if (at) send([{ type: 'touch', action: 'up', ...at }]);
+  };
+  const onWheel = (event: WheelEvent<HTMLCanvasElement>) => {
+    const at = point(event);
+    if (!interactive || !at) return;
+    send([wheelCommand(at, event.deltaX, event.deltaY)]);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative grid place-items-center rounded-lg bg-term p-2">
+        <canvas
+          ref={canvasRef}
+          tabIndex={interactive ? 0 : -1}
+          aria-label={t(`phoneScreen.canvas.${mode}`)}
+          className="block max-h-dialog w-auto max-w-full touch-none rounded-md outline-none focus-visible:shadow-focus"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onWheel={onWheel}
+          onContextMenu={(event) => event.preventDefault()}
+          onKeyDown={(event) => {
+            if (!interactive) return;
+            const commands = keyCommands(event);
+            if (!commands) return;
+            event.preventDefault();
+            send(commands);
+          }}
+          onPaste={(event) => {
+            if (!interactive) return;
+            event.preventDefault();
+            send(textCommands(event.clipboardData.getData('text')));
+          }}
+        />
+        {state.phase === 'connecting' && (
+          <div
+            role="status"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-on-fill"
+          >
+            <Spinner tone="onAction" />
+            <span className="type-small text-on-fill">{t('phoneScreen.connecting')}</span>
+          </div>
+        )}
+      </div>
+
+      {state.phase === 'closed' && state.reason && (
+        <Notice tone={state.reason === 'screen_ended' ? 'info' : 'warning'}>
+          {t(`phoneScreen.closed.${state.reason}`)}
+        </Notice>
+      )}
+      {state.phase === 'unsupported' && (
+        <Notice tone="warning">{t('phoneScreen.unsupported')}</Notice>
+      )}
+
+      {mode === 'control' && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {BUTTONS.map((button) => (
+            <Button
+              key={button}
+              size="sm"
+              disabled={!interactive}
+              onClick={() => send(buttonPress(button))}
+            >
+              {t(`phoneScreen.button.${button}`)}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!interactive}
+            onClick={() => send([{ type: 'clipboard_get' }])}
+          >
+            {t(copied ? 'phoneScreen.copyAgain' : 'phoneScreen.copy')}
+          </Button>
+        </div>
+      )}
+      {mode === 'control' && <p className="type-small">{t('phoneScreen.hint')}</p>}
+    </div>
+  );
+}

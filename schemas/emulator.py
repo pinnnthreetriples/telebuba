@@ -33,6 +33,8 @@ EmulatorRefusalCode = Literal[
     "emulator_not_running",
     "emulator_not_signed_in",
     "emulator_capacity",
+    "emulator_scrcpy_missing",
+    "emulator_screen_timeout",
 ]
 
 # A search query ``input text`` can type: 2-32 letters, digits and spaces.

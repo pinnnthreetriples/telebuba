@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import { SpamBlockBadge, SurvivalBadge, WaveChip } from '@/entities/warming';
+import { PhoneScreen } from '@/features/phone-screen';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
@@ -16,6 +17,9 @@ import {
   CardHeader,
   FeedbackMark,
   Icon,
+  IconButton,
+  Modal,
+  ModalHeader,
   ProgressBar,
   TerminalPane,
 } from '@/shared/ui';
@@ -148,6 +152,10 @@ function WarmingCard({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
+  // The phone being watched, fixed when the eye was clicked: the visit ending clears
+  // `live_phone_id`, and the open screen then says so instead of vanishing — and a
+  // later visit never reopens it on its own.
+  const [watching, setWatching] = useState<string | null>(null);
   // Real per-account activity log, fetched only while the terminal is expanded.
   // `warming_` alone now covers the engine's own gateway calls too: the gateway
   // stamps the calling domain onto its event names, so warming's actions arrive as
@@ -240,6 +248,20 @@ function WarmingCard({
         {/* shrink-0: without it the truncating name above just pushes its cost onto
             the actions instead, and the "Стоп" button loses its label. */}
         <div className="flex shrink-0 items-center gap-2">
+          {/* Only while a mobile visit runs: between visits the phone sleeps and
+              there is no screen to show. Watching never takes the controls. */}
+          {account.live_phone_id ? (
+            <IconButton
+              size="sm"
+              aria-label={t('warming.card.watchPhone')}
+              title={t('warming.card.watchPhone')}
+              onClick={() => {
+                setWatching(account.live_phone_id ?? null);
+              }}
+            >
+              <Icon name="eye" size={14} />
+            </IconButton>
+          ) : null}
           {!complete && !blocked ? (
             <>
               <FeedbackMark result={result} />
@@ -261,6 +283,20 @@ function WarmingCard({
       <PhaseRow account={account} />
       <FloodMemoryLine account={account} />
 
+      {watching ? (
+        <Modal
+          size="panel"
+          label={t('warming.card.watchPhoneTitle')}
+          onClose={() => {
+            setWatching(null);
+          }}
+        >
+          <ModalHeader title={t('warming.card.watchPhoneTitle')} subtitle={primaryId} />
+          <div className="p-6">
+            <PhoneScreen phoneId={watching} mode="view" />
+          </div>
+        </Modal>
+      ) : null}
       {stopOpen ? (
         <WarmStopModal
           phone={primaryId}
