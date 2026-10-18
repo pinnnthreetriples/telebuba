@@ -16,4 +16,9 @@ RUN apk add --no-cache iproute2 iptables ip6tables \
 
 COPY --chmod=0755 net-gateway /usr/local/bin/
 
+# Root on purpose: the tunnel opens /dev/net/tun and the kill-switch loads nf_tables
+# rules (NET_ADMIN); the container runs nothing else and holds no secrets but the
+# proxy file.
+# nosemgrep: dockerfile.security.last-user-is-root.last-user-is-root
+USER root
 ENTRYPOINT ["/usr/local/bin/net-gateway", "run"]
