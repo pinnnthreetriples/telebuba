@@ -2,14 +2,23 @@
 
 Taken only when the loop task is bound to the mobile device and the emulator is on
 (``_loop._execute_cycle``); a desktop stint, or a mobile one with the emulator off,
-keeps the Telethon cycle. One cycle opens the pod (booting it and signing the app
-in when needed), spends the visit's time in the app, and stops the pod again,
-whatever happened. A pod that cannot open or a session that fails is a failed cycle
-with the refusal code as its detail: the loop schedules the next one as usual and
-never falls back to Telethon.
+keeps the Telethon cycle. One cycle opens the pod in the background (booting it when
+needed, never asking for a login code: an app left signed out is the operator's to
+sign in), spends the visit's time in the app, and stops the pod again, whatever
+happened. The stop runs on its own, so a Stop of the warming never waits for Docker.
+At most ``max_running_pods`` warming pods run at once; a cycle finding none free
+is skipped (``emulator_capacity``): a full host is not the account's failure.
+
+A pod that cannot open or a session that fails is a failed cycle with the refusal
+code as its detail, never a fallback to Telethon. A passing cause (a timeout, a
+login-code pause) sleeps it off and retries; anything else, or
+``_FAILURE_LIMIT`` failures in a row, parks the account in ``error``. A pod the
+operator holds, no free slot and a session that found nothing to do are skipped
+cycles, not the account's failures. A failed session keeps what it did before failing.
 
 The day's totals keep their columns: channels read go to ``reads``, reactions to
 ``reactions``; stories, scrolls and the seconds spent go to the log event only.
+The failure streaks and slots are process-local, like the rest of the runtime state.
 """
 
 from __future__ import annotations
@@ -27,18 +36,40 @@ from services.accounts.mobile_emulator import (
     run_mobile_activity,
     stop_account_pod,
 )
-from services.warming._transitions import MOBILE_SESSION_ACTION
+from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_ACTION
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas.emulator import PlaybookResult
     from schemas.warming import WarmingCycleRequest
 
 _NOT_SIGNED_IN = "emulator_not_signed_in"
+_CAPACITY = "emulator_capacity"
+# Causes a later cycle may not meet again; every other code needs the operator.
+_PASSING_CODES = frozenset(
+    {
+        "emulator_busy",
+        "emulator_command_failed",
+        "emulator_command_timeout",
+        "emulator_boot_timeout",
+        "emulator_code_timeout",
+        "emulator_not_running",
+        "device_code_cooldown",
+    }
+)
+# Failed cycles in a row after which even a passing cause parks the account.
+_FAILURE_LIMIT = 5
 # One budgeted action buys this many seconds in the app; a cycle gets at least
 # the floor, and never more than the emulator's session cap.
 _SECONDS_PER_ACTION = 30
 _MIN_SECONDS = 60
+
+_STREAKS: dict[str, int] = {}
+# Accounts whose warming pod holds a slot, until its stop is done.
+_RUNNING: set[str] = set()
+# Strong references to the detached pod stops; the event loop holds tasks weakly.
+_DETACHED: set[asyncio.Task[None]] = set()
 
 
 def session_seconds(budget: int | None) -> int:
@@ -47,16 +78,6 @@ def session_seconds(budget: int | None) -> int:
     if budget is None:
         return cap
     return min(cap, max(_MIN_SECONDS, budget * _SECONDS_PER_ACTION))
-
-
-def _failed(account_id: str, code: str) -> WarmingCycleResult:
-    return WarmingCycleResult(
-        account_id=account_id,
-        status="failed",
-        detail=code,
-        failures=1,
-        last_failed_action=MOBILE_SESSION_ACTION,
-    )
 
 
 async def run_mobile_cycle(
@@ -69,29 +90,37 @@ async def run_mobile_cycle(
     A pod busy with the operator's own open or session is left running: it is theirs.
     """
     account_id = request.account_id
+    if len(_RUNNING) >= settings.emulator.max_running_pods:
+        return await _log_skip(account_id, _CAPACITY)
+    _RUNNING.add(account_id)
     seconds = session_seconds(request.remaining_actions)
     owned = True
     try:
-        opened = await open_account_mobile(account_id)
+        opened = await open_account_mobile(account_id, background=True)
         if not opened.signed_in:
-            return await _log_failure(account_id, _NOT_SIGNED_IN)
+            return await _log_failure(account_id, _NOT_SIGNED_IN, None)
         await on_step("read")
         activity = await run_mobile_activity(account_id, seconds)
     except EmulatorBusyError:
         owned = False
-        return await _log_failure(account_id, "emulator_busy")
+        return await _log_skip(account_id, "emulator_busy")
     except AccountActionError as exc:
-        return await _log_failure(account_id, exc.code)
+        return await _log_failure(account_id, exc.code, getattr(exc, "partial", None))
     finally:
         if owned:
-            # Shielded: a Stop that cancels the cycle still lets the pod stop.
-            await asyncio.shield(stop_account_pod(account_id))
+            _stop_detached(account_id)
+        else:
+            _RUNNING.discard(account_id)
+    _STREAKS.pop(account_id, None)
     await log_event(
         "INFO",
         "warming_mobile_cycle_done",
         account_id=account_id,
         extra={"seconds": seconds, **activity.model_dump(mode="json")},
     )
+    if not (activity.channels_read or activity.reactions or activity.stories_watched):
+        # Nothing to do in the app: not a warming day, and not the account's failure.
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="no activity")
     return WarmingCycleResult(
         account_id=account_id,
         status="ok",
@@ -101,8 +130,45 @@ async def run_mobile_cycle(
     )
 
 
-async def _log_failure(account_id: str, code: str) -> WarmingCycleResult:
+def _stop_detached(account_id: str) -> None:
+    """Stop the pod in a task of its own; the slot frees once the stop is done."""
+    task = asyncio.ensure_future(stop_account_pod(account_id))
+    _DETACHED.add(task)
+    task.add_done_callback(_DETACHED.discard)
+    task.add_done_callback(lambda _done: _RUNNING.discard(account_id))
+
+
+async def _log_skip(account_id: str, code: str) -> WarmingCycleResult:
     await log_event(
-        "WARNING", "warming_mobile_cycle_failed", account_id=account_id, extra={"reason": code}
+        "INFO", "warming_mobile_cycle_skipped", account_id=account_id, extra={"reason": code}
     )
-    return _failed(account_id, code)
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail=code)
+
+
+async def _log_failure(
+    account_id: str, code: str, partial: PlaybookResult | None
+) -> WarmingCycleResult:
+    streak = _STREAKS.get(account_id, 0) + 1
+    retry = code in _PASSING_CODES and streak < _FAILURE_LIMIT
+    if retry:
+        _STREAKS[account_id] = streak
+    else:
+        _STREAKS.pop(account_id, None)
+    await log_event(
+        "WARNING",
+        "warming_mobile_cycle_failed",
+        account_id=account_id,
+        extra={"reason": code, "retry": retry, "streak": streak},
+    )
+    read = partial.channels_read if partial is not None else 0
+    reactions = partial.reactions if partial is not None else 0
+    return WarmingCycleResult(
+        account_id=account_id,
+        status="failed",
+        detail=code,
+        failures=1,
+        channels_read=read,
+        reactions_sent=reactions,
+        attempted_actions=read + reactions,
+        last_failed_action=MOBILE_SESSION_ACTION if retry else MOBILE_REFUSED_ACTION,
+    )

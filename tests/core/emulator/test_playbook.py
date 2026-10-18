@@ -178,6 +178,67 @@ async def test_a_scroll_back_rereads_with_a_short_upward_drag(
     assert clock.slept == [2.0]
 
 
+def _ends(call: list[str]) -> tuple[tuple[int, int], tuple[int, int]]:
+    """A ``human_swipe`` call's DOWN and UP points."""
+    return (int(call[3]), int(call[4])), (int(call[-2]), int(call[-1]))
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_reads_start_at_a_right_thumbs_spot_never_the_same_pixel(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
+    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
+    _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
+
+    await _playbook().read_channel_feed(SERIAL, 8)
+
+    drags = [_ends(call) for call in console.shell_calls()]
+    assert len({start for start, _end in drags}) == len(drags), "no two DOWNs on one pixel"
+    for (x, y), (end_x, end_y) in drags:
+        assert 0.48 * WIDTH - 1 <= x <= 0.64 * WIDTH + 1
+        assert 0.26 * HEIGHT - 1 <= y <= 0.34 * HEIGHT + 1
+        assert 0.3 * HEIGHT - 1 <= end_y - y <= 0.5 * HEIGHT + 1
+        assert abs(end_x - x) <= 0.03 * WIDTH + 1
+    assert sum(x for (x, _y), _end in drags) / len(drags) > WIDTH / 2, "a right thumb"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_scroll_back_starts_somewhere_new_too(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
+    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
+    _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
+
+    await _playbook(scroll_back=True).read_channel_feed(SERIAL, 4)
+
+    backs = [_ends(call) for call in console.shell_calls()[1::2]]
+    assert len({start for start, _end in backs}) == len(backs)
+    for (x, y), (_end_x, end_y) in backs:
+        assert 0.48 * WIDTH - 1 <= x <= 0.64 * WIDTH + 1
+        assert 0.56 * HEIGHT - 1 <= y <= 0.64 * HEIGHT + 1
+        assert 0.15 * HEIGHT - 1 <= y - end_y <= 0.25 * HEIGHT + 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_one_seed_scrolls_the_same_way_twice(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
+    _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
+    await _playbook().read_channel_feed(SERIAL, 3)
+    first = console.shell_calls()
+    console.calls.clear()
+
+    await _playbook().read_channel_feed(SERIAL, 3)
+
+    assert console.shell_calls() == first
+
+
 @pytest.mark.asyncio
 async def test_a_reaction_double_taps_a_post_on_screen(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock

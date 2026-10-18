@@ -221,10 +221,13 @@ async def test_the_container_is_shown_in_one_scrcpy_window(viewers: list[list[st
 @pytest.mark.usefixtures("ps")
 @pytest.mark.asyncio
 async def test_a_closed_window_is_opened_again(viewers: list[list[str]]) -> None:
+    assert redroid.viewer_open("telebuba-acc-1") is False
     await redroid.show_instance(0)
     viewer = redroid._VIEWERS["telebuba-acc-1"]
     assert isinstance(viewer, _Viewer)
+    assert redroid.viewer_open("telebuba-acc-1") is True
     viewer.returncode = 0  # the operator closed the window
+    assert redroid.viewer_open("telebuba-acc-1") is False
 
     await redroid.show_instance(0)
 

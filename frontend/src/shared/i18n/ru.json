@@ -1402,6 +1402,7 @@
       "emulator_twofa_missing": "Аккаунт защищён облачным паролем, а он не сохранён.",
       "emulator_not_running": "Telegram в контейнере не запущен на текущем прокси аккаунта — сначала откройте его.",
       "emulator_not_signed_in": "Telegram в контейнере не вошёл в аккаунт — сначала завершите вход.",
+      "emulator_capacity": "Все поды прогрева заняты — аккаунт повторит на следующем заходе.",
       "not_graduated": "Аккаунт уже не в прогретых — обновите страницу",
       "not_spam_blocked": "Аккаунт уже не остановлен из-за спамблока — обновите страницу"
     },
@@ -1886,6 +1887,7 @@
     "account_mobile_activity_failed": "Активность на телефоне не удалась",
     "warming_mobile_cycle_done": "Прогрев на телефоне",
     "warming_mobile_cycle_failed": "Прогрев на телефоне не удался",
+    "warming_mobile_cycle_skipped": "Прогрев на телефоне пропущен",
     "account_mobile_container_removed": "Контейнер удалён",
     "account_mobile_container_remove_failed": "Контейнер не удалён",
     "account_mobile_pod_stop_failed": "Телефон не остановлен после смены прокси",
@@ -2063,6 +2065,7 @@
     "emulator_twofa_missing": "облачный пароль не сохранён",
     "emulator_not_running": "контейнер не запущен",
     "emulator_not_signed_in": "Telegram не вошёл в аккаунт",
+    "emulator_capacity": "все поды прогрева заняты",
     "no_discussion": "у поста нет комментариев",
     "no_message": "нет сообщения собеседника",
     "no_sticker": "нет подходящего стикера"

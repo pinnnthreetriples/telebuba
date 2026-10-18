@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 _RECONCILE = (
     # First: a window a previous run left open is closed before this run can open one.
     "close_orphaned_web_windows",
+    # Likewise a phone pod a crashed or restarted run left up.
+    "stop_orphaned_pods",
     # The operator bot subscribes first, so it sees the events the reconciles emit.
     "start_notifications",
     "reconcile_warming_runtime",
@@ -59,6 +61,8 @@ _STEPS = (
     "shutdown_scheduled_posts",
     "shutdown_survival_probes",
     "shutdown_warming_runtime",
+    # After warming: a cancelled mobile cycle may still be stopping its pod.
+    "shutdown_mobile_pods",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
     "shutdown_chat_broadcast_on_shutdown",

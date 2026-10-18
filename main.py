@@ -46,6 +46,7 @@ from services.accounts import (
     shutdown_web_login,
     start_lead_queue_on_startup,
 )
+from services.accounts.mobile_pods import shutdown_mobile_pods, stop_orphaned_pods
 from services.auth import seed_admin_if_empty
 from services.chat_broadcast import (
     reconcile_chat_broadcast_on_startup,
@@ -161,6 +162,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await cleanup_stale_uploads()
     # Before any window of this run can open: whatever answers now is a leftover.
     await close_orphaned_web_windows()
+    # Same for the phone pods: no task of this run owns one yet.
+    await stop_orphaned_pods()
     await _log_app_started()
     await seed_admin_if_empty()
     # DB is initialised by the seed above; start the periodic SQLite maintenance
@@ -195,6 +198,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # Before warming and the pool: a refill search reads on the pooled client.
         await _shutdown_step("pool_refill", shutdown_pool_refill)
         await _shutdown_step("warming", shutdown_warming_runtime)
+        # After warming: a cancelled mobile cycle's own pod stop may still be running.
+        await _shutdown_step("mobile_pods", shutdown_mobile_pods)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("chat_broadcast", shutdown_chat_broadcast_on_shutdown)

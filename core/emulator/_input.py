@@ -40,6 +40,12 @@ QWERTY_NEIGHBORS: dict[str, str] = {
 }
 
 _SCROLL_BACK_UP_PROBABILITY = 0.12
+# A scroll's thumb, as shares of the screen: a right thumb starts right of the centre,
+# within this much of its spot on either axis, and drifts sideways a little on the way.
+_THUMB_X = 0.56
+_THUMB_X_SPREAD = 0.08
+_THUMB_Y_SPREAD = 0.04
+_THUMB_DRIFT = 0.03
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +222,32 @@ class HumanInputEngine:
             total_duration_ms=sum(intervals),
             control_points=[p0, p1, p2, p3],
         )
+
+    def _between(self, low: float, high: float) -> float:
+        """Gaussian around the middle of ``[low, high]``, clamped to it."""
+        middle, spread = (low + high) / 2.0, (high - low) / 2.0
+        return max(low, min(high, self.rng.gauss(middle, spread / 2.0)))
+
+    def sample_scroll(
+        self,
+        size: tuple[int, int],
+        start_y: float,
+        length: tuple[float, float],
+        *,
+        downward: bool,
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Where a scroll's finger lands and lifts on a ``size`` (width, height) screen.
+
+        - Start: right of the centre (a right thumb) +-8% of the width, ``start_y``
+          +-4% of the height
+        - Travel: ``length`` (shares of the height), down or up, drifting +-3% sideways
+        """
+        width, height = size
+        x = width * self._between(_THUMB_X - _THUMB_X_SPREAD, _THUMB_X + _THUMB_X_SPREAD)
+        y = height * self._between(start_y - _THUMB_Y_SPREAD, start_y + _THUMB_Y_SPREAD)
+        travel = height * self._between(*length) * (1 if downward else -1)
+        end_x = x + width * self._between(-_THUMB_DRIFT, _THUMB_DRIFT)
+        return (round(x), round(y)), (round(end_x), round(y + travel))
 
     def sample_reading_pause_sec(self) -> tuple[float, bool]:
         """Sample reading pause between swipes clamped to [1.8, 9.5]s and scroll-back flag."""

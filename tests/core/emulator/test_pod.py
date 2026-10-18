@@ -266,14 +266,24 @@ async def test_a_tunnel_that_never_comes_up_removes_the_gateway_it_created(
     console: Console,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.emulator, "tunnel_timeout_seconds", 0.05)
+    monkeypatch.setattr(settings.emulator, "tunnel_timeout_seconds", 2.5)
+    monkeypatch.setattr(settings.emulator, "poll_seconds", 1.0)
     console.answer = _docker(fail=lambda argv: argv[1] == "exec")
+    loop = asyncio.get_running_loop()
+    clock = {"now": loop.time()}
 
-    with pytest.raises(EmulatorError) as failed:
-        await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+    async def sleep(seconds: float) -> None:  # only the poll moves the fake clock
+        clock["now"] += seconds
+
+    with monkeypatch.context() as frozen:
+        frozen.setattr(_gateway.asyncio, "sleep", sleep)
+        frozen.setattr(loop, "time", lambda: clock["now"])
+        with pytest.raises(EmulatorError) as failed:
+            await pod.start_pod("telebuba-new", _SPEC, _PROXY)
 
     assert failed.value.code == "emulator_command_timeout"
-    assert len(_verbs(console)) > 5, "polled, not given up on the first failure"
+    probes = [call for call in console.calls if call[1] == "exec"]
+    assert len(probes) == 4, "polled at 0, 1, 2 and 3 s, not given up on the first failure"
     assert _verbs(console)[-1] == "rm --force"
     assert console.calls[-1][2:] == ["--force", "telebuba-new-net"]
     assert "create telebuba-new" not in _verbs(console), "Android is never created"
@@ -497,6 +507,45 @@ async def test_stopping_a_pod_stops_android_then_its_gateway(console: Console) -
 
     await pod.stop_pod("telebuba-acc-0")
     await pod.stop_pod("telebuba-acc-2")
+
+    assert _verbs(console) == ["stop telebuba-acc-0", "stop telebuba-acc-0-net"]
+    grace = ["--time", str(pod.STOP_GRACE_SECONDS)]
+    assert all(c[2:4] == grace for c in console.calls if c[1] == "stop"), "a quick stop"
+
+
+@pytest.mark.asyncio
+async def test_an_android_that_will_not_stop_does_not_leave_its_gateway_running(
+    console: Console,
+) -> None:
+    console.answer = _docker(fail=lambda argv: argv[1] == "stop" and argv[-1] == "telebuba-acc-0")
+
+    with pytest.raises(EmulatorError):
+        await pod.stop_pod("telebuba-acc-0")
+
+    assert _verbs(console) == ["stop telebuba-acc-0", "stop telebuba-acc-0-net"]
+
+
+@pytest.mark.asyncio
+async def test_every_running_pod_is_stopped_androids_before_gateways(console: Console) -> None:
+    androids = "0|telebuba-acc-0|running\n1|telebuba-acc-1|running\n2|telebuba-acc-2|exited\n"
+    gateways = "0|telebuba-acc-0-net|running\n1|telebuba-acc-1-net|running\n"
+    console.answer = _docker(androids, gateways)
+
+    assert await pod.stop_running_pods() == 4
+
+    verbs = _verbs(console)
+    assert set(verbs[:2]) == {"stop telebuba-acc-0", "stop telebuba-acc-1"}
+    assert set(verbs[2:]) == {"stop telebuba-acc-0-net", "stop telebuba-acc-1-net"}
+
+
+@pytest.mark.asyncio
+async def test_one_pod_that_will_not_stop_does_not_keep_the_others_running(
+    console: Console,
+) -> None:
+    console.answer = _docker(fail=lambda argv: argv[1] == "stop" and argv[-1] == "telebuba-acc-0")
+
+    with pytest.raises(EmulatorError):
+        await pod.stop_running_pods()
 
     assert _verbs(console) == ["stop telebuba-acc-0", "stop telebuba-acc-0-net"]
 

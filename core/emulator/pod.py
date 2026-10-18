@@ -9,7 +9,8 @@ that index.
 and waits for its tunnel before Android is started: Android's first packet meets the
 tunnel or the kill-switch, never a direct route. ``stop_pod`` stops Android, then the
 gateway; ``remove_pod`` deletes both. A failed start undoes what it did: the
-containers it created are removed, the ones it found are stopped.
+containers it created are removed, the ones it found are stopped. ``stop_running_pods``
+stops every pod this app left running (a crash, a restart), Androids before gateways.
 """
 
 from __future__ import annotations
@@ -57,6 +58,9 @@ logger = logging.getLogger(__name__)
 
 # Picking a free index and creating the gateway that holds it is one step.
 _CREATE_LOCK = asyncio.Lock()
+# Seconds ``docker stop`` waits for a container's own shutdown before it kills it:
+# redroid's init may not act on SIGTERM, and a stop must fit the app's shutdown.
+STOP_GRACE_SECONDS = 3
 
 
 async def _find(name: str) -> tuple[Instance | None, Instance | None]:
@@ -103,7 +107,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             if container is not None:
                 found.add(container.name)
                 if container.running:
-                    await docker("stop", container.name)
+                    await _stop(container.name)
         await give_proxy(gateway, proxy_text, address)
         await docker("start", gateway)
         await wait_for_tunnel(gateway)
@@ -119,14 +123,34 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     return Instance(index, name, running=True)
 
 
+async def _stop(container: str) -> None:
+    await docker("stop", "--time", str(STOP_GRACE_SECONDS), container)
+
+
 async def _undo(containers: tuple[str, ...], *, found: set[str], created: set[str]) -> None:
     for container in containers:
-        args = ("rm", "--force") if container in created else ("stop",)
-        if container in created | found:
-            try:
-                await docker(*args, container)
-            except EmulatorError as exc:
-                logger.warning("pod cleanup of %s failed (%s)", container, exc.code)
+        if container not in created | found:
+            continue
+        try:
+            if container in created:
+                await docker("rm", "--force", container)
+            else:
+                await _stop(container)
+        except EmulatorError as exc:
+            logger.warning("pod cleanup of %s failed (%s)", container, exc.code)
+
+
+async def _stop_each(names: list[str]) -> EmulatorError | None:
+    """Stop every container in ``names``, at once; the first failure, after all were tried."""
+    results = await asyncio.gather(*(_stop(name) for name in names), return_exceptions=True)
+    failures: list[EmulatorError] = []
+    for name, result in zip(names, results, strict=True):
+        if isinstance(result, EmulatorError):
+            logger.warning("stopping %s failed (%s)", name, result.code)
+            failures.append(result)
+        elif isinstance(result, BaseException):
+            raise result
+    return failures[0] if failures else None
 
 
 def _started_at(stamp: str) -> datetime:
@@ -152,12 +176,41 @@ async def pod_runs_proxy(name: str, proxy: ProxySettings) -> bool:
 
 
 async def stop_pod(name: str) -> None:
-    """Close the pod's window and stop its running containers, Android first."""
+    """Close the pod's window and stop its running containers, Android first.
+
+    A failed Android stop does not leave the gateway running: both are tried, and
+    the first failure is raised after.
+    """
     android, gateway = await _find(name)
     await close_viewer(name)
+    failure = None
     for container in (android, gateway):
         if container is not None and container.running:
-            await docker("stop", container.name)
+            failed = await _stop_each([container.name])
+            failure = failure or failed
+    if failure is not None:
+        raise failure
+
+
+async def stop_running_pods() -> int:
+    """Stop every running container this app made, Androids before gateways; how many.
+
+    For containers no task of this process owns: left by a crash or a restart, or
+    still up when the app shuts down. Each one is tried; the first failure is raised
+    after all of them were.
+    """
+    failure = None
+    stopped = 0
+    for label in (ANDROID_LABEL, GATEWAY_LABEL):
+        running = [i.name for i in await list_containers(label) if i.running]
+        for name in running:
+            await close_viewer(name)
+        failed = await _stop_each(running)
+        failure = failure or failed
+        stopped += len(running)
+    if failure is not None:
+        raise failure
+    return stopped
 
 
 async def remove_pod(name: str) -> bool:

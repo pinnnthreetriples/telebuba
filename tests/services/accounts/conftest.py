@@ -16,6 +16,8 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.outreach_protection import OutreachProtection  # noqa: TC001
 from services import warming
 from services.accounts import _bulk_runner, bulk_messages
+from services.accounts import devices as devices_module
+from services.accounts import mobile_emulator as emulator_module
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
@@ -52,6 +54,17 @@ def _repo_session_files() -> set[str]:
     return {path.name for path in _REPO_SESSIONS.glob("*.session")}
 
 
+def _clear_mobile_state() -> None:
+    """Reset the module-level mobile state between tests.
+
+    The pod's per-account start locks are loop-bound, and a login-code pacing stamp left
+    by one test refuses the next test's code request for the same account as a cooldown.
+    """
+    emulator_module._LOCKS.clear()
+    emulator_module._ACTIVE.clear()
+    devices_module._LAST_CODE_REQUEST.clear()
+
+
 @pytest.fixture(autouse=True)
 def _isolate_runtime(
     tmp_path: Path,
@@ -76,6 +89,7 @@ def _isolate_runtime(
     # The 2FA writes serialise per account through the same module-level, loop-bound
     # shape, so it needs the same reset.
     twofa_module._TWOFA_LOCKS.clear()
+    _clear_mobile_state()
     reset_logging_for_tests()
     setup_logging()
     before = _repo_session_files()
@@ -83,6 +97,7 @@ def _isolate_runtime(
     _IMPORT_LOCKS.clear()
     warming._ACCOUNT_LOCKS.clear()
     twofa_module._TWOFA_LOCKS.clear()
+    _clear_mobile_state()
     reset_logging_for_tests()
     # Isolation is not self-evident: ``monkeypatch`` is function-scoped and SHARED with
     # every test that requests it, so one ``monkeypatch.undo()`` reverts the redirect

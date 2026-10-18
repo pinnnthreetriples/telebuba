@@ -130,14 +130,34 @@ async def test_a_missing_adb_is_not_waited_out_as_a_slow_boot(console: Console) 
 
 @pytest.mark.asyncio
 async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
-    answers = iter(["", "ERROR: could not get idle state.", ""])
-    console.answer = lambda _argv: next(answers)
+    console.answer = lambda argv: "ERROR: could not get idle state." if "dump" in argv else ""
 
     assert await adb.dump_ui("emulator-5554") == ""
-    assert console.shell_calls() == [
-        ["rm", "-f", "/sdcard/telebuba_ui.xml"],
-        ["uiautomator", "dump", "/sdcard/telebuba_ui.xml"],
-    ], "an old file is never read back"
+    assert (
+        console.shell_calls()
+        == [
+            ["rm", "-f", "/sdcard/telebuba_ui.xml"],
+            ["uiautomator", "dump", "/sdcard/telebuba_ui.xml"],
+        ]
+        * 3
+    ), "tried three times, and an old file is never read back"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_dump_is_taken_again(console: Console) -> None:
+    answers = iter(
+        [
+            "",
+            "ERROR: could not get idle state.",
+            "",
+            "UI hierchary dumped to: /sdcard/telebuba_ui.xml",
+            "<hierarchy/>",
+        ]
+    )
+    console.answer = lambda _argv: next(answers)
+
+    assert await adb.dump_ui("emulator-5554") == "<hierarchy/>"
+    assert console.shell_calls()[-1] == ["cat", "/sdcard/telebuba_ui.xml"]
 
 
 @pytest.mark.asyncio
