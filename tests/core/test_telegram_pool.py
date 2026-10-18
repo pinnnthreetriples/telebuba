@@ -250,6 +250,49 @@ async def test_get_client_raises_on_persistent_connect_failure(
 
 
 @pytest.mark.asyncio
+async def test_failed_connect_disconnects_every_built_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A client whose connect() raised is never cached, so only the build can close it.
+
+    Telethon opens the ``.session`` SQLite file in the constructor; left open, the
+    handle blocked the account's delete on Windows with ``PermissionError``.
+    """
+    built = _install_fake_factory(monkeypatch, connect_failures=5)
+
+    with pytest.raises(TelegramClientPoolError):
+        await get_client("acc-dead-key")
+
+    assert len(built) == 2
+    assert [client.disconnect_calls for client in built] == [1, 1]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_connect_disconnects_the_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The session-check deadline cancels a connect mid-flight; the handle must close too."""
+    built = _install_fake_factory(monkeypatch)
+
+    async def hanging_connect() -> None:
+        await asyncio.Event().wait()
+
+    def fake_create(_profile):
+        client = _FakeClient()
+        client.connect = hanging_connect  # ty: ignore[invalid-assignment]
+        built.append(client)
+        return client
+
+    monkeypatch.setattr("core.telegram_client._pool.create_telegram_client", fake_create)
+
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.05):
+            await get_client("acc-hung")
+
+    assert [client.disconnect_calls for client in built] == [1]
+
+
+@pytest.mark.asyncio
 async def test_get_client_recovers_after_single_transient_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

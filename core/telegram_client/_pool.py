@@ -356,7 +356,15 @@ async def _build_and_connect(account_id: str, device: DeviceType) -> TelegramCli
         TelegramClientRequest(account_id=account_id, device_type=device),
     )
     client = create_telegram_client(profile)
-    await client.connect()
+    try:
+        await client.connect()
+    except BaseException:
+        # The constructor already opened the ``.session`` file, and a client that
+        # failed (or was cancelled by a borrower's deadline) is never cached, so
+        # nothing else can close it — on Windows the leaked handle made the
+        # account's delete fail with ``PermissionError``.
+        await _safe_disconnect(client)
+        raise
     return client
 
 
