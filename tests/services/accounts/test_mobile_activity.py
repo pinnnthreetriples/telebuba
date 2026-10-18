@@ -15,7 +15,7 @@ import pytest
 from core.config import settings
 from core.emulator import EmulatorError
 from core.emulator.redroid import Instance
-from schemas.emulator import PlaybookResult
+from schemas.emulator import PlaybookPlan, PlaybookResult
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
@@ -37,6 +37,7 @@ class _Playbook:
     """Stands in for ``TelegramMobilePlaybook``; every instance reports to the class."""
 
     runs: list[tuple[str, int]]
+    plans: list[PlaybookPlan | None]
     started: asyncio.Event
     fail: EmulatorRefusalCode | None = None
     gate: asyncio.Event | None = None
@@ -44,9 +45,12 @@ class _Playbook:
     def __init__(self) -> None:
         self.result = PlaybookResult()
 
-    async def run_session(self, serial: str, duration_sec: int) -> PlaybookResult:
+    async def run_session(
+        self, serial: str, duration_sec: int, plan: PlaybookPlan | None = None
+    ) -> PlaybookResult:
         cls = type(self)
         cls.runs.append((serial, duration_sec))
+        cls.plans.append(plan)
         self.result = PlaybookResult(channels_read=1)  # what it did before any gate
         cls.started.set()
         gate, fail = cls.gate, cls.fail
@@ -60,6 +64,7 @@ class _Playbook:
 @pytest.fixture
 def playbook(monkeypatch: pytest.MonkeyPatch) -> type[_Playbook]:
     _Playbook.runs = []
+    _Playbook.plans = []
     _Playbook.started = asyncio.Event()
     _Playbook.fail = None
     _Playbook.gate = None
@@ -81,7 +86,13 @@ async def test_a_running_pod_on_the_current_proxy_gets_its_session(
 
     assert result == PlaybookResult(channels_read=1, scrolls=4)
     assert playbook.runs == [("127.0.0.1:5601", 120)]
-    assert container.steps == ["find:telebuba-acc", "proxy?:10.0.0.5", "connect", "front"]
+    assert container.steps == [
+        "find:telebuba-acc",
+        "proxy?:10.0.0.5",
+        "connect",
+        "front",
+        "home",
+    ], "the app is left with HOME, as a phone put away"
     assert "acc" not in emulator_module._ACTIVE
 
 
@@ -223,3 +234,32 @@ async def test_the_feature_switch_refuses_a_session(
     assert refused.value.code == "mobile_emulator_disabled"
     assert container.steps == []
     assert playbook.runs == []
+
+
+@pytest.mark.asyncio
+async def test_the_plan_reaches_the_playbook(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    plan = PlaybookPlan(channels=2, reaction_probability=0.0, stories=False)
+
+    await run_mobile_activity("acc", 60, plan)
+
+    assert playbook.plans == [plan]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_session_does_not_press_home(
+    container: _Container,  # noqa: F811
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    playbook.fail = "emulator_field_missing"
+
+    with pytest.raises(EmulatorRefusedError):
+        await run_mobile_activity("acc", 60)
+
+    assert "home" not in container.steps

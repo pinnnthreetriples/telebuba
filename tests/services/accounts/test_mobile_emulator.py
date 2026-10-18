@@ -98,6 +98,9 @@ class _Container:
     async def bring_app_to_front(self, serial: str) -> None:
         self.on_serial(serial, "front")
 
+    async def leave_app(self, serial: str) -> None:
+        self.on_serial(serial, "home")
+
     async def wait_for_boot(self, serial: str) -> None:
         self.on_serial(serial, "boot")
 
@@ -172,6 +175,7 @@ _SERVICE_FAKES = (
     "ensure_app",
     "seed_device_if_needed",
     "bring_app_to_front",
+    "leave_app",
     "read_screen",
     "stop_pod",
     "remove_pod",

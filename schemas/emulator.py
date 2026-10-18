@@ -61,6 +61,21 @@ class EmulatorStatus(BaseModel):
 PlaybookSkip = Literal["no_channel", "no_stories", "no_post"]
 
 
+class PlaybookPlan(BaseModel):
+    """What one activity session may do: the warming visit's shape and the account's switches.
+
+    ``channels`` caps the channels opened (``None``: as many as time allows),
+    ``reaction_probability`` is the chance of one reaction per channel read (0 turns
+    reactions off), ``max_actions`` caps channels read plus reactions (``None``: no cap).
+    """
+
+    channels: int | None = Field(default=None, ge=0)
+    reaction_probability: float = Field(default=0.15, ge=0.0, le=1.0)
+    stories: bool = True
+    stories_first: bool = False
+    max_actions: int | None = Field(default=None, ge=0)
+
+
 class PlaybookResult(BaseModel):
     """What one activity session in the container's app did."""
 
