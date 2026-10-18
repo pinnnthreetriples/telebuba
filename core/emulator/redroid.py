@@ -93,8 +93,13 @@ async def list_pods() -> tuple[list[Instance], list[Instance]]:
     return androids, gateways
 
 
+async def list_instances() -> list[Instance]:
+    """Every Android container this app made, running or not."""
+    return await list_containers(ANDROID_LABEL)
+
+
 async def find_instance(name: str) -> Instance | None:
-    return next((i for i in await list_containers(ANDROID_LABEL) if i.name == name), None)
+    return next((i for i in await list_instances() if i.name == name), None)
 
 
 def build_prop(spec: ContainerSpec) -> str:
@@ -207,8 +212,12 @@ async def launch_instance(name: str, index: int) -> None:
 
 
 async def show_instance(name: str, index: int) -> None:
-    """Open the container's scrcpy window, unless this process has one open already."""
-    if viewer_open(name):
+    """Open the container's scrcpy window, unless this process has one open already.
+
+    Nothing opens while ``desktop_viewer`` is off: the window encodes video for as long
+    as it stays open, and the web screen (``core.emulator.scrcpy``) does it on demand.
+    """
+    if not settings.emulator.desktop_viewer or viewer_open(name):
         return
     argv = [
         str(settings.emulator.scrcpy_path),

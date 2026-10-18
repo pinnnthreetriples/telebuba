@@ -37,6 +37,7 @@ from schemas.warming import (
     spam_block_known,
     warming_health,
 )
+from services.accounts.mobile_emulator import container_name, phone_activity
 from services.survival import load_account_survivals
 from services.trust import account_trust_score_from
 from services.warming._cadence import cadence_preview
@@ -132,6 +133,11 @@ def _to_card(
         spam_check_warning=(
             record is not None
             and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak
+        ),
+        live_phone_id=(
+            container_name(account.account_id)
+            if phone_activity(account.account_id) == "warming"
+            else None
         ),
         **record_fields,
     )

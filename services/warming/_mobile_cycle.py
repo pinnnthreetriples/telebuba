@@ -40,6 +40,7 @@ from services.accounts._result import AccountActionError
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     open_account_mobile,
+    phone_activity,
     run_mobile_activity,
     stop_account_pod,
 )
@@ -155,7 +156,8 @@ async def run_mobile_cycle(
     except AccountActionError as exc:
         return await _log_failure(account_id, exc.code, getattr(exc, "partial", None))
     finally:
-        if not owned:
+        # An operator who took the phone's controls meanwhile keeps it running: theirs.
+        if not owned or phone_activity(account_id) == "manual":
             _RUNNING.discard(account_id)
         else:
             _detach(_park(account_id) if went_well else _stop_and_free(account_id))

@@ -23,6 +23,7 @@ dependencies = [
     "sqlalchemy>=2.0.50",
     "telethon>=1.45.0",
     "uvicorn>=0.49.0",
+    "websockets>=17.2",
 ]
 
 [dependency-groups]
@@ -232,7 +233,8 @@ extend_exclude = ["tools"]
 # (so the tdata path stays optional), which deptry's static scan can't see.
 # python-multipart is the runtime backing for FastAPI's multipart/form-data
 # parsing (UploadFile/Form) — imported lazily by fastapi, not by our code.
-DEP002 = ["opentele2", "python-multipart"]
+# websockets is uvicorn's WebSocket protocol (the phone screen), loaded by uvicorn.
+DEP002 = ["opentele2", "python-multipart", "websockets"]
 # hypothesis is used in conftest.py (test infrastructure). deptry treats the
 # root conftest as production code and flags the dev-only import; it is correct
 # that hypothesis is a dev dependency.

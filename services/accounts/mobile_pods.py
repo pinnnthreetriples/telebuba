@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.emulator import EmulatorError, pause_pod, stop_paused_pod, stop_running_pods
 from core.logging import log_event
-from services.accounts.mobile_emulator import _LOCKS, _container_name
+from services.accounts.mobile_emulator import _LOCKS, container_name
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
@@ -69,7 +69,7 @@ async def park_account_pod(account_id: str) -> bool:
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     try:
         async with lock:
-            return await pause_pod(_container_name(account_id))
+            return await pause_pod(container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -85,7 +85,7 @@ async def stop_parked_pod(account_id: str) -> None:
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     try:
         async with lock:
-            await stop_paused_pod(_container_name(account_id))
+            await stop_paused_pod(container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",

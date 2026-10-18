@@ -337,6 +337,10 @@ class WarmingAccountState(WarmingCardConsole):
     # Operator-chosen activity persona, surfaced on the card.
     activity_persona: ActivityPersona | None = None
     devices: list[DeviceType] = Field(default_factory=desktop_only)  # primary first
+    # The stint's device; the phone (device farm id) while it is in a visit right now,
+    # so the card can show its screen. ``None`` between visits: the phone sleeps.
+    device_mode: DeviceType = "desktop"
+    live_phone_id: str | None = None
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).

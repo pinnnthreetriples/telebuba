@@ -86,3 +86,6 @@ skills-lock.json
 .claude/launch.json
 
 .tmp_backups/
+
+# scrcpy-server and the Telegram APK the mobile pod pushes (downloaded, see docs/redroid.md).
+/emulator/

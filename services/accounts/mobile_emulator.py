@@ -32,7 +32,9 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * a background open (warming's) shows no window and signs nothing in, and leaves a
   pod the operator opened alone while its window is open; the operator's open
   answers ``emulator_busy`` while a session runs;
-* a window that cannot open (no scrcpy) is a warning, never a failed open.
+* a window that cannot open (no scrcpy) is a warning, never a failed open;
+* an operator holding a phone's controls on the web screen (``claim_manual``) excludes
+  an open and an activity session, and they exclude it: the second is ``emulator_busy``.
 
 The per-account locks are process-local, like the rest of the runtime state (one
 uvicorn worker). A start takes the lock before it reads the account, and only the
@@ -80,7 +82,17 @@ from core.logging import log_event
 from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
 from services.accounts._emulator_sign_in import sign_in
-from services.accounts._result import AccountActionError
+from services.accounts._mobile_holds import (
+    _ACTIVE,
+    _LOCKS,
+    _MANUAL,
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    claim_manual,
+    container_name,
+    phone_activity,
+    release_manual,
+)
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
@@ -102,18 +114,20 @@ _MOBILE_EMULATOR_DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
 __all__ = [
     "EmulatorBusyError",
     "EmulatorRefusedError",
+    "claim_manual",
+    "container_name",
     "open_account_mobile",
+    "phone_activity",
+    "release_manual",
     "remove_account_container",
     "run_mobile_activity",
+    "running_serial",
     "stop_account_pod",
 ]
 
 # Stdlib sink, codes and step names only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
 
-_LOCKS: dict[str, asyncio.Lock] = {}
-# Accounts with an activity session running.
-_ACTIVE: set[str] = set()
 # Accounts whose pod the operator opened; theirs while its window stays open.
 _OPERATOR: set[str] = set()
 
@@ -125,26 +139,18 @@ _KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "pa
 _SESSION_GRACE_SECONDS = 60
 
 
-class EmulatorRefusedError(AccountActionError):
-    """The container could not be opened; ``code`` is the stable code the SPA translates.
+async def running_serial(account_id: str) -> str:
+    """The adb serial of the account's running pod; ``emulator_not_running`` otherwise.
 
-    ``partial`` is what a failed activity session did before it failed, else ``None``.
+    Read-only: the pod is neither started nor checked against the account's proxy.
     """
-
-    def __init__(self, code: EmulatorRefusalCode, *, partial: PlaybookResult | None = None) -> None:
-        super().__init__(code)
-        self.partial = partial
-
-
-class EmulatorBusyError(EmulatorRefusedError):
-    """Another start of the same account's container is still running (409)."""
-
-    def __init__(self) -> None:
-        super().__init__("emulator_busy")
-
-
-def _container_name(account_id: str) -> str:
-    return f"{settings.emulator.instance_prefix}{account_id}"
+    try:
+        instance = await find_instance(container_name(account_id))
+    except EmulatorError as exc:
+        raise EmulatorRefusedError(exc.code) from exc
+    if instance is None or not instance.running:
+        raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
+    return adb_serial(instance.index)
 
 
 async def _refuse_what_cannot_work(
@@ -176,7 +182,7 @@ async def _refuse_what_cannot_work(
 
 def _operator_holds(account_id: str) -> bool:
     """Whether the operator opened the account's pod and its window is still open."""
-    if account_id in _OPERATOR and viewer_open(_container_name(account_id)):
+    if account_id in _OPERATOR and viewer_open(container_name(account_id)):
         return True
     _OPERATOR.discard(account_id)
     return False
@@ -191,7 +197,9 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     held = _operator_holds(account_id) if background else account_id in _ACTIVE
-    if lock.locked() or held:
+    # An operator's hands on the phone: an open would pull the app to the front, sign
+    # in over them or restart the pod (and a warming cycle would then stop it).
+    if lock.locked() or held or account_id in _MANUAL:
         raise EmulatorBusyError
     try:
         async with lock:
@@ -230,7 +238,7 @@ async def _open(
     spec = container_spec(
         fingerprint, account.proxy_country_code or country_for_phone(account.phone)
     )
-    name = _container_name(account.account_id)
+    name = container_name(account.account_id)
     instance = await find_instance(name)
     if instance is not None and instance.paused:
         # Parked after a close visit: thawed in a moment, then checked like a running one.
@@ -292,16 +300,14 @@ async def run_mobile_activity(
     account, none while a start is in flight or the operator holds the pod. A session
     still going ``_SESSION_GRACE_SECONDS`` past its length ends there, with what it did.
     """
-    lock = _LOCKS.get(account_id)
-    starting = lock is not None and lock.locked()
-    if starting or account_id in _ACTIVE or _operator_holds(account_id):
+    if phone_activity(account_id) is not None or _operator_holds(account_id):
         raise EmulatorBusyError
     _ACTIVE.add(account_id)
     playbook: TelegramMobilePlaybook | None = None
     try:
         account = await require_account(account_id)
         _fingerprint, proxy = await _refuse_what_cannot_work(account)
-        name = _container_name(account_id)
+        name = container_name(account_id)
         instance = await find_instance(name)
         if instance is None or not instance.running or not await pod_runs_proxy(name, proxy):
             raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
@@ -391,7 +397,7 @@ async def stop_account_pod(account_id: str) -> None:
     _OPERATOR.discard(account_id)
     try:
         async with lock:
-            await stop_pod(_container_name(account_id))
+            await stop_pod(container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -412,7 +418,7 @@ async def remove_account_container(account_id: str) -> None:
     _OPERATOR.discard(account_id)
     try:
         async with lock:
-            removed = await remove_pod(_container_name(account_id))
+            removed = await remove_pod(container_name(account_id))
     except EmulatorError as exc:
         await log_event(
             "WARNING",

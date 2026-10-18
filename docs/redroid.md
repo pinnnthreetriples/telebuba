@@ -33,7 +33,9 @@ phone is shown in a scrcpy window opened by the phone button.
   command line: redroid's init re-splits it on spaces, so `Pixel 7` would become `Pixel`); the
   image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK. See
   [Identity and region](#identity-and-region).
-- **Window**: `scrcpy --serial … --window-title <container>`, one per container.
+- **Window** (only with `EMULATOR__DESKTOP_VIEWER=true`): `scrcpy --serial … --window-title <container>`,
+  one per container. Off by default: the window encodes video for as long as it is open, warming
+  visits included. The web screen below replaces it.
 
 Android keeps its `/data` across stop/start (it is re-created only when its gateway is gone, since
 its namespace went with it); deleting the account runs `docker rm --force` on both.
@@ -182,6 +184,37 @@ build the gateway image under the tag `EMULATOR__GATEWAY_IMAGE` names:
 ```bash
 docker build -t telebuba/net-gateway:1 docker/net-gateway
 ```
+
+## Web screen and the device farm
+
+The **Эмуляторы** page (`/devices`, `api/v1/devices.py`) lists every mobile account's phone with its
+status (asleep, starting, free, warming, manual), starts and puts it to sleep, and opens its live
+screen; the warming card shows an eye while a mobile visit runs. The screen is a WebSocket
+(`/api/v1/devices/{id}/screen?mode=view|control`, `core/emulator/scrcpy.py`):
+
+- **On demand only.** Opening the socket pushes `scrcpy-server` to the phone, forwards a host port
+  (`adb forward tcp:0`) and starts the server through `adb shell`; closing it (tab closed, network
+  dropped, cancelled) closes the sockets, waits for the server, kills it by its `scid` if it lingers,
+  and removes the forward. Nothing encodes while nobody watches, and a sleeping phone costs nothing.
+- **One viewer per phone**: a new one supersedes the old (`screen_superseded`), so two encoders never
+  run on one phone. `view` starts the server without a control socket; `control` holds the phone
+  (`manual`) and excludes a warming visit, and the other way round.
+- **The video** is passed through as the server writes it (codec header, then a 12-byte header per
+  frame: `raw_stream` stays off, the decoder needs the keyframe flags); the browser decodes h264 in
+  hardware (`@yume-chan/scrcpy` + `scrcpy-decoder-webcodecs`, loaded only when a screen opens).
+- **Commands** arrive as JSON (`schemas/device_farm.py`: touch, scroll, key, text, clipboard) and the
+  backend writes scrcpy's bytes (`core/emulator/_scrcpy_control.py`): anything else (start an app,
+  UHID) has no way in. Every handshake needs the session cookie and the page's own Origin.
+
+The server's version must match the decoder's protocol exactly; `@yume-chan/scrcpy` 2.3 speaks up
+to **3.3.1** (the desktop scrcpy may be newer). Put the file next to the APK:
+
+```bash
+gh release download v3.3.1 -R Genymobile/scrcpy -p scrcpy-server-v3.3.1 -D emulator
+```
+
+(sha256 `a0f70b20aa4998fbf658c94118cd6c8dab6abbb0647a3bdab344d70bc1ebcbb8`). A phone is one account's
+pod today; the API already lists a phone's apps (`platform`), so other platforms can join it later.
 
 ## Settings
 
