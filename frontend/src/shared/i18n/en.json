@@ -1367,6 +1367,7 @@
       "emulator_twofa_missing": "The account has a cloud password that is not stored.",
       "emulator_not_running": "The container's Telegram app is not running on the account's current proxy — open it first.",
       "emulator_not_signed_in": "Telegram in the container is not signed in — finish the sign-in first.",
+      "emulator_capacity": "All warming pods are busy — the account retries on its next visit.",
       "not_graduated": "The account is no longer warmed — refresh the page",
       "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page"
     },
@@ -1851,6 +1852,7 @@
     "account_mobile_activity_failed": "Activity on phone failed",
     "warming_mobile_cycle_done": "Warmed up on the phone",
     "warming_mobile_cycle_failed": "Warming on the phone failed",
+    "warming_mobile_cycle_skipped": "Warming on the phone skipped",
     "account_mobile_container_removed": "Container removed",
     "account_mobile_container_remove_failed": "Container not removed",
     "account_mobile_pod_stop_failed": "Phone not stopped after a proxy change",
@@ -2028,6 +2030,7 @@
     "emulator_twofa_missing": "the cloud password is not stored",
     "emulator_not_running": "the container is not running",
     "emulator_not_signed_in": "Telegram is not signed in",
+    "emulator_capacity": "all warming pods are busy",
     "no_discussion": "the post has no comments",
     "no_message": "no message from the partner",
     "no_sticker": "no matching sticker installed"

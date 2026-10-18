@@ -38,6 +38,9 @@ class EmulatorSettings(BaseSettings):
     # Installed into a container that lacks the package; refused when the file is missing.
     telegram_apk_path: Path = Path("emulator/telegram.apk")
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
+    # That APK's "versionName (versionCode)": new mobile fingerprints claim it, so the
+    # app in the container and the fingerprint agree. Empty: drawn from the catalogue.
+    telegram_app_version: str = Field(default="", pattern=r"^(\d+\.\d+\.\d+ \(\d+\))?$")
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
     # CPU cores and RAM of a new container (its screen is its phone's, ``configs/``).
@@ -55,3 +58,6 @@ class EmulatorSettings(BaseSettings):
     poll_seconds: float = Field(default=2.0, gt=0)
     # Longest activity session (``run_mobile_activity``) in seconds.
     activity_max_seconds: int = Field(default=900, gt=0)
+    # Pods warming may run at once; a mobile stint finding none free skips its cycle
+    # (``emulator_capacity``) and tries again next time (the operator's opens are not counted).
+    max_running_pods: int = Field(default=4, ge=1)

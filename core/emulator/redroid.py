@@ -208,8 +208,7 @@ async def launch_instance(name: str, index: int) -> None:
 async def show_instance(index: int) -> None:
     """Open the container's scrcpy window, unless this process has one open already."""
     name = await _name_of(index)
-    viewer = _VIEWERS.get(name)
-    if viewer is not None and viewer.returncode is None:
+    if viewer_open(name):
         return
     argv = [
         str(settings.emulator.scrcpy_path),
@@ -231,6 +230,12 @@ async def show_instance(index: int) -> None:
     except OSError as exc:
         logger.warning("scrcpy could not start (%s)", type(exc).__name__)
         raise EmulatorError(_EMULATOR_COMMAND_FAILED) from exc
+
+
+def viewer_open(name: str) -> bool:
+    """Whether this process's scrcpy window of the container ``name`` is still open."""
+    viewer = _VIEWERS.get(name)
+    return viewer is not None and viewer.returncode is None
 
 
 async def close_viewer(name: str) -> None:

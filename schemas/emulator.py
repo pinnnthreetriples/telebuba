@@ -32,6 +32,7 @@ EmulatorRefusalCode = Literal[
     "emulator_twofa_missing",
     "emulator_not_running",
     "emulator_not_signed_in",
+    "emulator_capacity",
 ]
 
 # ``started``: the container was booted (and signed in when it could be);

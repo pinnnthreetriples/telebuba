@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.config import settings
 from core.db import configure_database
+from core.emulator import pod
 from core.logging import reset_logging_for_tests, setup_logging
 
 if TYPE_CHECKING:
@@ -26,6 +28,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.emulator, "poll_seconds", 0.01)
     monkeypatch.setattr(settings.emulator, "boot_timeout_seconds", 0.1)
     monkeypatch.setattr(settings.emulator, "ui_timeout_seconds", 0.1)
+    # Module-level and bound to the first loop that waits on it: a fresh one per test.
+    monkeypatch.setattr(pod, "_CREATE_LOCK", asyncio.Lock())
     reset_logging_for_tests()
     setup_logging()
     yield

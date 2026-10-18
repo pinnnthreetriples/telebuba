@@ -44,8 +44,11 @@ if TYPE_CHECKING:
         WarmingStateRecord,
     )
 
-# ``last_failed_action`` of a failed mobile cycle (``_mobile_cycle``).
+# ``last_failed_action`` of a failed mobile cycle (``_mobile_cycle``): a session that
+# may work next time, or a pod refused for a reason a retry cannot fix (or failing
+# too many times in a row), which parks the account in ``error``.
 MOBILE_SESSION_ACTION = "mobile_session"
+MOBILE_REFUSED_ACTION = "mobile_refused"
 # A failed cycle that did no work but stopped on one of these sleeps it off and
 # retries instead of parking the account in ``error``.
 _RETRYABLE_ACTIONS = frozenset({"set_online", MOBILE_SESSION_ACTION})
@@ -250,7 +253,7 @@ async def _calculate_next_run(
             # A lone presence-flip failure (network/proxy blip on the very first
             # action) is not evidence the account is broken — sleep and retry
             # next cycle instead of parking it in the terminal error column. A
-            # mobile pod that would not open or whose session failed is the same.
+            # mobile session that failed on a passing cause is the same.
             next_state = "sleeping"
         else:
             next_state = "error"

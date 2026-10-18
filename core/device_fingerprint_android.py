@@ -24,6 +24,7 @@ from __future__ import annotations
 import secrets
 from typing import NamedTuple
 
+from core.config import settings
 from core.device_fingerprint_lang import language_pair
 from schemas.device_fingerprint import DeviceFingerprint
 
@@ -68,6 +69,14 @@ def android_device_model(device: AndroidDevice) -> str:
     return f"{device.manufacturer}{device.model}"
 
 
+def android_app_version() -> str:
+    """The configured APK's version when there is one, else one from the list.
+
+    Only new fingerprints use it: a stored one keeps the version it was minted with.
+    """
+    return settings.emulator.telegram_app_version or secrets.choice(ANDROID_APP_VERSIONS)
+
+
 def generate_android_fingerprint(account_id: str, phone: str | None) -> DeviceFingerprint:
     """A fresh, internally consistent Android fingerprint for a mobile authorization."""
     device = secrets.choice(ANDROID_DEVICES)
@@ -78,7 +87,7 @@ def generate_android_fingerprint(account_id: str, phone: str | None) -> DeviceFi
         platform="android",
         device_model=android_device_model(device),
         system_version=f"SDK {secrets.choice(device.sdk_levels)}",
-        app_version=secrets.choice(ANDROID_APP_VERSIONS),
+        app_version=android_app_version(),
         lang_code=lang_code,
         system_lang_code=system_lang_code,
     )

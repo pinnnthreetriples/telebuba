@@ -27,7 +27,12 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * on any failure the pod this call started is stopped again, and removed when this
   call created it;
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
-  stands and never starts one.
+  stands and never starts one; it ends with what it did when its time is up, and a
+  failed one carries what it did on the refusal (``partial``);
+* a background open (warming's) shows no window and signs nothing in, and leaves a
+  pod the operator opened alone while its window is open; the operator's open
+  answers ``emulator_busy`` while a session runs;
+* a window that cannot open (no scrcpy) is a warning, never a failed open.
 
 The per-account locks are process-local, like the rest of the runtime state (one
 uvicorn worker). A start takes the lock before it reads the account, and only the
@@ -65,7 +70,9 @@ from core.emulator import (
     show_instance,
     start_pod,
     stop_pod,
+    viewer_open,
     wait_for_boot,
+    wait_screen,
 )
 from core.logging import log_event
 from core.phone_geo import country_for_phone
@@ -105,16 +112,26 @@ logger = logging.getLogger(__name__)
 _LOCKS: dict[str, asyncio.Lock] = {}
 # Accounts with an activity session running.
 _ACTIVE: set[str] = set()
+# Accounts whose pod the operator opened; theirs while its window stays open.
+_OPERATOR: set[str] = set()
 
 # A running app on one of these still needs signing in; anything else is left as is.
 _ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
+# A background open waits for the app to show one of these, then reads it as it is.
+_KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
+# A session gets this long past its own length to finish its last read before it is cut.
+_SESSION_GRACE_SECONDS = 60
 
 
 class EmulatorRefusedError(AccountActionError):
-    """The container could not be opened; ``code`` is the stable code the SPA translates."""
+    """The container could not be opened; ``code`` is the stable code the SPA translates.
 
-    def __init__(self, code: EmulatorRefusalCode) -> None:
+    ``partial`` is what a failed activity session did before it failed, else ``None``.
+    """
+
+    def __init__(self, code: EmulatorRefusalCode, *, partial: PlaybookResult | None = None) -> None:
         super().__init__(code)
+        self.partial = partial
 
 
 class EmulatorBusyError(EmulatorRefusedError):
@@ -155,16 +172,30 @@ async def _refuse_what_cannot_work(
     return fingerprint, proxy
 
 
-async def open_account_mobile(account_id: str) -> OpenMobileResult:
-    """Start (or find running) the account's container and sign its Telegram app in."""
+def _operator_holds(account_id: str) -> bool:
+    """Whether the operator opened the account's pod and its window is still open."""
+    if account_id in _OPERATOR and viewer_open(_container_name(account_id)):
+        return True
+    _OPERATOR.discard(account_id)
+    return False
+
+
+async def open_account_mobile(account_id: str, *, background: bool = False) -> OpenMobileResult:
+    """Start (or find running) the account's container and sign its Telegram app in.
+
+    ``background`` (warming) opens no window and signs nothing in: ``signed_in`` is
+    what the screen shows. It is busy while the operator holds the pod; the operator's
+    open is busy while an activity session runs.
+    """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
-    if lock.locked():
+    held = _operator_holds(account_id) if background else account_id in _ACTIVE
+    if lock.locked() or held:
         raise EmulatorBusyError
     try:
         async with lock:
             account = await require_account(account_id)
             fingerprint, proxy = await _refuse_what_cannot_work(account)
-            result = await _open(account, fingerprint, proxy)
+            result = await _open(account, fingerprint, proxy, background=background)
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -173,12 +204,26 @@ async def open_account_mobile(account_id: str) -> OpenMobileResult:
             extra={"reason": exc.code},
         )
         raise EmulatorRefusedError(exc.code) from exc
+    if not background:
+        _OPERATOR.add(account_id)
     await log_event("INFO", "account_mobile_opened", account_id=account_id)
     return result
 
 
+async def _show(index: int) -> None:
+    """Open the pod's window; one that cannot open is logged and the open goes on."""
+    try:
+        await show_instance(index)
+    except EmulatorError as exc:
+        logger.warning("pod window %s did not open (%s)", index, exc.code)
+
+
 async def _open(
-    account: AccountRead, fingerprint: DeviceFingerprint, proxy: ProxySettings
+    account: AccountRead,
+    fingerprint: DeviceFingerprint,
+    proxy: ProxySettings,
+    *,
+    background: bool,
 ) -> OpenMobileResult:
     spec = container_spec(
         fingerprint, account.proxy_country_code or country_for_phone(account.phone)
@@ -191,11 +236,12 @@ async def _open(
             # Only an entry screen is acted on, through its nodes.
             serial = adb_serial(instance.index)
             await connect_device(serial)
-            await show_instance(instance.index)
+            if not background:
+                await _show(instance.index)
             await bring_app_to_front(serial)
             screen, _nodes = await read_screen(serial)
             signed_in = screen == "chats"
-            if screen in _ENTRY_SCREENS:
+            if screen in _ENTRY_SCREENS and not background:
                 signed_in = await sign_in(account, serial)
             return OpenMobileResult(
                 account_id=account.account_id,
@@ -208,11 +254,16 @@ async def _open(
     try:
         serial = adb_serial(instance.index)
         await wait_for_boot(serial)
-        await show_instance(instance.index)
+        if not background:
+            await _show(instance.index)
         await assert_sdk(serial, spec.sdk)
         await _seed(account.account_id, serial, spec)
         await ensure_app(serial)
-        signed_in = await sign_in(account, serial)
+        if background:
+            screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
+            signed_in = screen == "chats"
+        else:
+            signed_in = await sign_in(account, serial)
     except BaseException:
         await asyncio.shield(_undo(name, created=created))
         raise
@@ -225,12 +276,16 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
     The pod is used as it stands: one that is down, or whose gateway runs another
     proxy, answers ``emulator_not_running``. The session does not hold the account's
     lock, so a proxy change or a deletion stops the pod at once and the session fails
-    on its next command. One session per account, none while a start is in flight.
+    on its next command; the refusal carries what it did (``partial``). One session per
+    account, none while a start is in flight or the operator holds the pod. A session
+    still going ``_SESSION_GRACE_SECONDS`` past its length ends there, with what it did.
     """
     lock = _LOCKS.get(account_id)
-    if (lock is not None and lock.locked()) or account_id in _ACTIVE:
+    starting = lock is not None and lock.locked()
+    if starting or account_id in _ACTIVE or _operator_holds(account_id):
         raise EmulatorBusyError
     _ACTIVE.add(account_id)
+    playbook: TelegramMobilePlaybook | None = None
     try:
         account = await require_account(account_id)
         _fingerprint, proxy = await _refuse_what_cannot_work(account)
@@ -242,7 +297,8 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
         await connect_device(serial)
         await bring_app_to_front(serial)
         seconds = min(duration_sec, settings.emulator.activity_max_seconds)
-        result = await TelegramMobilePlaybook().run_session(serial, seconds)
+        playbook = TelegramMobilePlaybook()
+        result = await _run_session(playbook, serial, seconds)
     except EmulatorError as exc:
         await log_event(
             "WARNING",
@@ -250,7 +306,8 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
             account_id=account_id,
             extra={"reason": exc.code},
         )
-        raise EmulatorRefusedError(exc.code) from exc
+        partial = playbook.result if playbook is not None else None
+        raise EmulatorRefusedError(exc.code, partial=partial) from exc
     finally:
         _ACTIVE.discard(account_id)
     await log_event(
@@ -260,6 +317,20 @@ async def run_mobile_activity(account_id: str, duration_sec: int) -> PlaybookRes
         extra=result.model_dump(mode="json"),
     )
     return result
+
+
+async def _run_session(
+    playbook: TelegramMobilePlaybook, serial: str, seconds: int
+) -> PlaybookResult:
+    """The playbook's session, cut ``_SESSION_GRACE_SECONDS`` past its length."""
+    timeout = asyncio.timeout(seconds + _SESSION_GRACE_SECONDS)
+    try:
+        async with timeout:
+            return await playbook.run_session(serial, seconds)
+    except TimeoutError:
+        if not timeout.expired():
+            raise
+    return playbook.result
 
 
 async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
@@ -303,6 +374,7 @@ async def stop_account_pod(account_id: str) -> None:
     if not settings.emulator.enabled:
         return
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
+    _OPERATOR.discard(account_id)
     try:
         async with lock:
             await stop_pod(_container_name(account_id))
@@ -323,6 +395,7 @@ async def remove_account_container(account_id: str) -> None:
     row is already deleted, so a later start finds no account under a fresh lock.
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
+    _OPERATOR.discard(account_id)
     try:
         async with lock:
             removed = await remove_pod(_container_name(account_id))
