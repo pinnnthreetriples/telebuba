@@ -336,12 +336,13 @@ const PATTERNS = [
       'A waiting ring assembled by hand. `Spinner` is the component: `size` is `sm`/`md`/`lg` and `tone` is `default`/`inverse`/`danger`. Seventeen copies of these classes drifted into two different track greys, and four call sites set the size in raw pixels 12–15px apart.',
   },
   {
-    // Брейкпоинт, которого нет. Шкала `screens` тоже закрыта — три ступени, которые
-    // приложение носит, — и `xl:`/`2xl:` теперь не выпускают НИ ОДНОГО правила: класс
-    // выглядит работающим и молчит. Ровно тот же дефект, что у палитры Tailwind рядом.
-    test: at(String.raw`(?:xl|2xl):[a-z]`),
+    // Брейкпоинт, которого нет. Шкала `screens` тоже закрыта — четыре ступени, которые
+    // приложение носит (`xl` — шапка с полным рядом разделов), — и `2xl:` не выпускает НИ
+    // ОДНОГО правила: класс выглядит работающим и молчит. Ровно тот же дефект, что у
+    // палитры Tailwind рядом.
+    test: at(String.raw`2xl:[a-z]`),
     message:
-      "The breakpoint scale is closed at three rungs — `sm` (640), `md` (768), `lg` (1024) — and the generated theme resets Tailwind's (`--*: initial`), so `xl:`/`2xl:` emit no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fourth.",
+      "The breakpoint scale is closed at four rungs — `sm` (640), `md` (768), `lg` (1024), `xl` (1280, the header's full row of sections) — and the generated theme resets Tailwind's (`--*: initial`), so `2xl:` emits no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fifth.",
   },
   {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),

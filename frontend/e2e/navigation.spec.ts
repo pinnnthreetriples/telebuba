@@ -48,7 +48,7 @@ async function setup(page: Page) {
 }
 
 async function goTo(page: Page, name: string) {
-  if ((page.viewportSize()?.width ?? 1280) < 1024) {
+  if ((page.viewportSize()?.width ?? 1280) < 1280) {
     await page.getByRole('button', { name: 'Меню' }).click();
     await page.getByRole('dialog', { name: 'Меню' }).getByRole('link', { name }).click();
   } else {
@@ -87,7 +87,7 @@ test('navigation reveals each page with its primary data already in place', asyn
 test('navigation keeps the active tab aligned with the visible page while loading', async ({
   page,
 }) => {
-  test.skip((page.viewportSize()?.width ?? 1280) < 1024, 'Desktop active rail');
+  test.skip((page.viewportSize()?.width ?? 1280) < 1280, 'Desktop active rail');
   await setup(page);
   await page.goto('/');
   await expect(page.getByText('@user_0')).toBeVisible();
@@ -101,7 +101,7 @@ test('navigation keeps the active tab aligned with the visible page while loadin
 });
 
 test('switching from a scrolled page starts the next page at the top', async ({ page }) => {
-  test.skip((page.viewportSize()?.width ?? 1280) < 1024, 'Desktop sticky navigation');
+  test.skip((page.viewportSize()?.width ?? 1280) < 1280, 'Desktop sticky navigation');
   await setup(page);
   await page.goto('/warming');
   await expect(page.getByText('Готовы к прогреву')).toBeVisible();
