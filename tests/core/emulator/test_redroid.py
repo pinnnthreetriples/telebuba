@@ -221,7 +221,7 @@ async def test_no_window_opens_while_the_desktop_viewer_is_off(
 ) -> None:
     monkeypatch.setattr(settings.emulator, "desktop_viewer", False)
 
-    await redroid.show_instance(0)
+    await redroid.show_instance("telebuba-acc-1", 0)
 
     assert viewers == [], "a window would encode video for as long as it stays open"
 

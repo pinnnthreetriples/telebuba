@@ -20,7 +20,9 @@ from services.accounts import add_account
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
 from services.device_farm import _phones, list_phones, start_phone, stop_phone
-from tests.services.accounts.test_mobile_emulator import _account, _enabled  # noqa: F401
+from tests.services.accounts._mobile_support import _account
+
+pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode

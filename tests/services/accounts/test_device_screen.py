@@ -25,7 +25,8 @@ from services.accounts.mobile_emulator import (
 )
 from services.device_farm import ScreenCommandError, ScreenSupersededError, parse_command, screen
 from services.device_farm import screen_session as open_session
-from tests.services.accounts.test_mobile_emulator import _enabled  # noqa: F401
+
+pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
