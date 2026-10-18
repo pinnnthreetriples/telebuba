@@ -34,6 +34,14 @@ KEYCODE_DEL = 67
 KEYCODE_MOVE_END = 123
 _DUMP_PATH = "/sdcard/telebuba_ui.xml"
 _DUMP_ATTEMPTS = 3
+_DUMP_SCRIPT = (
+    *("rm", "-f", _DUMP_PATH, ";"),
+    *("uiautomator", "dump", _DUMP_PATH, ";"),
+    *("cat", _DUMP_PATH, "2>/dev/null", ";", "true"),
+)
+# A slow drag's Bezier curve goes out as this many points: each ``input motionevent``
+# starts its own process on the device, and the curve keeps its shape at a dozen.
+_SWIPE_POINTS = (8, 12)
 _BOOTED = "1"
 
 
@@ -132,17 +140,21 @@ async def start_app(serial: str, package: str) -> None:
 async def dump_ui(serial: str) -> str:
     """This moment's UI dump, or ``""`` when uiautomator could not take one in a few tries.
 
-    The file is deleted first: a failed dump ("could not get idle state", common on
-    animated screens) still exits 0, and ``cat`` would then serve an older screen.
+    One ``adb shell`` script deletes the file, dumps and prints it: the file is deleted
+    first because a failed dump ("could not get idle state", common on animated
+    screens) still exits 0, and ``cat`` would then serve an older screen; the script
+    always exits 0, and only the XML after uiautomator's "dumped to" line counts.
     A failed dump is taken again after a poll interval: one is no screen at all, and
     read as one it would send a BACK press or a tap on a guess.
     """
     for attempt in range(_DUMP_ATTEMPTS):
         if attempt:
             await asyncio.sleep(settings.emulator.poll_seconds)
-        await shell(serial, "rm", "-f", _DUMP_PATH)
-        if "dumped to" in (await shell(serial, "uiautomator", "dump", _DUMP_PATH)).lower():
-            return await shell(serial, "cat", _DUMP_PATH)
+        output = await shell(serial, *_DUMP_SCRIPT)
+        marker = output.lower().find("dumped to")
+        xml = output[marker:].partition("\n")[2].strip() if marker >= 0 else ""
+        if xml:
+            return xml
     return ""
 
 
@@ -220,7 +232,7 @@ async def human_swipe(
     ``adb shell`` script that the device's ``sh`` runs command by command.
     """
     eng = engine or _default_input_engine
-    points = eng.generate_bezier_swipe(start, end).points
+    points = eng.generate_bezier_swipe(start, end, eng.rng.randint(*_SWIPE_POINTS)).points
     actions = ["DOWN"] + ["MOVE"] * (len(points) - 2) + ["UP"]
     script: list[str] = []
     for action, (x, y) in zip(actions, points, strict=True):

@@ -61,3 +61,6 @@ class EmulatorSettings(BaseSettings):
     # Pods warming may run at once; a mobile stint finding none free skips its cycle
     # (``emulator_capacity``) and tries again next time (the operator's opens are not counted).
     max_running_pods: int = Field(default=4, ge=1)
+    # A warming pod is paused, not stopped, after a visit, and stopped once paused this
+    # long: a visit within it skips the Android boot. 0 stops it after every visit.
+    pause_ttl_seconds: int = Field(default=1200, ge=0)

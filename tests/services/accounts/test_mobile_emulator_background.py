@@ -132,7 +132,7 @@ async def test_a_window_that_cannot_open_does_not_fail_the_open(
     await _account()
     container.screens = ["chats"]
 
-    async def no_scrcpy(_index: int) -> None:
+    async def no_scrcpy(_name: str, _index: int) -> None:
         code = "emulator_not_found"
         raise EmulatorError(code)
 
@@ -196,3 +196,54 @@ async def test_the_shutdown_stops_every_pod_still_running(
     await shutdown_mobile_pods()
 
     assert pods.calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("windows")
+async def test_a_parked_pod_is_thawed_and_used_as_it_stands(
+    container: _Container,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unpause(name: str) -> None:
+        container.step(f"unpause:{name}")
+
+    monkeypatch.setattr(emulator_module, "unpause_pod", unpause)
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=False, paused=True)
+    container.screens = ["chats"]
+
+    result = await open_account_mobile("acc", background=True)
+
+    assert container.steps[:2] == ["find:telebuba-acc", "unpause:telebuba-acc"]
+    assert result.status == "already_running", "no boot: the visit starts at once"
+    assert not any(step.startswith(("pod:", "boot")) for step in container.steps)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("paused", "parked"), [(True, True), (False, False)])
+async def test_parking_pauses_the_pod_under_its_lock(
+    monkeypatch: pytest.MonkeyPatch, *, paused: bool, parked: bool
+) -> None:
+    names: list[str] = []
+
+    async def pause(name: str) -> bool:
+        names.append(name)
+        return paused
+
+    monkeypatch.setattr(mobile_pods, "pause_pod", pause)
+
+    assert await mobile_pods.park_account_pod("acc") is parked
+    assert names == ["telebuba-acc"]
+
+
+@pytest.mark.asyncio
+async def test_a_pause_that_fails_is_reported_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def broken(_name: str) -> bool:
+        code = "emulator_command_failed"
+        raise EmulatorError(code)
+
+    monkeypatch.setattr(mobile_pods, "pause_pod", broken)
+    monkeypatch.setattr(mobile_pods, "stop_paused_pod", broken)
+
+    assert await mobile_pods.park_account_pod("acc") is False
+    await mobile_pods.stop_parked_pod("acc")  # logged, never raised

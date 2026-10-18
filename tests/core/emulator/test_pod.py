@@ -68,6 +68,11 @@ def _docker(
                 f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n"
                 for name in argv[4:]
             )
+        if argv[1] == "ps" and argv[4] == "label=telebuba.index":
+            # One listing of both kinds: the gateway label field is set on gateways only.
+            return "".join(f"{line}|\n" for line in lists["android"]) + "".join(
+                f"{line}|1\n" for line in lists["gateway"]
+            )
         if argv[1] == "ps":
             role = "gateway" if argv[4] == "label=telebuba.gateway" else "android"
             return "".join(f"{line}\n" for line in lists[role])
@@ -127,7 +132,7 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
 
     instance = await pod.start_pod("telebuba-new", _SPEC, _PROXY)
 
-    assert instance == (1, "telebuba-new", True), "the lowest index free in both lists"
+    assert instance == (1, "telebuba-new", True, False), "the lowest index free in both lists"
     assert _verbs(console) == [
         "create telebuba-new-net",
         "cp " + str(copied[0][0]),
@@ -204,7 +209,7 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
 
     instance = await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
 
-    assert instance == (0, "telebuba-acc-0", True)
+    assert instance == (0, "telebuba-acc-0", True, False)
     verbs = _verbs(console)
     assert verbs[:2] == ["stop telebuba-acc-0", "stop telebuba-acc-0-net"]
     assert verbs[2].startswith("cp ")
@@ -583,3 +588,72 @@ async def test_a_failing_docker_is_not_hidden_from_a_removal(console: Console) -
 @pytest.mark.asyncio
 async def test_an_ipv4_literal_needs_no_lookup() -> None:
     assert await _gateway.resolve_address("127.0.0.1") == "127.0.0.1"
+
+
+_PAUSED = "0|telebuba-acc-0|paused\n"
+
+
+@pytest.mark.asyncio
+async def test_a_pod_is_parked_by_pausing_android_alone(console: Console) -> None:
+    console.answer = _docker()
+
+    assert await pod.pause_pod("telebuba-acc-0") is True
+    assert await pod.pause_pod("telebuba-acc-2") is False, "a stopped pod has nothing to pause"
+
+    assert _verbs(console) == ["pause telebuba-acc-0"], "the gateway keeps its tunnel up"
+
+
+@pytest.mark.asyncio
+async def test_a_parked_pod_is_thawed_then_killed_when_stopped(console: Console) -> None:
+    console.answer = _docker(_PAUSED)
+
+    await pod.stop_pod("telebuba-acc-0")
+
+    assert _verbs(console) == [
+        "unpause telebuba-acc-0",
+        "kill telebuba-acc-0",
+        "stop telebuba-acc-0-net",
+    ], "no grace: the app must not get to reconnect"
+
+
+@pytest.mark.asyncio
+async def test_only_a_pod_still_parked_is_stopped_by_its_timer(console: Console) -> None:
+    console.answer = _docker(_PAUSED)
+    assert await pod.stop_paused_pod("telebuba-acc-0") is True
+
+    console.calls.clear()
+    console.answer = _docker()
+    assert await pod.stop_paused_pod("telebuba-acc-0") is False, "someone opened it since"
+    assert _verbs(console) == []
+
+
+@pytest.mark.asyncio
+async def test_parked_pods_are_stopped_with_the_running_ones(console: Console) -> None:
+    console.answer = _docker(_PAUSED + "1|telebuba-acc-1|running\n")
+
+    assert await pod.stop_running_pods() == 3
+
+    verbs = _verbs(console)
+    assert "kill telebuba-acc-0" in verbs
+    assert "stop telebuba-acc-1" in verbs
+
+
+@pytest.mark.asyncio
+async def test_a_parked_pod_is_halted_before_a_restart(console: Console) -> None:
+    console.answer = _docker(_PAUSED)
+
+    await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    verbs = _verbs(console)
+    assert verbs.index("kill telebuba-acc-0") < verbs.index("start telebuba-acc-0-net")
+
+
+@pytest.mark.asyncio
+async def test_one_listing_finds_both_containers_of_a_pod(console: Console) -> None:
+    console.answer = _docker()
+
+    await pod.stop_pod("telebuba-acc-0")
+
+    listings = [c for c in console.calls if c[1] == "ps"]
+    assert len(listings) == 1
+    assert listings[0][4] == "label=telebuba.index"
