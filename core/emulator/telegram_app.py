@@ -17,11 +17,10 @@ from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._text import escape_input_text
 from core.emulator.ui_dump import (
-    START_LABELS,
-    YES_LABELS,
     classify,
     fields,
     find,
+    labels,
     parse_dump,
     password_field,
 )
@@ -77,6 +76,11 @@ async def bring_app_to_front(serial: str) -> None:
     await adb.start_app(serial, settings.emulator.telegram_package)
 
 
+async def leave_app(serial: str) -> None:
+    """Send the app to the background with HOME, as a person does when done with it."""
+    await adb.press(serial, adb.KEYCODE_HOME)
+
+
 async def ensure_app(serial: str) -> None:
     """Install Telegram when the container lacks it, then start it."""
     package = settings.emulator.telegram_package
@@ -98,7 +102,7 @@ def split_phone(phone: str) -> tuple[str, str]:
 
 
 async def press_start(serial: str, nodes: list[UiNode]) -> None:
-    await adb.human_tap(serial, _require(find(nodes, START_LABELS)))
+    await adb.human_tap(serial, _require(find(nodes, labels().start)))
 
 
 async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
@@ -115,7 +119,7 @@ async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
 
 
 async def confirm_number(serial: str, nodes: list[UiNode]) -> None:
-    await adb.human_tap(serial, _require(find(nodes, YES_LABELS)))
+    await adb.human_tap(serial, _require(find(nodes, labels().yes)))
 
 
 async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:

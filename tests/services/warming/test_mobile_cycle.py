@@ -17,8 +17,9 @@ import pytest_asyncio
 from core.config import settings
 from core.db import fetch_warming_state, upsert_warming_state
 from core.repositories.warming_daily_stats import list_warming_daily_stats
-from schemas.emulator import OpenMobileResult, PlaybookResult
-from schemas.warming import WarmingStateWrite
+from schemas._warming_visits import VisitPlan
+from schemas.emulator import OpenMobileResult, PlaybookPlan, PlaybookResult
+from schemas.warming import WarmingCycleRequest, WarmingStateWrite
 from services import warming
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 
     from schemas.device_fingerprint import DeviceType
     from schemas.telegram_actions import ActionResult, TelegramAction
-    from schemas.warming import WarmingStateRecord
+    from schemas.warming import ActivityPersona, WarmingStateRecord
     from schemas.warming_daily_stats import WarmingDailyStats
 
 
@@ -41,6 +42,7 @@ class _Pod:
 
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.plans: list[PlaybookPlan | None] = []
         self.signed_in = True
         self.open_error: Exception | None = None
         self.run_error: BaseException | None = None
@@ -54,9 +56,12 @@ class _Pod:
             raise self.open_error
         return OpenMobileResult(account_id=account_id, status="started", signed_in=self.signed_in)
 
-    async def run(self, account_id: str, duration_sec: int) -> PlaybookResult:
+    async def run(
+        self, account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+    ) -> PlaybookResult:
         del account_id
         self.calls.append(f"run:{duration_sec}")
+        self.plans.append(plan)
         if self.run_error is not None:
             raise self.run_error
         return self.activity
@@ -406,8 +411,10 @@ async def test_a_stop_mid_session_is_not_held_by_the_pod_stop(
     pod.stop_gate = asyncio.Event()
     started = asyncio.Event()
 
-    async def endless(account_id: str, duration_sec: int) -> PlaybookResult:
-        del account_id, duration_sec
+    async def endless(
+        account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+    ) -> PlaybookResult:
+        del account_id, duration_sec, plan
         started.set()
         await asyncio.Event().wait()
         raise AssertionError
@@ -437,3 +444,60 @@ def test_a_visit_buys_seconds_by_its_budget_within_the_cap(
     monkeypatch.setattr(settings.emulator, "activity_max_seconds", 900)
 
     assert session_seconds(budget) == expected
+
+
+class _Controls:
+    def __init__(self, *, reactions: bool) -> None:
+        self.reactions_enabled = reactions
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("persona", "reactions", "expected"),
+    [("calm", True, "calm"), ("active", True, "active"), ("active", False, None)],
+)
+async def test_the_session_plan_follows_the_persona_and_the_reactions_switch(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    persona: ActivityPersona,
+    reactions: bool,
+    expected: ActivityPersona | None,
+) -> None:
+    async def controls() -> _Controls:
+        return _Controls(reactions=reactions)
+
+    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    request = WarmingCycleRequest(account_id="acc-1", activity_persona=persona, remaining_actions=6)
+
+    plan = await _mobile_cycle.session_plan(request)
+
+    chance = settings.warming.persona_reaction_probability[expected] if expected else 0.0
+    assert plan.reaction_probability == chance
+    assert plan.max_actions == 6
+
+
+@pytest.mark.asyncio
+async def test_the_session_plan_takes_the_visits_shape_and_the_stories_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def controls() -> _Controls:
+        return _Controls(reactions=True)
+
+    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(settings.warming, "story_view_enabled", False)
+    visit = VisitPlan(kind="glance", channels=1, stories_first=True)
+    request = WarmingCycleRequest(account_id="acc-1", visit=visit)
+
+    plan = await _mobile_cycle.session_plan(request)
+
+    assert (plan.channels, plan.stories_first, plan.stories) == (1, True, False)
+    assert plan.max_actions is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_mobile_stint_hands_its_plan_to_the_session(pod: _Pod) -> None:
+    await _iterate_on("mobile")
+
+    [plan] = pod.plans
+    assert isinstance(plan, PlaybookPlan)

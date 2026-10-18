@@ -15,7 +15,7 @@ import pytest
 from core.emulator import telegram_app
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
-from core.emulator.ui_dump import classify, parse_dump, password_field
+from core.emulator.ui_dump import classify, labels, parse_dump, password_field
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -80,6 +80,44 @@ PASSWORD = _dump(_node("Your password"), _node("", cls=_EDIT, password="true"))
 )
 def test_each_telegram_screen_is_told_apart(xml: str, screen: str) -> None:
     assert classify(parse_dump(xml)) == screen
+
+
+@pytest.mark.parametrize(
+    ("xml", "screen"),
+    [
+        (_dump(_node(content_desc="Відкрити меню навігації")), "chats"),
+        (_dump(_node(content_desc="Yeni Mesaj")), "chats"),
+        (
+            _dump(_node("Telegram"), _node("Empezar a chatear", cls="android.widget.Button")),
+            "intro",
+        ),
+        (_dump(_node("Правильно ли указан номер?"), _node("Да")), "confirm"),
+        (_dump(_node("Ist das die richtige Nummer?"), _node("Ja")), "confirm"),
+        (
+            _dump(
+                _node("Tu número de teléfono"),
+                _node("52", cls=_EDIT, bounds="[0,100][80,150]"),
+                _node("", cls=_EDIT, bounds="[100,100][400,150]"),
+            ),
+            "phone",
+        ),
+    ],
+)
+def test_a_container_in_another_language_is_read_alike(xml: str, screen: str) -> None:
+    """The container runs in its fingerprint's language: Telegram's own strings for it."""
+    assert classify(parse_dump(xml)) == screen
+
+
+def test_every_label_group_has_english_and_other_languages() -> None:
+    words = labels()
+
+    assert "open navigation menu" in words.chats
+    assert "правильно ли указан номер?" in words.confirm, "Telegram's Russian wording"
+    for group in (words.start, words.yes, words.chats, words.phone, words.confirm):
+        assert len(group) > 10
+    assert "channel" in words.channel
+    assert "канал" in words.channel
+    assert all(len(stem) >= 3 for stem in words.story)
 
 
 def test_a_field_labelled_password_is_not_a_password_field() -> None:

@@ -17,12 +17,14 @@ from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator.playbook import TelegramMobilePlaybook, channel_rows, posts, story_avatars
 from core.emulator.ui_dump import UiNode
+from schemas.emulator import PlaybookPlan
 
 if TYPE_CHECKING:
     from core.emulator.ui_dump import Screen
     from tests.core.emulator.conftest import Console
 
 SERIAL = "127.0.0.1:5601"
+NO_REACTIONS = PlaybookPlan(reaction_probability=0.0)
 WIDTH, HEIGHT = 1080, 2400
 
 
@@ -104,6 +106,10 @@ class _Engine(HumanInputEngine):
         return 2.0, self.scroll_back
 
 
+# The fixed 2 s pause, stretched for POST's text (``_reading_pause``).
+POST_PAUSE = 2.0 * (playbook._TEXT_FACTOR_MIN + len(POST.text) / playbook._CHARS_PER_FACTOR)
+
+
 def _playbook(*, scroll_back: bool = False) -> TelegramMobilePlaybook:
     return TelegramMobilePlaybook(_Engine(scroll_back=scroll_back))
 
@@ -128,7 +134,6 @@ async def test_a_slow_read_drags_the_bezier_curve_down_the_history(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
     session = _playbook()
 
@@ -142,7 +147,7 @@ async def test_a_slow_read_drags_the_bezier_curve_down_the_history(
         assert up[:3] == ["input", "motionevent", "UP"]
         assert int(down[4]) < int(up[4]), "the finger moves down: older posts"
     assert session.result.scrolls == 3
-    assert clock.slept == [2.0, 2.0, 2.0]
+    assert clock.slept == [POST_PAUSE] * 3
 
 
 @pytest.mark.asyncio
@@ -150,7 +155,6 @@ async def test_a_flick_is_a_short_input_swipe(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 1.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
 
     await _playbook().read_channel_feed(SERIAL, 1)
@@ -159,7 +163,7 @@ async def test_a_flick_is_a_short_input_swipe(
     assert call[:2] == ["input", "swipe"]
     assert 120 <= int(call[6]) <= 180
     assert int(call[3]) < int(call[5])
-    assert clock.slept == [2.0]
+    assert clock.slept == [POST_PAUSE]
 
 
 @pytest.mark.asyncio
@@ -167,7 +171,6 @@ async def test_a_scroll_back_rereads_with_a_short_upward_drag(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
 
     await _playbook(scroll_back=True).read_channel_feed(SERIAL, 1)
@@ -175,7 +178,7 @@ async def test_a_scroll_back_rereads_with_a_short_upward_drag(
     read, back = console.shell_calls()
     assert int(read[4]) < int(read[-1])
     assert int(back[4]) > int(back[-1]), "the finger moves up again"
-    assert clock.slept == [2.0]
+    assert clock.slept == [POST_PAUSE]
 
 
 def _ends(call: list[str]) -> tuple[tuple[int, int], tuple[int, int]]:
@@ -189,7 +192,6 @@ async def test_reads_start_at_a_right_thumbs_spot_never_the_same_pixel(
     console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
 
     await _playbook().read_channel_feed(SERIAL, 8)
@@ -210,7 +212,6 @@ async def test_a_scroll_back_starts_somewhere_new_too(
     console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
 
     await _playbook(scroll_back=True).read_channel_feed(SERIAL, 4)
@@ -228,7 +229,6 @@ async def test_a_scroll_back_starts_somewhere_new_too(
 async def test_one_seed_scrolls_the_same_way_twice(
     console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
     await _playbook().read_channel_feed(SERIAL, 3)
     first = console.shell_calls()
@@ -243,11 +243,10 @@ async def test_one_seed_scrolls_the_same_way_twice(
 async def test_a_reaction_double_taps_a_post_on_screen(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 1.0)
     _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
     session = _playbook()
 
-    await session.read_channel_feed(SERIAL, 1)
+    await session.read_channel_feed(SERIAL, 1, react=True)
 
     tap = console.shell_calls()[0]
     assert tap[:2] == ["input", "tap"]
@@ -263,13 +262,12 @@ async def test_a_reaction_double_taps_a_post_on_screen(
 async def test_no_post_on_screen_is_skipped_not_guessed(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 1.0)
     phone = _phone(monkeypatch, console, [CHANNEL_ROW])
     _opened_in_channel(phone)
     phone.inside = [ROOT]
     session = _playbook()
 
-    await session.read_channel_feed(SERIAL, 1)
+    await session.read_channel_feed(SERIAL, 1, react=True)
 
     assert not any(call[:2] == ["input", "tap"] for call in console.shell_calls())
     assert session.result.skipped == ["no_post"]
@@ -287,7 +285,7 @@ async def test_reading_stops_when_the_chat_list_shows(
 
     assert console.shell_calls() == [], "nothing is swiped on the chat list"
     assert session.result.scrolls == 0
-    assert clock.slept == [2.0]
+    assert clock.slept == []
 
 
 @pytest.mark.asyncio
@@ -401,39 +399,38 @@ async def test_an_empty_dump_is_refused_before_any_gesture(
 
     assert refused.value.code == "emulator_field_missing"
     assert console.shell_calls() == []
-    assert clock.slept == [2.0]
+    assert clock.slept == []
 
 
 @pytest.mark.asyncio
-async def test_a_session_reads_channels_until_time_runs_out_and_ends_on_chats(
+async def test_a_session_reads_each_channel_once_and_ends_on_chats(
     console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
 ) -> None:
     monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 0.0)
     phone = _phone(monkeypatch, console, [CHANNEL_ROW])
 
-    result = await _playbook().run_session(SERIAL, 60)
+    result = await _playbook().run_session(SERIAL, 600, NO_REACTIONS)
 
-    assert result.channels_read >= 1
+    assert result.channels_read == 1, "the one channel is not read again"
     assert result.scrolls >= 3
-    assert clock.now >= 60
+    assert clock.now < 600
     assert phone.screen == "chats"
-    assert result.skipped == []
+    assert result.skipped == ["no_channel", "no_stories"]
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
 async def test_a_session_falls_back_to_the_other_activity(
-    console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
+    console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(playbook, "_STORIES_SHARE", 1.0)
     _phone(monkeypatch, console, [CHANNEL_ROW])
 
-    result = await _playbook().run_session(SERIAL, 10)
+    result = await _playbook().run_session(SERIAL, 600, NO_REACTIONS)
 
-    assert result.channels_read >= 1
-    assert result.skipped == ["no_stories"]
-    assert clock.now >= 10
+    assert result.channels_read == 1
+    assert result.skipped == ["no_stories", "no_channel"], "stories are tried once"
 
 
 @pytest.mark.asyncio
@@ -525,12 +522,11 @@ async def test_real_dumps_a_channel_is_opened_read_and_reacted_to(
 ) -> None:
     monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
     monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
-    monkeypatch.setattr(playbook, "_REACTION_CHANCE", 1.0)
     monkeypatch.setattr(playbook, "_FEED_SCROLLS", (1, 1))
     _serve_dumps(console).clear()
     session = _playbook()
 
-    result = await session.run_session(SERIAL, 1)
+    result = await session.run_session(SERIAL, 1, PlaybookPlan(reaction_probability=1.0))
 
     gestures = _gestures(console)
     back, open_row, react, read, back_again = gestures
@@ -562,3 +558,125 @@ async def test_real_dumps_stories_open_others_never_the_own_story(
     assert 180 <= int(opened[2]) < 320, "Anna's story, not the own-story button"
     assert 220 <= int(opened[3]) < 360
     assert clock.slept
+
+
+OTHER_CHANNEL = _node(text="Channel. Daily Deals", bounds=(0, 720, WIDTH, 880))
+HISTORY_CHANNEL = _node(text="Канал. История России", bounds=(0, 880, WIDTH, 1040))
+
+
+def test_a_channel_named_history_is_no_story_and_stories_sit_on_top() -> None:
+    low_story = _node(description="Stories by Bob", bounds=(180, 1500, 320, 1640))
+    chats = [ROOT, MENU, STORY, HISTORY_CHANNEL, low_story]
+
+    assert channel_rows(chats) == [HISTORY_CHANNEL], "the Russian row is a channel too"
+    assert story_avatars(chats) == [STORY]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_one_reaction_per_channel_however_long_it_is_read(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_FLING_CHANCE", 0.0)
+    _opened_in_channel(_phone(monkeypatch, console, [CHANNEL_ROW]))
+    session = _playbook()
+
+    await session.read_channel_feed(SERIAL, 6, react=True)
+
+    taps = [call for call in console.shell_calls() if call[:2] == ["input", "tap"]]
+    assert len(taps) == 1, "a second quick reaction would take the first back"
+    assert session.result.reactions == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_reactions_switched_off_are_never_sent(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    _phone(monkeypatch, console, [CHANNEL_ROW, OTHER_CHANNEL])
+
+    result = await _playbook().run_session(SERIAL, 600, NO_REACTIONS)
+
+    assert result.reactions == 0
+    assert not any(call[:2] == ["input", "tap"] for call in console.shell_calls())
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_the_visits_channels_and_action_budget_end_the_session(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    _phone(monkeypatch, console, [CHANNEL_ROW, OTHER_CHANNEL])
+
+    by_channels = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(channels=1, reaction_probability=0.0)
+    )
+    by_budget = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(max_actions=1, reaction_probability=0.0)
+    )
+
+    assert by_channels.channels_read == 1
+    assert by_budget.channels_read == 1
+
+
+@pytest.mark.asyncio
+async def test_a_feed_stops_reading_when_the_session_time_is_up(
+    console: Console, monkeypatch: pytest.MonkeyPatch, clock: _Clock
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    monkeypatch.setattr(playbook, "_FEED_SCROLLS", (8, 8))
+    _phone(monkeypatch, console, [CHANNEL_ROW])
+
+    result = await _playbook().run_session(SERIAL, 3, NO_REACTIONS)
+
+    assert 1 <= result.scrolls < 8, "the channel is left when the visit's time is up"
+    assert clock.now < 3 + POST_PAUSE + 1, "no pause after the time is up"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_stories_switched_off_are_never_opened(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 1.0)
+    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
+
+    result = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(stories=False, reaction_probability=0.0)
+    )
+
+    assert result.stories_watched == 0
+    assert result.channels_read == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_stories_first_are_watched_before_any_channel(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
+
+    result = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(stories_first=True, reaction_probability=0.0)
+    )
+
+    first_tap = console.shell_calls()[0]
+    left, top, right, bottom = STORY.bounds
+    assert left <= int(first_tap[2]) < right
+    assert top <= int(first_tap[3]) < bottom
+    assert result.stories_watched >= 1
+
+
+def test_a_long_text_is_read_longer_than_a_picture() -> None:
+    session = _playbook()
+    long_post = _node(text="x" * 1000, bounds=POST.bounds)
+    picture = _node(bounds=POST.bounds)
+
+    text_pause, _back = session._reading_pause([ROOT, long_post])
+    glance, _back = session._reading_pause([ROOT, picture])
+
+    assert text_pause == 2.0 * playbook._TEXT_FACTOR_MAX
+    assert glance == 2.0 * playbook._TEXT_FACTOR_MIN
