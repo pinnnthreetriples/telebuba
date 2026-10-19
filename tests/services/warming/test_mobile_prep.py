@@ -10,6 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
+import pytest_asyncio
 
 from core.config import settings
 from core.db import create_account
@@ -24,7 +25,7 @@ from services.warming import _mobile_cycle, _mobile_prep, _mobile_prep_state
 from services.warming._state import _set_state
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import AsyncIterator, Iterator
 
     from schemas._warming_cycle import CycleStatus
     from schemas.device_fingerprint import DeviceType
@@ -67,6 +68,24 @@ def phone(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Phone]:
         fake.gate.set()
 
 
+async def _forever() -> None:
+    await asyncio.Event().wait()
+
+
+@pytest_asyncio.fixture
+async def loop_task() -> AsyncIterator[asyncio.Task[None]]:
+    """Stands in for the stint's warming loop the job is tied to."""
+    task = asyncio.create_task(_forever())
+    yield task
+    task.cancel()
+
+
+async def _start(
+    loop: asyncio.Task[None], device: DeviceType = "mobile", account_id: str = "acc-1"
+) -> None:
+    (await _mobile_prep.prepare_phone(account_id, device))(loop)
+
+
 async def _job_done(account_id: str = "acc-1") -> None:
     job = _mobile_prep_state.JOBS.get(account_id)
     if job is not None:
@@ -74,16 +93,20 @@ async def _job_done(account_id: str = "acc-1") -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_desktop_stint_prepares_nothing(phone: _Phone) -> None:
-    await _mobile_prep.prepare_phone("acc-1", "desktop")
+async def test_a_desktop_stint_prepares_nothing(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
+    await _start(loop_task, "desktop")
 
     assert phone.steps == []
     assert _mobile_prep_state.phone_prep("acc-1") is None
 
 
 @pytest.mark.asyncio
-async def test_a_phone_is_checked_then_readied_in_the_background(phone: _Phone) -> None:
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+async def test_a_phone_is_checked_then_readied_in_the_background(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
+    await _start(loop_task)
 
     assert phone.steps == ["host:quick"], "the start waits only for the quick host check"
     assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="preparing")
@@ -124,12 +147,12 @@ async def test_a_host_that_cannot_run_a_phone_refuses_the_start(
 )
 @pytest.mark.asyncio
 async def test_a_failed_preparation_leaves_its_code_on_the_card(
-    phone: _Phone, error: BaseException | None, code: str
+    phone: _Phone, loop_task: asyncio.Task[None], error: BaseException | None, code: str
 ) -> None:
     phone.error = error
     phone.signed_in = False
 
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+    await _start(loop_task)
     await _job_done()
 
     assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="failed", code=code)
@@ -137,27 +160,60 @@ async def test_a_failed_preparation_leaves_its_code_on_the_card(
 
 
 @pytest.mark.asyncio
-async def test_a_phone_the_operator_holds_is_left_to_them(phone: _Phone) -> None:
+async def test_a_phone_the_operator_holds_is_left_to_them(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
     phone.error = EmulatorBusyError()
 
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+    await _start(loop_task)
     await _job_done()
 
     assert _mobile_prep_state.phone_prep("acc-1") is None
 
 
 @pytest.mark.asyncio
-async def test_a_second_start_joins_the_job_in_flight(phone: _Phone) -> None:
+async def test_the_job_ends_with_the_stints_loop(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
     phone.gate = asyncio.Event()
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+    await _start(loop_task)
     job = _mobile_prep_state.JOBS["acc-1"]
+    await asyncio.sleep(0)
+    assert phone.steps[-1] == "pod:acc-1", "the job is inside the pod's open"
 
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+    loop_task.cancel()  # Stop, Promote or a restart's cancel-and-replace
+    await asyncio.wait({job}, timeout=5)
 
-    assert _mobile_prep_state.JOBS["acc-1"] is job
+    assert job.cancelled()
+    assert _mobile_prep_state.JOBS == {}, "visits are no longer held"
+    assert _mobile_prep_state.phone_prep("acc-1") is None, "no card note for a stopped stint"
+
+
+@pytest.mark.asyncio
+async def test_a_new_stints_job_waits_for_the_old_one_to_end(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
+    phone.gate = asyncio.Event()
+    await _start(loop_task)
+    old = _mobile_prep_state.JOBS["acc-1"]
+    await asyncio.sleep(0)
+    new_loop = asyncio.create_task(_forever())
+
+    await _start(new_loop)
+    new = _mobile_prep_state.JOBS["acc-1"]
+    await asyncio.sleep(0)
+
+    assert new is not old
+    assert phone.steps.count("host:build") == 1, "no second open while the first runs"
+    loop_task.cancel()
+    await asyncio.wait({old}, timeout=5)
+    assert _mobile_prep_state.JOBS["acc-1"] is new, "the old job's end leaves the new one"
+    assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="preparing")
     phone.gate.set()
-    await job
-    assert phone.steps.count("host:build") == 1
+    await new
+    assert phone.steps.count("host:build") == 2
+    assert _mobile_prep_state.phone_prep("acc-1") is None
+    new_loop.cancel()
 
 
 class _Visits:
@@ -179,12 +235,12 @@ async def _no_step(_step: str) -> None:
 
 @pytest.mark.asyncio
 async def test_a_visit_waits_while_the_phone_is_prepared(
-    phone: _Phone, monkeypatch: pytest.MonkeyPatch
+    phone: _Phone, monkeypatch: pytest.MonkeyPatch, loop_task: asyncio.Task[None]
 ) -> None:
     visits = _Visits()
     monkeypatch.setattr(_mobile_prep, "run_mobile_cycle", visits)
     phone.gate = asyncio.Event()
-    await _mobile_prep.prepare_phone("acc-1", "mobile")
+    await _start(loop_task)
     request = WarmingCycleRequest(account_id="acc-1")
 
     result = await _mobile_prep.run_visit(request, on_step=_no_step)

@@ -9,7 +9,8 @@ on the way) with the Telegram app installed and signed in through the account's
 existing session, parked for the first visit. A visit waits while the job runs
 (skipped as ``emulator_preparing``); a failed job leaves its code on the card, and a
 visit that then warms clears it. A phone the operator holds is theirs: the job
-stops there and the visits sign it in later.
+stops there and the visits sign it in later. The job ends with the stint's loop task
+(a stop, promote or restart cancels it), so no phone is readied for a stint that ended.
 
 The jobs and their state are process-local, like the rest of the runtime state: after
 a restart a visit prepares the phone itself (``open_account_mobile`` signs a
@@ -19,6 +20,7 @@ signed-out app in).
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 from typing import TYPE_CHECKING
 
 from core.emulator import EmulatorError
@@ -44,23 +46,50 @@ _NOT_SIGNED_IN = "emulator_not_signed_in"
 _UNEXPECTED = "emulator_command_failed"
 
 
-async def prepare_phone(account_id: str, device_mode: DeviceType) -> None:
-    """Refuse a host that cannot run a phone, then start the account's phone job.
+async def prepare_phone(
+    account_id: str, device_mode: DeviceType
+) -> Callable[[asyncio.Task[None]], None]:
+    """Refuse a host that cannot run a phone; how to start the phone job once the loop runs.
 
-    Nothing for a desktop stint; a job already running is left to finish.
+    The returned callable takes the stint's loop task and starts the account's phone
+    job, which lives no longer than that loop: a stop, promote or restart cancels it
+    with the loop (the card note goes too). A job still running for the account is
+    waited out first. Nothing for a desktop stint.
     """
     if device_mode != "mobile":
-        return
+        return _no_job
     try:
         await check_host(build_probe=False)
     except EmulatorError as exc:
         raise WarmingDeviceUnavailableError(exc.code, account_id) from exc
-    if account_id in _state.JOBS:
-        return
+    return partial(_start_job, account_id)
+
+
+def _no_job(_loop: asyncio.Task[None]) -> None:
+    return None
+
+
+def _start_job(account_id: str, loop: asyncio.Task[None]) -> None:
+    previous = _state.JOBS.get(account_id)
     _state.STATE[account_id] = PhonePrep(status="preparing")
-    job = asyncio.create_task(_prepare(account_id))
+    job = asyncio.create_task(_prepare_after(previous, account_id))
     _state.JOBS[account_id] = job
-    job.add_done_callback(lambda _done: _state.JOBS.pop(account_id, None))
+    job.add_done_callback(partial(_job_done, account_id))
+    loop.add_done_callback(lambda _loop: job.cancel())
+
+
+def _job_done(account_id: str, job: asyncio.Task[None]) -> None:
+    if _state.JOBS.get(account_id) is not job:
+        return  # a newer stint's job took over
+    del _state.JOBS[account_id]
+    if job.cancelled():
+        _state.STATE.pop(account_id, None)
+
+
+async def _prepare_after(previous: asyncio.Task[None] | None, account_id: str) -> None:
+    if previous is not None:
+        await asyncio.wait({previous})  # its pod cleanup first, never two opens at once
+    await _prepare(account_id)
 
 
 async def run_visit(

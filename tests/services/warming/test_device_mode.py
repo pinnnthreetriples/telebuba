@@ -20,7 +20,7 @@ from core.emulator import EmulatorError
 from core.repositories.device_fingerprint import record_second_device
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import ActionResult, SetOnline
-from schemas.warming import StartWarmingRequest
+from schemas.warming import StartWarmingRequest, StopWarmingRequest
 from services import warming
 from services.warming import _mobile_prep, _mobile_prep_state, _runner, _runtime, _seams
 from services.warming._state import _set_state
@@ -94,6 +94,31 @@ async def test_a_phone_stint_start_prepares_its_phone(
     await asyncio.gather(*_mobile_prep_state.JOBS.values())
 
     assert prepared_phones == ["acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_stopping_a_phone_stint_cancels_its_phone_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await _account(mobile=True)
+    preparing = asyncio.Event()
+
+    async def prepare(_account_id: str) -> None:
+        preparing.set()
+        await asyncio.sleep(3600)  # still booting the pod
+
+    monkeypatch.setattr(_mobile_prep, "_prepare", prepare)
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1", device_mode="mobile"))
+    await preparing.wait()
+    job = _mobile_prep_state.JOBS["acc-1"]
+
+    card = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
+    await asyncio.wait({job}, timeout=5)
+
+    assert job.cancelled(), "no phone is readied for a stint that ended"
+    assert _mobile_prep_state.JOBS == {}
+    assert card.phone_prep is None
 
 
 @pytest.mark.asyncio

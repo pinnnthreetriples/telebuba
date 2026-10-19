@@ -336,7 +336,7 @@ async def start_warming(data: StartWarmingRequest, *, rewarm: bool = False) -> W
         if rewarm:
             assert_on_warmed_card(existing, data.account_id)
         stint = carry_or_restamp(existing, data, account)
-        await _mobile_prep.prepare_phone(data.account_id, stint.device_mode)
+        start_phone = await _mobile_prep.prepare_phone(data.account_id, stint.device_mode)
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
@@ -395,7 +395,7 @@ async def start_warming(data: StartWarmingRequest, *, rewarm: bool = False) -> W
             raise
         # No await after the prepared generation and task registration: a request
         # cancellation can now only land after ownership is complete.
-        _spawn_runtime_task(data.account_id, run_id)
+        start_phone(_spawn_runtime_task(data.account_id, run_id))
     await journal_start(data.account_id, existing, stint, account)
     return await _current_card(data.account_id)
 
