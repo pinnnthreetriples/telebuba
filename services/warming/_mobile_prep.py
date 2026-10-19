@@ -3,8 +3,8 @@
 A phone stint's start first refuses a host that cannot run a phone at all (no docker,
 no adb, a kernel without binder: ``core.emulator.host``), with the stint unchanged.
 Then a background job readies everything else, so a problem shows on the card at
-once instead of hours later at the first visit: the host's binder probe (building the
-gateway image for it), the screen's scrcpy-server, the pod (its images pulled or built
+once instead of hours later at the first visit: the host check again, the
+screen's scrcpy-server, the pod (its images pulled or built
 on the way) with the Telegram app installed and signed in through the account's
 existing session, parked for the first visit. A visit waits while the job runs
 (skipped as ``emulator_preparing``); a failed job leaves its code on the card, and a
@@ -59,7 +59,7 @@ async def prepare_phone(
     if device_mode != "mobile":
         return _no_job
     try:
-        await check_host(build_probe=False)
+        await check_host()
     except EmulatorError as exc:
         raise WarmingDeviceUnavailableError(exc.code, account_id) from exc
     return partial(_start_job, account_id)
@@ -113,7 +113,7 @@ async def run_visit(
 
 async def _prepare(account_id: str) -> None:
     try:
-        await check_host(build_probe=True)
+        await check_host()
         await ensure_scrcpy_server()
         signed_in = await prepare_pod(account_id)
     except EmulatorBusyError:

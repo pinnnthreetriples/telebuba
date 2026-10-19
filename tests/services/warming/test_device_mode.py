@@ -38,8 +38,8 @@ def prepared_phones(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setattr(settings.emulator, "enabled", True)
     prepared: list[str] = []
 
-    async def capable(*, build_probe: bool) -> None:
-        del build_probe
+    async def capable() -> None:
+        return None
 
     async def prepare(account_id: str) -> None:
         prepared.append(account_id)
@@ -128,8 +128,7 @@ async def test_a_host_that_cannot_run_a_phone_refuses_the_start_untouched(
     monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
     await _account(mobile=True)
 
-    async def no_docker(*, build_probe: bool) -> None:
-        del build_probe
+    async def no_docker() -> None:
         code = "emulator_docker_unavailable"
         raise EmulatorError(code)
 

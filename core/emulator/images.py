@@ -48,19 +48,26 @@ async def ensure_gateway_image() -> None:
     await _ensure(settings.emulator.gateway_image, ("build", "-t", "{image}", str(GATEWAY_CONTEXT)))
 
 
+async def ensure_pulled(image: str, *, seconds: float) -> None:
+    """Pull ``image`` when missing, bounded by ``seconds`` instead of the usual timeout."""
+    await _ensure(image, ("pull", "{image}"), seconds=seconds)
+
+
 async def image_present(image: str) -> bool:
     listed = await _process.docker_or_none("image", "inspect", "--format", "{{.Id}}", image)
     return listed is not None
 
 
-async def _ensure(image: str, make: tuple[str, ...]) -> None:
+async def _ensure(image: str, make: tuple[str, ...], *, seconds: float | None = None) -> None:
     async with _LOCKS.setdefault(image, asyncio.Lock()):
         if await image_present(image):
             return
         argv = [str(settings.emulator.docker_path), *(a.format(image=image) for a in make)]
         try:
             await _process.run_command(
-                argv, seconds=settings.emulator.image_timeout_seconds, step=f"docker {make[0]}"
+                argv,
+                seconds=seconds or settings.emulator.image_timeout_seconds,
+                step=f"docker {make[0]}",
             )
         except EmulatorError as exc:
             if exc.code in {_EMULATOR_COMMAND_FAILED, _EMULATOR_COMMAND_TIMEOUT}:

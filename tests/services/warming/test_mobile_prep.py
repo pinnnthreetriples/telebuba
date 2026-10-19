@@ -40,8 +40,8 @@ class _Phone:
         self.error: BaseException | None = None
         self.gate: asyncio.Event | None = None
 
-    async def check_host(self, *, build_probe: bool) -> None:
-        self.steps.append("host:build" if build_probe else "host:quick")
+    async def check_host(self) -> None:
+        self.steps.append("host")
 
     async def scrcpy(self) -> None:
         self.steps.append("scrcpy")
@@ -108,11 +108,11 @@ async def test_a_phone_is_checked_then_readied_in_the_background(
 ) -> None:
     await _start(loop_task)
 
-    assert phone.steps == ["host:quick"], "the start waits only for the quick host check"
+    assert phone.steps == ["host"], "the start waits only for the quick host check"
     assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="preparing")
     await _job_done()
 
-    assert phone.steps == ["host:quick", "host:build", "scrcpy", "pod:acc-1"]
+    assert phone.steps == ["host", "host", "scrcpy", "pod:acc-1"]
     assert _mobile_prep_state.phone_prep("acc-1") is None, "a ready phone needs no card note"
 
 
@@ -120,8 +120,7 @@ async def test_a_phone_is_checked_then_readied_in_the_background(
 async def test_a_host_that_cannot_run_a_phone_refuses_the_start(
     phone: _Phone, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def no_binder(*, build_probe: bool) -> None:
-        del build_probe
+    async def no_binder() -> None:
         code = "emulator_binder_missing"
         raise EmulatorError(code)
 
@@ -204,14 +203,14 @@ async def test_a_new_stints_job_waits_for_the_old_one_to_end(
     await asyncio.sleep(0)
 
     assert new is not old
-    assert phone.steps.count("host:build") == 1, "no second open while the first runs"
+    assert phone.steps.count("pod:acc-1") == 1, "no second open while the first runs"
     loop_task.cancel()
     await asyncio.wait({old}, timeout=5)
     assert _mobile_prep_state.JOBS["acc-1"] is new, "the old job's end leaves the new one"
     assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="preparing")
     phone.gate.set()
     await new
-    assert phone.steps.count("host:build") == 2
+    assert phone.steps.count("pod:acc-1") == 2
     assert _mobile_prep_state.phone_prep("acc-1") is None
     new_loop.cancel()
 

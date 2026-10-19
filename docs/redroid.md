@@ -148,10 +148,10 @@ Android keeps `/data` across stop/start, so only a container made again is seede
 Starting warming with device `mobile` (`services/warming/_mobile_prep.py`) first checks the host
 (`core/emulator/host.py`) and refuses the start, stint untouched, with what only the operator can
 fix: `emulator_docker_unavailable` (no docker CLI or its daemon down), `emulator_adb_missing`, or
-`emulator_binder_missing` (the kernel below; probed in a throwaway gateway container once the image
-exists, and not asked again once found capable). Then a background job readies the rest while
-the card says "preparing the phone": the binder probe (building the gateway image for it), the
-scrcpy-server, and the pod itself with its images pulled or built, Telegram installed and signed in
+`emulator_binder_missing` (the kernel below; probed in a throwaway container of `alpine:3.20`, the
+gateway's base image, pulled first when missing, and not asked again once found capable; a pull
+that fails is `emulator_image_unavailable`). Then a background job readies the rest while the card
+says "preparing the phone": the scrcpy-server, and the pod itself with its images pulled or built, Telegram installed and signed in
 through the account's existing session, parked for the first visit within
 `EMULATOR__MAX_RUNNING_PODS`; the job ends with the stint's loop, so Stop or Promote cancels it. Visits are skipped as `emulator_preparing` while it runs; a failed
 job leaves its code on the card until a visit warms. A visit that finds the app signed out signs it

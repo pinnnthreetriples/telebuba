@@ -15,24 +15,23 @@ if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
     from tests.core.emulator.conftest import Console
 
-_GATEWAY = "telebuba/net-gateway:1"
+_PROBE = "alpine:3.20"
 
 
 @pytest.fixture(autouse=True)
 def _fresh(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(host, "_binder_seen", False)
     monkeypatch.setattr(images, "_LOCKS", {})
-    monkeypatch.setattr(settings.emulator, "gateway_image", _GATEWAY)
 
 
 def _host(
     *,
     refuse: Callable[[list[str]], EmulatorRefusalCode | None] = lambda _argv: None,
-    gateway: bool = True,
+    probe_image: bool = True,
 ) -> Callable[[list[str]], str]:
     def answer(argv: list[str]) -> str:
         code = refuse(argv)
-        if code is None and argv[1:3] == ["image", "inspect"] and not gateway:
+        if code is None and argv[1:3] == ["image", "inspect"] and not probe_image:
             code = "emulator_command_failed"
         if code is not None:
             raise EmulatorError(code)
@@ -49,13 +48,13 @@ def _probes(console: Console) -> list[list[str]]:
 async def test_a_capable_host_is_probed_once(console: Console) -> None:
     console.answer = _host()
 
-    await host.check_host(build_probe=False)
-    await host.check_host(build_probe=False)
+    await host.check_host()
+    await host.check_host()
 
     assert _probes(console) == [
         [
             str(settings.emulator.docker_path),
-            *("run", "--rm", "--entrypoint", "grep", _GATEWAY),
+            *("run", "--rm", "--entrypoint", "grep", _PROBE),
             *("-qw", "binder", "/proc/filesystems"),
         ]
     ], "a kernel found capable is not asked again"
@@ -83,25 +82,52 @@ async def test_what_the_host_lacks_is_named(
     console.answer = _host(refuse=refuse)
 
     with pytest.raises(EmulatorError) as refusal:
-        await host.check_host(build_probe=False)
+        await host.check_host()
 
     assert refusal.value.code == expected
 
 
 @pytest.mark.asyncio
-async def test_without_the_gateway_image_the_start_does_not_build_it(console: Console) -> None:
-    console.answer = _host(gateway=False)
+async def test_a_host_that_never_ran_a_phone_is_probed_at_the_first_start(
+    console: Console,
+) -> None:
+    console.answer = _host(probe_image=False)
 
-    await host.check_host(build_probe=False)
+    await host.check_host()
 
-    assert _probes(console) == []
-    assert not [call for call in console.calls if call[1] == "build"]
+    made = [call[1:3] for call in console.calls if call[1] in {"pull", "build", "run"}]
+    assert made == [["pull", _PROBE], ["run", "--rm"]], "a small pull, never the gateway build"
+    pull = next(call for call in console.calls if call[1] == "pull")
+    assert console.seconds[console.calls.index(pull)] == host._PROBE_PULL_SECONDS
 
 
 @pytest.mark.asyncio
-async def test_the_preparation_builds_the_gateway_image_to_probe(console: Console) -> None:
-    console.answer = _host(gateway=False)
+async def test_a_kernel_without_binder_refuses_even_a_fresh_host(console: Console) -> None:
+    console.answer = _host(
+        probe_image=False,
+        refuse=lambda argv: "emulator_command_failed" if argv[1] == "run" else None,
+    )
 
-    await host.check_host(build_probe=True)
+    with pytest.raises(EmulatorError) as refusal:
+        await host.check_host()
 
-    assert [call[1] for call in console.calls if call[1] in {"build", "run"}] == ["build", "run"]
+    assert refusal.value.code == "emulator_binder_missing"
+
+
+@pytest.mark.asyncio
+async def test_a_probe_image_that_cannot_be_pulled_refuses_the_start(console: Console) -> None:
+    console.answer = _host(
+        probe_image=False,
+        refuse=lambda argv: "emulator_command_timeout" if argv[1] == "pull" else None,
+    )
+
+    with pytest.raises(EmulatorError) as refusal:
+        await host.check_host()
+
+    assert refusal.value.code == "emulator_image_unavailable"
+    assert not host._binder_seen
+
+
+def test_the_probe_image_is_the_gateways_own_base() -> None:
+    dockerfile = (images.GATEWAY_CONTEXT / "Dockerfile").read_text(encoding="utf-8")
+    assert f"FROM {host.PROBE_IMAGE}" in dockerfile.splitlines()
