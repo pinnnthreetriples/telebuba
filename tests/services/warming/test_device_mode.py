@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 def _mobile_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.telegram, "mobile_api_id", 6)
     monkeypatch.setattr(settings.telegram, "mobile_api_hash", "mobile-hash")
+    monkeypatch.setattr(settings.emulator, "enabled", True)
 
 
 async def _account(*, mobile: bool) -> None:
@@ -96,6 +97,35 @@ async def test_mobile_without_its_app_credentials_is_refused(
         await warming.start_warming(StartWarmingRequest(account_id="acc-1", device_mode="mobile"))
 
     assert refused.value.code == "mobile_api_not_configured"
+
+
+@pytest.mark.asyncio
+async def test_mobile_with_the_emulator_off_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A phone stint runs only on the emulator: no silent Telethon stand-in."""
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await _account(mobile=True)
+    monkeypatch.setattr(settings.emulator, "enabled", False)
+
+    with pytest.raises(warming.WarmingDeviceUnavailableError) as refused:
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1", device_mode="mobile"))
+
+    assert refused.value.code == "mobile_emulator_disabled"
+    assert await fetch_warming_state("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_the_card_flags_a_mobile_stint_while_the_emulator_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account(mobile=True)
+    await _set_state("acc-1", "sleeping", device_mode="mobile")
+    monkeypatch.setattr(settings.emulator, "enabled", False)
+
+    board = await warming.load_board()
+
+    assert [card.mobile_emulator_off for card in board.warming] == [True]
+    monkeypatch.setattr(settings.emulator, "enabled", True)
+    assert [card.mobile_emulator_off for card in (await warming.load_board()).warming] == [False]
 
 
 @pytest.mark.asyncio

@@ -134,6 +134,12 @@ def _to_card(
             record is not None
             and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak
         ),
+        mobile_emulator_off=(
+            record is not None
+            and record.device_mode == "mobile"
+            and is_warming(state)
+            and not settings.emulator.enabled
+        ),
         live_phone_id=(
             container_name(account.account_id)
             if phone_activity(account.account_id) == "warming"

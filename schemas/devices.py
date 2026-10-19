@@ -18,6 +18,7 @@ from schemas.device_fingerprint import DeviceType  # noqa: TC001 - Pydantic fiel
 DeviceRefusalCode = Literal[
     "device_missing",
     "mobile_api_not_configured",
+    "mobile_emulator_disabled",
     "device_already_present",
     "device_phone_unknown",
     "device_session_conflict",
