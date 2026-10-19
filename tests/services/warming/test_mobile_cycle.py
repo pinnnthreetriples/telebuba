@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from schemas.device_fingerprint import DeviceType
+    from schemas.devices import DeviceRefusalCode
     from schemas.telegram_actions import ActionResult, TelegramAction
     from schemas.warming import ActivityPersona, WarmingStateRecord
     from schemas.warming_daily_stats import WarmingDailyStats
@@ -270,19 +271,22 @@ async def test_a_missing_device_parks_the_account_in_error(pod: _Pod) -> None:
     assert (record.state, record.last_error) == ("error", "device_missing")
 
 
+@pytest.mark.parametrize("code", ["device_code_cooldown", "device_primary_unavailable"])
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("telethon")
-async def test_a_code_pause_is_a_passing_cause(pod: _Pod) -> None:
-    pod.open_error = DeviceRefusedError("device_code_cooldown", retry_after_seconds=60)
+async def test_a_sign_in_that_must_wait_is_a_passing_cause(
+    pod: _Pod, code: DeviceRefusalCode
+) -> None:
+    pod.open_error = DeviceRefusedError(code, retry_after_seconds=60)
 
     await _iterate_on("mobile")
 
     record = await _record()
-    assert (record.state, record.last_error) == ("sleeping", "device_code_cooldown")
+    assert (record.state, record.last_error) == ("sleeping", code)
 
 
 @pytest.mark.asyncio
-async def test_an_app_left_signed_out_parks_the_account_without_asking_for_a_code(
+async def test_an_app_still_signed_out_after_the_open_parks_the_account(
     pod: _Pod, telethon: list[str]
 ) -> None:
     pod.signed_in = False
