@@ -46,6 +46,9 @@ class _Phone:
     async def scrcpy(self) -> None:
         self.steps.append("scrcpy")
 
+    async def apk(self) -> None:
+        self.steps.append("apk")
+
     async def prepare_pod(self, account_id: str) -> bool:
         self.steps.append(f"pod:{account_id}")
         if self.gate is not None:
@@ -60,6 +63,7 @@ def phone(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Phone]:
     fake = _Phone()
     monkeypatch.setattr(_mobile_prep, "check_host", fake.check_host)
     monkeypatch.setattr(_mobile_prep, "ensure_scrcpy_server", fake.scrcpy)
+    monkeypatch.setattr(_mobile_prep, "ensure_telegram_apk", fake.apk)
     monkeypatch.setattr(_mobile_prep, "prepare_pod", fake.prepare_pod)
     monkeypatch.setattr(_mobile_prep_state, "STATE", {})
     monkeypatch.setattr(_mobile_prep_state, "JOBS", {})
@@ -112,7 +116,7 @@ async def test_a_phone_is_checked_then_readied_in_the_background(
     assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(status="preparing")
     await _job_done()
 
-    assert phone.steps == ["host", "host", "scrcpy", "pod:acc-1"]
+    assert phone.steps == ["host", "host", "scrcpy", "apk", "pod:acc-1"]
     assert _mobile_prep_state.phone_prep("acc-1") is None, "a ready phone needs no card note"
 
 

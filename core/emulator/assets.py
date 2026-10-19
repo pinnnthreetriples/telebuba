@@ -1,12 +1,18 @@
 """The files a phone needs on the host, fetched once from their official source.
 
 - ``scrcpy-server`` (the web screen): the configured version's asset of the
-  github.com/Genymobile/scrcpy release, kept only when its sha256 is the configured one.
+  github.com/Genymobile/scrcpy release, kept only when its sha256 is the configured one;
+- the Telegram APK: telegram.org's own download (always its latest build, package
+  ``org.telegram.messenger.web``, no published checksum), kept only when it is signed
+  with Telegram's certificate (``TELEGRAM_CERTIFICATE_SHA256``). Android checks the
+  signature against that certificate on install, so the two together mean the app
+  is Telegram's. Its package and version are read from the file itself.
 
-A file already in place is used as it is: nothing is ever updated behind the
-operator's back. A download goes to a scratch file next to the target and is moved
-into place only once its hash matched, so a cut download or a wrong file leaves
-nothing behind. Concurrent callers wait for the one download in flight.
+A file already in place is used as it is (an APK the operator put there included):
+nothing is ever updated behind the operator's back. A download goes to a scratch
+file next to the target and is moved into place only once it passed its check, so a
+cut download or a wrong file leaves nothing behind. Concurrent callers wait for the
+one download in flight.
 """
 
 from __future__ import annotations
@@ -18,20 +24,28 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from core.android_apk import AppIdentity, app_identity, signing_certificate_sha256
 from core.config import settings
 from core.emulator._errors import EmulatorError
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from schemas.emulator import EmulatorRefusalCode
 
 _EMULATOR_CHECKSUM_MISMATCH: EmulatorRefusalCode = "emulator_checksum_mismatch"
 _EMULATOR_DOWNLOAD_FAILED: EmulatorRefusalCode = "emulator_download_failed"
+_EMULATOR_INSTALL_FAILED: EmulatorRefusalCode = "emulator_install_failed"
+_EMULATOR_SIGNATURE_MISMATCH: EmulatorRefusalCode = "emulator_signature_mismatch"
 
 _SCRCPY_SERVER_URL = (
     "https://github.com/Genymobile/scrcpy/releases/download/v{version}/scrcpy-server-v{version}"
 )
+_TELEGRAM_APK_URL = "https://telegram.org/dl/android/apk"
+# Telegram for Android's signing certificate (CN=Nikolay Kudashov, O=VK, 2013-2038):
+# the same on every build telegram.org has served, ``apksigner --print-certs``'s SHA-256.
+TELEGRAM_CERTIFICATE_SHA256 = "49c1522548ebacd46ce322b6fd47f6092bb745d0f88082145caf35e14dcc38e1"
 _CHUNK_BYTES = 1 << 16
 # Larger than any phone file we fetch; a response past it is not the file we asked for.
 _MAX_BYTES = 512 * 1024 * 1024
@@ -47,8 +61,36 @@ async def ensure_scrcpy_server() -> Path:
     emulator = settings.emulator
     target = emulator.scrcpy_server_path
     url = _SCRCPY_SERVER_URL.format(version=emulator.scrcpy_server_version)
-    await _ensure_file(target, url, emulator.scrcpy_server_sha256)
+
+    async def same_hash(_scratch: Path, digest: str) -> None:
+        if digest != emulator.scrcpy_server_sha256:
+            raise EmulatorError(_EMULATOR_CHECKSUM_MISMATCH)
+
+    await _ensure_file(target, url, same_hash)
     return target
+
+
+async def ensure_telegram_apk() -> AppIdentity:
+    """The Telegram APK's package and version, downloaded and checked first when missing.
+
+    A file that is no APK (or one with no package or version in it) is
+    ``emulator_install_failed``: nothing could be installed from it.
+    """
+    target = settings.emulator.telegram_apk_path
+    await _ensure_file(target, _TELEGRAM_APK_URL, _signed_by_telegram)
+    try:
+        return await asyncio.to_thread(app_identity, target)
+    except (ValueError, OSError) as exc:
+        raise EmulatorError(_EMULATOR_INSTALL_FAILED) from exc
+
+
+async def _signed_by_telegram(scratch: Path, _digest: str) -> None:
+    try:
+        certificate = await asyncio.to_thread(signing_certificate_sha256, scratch)
+    except ValueError as exc:
+        raise EmulatorError(_EMULATOR_SIGNATURE_MISMATCH) from exc
+    if certificate != TELEGRAM_CERTIFICATE_SHA256:
+        raise EmulatorError(_EMULATOR_SIGNATURE_MISMATCH)
 
 
 def _scratch_for(target: Path) -> Path | None:
@@ -59,7 +101,10 @@ def _scratch_for(target: Path) -> Path | None:
     return target.with_name(f"{target.name}.part")
 
 
-async def _ensure_file(target: Path, url: str, sha256: str) -> None:
+async def _ensure_file(
+    target: Path, url: str, check: Callable[[Path, str], Awaitable[None]]
+) -> None:
+    """Download a missing ``target``; ``check`` (scratch file, its sha256) refuses a wrong one."""
     async with _LOCKS.setdefault(str(target), asyncio.Lock()):
         try:
             scratch = _scratch_for(target)
@@ -69,9 +114,11 @@ async def _ensure_file(target: Path, url: str, sha256: str) -> None:
             return
         try:
             digest = await _download(url, scratch)
-            if digest != sha256:
-                logger.warning("emulator asset %s failed its checksum", target.name)
-                raise EmulatorError(_EMULATOR_CHECKSUM_MISMATCH)
+            try:
+                await check(scratch, digest)
+            except EmulatorError as exc:
+                logger.warning("emulator asset %s refused (%s)", target.name, exc.code)
+                raise
             try:
                 scratch.replace(target)
             except OSError as exc:

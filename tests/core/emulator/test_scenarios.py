@@ -132,6 +132,11 @@ def _searching_app(monkeypatch: pytest.MonkeyPatch, console: Console) -> _App:
     )
 
 
+def _without_package_lookup(console: Console) -> list[list[str]]:
+    """The shell calls, less the ``pm list packages`` that finds the phone's Telegram."""
+    return [call for call in console.shell_calls() if call[:2] != ["pm", "list"]]
+
+
 @pytest.mark.asyncio
 async def test_a_search_types_opens_a_result_reads_it_and_joins_when_planned(
     console: Console,
@@ -346,7 +351,7 @@ async def test_a_recommended_folder_is_added_then_the_tabs_are_swiped(
 
     assert await session.organize_chat_folders(SERIAL)
 
-    calls = console.shell_calls()
+    calls = _without_package_lookup(console)
     assert calls[0][:2] == ["am", "start"]
     assert tapped(ADD)(calls[1]), "the recommended folder, not a new one"
     there, back_again = (call for call in calls[2:] if call[:2] == ["input", "swipe"])
@@ -430,8 +435,8 @@ async def test_a_mini_app_is_launched_scrolled_and_closed(
 
     assert await session.interact_with_webapp(SERIAL, "demo_bot")
 
-    calls = console.shell_calls()
-    assert calls[0][-1] == "org.telegram.messenger"
+    calls = _without_package_lookup(console)
+    assert calls[0][-1] == "org.telegram.messenger", "no Telegram listed: the configured one"
     scrolls = [call for call in calls if call[:2] == ["input", "motionevent"]]
     assert 4 <= len(scrolls) <= 6
     assert 30 <= clock.now <= 46

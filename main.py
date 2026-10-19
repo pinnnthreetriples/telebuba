@@ -46,7 +46,11 @@ from services.accounts import (
     shutdown_web_login,
     start_lead_queue_on_startup,
 )
-from services.accounts.mobile_pods import shutdown_mobile_pods, stop_orphaned_pods
+from services.accounts.mobile_pods import (
+    prefetch_phone_files,
+    shutdown_mobile_pods,
+    stop_orphaned_pods,
+)
 from services.auth import seed_admin_if_empty
 from services.chat_broadcast import (
     reconcile_chat_broadcast_on_startup,
@@ -164,6 +168,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await close_orphaned_web_windows()
     # Same for the phone pods: no task of this run owns one yet.
     await stop_orphaned_pods()
+    prefetch_phone_files()
     await _log_app_started()
     await seed_admin_if_empty()
     # DB is initialised by the seed above; start the periodic SQLite maintenance

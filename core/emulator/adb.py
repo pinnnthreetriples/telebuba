@@ -96,9 +96,9 @@ async def assert_sdk(serial: str, sdk: int) -> None:
         raise EmulatorError(_EMULATOR_SDK_MISMATCH)
 
 
-async def package_installed(serial: str, package: str) -> bool:
-    listed = await shell(serial, "pm", "list", "packages", package)
-    return f"package:{package}" in {line.strip() for line in listed.splitlines()}
+async def installed_packages(serial: str) -> set[str]:
+    listed = await shell(serial, "pm", "list", "packages")
+    return {line.strip().removeprefix("package:") for line in listed.splitlines() if line.strip()}
 
 
 async def install_apk(serial: str) -> None:

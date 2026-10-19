@@ -39,8 +39,10 @@ class EmulatorSettings(BaseSettings):
     # bridge network its gateways join (created when missing, containers isolated).
     gateway_image: str = Field(default="telebuba/net-gateway:1", min_length=1)
     gateway_network: str = Field(default="telebuba-emulator", min_length=1)
-    # Installed into a container that lacks the package; refused when the file is missing.
+    # Installed into a container with no Telegram; a missing file is fetched from
+    # telegram.org, kept only when Telegram signed it (``core.emulator.assets``).
     telegram_apk_path: Path = Path("emulator/telegram.apk")
+    # The Telegram a container already has is driven: this package first, else the APK's.
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
     # That APK's "versionName (versionCode)": new mobile fingerprints claim it, so the
     # app in the container and the fingerprint agree. Empty: drawn from the catalogue.

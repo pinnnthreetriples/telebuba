@@ -35,6 +35,7 @@ from core.emulator._selectors import (
     search_field,
     webview_shown,
 )
+from core.emulator.telegram_app import app_package
 from core.emulator.ui_dump import UiNode, fields, find
 
 if TYPE_CHECKING:
@@ -76,6 +77,11 @@ _WEBAPP_TRIES = 5
 _FLICK_FROM, _FLICK_TO, _FLICK_Y = 0.8, 0.2, 0.5
 _DISMISS_FROM, _DISMISS_TO = 0.45, 0.8
 _SCROLL_START, _SCROLL_LENGTH = 0.65, (0.2, 0.35)
+
+
+async def _package(serial: str) -> str:
+    """The phone's own Telegram package, for a link opened in it."""
+    return await app_package(serial) or settings.emulator.telegram_package
 
 
 class ScenarioSteps:
@@ -260,7 +266,7 @@ class ScenarioSteps:
         """Add a recommended folder, or create ``folder_name`` with a few chats; swipe the tabs."""
         labels = scenario_labels()
         self._chats = None
-        await adb.open_uri(serial, _FOLDERS_URI, settings.emulator.telegram_package)
+        await adb.open_uri(serial, _FOLDERS_URI, await _package(serial))
         await self._settle()
         _screen, nodes = await self._screen(serial)
         if await self._dismiss_error(serial, nodes):
@@ -344,7 +350,7 @@ class ScenarioSteps:
             raise EmulatorError(_EMULATOR_TEXT_UNSUPPORTED)
         self._chats = None
         uri = f"tg://resolve?domain={bot_username}&startapp"
-        await adb.open_uri(serial, uri, settings.emulator.telegram_package)
+        await adb.open_uri(serial, uri, await _package(serial))
         nodes: list[UiNode] = []
         for _ in range(_WEBAPP_TRIES):
             await self._settle()

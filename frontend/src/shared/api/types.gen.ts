@@ -5959,6 +5959,7 @@ export type PhoneList = {
     | 'emulator_scrcpy_missing'
     | 'emulator_download_failed'
     | 'emulator_checksum_mismatch'
+    | 'emulator_signature_mismatch'
     | 'emulator_image_unavailable'
     | 'emulator_docker_unavailable'
     | 'emulator_adb_missing'

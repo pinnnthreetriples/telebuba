@@ -8,6 +8,10 @@ The pods no task owns, left up by a crash or a restart, or up at shutdown:
 after warming drained, where a cancelled cycle's own shielded stop may not finish
 before the loop closes. Neither ever fails the app's start or stop: a host without
 docker has no pod, and any other failure is logged.
+
+``prefetch_phone_files`` fetches a missing Telegram APK and scrcpy-server in the
+background at startup, so a mobile fingerprint minted later already claims the APK's
+own version; a fetch that fails is logged and tried again where the file is needed.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.emulator import EmulatorError, pause_pod, stop_paused_pod, stop_running_pods
+from core.emulator.assets import ensure_scrcpy_server, ensure_telegram_apk
 from core.logging import log_event
 from services.accounts.mobile_emulator import _LOCKS, container_name
 
@@ -26,6 +31,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "park_account_pod",
+    "prefetch_phone_files",
     "shutdown_mobile_pods",
     "stop_orphaned_pods",
     "stop_parked_pod",
@@ -35,6 +41,9 @@ _EMULATOR_NOT_FOUND: EmulatorRefusalCode = "emulator_not_found"
 
 # Stdlib sink, codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
+
+# Strong reference to the startup fetch; the event loop holds tasks weakly.
+_FETCHES: set[asyncio.Task[None]] = set()
 
 
 async def _stop_all_pods(moment: str) -> None:
@@ -53,6 +62,23 @@ async def _stop_all_pods(moment: str) -> None:
 async def stop_orphaned_pods() -> None:
     """Stop the pods a crashed or restarted run left up."""
     await _stop_all_pods("startup")
+
+
+def prefetch_phone_files() -> None:
+    """Start fetching the phone's missing files; nothing with the emulator off."""
+    if not settings.emulator.enabled:
+        return
+    task = asyncio.create_task(_fetch_phone_files())
+    _FETCHES.add(task)
+    task.add_done_callback(_FETCHES.discard)
+
+
+async def _fetch_phone_files() -> None:
+    for fetch in (ensure_telegram_apk, ensure_scrcpy_server):
+        try:
+            await fetch()
+        except EmulatorError as exc:
+            await log_event("WARNING", "emulator_files_fetch_failed", extra={"reason": exc.code})
 
 
 async def shutdown_mobile_pods() -> None:

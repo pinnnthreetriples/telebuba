@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING
 
 import phonenumbers
 
+from core.android_apk import local_apk_identity
 from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
 from core.emulator._text import escape_input_text
+from core.emulator.assets import ensure_telegram_apk
 from core.emulator.ui_dump import (
     classify,
     fields,
@@ -58,8 +60,21 @@ def _require(node: UiNode | None) -> UiNode:
     return node
 
 
+async def app_package(serial: str) -> str | None:
+    """The Telegram installed on the phone: the configured package, else the APK's.
+
+    A phone set up from an older APK keeps its app (and its sign-in): the package is
+    read off the phone, never assumed from whichever APK is on the host now.
+    """
+    apk = local_apk_identity()
+    wanted = [settings.emulator.telegram_package, *([apk.package] if apk else [])]
+    installed = await adb.installed_packages(serial)
+    return next((package for package in wanted if package in installed), None)
+
+
 async def bring_app_to_front(serial: str) -> None:
-    await adb.start_app(serial, settings.emulator.telegram_package)
+    package = await app_package(serial) or settings.emulator.telegram_package
+    await adb.start_app(serial, package)
 
 
 async def leave_app(serial: str) -> None:
@@ -68,9 +83,10 @@ async def leave_app(serial: str) -> None:
 
 
 async def ensure_app(serial: str) -> None:
-    """Install Telegram when the container lacks it, then start it."""
-    package = settings.emulator.telegram_package
-    if not await adb.package_installed(serial, package):
+    """Install Telegram when the container lacks it (fetching the APK first), then start it."""
+    package = await app_package(serial)
+    if package is None:
+        package = (await ensure_telegram_apk()).package
         await adb.install_apk(serial)
     await adb.start_app(serial, package)
 
