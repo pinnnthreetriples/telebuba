@@ -1,11 +1,13 @@
 """Read an APK on the host: who signed it, and the app it holds.
 
 Standard library only. ``signing_certificate_sha256`` reads the APK Signing Block
-(v2, else v3) and returns the SHA-256 of the first signer's certificate, the
-fingerprint ``apksigner verify --print-certs`` prints. Nothing here verifies the
-signature itself: Android does that on install and refuses an APK whose contents do
-not match the certificate, so a pinned certificate plus Android's own check means
-the file is the signer's. ``app_identity`` reads the binary ``AndroidManifest.xml``:
+and returns the SHA-256 of its signer's certificate, the fingerprint ``apksigner
+verify --print-certs`` prints, only when every signer of every v2, v3 and v3.1 block
+carries that one certificate. Nothing here verifies the signature itself: Android
+does that on install, but checks only one block (v3.1, else v3, else v2) and in v3
+only the signer for its SDK; so a second certificate anywhere could be the one
+Android installs, and an APK with two is refused. One certificate plus Android's own
+check means the file is the signer's. ``app_identity`` reads the binary ``AndroidManifest.xml``:
 the package, and ``versionName (versionCode)``, the version the app sends Telegram.
 
 Both raise ``ValueError`` on a file that is not an APK of that shape;
@@ -30,6 +32,7 @@ _SIG_BLOCK_MAGIC = b"APK Sig Block 42"
 _EOCD_MAGIC = b"PK\x05\x06"
 _V2_ID = 0x7109871A
 _V3_ID = 0xF05368C0
+_V31_ID = 0x1B93AD61
 
 # Binary XML chunk types and the android: attribute ids of the manifest's version.
 _STRING_POOL = 0x0001
@@ -50,14 +53,26 @@ class AppIdentity(NamedTuple):
 
 
 def signing_certificate_sha256(path: Path) -> str:
-    """The SHA-256 (hex) of the APK's first v2/v3 signer certificate."""
+    """The SHA-256 (hex) of the one certificate every v2/v3/v3.1 signer of the APK uses."""
     data = path.read_bytes()
-    blocks = _signing_blocks(data)
-    for block_id in (_V2_ID, _V3_ID):
-        if block_id in blocks:
-            return hashlib.sha256(_first_certificate(blocks[block_id])).hexdigest()
-    msg = "no v2/v3 signature"
-    raise ValueError(msg)
+    try:
+        blocks = _signing_blocks(data)
+        found = {
+            hashlib.sha256(certificate).hexdigest()
+            for block_id in (_V2_ID, _V3_ID, _V31_ID)
+            if block_id in blocks
+            for certificate in _signer_certificates(blocks[block_id])
+        }
+    except (struct.error, IndexError) as exc:
+        msg = "truncated signing block"
+        raise ValueError(msg) from exc
+    if not found:
+        msg = "no v2/v3 signature"
+        raise ValueError(msg)
+    if len(found) > 1:
+        msg = "more than one signing certificate"
+        raise ValueError(msg)
+    return found.pop()
 
 
 def app_identity(path: Path) -> AppIdentity:
@@ -70,7 +85,7 @@ def app_identity(path: Path) -> AppIdentity:
         raise ValueError(msg) from exc
     try:
         attributes = _manifest_attributes(manifest)
-    except struct.error as exc:
+    except (struct.error, IndexError) as exc:
         msg = "truncated manifest"
         raise ValueError(msg) from exc
     package = attributes.get("package")
@@ -130,14 +145,19 @@ def _prefixed(buffer: bytes, position: int) -> tuple[bytes, int]:
     return buffer[position + 4 : end], end
 
 
-def _first_certificate(block: bytes) -> bytes:
+def _signer_certificates(block: bytes) -> list[bytes]:
+    """Each signer's own (first) certificate in one v2/v3 block."""
     signers, _ = _prefixed(block, 0)
-    signer, _ = _prefixed(signers, 0)
-    signed_data, _ = _prefixed(signer, 0)
-    _digests, position = _prefixed(signed_data, 0)
-    certificates, _ = _prefixed(signed_data, position)
-    certificate, _ = _prefixed(certificates, 0)
-    return certificate
+    found: list[bytes] = []
+    position = 0
+    while position < len(signers):
+        signer, position = _prefixed(signers, position)
+        signed_data, _ = _prefixed(signer, 0)
+        _digests, at = _prefixed(signed_data, 0)
+        certificates, _ = _prefixed(signed_data, at)
+        certificate, _ = _prefixed(certificates, 0)
+        found.append(certificate)
+    return found
 
 
 def _strings(chunk: bytes) -> list[str]:

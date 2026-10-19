@@ -11,7 +11,7 @@ from core import android_apk
 from core.android_apk import AppIdentity, app_identity, signing_certificate_sha256
 from core.config import settings
 from core.device_fingerprint_android import ANDROID_APP_VERSIONS, android_app_version
-from tests.core._apk_builder import build_apk
+from tests.core._apk_builder import V2_ID, V3_ID, V31_ID, build_apk
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,6 +44,46 @@ def test_a_file_that_is_no_apk_is_refused(tmp_path: Path) -> None:
         signing_certificate_sha256(junk)
     with pytest.raises(ValueError, match="no manifest"):
         app_identity(junk)
+
+
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        {V2_ID: [_CERTIFICATE], V3_ID: [b"another"]},
+        {V2_ID: [_CERTIFICATE], V31_ID: [b"another"]},
+        {V3_ID: [_CERTIFICATE, b"another"]},
+    ],
+    ids=["v3-differs", "v3.1-differs", "second-v3-signer"],
+)
+def test_a_second_certificate_anywhere_is_refused(
+    tmp_path: Path, blocks: dict[int, list[bytes]]
+) -> None:
+    """Android installs by one block (v3.1, else v3, else v2) and one v3 signer per SDK."""
+    path = tmp_path / "two-signers.apk"
+    build_apk(path, certificate=_CERTIFICATE, package="p", version=("1", 1), blocks=blocks)
+
+    with pytest.raises(ValueError, match="more than one signing certificate"):
+        signing_certificate_sha256(path)
+
+
+def test_the_same_certificate_in_every_block_is_the_signer(tmp_path: Path) -> None:
+    path = tmp_path / "v2-v3.apk"
+    blocks = {V2_ID: [_CERTIFICATE], V3_ID: [_CERTIFICATE], V31_ID: [_CERTIFICATE]}
+    build_apk(path, certificate=_CERTIFICATE, package="p", version=("1", 1), blocks=blocks)
+
+    assert signing_certificate_sha256(path) == hashlib.sha256(_CERTIFICATE).hexdigest()
+
+
+def test_a_cut_signing_block_is_refused_as_no_apk(apk: Path) -> None:
+    data = apk.read_bytes()
+    directory = data.index(b"APK Sig Block 42") + 16
+    cut = apk.with_name("cut.apk")
+    # The signing block's own size now points past the file's start.
+    huge = (1 << 40).to_bytes(8, "little")
+    cut.write_bytes(data[: directory - 24] + huge + data[directory - 16 :])
+
+    with pytest.raises(ValueError, match="truncated signing block"):
+        signing_certificate_sha256(cut)
 
 
 def test_new_fingerprints_claim_the_apks_own_version(

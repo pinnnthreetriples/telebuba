@@ -1,7 +1,7 @@
 """Build a minimal APK for tests: a binary manifest and a v2 signing block.
 
 Only the shape ``core.android_apk`` reads: the zip's central directory preceded by an
-APK Signing Block whose v2 signer carries ``certificate``, and an
+APK Signing Block whose v2 signer carries ``certificate`` (or the given blocks), and an
 ``AndroidManifest.xml`` whose ``<manifest>`` holds ``package``, ``versionCode``
 (typed int) and ``versionName`` (raw string), the version attributes named through
 the resource map as aapt2 writes them.
@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-_V2_ID = 0x7109871A
+V2_ID = 0x7109871A
+V3_ID = 0xF05368C0
+V31_ID = 0x1B93AD61
 _NO_STRING = 0xFFFFFFFF
 
 
@@ -60,19 +62,35 @@ def manifest(package: str, version_name: str, version_code: int) -> bytes:
     return struct.pack("<HHI", 0x0003, 8, 8 + len(chunks)) + chunks
 
 
-def build_apk(path: Path, *, certificate: bytes, package: str, version: tuple[str, int]) -> None:
-    """Write an APK at ``path`` signed (in shape) by ``certificate``."""
+def _signer(certificate: bytes) -> bytes:
+    signed_data = _prefixed() + _prefixed(_prefixed(certificate)) + _prefixed()
+    return _prefixed(signed_data) + _prefixed() + _prefixed()
+
+
+def build_apk(
+    path: Path,
+    *,
+    certificate: bytes,
+    package: str,
+    version: tuple[str, int],
+    blocks: dict[int, list[bytes]] | None = None,
+) -> None:
+    """Write an APK at ``path`` signed (in shape) by ``certificate``.
+
+    ``blocks`` replaces the one v2 signer: each signing block id with its signers'
+    certificates, in order.
+    """
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as apk:
         apk.writestr("AndroidManifest.xml", manifest(package, *version))
     data = archive.getvalue()
     directory = struct.unpack_from("<I", data, data.rfind(b"PK\x05\x06") + 16)[0]
-    signed_data = _prefixed() + _prefixed(_prefixed(certificate)) + _prefixed()
-    signer = _prefixed(signed_data) + _prefixed() + _prefixed()
-    value = _prefixed(_prefixed(signer))
-    pair = struct.pack("<QI", 4 + len(value), _V2_ID) + value
-    size = len(pair) + 8 + 16
-    block = struct.pack("<Q", size) + pair + struct.pack("<Q", size) + b"APK Sig Block 42"
+    pairs = b""
+    for block_id, certificates in (blocks or {V2_ID: [certificate]}).items():
+        value = _prefixed(*(_prefixed(_signer(cert)) for cert in certificates))
+        pairs += struct.pack("<QI", 4 + len(value), block_id) + value
+    size = len(pairs) + 8 + 16
+    block = struct.pack("<Q", size) + pairs + struct.pack("<Q", size) + b"APK Sig Block 42"
     head, tail = data[:directory], data[directory:]
     eocd = tail.rfind(b"PK\x05\x06")
     tail = tail[: eocd + 16] + struct.pack("<I", directory + len(block)) + tail[eocd + 20 :]

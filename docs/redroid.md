@@ -203,8 +203,8 @@ present is never pulled or rebuilt; after changing `docker/net-gateway`, bump th
 A container with no Telegram gets `EMULATOR__TELEGRAM_APK_PATH`. A missing file is downloaded
 (`core/emulator/assets.py`, at startup and again wherever it is needed) from telegram.org's own
 link, which always serves the latest universal build (x86_64 included; package
-`org.telegram.messenger.web`) and publishes no checksum: the file is kept only when its v2/v3
-signing certificate is Telegram's (SHA-256 `49c15225…dcc38e1`, pinned in code), and Android checks
+`org.telegram.messenger.web`) and publishes no checksum: the file is kept only when every signer
+of its v2/v3/v3.1 blocks carries Telegram's certificate (SHA-256 `49c15225…dcc38e1`, pinned in code), and Android checks
 the signature against that certificate on install. A file already there (the operator's own APK
 included) is never replaced or updated. The package and `versionName (versionCode)` are read off
 the APK (`core/android_apk.py`): new mobile fingerprints claim that version unless

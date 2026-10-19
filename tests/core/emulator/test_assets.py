@@ -13,7 +13,7 @@ import respx
 from core.android_apk import AppIdentity
 from core.config import settings
 from core.emulator import EmulatorError, assets
-from tests.core._apk_builder import build_apk
+from tests.core._apk_builder import V2_ID, V3_ID, build_apk
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -143,7 +143,9 @@ _APK_URL = "https://telegram.org/dl/android/apk"
 _TELEGRAM_CERT = b"telegram's certificate"
 
 
-def _apk_bytes(tmp_path: Path, certificate: bytes) -> bytes:
+def _apk_bytes(
+    tmp_path: Path, certificate: bytes, blocks: dict[int, list[bytes]] | None = None
+) -> bytes:
     built = tmp_path / "built" / "telegram.apk"
     built.parent.mkdir()
     build_apk(
@@ -151,6 +153,7 @@ def _apk_bytes(tmp_path: Path, certificate: bytes) -> bytes:
         certificate=certificate,
         package="org.telegram.messenger.web",
         version=("13.0.3", 71839),
+        blocks=blocks,
     )
     return built.read_bytes()
 
@@ -182,6 +185,21 @@ async def test_a_missing_apk_is_fetched_from_telegram_and_read(
 async def test_an_apk_signed_by_anyone_else_is_never_kept(apk_target: Path, tmp_path: Path) -> None:
     with respx.mock() as telegram:
         telegram.get(_APK_URL).respond(200, content=_apk_bytes(tmp_path, b"someone else"))
+        with pytest.raises(EmulatorError) as refused:
+            await assets.ensure_telegram_apk()
+
+    assert refused.value.code == "emulator_signature_mismatch"
+    assert list(apk_target.parent.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_telegrams_certificate_beside_another_signer_is_never_kept(
+    apk_target: Path, tmp_path: Path
+) -> None:
+    """A v3 block signed by someone else is the one Android installs by."""
+    blocks = {V2_ID: [_TELEGRAM_CERT], V3_ID: [b"someone else"]}
+    with respx.mock() as telegram:
+        telegram.get(_APK_URL).respond(200, content=_apk_bytes(tmp_path, _TELEGRAM_CERT, blocks))
         with pytest.raises(EmulatorError) as refused:
             await assets.ensure_telegram_apk()
 
