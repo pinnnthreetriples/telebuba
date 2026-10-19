@@ -142,6 +142,37 @@ async def test_a_second_sms_during_the_pause_is_kept_but_not_typed(phone: FakePh
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sender", "text"),
+    [
+        ("WhatsApp", "<#> Ваш код WhatsApp: 321-654"),
+        ("Bank", "Ваш код подтверждения: 9988"),
+    ],
+)
+async def test_another_services_code_does_not_use_up_a_telegram_wait(
+    phone: FakePhone,
+    sender: str,
+    text: str,
+) -> None:
+    start_waiting_session(_PHONE, _NUMBER)
+
+    other = await handle_inbound_sms(_sms(text, sender=sender))
+    await wait_pending_dispatches()
+
+    assert other.matched is False
+    assert other.code is not None
+    assert phone.typed == []
+    assert (await get_phone_status(_PHONE)).status == "waiting_otp"
+    assert [m.code for m in (await list_inbox(_PHONE)).messages] == [other.code]
+
+    telegram = await handle_inbound_sms(_sms())
+    await wait_pending_dispatches()
+
+    assert telegram.matched is True
+    assert phone.typed == [(f"serial-{_PHONE}", "48291")]
+
+
+@pytest.mark.asyncio
 async def test_a_new_wait_during_the_pause_drops_the_old_code(phone: FakePhone) -> None:
     phone.gate = asyncio.Event()
     start_waiting_session(_PHONE, _NUMBER)

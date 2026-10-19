@@ -200,6 +200,10 @@ async def handle_inbound_sms(payload: InboundSmsWebhook) -> SmsWebhookResponse:
     else:
         code = extract_otp(payload.text, payload.sender)
         platform = detect_platform(payload.text, payload.sender)
+        if session is not None and platform != session.platform:
+            # Another service's code (WhatsApp, a bank) on the same number must not be
+            # typed into this wait's app, nor use the wait up: it stays unmatched.
+            session = None
     matched = session is not None and code is not None
 
     _INBOX.appendleft(
