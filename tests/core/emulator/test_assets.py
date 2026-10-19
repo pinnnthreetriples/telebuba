@@ -105,13 +105,14 @@ async def test_an_oversized_answer_is_cut_off(
 
 @pytest.mark.asyncio
 async def test_a_redirect_off_tls_keeps_nothing(target: Path) -> None:
-    with respx.mock() as github:
+    with respx.mock(assert_all_called=False) as github:
         github.get(_URL).respond(302, headers={"location": "http://mirror.example/scrcpy"})
-        github.get("http://mirror.example/scrcpy").respond(200, content=_BODY)
+        plain = github.get("http://mirror.example/scrcpy").respond(200, content=_BODY)
         with pytest.raises(EmulatorError) as refused:
             await assets.ensure_scrcpy_server()
 
     assert refused.value.code == "emulator_download_failed", "even the right bytes, off TLS"
+    assert not plain.called, "the plain-http hop is never requested"
     assert list(target.parent.iterdir()) == []
 
 

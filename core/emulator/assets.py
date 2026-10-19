@@ -81,6 +81,12 @@ async def _ensure_file(target: Path, url: str, sha256: str) -> None:
     logger.info("emulator asset %s downloaded", target.name)
 
 
+async def _refuse_plain_http(request: httpx.Request) -> None:
+    """Run before every hop, redirects too: nothing is ever asked for off TLS."""
+    if request.url.scheme != "https":
+        raise EmulatorError(_EMULATOR_DOWNLOAD_FAILED)
+
+
 async def _download(url: str, scratch: Path) -> str:
     """Stream ``url`` into ``scratch``; the sha256 of what was written."""
     digest = hashlib.sha256()
@@ -90,13 +96,13 @@ async def _download(url: str, scratch: Path) -> str:
             asyncio.timeout(settings.emulator.download_timeout_seconds),
             # httpx's own 5 s default would cut a CDN that pauses mid-file.
             httpx.AsyncClient(
-                follow_redirects=True, timeout=settings.emulator.download_timeout_seconds
+                follow_redirects=True,
+                timeout=settings.emulator.download_timeout_seconds,
+                event_hooks={"request": [_refuse_plain_http]},
             ) as client,
             client.stream("GET", url) as response,
         ):
             response.raise_for_status()
-            if response.url.scheme != "https":  # a redirect off TLS: not the official file
-                raise EmulatorError(_EMULATOR_DOWNLOAD_FAILED)
             with scratch.open("wb") as out:
                 async for chunk in response.aiter_bytes(_CHUNK_BYTES):
                     written += len(chunk)
