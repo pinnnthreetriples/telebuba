@@ -56,6 +56,8 @@ class EmulatorSettings(BaseSettings):
     command_timeout_seconds: float = Field(default=60.0, gt=0)
     tunnel_timeout_seconds: float = Field(default=30.0, gt=0)
     install_timeout_seconds: float = Field(default=300.0, gt=0)
+    # A missing image's ``docker pull`` (redroid) or ``docker build`` (the gateway).
+    image_timeout_seconds: float = Field(default=1800.0, gt=0)
     boot_timeout_seconds: float = Field(default=180.0, gt=0)
     ui_timeout_seconds: float = Field(default=30.0, gt=0)
     code_wait_seconds: float = Field(default=90.0, gt=0)
@@ -66,6 +68,14 @@ class EmulatorSettings(BaseSettings):
     # may take to accept its sockets.
     scrcpy_server_path: Path = Path("emulator/scrcpy-server-v3.3.1")
     scrcpy_server_version: str = Field(default="3.3.1", pattern=r"^\d+\.\d+(\.\d+)?$")
+    # A missing scrcpy-server is fetched from that version's GitHub release and kept
+    # only when its sha256 is this one; a version change needs its own hash here.
+    scrcpy_server_sha256: str = Field(
+        default="a0f70b20aa4998fbf658c94118cd6c8dab6abbb0647a3bdab344d70bc1ebcbb8",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    # One asset download from its official source, start to finish.
+    download_timeout_seconds: float = Field(default=600.0, gt=0)
     stream_max_size: int = Field(default=1280, ge=320, le=4096)
     stream_max_fps: int = Field(default=30, ge=5, le=60)
     stream_bit_rate: int = Field(default=4_000_000, ge=500_000, le=20_000_000)

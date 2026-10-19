@@ -102,7 +102,7 @@ def _verbs(console: Console) -> list[str]:
     return [
         f"{call[1]} {call[targets.get(call[1], 2)]}"
         for call in console.calls
-        if call[0] == docker and call[1] not in {"ps", "network", "inspect"}
+        if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image"}
     ]
 
 

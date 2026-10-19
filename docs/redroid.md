@@ -23,7 +23,7 @@ phone is shown in a scrcpy window opened by the phone button.
   gateways join their own bridge network (`EMULATOR__GATEWAY_NETWORK`, created when missing with
   `com.docker.network.bridge.enable_icc=false`), and the gateway drops 5555 on eth0 from anything
   but the Docker gateway, which is where the published loopback port arrives from.
-- **Start**: create what is missing (gateway first), stop whatever of the pod runs, copy the
+- **Start**: pull or build a missing image, create what is missing (gateway first), stop whatever of the pod runs, copy the
   account's current proxy into the gateway, start it, wait until `net-gateway ready` (tun0 up,
   tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`), then create/start Android.
   A failed start removes what it created and stops what it found. **Stop** is Android, then the
@@ -178,12 +178,11 @@ Check: `wsl -d Ubuntu -- grep binder /proc/filesystems` prints a `binder` line. 
 the two lines and `wsl --shutdown`. WSL updates no longer bring kernel fixes: rebuild with the
 new tag when Microsoft ships one.
 
-Then `winget install Genymobile.scrcpy`, pull the images named in `EMULATOR__REDROID_IMAGES`, and
-build the gateway image under the tag `EMULATOR__GATEWAY_IMAGE` names:
-
-```bash
-docker build -t telebuba/net-gateway:1 docker/net-gateway
-```
+Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
+pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
+and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each bounded by
+`EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
+present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag.
 
 ## Web screen and the device farm
 
@@ -207,13 +206,10 @@ screen; the warming card shows an eye while a mobile visit runs. The screen is a
   UHID) has no way in. Every handshake needs the session cookie and the page's own Origin.
 
 The server's version must match the decoder's protocol exactly; `@yume-chan/scrcpy` 2.3 speaks up
-to **3.3.1** (the desktop scrcpy may be newer). Put the file next to the APK:
-
-```bash
-gh release download v3.3.1 -R Genymobile/scrcpy -p scrcpy-server-v3.3.1 -D emulator
-```
-
-(sha256 `a0f70b20aa4998fbf658c94118cd6c8dab6abbb0647a3bdab344d70bc1ebcbb8`). A phone is one account's
+to **3.3.1** (the desktop scrcpy may be newer). A missing file is downloaded on the first screen
+(`core/emulator/assets.py`) from that version's GitHub release to `EMULATOR__SCRCPY_SERVER_PATH`,
+and kept only when its sha256 is `EMULATOR__SCRCPY_SERVER_SHA256`; a file already there is used as
+it is, never updated. Another version needs its own hash in that setting. A phone is one account's
 pod today; the API already lists a phone's apps (`platform`), so other platforms can join it later.
 
 ## Settings

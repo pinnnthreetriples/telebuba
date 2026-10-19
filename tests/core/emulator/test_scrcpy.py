@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
+import respx
 
 from core.config import settings
 from core.emulator import EmulatorError, open_screen
@@ -244,16 +245,18 @@ async def test_a_cancelled_viewer_still_stops_the_server(
 
 @pytest.mark.usefixtures("adb", "spawned")
 @pytest.mark.asyncio
-async def test_a_missing_server_file_is_refused_before_adb(
+async def test_a_server_file_that_cannot_be_fetched_is_refused_before_adb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, adb: Console
 ) -> None:
     monkeypatch.setattr(settings.emulator, "scrcpy_server_path", tmp_path / "absent")
 
-    with pytest.raises(EmulatorError) as refused:
-        async with open_screen(_SERIAL, control=False):
-            pytest.fail("no screen without the server file")
+    with respx.mock(assert_all_called=True) as github:
+        github.get(url__startswith="https://github.com/Genymobile/scrcpy/").respond(404)
+        with pytest.raises(EmulatorError) as refused:
+            async with open_screen(_SERIAL, control=False):
+                pytest.fail("no screen without the server file")
 
-    assert refused.value.code == "emulator_scrcpy_missing"
+    assert refused.value.code == "emulator_download_failed"
     assert adb.calls == []
 
 

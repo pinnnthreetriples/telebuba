@@ -24,6 +24,7 @@ from core.emulator._errors import EmulatorError
 from core.emulator._process import run_command
 from core.emulator._scrcpy_control import encode_command, read_device_message
 from core.emulator.adb import connect_device
+from core.emulator.assets import ensure_scrcpy_server
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
 
 _EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_NOT_FOUND: EmulatorRefusalCode = "emulator_not_found"
-_EMULATOR_SCRCPY_MISSING: EmulatorRefusalCode = "emulator_scrcpy_missing"
 _EMULATOR_SCREEN_TIMEOUT: EmulatorRefusalCode = "emulator_screen_timeout"
 
 _DEVICE_PATH = "/data/local/tmp/telebuba-scrcpy-server.jar"
@@ -227,10 +227,11 @@ async def _stop(
 
 @asynccontextmanager
 async def open_screen(serial: str, *, control: bool) -> AsyncIterator[ScreenStream]:
-    """Run scrcpy-server on ``serial`` for as long as the context is open."""
-    server_file = settings.emulator.scrcpy_server_path
-    if not server_file.is_file():
-        raise EmulatorError(_EMULATOR_SCRCPY_MISSING)
+    """Run scrcpy-server on ``serial`` for as long as the context is open.
+
+    A missing server file is downloaded first (``core.emulator.assets``).
+    """
+    server_file = await ensure_scrcpy_server()
     scid = f"{secrets.randbits(31):08x}"
     await connect_device(serial)
     await _adb(serial, "push", str(server_file), _DEVICE_PATH)

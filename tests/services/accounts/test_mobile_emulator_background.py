@@ -1,8 +1,9 @@
 """Warming's background open, the operator's hold on a pod, and pods left running.
 
 Reuses the scripted container of ``test_mobile_emulator``: a background open shows no
-window and signs nothing in, a pod the operator holds is theirs, a window that cannot
-open never fails the open, and the pods a crash or a shutdown leaves up are stopped.
+window and signs in only an app on an entry screen, a pod the operator holds is
+theirs, a window that cannot open never fails the open, and the pods a crash or a
+shutdown leaves up are stopped.
 """
 
 from __future__ import annotations
@@ -27,9 +28,13 @@ from tests.services.accounts._mobile_support import _account, _Container
 pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
 if TYPE_CHECKING:
+    from core.emulator.ui_dump import Screen
     from schemas.emulator import EmulatorRefusalCode
 
 _SIGN_IN_STEPS = {"start", "cutoff", "confirm"}
+# Each read takes the next screen: the entry screen is read once by the open, then
+# again by the sign-in, as the real app keeps showing it.
+_FULL_SIGN_IN: list[Screen] = ["intro", "intro", "phone", "confirm", "code", "password", "chats"]
 
 
 @pytest.fixture
@@ -44,34 +49,53 @@ def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
 
 
 @pytest.mark.asyncio
-async def test_a_background_start_shows_no_window_and_signs_nothing_in(
+async def test_a_background_start_shows_no_window_and_signs_a_fresh_app_in(
     container: _Container,
     windows: set[str],  # noqa: ARG001 - fakes the screen wait
 ) -> None:
     await _account()
-    container.screens = ["intro"]
+    container.screens = list(_FULL_SIGN_IN)
 
     result = await open_account_mobile("acc", background=True)
 
-    assert (result.status, result.signed_in) == ("started", False)
-    assert not [s for s in container.steps if s.startswith("show:") or s in _SIGN_IN_STEPS]
-    assert container.steps[-2:] == ["app", "wait"], "the screen is read as the app shows it"
+    assert (result.status, result.signed_in) == ("started", True)
+    assert not [s for s in container.steps if s.startswith("show:")]
+    assert set(container.steps) >= _SIGN_IN_STEPS, "the visit signed the new app in"
     assert "acc" not in emulator_module._OPERATOR, "warming's open is not the operator's"
 
 
 @pytest.mark.asyncio
-async def test_a_background_open_of_a_running_pod_reads_the_screen_as_it_is(
+async def test_a_background_open_heals_a_running_app_that_fell_signed_out(
     container: _Container,
     windows: set[str],  # noqa: ARG001 - fakes the screen wait
 ) -> None:
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
-    container.screens = ["phone"]
+    container.screens = ["phone", "phone", "confirm", "code", "password", "chats"]
 
     result = await open_account_mobile("acc", background=True)
 
-    assert (result.status, result.signed_in) == ("already_running", False)
-    assert container.steps == ["find:telebuba-acc", "proxy?:10.0.0.5", "connect", "front", "read"]
+    assert (result.status, result.signed_in) == ("already_running", True)
+    assert container.steps[:4] == ["find:telebuba-acc", "proxy?:10.0.0.5", "connect", "front"]
+    assert "cutoff" in container.steps
+    assert not [s for s in container.steps if s.startswith("show:")]
+
+
+@pytest.mark.parametrize("screen", ["chats", "code"])
+@pytest.mark.asyncio
+async def test_a_background_open_leaves_any_other_screen_as_it_is(
+    container: _Container,
+    windows: set[str],  # noqa: ARG001 - fakes the screen wait
+    screen: Screen,
+) -> None:
+    await _account()
+    container.screens = [screen]
+
+    result = await open_account_mobile("acc", background=True)
+
+    assert (result.status, result.signed_in) == ("started", screen == "chats")
+    assert not [s for s in container.steps if s in _SIGN_IN_STEPS]
+    assert container.steps[-2:] == ["app", "wait"], "the screen is read as the app shows it"
 
 
 @pytest.mark.asyncio
