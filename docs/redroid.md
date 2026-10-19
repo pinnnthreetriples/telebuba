@@ -198,6 +198,20 @@ and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each
 `EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
 present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag.
 
+## The Telegram app
+
+A container with no Telegram gets `EMULATOR__TELEGRAM_APK_PATH`. A missing file is downloaded
+(`core/emulator/assets.py`, at startup and again wherever it is needed) from telegram.org's own
+link, which always serves the latest universal build (x86_64 included; package
+`org.telegram.messenger.web`) and publishes no checksum: the file is kept only when every signer
+of its v2/v3/v3.1 blocks carries Telegram's certificate (SHA-256 `49c15225…dcc38e1`, pinned in code), and Android checks
+the signature against that certificate on install. A file already there (the operator's own APK
+included) is never replaced or updated. The package and `versionName (versionCode)` are read off
+the APK (`core/android_apk.py`): new mobile fingerprints claim that version unless
+`EMULATOR__TELEGRAM_APP_VERSION` is set, and a container is driven through the Telegram it already
+has (`EMULATOR__TELEGRAM_PACKAGE` first, else the APK's), so a phone set up from an older
+`org.telegram.messenger` APK keeps its app and its sign-in.
+
 ## Web screen and the device farm
 
 The **Эмуляторы** page (`/devices`, `api/v1/devices.py`) lists every mobile account's phone with its
@@ -232,7 +246,7 @@ pod today; the API already lists a phone's apps (`platform`), so other platforms
 EMULATOR__ENABLED=true
 # The adb next to scrcpy.exe: scrcpy starts its own adb, and two versions kill each other's server.
 EMULATOR__ADB_PATH=C:/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe/scrcpy-win64-v4.1/adb.exe
-EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # an x86_64-capable APK: redroid has no ARM translation
+EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org when missing
 ```
 
 `EMULATOR__CPU_CORES` and `EMULATOR__MEMORY_MB` size new containers; the screen is the phone's.

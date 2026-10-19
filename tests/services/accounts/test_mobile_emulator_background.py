@@ -8,6 +8,7 @@ shutdown leaves up are stopped.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -268,3 +269,28 @@ async def test_a_pause_that_fails_is_reported_not_raised(monkeypatch: pytest.Mon
 
     assert await mobile_pods.park_account_pod("acc") is False
     await mobile_pods.stop_parked_pod("acc")  # logged, never raised
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_the_phone_files_are_fetched_at_startup_only_with_the_emulator_on(
+    monkeypatch: pytest.MonkeyPatch, *, enabled: bool
+) -> None:
+    fetched: list[str] = []
+
+    async def apk() -> None:
+        fetched.append("apk")
+        code = "emulator_download_failed"
+        raise EmulatorError(code)  # logged; the next file is still fetched
+
+    async def scrcpy() -> None:
+        fetched.append("scrcpy")
+
+    monkeypatch.setattr(mobile_pods, "ensure_telegram_apk", apk)
+    monkeypatch.setattr(mobile_pods, "ensure_scrcpy_server", scrcpy)
+    monkeypatch.setattr(settings.emulator, "enabled", enabled)
+
+    mobile_pods.prefetch_phone_files()
+    await asyncio.gather(*mobile_pods._FETCHES)
+
+    assert fetched == (["apk", "scrcpy"] if enabled else [])

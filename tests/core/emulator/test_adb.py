@@ -62,13 +62,14 @@ async def test_an_sdk_other_than_the_fingerprints_is_refused(console: Console) -
 
 
 @pytest.mark.asyncio
-async def test_the_package_list_is_matched_exactly(console: Console) -> None:
-    console.answer = lambda _argv: "package:org.telegram.messenger.web\n"
-    assert await adb.package_installed("emulator-5554", "org.telegram.messenger") is False
+async def test_the_package_list_is_read_whole(console: Console) -> None:
+    console.answer = lambda _argv: "package:org.telegram.messenger.web\npackage:com.android.shell\n"
 
-    console.answer = lambda _argv: "package:org.telegram.messenger\n"
-    assert await adb.package_installed("emulator-5554", "org.telegram.messenger") is True
-    assert console.shell_calls()[-1] == ["pm", "list", "packages", "org.telegram.messenger"]
+    assert await adb.installed_packages("emulator-5554") == {
+        "org.telegram.messenger.web",
+        "com.android.shell",
+    }
+    assert console.shell_calls()[-1] == ["pm", "list", "packages"]
 
 
 @pytest.mark.asyncio

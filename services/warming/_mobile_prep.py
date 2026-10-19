@@ -3,10 +3,10 @@
 A phone stint's start first refuses a host that cannot run a phone at all (no docker,
 no adb, a kernel without binder: ``core.emulator.host``), with the stint unchanged.
 Then a background job readies everything else, so a problem shows on the card at
-once instead of hours later at the first visit: the host check again, the
-screen's scrcpy-server, the pod (its images pulled or built
-on the way) with the Telegram app installed and signed in through the account's
-existing session, parked for the first visit. A visit waits while the job runs
+once instead of hours later at the first visit: the host check again, the screen's
+scrcpy-server, the Telegram APK, and the pod (its images pulled or built on the way)
+with the app installed and signed in through the account's existing session, parked
+for the first visit. A visit waits while the job runs
 (skipped as ``emulator_preparing``); a failed job leaves its code on the card, and a
 visit that then warms clears it. A phone the operator holds is theirs: the job
 stops there and the visits sign it in later. The job ends with the stint's loop task
@@ -24,7 +24,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from core.emulator import EmulatorError
-from core.emulator.assets import ensure_scrcpy_server
+from core.emulator.assets import ensure_scrcpy_server, ensure_telegram_apk
 from core.emulator.host import check_host
 from core.logging import log_event
 from schemas.warming import PhonePrep, WarmingCycleResult
@@ -115,6 +115,7 @@ async def _prepare(account_id: str) -> None:
     try:
         await check_host()
         await ensure_scrcpy_server()
+        await ensure_telegram_apk()
         signed_in = await prepare_pod(account_id)
     except EmulatorBusyError:
         _state.STATE.pop(account_id, None)

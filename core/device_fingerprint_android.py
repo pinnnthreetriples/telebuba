@@ -24,6 +24,7 @@ from __future__ import annotations
 import secrets
 from typing import NamedTuple
 
+from core.android_apk import local_apk_identity
 from core.config import settings
 from core.device_fingerprint_lang import language_pair
 from schemas.device_fingerprint import DeviceFingerprint
@@ -71,11 +72,14 @@ def android_device_model(device: AndroidDevice) -> str:
 
 
 def android_app_version() -> str:
-    """The configured APK's version when there is one, else one from the list.
+    """The APK's version: configured, else read off the APK file, else one from the list.
 
     Only new fingerprints use it: a stored one keeps the version it was minted with.
     """
-    return settings.emulator.telegram_app_version or secrets.choice(ANDROID_APP_VERSIONS)
+    if settings.emulator.telegram_app_version:
+        return settings.emulator.telegram_app_version
+    apk = local_apk_identity()
+    return apk.version if apk is not None else secrets.choice(ANDROID_APP_VERSIONS)
 
 
 def android_device_for(device_model: str) -> AndroidDevice | None:
