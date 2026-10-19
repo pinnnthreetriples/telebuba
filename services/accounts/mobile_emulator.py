@@ -273,15 +273,23 @@ async def _open(
         if not background:
             await _show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
-        await _seed(account.account_id, serial, spec)
-        await ensure_app(serial)
-        if background:
-            screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
-            signed_in = screen == "chats"
-            if screen in _ENTRY_SCREENS:
+        # Seeding (half a minute on a fresh pod) runs while the app is installed and
+        # signed in: nothing there reads the address book, and the open still waits
+        # for it, so it ends under the account's lock.
+        seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
+        try:
+            await ensure_app(serial)
+            if background:
+                screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
+                signed_in = screen == "chats"
+                if screen in _ENTRY_SCREENS:
+                    signed_in = await sign_in(account, serial)
+            else:
                 signed_in = await sign_in(account, serial)
-        else:
-            signed_in = await sign_in(account, serial)
+            await seeding
+        finally:
+            seeding.cancel()
+            await asyncio.gather(seeding, return_exceptions=True)
     except BaseException:
         await asyncio.shield(_undo(name, created=created))
         raise

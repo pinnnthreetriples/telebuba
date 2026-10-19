@@ -13,11 +13,13 @@ never seeded again, and a seeding cut short is redone at the next boot (contacts
 seeding wrote are deleted first, and so are the photos an earlier try listed, whatever
 day they were dated).
 
-Contacts take one ``content`` call each (an app_process start), so the scripts run
-on the device as one ``sh`` file, not one ``adb shell`` per row. ``content`` exits 0
-even when the provider refused a row, so every call goes through a wrapper that fails
-on the error it prints, and a script stops at its first failure: the marker is never
-written over a half-filled address book.
+Every ``content`` call starts an app_process (about a second, mostly waiting), so the
+scripts run on the device as ``sh`` files, not one ``adb shell`` per row, and the
+contacts go in over ``_LANES`` background lanes at once. The photos are made, pushed and
+indexed while the contacts are written. ``content`` exits 0 even when the provider
+refused a row, so every call goes through a wrapper that fails on the error it prints;
+a lane stops at its first failure and fails the script once every lane is done: the
+marker is never written over a half-filled address book.
 """
 
 from __future__ import annotations
@@ -40,7 +42,9 @@ if TYPE_CHECKING:
     from core.emulator._seed_data import Contact, Photo
 
 MARKER = "/data/local/tmp/.telebuba_seeded"
+# One file each: the contacts' script runs while the gallery's are pushed and run.
 _SCRIPT = "/data/local/tmp/telebuba_seed.sh"
+_GALLERY_SCRIPT = "/data/local/tmp/telebuba_gallery.sh"
 # The photos the latest try put in, so a redo removes them even when dated otherwise.
 _PHOTO_LIST = "/data/local/tmp/.telebuba_photos"
 CAMERA_DIR = "/sdcard/DCIM/Camera"
@@ -56,8 +60,12 @@ _SCRIPT_HEAD = (
 )
 
 _CONTACTS = "content://com.android.contacts"
-# Every raw contact this seeding writes carries it, so a redo can delete exactly those.
+# Every raw contact this seeding writes carries it, so a redo can delete exactly those;
+# ``sync2`` holds the contact's place in the list, so each finds its own raw contact.
 _SYNC_TAG = "telebuba"
+# Contacts written at once: each ``content`` call mostly waits, and 8 lanes wrote 40
+# contacts in 25 s on a redroid 13 pod, against ~160 s one after another.
+_LANES = 8
 
 # ContactsContract's TYPE_MOBILE / TYPE_HOME / TYPE_WORK.
 _PHONE_MOBILE = 2
@@ -84,56 +92,77 @@ def _fail(why: str) -> str:
     return "{ echo " + shell_quote(f"telebuba: {why}") + " >&2; exit 1; }"
 
 
+def _query(where: str) -> str:
+    return f"c query --uri {_CONTACTS}/raw_contacts --projection _id --where {where}"
+
+
+def _contact_lines(index: int, contact: Contact) -> list[str]:
+    """One contact's lines: its raw contact, found again by its own tag, then its rows."""
+    own = shell_quote(f"sync1='{_SYNC_TAG}' AND sync2='{index}'")
+    lines = [
+        f"c insert --uri {_CONTACTS}/raw_contacts --bind account_type:n:"
+        f" --bind account_name:n: {_bind('sync1', 's', _SYNC_TAG)}"
+        f" {_bind('sync2', 's', str(index))} || exit 1",
+        f"id=$({_query(own)}) || exit 1",
+        """id=$(printf '%s\\n' "$id" | head -n 1 | sed 's/.*_id=//')""",
+        f"case $id in ''|*[!0-9]*) {_fail('no raw contact id')} ;; esac",
+        _data_row(
+            "name",
+            _bind("data1", "s", f"{contact.first} {contact.last}"),
+            _bind("data2", "s", contact.first),
+            _bind("data3", "s", contact.last),
+        ),
+        _data_row(
+            "phone_v2",
+            _bind("data1", "s", contact.phone),
+            _bind("data2", "i", str(_PHONE_MOBILE)),
+        ),
+    ]
+    if contact.email:
+        lines.append(
+            _data_row(
+                "email_v2",
+                _bind("data1", "s", contact.email),
+                _bind("data2", "i", str(_EMAIL_HOME)),
+            )
+        )
+    if contact.company:
+        lines.append(
+            _data_row(
+                "organization",
+                _bind("data1", "s", contact.company),
+                _bind("data2", "i", str(_ORG_WORK)),
+            )
+        )
+    return lines
+
+
 def contacts_script(contacts: list[Contact]) -> list[str]:
     """The ``sh`` lines that replace this seeding's contacts with ``contacts``.
 
-    Every line stops the script when it fails, and the last one counts the tagged
-    rows: nothing ``content`` refused goes unnoticed.
+    The contacts are dealt over ``_LANES`` subshells run in the background, each writing
+    its own one after another and stopping at its first failure. The script waits for
+    every lane, fails when any did, and ends by counting the tagged rows: nothing
+    ``content`` refused goes unnoticed.
     """
     tagged = shell_quote(f"sync1='{_SYNC_TAG}'")
-    query = f"c query --uri {_CONTACTS}/raw_contacts --projection _id --where {tagged}"
     lines = [
         f"c delete --uri '{_CONTACTS}/raw_contacts?caller_is_syncadapter=true'"
-        f" --where {tagged} || exit 1"
+        f" --where {tagged} || exit 1",
+        "pids=",
     ]
-    for contact in contacts:
-        lines += [
-            f"c insert --uri {_CONTACTS}/raw_contacts --bind account_type:n:"
-            f" --bind account_name:n: {_bind('sync1', 's', _SYNC_TAG)} || exit 1",
-            # The raw contact just written: the newest one carrying the tag.
-            f"id=$({query} --sort '_id DESC') || exit 1",
-            """id=$(printf '%s\\n' "$id" | head -n 1 | sed 's/.*_id=//')""",
-            f"case $id in ''|*[!0-9]*) {_fail('no raw contact id')} ;; esac",
-            _data_row(
-                "name",
-                _bind("data1", "s", f"{contact.first} {contact.last}"),
-                _bind("data2", "s", contact.first),
-                _bind("data3", "s", contact.last),
-            ),
-            _data_row(
-                "phone_v2",
-                _bind("data1", "s", contact.phone),
-                _bind("data2", "i", str(_PHONE_MOBILE)),
-            ),
-        ]
-        if contact.email:
-            lines.append(
-                _data_row(
-                    "email_v2",
-                    _bind("data1", "s", contact.email),
-                    _bind("data2", "i", str(_EMAIL_HOME)),
-                )
-            )
-        if contact.company:
-            lines.append(
-                _data_row(
-                    "organization",
-                    _bind("data1", "s", contact.company),
-                    _bind("data2", "i", str(_ORG_WORK)),
-                )
-            )
+    numbered = list(enumerate(contacts, start=1))
+    for lane in range(min(_LANES, len(contacts))):
+        lines.append("(")
+        for index, contact in numbered[lane::_LANES]:
+            lines += _contact_lines(index, contact)
+        lines.append(') & pids="$pids $!"')
     lines += [
-        f"rows=$({query}) || exit 1",
+        # ``wait`` on each lane's pid gives its status; a bare ``wait`` would not.
+        "failed=0",
+        'for p in $pids; do wait "$p" || failed=1; done',
+        f'[ "$failed" -eq 0 ] || {_fail("a contact was not written")}',
+        f"rows=$({_query(tagged)}) || exit 1",
         f"""[ "$(printf '%s\\n' "$rows" | grep -c '^Row:')" -eq {len(contacts)} ]"""
         f" || {_fail('contacts missing')}",
     ]
@@ -176,8 +205,8 @@ def gallery_script(photos: list[Photo]) -> list[str]:
     return lines
 
 
-async def _run_script(serial: str, lines: list[str]) -> None:
-    """Push ``lines`` as one ``sh`` file, run it, and remove it whatever happened.
+async def _run_script(serial: str, lines: list[str], remote: str = _SCRIPT) -> None:
+    """Push ``lines`` as the ``sh`` file ``remote``, run it, and remove it whatever happened.
 
     The removal is best effort: on a device gone mid-script it fails too, and its error
     must not hide the script's own.
@@ -187,11 +216,11 @@ async def _run_script(serial: str, lines: list[str]) -> None:
             local = Path(scratch) / "seed.sh"
             script = "\n".join((*_SCRIPT_HEAD, *lines)) + "\n"
             local.write_text(script, encoding="utf-8", newline="\n")
-            await adb.push(serial, str(local), remote=_SCRIPT)
-        await adb.shell(serial, "sh", _SCRIPT, seconds=settings.emulator.install_timeout_seconds)
+            await adb.push(serial, str(local), remote=remote)
+        await adb.shell(serial, "sh", remote, seconds=settings.emulator.install_timeout_seconds)
     finally:
         with suppress(EmulatorError):
-            await adb.shell(serial, "rm", "-f", _SCRIPT)
+            await adb.shell(serial, "rm", "-f", remote)
 
 
 async def seed_contacts(serial: str, spec: ContainerSpec) -> None:
@@ -216,11 +245,11 @@ async def seed_gallery(serial: str, spec: ContainerSpec) -> None:
     """Put ``spec``'s phone's photos into ``DCIM/Camera``, dated, and have them indexed."""
     rng = rng_for(spec, "gallery")
     photos = await asyncio.to_thread(make_photos, spec, rng, datetime.now(UTC))
-    await _run_script(serial, gallery_prep_script(photos))
+    await _run_script(serial, gallery_prep_script(photos), _GALLERY_SCRIPT)
     with tempfile.TemporaryDirectory(prefix="telebuba-gallery-") as scratch:
         paths = await asyncio.to_thread(_write_photos, Path(scratch), photos)
         await adb.push(serial, *paths, remote=f"{CAMERA_DIR}/")
-    await _run_script(serial, gallery_script(photos))
+    await _run_script(serial, gallery_script(photos), _GALLERY_SCRIPT)
 
 
 async def is_seeded(serial: str) -> bool:
@@ -233,7 +262,14 @@ async def seed_device_if_needed(serial: str, spec: ContainerSpec) -> bool:
     """Seed a booted container that has never been seeded; ``True`` when it was seeded now."""
     if await is_seeded(serial):
         return False
-    await seed_contacts(serial, spec)
-    await seed_gallery(serial, spec)
+    # The photos are made, pushed and indexed while the contacts are written. Both run
+    # to their end before either's error is raised: a script still writing on the
+    # device must not outlive the seeding that started it.
+    results = await asyncio.gather(
+        seed_contacts(serial, spec), seed_gallery(serial, spec), return_exceptions=True
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
     await adb.shell(serial, "touch", MARKER)
     return True
