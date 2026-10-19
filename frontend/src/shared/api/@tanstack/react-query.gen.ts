@@ -101,6 +101,7 @@ import {
   getNotificationSettings,
   getOutreachLimits,
   getOutreachUsageToday,
+  getPhoneTelephonyStatus,
   getReadiness,
   getUserParserRun,
   getWarmingBoard,
@@ -136,6 +137,7 @@ import {
   listOutreachPresets,
   listPhones,
   listProxies,
+  listSmsInbox,
   listUserParserAccounts,
   listUserParserBases,
   listUserParserBaseUsers,
@@ -149,6 +151,7 @@ import {
   login,
   logout,
   logoutAccount,
+  manualInputPhoneOtp,
   markAccountChatRead,
   openAccountMobile,
   openAccountWeb,
@@ -158,6 +161,7 @@ import {
   probeProxy,
   promoteToNeurocomment,
   publishAccountChannelPost,
+  receiveInboundSmsWebhook,
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountsFromFolder,
@@ -211,16 +215,13 @@ import {
   startNeuroshillingCampaign,
   startPhone,
   startPhoneLogin,
+  startPhoneOtpWait,
   startUserParserRun,
   startWarming,
   stopChatBroadcastCampaign,
   stopMasstaggingCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
-  getPhoneTelephonyStatus,
-  listSmsInbox,
-  manualInputPhoneOtp,
-  receiveInboundSmsWebhook,
   stopPhone,
   stopUserParserRun,
   stopWarming,
@@ -517,6 +518,9 @@ import type {
   GetOutreachUsageTodayData,
   GetOutreachUsageTodayError,
   GetOutreachUsageTodayResponse,
+  GetPhoneTelephonyStatusData,
+  GetPhoneTelephonyStatusError,
+  GetPhoneTelephonyStatusResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -622,6 +626,9 @@ import type {
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
+  ListSmsInboxData,
+  ListSmsInboxError,
+  ListSmsInboxResponse,
   ListUserParserAccountsData,
   ListUserParserAccountsError,
   ListUserParserAccountsResponse,
@@ -661,6 +668,9 @@ import type {
   LogoutData,
   LogoutError,
   LogoutResponse,
+  ManualInputPhoneOtpData,
+  ManualInputPhoneOtpError,
+  ManualInputPhoneOtpResponse,
   MarkAccountChatReadData,
   MarkAccountChatReadError,
   MarkAccountChatReadResponse,
@@ -685,6 +695,9 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostError,
   PublishAccountChannelPostResponse,
+  ReceiveInboundSmsWebhookData,
+  ReceiveInboundSmsWebhookError,
+  ReceiveInboundSmsWebhookResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -843,6 +856,9 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginError,
   StartPhoneLoginResponse,
+  StartPhoneOtpWaitData,
+  StartPhoneOtpWaitError,
+  StartPhoneOtpWaitResponse,
   StartPhoneResponse,
   StartUserParserRunData,
   StartUserParserRunError,
@@ -862,18 +878,6 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignError,
   StopNeuroshillingCampaignResponse,
-  GetPhoneTelephonyStatusData,
-  GetPhoneTelephonyStatusError,
-  GetPhoneTelephonyStatusResponse,
-  ListSmsInboxData,
-  ListSmsInboxError,
-  ListSmsInboxResponse,
-  ManualInputPhoneOtpData,
-  ManualInputPhoneOtpError,
-  ManualOtpInputResult,
-  ReceiveInboundSmsWebhookData,
-  ReceiveInboundSmsWebhookError,
-  ReceiveInboundSmsWebhookResponse,
   StopPhoneData,
   StopPhoneError,
   StopPhoneResponse,
@@ -7614,6 +7618,11 @@ export const stopPhoneMutation = (
 export const getPhoneTelephonyStatusQueryKey = (options: Options<GetPhoneTelephonyStatusData>) =>
   createQueryKey('getPhoneTelephonyStatus', options);
 
+/**
+ * Get Phone Telephony Status
+ *
+ * Return the current OTP waiting/typing status for a phone container.
+ */
 export const getPhoneTelephonyStatusOptions = (options: Options<GetPhoneTelephonyStatusData>) =>
   queryOptions<
     GetPhoneTelephonyStatusResponse,
@@ -7633,9 +7642,72 @@ export const getPhoneTelephonyStatusOptions = (options: Options<GetPhoneTelephon
     queryKey: getPhoneTelephonyStatusQueryKey(options),
   });
 
+/**
+ * Start Phone Otp Wait
+ *
+ * Make the phone wait for an OTP SMS on its account's number; it is typed when it comes.
+ */
+export const startPhoneOtpWaitMutation = (
+  options?: Partial<Options<StartPhoneOtpWaitData>>,
+): UseMutationOptions<
+  StartPhoneOtpWaitResponse,
+  StartPhoneOtpWaitError,
+  Options<StartPhoneOtpWaitData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartPhoneOtpWaitResponse,
+    StartPhoneOtpWaitError,
+    Options<StartPhoneOtpWaitData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startPhoneOtpWait({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Manual Input Phone Otp
+ *
+ * Type an OTP code into the phone's code screen now; refused off that screen.
+ */
+export const manualInputPhoneOtpMutation = (
+  options?: Partial<Options<ManualInputPhoneOtpData>>,
+): UseMutationOptions<
+  ManualInputPhoneOtpResponse,
+  ManualInputPhoneOtpError,
+  Options<ManualInputPhoneOtpData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ManualInputPhoneOtpResponse,
+    ManualInputPhoneOtpError,
+    Options<ManualInputPhoneOtpData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await manualInputPhoneOtp({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
 export const listSmsInboxQueryKey = (options?: Options<ListSmsInboxData>) =>
   createQueryKey('listSmsInbox', options);
 
+/**
+ * List Sms Inbox
+ *
+ * Return the last 50 inbound SMS messages, or only those for one phone.
+ */
 export const listSmsInboxOptions = (options?: Options<ListSmsInboxData>) =>
   queryOptions<
     ListSmsInboxResponse,
@@ -7655,30 +7727,11 @@ export const listSmsInboxOptions = (options?: Options<ListSmsInboxData>) =>
     queryKey: listSmsInboxQueryKey(options),
   });
 
-export const manualInputPhoneOtpMutation = (
-  options?: Partial<Options<ManualInputPhoneOtpData>>,
-): UseMutationOptions<
-  ManualOtpInputResult,
-  ManualInputPhoneOtpError,
-  Options<ManualInputPhoneOtpData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    ManualOtpInputResult,
-    ManualInputPhoneOtpError,
-    Options<ManualInputPhoneOtpData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await manualInputPhoneOtp({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      });
-      return data;
-    },
-  };
-  return mutationOptions;
-};
-
+/**
+ * Receive Inbound Sms Webhook
+ *
+ * Receive an inbound SMS or Flash Call from a hardware gateway, modem, or SMS API.
+ */
 export const receiveInboundSmsWebhookMutation = (
   options?: Partial<Options<ReceiveInboundSmsWebhookData>>,
 ): UseMutationOptions<

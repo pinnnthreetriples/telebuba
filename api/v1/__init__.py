@@ -55,5 +55,7 @@ router.include_router(devices.router, dependencies=_protected, responses=PROTECT
 router.include_router(telephony.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 # Self-guarded: a WebSocket handshake authenticates itself (see ``api.v1.devices``).
 router.include_router(devices.screen_router)
+# Self-guarded: SMS gateways send a shared secret instead (see ``api.v1.telephony``).
+router.include_router(telephony.webhook_router)
 
 __all__ = ["router"]

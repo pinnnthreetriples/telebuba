@@ -8,16 +8,16 @@ export {
   manualInputPhoneOtpMutation,
   phoneTelephonyStatusOptions,
   phoneTelephonyStatusQueryKey,
-  receiveInboundSmsWebhookMutation,
   smsInboxQueryKey,
   smsInboxQueryOptions,
+  startPhoneOtpWaitMutation,
 } from './api/telephony.queries';
 export { androidVersion, PHONE_STATUS_TONE, phoneActions, type PhoneStatus } from './model/status';
 export {
   formatOtpCountdown,
+  isLiveTelephonyStatus,
   isTelephonyLineStatus,
   TELEPHONY_STATUS_TONE,
-  type OtpSession,
   type PhoneTelephonyStatus,
   type SmsInboxMessage,
   type TelephonyLineStatus,

@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: Backend flow, stack, services, gateways and system design.
-last_updated: 2026-10-12
+last_updated: 2026-10-19
 edges:
   - target: context/conventions.md
     condition: backend implementation or review conventions
@@ -39,3 +39,5 @@ Scheduled profile photos and stories exist because Telegram cannot schedule them
 The account lifecycle journal has no FK to `accounts` and outlives both the log purge and the account; its writes never raise into the path that produced the event.
 
 The operator bot is one more reader of the in-process log bus: it maps a few warming and spam-status events to Telegram messages, throttled in memory per account and kind, and a failed send is logged by status only, never breaking the pipeline. Its bot token is stored like the LLM keys and leaves the API only as a mask.
+
+Inbound telephony is the one machine-to-machine route outside the session gate: SMS gateways post to the webhook with a shared secret header (off until `TELEPHONY__WEBHOOK_SECRET` is set), and a replay window plus a timestamp skew check stand in for a session. A code is typed into a phone only while the operator opened a wait for it, the Telegram app shows its code screen, and no start or warming session holds the pod; otherwise the wait ends `failed` with a stable code. Waits, the replay window and the inbox are in-process state, like the other runtimes.

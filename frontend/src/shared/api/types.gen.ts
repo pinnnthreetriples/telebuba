@@ -3572,6 +3572,48 @@ export type HealthStatus = {
 };
 
 /**
+ * InboundSmsWebhook
+ *
+ * Контракт входящего вебхука от шлюзов (GoIP, Dinstar), модемов или SMS-API.
+ */
+export type InboundSmsWebhook = {
+  /**
+   * Kind
+   */
+  kind?: 'sms' | 'flash_call';
+  /**
+   * Phone
+   *
+   * Номер получателя в формате E.164, напр. +79991234567
+   */
+  phone: string;
+  /**
+   * Sender
+   *
+   * Имя отправителя или номер, напр. Telegram, WhatsApp, Facebook
+   */
+  sender: string;
+  /**
+   * Text
+   *
+   * Сырой текст SMS-сообщения
+   */
+  text?: string;
+  /**
+   * Caller Id
+   *
+   * Caller number of a flash_call; the code is its last digits
+   */
+  caller_id?: string | null;
+  /**
+   * Timestamp
+   *
+   * When the gateway received it, with a timezone; server time when absent
+   */
+  timestamp?: string | null;
+};
+
+/**
  * LeadInput
  */
 export type LeadInput = {
@@ -3826,6 +3868,43 @@ export type LoginRequest = {
    * Password
    */
   password: string;
+};
+
+/**
+ * ManualOtpInputRequest
+ *
+ * Запрос на ручной биомеханический ввод OTP-кода оператором.
+ */
+export type ManualOtpInputRequest = {
+  /**
+   * Code
+   */
+  code: string;
+};
+
+/**
+ * ManualOtpInputResult
+ *
+ * Результат ручного ввода OTP-кода в контейнер смартфона.
+ */
+export type ManualOtpInputResult = {
+  /**
+   * Status
+   */
+  status?: 'ok';
+  /**
+   * Phone Id
+   */
+  phone_id: string;
+  /**
+   * Code
+   */
+  code: string;
+  /**
+   * Line Status
+   */
+  line_status?:
+    'idle' | 'waiting_otp' | 'otp_received' | 'typing' | 'completed' | 'failed' | 'timeout';
 };
 
 /**
@@ -5994,6 +6073,54 @@ export type PhoneProxy = {
 };
 
 /**
+ * PhoneTelephonyStatus
+ *
+ * Текущий статус сотовой линии и ожидания/ввода OTP для телефона.
+ */
+export type PhoneTelephonyStatus = {
+  /**
+   * Phone Id
+   */
+  phone_id: string;
+  /**
+   * Phone Number
+   */
+  phone_number?: string | null;
+  /**
+   * Platform
+   */
+  platform?: 'telegram' | 'whatsapp' | 'facebook' | 'tiktok' | 'generic' | null;
+  /**
+   * Status
+   */
+  status?: 'idle' | 'waiting_otp' | 'otp_received' | 'typing' | 'completed' | 'failed' | 'timeout';
+  /**
+   * Last Code
+   */
+  last_code?: string | null;
+  /**
+   * Last Sms Text
+   */
+  last_sms_text?: string | null;
+  /**
+   * Error Code
+   */
+  error_code?: string | null;
+  /**
+   * Created At
+   */
+  created_at?: string | null;
+  /**
+   * Expires At
+   */
+  expires_at?: string | null;
+  /**
+   * Remaining Seconds
+   */
+  remaining_seconds?: number;
+};
+
+/**
  * PhotoMainRequest
  *
  * Promote an existing profile photo to the current avatar.
@@ -6868,6 +6995,86 @@ export type SkippedAccount = {
    * Retry After Seconds
    */
   retry_after_seconds?: number | null;
+};
+
+/**
+ * SmsInboxList
+ *
+ * Список последних входящих SMS для журнала (до 50 сообщений).
+ */
+export type SmsInboxList = {
+  /**
+   * Messages
+   */
+  messages: Array<SmsInboxMessage>;
+};
+
+/**
+ * SmsInboxMessage
+ *
+ * Запись входящего SMS-сообщения в кольцевом журнале.
+ */
+export type SmsInboxMessage = {
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Phone
+   */
+  phone: string;
+  /**
+   * Phone Id
+   */
+  phone_id?: string | null;
+  /**
+   * Sender
+   */
+  sender: string;
+  /**
+   * Text
+   */
+  text: string;
+  /**
+   * Code
+   */
+  code?: string | null;
+  /**
+   * Platform
+   */
+  platform?: 'telegram' | 'whatsapp' | 'facebook' | 'tiktok' | 'generic';
+  /**
+   * Matched
+   */
+  matched?: boolean;
+  /**
+   * Timestamp
+   */
+  timestamp: string;
+};
+
+/**
+ * SmsWebhookResponse
+ *
+ * Ответ вебхука приёма входящих SMS.
+ */
+export type SmsWebhookResponse = {
+  /**
+   * Status
+   */
+  status?: 'ok';
+  /**
+   * Matched
+   */
+  matched: boolean;
+  /**
+   * Code
+   */
+  code?: string | null;
+  /**
+   * Duplicate
+   */
+  duplicate?: boolean;
 };
 
 /**
@@ -18971,106 +19178,12 @@ export type StopPhoneResponses = {
 
 export type StopPhoneResponse = StopPhoneResponses[keyof StopPhoneResponses];
 
-export type TelephonyLineStatus =
-  | 'idle'
-  | 'waiting_otp'
-  | 'otp_received'
-  | 'typing'
-  | 'completed'
-  | 'timeout';
-
-export type TelephonyPlatform = 'telegram' | 'whatsapp' | 'facebook' | 'tiktok' | 'generic';
-
-export type InboundSmsWebhook = {
-  phone: string;
-  sender: string;
-  text?: string;
-  timestamp?: string;
-};
-
-export type OtpSession = {
-  phone_id: string;
-  phone_number: string;
-  platform?: TelephonyPlatform;
-  status?: TelephonyLineStatus;
-  last_code?: string | null;
-  last_sms_text?: string | null;
-  created_at?: string;
-  expires_at: string;
-};
-
-export type SmsWebhookResponse = {
-  status?: 'ok';
-  matched: boolean;
-  code?: string | null;
-  duplicate?: boolean;
-};
-
-export type PhoneTelephonyStatus = {
-  phone_id: string;
-  phone_number?: string | null;
-  platform?: TelephonyPlatform | null;
-  status?: TelephonyLineStatus;
-  last_code?: string | null;
-  last_sms_text?: string | null;
-  created_at?: string | null;
-  expires_at?: string | null;
-  remaining_seconds?: number;
-};
-
-export type ManualOtpInputRequest = {
-  code: string;
-};
-
-export type ManualOtpInputResult = {
-  status?: 'ok';
-  phone_id: string;
-  code: string;
-  line_status?: TelephonyLineStatus;
-};
-
-export type SmsInboxMessage = {
-  id: string;
-  phone: string;
-  phone_id?: string | null;
-  sender: string;
-  text: string;
-  code?: string | null;
-  platform?: TelephonyPlatform;
-  matched?: boolean;
-  timestamp: string;
-};
-
-export type SmsInboxList = {
-  messages: Array<SmsInboxMessage>;
-};
-
-export type ReceiveInboundSmsWebhookData = {
-  body: InboundSmsWebhook;
-  path?: never;
-  query?: never;
-  url: '/api/v1/telephony/sms-webhook';
-};
-
-export type ReceiveInboundSmsWebhookErrors = {
-  401: ErrorEnvelope;
-  422: ErrorEnvelope;
-  500: ErrorEnvelope;
-};
-
-export type ReceiveInboundSmsWebhookError =
-  ReceiveInboundSmsWebhookErrors[keyof ReceiveInboundSmsWebhookErrors];
-
-export type ReceiveInboundSmsWebhookResponses = {
-  200: SmsWebhookResponse;
-};
-
-export type ReceiveInboundSmsWebhookResponse =
-  ReceiveInboundSmsWebhookResponses[keyof ReceiveInboundSmsWebhookResponses];
-
 export type GetPhoneTelephonyStatusData = {
   body?: never;
   path: {
+    /**
+     * Phone Id
+     */
     phone_id: string;
   };
   query?: never;
@@ -19078,8 +19191,17 @@ export type GetPhoneTelephonyStatusData = {
 };
 
 export type GetPhoneTelephonyStatusErrors = {
+  /**
+   * Not authenticated
+   */
   401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
   422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
   500: ErrorEnvelope;
 };
 
@@ -19087,15 +19209,72 @@ export type GetPhoneTelephonyStatusError =
   GetPhoneTelephonyStatusErrors[keyof GetPhoneTelephonyStatusErrors];
 
 export type GetPhoneTelephonyStatusResponses = {
+  /**
+   * Successful Response
+   */
   200: PhoneTelephonyStatus;
 };
 
 export type GetPhoneTelephonyStatusResponse =
   GetPhoneTelephonyStatusResponses[keyof GetPhoneTelephonyStatusResponses];
 
+export type StartPhoneOtpWaitData = {
+  body?: never;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/telephony/phones/{phone_id}/wait';
+};
+
+export type StartPhoneOtpWaitErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type StartPhoneOtpWaitError = StartPhoneOtpWaitErrors[keyof StartPhoneOtpWaitErrors];
+
+export type StartPhoneOtpWaitResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneTelephonyStatus;
+};
+
+export type StartPhoneOtpWaitResponse =
+  StartPhoneOtpWaitResponses[keyof StartPhoneOtpWaitResponses];
+
 export type ManualInputPhoneOtpData = {
   body: ManualOtpInputRequest;
   path: {
+    /**
+     * Phone Id
+     */
     phone_id: string;
   };
   query?: never;
@@ -19103,14 +19282,38 @@ export type ManualInputPhoneOtpData = {
 };
 
 export type ManualInputPhoneOtpErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
   401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
   422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ManualInputPhoneOtpError = ManualInputPhoneOtpErrors[keyof ManualInputPhoneOtpErrors];
 
 export type ManualInputPhoneOtpResponses = {
+  /**
+   * Successful Response
+   */
   200: ManualOtpInputResult;
 };
 
@@ -19121,21 +19324,89 @@ export type ListSmsInboxData = {
   body?: never;
   path?: never;
   query?: {
+    /**
+     * Phone Id
+     */
     phone_id?: string | null;
   };
   url: '/api/v1/telephony/inbox';
 };
 
 export type ListSmsInboxErrors = {
+  /**
+   * Not authenticated
+   */
   401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
   422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
   500: ErrorEnvelope;
 };
 
 export type ListSmsInboxError = ListSmsInboxErrors[keyof ListSmsInboxErrors];
 
 export type ListSmsInboxResponses = {
+  /**
+   * Successful Response
+   */
   200: SmsInboxList;
 };
 
 export type ListSmsInboxResponse = ListSmsInboxResponses[keyof ListSmsInboxResponses];
+
+export type ReceiveInboundSmsWebhookData = {
+  body: InboundSmsWebhook;
+  headers?: {
+    /**
+     * X-Telephony-Token
+     */
+    'x-telephony-token'?: string | null;
+  };
+  path?: never;
+  query?: never;
+  url: '/api/v1/telephony/sms-webhook';
+};
+
+export type ReceiveInboundSmsWebhookErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ReceiveInboundSmsWebhookError =
+  ReceiveInboundSmsWebhookErrors[keyof ReceiveInboundSmsWebhookErrors];
+
+export type ReceiveInboundSmsWebhookResponses = {
+  /**
+   * Successful Response
+   */
+  200: SmsWebhookResponse;
+};
+
+export type ReceiveInboundSmsWebhookResponse =
+  ReceiveInboundSmsWebhookResponses[keyof ReceiveInboundSmsWebhookResponses];

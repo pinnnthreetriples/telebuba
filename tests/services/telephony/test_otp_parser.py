@@ -175,8 +175,60 @@ def test_extract_flash_call_otp_extracts_trailing_digits(
     expected: str | None,
 ) -> None:
     assert extract_flash_call_otp(caller_id, digits=digits) == expected
-    assert extract_otp("", caller_id, flash_call_digits=digits) == expected
-    assert extract_otp("flash_call", caller_id, flash_call_digits=digits) == expected
+    assert extract_otp("", "call", caller_id=caller_id, flash_call_digits=digits) == expected
+
+
+@pytest.mark.parametrize("text", ["", "   ", "flash_call", "call", "ring"])
+def test_an_sms_is_never_read_as_a_flash_call(text: str) -> None:
+    assert extract_otp(text, "+79161234567") is None
+
+
+@pytest.mark.parametrize(
+    ("sender", "text"),
+    [
+        ("X", "Call +7 999 123-456 for code"),
+        ("Shop", "Your order 20261019 code will arrive soon"),
+        ("Shop", "Order 123-456 shipped, track it with the code in the app"),
+        ("Telegram", "Telegram: call +7 999 123-45-67 now"),
+        ("Info", "Код 1234-5678-9012 вашей карты"),
+        ("Info", "Refbnumber 55512 for your code"),
+        ("Info", "Telegram code: ١٢٣٤٥"),
+    ],
+)
+def test_numbers_that_are_not_codes_are_not_taken(sender: str, text: str) -> None:
+    assert extract_otp(text, sender) is None
+
+
+@pytest.mark.parametrize(
+    ("sender", "text", "expected"),
+    [
+        ("Telegram", "Telegram code: 48291", "48291"),
+        ("Telegram", "Telegram code: ４８２９１", "48291"),
+        ("Telegram", "🔐 Telegram code: 48291 🔐", "48291"),
+        ("Telegram", "Telegram code: 48291.", "48291"),
+        ("Telegram", "Telegram code: 48291!!!", "48291"),
+        ("WhatsApp", "WhatsApp code 771 882", "771882"),
+        ("Info", "Your code is 4821. Valid 5 min", "4821"),
+        ("Info", "7391 is your verification code", "7391"),
+    ],
+)
+def test_unicode_spaces_digits_emoji_and_punctuation_are_handled(
+    sender: str,
+    text: str,
+    expected: str,
+) -> None:
+    assert extract_otp(text, sender) == expected
+
+
+def test_fb_inside_a_word_is_not_facebook() -> None:
+    assert detect_platform("Your fbx order 12345 is ready", "Shop") == "generic"
+    assert extract_otp("Your fbx order 12345 is ready", "Shop") is None
+
+
+def test_the_platform_the_sms_is_about_wins() -> None:
+    text = "Telegram code: 48291. Do not share it on WhatsApp 123-456"
+
+    assert extract_otp(text, "Telegram") == "48291"
 
 
 def test_extract_flash_call_otp_rejects_invalid_digit_length() -> None:

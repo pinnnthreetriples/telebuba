@@ -286,6 +286,9 @@ import type {
   GetOutreachUsageTodayData,
   GetOutreachUsageTodayErrors,
   GetOutreachUsageTodayResponses,
+  GetPhoneTelephonyStatusData,
+  GetPhoneTelephonyStatusErrors,
+  GetPhoneTelephonyStatusResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -391,6 +394,9 @@ import type {
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
+  ListSmsInboxData,
+  ListSmsInboxErrors,
+  ListSmsInboxResponses,
   ListUserParserAccountsData,
   ListUserParserAccountsErrors,
   ListUserParserAccountsResponses,
@@ -430,6 +436,9 @@ import type {
   LogoutData,
   LogoutErrors,
   LogoutResponses,
+  ManualInputPhoneOtpData,
+  ManualInputPhoneOtpErrors,
+  ManualInputPhoneOtpResponses,
   MarkAccountChatReadData,
   MarkAccountChatReadErrors,
   MarkAccountChatReadResponses,
@@ -454,6 +463,9 @@ import type {
   PublishAccountChannelPostData,
   PublishAccountChannelPostErrors,
   PublishAccountChannelPostResponses,
+  ReceiveInboundSmsWebhookData,
+  ReceiveInboundSmsWebhookErrors,
+  ReceiveInboundSmsWebhookResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -612,6 +624,9 @@ import type {
   StartPhoneLoginData,
   StartPhoneLoginErrors,
   StartPhoneLoginResponses,
+  StartPhoneOtpWaitData,
+  StartPhoneOtpWaitErrors,
+  StartPhoneOtpWaitResponses,
   StartPhoneResponses,
   StartUserParserRunData,
   StartUserParserRunErrors,
@@ -631,18 +646,6 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignErrors,
   StopNeuroshillingCampaignResponses,
-  GetPhoneTelephonyStatusData,
-  GetPhoneTelephonyStatusErrors,
-  GetPhoneTelephonyStatusResponses,
-  ListSmsInboxData,
-  ListSmsInboxErrors,
-  ListSmsInboxResponses,
-  ManualInputPhoneOtpData,
-  ManualInputPhoneOtpErrors,
-  ManualInputPhoneOtpResponses,
-  ReceiveInboundSmsWebhookData,
-  ReceiveInboundSmsWebhookErrors,
-  ReceiveInboundSmsWebhookResponses,
   StopPhoneData,
   StopPhoneErrors,
   StopPhoneResponses,
@@ -4568,26 +4571,9 @@ export const stopPhone = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Receive Inbound Sms Webhook
- */
-export const receiveInboundSmsWebhook = <ThrowOnError extends boolean = false>(
-  options: Options<ReceiveInboundSmsWebhookData, ThrowOnError>,
-): RequestResult<ReceiveInboundSmsWebhookResponses, ReceiveInboundSmsWebhookErrors, ThrowOnError> =>
-  (options.client ?? client).post<
-    ReceiveInboundSmsWebhookResponses,
-    ReceiveInboundSmsWebhookErrors,
-    ThrowOnError
-  >({
-    url: '/api/v1/telephony/sms-webhook',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-/**
  * Get Phone Telephony Status
+ *
+ * Return the current OTP waiting/typing status for a phone container.
  */
 export const getPhoneTelephonyStatus = <ThrowOnError extends boolean = false>(
   options: Options<GetPhoneTelephonyStatusData, ThrowOnError>,
@@ -4596,13 +4582,26 @@ export const getPhoneTelephonyStatus = <ThrowOnError extends boolean = false>(
     GetPhoneTelephonyStatusResponses,
     GetPhoneTelephonyStatusErrors,
     ThrowOnError
-  >({
-    url: '/api/v1/telephony/phones/{phone_id}/status',
-    ...options,
-  });
+  >({ url: '/api/v1/telephony/phones/{phone_id}/status', ...options });
+
+/**
+ * Start Phone Otp Wait
+ *
+ * Make the phone wait for an OTP SMS on its account's number; it is typed when it comes.
+ */
+export const startPhoneOtpWait = <ThrowOnError extends boolean = false>(
+  options: Options<StartPhoneOtpWaitData, ThrowOnError>,
+): RequestResult<StartPhoneOtpWaitResponses, StartPhoneOtpWaitErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StartPhoneOtpWaitResponses,
+    StartPhoneOtpWaitErrors,
+    ThrowOnError
+  >({ url: '/api/v1/telephony/phones/{phone_id}/wait', ...options });
 
 /**
  * Manual Input Phone Otp
+ *
+ * Type an OTP code into the phone's code screen now; refused off that screen.
  */
 export const manualInputPhoneOtp = <ThrowOnError extends boolean = false>(
   options: Options<ManualInputPhoneOtpData, ThrowOnError>,
@@ -4622,6 +4621,8 @@ export const manualInputPhoneOtp = <ThrowOnError extends boolean = false>(
 
 /**
  * List Sms Inbox
+ *
+ * Return the last 50 inbound SMS messages, or only those for one phone.
  */
 export const listSmsInbox = <ThrowOnError extends boolean = false>(
   options?: Options<ListSmsInboxData, ThrowOnError>,
@@ -4629,4 +4630,25 @@ export const listSmsInbox = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).get<ListSmsInboxResponses, ListSmsInboxErrors, ThrowOnError>({
     url: '/api/v1/telephony/inbox',
     ...options,
+  });
+
+/**
+ * Receive Inbound Sms Webhook
+ *
+ * Receive an inbound SMS or Flash Call from a hardware gateway, modem, or SMS API.
+ */
+export const receiveInboundSmsWebhook = <ThrowOnError extends boolean = false>(
+  options: Options<ReceiveInboundSmsWebhookData, ThrowOnError>,
+): RequestResult<ReceiveInboundSmsWebhookResponses, ReceiveInboundSmsWebhookErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ReceiveInboundSmsWebhookResponses,
+    ReceiveInboundSmsWebhookErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/telephony/sms-webhook',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });

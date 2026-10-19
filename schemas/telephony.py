@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 TelephonyLineStatus = Literal[
     "idle",
@@ -13,12 +13,19 @@ TelephonyLineStatus = Literal[
     "otp_received",
     "typing",
     "completed",
+    "failed",
     "timeout",
 ]
 
 TelephonyPlatform = Literal["telegram", "whatsapp", "facebook", "tiktok", "generic"]
 
+# ``sms``: a text to parse. ``flash_call``: a missed call whose caller id ends in the code.
+InboundKind = Literal["sms", "flash_call"]
+
 PHONE_ID_PATTERN = r"^[A-Za-z0-9_.-]{1,128}$"
+# ASCII digits only: ``\d`` would let Arabic-Indic or other Unicode digits through,
+# which ``adb input text`` cannot type.
+OTP_CODE_PATTERN = r"^[0-9]{4,8}$"
 
 
 def _utc_now() -> datetime:
@@ -28,19 +35,34 @@ def _utc_now() -> datetime:
 class InboundSmsWebhook(BaseModel):
     """Контракт входящего вебхука от шлюзов (GoIP, Dinstar), модемов или SMS-API."""
 
+    kind: InboundKind = "sms"
     phone: str = Field(
         min_length=1,
+        max_length=32,
         description="Номер получателя в формате E.164, напр. +79991234567",
     )
     sender: str = Field(
         min_length=1,
+        max_length=64,
         description="Имя отправителя или номер, напр. Telegram, WhatsApp, Facebook",
     )
-    text: str = Field(
-        default="",
-        description="Сырой текст SMS-сообщения",
+    text: str = Field(default="", max_length=2000, description="Сырой текст SMS-сообщения")
+    caller_id: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Caller number of a flash_call; the code is its last digits",
     )
-    timestamp: datetime = Field(default_factory=_utc_now)
+    timestamp: AwareDatetime | None = Field(
+        default=None,
+        description="When the gateway received it, with a timezone; server time when absent",
+    )
+
+    @model_validator(mode="after")
+    def _check_flash_call(self) -> InboundSmsWebhook:
+        if self.kind == "flash_call" and not self.caller_id:
+            msg = "caller_id is required for a flash_call"
+            raise ValueError(msg)
+        return self
 
 
 class OtpSession(BaseModel):
@@ -52,8 +74,11 @@ class OtpSession(BaseModel):
     status: TelephonyLineStatus = "waiting_otp"
     last_code: str | None = None
     last_sms_text: str | None = None
+    # The stable refusal code the SPA translates when the wait ended ``failed``.
+    error_code: str | None = None
     created_at: datetime = Field(default_factory=_utc_now)
     expires_at: datetime
+    updated_at: datetime = Field(default_factory=_utc_now)
 
 
 class SmsWebhookResponse(BaseModel):
@@ -74,6 +99,8 @@ class PhoneTelephonyStatus(BaseModel):
     status: TelephonyLineStatus = "idle"
     last_code: str | None = None
     last_sms_text: str | None = None
+    # The stable refusal code the SPA translates when the wait ended ``failed``.
+    error_code: str | None = None
     created_at: datetime | None = None
     expires_at: datetime | None = None
     remaining_seconds: int = Field(default=0, ge=0)
@@ -82,7 +109,7 @@ class PhoneTelephonyStatus(BaseModel):
 class ManualOtpInputRequest(BaseModel):
     """Запрос на ручной биомеханический ввод OTP-кода оператором."""
 
-    code: str = Field(min_length=4, max_length=8, pattern=r"^\d{4,8}$")
+    code: str = Field(min_length=4, max_length=8, pattern=OTP_CODE_PATTERN)
 
 
 class ManualOtpInputResult(BaseModel):
@@ -105,7 +132,7 @@ class SmsInboxMessage(BaseModel):
     code: str | None = None
     platform: TelephonyPlatform = "generic"
     matched: bool = False
-    timestamp: datetime = Field(default_factory=_utc_now)
+    timestamp: datetime
 
 
 class SmsInboxList(BaseModel):

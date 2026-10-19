@@ -1,16 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   manualInputPhoneOtpMutation,
   phoneTelephonyStatusQueryKey,
+  smsInboxQueryKey,
   smsInboxQueryOptions,
   type SmsInboxMessage,
 } from '@/entities/phone';
 import { Badge, Button, CloseButton, EmptyState, Input, Modal, ModalHeader } from '@/shared/ui';
 
 const POLL_INBOX_MS = 3000;
+const COPY_FEEDBACK_MS = 2000;
+const CUSTOM_TARGET = 'custom';
+const MIN_CODE_LENGTH = 4;
+const MAX_CODE_LENGTH = 8;
+
+type CopyFeedback = { id: string; ok: boolean };
 
 function formatSmsTimestamp(iso: string): string {
   const parsed = new Date(iso);
@@ -18,13 +25,17 @@ function formatSmsTimestamp(iso: string): string {
   return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export function SmsInboxDrawer({
-  phoneId,
-  onClose,
-}: {
-  phoneId: string;
-  onClose: () => void;
-}) {
+async function writeToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function SmsInboxDrawer({ phoneId, onClose }: { phoneId: string; onClose: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data } = useQuery({
@@ -32,58 +43,75 @@ export function SmsInboxDrawer({
     refetchInterval: POLL_INBOX_MS,
   });
   const manualType = useMutation(manualInputPhoneOtpMutation());
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [typingCode, setTypingCode] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | null>(null);
+  // Which button started the typing in flight (a message id or the custom field):
+  // two messages can carry the same code, so the code itself cannot say.
+  const [typingTarget, setTypingTarget] = useState<string | null>(null);
   const [customCode, setCustomCode] = useState('');
+
+  useEffect(() => {
+    if (copyFeedback === null) return undefined;
+    const timer = window.setTimeout(() => setCopyFeedback(null), COPY_FEEDBACK_MS);
+    return () => window.clearTimeout(timer);
+  }, [copyFeedback]);
 
   const messages: SmsInboxMessage[] = Array.isArray(data?.messages) ? data.messages : [];
 
   const copyCode = (msg: SmsInboxMessage) => {
     if (!msg.code) return;
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(msg.code).catch(() => undefined);
-    }
-    setCopiedId(msg.id);
+    void writeToClipboard(msg.code).then((ok) => setCopyFeedback({ id: msg.id, ok }));
   };
 
-  const triggerManualType = (code: string) => {
+  const copyLabel = (msg: SmsInboxMessage) => {
+    if (copyFeedback?.id !== msg.id) return t('telephony.inbox.copyCode');
+    return copyFeedback.ok ? t('telephony.inbox.copied') : t('telephony.inbox.copyFailed');
+  };
+
+  const triggerManualType = (code: string, target: string) => {
     const trimmed = code.trim();
-    if (!trimmed) return;
-    setTypingCode(trimmed);
+    if (trimmed.length < MIN_CODE_LENGTH) return;
+    setTypingTarget(target);
     void manualType
-      .mutateAsync({
-        path: { phone_id: phoneId },
-        body: { code: trimmed },
+      .mutateAsync({ path: { phone_id: phoneId }, body: { code: trimmed } })
+      .then(() => {
+        if (target === CUSTOM_TARGET) setCustomCode('');
       })
+      // The global mutation cache toasts a refusal; the catch only keeps it handled.
+      .catch(() => undefined)
       .finally(() => {
-        setTypingCode(null);
-        setCustomCode('');
+        setTypingTarget(null);
         void queryClient.invalidateQueries({
           queryKey: phoneTelephonyStatusQueryKey({ path: { phone_id: phoneId } }),
         });
-      })
-      .catch(() => undefined);
+        void queryClient.invalidateQueries({
+          queryKey: smsInboxQueryKey({ query: { phone_id: phoneId } }),
+        });
+      });
   };
 
   return (
     <Modal variant="drawer-left" label={t('telephony.inbox.title')} onClose={onClose}>
       <ModalHeader title={t('telephony.inbox.title')}>
-        <CloseButton aria-label={t('telephony.inbox.title')} onClick={onClose} />
+        <CloseButton aria-label={t('telephony.inbox.close')} onClick={onClose} />
       </ModalHeader>
       <div className="flex flex-1 flex-col gap-4 p-6">
         <div className="flex items-center gap-2">
           <Input
             size="sm"
             value={customCode}
+            inputMode="numeric"
+            aria-label={t('telephony.inbox.manualInputPlaceholder')}
             placeholder={t('telephony.inbox.manualInputPlaceholder')}
-            onChange={(event) => setCustomCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+            onChange={(event) =>
+              setCustomCode(event.target.value.replace(/[^0-9]/g, '').slice(0, MAX_CODE_LENGTH))
+            }
           />
           <Button
             size="sm"
             variant="primary"
-            disabled={customCode.length < 4}
-            loading={typingCode === customCode && customCode.length >= 4}
-            onClick={() => triggerManualType(customCode)}
+            disabled={customCode.length < MIN_CODE_LENGTH || typingTarget !== null}
+            loading={typingTarget === CUSTOM_TARGET}
+            onClick={() => triggerManualType(customCode, CUSTOM_TARGET)}
           >
             {t('telephony.inbox.manualType')}
           </Button>
@@ -109,15 +137,14 @@ export function SmsInboxDrawer({
                       {msg.code}
                     </Badge>
                     <Button size="sm" variant="secondary" onClick={() => copyCode(msg)}>
-                      {copiedId === msg.id
-                        ? t('telephony.inbox.copied')
-                        : t('telephony.inbox.copyCode')}
+                      {copyLabel(msg)}
                     </Button>
                     <Button
                       size="sm"
                       variant="primary"
-                      loading={typingCode === msg.code}
-                      onClick={() => triggerManualType(msg.code ?? '')}
+                      disabled={typingTarget !== null && typingTarget !== msg.id}
+                      loading={typingTarget === msg.id}
+                      onClick={() => triggerManualType(msg.code ?? '', msg.id)}
                     >
                       {t('telephony.inbox.manualType')}
                     </Button>

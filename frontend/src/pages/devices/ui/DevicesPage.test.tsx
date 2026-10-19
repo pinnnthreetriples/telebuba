@@ -201,7 +201,7 @@ test('phone details display cellular line status and open SMS inbox drawer with 
 
   const dialog = await screen.findByRole('dialog');
   expect(await within(dialog).findByText('Сотовая связь и SMS')).toBeTruthy();
-  expect(await within(dialog).findByText('Код получен: 48291 (ввожу...)')).toBeTruthy();
+  expect(await within(dialog).findByText('Код получен: 48291')).toBeTruthy();
 
   await userEvent.click(within(dialog).getByRole('button', { name: 'Входящие SMS' }));
 

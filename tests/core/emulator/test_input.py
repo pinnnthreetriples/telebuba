@@ -374,3 +374,63 @@ def test_story_view_time_stays_in_range() -> None:
     samples = [engine.sample_story_view_sec() for _ in range(300)]
     assert all(2.0 <= s <= 9.0 for s in samples)
     assert len(set(samples)) > 10
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_a_code_is_typed_steadily_with_a_glance_mid_six_digits(seed: int) -> None:
+    engine = HumanInputEngine(rng=random.Random(seed))  # noqa: S311
+
+    events = engine.generate_code_sequence("482913")
+
+    assert "".join(e.char for e in events) == "482913"
+    assert all(e.key_event is None for e in events)  # never a typo or a delete
+    assert 400 <= events[3].delay_ms <= 600
+    for idx, event in enumerate(events):
+        if idx != 3:
+            assert 140 <= event.delay_ms <= 280
+
+
+@pytest.mark.parametrize("code", ["4829", "48291", "4829137", "48291375"])
+def test_only_a_six_digit_code_gets_the_mid_code_glance(code: str) -> None:
+    engine = HumanInputEngine(rng=random.Random(1))  # noqa: S311
+
+    events = engine.generate_code_sequence(code)
+
+    assert [e.char for e in events] == list(code)
+    assert all(140 <= e.delay_ms <= 280 for e in events)
+
+
+def test_digits_typed_as_text_keep_the_text_rhythm() -> None:
+    """A numeric password or search is not mistaken for a code: no hidden code branch."""
+    delays = [
+        event.delay_ms
+        for seed in range(20)
+        for event in HumanInputEngine(rng=random.Random(seed)).generate_keystroke_sequence(  # noqa: S311
+            "482913",
+            typo_probability=0.0,
+        )
+    ]
+
+    assert all(75 <= delay <= 230 for delay in delays)
+    assert min(delays) < 140
+
+
+@pytest.mark.asyncio
+async def test_adb_human_type_as_code_uses_the_code_rhythm(
+    console: Console,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slept: list[float] = []
+
+    async def _mock_sleep(sec: float) -> None:
+        slept.append(sec)
+
+    monkeypatch.setattr("core.emulator.adb.asyncio.sleep", _mock_sleep)
+    engine = HumanInputEngine(rng=random.Random(0))  # noqa: S311
+
+    await adb.human_type("emulator-5554", "482913", engine=engine, as_code=True)
+
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert typed == list("482913")
+    assert 0.4 <= slept[3] <= 0.6
+    assert all(0.14 <= s <= 0.28 for i, s in enumerate(slept) if i != 3)

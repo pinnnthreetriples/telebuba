@@ -1495,6 +1495,7 @@
     }
   },
   "logEvent": {
+    "telephony_otp_typing_failed": "Code not typed into the phone",
     "account_remove_web_cleanup_failed": "Could not close the deleted account's web window or remove its browser profile",
     "web_login_locale_rejected": "Chrome rejected the account's device language; the web window opened in the proxy country's language instead",
     "inbox_listener_health_check_failed": "Inbox connection check failed",
@@ -4999,6 +5000,7 @@
   },
   "telephony": {
     "sectionTitle": "Cellular & SMS",
+    "waitSms": "Wait for SMS",
     "status": {
       "idle": "Line idle",
       "waitingOtp": "Waiting for SMS...",
@@ -5007,6 +5009,8 @@
       "codeReceivedTyping": "Code received: {{code}} (typing...)",
       "typing": "Typing code...",
       "completed": "Code entered",
+      "failed": "Code not entered",
+      "failedWith": "Code not entered: {{reason}}",
       "timeout": "Wait timed out"
     },
     "inbox": {
@@ -5014,6 +5018,8 @@
       "empty": "No incoming SMS yet.",
       "copyCode": "Copy code",
       "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "close": "Close the inbox",
       "manualType": "Type into phone",
       "manualInputPlaceholder": "Enter code manually"
     }

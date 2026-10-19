@@ -1,4 +1,17 @@
-"""Inbound SMS dispatcher: deduplication, ring-buffer inbox, cognitive pause, and ADB typing."""
+"""Inbound SMS dispatcher: replay window, ring-buffer inbox, reading pause, and ADB typing.
+
+A matched SMS moves its phone's session to ``otp_received`` in the same synchronous
+step that finds it, so a second SMS for that phone is never matched while the first
+is pending. Typing holds the phone's lock, and a manual input takes the same lock
+after cancelling a code still in its reading pause, so two codes never interleave in
+one field. A code is typed only when the phone's Telegram app shows its code screen
+and no start or warming session holds the phone; anything else ends the wait as
+``failed`` with the refusal code, never as an exception left on a background task.
+
+Sessions, the replay window, the inbox and the tasks live in this process, which the
+one-uvicorn-worker rule allows. Logs carry the phone id and a stable code, never the
+number, the SMS text or the code.
+"""
 
 from __future__ import annotations
 
@@ -7,15 +20,14 @@ import hashlib
 import random
 import time
 import uuid
-from collections import deque
-from contextlib import suppress
+from collections import OrderedDict, deque
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.emulator import adb, redroid, telegram_app
+from core.emulator import redroid, telegram_app
 from core.emulator._errors import EmulatorError
-from core.emulator.ui_dump import UiNode, fields
+from core.logging import log_event
 from schemas.telephony import (
     InboundSmsWebhook,
     ManualOtpInputResult,
@@ -24,154 +36,215 @@ from schemas.telephony import (
     SmsInboxMessage,
     SmsWebhookResponse,
 )
+from services.accounts import (
+    DeviceRefusedError,
+    EmulatorBusyError,
+    EmulatorRefusedError,
+    require_account,
+)
+from services.accounts.mobile_emulator import phone_activity
+from services.device_farm import account_of
 from services.telephony._parser import detect_platform, extract_otp
 from services.telephony._session import (
     find_active_session,
     get_session,
     normalize_phone,
+    start_waiting_session,
     update_session_status,
 )
 
 if TYPE_CHECKING:
-    from core.emulator.ui_dump import Screen
+    from schemas.devices import DeviceRefusalCode
+    from schemas.emulator import EmulatorRefusalCode
+    from schemas.telephony import OtpSession
 
 INBOX_MAX_MESSAGES = 50
-DEDUP_TTL_SECONDS = 60.0
-COGNITIVE_PAUSE_MIN_SEC = 5.0
-COGNITIVE_PAUSE_MAX_SEC = 7.5
-_DEFAULT_CODE_BOUNDS: tuple[int, int, int, int] = (240, 560, 840, 720)
-_VERIFICATION_SCREENS: frozenset[Screen] = frozenset({"code", "password"})
+
+_DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
+_NOT_RUNNING: EmulatorRefusalCode = "emulator_not_running"
+_NOT_ON_CODE_SCREEN: EmulatorRefusalCode = "emulator_field_missing"
+_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
+_PHONE_UNKNOWN: DeviceRefusalCode = "device_phone_unknown"
+# What holds the phone's screen; a manual live-screen viewer does not.
+_SCREEN_OWNERS = frozenset({"starting", "warming"})
 
 _INBOX: deque[SmsInboxMessage] = deque(maxlen=INBOX_MAX_MESSAGES)
-_SEEN_WEBHOOKS: dict[str, float] = {}
-_ACTIVE_TASKS: set[asyncio.Task[None]] = set()
+# Insertion order is arrival order, so the expired entries are always at the front.
+_SEEN_WEBHOOKS: OrderedDict[str, float] = OrderedDict()
+_DISPATCHES: dict[str, asyncio.Task[None]] = {}
+_LOCKS: dict[str, asyncio.Lock] = {}
 _RNG = random.Random()  # nosec B311  # noqa: S311
 
 
-def _webhook_hash(phone: str, text: str) -> str:
-    normalized = normalize_phone(phone) or phone.strip()
-    payload_bytes = f"{normalized}:{text}".encode()
-    return hashlib.sha256(payload_bytes).hexdigest()
+class StaleWebhookError(ValueError):
+    """The gateway's timestamp is outside the replay window (400)."""
+
+    def __init__(self) -> None:
+        super().__init__("webhook_timestamp_out_of_window")
 
 
-def _is_duplicate_and_record(phone: str, text: str, now_mono: float | None = None) -> bool:
+def _lock(phone_id: str) -> asyncio.Lock:
+    return _LOCKS.setdefault(phone_id, asyncio.Lock())
+
+
+def _webhook_hash(payload: InboundSmsWebhook, normalized_phone: str) -> str:
+    parts = (payload.kind, normalized_phone, payload.sender, payload.text, payload.caller_id or "")
+    return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
+
+
+def _is_duplicate_and_record(digest: str, now_mono: float | None = None) -> bool:
     moment = now_mono if now_mono is not None else time.monotonic()
-    expired = [
-        digest
-        for digest, seen_at in _SEEN_WEBHOOKS.items()
-        if moment - seen_at >= DEDUP_TTL_SECONDS
-    ]
-    for digest in expired:
-        del _SEEN_WEBHOOKS[digest]
-    digest = _webhook_hash(phone, text)
+    ttl = settings.telephony.dedup_ttl_seconds
+    while _SEEN_WEBHOOKS:
+        oldest, seen_at = next(iter(_SEEN_WEBHOOKS.items()))
+        if moment - seen_at < ttl:
+            break
+        del _SEEN_WEBHOOKS[oldest]
     if digest in _SEEN_WEBHOOKS:
         return True
     _SEEN_WEBHOOKS[digest] = moment
     return False
 
 
+def _check_timestamp(payload: InboundSmsWebhook, now: datetime) -> None:
+    if payload.timestamp is None:
+        return
+    skew = abs((now - payload.timestamp).total_seconds())
+    if skew > settings.telephony.max_clock_skew_seconds:
+        raise StaleWebhookError
+
+
 async def _resolve_serial(phone_id: str) -> str:
-    """Resolve container name to ADB serial when emulator is enabled; fallback to ``phone_id``."""
-    if settings.emulator.enabled:
-        with suppress(EmulatorError, OSError):
-            instance = await redroid.find_instance(phone_id)
-            if instance is not None and instance.running:
-                return redroid.adb_serial(instance.index)
-    return phone_id
+    """The running container's adb serial; refused when the emulator or the pod is down."""
+    if not settings.emulator.enabled:
+        raise EmulatorError(_DISABLED)
+    try:
+        instance = await redroid.find_instance(phone_id)
+    except OSError as exc:
+        raise EmulatorError(_COMMAND_FAILED) from exc
+    if instance is None or not instance.running or instance.paused:
+        raise EmulatorError(_NOT_RUNNING)
+    return redroid.adb_serial(instance.index)
 
 
-def _pick_focus_target(nodes: list[UiNode]) -> UiNode:
-    editable = fields(nodes)
-    if editable:
-        return editable[0]
-    if nodes:
-        return nodes[0]
-    return UiNode(
-        text="",
-        description="otp_input",
-        class_name="android.widget.EditText",
-        password=False,
-        bounds=_DEFAULT_CODE_BOUNDS,
+async def _enter_code(phone_id: str, code: str) -> None:
+    """Type ``code`` into the phone's Telegram code screen, or refuse with a stable code."""
+    if phone_activity(account_of(phone_id)) in _SCREEN_OWNERS:
+        raise EmulatorBusyError
+    serial = await _resolve_serial(phone_id)
+    screen, nodes = await telegram_app.read_screen(serial)
+    if screen != "code":
+        raise EmulatorError(_NOT_ON_CODE_SCREEN)
+    await telegram_app.enter_code(serial, nodes, code)
+
+
+def _is_current(session: OtpSession) -> bool:
+    return get_session(session.phone_id) is session
+
+
+async def _fail(session: OtpSession, code: str) -> None:
+    if _is_current(session):
+        update_session_status(session.phone_id, "failed", error_code=code)
+    await log_event(
+        "WARNING",
+        "telephony_otp_typing_failed",
+        extra={"phone_id": session.phone_id, "code": code},
     )
 
 
-async def _ensure_verification_focus(serial: str) -> None:
-    """Read container screen and tap the verification input area if focus is lost."""
-    try:
-        screen, nodes = await telegram_app.read_screen(serial)
-    except EmulatorError:
-        return
-    if screen not in _VERIFICATION_SCREENS:
-        target = _pick_focus_target(nodes)
-        with suppress(EmulatorError):
-            await adb.human_tap(serial, target)
+async def _dispatch(session: OtpSession, code: str) -> None:
+    """Reading pause, then type ``code`` unless the session was replaced meanwhile."""
+    telephony = settings.telephony
+    await asyncio.sleep(
+        _RNG.uniform(telephony.reading_pause_min_seconds, telephony.reading_pause_max_seconds),
+    )
+    async with _lock(session.phone_id):
+        if not _is_current(session) or session.status != "otp_received":
+            return
+        update_session_status(session.phone_id, "typing", last_code=code)
+        try:
+            await _enter_code(session.phone_id, code)
+        except (EmulatorError, EmulatorRefusedError) as exc:
+            await _fail(session, exc.code)
+            return
+        except Exception:  # noqa: BLE001 - a background task has nobody to raise to
+            await _fail(session, _COMMAND_FAILED)
+            return
+        if _is_current(session):
+            update_session_status(session.phone_id, "completed", last_code=code)
 
 
-async def _type_otp_into_container(phone_id: str, code: str, *, pause: bool = True) -> None:
-    """Run cognitive reading pause (5.0-7.5s), check screen focus, and type OTP via ADB."""
-    if pause:
-        delay = _RNG.uniform(COGNITIVE_PAUSE_MIN_SEC, COGNITIVE_PAUSE_MAX_SEC)
-        await asyncio.sleep(delay)
-    update_session_status(phone_id, "typing", last_code=code)
-    serial = await _resolve_serial(phone_id)
-    await _ensure_verification_focus(serial)
-    await adb.human_type(serial, code)
-    update_session_status(phone_id, "completed", last_code=code)
+def _forget_dispatch(phone_id: str, task: asyncio.Task[None]) -> None:
+    if _DISPATCHES.get(phone_id) is task:
+        del _DISPATCHES[phone_id]
 
 
-async def handle_inbound_sms(
-    payload: InboundSmsWebhook,
-    *,
-    wait_for_typing: bool = False,
-) -> SmsWebhookResponse:
-    """Process an inbound SMS webhook, deduplicate, extract OTP, and dispatch typing."""
-    if _is_duplicate_and_record(payload.phone, payload.text):
+def _start_dispatch(session: OtpSession, code: str) -> None:
+    task = asyncio.create_task(_dispatch(session, code))
+    _DISPATCHES[session.phone_id] = task
+    task.add_done_callback(lambda done: _forget_dispatch(session.phone_id, done))
+
+
+async def handle_inbound_sms(payload: InboundSmsWebhook) -> SmsWebhookResponse:
+    """Process an inbound SMS or Flash Call: replay checks, OTP extraction, dispatch."""
+    now = datetime.now(UTC)
+    _check_timestamp(payload, now)
+    normalized_phone = normalize_phone(payload.phone) or payload.phone.strip()
+    if _is_duplicate_and_record(_webhook_hash(payload, normalized_phone)):
         return SmsWebhookResponse(status="ok", matched=False, code=None, duplicate=True)
 
-    normalized_phone = normalize_phone(payload.phone) or payload.phone
-    code = extract_otp(payload.text, payload.sender)
-    platform = detect_platform(payload.text, payload.sender)
     session = find_active_session(normalized_phone)
+    if payload.kind == "flash_call":
+        code = extract_otp(payload.text, payload.sender, caller_id=payload.caller_id)
+        platform = session.platform if session is not None else "generic"
+    else:
+        code = extract_otp(payload.text, payload.sender)
+        platform = detect_platform(payload.text, payload.sender)
     matched = session is not None and code is not None
 
-    inbox_entry = SmsInboxMessage(
-        id=uuid.uuid4().hex[:12],
-        phone=normalized_phone,
-        phone_id=session.phone_id if session is not None else None,
-        sender=payload.sender,
-        text=payload.text,
-        code=code,
-        platform=platform,
-        matched=matched,
-        timestamp=payload.timestamp,
+    _INBOX.appendleft(
+        SmsInboxMessage(
+            id=uuid.uuid4().hex[:12],
+            phone=normalized_phone,
+            phone_id=session.phone_id if matched and session is not None else None,
+            sender=payload.sender,
+            text=payload.text,
+            code=code,
+            platform=platform,
+            matched=matched,
+            timestamp=payload.timestamp or now,
+        ),
     )
-    _INBOX.appendleft(inbox_entry)
 
-    if matched and session is not None and code is not None:
+    if session is not None and code is not None:
+        # Same synchronous step as the lookup: no second SMS can match in between.
         update_session_status(
             session.phone_id,
             "otp_received",
             last_code=code,
             last_sms_text=payload.text,
         )
-        task = asyncio.create_task(_type_otp_into_container(session.phone_id, code, pause=True))
-        _ACTIVE_TASKS.add(task)
-        task.add_done_callback(_ACTIVE_TASKS.discard)
-        if wait_for_typing:
-            await task
+        _start_dispatch(session, code)
 
-    return SmsWebhookResponse(
-        status="ok",
-        matched=matched,
-        code=code,
-        duplicate=False,
-    )
+    return SmsWebhookResponse(status="ok", matched=matched, code=code, duplicate=False)
+
+
+async def start_phone_wait(phone_id: str) -> PhoneTelephonyStatus:
+    """Make the phone wait for an OTP SMS on its account's number (``waiting_otp``)."""
+    account_id = account_of(phone_id)
+    account = await require_account(account_id)
+    if not account.phone:
+        raise DeviceRefusedError(_PHONE_UNKNOWN)
+    if phone_activity(account_id) in _SCREEN_OWNERS:
+        raise EmulatorBusyError
+    start_waiting_session(phone_id, account.phone, platform="telegram")
+    return await get_phone_status(phone_id)
 
 
 async def wait_pending_dispatches() -> None:
-    """Await all currently running background OTP typing tasks."""
-    if _ACTIVE_TASKS:
-        await asyncio.gather(*list(_ACTIVE_TASKS))
+    """Await all currently running background OTP typing tasks; never raises their errors."""
+    if _DISPATCHES:
+        await asyncio.gather(*list(_DISPATCHES.values()), return_exceptions=True)
 
 
 async def get_phone_status(phone_id: str) -> PhoneTelephonyStatus:
@@ -192,6 +265,7 @@ async def get_phone_status(phone_id: str) -> PhoneTelephonyStatus:
         status=session.status,
         last_code=session.last_code,
         last_sms_text=session.last_sms_text,
+        error_code=session.error_code,
         created_at=session.created_at,
         expires_at=session.expires_at,
         remaining_seconds=remaining,
@@ -199,36 +273,49 @@ async def get_phone_status(phone_id: str) -> PhoneTelephonyStatus:
 
 
 async def manual_input_otp(phone_id: str, code: str) -> ManualOtpInputResult:
-    """Manually type an OTP code into ``phone_id`` from the operator UI without SMS wait."""
-    update_session_status(phone_id, "typing", last_code=code)
-    serial = await _resolve_serial(phone_id)
-    await _ensure_verification_focus(serial)
-    await adb.human_type(serial, code)
-    update_session_status(phone_id, "completed", last_code=code)
-    return ManualOtpInputResult(
-        status="ok",
-        phone_id=phone_id,
-        code=code,
-        line_status="completed",
-    )
+    """Type ``code`` into ``phone_id`` now, superseding a code still in its reading pause.
+
+    Refused (``EmulatorRefusedError``, 400 with the stable code) when the phone is not
+    on its code screen, not running, or held by a start or warming session.
+    """
+    session = get_session(phone_id)
+    pending = _DISPATCHES.get(phone_id)
+    if pending is not None and session is not None and session.status == "otp_received":
+        pending.cancel()
+    async with _lock(phone_id):
+        update_session_status(phone_id, "typing", last_code=code)
+        try:
+            await _enter_code(phone_id, code)
+        except EmulatorError as exc:
+            update_session_status(phone_id, "failed", error_code=exc.code)
+            raise EmulatorRefusedError(exc.code) from exc
+        except EmulatorRefusedError as exc:
+            update_session_status(phone_id, "failed", error_code=exc.code)
+            raise
+        update_session_status(phone_id, "completed", last_code=code)
+    return ManualOtpInputResult(status="ok", phone_id=phone_id, code=code, line_status="completed")
 
 
 async def list_inbox(phone_id: str | None = None) -> SmsInboxList:
-    """Return the ring buffer of up to 50 recent inbound SMS messages."""
+    """The ring buffer of recent SMS; for a phone, only SMS matched to it or to its number."""
     if phone_id is None:
         return SmsInboxList(messages=list(_INBOX))
     session = get_session(phone_id)
-    target_phone = session.phone_number if session is not None else None
+    number = session.phone_number if session is not None else None
     filtered = [
         msg
         for msg in _INBOX
-        if msg.phone_id in {phone_id, None}
-        and (target_phone is None or msg.phone == target_phone or msg.phone_id == phone_id)
+        if msg.phone_id == phone_id
+        or (number is not None and msg.phone_id is None and msg.phone == number)
     ]
     return SmsInboxList(messages=filtered)
 
 
 def clear_dispatcher_state() -> None:
-    """Clear inbox ring buffer and deduplication cache (used by tests)."""
+    """Clear inbox ring buffer, replay window, tasks and locks (used by tests)."""
     _INBOX.clear()
     _SEEN_WEBHOOKS.clear()
+    for task in _DISPATCHES.values():
+        task.cancel()
+    _DISPATCHES.clear()
+    _LOCKS.clear()

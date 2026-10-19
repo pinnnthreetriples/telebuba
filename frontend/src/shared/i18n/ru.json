@@ -1530,6 +1530,7 @@
     }
   },
   "logEvent": {
+    "telephony_otp_typing_failed": "Код не введён в телефон",
     "account_remove_web_cleanup_failed": "Не удалось закрыть веб-окно удалённого аккаунта или удалить его профиль браузера",
     "web_login_locale_rejected": "Chrome не принял язык устройства аккаунта; веб-окно открыто на языке страны прокси",
     "inbox_listener_health_check_failed": "Не удалось проверить соединение входящих сообщений",
@@ -5108,6 +5109,7 @@
   },
   "telephony": {
     "sectionTitle": "Сотовая связь и SMS",
+    "waitSms": "Ждать SMS",
     "status": {
       "idle": "Линия свободна",
       "waitingOtp": "Ожидание SMS...",
@@ -5116,6 +5118,8 @@
       "codeReceivedTyping": "Код получен: {{code}} (ввожу...)",
       "typing": "Ввод кода...",
       "completed": "Код введён",
+      "failed": "Код не введён",
+      "failedWith": "Код не введён: {{reason}}",
       "timeout": "Время ожидания истекло"
     },
     "inbox": {
@@ -5123,6 +5127,8 @@
       "empty": "Входящих SMS пока нет.",
       "copyCode": "Скопировать код",
       "copied": "Скопировано",
+      "copyFailed": "Не удалось скопировать",
+      "close": "Закрыть входящие",
       "manualType": "Напечатать в телефон",
       "manualInputPlaceholder": "Введите код вручную"
     }

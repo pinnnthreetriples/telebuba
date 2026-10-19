@@ -1,12 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   androidVersion,
   formatOtpCountdown,
+  isLiveTelephonyStatus,
   isTelephonyLineStatus,
   phoneTelephonyStatusOptions,
+  phoneTelephonyStatusQueryKey,
+  startPhoneOtpWaitMutation,
   TELEPHONY_STATUS_TONE,
   type TelephonyLineStatus,
 } from '@/entities/phone';
@@ -18,19 +21,40 @@ import { SmsInboxDrawer } from './SmsInboxDrawer';
 const STATUS_POLL_MS = 2000;
 
 // What the phone presents, where its traffic goes, and its cellular/SMS OTP line state.
+// The line is polled only while it can change on its own (waiting, code received,
+// typing); an idle or ended line changes when the operator acts, which refetches it.
 export function PhoneDetails({ phone }: { phone: Phone }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [inboxOpen, setInboxOpen] = useState(false);
+  const statusOptions = phoneTelephonyStatusOptions({ path: { phone_id: phone.phone_id } });
   const { data: telephonyStatus } = useQuery({
-    ...phoneTelephonyStatusOptions({ path: { phone_id: phone.phone_id } }),
-    refetchInterval: STATUS_POLL_MS,
+    ...statusOptions,
+    refetchInterval: (query) =>
+      isLiveTelephonyStatus(query.state.data?.status) ? STATUS_POLL_MS : false,
   });
+  const startWait = useMutation(startPhoneOtpWaitMutation());
 
-  const lineStatus: TelephonyLineStatus = isTelephonyLineStatus(telephonyStatus?.status)
-    ? telephonyStatus.status
-    : 'idle';
+  const rawStatus = telephonyStatus?.status;
+  const lineStatus: TelephonyLineStatus = isTelephonyLineStatus(rawStatus) ? rawStatus : 'idle';
   const lastCode = telephonyStatus?.last_code ?? null;
   const remainingSeconds = telephonyStatus?.remaining_seconds ?? 0;
+  const errorCode = telephonyStatus?.error_code ?? null;
+
+  const waitForSms = () => {
+    void startWait
+      .mutateAsync({ path: { phone_id: phone.phone_id } })
+      .then((status) => {
+        queryClient.setQueryData(statusOptions.queryKey, status);
+      })
+      // The global mutation cache toasts a refusal; the catch only keeps it handled.
+      .catch(() => undefined)
+      .finally(() => {
+        void queryClient.invalidateQueries({
+          queryKey: phoneTelephonyStatusQueryKey({ path: { phone_id: phone.phone_id } }),
+        });
+      });
+  };
 
   const renderStatusLabel = () => {
     switch (lineStatus) {
@@ -41,12 +65,21 @@ export function PhoneDetails({ phone }: { phone: Phone }) {
             })
           : t('telephony.status.waitingOtp');
       case 'otp_received':
+        return lastCode
+          ? t('telephony.status.codeReceived', { code: lastCode })
+          : t('telephony.status.waitingOtp');
       case 'typing':
         return lastCode
           ? t('telephony.status.codeReceivedTyping', { code: lastCode })
           : t('telephony.status.typing');
       case 'completed':
         return t('telephony.status.completed');
+      case 'failed':
+        return errorCode
+          ? t('telephony.status.failedWith', {
+              reason: t(`shell.code.${errorCode}`, { defaultValue: errorCode }),
+            })
+          : t('telephony.status.failed');
       case 'timeout':
         return t('telephony.status.timeout');
       case 'idle':
@@ -105,9 +138,20 @@ export function PhoneDetails({ phone }: { phone: Phone }) {
           >
             {renderStatusLabel()}
           </Badge>
-          <Button size="sm" variant="secondary" onClick={() => setInboxOpen(true)}>
-            {t('telephony.inbox.title')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={isLiveTelephonyStatus(lineStatus)}
+              loading={startWait.isPending}
+              onClick={waitForSms}
+            >
+              {t('telephony.waitSms')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setInboxOpen(true)}>
+              {t('telephony.inbox.title')}
+            </Button>
+          </div>
         </div>
       </div>
 

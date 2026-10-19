@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from services.telephony._dispatcher import (
-    COGNITIVE_PAUSE_MAX_SEC,
-    COGNITIVE_PAUSE_MIN_SEC,
-    DEDUP_TTL_SECONDS,
     INBOX_MAX_MESSAGES,
+    StaleWebhookError,
     clear_dispatcher_state,
     get_phone_status,
     handle_inbound_sms,
     list_inbox,
     manual_input_otp,
+    start_phone_wait,
     wait_pending_dispatches,
 )
 from services.telephony._parser import (
@@ -29,10 +28,8 @@ from services.telephony._session import (
 )
 
 __all__ = [
-    "COGNITIVE_PAUSE_MAX_SEC",
-    "COGNITIVE_PAUSE_MIN_SEC",
-    "DEDUP_TTL_SECONDS",
     "INBOX_MAX_MESSAGES",
+    "StaleWebhookError",
     "clear_dispatcher_state",
     "clear_sessions",
     "detect_platform",
@@ -45,6 +42,7 @@ __all__ = [
     "list_inbox",
     "manual_input_otp",
     "normalize_phone",
+    "start_phone_wait",
     "start_waiting_session",
     "update_session_status",
     "wait_pending_dispatches",
