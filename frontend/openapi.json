@@ -36212,6 +36212,11 @@
             "type": "boolean",
             "title": "Spam Check Warning",
             "default": false
+          },
+          "mobile_emulator_off": {
+            "type": "boolean",
+            "title": "Mobile Emulator Off",
+            "default": false
           }
         },
         "type": "object",

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 _DEVICE_MISSING: DeviceRefusalCode = "device_missing"
 _NO_MOBILE_API: DeviceRefusalCode = "mobile_api_not_configured"
+_NO_EMULATOR: DeviceRefusalCode = "mobile_emulator_disabled"
 
 
 class WarmingDeviceUnavailableError(ValueError):
@@ -48,6 +49,17 @@ def assert_on_warmed_card(existing: WarmingStateRecord | None, account_id: str) 
     """
     if existing is None or not existing.promoted_to_nc or existing.nc_handed_off:
         raise NotGraduatedError(account_id)
+
+
+def _assert_device_ready(device_mode: DeviceType, account: AccountRead) -> None:
+    """Refuse a stint whose device cannot warm; never swap in the other one."""
+    if device_mode not in account.devices:
+        raise WarmingDeviceUnavailableError(_DEVICE_MISSING, account.account_id)
+    if device_mode == "mobile" and not mobile_api_configured():
+        raise WarmingDeviceUnavailableError(_NO_MOBILE_API, account.account_id)
+    # A phone stint visits through the emulator only; Telethon never stands in for it.
+    if device_mode == "mobile" and not settings.emulator.enabled:
+        raise WarmingDeviceUnavailableError(_NO_EMULATOR, account.account_id)
 
 
 class CarriedStint(NamedTuple):
@@ -96,10 +108,7 @@ def carry_or_restamp(
     )
     persona = existing.activity_persona if continuing and existing else data.activity_persona
     device_mode = existing.device_mode if continuing and existing else data.device_mode
-    if device_mode not in account.devices:
-        raise WarmingDeviceUnavailableError(_DEVICE_MISSING, account.account_id)
-    if device_mode == "mobile" and not mobile_api_configured():
-        raise WarmingDeviceUnavailableError(_NO_MOBILE_API, account.account_id)
+    _assert_device_ready(device_mode, account)
     wave = existing.wave if carried and existing else next_wave(existing)
     return CarriedStint(
         started_at, target_days, persona, device_mode, first_run, fresh=not carried, wave=wave

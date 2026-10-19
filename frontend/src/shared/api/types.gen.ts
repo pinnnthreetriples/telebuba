@@ -8367,6 +8367,10 @@ export type WarmingAccountState = {
    * Spam Check Warning
    */
   spam_check_warning?: boolean;
+  /**
+   * Mobile Emulator Off
+   */
+  mobile_emulator_off?: boolean;
 };
 
 /**

@@ -354,6 +354,7 @@ class WarmingAccountState(WarmingCardConsole):
     dm_blocked_until: str | None = None
     limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
     spam_check_warning: bool = False  # @SpamBot silent ``spam_unknown_warn_streak`` times
+    mobile_emulator_off: bool = False  # a phone stint whose visits wait for the emulator
 
 
 class WarmingBoardState(BaseModel):

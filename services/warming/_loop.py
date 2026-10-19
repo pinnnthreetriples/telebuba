@@ -248,12 +248,19 @@ async def _execute_cycle(
     on_step: Callable[[str], Awaitable[None]],
     tally: _ChannelTally,
 ) -> WarmingCycleResult:
-    """The stint's cycle: Telethon, or the Redroid pod for a mobile stint with the emulator on.
+    """The stint's cycle: Telethon for desktop, the Redroid pod for a mobile stint.
 
+    A mobile stint whose emulator was switched off after its start skips the visit
+    and says so, never a Telethon cycle in the phone's place.
     Also the patch-friendly indirection tests and engine instrumentation rely on.
     """
-    if _seams.bound_device() == "mobile" and settings.emulator.enabled:
-        return await run_mobile_cycle(request, on_step=on_step)
+    if _seams.bound_device() == "mobile":
+        if settings.emulator.enabled:
+            return await run_mobile_cycle(request, on_step=on_step)
+        await log_event("WARNING", "warming_mobile_emulator_off", account_id=request.account_id)
+        return WarmingCycleResult(
+            account_id=request.account_id, status="skipped", detail="mobile_emulator_disabled"
+        )
     return await run_one_cycle(request, on_step=on_step, tally=tally)
 
 

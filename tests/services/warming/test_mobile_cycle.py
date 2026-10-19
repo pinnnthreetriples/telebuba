@@ -23,7 +23,7 @@ from schemas.warming import WarmingCycleRequest, WarmingStateWrite
 from services import warming
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
-from services.warming import _mobile_cycle, _seams
+from services.warming import _loop, _mobile_cycle, _seams
 from services.warming._mobile_cycle import session_seconds
 from services.warming.daily_stats import stats_day
 from tests.services.warming._support import _no_quiet_days, _ok, _seed_warming_account
@@ -183,15 +183,26 @@ async def test_a_mobile_stint_opens_its_pod_spends_the_visit_and_stops_it(
 
 
 @pytest.mark.asyncio
-async def test_a_mobile_stint_with_the_emulator_off_stays_on_telethon(
+async def test_a_mobile_stint_with_the_emulator_off_skips_the_cycle_and_says_why(
     pod: _Pod, telethon: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The operator chose the phone: never a silent Telethon cycle in its place."""
     monkeypatch.setattr(settings.emulator, "enabled", False)
+    events: list[str] = []
+
+    async def log(_level: str, event: str, **_kwargs: object) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(_loop, "log_event", log)
 
     await _iterate_on("mobile")
 
-    assert telethon
+    assert telethon == [], "no MTProto action stands in for the phone"
     assert pod.calls == []
+    assert "warming_mobile_emulator_off" in events
+    record = await _record()
+    assert record.last_event == "cycle:skipped"
+    assert record.cycles_completed == 0, "a parked visit is no warming progress"
 
 
 @pytest.mark.asyncio

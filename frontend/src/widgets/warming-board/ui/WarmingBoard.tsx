@@ -358,6 +358,17 @@ function WarmingCard({
         </div>
       ) : null}
 
+      {/* A phone stint never falls back to Telethon: its visits wait for the emulator. */}
+      {account.mobile_emulator_off ? (
+        <div
+          role="status"
+          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
+        >
+          <Icon name="alert-triangle" size={14} className="shrink-0" />
+          {t('warming.card.emulatorOff')}
+        </div>
+      ) : null}
+
       {!complete ? (
         <>
           {/* activity log */}
