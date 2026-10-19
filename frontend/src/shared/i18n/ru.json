@@ -1407,6 +1407,8 @@
       "not_graduated": "Аккаунт уже не в прогретых — обновите страницу",
       "not_spam_blocked": "Аккаунт уже не остановлен из-за спамблока — обновите страницу",
       "emulator_scrcpy_missing": "Нет файла scrcpy-server для показа экрана — положите его по пути EMULATOR__SCRCPY_SERVER_PATH.",
+      "emulator_download_failed": "Не удалось скачать файл, нужный телефону. Проверьте интернет на сервере и попробуйте ещё раз.",
+      "emulator_checksum_mismatch": "Скачанный файл для телефона не совпал с контрольной суммой и удалён.",
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя. Попробуйте ещё раз."
     },
     "sessionError": "Не удалось проверить сессию. Проверьте соединение и попробуйте снова.",
@@ -2076,6 +2078,8 @@
     "no_message": "нет сообщения собеседника",
     "no_sticker": "нет подходящего стикера",
     "emulator_scrcpy_missing": "нет scrcpy-server",
+    "emulator_download_failed": "не скачался файл для телефона",
+    "emulator_checksum_mismatch": "файл для телефона не совпал с контрольной суммой",
     "emulator_screen_timeout": "экран не открылся"
   },
   "logEventHint": {
@@ -5102,6 +5106,8 @@
       "emulator_not_running": "Телефон спит. Запустите его, чтобы увидеть экран.",
       "emulator_not_found": "Такого телефона нет или Docker недоступен.",
       "emulator_scrcpy_missing": "На сервере нет файла scrcpy-server — экран показать нельзя.",
+      "emulator_download_failed": "Сервер не смог скачать scrcpy-server — экран показать нельзя.",
+      "emulator_checksum_mismatch": "Скачанный scrcpy-server не совпал с контрольной суммой — экран показать нельзя.",
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя.",
       "mobile_emulator_disabled": "Эмулятор выключен в настройках сервера."
     }

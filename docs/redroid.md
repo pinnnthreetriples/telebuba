@@ -207,13 +207,10 @@ screen; the warming card shows an eye while a mobile visit runs. The screen is a
   UHID) has no way in. Every handshake needs the session cookie and the page's own Origin.
 
 The server's version must match the decoder's protocol exactly; `@yume-chan/scrcpy` 2.3 speaks up
-to **3.3.1** (the desktop scrcpy may be newer). Put the file next to the APK:
-
-```bash
-gh release download v3.3.1 -R Genymobile/scrcpy -p scrcpy-server-v3.3.1 -D emulator
-```
-
-(sha256 `a0f70b20aa4998fbf658c94118cd6c8dab6abbb0647a3bdab344d70bc1ebcbb8`). A phone is one account's
+to **3.3.1** (the desktop scrcpy may be newer). A missing file is downloaded on the first screen
+(`core/emulator/assets.py`) from that version's GitHub release to `EMULATOR__SCRCPY_SERVER_PATH`,
+and kept only when its sha256 is `EMULATOR__SCRCPY_SERVER_SHA256`; a file already there is used as
+it is, never updated. Another version needs its own hash in that setting. A phone is one account's
 pod today; the API already lists a phone's apps (`platform`), so other platforms can join it later.
 
 ## Settings
