@@ -95,6 +95,8 @@ async def _download(url: str, scratch: Path) -> str:
             client.stream("GET", url) as response,
         ):
             response.raise_for_status()
+            if response.url.scheme != "https":  # a redirect off TLS: not the official file
+                raise EmulatorError(_EMULATOR_DOWNLOAD_FAILED)
             with scratch.open("wb") as out:
                 async for chunk in response.aiter_bytes(_CHUNK_BYTES):
                     written += len(chunk)
