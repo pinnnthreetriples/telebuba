@@ -46,6 +46,10 @@ _THUMB_X = 0.56
 _THUMB_X_SPREAD = 0.08
 _THUMB_Y_SPREAD = 0.04
 _THUMB_DRIFT = 0.03
+_OTP_MIN_LEN = 4
+_OTP_MAX_LEN = 8
+_SIX_DIGIT_LEN = 6
+_SIX_DIGIT_MID = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,9 +289,21 @@ class HumanInputEngine:
         """Generate a stochastic character-by-character typing sequence.
 
         - Inter-key delay: 75-230ms (250-480ms at word boundaries, uppercase, or symbols)
+        - For 4-8 digit OTP codes: Gaussian 140-280ms per digit, 400-600ms pause in the
+          middle of 6-digit codes (XXX ... XXX).
         - 3-4% probability of typing an adjacent QWERTY key, pausing 300-550ms,
           sending KEYCODE_DEL, and typing the intended character.
         """
+        if text.isdigit() and _OTP_MIN_LEN <= len(text) <= _OTP_MAX_LEN:
+            otp_events: list[KeystrokeEvent] = []
+            for idx, ch in enumerate(text):
+                if len(text) == _SIX_DIGIT_LEN and idx == _SIX_DIGIT_MID:
+                    delay = self.rng.randint(400, 600)
+                else:
+                    delay = round(self._between(140.0, 280.0))
+                otp_events.append(KeystrokeEvent(char=ch, delay_ms=delay))
+            return otp_events
+
         events: list[KeystrokeEvent] = []
         for idx, ch in enumerate(text):
             low_ch = ch.lower()

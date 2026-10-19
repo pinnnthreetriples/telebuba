@@ -4996,5 +4996,26 @@
       "emulator_screen_timeout": "The phone did not start showing its screen in time.",
       "mobile_emulator_disabled": "The emulator is switched off on the server."
     }
+  },
+  "telephony": {
+    "sectionTitle": "Cellular & SMS",
+    "status": {
+      "idle": "Line idle",
+      "waitingOtp": "Waiting for SMS...",
+      "waitingOtpTimer": "Waiting for SMS ({{timer}})...",
+      "codeReceived": "Code received: {{code}}",
+      "codeReceivedTyping": "Code received: {{code}} (typing...)",
+      "typing": "Typing code...",
+      "completed": "Code entered",
+      "timeout": "Wait timed out"
+    },
+    "inbox": {
+      "title": "Incoming SMS",
+      "empty": "No incoming SMS yet.",
+      "copyCode": "Copy code",
+      "copied": "Copied",
+      "manualType": "Type into phone",
+      "manualInputPlaceholder": "Enter code manually"
+    }
   }
 }

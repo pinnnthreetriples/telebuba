@@ -217,6 +217,10 @@ import {
   stopMasstaggingCampaign,
   stopNeurocomment,
   stopNeuroshillingCampaign,
+  getPhoneTelephonyStatus,
+  listSmsInbox,
+  manualInputPhoneOtp,
+  receiveInboundSmsWebhook,
   stopPhone,
   stopUserParserRun,
   stopWarming,
@@ -858,6 +862,18 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignError,
   StopNeuroshillingCampaignResponse,
+  GetPhoneTelephonyStatusData,
+  GetPhoneTelephonyStatusError,
+  GetPhoneTelephonyStatusResponse,
+  ListSmsInboxData,
+  ListSmsInboxError,
+  ListSmsInboxResponse,
+  ManualInputPhoneOtpData,
+  ManualInputPhoneOtpError,
+  ManualOtpInputResult,
+  ReceiveInboundSmsWebhookData,
+  ReceiveInboundSmsWebhookError,
+  ReceiveInboundSmsWebhookResponse,
   StopPhoneData,
   StopPhoneError,
   StopPhoneResponse,
@@ -7585,6 +7601,98 @@ export const stopPhoneMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopPhone({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getPhoneTelephonyStatusQueryKey = (options: Options<GetPhoneTelephonyStatusData>) =>
+  createQueryKey('getPhoneTelephonyStatus', options);
+
+export const getPhoneTelephonyStatusOptions = (options: Options<GetPhoneTelephonyStatusData>) =>
+  queryOptions<
+    GetPhoneTelephonyStatusResponse,
+    GetPhoneTelephonyStatusError,
+    GetPhoneTelephonyStatusResponse,
+    ReturnType<typeof getPhoneTelephonyStatusQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getPhoneTelephonyStatus({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getPhoneTelephonyStatusQueryKey(options),
+  });
+
+export const listSmsInboxQueryKey = (options?: Options<ListSmsInboxData>) =>
+  createQueryKey('listSmsInbox', options);
+
+export const listSmsInboxOptions = (options?: Options<ListSmsInboxData>) =>
+  queryOptions<
+    ListSmsInboxResponse,
+    ListSmsInboxError,
+    ListSmsInboxResponse,
+    ReturnType<typeof listSmsInboxQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listSmsInbox({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listSmsInboxQueryKey(options),
+  });
+
+export const manualInputPhoneOtpMutation = (
+  options?: Partial<Options<ManualInputPhoneOtpData>>,
+): UseMutationOptions<
+  ManualOtpInputResult,
+  ManualInputPhoneOtpError,
+  Options<ManualInputPhoneOtpData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ManualOtpInputResult,
+    ManualInputPhoneOtpError,
+    Options<ManualInputPhoneOtpData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await manualInputPhoneOtp({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const receiveInboundSmsWebhookMutation = (
+  options?: Partial<Options<ReceiveInboundSmsWebhookData>>,
+): UseMutationOptions<
+  ReceiveInboundSmsWebhookResponse,
+  ReceiveInboundSmsWebhookError,
+  Options<ReceiveInboundSmsWebhookData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ReceiveInboundSmsWebhookResponse,
+    ReceiveInboundSmsWebhookError,
+    Options<ReceiveInboundSmsWebhookData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await receiveInboundSmsWebhook({
         ...options,
         ...fnOptions,
         throwOnError: true,

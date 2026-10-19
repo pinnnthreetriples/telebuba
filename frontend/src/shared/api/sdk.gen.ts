@@ -631,6 +631,18 @@ import type {
   StopNeuroshillingCampaignData,
   StopNeuroshillingCampaignErrors,
   StopNeuroshillingCampaignResponses,
+  GetPhoneTelephonyStatusData,
+  GetPhoneTelephonyStatusErrors,
+  GetPhoneTelephonyStatusResponses,
+  ListSmsInboxData,
+  ListSmsInboxErrors,
+  ListSmsInboxResponses,
+  ManualInputPhoneOtpData,
+  ManualInputPhoneOtpErrors,
+  ManualInputPhoneOtpResponses,
+  ReceiveInboundSmsWebhookData,
+  ReceiveInboundSmsWebhookErrors,
+  ReceiveInboundSmsWebhookResponses,
   StopPhoneData,
   StopPhoneErrors,
   StopPhoneResponses,
@@ -4552,5 +4564,69 @@ export const stopPhone = <ThrowOnError extends boolean = false>(
 ): RequestResult<StopPhoneResponses, StopPhoneErrors, ThrowOnError> =>
   (options.client ?? client).post<StopPhoneResponses, StopPhoneErrors, ThrowOnError>({
     url: '/api/v1/devices/{phone_id}/stop',
+    ...options,
+  });
+
+/**
+ * Receive Inbound Sms Webhook
+ */
+export const receiveInboundSmsWebhook = <ThrowOnError extends boolean = false>(
+  options: Options<ReceiveInboundSmsWebhookData, ThrowOnError>,
+): RequestResult<ReceiveInboundSmsWebhookResponses, ReceiveInboundSmsWebhookErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ReceiveInboundSmsWebhookResponses,
+    ReceiveInboundSmsWebhookErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/telephony/sms-webhook',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Phone Telephony Status
+ */
+export const getPhoneTelephonyStatus = <ThrowOnError extends boolean = false>(
+  options: Options<GetPhoneTelephonyStatusData, ThrowOnError>,
+): RequestResult<GetPhoneTelephonyStatusResponses, GetPhoneTelephonyStatusErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetPhoneTelephonyStatusResponses,
+    GetPhoneTelephonyStatusErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/telephony/phones/{phone_id}/status',
+    ...options,
+  });
+
+/**
+ * Manual Input Phone Otp
+ */
+export const manualInputPhoneOtp = <ThrowOnError extends boolean = false>(
+  options: Options<ManualInputPhoneOtpData, ThrowOnError>,
+): RequestResult<ManualInputPhoneOtpResponses, ManualInputPhoneOtpErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ManualInputPhoneOtpResponses,
+    ManualInputPhoneOtpErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/telephony/phones/{phone_id}/manual-input',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Sms Inbox
+ */
+export const listSmsInbox = <ThrowOnError extends boolean = false>(
+  options?: Options<ListSmsInboxData, ThrowOnError>,
+): RequestResult<ListSmsInboxResponses, ListSmsInboxErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListSmsInboxResponses, ListSmsInboxErrors, ThrowOnError>({
+    url: '/api/v1/telephony/inbox',
     ...options,
   });

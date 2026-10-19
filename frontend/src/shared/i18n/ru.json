@@ -5105,5 +5105,26 @@
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя.",
       "mobile_emulator_disabled": "Эмулятор выключен в настройках сервера."
     }
+  },
+  "telephony": {
+    "sectionTitle": "Сотовая связь и SMS",
+    "status": {
+      "idle": "Линия свободна",
+      "waitingOtp": "Ожидание SMS...",
+      "waitingOtpTimer": "Ожидание SMS ({{timer}})...",
+      "codeReceived": "Код получен: {{code}}",
+      "codeReceivedTyping": "Код получен: {{code}} (ввожу...)",
+      "typing": "Ввод кода...",
+      "completed": "Код введён",
+      "timeout": "Время ожидания истекло"
+    },
+    "inbox": {
+      "title": "Входящие SMS",
+      "empty": "Входящих SMS пока нет.",
+      "copyCode": "Скопировать код",
+      "copied": "Скопировано",
+      "manualType": "Напечатать в телефон",
+      "manualInputPlaceholder": "Введите код вручную"
+    }
   }
 }

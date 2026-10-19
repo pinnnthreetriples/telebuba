@@ -18970,3 +18970,172 @@ export type StopPhoneResponses = {
 };
 
 export type StopPhoneResponse = StopPhoneResponses[keyof StopPhoneResponses];
+
+export type TelephonyLineStatus =
+  | 'idle'
+  | 'waiting_otp'
+  | 'otp_received'
+  | 'typing'
+  | 'completed'
+  | 'timeout';
+
+export type TelephonyPlatform = 'telegram' | 'whatsapp' | 'facebook' | 'tiktok' | 'generic';
+
+export type InboundSmsWebhook = {
+  phone: string;
+  sender: string;
+  text?: string;
+  timestamp?: string;
+};
+
+export type OtpSession = {
+  phone_id: string;
+  phone_number: string;
+  platform?: TelephonyPlatform;
+  status?: TelephonyLineStatus;
+  last_code?: string | null;
+  last_sms_text?: string | null;
+  created_at?: string;
+  expires_at: string;
+};
+
+export type SmsWebhookResponse = {
+  status?: 'ok';
+  matched: boolean;
+  code?: string | null;
+  duplicate?: boolean;
+};
+
+export type PhoneTelephonyStatus = {
+  phone_id: string;
+  phone_number?: string | null;
+  platform?: TelephonyPlatform | null;
+  status?: TelephonyLineStatus;
+  last_code?: string | null;
+  last_sms_text?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+  remaining_seconds?: number;
+};
+
+export type ManualOtpInputRequest = {
+  code: string;
+};
+
+export type ManualOtpInputResult = {
+  status?: 'ok';
+  phone_id: string;
+  code: string;
+  line_status?: TelephonyLineStatus;
+};
+
+export type SmsInboxMessage = {
+  id: string;
+  phone: string;
+  phone_id?: string | null;
+  sender: string;
+  text: string;
+  code?: string | null;
+  platform?: TelephonyPlatform;
+  matched?: boolean;
+  timestamp: string;
+};
+
+export type SmsInboxList = {
+  messages: Array<SmsInboxMessage>;
+};
+
+export type ReceiveInboundSmsWebhookData = {
+  body: InboundSmsWebhook;
+  path?: never;
+  query?: never;
+  url: '/api/v1/telephony/sms-webhook';
+};
+
+export type ReceiveInboundSmsWebhookErrors = {
+  401: ErrorEnvelope;
+  422: ErrorEnvelope;
+  500: ErrorEnvelope;
+};
+
+export type ReceiveInboundSmsWebhookError =
+  ReceiveInboundSmsWebhookErrors[keyof ReceiveInboundSmsWebhookErrors];
+
+export type ReceiveInboundSmsWebhookResponses = {
+  200: SmsWebhookResponse;
+};
+
+export type ReceiveInboundSmsWebhookResponse =
+  ReceiveInboundSmsWebhookResponses[keyof ReceiveInboundSmsWebhookResponses];
+
+export type GetPhoneTelephonyStatusData = {
+  body?: never;
+  path: {
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/telephony/phones/{phone_id}/status';
+};
+
+export type GetPhoneTelephonyStatusErrors = {
+  401: ErrorEnvelope;
+  422: ErrorEnvelope;
+  500: ErrorEnvelope;
+};
+
+export type GetPhoneTelephonyStatusError =
+  GetPhoneTelephonyStatusErrors[keyof GetPhoneTelephonyStatusErrors];
+
+export type GetPhoneTelephonyStatusResponses = {
+  200: PhoneTelephonyStatus;
+};
+
+export type GetPhoneTelephonyStatusResponse =
+  GetPhoneTelephonyStatusResponses[keyof GetPhoneTelephonyStatusResponses];
+
+export type ManualInputPhoneOtpData = {
+  body: ManualOtpInputRequest;
+  path: {
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/telephony/phones/{phone_id}/manual-input';
+};
+
+export type ManualInputPhoneOtpErrors = {
+  401: ErrorEnvelope;
+  422: ErrorEnvelope;
+  500: ErrorEnvelope;
+};
+
+export type ManualInputPhoneOtpError = ManualInputPhoneOtpErrors[keyof ManualInputPhoneOtpErrors];
+
+export type ManualInputPhoneOtpResponses = {
+  200: ManualOtpInputResult;
+};
+
+export type ManualInputPhoneOtpResponse =
+  ManualInputPhoneOtpResponses[keyof ManualInputPhoneOtpResponses];
+
+export type ListSmsInboxData = {
+  body?: never;
+  path?: never;
+  query?: {
+    phone_id?: string | null;
+  };
+  url: '/api/v1/telephony/inbox';
+};
+
+export type ListSmsInboxErrors = {
+  401: ErrorEnvelope;
+  422: ErrorEnvelope;
+  500: ErrorEnvelope;
+};
+
+export type ListSmsInboxError = ListSmsInboxErrors[keyof ListSmsInboxErrors];
+
+export type ListSmsInboxResponses = {
+  200: SmsInboxList;
+};
+
+export type ListSmsInboxResponse = ListSmsInboxResponses[keyof ListSmsInboxResponses];

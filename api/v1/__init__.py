@@ -21,6 +21,7 @@ from api.v1 import (
     neuroshilling,
     notifications,
     proxies,
+    telephony,
     user_parser,
     warming,
 )
@@ -51,6 +52,7 @@ router.include_router(user_parser.router, dependencies=_protected, responses=PRO
 router.include_router(masstagging.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(notifications.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(devices.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+router.include_router(telephony.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 # Self-guarded: a WebSocket handshake authenticates itself (see ``api.v1.devices``).
 router.include_router(devices.screen_router)
 
