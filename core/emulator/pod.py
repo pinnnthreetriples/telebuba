@@ -37,6 +37,7 @@ from core.emulator._gateway import (
     wait_for_tunnel,
 )
 from core.emulator._process import docker
+from core.emulator.images import ensure_pod_images
 from core.emulator.redroid import (
     Instance,
     build_prop,
@@ -91,6 +92,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)
+    await ensure_pod_images(spec)  # a pull or build may take minutes: outside the lock
     gateway = gateway_name(name)
     found: set[str] = set()
     created: set[str] = set()

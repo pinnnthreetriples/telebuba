@@ -1374,6 +1374,7 @@
       "emulator_scrcpy_missing": "The scrcpy-server file for the screen is missing — put it at EMULATOR__SCRCPY_SERVER_PATH.",
       "emulator_download_failed": "A file the phone needs could not be downloaded. Check the server's internet access and try again.",
       "emulator_checksum_mismatch": "A downloaded phone file did not match its checksum and was discarded.",
+      "emulator_image_unavailable": "A Docker image the phone needs could not be pulled or built. Check Docker and the server's internet access.",
       "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
@@ -2045,6 +2046,7 @@
     "emulator_scrcpy_missing": "no scrcpy-server",
     "emulator_download_failed": "phone file download failed",
     "emulator_checksum_mismatch": "phone file checksum mismatch",
+    "emulator_image_unavailable": "phone image unavailable",
     "emulator_screen_timeout": "screen did not open"
   },
   "logEventHint": {

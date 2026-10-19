@@ -56,6 +56,8 @@ class EmulatorSettings(BaseSettings):
     command_timeout_seconds: float = Field(default=60.0, gt=0)
     tunnel_timeout_seconds: float = Field(default=30.0, gt=0)
     install_timeout_seconds: float = Field(default=300.0, gt=0)
+    # A missing image's ``docker pull`` (redroid) or ``docker build`` (the gateway).
+    image_timeout_seconds: float = Field(default=1800.0, gt=0)
     boot_timeout_seconds: float = Field(default=180.0, gt=0)
     ui_timeout_seconds: float = Field(default=30.0, gt=0)
     code_wait_seconds: float = Field(default=90.0, gt=0)

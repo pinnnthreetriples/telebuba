@@ -23,7 +23,7 @@ phone is shown in a scrcpy window opened by the phone button.
   gateways join their own bridge network (`EMULATOR__GATEWAY_NETWORK`, created when missing with
   `com.docker.network.bridge.enable_icc=false`), and the gateway drops 5555 on eth0 from anything
   but the Docker gateway, which is where the published loopback port arrives from.
-- **Start**: create what is missing (gateway first), stop whatever of the pod runs, copy the
+- **Start**: pull or build a missing image, create what is missing (gateway first), stop whatever of the pod runs, copy the
   account's current proxy into the gateway, start it, wait until `net-gateway ready` (tun0 up,
   tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`), then create/start Android.
   A failed start removes what it created and stops what it found. **Stop** is Android, then the
@@ -178,12 +178,11 @@ Check: `wsl -d Ubuntu -- grep binder /proc/filesystems` prints a `binder` line. 
 the two lines and `wsl --shutdown`. WSL updates no longer bring kernel fixes: rebuild with the
 new tag when Microsoft ships one.
 
-Then `winget install Genymobile.scrcpy`, pull the images named in `EMULATOR__REDROID_IMAGES`, and
-build the gateway image under the tag `EMULATOR__GATEWAY_IMAGE` names:
-
-```bash
-docker build -t telebuba/net-gateway:1 docker/net-gateway
-```
+Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
+pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
+and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each bounded by
+`EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
+present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag.
 
 ## Web screen and the device farm
 

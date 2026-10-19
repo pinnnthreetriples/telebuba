@@ -1409,6 +1409,7 @@
       "emulator_scrcpy_missing": "Нет файла scrcpy-server для показа экрана — положите его по пути EMULATOR__SCRCPY_SERVER_PATH.",
       "emulator_download_failed": "Не удалось скачать файл, нужный телефону. Проверьте интернет на сервере и попробуйте ещё раз.",
       "emulator_checksum_mismatch": "Скачанный файл для телефона не совпал с контрольной суммой и удалён.",
+      "emulator_image_unavailable": "Не удалось скачать или собрать Docker-образ для телефона. Проверьте Docker и интернет на сервере.",
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя. Попробуйте ещё раз."
     },
     "sessionError": "Не удалось проверить сессию. Проверьте соединение и попробуйте снова.",
@@ -2080,6 +2081,7 @@
     "emulator_scrcpy_missing": "нет scrcpy-server",
     "emulator_download_failed": "не скачался файл для телефона",
     "emulator_checksum_mismatch": "файл для телефона не совпал с контрольной суммой",
+    "emulator_image_unavailable": "нет образа для телефона",
     "emulator_screen_timeout": "экран не открылся"
   },
   "logEventHint": {
