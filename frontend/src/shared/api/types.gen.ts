@@ -5957,6 +5957,8 @@ export type PhoneList = {
     | 'emulator_not_signed_in'
     | 'emulator_capacity'
     | 'emulator_scrcpy_missing'
+    | 'emulator_download_failed'
+    | 'emulator_checksum_mismatch'
     | 'emulator_screen_timeout'
     | null;
   /**

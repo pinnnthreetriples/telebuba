@@ -172,6 +172,8 @@ const KNOWN_REASONS = new Set([
   'emulator_not_running',
   'emulator_not_found',
   'emulator_scrcpy_missing',
+  'emulator_download_failed',
+  'emulator_checksum_mismatch',
   'emulator_screen_timeout',
   'mobile_emulator_disabled',
 ]);
