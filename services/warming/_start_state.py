@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceType
     from schemas.devices import DeviceRefusalCode
+    from schemas.emulator import EmulatorRefusalCode
     from schemas.warming import ActivityPersona, StartWarmingRequest, WarmingStateRecord
 
 
@@ -27,13 +28,16 @@ _NO_EMULATOR: DeviceRefusalCode = "mobile_emulator_disabled"
 
 
 class WarmingDeviceUnavailableError(ValueError):
-    """The stint's device cannot warm: the account lacks it, or mobile is not set up.
+    """The stint's device cannot warm: it is missing, unset, or the host lacks a phone.
+
+    The host lacks a phone when ``core.emulator.host`` refuses it (no docker, adb or
+    binder).
 
     Never answered by warming the account's other device instead.
     """
 
-    def __init__(self, code: DeviceRefusalCode, account_id: str) -> None:
-        self.code: DeviceRefusalCode = code
+    def __init__(self, code: DeviceRefusalCode | EmulatorRefusalCode, account_id: str) -> None:
+        self.code: DeviceRefusalCode | EmulatorRefusalCode = code
         super().__init__(f"{code}: {account_id}")
 
 

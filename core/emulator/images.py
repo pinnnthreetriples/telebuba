@@ -40,18 +40,22 @@ _LOCKS: dict[str, asyncio.Lock] = {}
 
 async def ensure_pod_images(spec: ContainerSpec) -> None:
     """Make the gateway image and ``spec``'s Android image present; pull or build what is not."""
-    await _ensure(settings.emulator.gateway_image, ("build", "-t", "{image}", str(GATEWAY_CONTEXT)))
+    await ensure_gateway_image()
     await _ensure(image_for(spec), ("pull", "{image}"))
 
 
-async def _present(image: str) -> bool:
+async def ensure_gateway_image() -> None:
+    await _ensure(settings.emulator.gateway_image, ("build", "-t", "{image}", str(GATEWAY_CONTEXT)))
+
+
+async def image_present(image: str) -> bool:
     listed = await _process.docker_or_none("image", "inspect", "--format", "{{.Id}}", image)
     return listed is not None
 
 
 async def _ensure(image: str, make: tuple[str, ...]) -> None:
     async with _LOCKS.setdefault(image, asyncio.Lock()):
-        if await _present(image):
+        if await image_present(image):
             return
         argv = [str(settings.emulator.docker_path), *(a.format(image=image) for a in make)]
         try:

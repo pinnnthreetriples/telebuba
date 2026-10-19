@@ -16,12 +16,13 @@ import pytest
 from core.config import settings
 from core.db import create_account, fetch_warming_state
 from core.device_fingerprint_android import generate_android_fingerprint
+from core.emulator import EmulatorError
 from core.repositories.device_fingerprint import record_second_device
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import ActionResult, SetOnline
 from schemas.warming import StartWarmingRequest
 from services import warming
-from services.warming import _runner, _runtime, _seams
+from services.warming import _mobile_prep, _mobile_prep_state, _runner, _runtime, _seams
 from services.warming._state import _set_state
 from tests.services.warming._support import _fake_loop, _set_settings
 
@@ -30,10 +31,22 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _mobile_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+def prepared_phones(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Mobile set up on a capable host; the phone jobs a start launches are recorded."""
     monkeypatch.setattr(settings.telegram, "mobile_api_id", 6)
     monkeypatch.setattr(settings.telegram, "mobile_api_hash", "mobile-hash")
     monkeypatch.setattr(settings.emulator, "enabled", True)
+    prepared: list[str] = []
+
+    async def capable(*, build_probe: bool) -> None:
+        del build_probe
+
+    async def prepare(account_id: str) -> None:
+        prepared.append(account_id)
+
+    monkeypatch.setattr(_mobile_prep, "check_host", capable)
+    monkeypatch.setattr(_mobile_prep, "_prepare", prepare)
+    return prepared
 
 
 async def _account(*, mobile: bool) -> None:
@@ -68,6 +81,40 @@ async def test_the_chosen_mobile_device_is_persisted(monkeypatch: pytest.MonkeyP
     assert record is not None
     assert record.device_mode == "mobile"
     assert card.devices == ["desktop", "mobile"]
+
+
+@pytest.mark.asyncio
+async def test_a_phone_stint_start_prepares_its_phone(
+    monkeypatch: pytest.MonkeyPatch, prepared_phones: list[str]
+) -> None:
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await _account(mobile=True)
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1", device_mode="mobile"))
+    await asyncio.gather(*_mobile_prep_state.JOBS.values())
+
+    assert prepared_phones == ["acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_a_host_that_cannot_run_a_phone_refuses_the_start_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await _account(mobile=True)
+
+    async def no_docker(*, build_probe: bool) -> None:
+        del build_probe
+        code = "emulator_docker_unavailable"
+        raise EmulatorError(code)
+
+    monkeypatch.setattr(_mobile_prep, "check_host", no_docker)
+
+    with pytest.raises(warming.WarmingDeviceUnavailableError) as refused:
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1", device_mode="mobile"))
+
+    assert refused.value.code == "emulator_docker_unavailable"
+    assert await fetch_warming_state("acc-1") is None
 
 
 @pytest.mark.asyncio

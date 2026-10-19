@@ -31791,6 +31791,10 @@
                   "emulator_download_failed",
                   "emulator_checksum_mismatch",
                   "emulator_image_unavailable",
+                  "emulator_docker_unavailable",
+                  "emulator_adb_missing",
+                  "emulator_binder_missing",
+                  "emulator_preparing",
                   "emulator_screen_timeout"
                 ]
               },
@@ -31814,6 +31818,35 @@
           "phones"
         ],
         "title": "PhoneList"
+      },
+      "PhonePrep": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "PhonePrep",
+        "description": "A mobile stint's phone being readied at its start, or the code that stopped it."
       },
       "PhoneProxy": {
         "properties": {
@@ -36220,6 +36253,16 @@
             "type": "boolean",
             "title": "Mobile Emulator Off",
             "default": false
+          },
+          "phone_prep": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhonePrep"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

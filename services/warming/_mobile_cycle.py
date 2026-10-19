@@ -81,6 +81,9 @@ _MIN_SECONDS = 60
 # nor looks at photos and notes.
 _SEARCH_CHANCE = {"calm": 0.15, "normal": 0.3, "active": 0.5}
 
+# A phone being prepared waits this long between tries for a free slot.
+_SLOT_WAIT_SECONDS = 30
+
 _STREAKS: dict[str, int] = {}
 # Accounts whose warming pod holds a slot, running or parked, until its stop is done.
 _RUNNING: set[str] = set()
@@ -185,6 +188,35 @@ async def run_mobile_cycle(
         reactions_sent=activity.reactions,
         attempted_actions=activity.channels_read + activity.reactions,
     )
+
+
+async def prepare_pod(account_id: str) -> bool:
+    """Boot the account's pod and sign its app in, as a visit's open does; whether it is.
+
+    Takes a warming slot like a visit, waiting ``_SLOT_WAIT_SECONDS`` between tries
+    while the host is full, and gives it back the same way: a signed-in pod is parked
+    for the first visit, any other is stopped. Raises the open's refusal, and
+    ``EmulatorBusyError`` while the operator holds the phone (left running: theirs).
+    """
+    holding = _PARKED.pop(account_id, None) is not None or account_id in _RUNNING
+    while not holding:
+        if await _free_slot():
+            break
+        await asyncio.sleep(_SLOT_WAIT_SECONDS)
+    _RUNNING.add(account_id)
+    owned = True
+    signed_in = False
+    try:
+        signed_in = (await open_account_mobile(account_id, background=True)).signed_in
+    except EmulatorBusyError:
+        owned = False
+        raise
+    finally:
+        if not owned or phone_activity(account_id) == "manual":
+            _RUNNING.discard(account_id)
+        else:
+            _detach(_park(account_id) if signed_in else _stop_and_free(account_id))
+    return signed_in
 
 
 async def _free_slot() -> bool:
