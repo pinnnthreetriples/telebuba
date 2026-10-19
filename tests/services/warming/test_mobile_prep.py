@@ -20,7 +20,7 @@ from schemas.emulator import OpenMobileResult
 from schemas.warming import PhonePrep, WarmingCycleRequest, WarmingCycleResult
 from services import warming
 from services.accounts.devices import DeviceRefusedError
-from services.accounts.mobile_emulator import EmulatorBusyError
+from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
 from services.warming import _mobile_cycle, _mobile_prep, _mobile_prep_state
 from services.warming._state import _set_state
 
@@ -347,3 +347,37 @@ async def test_the_preparation_waits_for_a_free_slot(monkeypatch: pytest.MonkeyP
     assert await preparing is True
     await asyncio.gather(*_mobile_cycle._DETACHED)
     assert pod.calls[0] == "open:background"
+
+
+@pytest.mark.usefixtures("pod_slots")
+@pytest.mark.asyncio
+async def test_a_host_that_stays_full_fails_the_preparation_as_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pod = _Pod()
+    _use(pod, monkeypatch)
+    monkeypatch.setattr(settings.emulator, "max_running_pods", 1)
+    monkeypatch.setattr(_mobile_cycle, "_SLOT_WAIT_SECONDS", 0.01)
+    monkeypatch.setattr(_mobile_cycle, "_SLOT_WAIT_LIMIT_SECONDS", 0.05)
+    _mobile_cycle._RUNNING.add("acc-other")
+
+    with pytest.raises(EmulatorRefusedError) as refused:
+        await asyncio.wait_for(_mobile_cycle.prepare_pod("acc-1"), timeout=5)
+
+    assert refused.value.code == "emulator_capacity"
+    assert pod.calls == [], "no pod was started"
+    assert "acc-1" not in _mobile_cycle._RUNNING, "no slot is held for the refused phone"
+
+
+@pytest.mark.asyncio
+async def test_a_capacity_refusal_shows_on_the_card(
+    phone: _Phone, loop_task: asyncio.Task[None]
+) -> None:
+    phone.error = EmulatorRefusedError("emulator_capacity")
+
+    await _start(loop_task)
+    await _job_done()
+
+    assert _mobile_prep_state.phone_prep("acc-1") == PhonePrep(
+        status="failed", code="emulator_capacity"
+    )

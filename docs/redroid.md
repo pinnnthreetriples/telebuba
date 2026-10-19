@@ -153,7 +153,7 @@ gateway's base image, pulled first when missing, and not asked again once found 
 that fails is `emulator_image_unavailable`). Then a background job readies the rest while the card
 says "preparing the phone": the scrcpy-server, and the pod itself with its images pulled or built, Telegram installed and signed in
 through the account's existing session, parked for the first visit within
-`EMULATOR__MAX_RUNNING_PODS`; the job ends with the stint's loop, so Stop or Promote cancels it. Visits are skipped as `emulator_preparing` while it runs; a failed
+`EMULATOR__MAX_RUNNING_PODS` (a host still full after 30 minutes fails it as `emulator_capacity`); the job ends with the stint's loop, so Stop or Promote cancels it. Visits are skipped as `emulator_preparing` while it runs; a failed
 job leaves its code on the card until a visit warms. A visit that finds the app signed out signs it
 in, so a phone the job could not finish (or one prepared before a restart) heals on its own.
 
