@@ -61,7 +61,10 @@ def _scratch_for(target: Path) -> Path | None:
 
 async def _ensure_file(target: Path, url: str, sha256: str) -> None:
     async with _LOCKS.setdefault(str(target), asyncio.Lock()):
-        scratch = _scratch_for(target)
+        try:
+            scratch = _scratch_for(target)
+        except OSError as exc:  # the target's folder cannot be made
+            raise EmulatorError(_EMULATOR_DOWNLOAD_FAILED) from exc
         if scratch is None:
             return
         try:
@@ -69,7 +72,10 @@ async def _ensure_file(target: Path, url: str, sha256: str) -> None:
             if digest != sha256:
                 logger.warning("emulator asset %s failed its checksum", target.name)
                 raise EmulatorError(_EMULATOR_CHECKSUM_MISMATCH)
-            scratch.replace(target)
+            try:
+                scratch.replace(target)
+            except OSError as exc:
+                raise EmulatorError(_EMULATOR_DOWNLOAD_FAILED) from exc
         finally:
             scratch.unlink(missing_ok=True)
     logger.info("emulator asset %s downloaded", target.name)
@@ -82,7 +88,10 @@ async def _download(url: str, scratch: Path) -> str:
     try:
         async with (
             asyncio.timeout(settings.emulator.download_timeout_seconds),
-            httpx.AsyncClient(follow_redirects=True) as client,
+            # httpx's own 5 s default would cut a CDN that pauses mid-file.
+            httpx.AsyncClient(
+                follow_redirects=True, timeout=settings.emulator.download_timeout_seconds
+            ) as client,
             client.stream("GET", url) as response,
         ):
             response.raise_for_status()

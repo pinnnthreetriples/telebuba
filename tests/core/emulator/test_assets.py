@@ -103,6 +103,17 @@ async def test_an_oversized_answer_is_cut_off(
     assert list(target.parent.iterdir()) == []
 
 
+@pytest.mark.asyncio
+async def test_a_folder_that_cannot_be_made_is_a_failed_download(target: Path) -> None:
+    target.parent.parent.mkdir(parents=True, exist_ok=True)
+    target.parent.write_bytes(b"a file where the folder goes")
+
+    with respx.mock(assert_all_called=False), pytest.raises(EmulatorError) as refused:
+        await assets.ensure_scrcpy_server()
+
+    assert refused.value.code == "emulator_download_failed"
+
+
 @pytest.mark.usefixtures("target")
 @pytest.mark.asyncio
 async def test_concurrent_callers_share_one_download() -> None:
