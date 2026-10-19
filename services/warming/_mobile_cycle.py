@@ -3,8 +3,8 @@
 Taken only when the loop task is bound to the mobile device and the emulator is on
 (``_loop._execute_cycle``); a desktop stint, or a mobile one with the emulator off,
 keeps the Telethon cycle. One cycle opens the pod in the background (booting it when
-needed, never asking for a login code: an app left signed out is the operator's to
-sign in), spends the visit's time in the app, and stops the pod again, whatever
+needed, and signing in an app it finds signed out with a login code read through the
+account's existing session), spends the visit's time in the app, and stops the pod again, whatever
 happened. A visit that went well parks the pod instead (``docker pause``: no CPU, its
 memory kept), and the account's next open thaws it with no boot; a pod parked
 ``pause_ttl_seconds`` is stopped, unless someone opened it since. Stops run on their
@@ -68,6 +68,7 @@ _PASSING_CODES = frozenset(
         "emulator_code_timeout",
         "emulator_not_running",
         "device_code_cooldown",
+        "device_primary_unavailable",
     }
 )
 # Failed cycles in a row after which even a passing cause parks the account.

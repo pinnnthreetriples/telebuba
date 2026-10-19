@@ -22,16 +22,17 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * a container's first boot gives it contacts and photos (``core.emulator._seeder``)
   before the app starts; a seeding that fails is logged, never fails the open;
 * the sign-in state is read off the screen every time, never remembered;
-* a running app that shows its intro or phone screen is signed in where it stands;
+* an app that shows its intro or phone screen is signed in where it stands, by the
+  operator's open and warming's alike (a visit heals an app that fell signed out);
   one showing the chat list, or anything else, is left alone;
 * on any failure the pod this call started is stopped again, and removed when this
   call created it;
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
   stands and never starts one; it ends with what it did when its time is up, and a
   failed one carries what it did on the refusal (``partial``);
-* a background open (warming's) shows no window and signs nothing in, and leaves a
-  pod the operator opened alone while its window is open; the operator's open
-  answers ``emulator_busy`` while a session runs;
+* a background open (warming's) shows no window, and leaves a pod the operator
+  opened alone while its window is open; the operator's open answers
+  ``emulator_busy`` while a session runs;
 * a window that cannot open (no scrcpy) is a warning, never a failed open;
 * an operator holding a phone's controls on the web screen (``claim_manual``) excludes
   an open and an activity session, and they exclude it: the second is ``emulator_busy``.
@@ -191,9 +192,10 @@ def _operator_holds(account_id: str) -> bool:
 async def open_account_mobile(account_id: str, *, background: bool = False) -> OpenMobileResult:
     """Start (or find running) the account's container and sign its Telegram app in.
 
-    ``background`` (warming) opens no window and signs nothing in: ``signed_in`` is
-    what the screen shows. It is busy while the operator holds the pod; the operator's
-    open is busy while an activity session runs.
+    ``background`` (warming) opens no window and signs the app in only when it shows
+    an entry screen; ``signed_in`` is what the screen shows at the end. It is busy
+    while the operator holds the pod; the operator's open is busy while an activity
+    session runs.
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     held = _operator_holds(account_id) if background else account_id in _ACTIVE
@@ -255,7 +257,7 @@ async def _open(
             await bring_app_to_front(serial)
             screen, _nodes = await read_screen(serial)
             signed_in = screen == "chats"
-            if screen in _ENTRY_SCREENS and not background:
+            if screen in _ENTRY_SCREENS:
                 signed_in = await sign_in(account, serial)
             return OpenMobileResult(
                 account_id=account.account_id,
@@ -276,6 +278,8 @@ async def _open(
         if background:
             screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
             signed_in = screen == "chats"
+            if screen in _ENTRY_SCREENS:
+                signed_in = await sign_in(account, serial)
         else:
             signed_in = await sign_in(account, serial)
     except BaseException:
