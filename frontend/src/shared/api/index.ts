@@ -1155,6 +1155,7 @@ export type {
   PhoneCodeOption,
   PhoneCodeRequestResult,
   PhoneList,
+  PhonePrep,
   PhoneProxy,
   PhotoMainRequest,
   PhotoRemoveRequest,

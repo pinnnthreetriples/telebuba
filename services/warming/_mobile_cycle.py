@@ -39,6 +39,7 @@ from schemas.warming import WarmingCycleResult
 from services.accounts._result import AccountActionError
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
+    EmulatorRefusedError,
     open_account_mobile,
     phone_activity,
     run_mobile_activity,
@@ -53,11 +54,11 @@ from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
 
-    from schemas.emulator import PlaybookResult
+    from schemas.emulator import EmulatorRefusalCode, PlaybookResult
     from schemas.warming import WarmingCycleRequest
 
 _NOT_SIGNED_IN = "emulator_not_signed_in"
-_CAPACITY = "emulator_capacity"
+_CAPACITY: EmulatorRefusalCode = "emulator_capacity"
 # Causes a later cycle may not meet again; every other code needs the operator.
 _PASSING_CODES = frozenset(
     {
@@ -80,6 +81,11 @@ _MIN_SECONDS = 60
 # The chance a visit searches the app for a channel, by persona; a glance never does,
 # nor looks at photos and notes.
 _SEARCH_CHANCE = {"calm": 0.15, "normal": 0.3, "active": 0.5}
+
+# A phone being prepared waits this long between tries for a free slot.
+_SLOT_WAIT_SECONDS = 30
+# ...and gives up after this long: the job fails as ``emulator_capacity`` on the card.
+_SLOT_WAIT_LIMIT_SECONDS = 30 * 60
 
 _STREAKS: dict[str, int] = {}
 # Accounts whose warming pod holds a slot, running or parked, until its stop is done.
@@ -185,6 +191,39 @@ async def run_mobile_cycle(
         reactions_sent=activity.reactions,
         attempted_actions=activity.channels_read + activity.reactions,
     )
+
+
+async def prepare_pod(account_id: str) -> bool:
+    """Boot the account's pod and sign its app in, as a visit's open does; whether it is.
+
+    Takes a warming slot like a visit, waiting ``_SLOT_WAIT_SECONDS`` between tries
+    while the host is full (``emulator_capacity`` after ``_SLOT_WAIT_LIMIT_SECONDS``),
+    and gives it back the same way: a signed-in pod is parked
+    for the first visit, any other is stopped. Raises the open's refusal, and
+    ``EmulatorBusyError`` while the operator holds the phone (left running: theirs).
+    """
+    holding = _PARKED.pop(account_id, None) is not None or account_id in _RUNNING
+    give_up = asyncio.get_running_loop().time() + _SLOT_WAIT_LIMIT_SECONDS
+    while not holding:
+        if await _free_slot():
+            break
+        if asyncio.get_running_loop().time() >= give_up:
+            raise EmulatorRefusedError(_CAPACITY)
+        await asyncio.sleep(_SLOT_WAIT_SECONDS)
+    _RUNNING.add(account_id)
+    owned = True
+    signed_in = False
+    try:
+        signed_in = (await open_account_mobile(account_id, background=True)).signed_in
+    except EmulatorBusyError:
+        owned = False
+        raise
+    finally:
+        if not owned or phone_activity(account_id) == "manual":
+            _RUNNING.discard(account_id)
+        else:
+            _detach(_park(account_id) if signed_in else _stop_and_free(account_id))
+    return signed_in
 
 
 async def _free_slot() -> bool:

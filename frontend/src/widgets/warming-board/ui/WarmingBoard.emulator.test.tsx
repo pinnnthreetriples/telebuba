@@ -40,3 +40,30 @@ test('only the card the backend flags warns that the emulator is off', () => {
   expect(warnings).toHaveLength(1);
   expect(warnings[0]).toHaveAttribute('role', 'status');
 });
+
+function preparing(id: string, phonePrep: WarmingAccountState['phone_prep']): WarmingAccountState {
+  return { ...account(id, false), phone_prep: phonePrep };
+}
+
+test('a phone being prepared, or one that failed, says so on its card', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[
+          preparing('acc-prep', { status: 'preparing' }),
+          preparing('acc-fail', { status: 'failed', code: 'emulator_binder_missing' }),
+          preparing('acc-ready', null),
+        ]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  expect(screen.getAllByText(/Готовим телефон/)).toHaveLength(1);
+  const failed = screen.getAllByText(/Телефон не готов: В ядре сервера нет binder/);
+  expect(failed).toHaveLength(1);
+  expect(failed[0]).toHaveAttribute('role', 'status');
+});

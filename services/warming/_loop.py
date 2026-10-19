@@ -21,7 +21,7 @@ from services.warming._dm_breaker import note_dm_flood
 from services.warming._fleet import _is_quiet_day
 from services.warming._flood_memory import remember_flood
 from services.warming._local_day import _next_local_wake
-from services.warming._mobile_cycle import run_mobile_cycle
+from services.warming._mobile_prep import run_visit
 from services.warming._reservation import _reconcile_reservation, _Reservation
 from services.warming._snapshot import refresh_after_cycle
 from services.warming._state import READ_CURRENT, _set_state
@@ -256,7 +256,7 @@ async def _execute_cycle(
     """
     if _seams.bound_device() == "mobile":
         if settings.emulator.enabled:
-            return await run_mobile_cycle(request, on_step=on_step)
+            return await run_visit(request, on_step=on_step)
         await log_event("WARNING", "warming_mobile_emulator_off", account_id=request.account_id)
         return WarmingCycleResult(
             account_id=request.account_id, status="skipped", detail="mobile_emulator_disabled"

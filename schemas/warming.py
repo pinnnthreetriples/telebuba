@@ -270,6 +270,13 @@ class WarmingStateWriteResult(BaseModel):
     applied: bool
 
 
+class PhonePrep(BaseModel):
+    """A mobile stint's phone being readied at its start, or the code that stopped it."""
+
+    status: Literal["preparing", "failed"]
+    code: str | None = None
+
+
 class WarmingAccountState(WarmingCardConsole):
     """One account's warming status, rendered as a kanban card."""
 
@@ -355,6 +362,7 @@ class WarmingAccountState(WarmingCardConsole):
     limit_factor: float = Field(default=1.0, ge=0.0, le=1.0)
     spam_check_warning: bool = False  # @SpamBot silent ``spam_unknown_warn_streak`` times
     mobile_emulator_off: bool = False  # a phone stint whose visits wait for the emulator
+    phone_prep: PhonePrep | None = None  # a phone stint's phone, readied at its start
 
 
 class WarmingBoardState(BaseModel):

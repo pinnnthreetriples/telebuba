@@ -369,6 +369,30 @@ function WarmingCard({
         </div>
       ) : null}
 
+      {/* A phone stint's phone is readied at its start; its visits wait for it. */}
+      {account.phone_prep?.status === 'preparing' ? (
+        <div
+          role="status"
+          className="mt-3 flex items-center gap-2 rounded-sm border border-info-line bg-info-tint px-3 py-2 type-small text-info-strong"
+        >
+          <Icon name="smartphone" size={14} className="shrink-0" />
+          {t('warming.card.phonePreparing')}
+        </div>
+      ) : null}
+      {account.phone_prep?.status === 'failed' ? (
+        <div
+          role="status"
+          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
+        >
+          <Icon name="alert-triangle" size={14} className="shrink-0" />
+          {t('warming.card.phonePrepFailed', {
+            reason: t(`shell.code.${account.phone_prep.code ?? ''}`, {
+              defaultValue: account.phone_prep.code ?? '',
+            }),
+          })}
+        </div>
+      ) : null}
+
       {!complete ? (
         <>
           {/* activity log */}

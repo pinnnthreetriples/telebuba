@@ -5960,12 +5960,32 @@ export type PhoneList = {
     | 'emulator_download_failed'
     | 'emulator_checksum_mismatch'
     | 'emulator_image_unavailable'
+    | 'emulator_docker_unavailable'
+    | 'emulator_adb_missing'
+    | 'emulator_binder_missing'
+    | 'emulator_preparing'
     | 'emulator_screen_timeout'
     | null;
   /**
    * Phones
    */
   phones: Array<Phone>;
+};
+
+/**
+ * PhonePrep
+ *
+ * A mobile stint's phone being readied at its start, or the code that stopped it.
+ */
+export type PhonePrep = {
+  /**
+   * Status
+   */
+  status: 'preparing' | 'failed';
+  /**
+   * Code
+   */
+  code?: string | null;
 };
 
 /**
@@ -8374,6 +8394,7 @@ export type WarmingAccountState = {
    * Mobile Emulator Off
    */
   mobile_emulator_off?: boolean;
+  phone_prep?: PhonePrep | null;
 };
 
 /**

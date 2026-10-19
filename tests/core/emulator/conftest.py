@@ -38,16 +38,18 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 class Console:
-    """Records every argv; ``answer`` maps an argv to its stdout (or raises)."""
+    """Records every argv and its time bound; ``answer`` maps an argv to its stdout (or raises)."""
 
     def __init__(self, answer: Callable[[list[str]], str] | None = None) -> None:
         self.calls: list[list[str]] = []
+        self.seconds: list[float] = []  # each call's bound, by index
         self.answer = answer or (lambda _argv: "")
 
     async def __call__(self, argv: Sequence[str], *, seconds: float, step: str) -> str:
         assert seconds > 0
         assert step
         self.calls.append(list(argv))
+        self.seconds.append(seconds)
         return self.answer(list(argv))
 
     def shell_calls(self) -> list[list[str]]:

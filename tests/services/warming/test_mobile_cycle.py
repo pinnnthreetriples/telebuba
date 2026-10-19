@@ -168,7 +168,7 @@ async def test_a_mobile_stint_opens_its_pod_spends_the_visit_and_stops_it(
     await _iterate_on("mobile")
     await _stops_done()
 
-    assert pod.calls[0] == "open:background", "a warming open never asks for a login code"
+    assert pod.calls[0] == "open:background", "a warming open shows no window"
     assert pod.calls[1].startswith("run:")
     assert pod.calls[2:] == ["stop"]
     assert telethon == [], "no MTProto action on a mobile stint"
