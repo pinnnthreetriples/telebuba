@@ -21802,6 +21802,513 @@
           }
         }
       }
+    },
+    "/api/v1/telephony/phones/{phone_id}/status": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Get Phone Telephony Status",
+        "description": "Return the current OTP waiting/typing status for a phone container.",
+        "operationId": "getPhoneTelephonyStatus",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneTelephonyStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telephony/phones/{phone_id}/wait": {
+      "post": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Start Phone Otp Wait",
+        "description": "Make the phone wait for an OTP SMS on its account's number; it is typed when it comes.",
+        "operationId": "startPhoneOtpWait",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneTelephonyStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telephony/phones/{phone_id}/manual-input": {
+      "post": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Manual Input Phone Otp",
+        "description": "Type an OTP code into the phone's code screen now; refused off that screen.",
+        "operationId": "manualInputPhoneOtp",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOtpInputRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualOtpInputResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telephony/inbox": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "List Sms Inbox",
+        "description": "Return the last 50 inbound SMS messages, or only those for one phone.",
+        "operationId": "listSmsInbox",
+        "parameters": [
+          {
+            "name": "phone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phone Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmsInboxList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telephony/sms-webhook": {
+      "post": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Receive Inbound Sms Webhook",
+        "description": "Receive an inbound SMS or Flash Call from a hardware gateway, modem, or SMS API.",
+        "operationId": "receiveInboundSmsWebhook",
+        "parameters": [
+          {
+            "name": "x-telephony-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Telephony-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboundSmsWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmsWebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -27883,6 +28390,73 @@
         "type": "object",
         "title": "HealthStatus"
       },
+      "InboundSmsWebhook": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sms",
+              "flash_call"
+            ],
+            "title": "Kind",
+            "default": "sms"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone",
+            "description": "\u041d\u043e\u043c\u0435\u0440 \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044f \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 E.164, \u043d\u0430\u043f\u0440. +79991234567"
+          },
+          "sender": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sender",
+            "description": "\u0418\u043c\u044f \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u0435\u043b\u044f \u0438\u043b\u0438 \u043d\u043e\u043c\u0435\u0440, \u043d\u0430\u043f\u0440. Telegram, WhatsApp, Facebook"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Text",
+            "description": "\u0421\u044b\u0440\u043e\u0439 \u0442\u0435\u043a\u0441\u0442 SMS-\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f",
+            "default": ""
+          },
+          "caller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Id",
+            "description": "Caller number of a flash_call; the code is its last digits"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp",
+            "description": "When the gateway received it, with a timezone; server time when absent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "sender"
+        ],
+        "title": "InboundSmsWebhook",
+        "description": "\u041a\u043e\u043d\u0442\u0440\u0430\u043a\u0442 \u0432\u0445\u043e\u0434\u044f\u0449\u0435\u0433\u043e \u0432\u0435\u0431\u0445\u0443\u043a\u0430 \u043e\u0442 \u0448\u043b\u044e\u0437\u043e\u0432 (GoIP, Dinstar), \u043c\u043e\u0434\u0435\u043c\u043e\u0432 \u0438\u043b\u0438 SMS-API."
+      },
       "LeadInput": {
         "properties": {
           "phone": {
@@ -28334,6 +28908,63 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "ManualOtpInputRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "pattern": "^[0-9]{4,8}$",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "ManualOtpInputRequest",
+        "description": "\u0417\u0430\u043f\u0440\u043e\u0441 \u043d\u0430 \u0440\u0443\u0447\u043d\u043e\u0439 \u0431\u0438\u043e\u043c\u0435\u0445\u0430\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0432\u0432\u043e\u0434 OTP-\u043a\u043e\u0434\u0430 \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u043e\u043c."
+      },
+      "ManualOtpInputResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          },
+          "phone_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+            "title": "Phone Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "line_status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "waiting_otp",
+              "otp_received",
+              "typing",
+              "completed",
+              "failed",
+              "timeout"
+            ],
+            "title": "Line Status",
+            "default": "completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_id",
+          "code"
+        ],
+        "title": "ManualOtpInputResult",
+        "description": "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0440\u0443\u0447\u043d\u043e\u0433\u043e \u0432\u0432\u043e\u0434\u0430 OTP-\u043a\u043e\u0434\u0430 \u0432 \u043a\u043e\u043d\u0442\u0435\u0439\u043d\u0435\u0440 \u0441\u043c\u0430\u0440\u0442\u0444\u043e\u043d\u0430."
       },
       "MasstaggingBaseRequest": {
         "properties": {
@@ -31911,6 +32542,127 @@
         "title": "PhoneProxy",
         "description": "Where the phone's traffic goes; never its credentials."
       },
+      "PhoneTelephonyStatus": {
+        "properties": {
+          "phone_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+            "title": "Phone Id"
+          },
+          "phone_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Number"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "telegram",
+                  "whatsapp",
+                  "facebook",
+                  "tiktok",
+                  "generic"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "waiting_otp",
+              "otp_received",
+              "typing",
+              "completed",
+              "failed",
+              "timeout"
+            ],
+            "title": "Status",
+            "default": "idle"
+          },
+          "last_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Code"
+          },
+          "last_sms_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sms Text"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "remaining_seconds": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Remaining Seconds",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_id"
+        ],
+        "title": "PhoneTelephonyStatus",
+        "description": "\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u0441\u0442\u0430\u0442\u0443\u0441 \u0441\u043e\u0442\u043e\u0432\u043e\u0439 \u043b\u0438\u043d\u0438\u0438 \u0438 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f/\u0432\u0432\u043e\u0434\u0430 OTP \u0434\u043b\u044f \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430."
+      },
       "PhotoMainRequest": {
         "properties": {
           "photo_id": {
@@ -33499,6 +34251,133 @@
         ],
         "title": "SkippedAccount",
         "description": "An account a run left out before sending anything, and for how long it would wait."
+      },
+      "SmsInboxList": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/SmsInboxMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "SmsInboxList",
+        "description": "\u0421\u043f\u0438\u0441\u043e\u043a \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0445 \u0432\u0445\u043e\u0434\u044f\u0449\u0438\u0445 SMS \u0434\u043b\u044f \u0436\u0443\u0440\u043d\u0430\u043b\u0430 (\u0434\u043e 50 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439)."
+      },
+      "SmsInboxMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "phone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Id"
+          },
+          "sender": {
+            "type": "string",
+            "title": "Sender"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "telegram",
+              "whatsapp",
+              "facebook",
+              "tiktok",
+              "generic"
+            ],
+            "title": "Platform",
+            "default": "generic"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched",
+            "default": false
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "phone",
+          "sender",
+          "text",
+          "timestamp"
+        ],
+        "title": "SmsInboxMessage",
+        "description": "\u0417\u0430\u043f\u0438\u0441\u044c \u0432\u0445\u043e\u0434\u044f\u0449\u0435\u0433\u043e SMS-\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0432 \u043a\u043e\u043b\u044c\u0446\u0435\u0432\u043e\u043c \u0436\u0443\u0440\u043d\u0430\u043b\u0435."
+      },
+      "SmsWebhookResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "matched"
+        ],
+        "title": "SmsWebhookResponse",
+        "description": "\u041e\u0442\u0432\u0435\u0442 \u0432\u0435\u0431\u0445\u0443\u043a\u0430 \u043f\u0440\u0438\u0451\u043c\u0430 \u0432\u0445\u043e\u0434\u044f\u0449\u0438\u0445 SMS."
       },
       "SoftStartPlan": {
         "properties": {

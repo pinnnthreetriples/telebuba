@@ -40,6 +40,7 @@ from core._config_notifications import NotificationsSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_survival import SurvivalSettings
+from core._config_telephony import TelephonySettings
 from core._config_user_parser import UserParserSettings
 from core._config_warming import WarmingSettings
 
@@ -365,6 +366,7 @@ class Settings(BaseSettings):
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
+    telephony: TelephonySettings = Field(default_factory=TelephonySettings)
 
 
 def load_settings() -> Settings:

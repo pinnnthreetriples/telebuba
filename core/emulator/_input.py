@@ -46,6 +46,9 @@ _THUMB_X = 0.56
 _THUMB_X_SPREAD = 0.08
 _THUMB_Y_SPREAD = 0.04
 _THUMB_DRIFT = 0.03
+# A six-digit code is read and typed as two halves (XXX XXX).
+_SIX_DIGIT_LEN = 6
+_SIX_DIGIT_MID = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +279,21 @@ class HumanInputEngine:
         """Sample how long one story is looked at: log-normal around 4 s, in [2.0, 9.0]."""
         raw = math.exp(self.rng.gauss(math.log(4.0), 0.35))
         return round(max(2.0, min(9.0, raw)), 2)
+
+    def generate_code_sequence(self, code: str) -> list[KeystrokeEvent]:
+        """Keystrokes for a verification code read off an SMS: no typos, steady digits.
+
+        Gaussian 140-280ms per digit; a six-digit code gets a 400-600ms pause after its
+        third digit, where a person glances back at the message for the second half.
+        """
+        events: list[KeystrokeEvent] = []
+        for idx, ch in enumerate(code):
+            if len(code) == _SIX_DIGIT_LEN and idx == _SIX_DIGIT_MID:
+                delay = self.rng.randint(400, 600)
+            else:
+                delay = round(self._between(140.0, 280.0))
+            events.append(KeystrokeEvent(char=ch, delay_ms=delay))
+        return events
 
     def generate_keystroke_sequence(
         self,

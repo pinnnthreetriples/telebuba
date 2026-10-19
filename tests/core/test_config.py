@@ -514,6 +514,7 @@ def test_the_protected_field_set_is_pinned() -> None:
         ("telegram", "api_id"),
         ("telegram", "mobile_api_hash"),
         ("telegram", "mobile_api_id"),
+        ("telephony", "webhook_secret"),
         ("warming", "fleet_hash_salt"),
     ]
 

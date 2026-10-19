@@ -145,3 +145,73 @@ test('no phones yet explains where they come from', async () => {
 
   expect(await screen.findByText(/мобильное устройство/)).toBeTruthy();
 });
+
+test('phone details display cellular line status and open SMS inbox drawer with manual OTP input', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (request.method === 'POST' && url.pathname.endsWith('/manual-input')) {
+      posted.push(url.pathname);
+      return Promise.resolve(
+        Response.json({
+          status: 'ok',
+          phone_id: 'telebuba-b',
+          code: '48291',
+          line_status: 'completed',
+        }),
+      );
+    }
+    if (url.pathname.endsWith('/telephony/phones/telebuba-b/status')) {
+      return Promise.resolve(
+        Response.json({
+          phone_id: 'telebuba-b',
+          phone_number: '+79991234567',
+          platform: 'telegram',
+          status: 'otp_received',
+          last_code: '48291',
+          remaining_seconds: 105,
+        }),
+      );
+    }
+    if (url.pathname.endsWith('/telephony/inbox')) {
+      return Promise.resolve(
+        Response.json({
+          messages: [
+            {
+              id: 'msg-1',
+              phone: '+79991234567',
+              phone_id: 'telebuba-b',
+              sender: 'Telegram',
+              text: 'Код Telegram: 48291',
+              code: '48291',
+              platform: 'telegram',
+              matched: true,
+              timestamp: '2026-10-19T12:00:00Z',
+            },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(Response.json({ enabled: true, phones: [phone('telebuba-b', 'free')] }));
+  });
+
+  renderPage(<DevicesPage />);
+  const [free] = (await screen.findAllByRole('listitem')) as [HTMLElement];
+  await userEvent.click(within(free).getByRole('button', { name: 'Параметры' }));
+
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('Сотовая связь и SMS')).toBeTruthy();
+  expect(await within(dialog).findByText('Код получен: 48291')).toBeTruthy();
+
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Входящие SMS' }));
+
+  expect(await screen.findByText('Код Telegram: 48291')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Скопировать код' })).toBeTruthy();
+
+  const manualButtons = screen.getAllByRole('button', { name: 'Напечатать в телефон' });
+  await userEvent.click(manualButtons[manualButtons.length - 1]!);
+
+  await waitFor(() => {
+    expect(posted).toContain('/api/v1/telephony/phones/telebuba-b/manual-input');
+  });
+});

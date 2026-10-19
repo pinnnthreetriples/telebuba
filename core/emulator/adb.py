@@ -207,15 +207,21 @@ async def human_type(
     *,
     typo_probability: float | None = None,
     engine: HumanInputEngine | None = None,
+    as_code: bool = False,
 ) -> None:
-    """Type ``text`` with stochastic keystroke intervals and realistic typo-correction."""
+    """Type ``text`` with stochastic keystroke intervals and realistic typo-correction.
+
+    ``as_code`` types a verification code instead: steady digits, no typos, and the
+    mid-code glance of a six-digit code (``HumanInputEngine.generate_code_sequence``).
+    """
     escape_input_text(text)
     eng = engine or _default_input_engine
-    events = (
-        eng.generate_keystroke_sequence(text, typo_probability=typo_probability)
-        if typo_probability is not None
-        else eng.generate_keystroke_sequence(text)
-    )
+    if as_code:
+        events = eng.generate_code_sequence(text)
+    elif typo_probability is not None:
+        events = eng.generate_keystroke_sequence(text, typo_probability=typo_probability)
+    else:
+        events = eng.generate_keystroke_sequence(text)
     for event in events:
         if event.delay_ms > 0:
             await asyncio.sleep(event.delay_ms / 1000.0)
