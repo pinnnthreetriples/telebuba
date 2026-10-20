@@ -48,9 +48,12 @@ def _dump_script(xml: str, log: str) -> tuple[str, ...]:
 
     uiautomator writes the file, prints "dumped to" and then spends most of a second
     shutting its VM down; the script kills it at that print (or stops when it has
-    exited without one), serves its output followed by the file and deletes both.
+    exited without one), serves its output followed by the file and deletes both. Cut
+    off on the way (adb timed out), it still kills uiautomator and deletes both files.
     """
+    cleanup = f"kill $p 2>/dev/null; rm -f {log} {xml}; exit 1"
     return (
+        *("trap", shell_quote(cleanup), "HUP", "INT", "TERM", ";"),
         *("rm", "-f", xml, log, ";"),
         *("uiautomator", "dump", xml, f">{log}", "2>&1", "&", "p=$!", ";"),
         *("while", "kill", "-0", "$p", "2>/dev/null", "&&", "!", "grep", "-q", "dumped", log),

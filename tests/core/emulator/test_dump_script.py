@@ -25,11 +25,13 @@ pytestmark = pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
 
 # A shell function wins over the binary. A good dump writes the file, prints the
 # marker and then stays alive for $LINGER seconds (the VM shutdown); a failed one
-# prints uiautomator's error and exits 0, as the real tool does.
+# prints uiautomator's error and exits 0, as the real tool does; a hung one writes
+# the file and never prints.
 _FAKE_UIAUTOMATOR = """
 uiautomator() {
   if [ "$FAIL" = 1 ]; then echo "ERROR: could not get idle state."; return 0; fi
   echo "<hierarchy rotation=\\"0\\" />" > "$2"
+  if [ "$HANG" = 1 ]; then exec sh -c 'echo $$ > "$PIDFILE"; exec sleep "$LINGER"'; fi
   echo "UI hierchary dumped to: $2"
   exec sh -c 'echo $$ > "$PIDFILE"; exec sleep "$LINGER"'
 }
@@ -42,19 +44,29 @@ class _Run(NamedTuple):
     uiautomator_alive: bool
 
 
-def _run(tmp_path: Path, *, fail: bool = False, linger: int = 20) -> _Run:
+def _script(tmp_path: Path) -> Path:
     xml, log = (tmp_path / "ui.xml").as_posix(), (tmp_path / "ui.log").as_posix()
     script = tmp_path / "dump.sh"
     script.write_text(
         _FAKE_UIAUTOMATOR + " ".join(_dump_script(xml, log)) + "\n", encoding="utf-8", newline="\n"
     )
-    pidfile = tmp_path / "uiautomator.pid"
-    env = {
+    return script
+
+
+def _env(tmp_path: Path, *, fail: bool = False, hang: bool = False, linger: int = 20):
+    return {
         "PATH": os.environ["PATH"],
         "FAIL": "1" if fail else "0",
+        "HANG": "1" if hang else "0",
         "LINGER": str(linger),
-        "PIDFILE": pidfile.as_posix(),
+        "PIDFILE": (tmp_path / "uiautomator.pid").as_posix(),
     }
+
+
+def _run(tmp_path: Path, *, fail: bool = False, linger: int = 20) -> _Run:
+    script = _script(tmp_path)
+    pidfile = tmp_path / "uiautomator.pid"
+    env = _env(tmp_path, fail=fail, linger=linger)
     assert _SH is not None
     started = time.monotonic()
     done = subprocess.run(  # noqa: S603 - test-owned argv
@@ -93,3 +105,22 @@ def test_a_failed_dump_ends_the_script_and_serves_no_old_screen(tmp_path: Path) 
     assert "dumped to" not in run.stdout
     assert "stale" not in run.stdout
     assert "could not get idle state" in run.stdout
+
+
+def test_a_script_cut_off_kills_uiautomator_and_leaves_no_files(tmp_path: Path) -> None:
+    script, spid, pidfile = _script(tmp_path), tmp_path / "script.pid", tmp_path / "uiautomator.pid"
+    assert _SH is not None
+    # As adbd does when adb times out: the script gets a signal mid-poll.
+    wrapper = f'sh "{script.as_posix()}" & echo $! > "{spid.as_posix()}"; wait'
+    running = subprocess.Popen(  # noqa: S603 - test-owned argv
+        [_SH, "-c", wrapper], env=_env(tmp_path, hang=True), stdout=subprocess.DEVNULL
+    )
+    deadline = time.monotonic() + 10
+    while not (pidfile.exists() and spid.exists()) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    subprocess.run([_SH, "-c", f"kill -TERM {spid.read_text().strip()}"], check=True)  # noqa: S603
+    running.wait(timeout=10)
+
+    assert not _alive(pidfile.read_text(encoding="utf-8").strip())
+    assert not (tmp_path / "ui.xml").exists()
+    assert not (tmp_path / "ui.log").exists()

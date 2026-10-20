@@ -132,8 +132,11 @@ async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
     assert await adb.dump_ui("emulator-5554") == ""
     tries = console.shell_calls()
     assert len(tries) == 3, "one script a try, three tries"
-    xmls = [script[2] for script in tries]
-    assert all(script[:2] == ["rm", "-f"] for script in tries), "an old file is never read back"
+    first_commands = [script[script.index(";") + 1 :] for script in tries]
+    xmls = [script[2] for script in first_commands]
+    assert all(script[:2] == ["rm", "-f"] for script in first_commands), (
+        "an old file is never read back"
+    )
     assert all(xml.startswith("/sdcard/telebuba_ui_") for xml in xmls)
     assert len(set(xmls)) == 3, "each try dumps into its own file"
 
