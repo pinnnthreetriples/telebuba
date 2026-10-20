@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   accountDisplayName,
+  accountMobileProgressQueryKey,
   accountFilterOptionsQueryOptions,
   accountFoldersQueryOptions,
   accountsQueryOptions,
@@ -55,7 +56,7 @@ import {
 } from '@/widgets/account-folders';
 
 import type { AccountRead } from '@/shared/api';
-import { useTransientFeedback } from '@/shared/lib';
+import { mutationErrorText, useTransientFeedback } from '@/shared/lib';
 import {
   AccountEdit,
   AddAccountModal,
@@ -67,6 +68,7 @@ import {
 import { AccountsTable, DeleteAccountModal, type DeleteReason } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
+import { MobileOpenDialog, type MobileOutcome } from './MobileOpenDialog';
 import { SearchToggle } from './SearchToggle';
 
 const PAGE_SIZE = 20;
@@ -103,6 +105,15 @@ export function AccountsPage() {
   // and its spinner sits only on the globe.
   const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [openMobileBusyIds, setOpenMobileBusyIds] = useState<ReadonlySet<string>>(new Set());
+  // The phone dialog of the open the operator started last; its outcome follows the request.
+  // Each open gets its own id, so a dialog (and its stepper) never carries an earlier one's state.
+  const nextMobileOpen = useRef(0);
+  const [mobileDialog, setMobileDialog] = useState<{
+    openId: number;
+    accountId: string;
+    title: string;
+    outcome: MobileOutcome;
+  } | null>(null);
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -244,7 +255,8 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
   const openWeb = useMutation(openAccountWebMutation());
-  const openMobile = useMutation(openAccountMobileMutation());
+  // The phone dialog says how the open went, so it raises no toast of its own.
+  const openMobile = useMutation({ ...openAccountMobileMutation(), meta: { inlineError: true } });
   const emulator = useQuery(emulatorStatusQueryOptions());
   const webWindows = useQuery(accountWebWindowsQueryOptions());
   const closeWebWindows = useMutation(closeAccountWebWindowsMutation());
@@ -342,17 +354,27 @@ export function AccountsPage() {
       });
   };
   // The container start can take minutes (boot, install, sign-in), so its spinner has
-  // its own set like the globe's. A refusal arrives as the global toast with its code;
-  // a container that opened without reaching the chat list says so, because the
-  // operator then finishes the sign-in in its window.
-  const openMobileAccount = (accountId: string) => {
+  // its own set like the globe's. The phone dialog opens at once and shows the start
+  // as it goes — its stages over the live screen — and then how it ended: signed in,
+  // left for the operator to finish by hand on that screen, or refused with its code.
+  const openMobileAccount = (accountId: string, title: string) => {
     setOpenMobileBusyIds((ids) => new Set(ids).add(accountId));
+    const openId = ++nextMobileOpen.current;
+    queryClient.removeQueries({
+      queryKey: accountMobileProgressQueryKey({ path: { account_id: accountId } }),
+    });
+    setMobileDialog({ openId, accountId, title, outcome: { phase: 'running' } });
+    const settle = (outcome: MobileOutcome) => {
+      setMobileDialog((open) => (open?.openId === openId ? { ...open, outcome } : open));
+    };
     return openMobile
       .mutateAsync({ path: { account_id: accountId } })
       .then((result) => {
-        if (!result.signed_in) toastError(t('accounts.openMobile.notSignedIn'));
+        settle({ phase: 'settled', result });
       })
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        settle({ phase: 'failed', message: mutationErrorText(error) });
+      })
       .finally(() => {
         setOpenMobileBusyIds((ids) => {
           const next = new Set(ids);
@@ -597,7 +619,11 @@ export function AccountsPage() {
               }}
               onOpenWeb={onOpenWeb}
               onOpenMobile={(accountId) => {
-                void openMobileAccount(accountId);
+                const account = items.find((row) => row.account_id === accountId);
+                void openMobileAccount(
+                  accountId,
+                  account ? accountDisplayName(account) : accountId,
+                );
               }}
               emulatorEnabled={emulator.data?.enabled ?? false}
               openMobileBusyIds={openMobileBusyIds}
@@ -714,6 +740,17 @@ export function AccountsPage() {
         <ProxyAddModal
           onClose={() => {
             setProxyAdding(false);
+          }}
+        />
+      ) : null}
+      {mobileDialog ? (
+        <MobileOpenDialog
+          key={mobileDialog.openId}
+          accountId={mobileDialog.accountId}
+          title={mobileDialog.title}
+          outcome={mobileDialog.outcome}
+          onClose={() => {
+            setMobileDialog(null);
           }}
         />
       ) : null}

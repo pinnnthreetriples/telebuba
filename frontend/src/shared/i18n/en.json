@@ -1212,7 +1212,32 @@
       "adding": "Signing the second device in: waiting for the code in the existing session — up to a minute."
     },
     "openMobile": {
-      "notSignedIn": "The container is open but not signed in — finish in its window."
+      "subtitle": "The phone starts and signs in to Telegram by itself — everything it does shows on its screen.",
+      "stepsLabel": "Phone sign-in stages",
+      "stage": {
+        "pod": "Network",
+        "boot": "Android",
+        "app": "Telegram",
+        "phone": "Number",
+        "code": "Code",
+        "password": "Password"
+      },
+      "status": {
+        "pod": "Bringing up the phone's network through the account's proxy…",
+        "boot": "Android is booting…",
+        "app": "Opening Telegram…",
+        "phone": "Typing the phone number…",
+        "code": "Waiting for the login code in the account's existing session…",
+        "password": "Typing the cloud password…",
+        "done": "Done: Telegram on the phone is signed in. You can control the phone.",
+        "manual": "The phone is open but not signed in. Finish the sign-in by hand on its screen.",
+        "failed": "The phone did not start."
+      },
+      "reason": "Reason: {{reason}}",
+      "waiting": {
+        "pod": "The phone is starting…",
+        "boot": "Android is booting…"
+      }
     }
   },
   "nav": {
@@ -1863,6 +1888,7 @@
     "account_second_device_remove_failed": "Second device not removed",
     "account_mobile_opened": "Opened on phone",
     "account_mobile_open_failed": "Could not open on phone",
+    "account_mobile_sign_in_failed": "Phone sign-in not finished — to finish by hand",
     "account_mobile_seed_failed": "Phone contacts and photos not added",
     "account_mobile_activity_done": "Activity on phone",
     "account_mobile_activity_failed": "Activity on phone failed",

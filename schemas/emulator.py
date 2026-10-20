@@ -55,12 +55,40 @@ _TYPEABLE = r"^[A-Za-z0-9][A-Za-z0-9 ]{1,31}$"
 OpenMobileStatus = Literal["started", "already_running"]
 
 
+# A refusal code as the API returns it (``EmulatorRefusalCode`` or ``DeviceRefusalCode``).
+RefusalCode = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]{1,64}$")]
+
+
 class OpenMobileResult(BaseModel):
-    """What opening the container did; ``signed_in`` is read off the screen, never cached."""
+    """What opening the container did; ``signed_in`` is read off the screen, never cached.
+
+    ``sign_in_refusal`` is why the operator's sign-in stopped short on a pod that is up:
+    the pod is left running so the sign-in can be finished by hand on its screen.
+    """
 
     account_id: str = Field(min_length=1)
     status: OpenMobileStatus
     signed_in: bool
+    sign_in_refusal: RefusalCode | None = None
+
+
+# Where an open of the account's pod is, in order: the pod (gateway, tunnel, container)
+# starting, Android booting, the Telegram app starting, the phone number typed, the
+# login code awaited and typed, the cloud password typed. It ends ``done`` (the chat
+# list is on screen), ``manual`` (the pod is up but signed out: finished by hand) or
+# ``failed`` (the pod could not be used and was stopped).
+MobileOpenStage = Literal[
+    "pod", "boot", "app", "phone", "code", "password", "done", "manual", "failed"
+]
+
+
+class MobileOpenProgress(BaseModel):
+    """The account's latest pod open as this process saw it; ``stage`` ``None``: none yet."""
+
+    account_id: str = Field(min_length=1)
+    phone_id: str = Field(min_length=1)
+    stage: MobileOpenStage | None = None
+    reason: RefusalCode | None = None
 
 
 class EmulatorStatus(BaseModel):

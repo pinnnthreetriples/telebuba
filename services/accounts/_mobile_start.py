@@ -6,7 +6,12 @@
 * a container's first boot gives it contacts and photos (``core.emulator._seeder``)
   alongside the app's start; a seeding that fails is logged, never fails the open;
 * on any failure the pod is stopped again, and removed only when it is new and failed
-  by its boot: a booted one keeps its seeded ``/data`` for the next start.
+  by its boot: a booted one keeps its seeded ``/data`` for the next start;
+* the operator's sign-in that stops short (no login code to read, a cooldown, a screen
+  it did not expect) is not a failure of the open: it is logged, and the pod is left
+  up on its screen with the refusal, for the operator to finish the sign-in by hand.
+  Warming's background open still fails: nobody watches its pod;
+* each stage is reported as it begins (``_mobile_progress``) for the operator's dialog.
 """
 
 from __future__ import annotations
@@ -33,6 +38,8 @@ from core.logging import log_event
 from schemas.emulator import OpenMobileResult
 from services.accounts._emulator_sign_in import sign_in
 from services.accounts._mobile_holds import container_name
+from services.accounts._mobile_progress import report_stage
+from services.accounts.devices import DeviceRefusedError
 
 if TYPE_CHECKING:
     from core.android_apk import AppIdentity
@@ -88,26 +95,57 @@ async def _start(
     booted = False
     try:
         serial = adb_serial(instance.index)
+        report_stage(account.account_id, "boot")
         await _boot(serial, apk)
         if not background:
             await show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
         booted = True
+        report_stage(account.account_id, "app")
         seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
         try:
             await ensure_app(serial)
             # In the background only an entry screen is signed in; in front, always.
             screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
-            signed_in = screen == "chats"
+            signed_in, refusal = screen == "chats", None
             if screen is None or screen in ENTRY_SCREENS:
-                signed_in = await sign_in(account, serial)
+                signed_in, refusal = await sign_in_or_hand_over(
+                    account, serial, background=background
+                )
             await seeding
         finally:
             await _drop(seeding)
     except BaseException:
         await asyncio.shield(_undo(name, remove=apk is not None and not booted))
         raise
-    return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
+    return OpenMobileResult(
+        account_id=account.account_id,
+        status="started",
+        signed_in=signed_in,
+        sign_in_refusal=refusal,
+    )
+
+
+async def sign_in_or_hand_over(
+    account: AccountRead, serial: str, *, background: bool
+) -> tuple[bool, str | None]:
+    """Sign the app in: ``(signed in, why it stopped short)``.
+
+    The operator's refusal is logged and handed back with the pod left up, to be
+    finished by hand on its screen; warming's is raised (its pod is stopped).
+    """
+    if background:
+        return await sign_in(account, serial), None
+    try:
+        return await sign_in(account, serial), None
+    except (EmulatorError, DeviceRefusedError) as exc:
+        await log_event(
+            "WARNING",
+            "account_mobile_sign_in_failed",
+            account_id=account.account_id,
+            extra={"reason": exc.code},
+        )
+        return False, exc.code
 
 
 async def _boot(serial: str, apk: asyncio.Task[AppIdentity] | None) -> None:

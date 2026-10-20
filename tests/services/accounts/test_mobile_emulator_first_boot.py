@@ -60,13 +60,12 @@ async def test_a_new_pod_that_fails_after_its_boot_is_stopped_not_removed(
     container: _Container,
 ) -> None:
     await _account()
-    container.code = None
-    container.screens = ["phone", "code"]
+    container.fail_at = "app"
 
     with pytest.raises(EmulatorRefusedError) as refused:
         await open_account_mobile("acc")
 
-    assert refused.value.code == "emulator_code_timeout"
+    assert refused.value.code == "emulator_boot_timeout"
     assert "boot" in container.steps
     assert container.steps[-1] == "stop:telebuba-acc", "its seeded data spares the next start"
     assert not any(step.startswith("remove:") for step in container.steps)

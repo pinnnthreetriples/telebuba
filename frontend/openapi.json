@@ -9640,7 +9640,7 @@
           "accounts"
         ],
         "summary": "Open Account Mobile",
-        "description": "Start the account's container and sign its Telegram app in.\n\nA refusal answers 400 with a stable code; a start already running for the same\naccount answers 409 ``emulator_busy``.",
+        "description": "Start the account's container and sign its Telegram app in.\n\nA refusal answers 400 with a stable code; a start already running for the same\naccount answers 409 ``emulator_busy``. A sign-in that stops short on a pod that\nis up answers 200 with ``signed_in`` false and ``sign_in_refusal``: the pod stays\nup for the operator to finish the sign-in on its screen.",
         "operationId": "openAccountMobile",
         "parameters": [
           {
@@ -9744,6 +9744,87 @@
           },
           "409": {
             "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/open-mobile/progress": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Account Mobile Progress",
+        "description": "Where the account's latest open of its phone is; the SPA polls it while it runs.",
+        "operationId": "accountMobileProgress",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileOpenProgress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -29901,6 +29982,61 @@
         ],
         "title": "MinutesRange"
       },
+      "MobileOpenProgress": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "phone_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Phone Id"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pod",
+                  "boot",
+                  "app",
+                  "phone",
+                  "code",
+                  "password",
+                  "done",
+                  "manual",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "phone_id"
+        ],
+        "title": "MobileOpenProgress",
+        "description": "The account's latest pod open as this process saw it; ``stage`` ``None``: none yet."
+      },
       "MusicRemoveRequest": {
         "properties": {
           "file_id": {
@@ -31589,6 +31725,18 @@
           "signed_in": {
             "type": "boolean",
             "title": "Signed In"
+          },
+          "sign_in_refusal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sign In Refusal"
           }
         },
         "type": "object",
@@ -31598,7 +31746,7 @@
           "signed_in"
         ],
         "title": "OpenMobileResult",
-        "description": "What opening the container did; ``signed_in`` is read off the screen, never cached."
+        "description": "What opening the container did; ``signed_in`` is read off the screen, never cached.\n\n``sign_in_refusal`` is why the operator's sign-in stopped short on a pod that is up:\nthe pod is left running so the sign-in can be finished by hand on its screen."
       },
       "OpenWebResult": {
         "properties": {

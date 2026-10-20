@@ -106,6 +106,7 @@ from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     EmulatorRefusedError,
     open_account_mobile,
+    open_mobile_progress,
 )
 from services.accounts.privacy import (
     apply_account_privacy,
@@ -198,6 +199,7 @@ __all__ = [
     "mark_chat_read",
     "open_account_mobile",
     "open_account_web",
+    "open_mobile_progress",
     "post_account_story",
     "publish_account_channel_post",
     "read_account_privacy",

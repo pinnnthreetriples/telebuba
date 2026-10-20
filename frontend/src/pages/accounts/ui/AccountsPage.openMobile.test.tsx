@@ -1,5 +1,5 @@
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -12,7 +12,8 @@ import { toastError } from '@/shared/ui';
 
 import { AccountsPage } from './AccountsPage';
 
-// The phone button opens a mobile account in its local Android container.
+// The phone button opens a mobile account in its local Android container, and a
+// dialog that shows the start as it goes and how it ended.
 
 vi.mock('@/shared/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/ui')>()),
@@ -40,6 +41,7 @@ function routeApi(options: {
   enabled?: boolean;
   openMobile?: () => Response;
   gate?: Promise<void>;
+  stage?: string;
 }) {
   const account = options.account ?? MOBILE;
   vi.mocked(fetch).mockImplementation((input) => {
@@ -54,6 +56,11 @@ function routeApi(options: {
       return Promise.resolve(json({ enabled: options.enabled ?? true }));
     }
     if (pathname === '/api/v1/proxies') return Promise.resolve(json({ proxies: [] }));
+    if (pathname === '/api/v1/accounts/acc-1/open-mobile/progress') {
+      return Promise.resolve(
+        json({ account_id: 'acc-1', phone_id: 'telebuba-acc-1', stage: options.stage ?? 'pod' }),
+      );
+    }
     if (pathname === '/api/v1/accounts/acc-1/open-mobile') {
       const answer = options.openMobile ?? (() => json({}));
       return (options.gate ?? Promise.resolve()).then(answer);
@@ -66,8 +73,11 @@ async function renderPage() {
   vi.mocked(toastError).mockClear();
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
+    // As the app's own cache: a mutation that shows its failure in place raises no toast.
     mutationCache: new MutationCache({
-      onError: (error) => toastError(mutationErrorText(error)),
+      onError: (error, _variables, _context, mutation) => {
+        if (!mutation.meta?.inlineError) toastError(mutationErrorText(error));
+      },
     }),
   });
   render(
@@ -119,9 +129,11 @@ test('openMobile starts the container and spins until it answers', async () => {
   expect(toastError).not.toHaveBeenCalled();
 });
 
-test('a container that did not reach the chat list says to finish there', async () => {
+test('the dialog shows the stage the start is in while it runs', async () => {
   routeApi({
-    openMobile: () => json({ account_id: 'acc-1', status: 'started', signed_in: false }),
+    openMobile: () => json({ account_id: 'acc-1', status: 'started', signed_in: true }),
+    gate: new Promise<void>(() => {}), // never answers: the start is still running
+    stage: 'boot',
   });
   await renderPage();
   await waitFor(() => {
@@ -130,14 +142,43 @@ test('a container that did not reach the chat list says to finish there', async 
 
   await userEvent.click(phone());
 
+  const dialog = await screen.findByRole('dialog');
   await waitFor(() => {
-    expect(toastError).toHaveBeenCalledWith(
-      'Контейнер открыт, но вход не завершён — закончите его в окне контейнера.',
-    );
+    expect(within(dialog).getByText('Загружается Android…')).toBeInTheDocument();
   });
+  expect(within(dialog).getByText('Android загружается…')).toBeInTheDocument();
 });
 
-test('a refusal is the translated code, once', async () => {
+test('a sign-in that stopped short says why and to finish it on the screen', async () => {
+  routeApi({
+    openMobile: () =>
+      json({
+        account_id: 'acc-1',
+        status: 'started',
+        signed_in: false,
+        sign_in_refusal: 'device_primary_unavailable',
+      }),
+  });
+  await renderPage();
+  await waitFor(() => {
+    expect(phone()).toBeEnabled();
+  });
+
+  await userEvent.click(phone());
+
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() => {
+    expect(
+      within(dialog).getByText(
+        'Телефон открыт, но вход не завершён. Закончите его вручную на экране телефона.',
+      ),
+    ).toBeInTheDocument();
+  });
+  expect(within(dialog).getByText(/Основная сессия недоступна/)).toBeInTheDocument();
+  expect(toastError).not.toHaveBeenCalled();
+});
+
+test('a refusal is the translated code in the dialog, not a toast', async () => {
   routeApi({
     openMobile: () =>
       json({ error: { code: 'bad_request', message: 'emulator_proxy_unsupported' } }, 400),
@@ -149,10 +190,12 @@ test('a refusal is the translated code, once', async () => {
 
   await userEvent.click(phone());
 
+  const dialog = await screen.findByRole('dialog');
   await waitFor(() => {
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('только через SOCKS5'));
+    expect(within(dialog).getByText('Телефон не запустился.')).toBeInTheDocument();
   });
-  expect(toastError).toHaveBeenCalledTimes(1);
+  expect(within(dialog).getByText(/только через SOCKS5/)).toBeInTheDocument();
+  expect(toastError).not.toHaveBeenCalled();
 });
 
 test('the button is disabled, with the reason, while the emulator is switched off', async () => {
@@ -175,4 +218,53 @@ test('an account without a mobile device cannot be opened on a phone', async () 
   expect(phone().parentElement).toHaveAttribute('title', 'У аккаунта нет мобильного устройства');
 
   expect(phone()).toBeDisabled();
+});
+
+test('a second open starts from its own first stage, not the last one seen', async () => {
+  let stage = 'code';
+  let answer: Promise<void> = Promise.resolve();
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/open-mobile/progress') {
+      return Promise.resolve(json({ account_id: 'acc-1', phone_id: 'telebuba-acc-1', stage }));
+    }
+    if (pathname === '/api/v1/accounts/acc-1/open-mobile') {
+      return answer.then(() => json({ account_id: 'acc-1', status: 'started', signed_in: false }));
+    }
+    if (pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(json({ total: 1, active: 1, idle: 0, needs_code: 0, problem: 0 }));
+    }
+    if (pathname === '/api/v1/accounts') {
+      return Promise.resolve(json({ items: [MOBILE], next_cursor: null }));
+    }
+    if (pathname === '/api/v1/accounts/emulator') return Promise.resolve(json({ enabled: true }));
+    if (pathname === '/api/v1/proxies') return Promise.resolve(json({ proxies: [] }));
+    return Promise.resolve(json(MOBILE));
+  });
+  await renderPage();
+  await waitFor(() => {
+    expect(phone()).toBeEnabled();
+  });
+  await userEvent.click(phone());
+  const first = await screen.findByRole('dialog');
+  await waitFor(() => {
+    expect(within(first).getByText(/Закончите его вручную/)).toBeInTheDocument();
+  });
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  stage = 'pod';
+  answer = new Promise<void>(() => {}); // the second open is still starting
+  await waitFor(() => {
+    expect(phone()).toBeEnabled();
+  });
+  await userEvent.click(phone());
+
+  const second = await screen.findByRole('dialog');
+  expect(
+    within(second).getByText('Поднимаю сеть телефона через прокси аккаунта…'),
+  ).toBeInTheDocument();
+  expect(within(second).getByText('Телефон запускается…')).toBeInTheDocument();
 });

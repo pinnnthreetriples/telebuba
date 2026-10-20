@@ -27,6 +27,7 @@ from core.telegram_client import (
     login_code_cutoff,
     wait_account_login_code,
 )
+from services.accounts._mobile_progress import report_stage
 from services.accounts.devices import DeviceRefusedError, claim_code_request
 
 if TYPE_CHECKING:
@@ -71,6 +72,7 @@ async def _submit_phone_and_code(
 ) -> tuple[Screen, list[UiNode]]:
     if not account.phone:
         raise DeviceRefusedError(_DEVICE_PHONE_UNKNOWN)
+    report_stage(account.account_id, "phone")
     claim_code_request(account.account_id)
     cutoff = await _code_cutoff(account.account_id)
     await enter_phone(serial, nodes, account.phone)
@@ -80,6 +82,7 @@ async def _submit_phone_and_code(
         screen, nodes = await wait_screen(serial, {"code", "password", "chats"})
     if screen != "code":
         raise EmulatorError(_EMULATOR_FIELD_MISSING)
+    report_stage(account.account_id, "code")
     try:
         code = await wait_account_login_code(
             account.account_id,
@@ -100,6 +103,7 @@ async def _submit_password(
     serial: str,
     nodes: list[UiNode],
 ) -> tuple[Screen, list[UiNode]]:
+    report_stage(account.account_id, "password")
     password = await fetch_account_twofa_password(account.account_id)
     if not password:
         raise EmulatorError(_EMULATOR_TWOFA_MISSING)

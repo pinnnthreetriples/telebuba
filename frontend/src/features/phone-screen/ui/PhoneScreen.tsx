@@ -162,3 +162,20 @@ export function PhoneScreen({ phoneId, mode }: { phoneId: string; mode: ScreenMo
     </div>
   );
 }
+
+// The same screen before there is a phone to stream: a pod still starting or Android
+// still booting. Nothing connects; the frame holds its place and says what it waits for.
+export function PhoneScreenWaiting({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div
+        style={SCREEN_FRAME}
+        role="status"
+        className="flex max-w-full flex-col items-center justify-center gap-2 rounded-lg bg-term p-6 text-center"
+      >
+        <Spinner tone="onAction" />
+        <span className="type-small text-on-fill">{label}</span>
+      </div>
+    </div>
+  );
+}

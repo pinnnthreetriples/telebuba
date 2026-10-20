@@ -21,6 +21,7 @@ from services.accounts import mobile_emulator as emulator_module
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
+from services.accounts._mobile_progress import _PROGRESS
 from tests.services.accounts._mobile_support import (
     _SCREEN_ACTIONS,
     _SERVICE_FAKES,
@@ -64,8 +65,10 @@ def _clear_mobile_state() -> None:
     """Reset the module-level mobile state between tests.
 
     The pod's per-account start locks are loop-bound, and a login-code pacing stamp left
-    by one test refuses the next test's code request for the same account as a cooldown.
+    by one test refuses the next test's code request for the same account as a cooldown;
+    an open's progress left by one test would be the next one's first stage.
     """
+    _PROGRESS.clear()
     emulator_module._LOCKS.clear()
     emulator_module._ACTIVE.clear()
     devices_module._LAST_CODE_REQUEST.clear()

@@ -26,7 +26,10 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
   operator's open and warming's alike (a visit heals an app that fell signed out);
   one showing the chat list, or anything else, is left alone;
 * on any failure the pod this call started is stopped again, and removed when this
-  call created it and it failed by its boot (a booted one keeps its seeded data);
+  call created it and it failed by its boot (a booted one keeps its seeded data); the
+  operator's sign-in that stops short is no failure: its pod stays up for the hand;
+* every refusal is logged (``account_mobile_open_failed``), and each stage the open
+  enters is reported for the operator's dialog (``open_mobile_progress``);
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
   stands and never starts one; it ends with what it did when its time is up, and a
   failed one carries what it did on the refusal (``partial``);
@@ -74,7 +77,6 @@ from core.emulator import (
 from core.logging import log_event
 from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
-from services.accounts._emulator_sign_in import sign_in
 from services.accounts._mobile_holds import (
     _ACTIVE,
     _LOCKS,
@@ -86,7 +88,14 @@ from services.accounts._mobile_holds import (
     phone_activity,
     release_manual,
 )
-from services.accounts._mobile_start import ENTRY_SCREENS, show, start_and_sign_in
+from services.accounts._mobile_progress import forget_progress, open_progress, report_stage
+from services.accounts._mobile_start import (
+    ENTRY_SCREENS,
+    show,
+    sign_in_or_hand_over,
+    start_and_sign_in,
+)
+from services.accounts._result import AccountActionError
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
@@ -94,7 +103,12 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
-    from schemas.emulator import EmulatorRefusalCode, PlaybookPlan, PlaybookResult
+    from schemas.emulator import (
+        EmulatorRefusalCode,
+        MobileOpenProgress,
+        PlaybookPlan,
+        PlaybookResult,
+    )
     from schemas.proxy import ProxySettings
 
 _DEVICE_MISSING: DeviceRefusalCode = "device_missing"
@@ -109,6 +123,7 @@ __all__ = [
     "claim_manual",
     "container_name",
     "open_account_mobile",
+    "open_mobile_progress",
     "phone_activity",
     "release_manual",
     "remove_account_container",
@@ -187,23 +202,39 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     # in over them or restart the pod (and a warming cycle would then stop it).
     if lock.locked() or held or account_id in _MANUAL:
         raise EmulatorBusyError
+    report_stage(account_id, "pod")
     try:
         async with lock:
             account = await require_account(account_id)
             fingerprint, proxy = await _refuse_what_cannot_work(account)
             result = await _open(account, fingerprint, proxy, background=background)
-    except EmulatorError as exc:
+    except (EmulatorError, AccountActionError) as exc:
+        report_stage(account_id, "failed", exc.code)
         await log_event(
             "WARNING",
             "account_mobile_open_failed",
             account_id=account_id,
             extra={"reason": exc.code},
         )
-        raise EmulatorRefusedError(exc.code) from exc
+        if isinstance(exc, EmulatorError):
+            raise EmulatorRefusedError(exc.code) from exc
+        raise
+    except BaseException:
+        report_stage(account_id, "failed")
+        raise
+    if result.signed_in:
+        report_stage(account_id, "done")
+    else:
+        report_stage(account_id, "manual", result.sign_in_refusal)
     if not background:
         _OPERATOR.add(account_id)
     await log_event("INFO", "account_mobile_opened", account_id=account_id)
     return result
+
+
+def open_mobile_progress(account_id: str) -> MobileOpenProgress:
+    """Where the account's latest open is (``_mobile_progress``)."""
+    return open_progress(account_id)
 
 
 async def _open(
@@ -227,18 +258,22 @@ async def _open(
             # Up already and on the current proxy: not booted or reconfigured again.
             # Only an entry screen is acted on, through its nodes.
             serial = adb_serial(instance.index)
+            report_stage(account.account_id, "app")
             await connect_device(serial)
             if not background:
                 await show(name, instance.index)
             await bring_app_to_front(serial)
             screen, _nodes = await read_screen(serial)
-            signed_in = screen == "chats"
+            signed_in, refusal = screen == "chats", None
             if screen in ENTRY_SCREENS:
-                signed_in = await sign_in(account, serial)
+                signed_in, refusal = await sign_in_or_hand_over(
+                    account, serial, background=background
+                )
             return OpenMobileResult(
                 account_id=account.account_id,
                 status="already_running",
                 signed_in=signed_in,
+                sign_in_refusal=refusal,
             )
         await stop_pod(name)
     return await start_and_sign_in(
@@ -347,6 +382,7 @@ async def remove_account_container(account_id: str) -> None:
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     _OPERATOR.discard(account_id)
+    forget_progress(account_id)
     try:
         async with lock:
             removed = await remove_pod(container_name(account_id))
