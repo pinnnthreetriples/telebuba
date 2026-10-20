@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from core.android_apk import AppIdentity
 from core.emulator import EmulatorError
 from core.emulator.redroid import Instance
 from core.repositories.proxies import create_and_assign_proxy, update_proxy_check
@@ -53,6 +54,8 @@ class _Container:
         self.remove_gate: asyncio.Event | None = None
         self.removing = asyncio.Event()
         self.specs: list[ContainerSpec] = []
+        self.boot_gate: asyncio.Event | None = None
+        self.apk_fails = False
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -93,7 +96,16 @@ class _Container:
         self.on_serial(serial, "home")
 
     async def wait_for_boot(self, serial: str) -> None:
+        if self.boot_gate is not None:
+            await self.boot_gate.wait()
         self.on_serial(serial, "boot")
+
+    async def ensure_telegram_apk(self) -> AppIdentity:
+        self.step("apk")
+        if self.apk_fails:
+            code = "emulator_download_failed"
+            raise EmulatorError(code)
+        return AppIdentity(package="org.telegram.messenger.web", version="1 (1)")
 
     async def connect_device(self, serial: str) -> None:
         self.on_serial(serial, "connect")
@@ -164,6 +176,7 @@ _SERVICE_FAKES = (
     "show_instance",
     "assert_sdk",
     "ensure_app",
+    "ensure_telegram_apk",
     "seed_device_if_needed",
     "bring_app_to_front",
     "leave_app",

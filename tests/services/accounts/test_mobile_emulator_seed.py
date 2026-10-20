@@ -7,6 +7,7 @@ import asyncio
 import pytest
 
 from core.emulator import EmulatorError
+from services.accounts import _mobile_start
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import EmulatorRefusedError, open_account_mobile
 from tests.services.accounts._mobile_support import _account, _Container
@@ -31,6 +32,7 @@ async def test_a_failed_seeding_is_logged_and_the_sign_in_goes_on(
     ) -> None:
         events.append((event, extra or {}))
 
+    monkeypatch.setattr(_mobile_start, "log_event", fake_log)
     monkeypatch.setattr(emulator_module, "log_event", fake_log)
 
     result = await open_account_mobile("acc")
@@ -62,8 +64,8 @@ async def test_a_seeding_that_breaks_outside_adb_is_logged_and_the_sign_in_goes_
     ) -> None:
         events.append((event, extra or {}))
 
-    monkeypatch.setattr(emulator_module, "seed_device_if_needed", broken)
-    monkeypatch.setattr(emulator_module, "log_event", fake_log)
+    monkeypatch.setattr(_mobile_start, "seed_device_if_needed", broken)
+    monkeypatch.setattr(_mobile_start, "log_event", fake_log)
 
     result = await open_account_mobile("acc")
 
@@ -90,8 +92,8 @@ async def test_the_seeding_runs_while_the_app_starts_and_the_open_waits_for_it(
         container.step("seeded")
         return True
 
-    monkeypatch.setattr(emulator_module, "ensure_app", ensure_app)
-    monkeypatch.setattr(emulator_module, "seed_device_if_needed", seed)
+    monkeypatch.setattr(_mobile_start, "ensure_app", ensure_app)
+    monkeypatch.setattr(_mobile_start, "seed_device_if_needed", seed)
 
     result = await open_account_mobile("acc")
 
@@ -119,12 +121,12 @@ async def test_a_failed_app_start_cancels_the_seeding_before_the_pod_is_undone(
         code = "emulator_install_failed"
         raise EmulatorError(code)
 
-    monkeypatch.setattr(emulator_module, "seed_device_if_needed", seed)
-    monkeypatch.setattr(emulator_module, "ensure_app", ensure_app)
+    monkeypatch.setattr(_mobile_start, "seed_device_if_needed", seed)
+    monkeypatch.setattr(_mobile_start, "ensure_app", ensure_app)
 
     with pytest.raises(EmulatorRefusedError):
         await open_account_mobile("acc")
 
     cancelled = container.steps.index("seed_cancelled")
-    removed = next(i for i, step in enumerate(container.steps) if step.startswith("remove:"))
-    assert cancelled < removed
+    stopped = container.steps.index("stop:telebuba-acc")  # booted: kept, not removed
+    assert cancelled < stopped

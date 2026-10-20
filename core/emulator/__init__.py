@@ -27,6 +27,7 @@ from core.emulator.adb import (
     human_type,
     wait_for_boot,
 )
+from core.emulator.assets import ensure_telegram_apk
 from core.emulator.playbook import TelegramMobilePlaybook
 from core.emulator.pod import (
     pause_pod,
@@ -77,6 +78,7 @@ __all__ = [
     "connect_device",
     "container_spec",
     "ensure_app",
+    "ensure_telegram_apk",
     "enter_code",
     "enter_password",
     "enter_phone",

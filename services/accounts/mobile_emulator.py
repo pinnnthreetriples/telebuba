@@ -19,14 +19,14 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * a running pod is used as it stands only while its gateway runs the current proxy;
   one on another proxy (or whose gateway died) is stopped and started again, and a
   proxy change stops the account's pod at once (``stop_account_pod``);
-* a container's first boot gives it contacts and photos (``core.emulator._seeder``)
-  before the app starts; a seeding that fails is logged, never fails the open;
+* a pod that is not running is started by ``_mobile_start``: a new container's APK
+  fetched alongside its boot, its first boot seeded, and a failure's clean-up;
 * the sign-in state is read off the screen every time, never remembered;
 * an app that shows its intro or phone screen is signed in where it stands, by the
   operator's open and warming's alike (a visit heals an app that fell signed out);
   one showing the chat list, or anything else, is left alone;
 * on any failure the pod this call started is stopped again, and removed when this
-  call created it;
+  call created it and it failed by its boot (a booted one keeps its seeded data);
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
   stands and never starts one; it ends with what it did when its time is up, and a
   failed one carries what it did on the refusal (``partial``);
@@ -46,7 +46,6 @@ same lock would otherwise share the account with the next start's fresh lock.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -59,25 +58,18 @@ from core.emulator import (
     EmulatorError,
     TelegramMobilePlaybook,
     adb_serial,
-    assert_sdk,
     bring_app_to_front,
     connect_device,
     container_spec,
-    ensure_app,
     escape_input_text,
     find_instance,
     leave_app,
     pod_runs_proxy,
     read_screen,
     remove_pod,
-    seed_device_if_needed,
-    show_instance,
-    start_pod,
     stop_pod,
     unpause_pod,
     viewer_open,
-    wait_for_boot,
-    wait_screen,
 )
 from core.logging import log_event
 from core.phone_geo import country_for_phone
@@ -94,12 +86,11 @@ from services.accounts._mobile_holds import (
     phone_activity,
     release_manual,
 )
+from services.accounts._mobile_start import ENTRY_SCREENS, show, start_and_sign_in
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
 
 if TYPE_CHECKING:
-    from core.emulator import ContainerSpec
-    from core.emulator.ui_dump import Screen
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.devices import DeviceRefusalCode
@@ -126,16 +117,9 @@ __all__ = [
     "stop_account_pod",
 ]
 
-# Stdlib sink, codes and step names only (see ``core.emulator._errors``).
-logger = logging.getLogger(__name__)
-
 # Accounts whose pod the operator opened; theirs while its window stays open.
 _OPERATOR: set[str] = set()
 
-# A running app on one of these still needs signing in; anything else is left as is.
-_ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
-# A background open waits for the app to show one of these, then reads it as it is.
-_KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
 # A session gets this long past its own length to finish its last read before it is cut.
 _SESSION_GRACE_SECONDS = 60
 
@@ -222,14 +206,6 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     return result
 
 
-async def _show(name: str, index: int) -> None:
-    """Open the pod's window; one that cannot open is logged and the open goes on."""
-    try:
-        await show_instance(name, index)
-    except EmulatorError as exc:
-        logger.warning("pod window %s did not open (%s)", index, exc.code)
-
-
 async def _open(
     account: AccountRead,
     fingerprint: DeviceFingerprint,
@@ -253,11 +229,11 @@ async def _open(
             serial = adb_serial(instance.index)
             await connect_device(serial)
             if not background:
-                await _show(name, instance.index)
+                await show(name, instance.index)
             await bring_app_to_front(serial)
             screen, _nodes = await read_screen(serial)
             signed_in = screen == "chats"
-            if screen in _ENTRY_SCREENS:
+            if screen in ENTRY_SCREENS:
                 signed_in = await sign_in(account, serial)
             return OpenMobileResult(
                 account_id=account.account_id,
@@ -265,30 +241,9 @@ async def _open(
                 signed_in=signed_in,
             )
         await stop_pod(name)
-    created = instance is None
-    instance = await start_pod(name, spec, proxy)  # undoes itself when it fails
-    try:
-        serial = adb_serial(instance.index)
-        await wait_for_boot(serial)
-        if not background:
-            await _show(name, instance.index)
-        await assert_sdk(serial, spec.sdk)
-        seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
-        try:
-            await ensure_app(serial)
-            # In the background only an entry screen is signed in; in front, always.
-            screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
-            signed_in = screen == "chats"
-            if screen is None or screen in _ENTRY_SCREENS:
-                signed_in = await sign_in(account, serial)
-            await seeding
-        finally:
-            seeding.cancel()
-            await asyncio.gather(seeding, return_exceptions=True)
-    except BaseException:
-        await asyncio.shield(_undo(name, created=created))
-        raise
-    return OpenMobileResult(account_id=account.account_id, status="started", signed_in=signed_in)
+    return await start_and_sign_in(
+        account, spec, proxy, new=instance is None, background=background
+    )
 
 
 async def run_mobile_activity(
@@ -358,35 +313,6 @@ async def _run_session(
         if not timeout.expired():
             raise
     return playbook.result
-
-
-async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
-    """Give a never-seeded container its contacts and photos; never fails the open.
-
-    Runs alongside the app's install and sign-in (they read no contacts). Anything but
-    a cancellation is logged and the sign-in goes on; with no marker, the next boot retries.
-    """
-    try:
-        await seed_device_if_needed(serial, spec)
-    except Exception as exc:  # noqa: BLE001 - seeding must never fail the open
-        reason = exc.code if isinstance(exc, EmulatorError) else type(exc).__name__
-        await log_event(
-            "WARNING",
-            "account_mobile_seed_failed",
-            account_id=account_id,
-            extra={"reason": reason},
-        )
-
-
-async def _undo(name: str, *, created: bool) -> None:
-    """Stop the pod this start booted; remove it when this start created it."""
-    try:
-        if created:
-            await remove_pod(name)
-        else:
-            await stop_pod(name)
-    except EmulatorError as exc:
-        logger.warning("pod cleanup for %s failed (%s)", name, exc.code)
 
 
 async def stop_account_pod(account_id: str) -> None:
