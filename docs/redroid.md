@@ -217,6 +217,13 @@ the APK (`core/android_apk.py`): new mobile fingerprints claim that version unle
 has (`EMULATOR__TELEGRAM_PACKAGE` first, else the APK's), so a phone set up from an older
 `org.telegram.messenger` APK keeps its app and its sign-in.
 
+Each screen read is one `uiautomator dump` (`core/emulator/adb.py`). On Docker Desktop/WSL2 it
+costs about 2 s: about 0.1 s VM start, then uiautomator's fixed 1 s wait for an idle screen, a few
+milliseconds of fetching, and about 0.8 s of VM shutdown after the file is written. The dump script
+kills uiautomator at its "dumped to" print, so a read takes about 1.25 s. The idle wait is
+hardcoded in uiautomator, and only a long-lived dump server of our own on the phone could
+shorten it.
+
 ## Web screen and the device farm
 
 The **Эмуляторы** page (`/devices`, `api/v1/devices.py`) lists every mobile account's phone with its
