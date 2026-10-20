@@ -130,27 +130,11 @@ async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
     console.answer = lambda _argv: "ERROR: could not get idle state."
 
     assert await adb.dump_ui("emulator-5554") == ""
-    assert (
-        console.shell_calls()
-        == [
-            [
-                "rm",
-                "-f",
-                "/sdcard/telebuba_ui.xml",
-                ";",
-                "uiautomator",
-                "dump",
-                "/sdcard/telebuba_ui.xml",
-                ";",
-                "cat",
-                "/sdcard/telebuba_ui.xml",
-                "2>/dev/null",
-                ";",
-                "true",
-            ]
-        ]
-        * 3
-    ), "one script a try, three tries, and an old file is never read back"
+    tries = console.shell_calls()
+    assert len(tries) == 3, "one script a try, three tries"
+    assert all(script[:3] == ["rm", "-f", "/sdcard/telebuba_ui.xml"] for script in tries), (
+        "an old file is never read back"
+    )
 
 
 @pytest.mark.asyncio

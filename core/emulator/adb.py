@@ -33,16 +33,33 @@ KEYCODE_ENTER = 66
 KEYCODE_DEL = 67
 KEYCODE_MOVE_END = 123
 _DUMP_PATH = "/sdcard/telebuba_ui.xml"
+_DUMP_LOG = "/sdcard/telebuba_ui.log"
 _DUMP_ATTEMPTS = 3
-_DUMP_SCRIPT = (
-    *("rm", "-f", _DUMP_PATH, ";"),
-    *("uiautomator", "dump", _DUMP_PATH, ";"),
-    *("cat", _DUMP_PATH, "2>/dev/null", ";", "true"),
-)
 # A slow drag's Bezier curve goes out as this many points: each ``input motionevent``
 # starts its own process on the device, and the curve keeps its shape at a dozen.
 _SWIPE_POINTS = (8, 12)
 _BOOTED = "1"
+
+
+def _dump_script(xml: str, log: str) -> tuple[str, ...]:
+    """The device-side script of one dump into ``xml``, its own output kept in ``log``.
+
+    uiautomator writes the file, prints "dumped to" and then spends most of a second
+    shutting its VM down; the script kills it at that print (or stops when it has
+    exited without one) and serves its output followed by the file.
+    """
+    return (
+        *("rm", "-f", xml, log, ";"),
+        *("uiautomator", "dump", xml, f">{log}", "2>&1", "&", "p=$!", ";"),
+        *("while", "kill", "-0", "$p", "2>/dev/null", "&&", "!", "grep", "-q", "dumped", log),
+        *(";", "do", "sleep", "0.05", ";", "done", ";"),
+        *("kill", "$p", "2>/dev/null", ";"),
+        *("cat", log, xml, "2>/dev/null", ";"),
+        *("rm", "-f", log, ";", "true"),
+    )
+
+
+_DUMP_SCRIPT = _dump_script(_DUMP_PATH, _DUMP_LOG)
 
 
 async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
@@ -151,10 +168,11 @@ async def open_uri(serial: str, uri: str, package: str) -> None:
 async def dump_ui(serial: str) -> str:
     """This moment's UI dump, or ``""`` when uiautomator could not take one in a few tries.
 
-    One ``adb shell`` script deletes the file, dumps and prints it: the file is deleted
-    first because a failed dump ("could not get idle state", common on animated
-    screens) still exits 0, and ``cat`` would then serve an older screen; the script
-    always exits 0, and only the XML after uiautomator's "dumped to" line counts.
+    One ``adb shell`` script (``_dump_script``) deletes the file, dumps and prints it:
+    the file is deleted first because a failed dump ("could not get idle state",
+    common on animated screens) still exits 0, and ``cat`` would then serve an older
+    screen; the script always exits 0, and only the XML after uiautomator's "dumped
+    to" line counts.
     A failed dump is taken again after a poll interval: one is no screen at all, and
     read as one it would send a BACK press or a tap on a guess.
     """
