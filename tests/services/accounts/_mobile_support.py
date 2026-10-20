@@ -55,6 +55,7 @@ class _Container:
         self.removing = asyncio.Event()
         self.specs: list[ContainerSpec] = []
         self.boot_gate: asyncio.Event | None = None
+        self.booting = asyncio.Event()
         self.apk_fails = False
 
     def step(self, name: str) -> None:
@@ -96,6 +97,7 @@ class _Container:
         self.on_serial(serial, "home")
 
     async def wait_for_boot(self, serial: str) -> None:
+        self.booting.set()
         if self.boot_gate is not None:
             await self.boot_gate.wait()
         self.on_serial(serial, "boot")

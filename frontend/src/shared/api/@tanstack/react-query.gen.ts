@@ -10,6 +10,7 @@ import {
 import { client } from '../client.gen';
 import {
   accountFilterOptions,
+  accountMobileProgress,
   accountStats,
   actOnChatBroadcastTarget,
   actOnMasstaggingTarget,
@@ -247,6 +248,9 @@ import type {
   AccountFilterOptionsData,
   AccountFilterOptionsError,
   AccountFilterOptionsResponse,
+  AccountMobileProgressData,
+  AccountMobileProgressError,
+  AccountMobileProgressResponse,
   AccountStatsData,
   AccountStatsError,
   AccountStatsResponse,
@@ -3666,7 +3670,9 @@ export const emulatorStatusOptions = (options?: Options<EmulatorStatusData>) =>
  * Start the account's container and sign its Telegram app in.
  *
  * A refusal answers 400 with a stable code; a start already running for the same
- * account answers 409 ``emulator_busy``.
+ * account answers 409 ``emulator_busy``. A sign-in that stops short on a pod that
+ * is up answers 200 with ``signed_in`` false and ``sign_in_refusal``: the pod stays
+ * up for the operator to finish the sign-in on its screen.
  */
 export const openAccountMobileMutation = (
   options?: Partial<Options<OpenAccountMobileData>>,
@@ -3691,6 +3697,33 @@ export const openAccountMobileMutation = (
   };
   return mutationOptions;
 };
+
+export const accountMobileProgressQueryKey = (options: Options<AccountMobileProgressData>) =>
+  createQueryKey('accountMobileProgress', options);
+
+/**
+ * Account Mobile Progress
+ *
+ * Where the account's latest open of its phone is; the SPA polls it while it runs.
+ */
+export const accountMobileProgressOptions = (options: Options<AccountMobileProgressData>) =>
+  queryOptions<
+    AccountMobileProgressResponse,
+    AccountMobileProgressError,
+    AccountMobileProgressResponse,
+    ReturnType<typeof accountMobileProgressQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await accountMobileProgress({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: accountMobileProgressQueryKey(options),
+  });
 
 export const listProxiesQueryKey = (options?: Options<ListProxiesData>) =>
   createQueryKey('listProxies', options);

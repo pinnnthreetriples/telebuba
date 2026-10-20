@@ -124,16 +124,18 @@ async def test_a_signed_out_app_is_signed_in_with_a_paced_code_cut_off_before_th
 
 
 @pytest.mark.asyncio
-async def test_a_code_inside_the_cooldown_is_refused(container: _Container) -> None:
+async def test_a_code_inside_the_cooldown_is_refused_and_the_phone_left_up(
+    container: _Container,
+) -> None:
     await _account()
     devices_module.claim_code_request("acc")
     container.screens = ["phone"]
 
-    with pytest.raises(DeviceRefusedError) as refused:
-        await open_account_mobile("acc")
+    result = await open_account_mobile("acc")
 
-    assert refused.value.code == "device_code_cooldown"
+    assert (result.signed_in, result.sign_in_refusal) == (False, "device_code_cooldown")
     assert not any(step.startswith("phone:") for step in container.steps)
+    assert not any(step.startswith(("stop:", "remove:")) for step in container.steps)
 
 
 @pytest.mark.parametrize(("screen", "signed_in"), [("chats", True), ("unknown", False)])
@@ -319,15 +321,29 @@ async def test_a_failed_start_of_an_existing_pod_stops_it_again(
 ) -> None:
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=False)
-    container.code = None
-    container.screens = ["phone", "code"]
+    container.fail_at = "app"
 
     with pytest.raises(EmulatorRefusedError) as refused:
         await open_account_mobile("acc")
 
-    assert refused.value.code == "emulator_code_timeout"
+    assert refused.value.code == "emulator_boot_timeout"
     assert container.steps[-1] == "stop:telebuba-acc"
     assert not any(step.startswith("remove:") for step in container.steps)
+
+
+@pytest.mark.asyncio
+async def test_a_login_code_that_never_comes_leaves_the_phone_up_for_the_hand(
+    container: _Container,
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=False)
+    container.code = None
+    container.screens = ["phone", "code"]
+
+    result = await open_account_mobile("acc")
+
+    assert (result.signed_in, result.sign_in_refusal) == (False, "emulator_code_timeout")
+    assert not any(step.startswith(("stop:", "remove:")) for step in container.steps)
 
 
 @pytest.mark.asyncio
@@ -340,18 +356,17 @@ async def test_deleting_the_account_removes_its_pod(container: _Container) -> No
 
 
 @pytest.mark.asyncio
-async def test_an_unusable_existing_session_while_waiting_is_a_refusal_not_a_500(
+async def test_an_unusable_existing_session_is_handed_to_the_operator_not_a_500(
     container: _Container,
 ) -> None:
     await _account()
     container.code = "pool-down"
     container.screens = ["phone", "code"]
 
-    with pytest.raises(DeviceRefusedError) as refused:
-        await open_account_mobile("acc")
+    result = await open_account_mobile("acc")
 
-    assert refused.value.code == "device_primary_unavailable"
-    assert container.steps[-1] == "stop:telebuba-acc", "booted and seeded: kept for the next try"
+    assert (result.signed_in, result.sign_in_refusal) == (False, "device_primary_unavailable")
+    assert not any(step.startswith(("stop:", "remove:")) for step in container.steps)
 
 
 @pytest.mark.parametrize("password", ["50%off", "пароль"])

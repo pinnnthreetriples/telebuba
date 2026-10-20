@@ -13,6 +13,9 @@ import type {
   AccountFilterOptionsData,
   AccountFilterOptionsErrors,
   AccountFilterOptionsResponses,
+  AccountMobileProgressData,
+  AccountMobileProgressErrors,
+  AccountMobileProgressResponses,
   AccountStatsData,
   AccountStatsErrors,
   AccountStatsResponses,
@@ -2197,7 +2200,9 @@ export const emulatorStatus = <ThrowOnError extends boolean = false>(
  * Start the account's container and sign its Telegram app in.
  *
  * A refusal answers 400 with a stable code; a start already running for the same
- * account answers 409 ``emulator_busy``.
+ * account answers 409 ``emulator_busy``. A sign-in that stops short on a pod that
+ * is up answers 200 with ``signed_in`` false and ``sign_in_refusal``: the pod stays
+ * up for the operator to finish the sign-in on its screen.
  */
 export const openAccountMobile = <ThrowOnError extends boolean = false>(
   options: Options<OpenAccountMobileData, ThrowOnError>,
@@ -2207,6 +2212,20 @@ export const openAccountMobile = <ThrowOnError extends boolean = false>(
     OpenAccountMobileErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/open-mobile', ...options });
+
+/**
+ * Account Mobile Progress
+ *
+ * Where the account's latest open of its phone is; the SPA polls it while it runs.
+ */
+export const accountMobileProgress = <ThrowOnError extends boolean = false>(
+  options: Options<AccountMobileProgressData, ThrowOnError>,
+): RequestResult<AccountMobileProgressResponses, AccountMobileProgressErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    AccountMobileProgressResponses,
+    AccountMobileProgressErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/open-mobile/progress', ...options });
 
 /**
  * List Proxies

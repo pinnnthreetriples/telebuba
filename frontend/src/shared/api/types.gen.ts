@@ -4459,6 +4459,31 @@ export type MinutesRange = {
 };
 
 /**
+ * MobileOpenProgress
+ *
+ * The account's latest pod open as this process saw it; ``stage`` ``None``: none yet.
+ */
+export type MobileOpenProgress = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Phone Id
+   */
+  phone_id: string;
+  /**
+   * Stage
+   */
+  stage?:
+    'pod' | 'boot' | 'app' | 'phone' | 'code' | 'password' | 'done' | 'manual' | 'failed' | null;
+  /**
+   * Reason
+   */
+  reason?: string | null;
+};
+
+/**
  * MusicRemoveRequest
  */
 export type MusicRemoveRequest = {
@@ -5509,6 +5534,9 @@ export type NotificationTestResult = {
  * OpenMobileResult
  *
  * What opening the container did; ``signed_in`` is read off the screen, never cached.
+ *
+ * ``sign_in_refusal`` is why the operator's sign-in stopped short on a pod that is up:
+ * the pod is left running so the sign-in can be finished by hand on its screen.
  */
 export type OpenMobileResult = {
   /**
@@ -5523,6 +5551,10 @@ export type OpenMobileResult = {
    * Signed In
    */
   signed_in: boolean;
+  /**
+   * Sign In Refusal
+   */
+  sign_in_refusal?: string | null;
 };
 
 /**
@@ -13627,6 +13659,46 @@ export type OpenAccountMobileResponses = {
 
 export type OpenAccountMobileResponse =
   OpenAccountMobileResponses[keyof OpenAccountMobileResponses];
+
+export type AccountMobileProgressData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-mobile/progress';
+};
+
+export type AccountMobileProgressErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AccountMobileProgressError =
+  AccountMobileProgressErrors[keyof AccountMobileProgressErrors];
+
+export type AccountMobileProgressResponses = {
+  /**
+   * Successful Response
+   */
+  200: MobileOpenProgress;
+};
+
+export type AccountMobileProgressResponse =
+  AccountMobileProgressResponses[keyof AccountMobileProgressResponses];
 
 export type ListProxiesData = {
   body?: never;

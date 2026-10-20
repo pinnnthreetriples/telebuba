@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from schemas.emulator import OpenMobileResult
+from schemas.emulator import MobileOpenProgress, OpenMobileResult
 from services.accounts import EmulatorBusyError, EmulatorRefusedError
 from tests.api.accounts_helpers import client as _client
 
@@ -69,6 +69,34 @@ async def test_two_concurrent_starts_for_one_account_answer_409_to_the_second(
         done = await first
 
     assert done.status_code == 200
-    assert done.json() == {"account_id": "acc-1", "status": "started", "signed_in": True}
+    assert done.json() == {
+        "account_id": "acc-1",
+        "status": "started",
+        "signed_in": True,
+        "sign_in_refusal": None,
+    }
     assert second.status_code == 409
     assert second.json()["error"]["message"] == "emulator_busy"
+
+
+@pytest.mark.asyncio
+async def test_the_progress_of_an_open_is_served_for_the_dialog(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _progress(account_id: str) -> MobileOpenProgress:
+        return MobileOpenProgress(
+            account_id=account_id, phone_id=f"telebuba-{account_id}", stage="code"
+        )
+
+    monkeypatch.setattr("services.accounts.open_mobile_progress", _progress)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/open-mobile/progress")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "account_id": "acc-1",
+        "phone_id": "telebuba-acc-1",
+        "stage": "code",
+        "reason": None,
+    }

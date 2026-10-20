@@ -2,6 +2,7 @@
 
 export {
   accountFilterOptions,
+  accountMobileProgress,
   accountStats,
   actOnChatBroadcastTarget,
   actOnMasstaggingTarget,
@@ -253,6 +254,11 @@ export type {
   AccountLimitGauge,
   AccountLimitsUpdate,
   AccountLimitsView,
+  AccountMobileProgressData,
+  AccountMobileProgressError,
+  AccountMobileProgressErrors,
+  AccountMobileProgressResponse,
+  AccountMobileProgressResponses,
   AccountPage,
   AccountPrivacyOutcome,
   AccountPrivacyUpdateRequest,
@@ -1118,6 +1124,7 @@ export type {
   MasstaggingTargetList,
   MasstaggingVersionRequest,
   MinutesRange,
+  MobileOpenProgress,
   MusicRemoveRequest,
   NeurocommentAccountCard,
   NeurocommentBoard,

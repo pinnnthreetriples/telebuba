@@ -14,7 +14,7 @@ from api.errors import SERVICE_ERRORS, error_responses
 from api.v1._errors import service_errors_to_http
 from core.config import settings
 from schemas.accounts import _ACCOUNT_ID_PATTERN
-from schemas.emulator import EmulatorStatus, OpenMobileResult
+from schemas.emulator import EmulatorStatus, MobileOpenProgress, OpenMobileResult
 from services import accounts
 
 emulator_router = APIRouter()
@@ -42,7 +42,9 @@ async def open_account_mobile(
     """Start the account's container and sign its Telegram app in.
 
     A refusal answers 400 with a stable code; a start already running for the same
-    account answers 409 ``emulator_busy``.
+    account answers 409 ``emulator_busy``. A sign-in that stops short on a pod that
+    is up answers 200 with ``signed_in`` false and ``sign_in_refusal``: the pod stays
+    up for the operator to finish the sign-in on its screen.
     """
     with service_errors_to_http():
         try:
@@ -53,3 +55,15 @@ async def open_account_mobile(
                 status_code=http_status.HTTP_409_CONFLICT,
                 detail=exc.code,
             ) from exc
+
+
+@emulator_router.get(
+    "/accounts/{account_id}/open-mobile/progress",
+    response_model=MobileOpenProgress,
+    operation_id="accountMobileProgress",
+)
+async def account_mobile_progress(
+    account_id: Annotated[str, Path(min_length=1, pattern=_ACCOUNT_ID_PATTERN)],
+) -> MobileOpenProgress:
+    """Where the account's latest open of its phone is; the SPA polls it while it runs."""
+    return accounts.open_mobile_progress(account_id)
