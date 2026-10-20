@@ -155,7 +155,11 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
 
     typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
     # The prefilled country box is tapped to be emptied, then each box to be typed into.
-    swipes = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "swipe"]][1:]
+    swipes = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 3  # clear the country box, then type both
+    assert 0 <= int(swipes[0][0]) <= 80
+    assert 100 <= int(swipes[0][1]) <= 150
+    swipes = swipes[1:]
     assert "".join(typed) == "5215550001111"
     assert len(swipes) == 2
     # First box bounds: [0, 100][80, 150]
