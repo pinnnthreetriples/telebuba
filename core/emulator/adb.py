@@ -155,7 +155,16 @@ async def push(serial: str, *local: str, remote: str) -> None:
 
 
 async def start_app(serial: str, package: str) -> None:
-    await shell(serial, "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
+    """Launch ``package``'s launcher activity.
+
+    No system keys: redroid has no physical ones, and monkey's default share of them
+    makes it abort (exit 251) before it launches anything.
+    """
+    await shell(
+        serial,
+        *("monkey", "--pct-syskeys", "0", "-p", package),
+        *("-c", "android.intent.category.LAUNCHER", "1"),
+    )
 
 
 async def open_uri(serial: str, uri: str, package: str) -> None:
