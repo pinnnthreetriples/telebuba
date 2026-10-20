@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import random
 from datetime import UTC, datetime, timedelta
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 _SERIAL = "127.0.0.1:5600"
 _SCRIPT = _seeder._SCRIPT
+_GALLERY = _seeder._GALLERY_SCRIPT
 _NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 
 
@@ -109,12 +111,16 @@ def test_the_contacts_script_replaces_only_this_seedings_rows() -> None:
     raw = [line for line in lines if "/raw_contacts --bind" in line]
     assert len(raw) == 2
     assert all("'sync1:s:telebuba'" in line for line in raw)
+    # Each raw contact carries its own place and is found again by it, not as the newest.
+    assert ["'sync2:s:1'" in raw[0], "'sync2:s:2'" in raw[1]] == [True, True]
+    ids = [line for line in lines if line.startswith("id=$(c query")]
+    assert ["sync2='\\''1'\\''" in ids[0], "sync2='\\''2'\\''" in ids[1]] == [True, True]
     data = [line for line in lines if "/data --bind raw_contact_id:i:$id" in line]
     assert len(data) == 2 + 2 + 1 + 1  # name and phone each, then Jürgen's e-mail and company
     # A quote in a name closes, escapes and reopens; nothing else is interpreted by sh.
-    assert "--bind 'data1:s:Jürgen O'\\''Neil'" in lines[5]
-    assert "'mimetype:s:vnd.android.cursor.item/phone_v2'" in lines[6]
-    assert "'data2:i:2'" in lines[6]
+    assert "--bind 'data1:s:Jürgen O'\\''Neil'" in data[0]
+    assert "'mimetype:s:vnd.android.cursor.item/phone_v2'" in data[1]
+    assert "'data2:i:2'" in data[1]
     # ``content`` exits 0 on a refusal: every call is the failing wrapper, and stops.
     calls = [line for line in lines if line.startswith(("c ", "id=$(c ", "rows=$(c "))]
     assert len(calls) == 1 + 2 * 2 + len(data) + 1
@@ -122,6 +128,28 @@ def test_the_contacts_script_replaces_only_this_seedings_rows() -> None:
     assert "-eq 2 ]" in lines[-1], "the script ends by counting every contact in"
     assert any("email_v2" in line and "j.oneil@gmx.de" in line for line in lines)
     assert any("organization" in line and "Bäckerei" in line for line in lines)
+
+
+def test_the_contacts_script_writes_eight_lanes_at_once_then_waits_for_each() -> None:
+    contacts = make_contacts("DE", _random(3), 30)
+
+    lines = contacts_script(contacts)
+
+    assert lines.count("(") == 8
+    assert lines.count(') & pids="$pids $!"') == 8
+    # A bare ``wait`` returns 0 whatever a lane did: each lane's own status is waited on.
+    assert 'for p in $pids; do wait "$p" || failed=1; done' in lines
+    wait = lines.index('for p in $pids; do wait "$p" || failed=1; done')
+    assert lines[wait + 1].startswith('[ "$failed" -eq 0 ] ||')
+    assert "-eq 30 ]" in lines[-1], "counted only once every lane is done"
+    raw = [line for line in lines if "/raw_contacts --bind" in line]
+    assert len({line.rsplit("'sync2:s:", 1)[1] for line in raw}) == 30
+
+
+def test_a_short_address_book_writes_one_lane_per_contact() -> None:
+    contacts = make_contacts("DE", _random(3), 3)
+
+    assert contacts_script(contacts).count("(") == 3
 
 
 @pytest.mark.parametrize(
@@ -246,14 +274,68 @@ async def test_a_fresh_container_is_seeded_then_marked(
     shells = console.shell_calls()
     assert shells[0] == ["ls", "-a", "/data/local/tmp"]
     assert shells[-1] == ["touch", MARKER], "marked only once both are in"
-    # Contacts, then the gallery's prep (an earlier try's photos out), then its dates.
-    assert shells.count(["sh", _SCRIPT]) == 3
+    assert shells.count(["sh", _SCRIPT]) == 1, "the contacts"
+    # The gallery's prep (an earlier try's photos out), then its dates, in its own file.
+    assert shells.count(["sh", _GALLERY]) == 2
+    assert ["rm", "-f", _SCRIPT] in shells
+    assert ["rm", "-f", _GALLERY] in shells
     pushes = [call for call in console.calls if "push" in call]
-    assert [push[-1] for push in pushes] == [_SCRIPT, _SCRIPT, f"{CAMERA_DIR}/", _SCRIPT]
-    photos = pushes[2]
+    gallery = [push[-1] for push in pushes if push[-1] != _SCRIPT]
+    assert gallery == [_GALLERY, f"{CAMERA_DIR}/", _GALLERY]
+    photos = next(push for push in pushes if push[-1] == f"{CAMERA_DIR}/")
     assert 12 <= len(photos) - 5 <= 20  # adb -s <serial> push <files...> <dir>
     jpeg_start = bytes.fromhex("ffd8")
     assert heads.count(jpeg_start) == len(photos) - 5, "the photos pushed are JPEGs"
+
+
+@pytest.mark.asyncio
+async def test_the_photos_are_made_and_pushed_while_the_contacts_are_written(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    console.answer = _device(seeded=False)
+    pushed = asyncio.Event()
+    real_push, real_shell = _seeder.adb.push, _seeder.adb.shell
+
+    async def push(serial: str, *local: str, remote: str) -> None:
+        await real_push(serial, *local, remote=remote)
+        if remote == f"{CAMERA_DIR}/":
+            pushed.set()
+
+    async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
+        if list(args) == ["sh", _SCRIPT]:
+            # One after the other, the photos would wait for this script: it never ends.
+            await asyncio.wait_for(pushed.wait(), timeout=10)
+        return await real_shell(serial, *args, seconds=seconds)
+
+    monkeypatch.setattr(_seeder.adb, "push", push)
+    monkeypatch.setattr(_seeder.adb, "shell", shell)
+
+    assert await seed_device_if_needed(_SERIAL, _spec()) is True
+
+    assert console.shell_calls()[-1] == ["touch", MARKER]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_gallery_still_lets_the_contacts_finish_and_leaves_no_marker(
+    console: Console,
+) -> None:
+    def answer(argv: list[str]) -> str:
+        if argv[-1] == f"{CAMERA_DIR}/":
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        return _device(seeded=False)(argv)
+
+    console.answer = answer
+
+    with pytest.raises(EmulatorError) as raised:
+        await seed_device_if_needed(_SERIAL, _spec())
+
+    assert raised.value.code == "emulator_command_failed"
+    shells = console.shell_calls()
+    assert ["sh", _SCRIPT] in shells, "the contacts ran to their end"
+    assert ["rm", "-f", _SCRIPT] in shells
+    assert ["rm", "-f", _GALLERY] in shells
+    assert ["touch", MARKER] not in shells
 
 
 @pytest.mark.asyncio
@@ -281,7 +363,8 @@ async def test_a_failed_seeding_leaves_no_marker_and_no_script(console: Console)
 
     shells = console.shell_calls()
     assert ["touch", MARKER] not in shells
-    assert shells[-1] == ["rm", "-f", _SCRIPT]
+    assert shells[-1][:2] == ["rm", "-f"]
+    assert ["rm", "-f", _SCRIPT] in shells
 
 
 @pytest.mark.asyncio
@@ -293,7 +376,7 @@ async def test_the_script_is_removed_and_its_own_error_kept_whatever_failed(
         if failing in argv:
             code = "emulator_command_timeout"
             raise EmulatorError(code)
-        if argv[-3:] == ["rm", "-f", _SCRIPT]:
+        if argv[-3:-1] == ["rm", "-f"]:
             code = "emulator_command_failed"  # the device is gone by now
             raise EmulatorError(code)
         return _device(seeded=False)(argv)
@@ -304,7 +387,9 @@ async def test_the_script_is_removed_and_its_own_error_kept_whatever_failed(
         await seed_device_if_needed(_SERIAL, _spec())
 
     assert raised.value.code == "emulator_command_timeout"
-    assert console.shell_calls()[-1] == ["rm", "-f", _SCRIPT]
+    shells = console.shell_calls()
+    assert ["rm", "-f", _SCRIPT] in shells
+    assert ["rm", "-f", _GALLERY] in shells
 
 
 @pytest.mark.parametrize("country", ["AX", "VA", "IM", "CC"])

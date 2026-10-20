@@ -7,6 +7,7 @@ the error, so the script must stop on that print and the marker must never follo
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -24,9 +25,11 @@ if TYPE_CHECKING:
 _SH = shutil.which("sh")
 pytestmark = pytest.mark.skipif(_SH is None, reason="needs a POSIX sh")
 
-# A shell function wins over the binary: raw contacts count up in $STATE, a query
-# lists them newest first, and an insert whose argv holds $FAIL_ON prints the
-# provider's error and exits 0, as the real tool does.
+# A shell function wins over the binary. A raw contact is a line in $ROWS holding its
+# ``sync2`` tag, its _id that line's number (appends do not race between the lanes);
+# a query for one tag finds that row alone, one for every tagged row lists them all
+# but $LOSE (a row the provider lost), and an insert whose argv holds $FAIL_ON prints
+# the provider's error and exits 0, as the real tool does. $GROW=0 writes no rows.
 _FAKE_CONTENT = """
 content() {
   echo "$*" >> "$WORK/calls.log"
@@ -34,11 +37,16 @@ content() {
     insert)
       case "$*" in
         *"$FAIL_ON"*) echo "Error while accessing provider:com.android.contacts" >&2 ;;
-        *raw_contacts*) echo $(( $(cat "$STATE") + $GROW )) > "$STATE" ;;
+        *raw_contacts*)
+          [ "$GROW" -eq 0 ] || echo "$*" | sed 's/.*sync2:s:\\([0-9]*\\).*/\\1/' >> "$ROWS" ;;
       esac ;;
     query)
-      i=$(cat "$STATE")
-      while [ "$i" -gt 0 ]; do echo "Row: 0 _id=$i"; i=$((i - 1)); done ;;
+      case "$*" in
+        *sync2=*)
+          tag=$(echo "$*" | sed "s/.*sync2='\\([0-9]*\\)'.*/\\1/")
+          grep -n "^$tag\\$" "$ROWS" | sed 's/:.*//; s/^/Row: 0 _id=/' ;;
+        *) grep -vn "^$LOSE\\$" "$ROWS" | sed 's/:.*//; s/^/Row: 0 _id=/' ;;
+      esac ;;
   esac
   return 0
 }
@@ -56,9 +64,23 @@ class _Run(NamedTuple):
     stderr: str
 
 
-def _run(tmp_path: Path, lines: list[str], *, fail_on: str = "never-matches", grow: int = 1):
-    state = tmp_path / "state"
-    state.write_text("0\n", encoding="utf-8")
+# More people than lanes, so lanes write several each and their raw contacts interleave.
+_CROWD = [
+    *_PEOPLE,
+    *(Contact(f"P{i}", "Lane", f"0151 0000 {i:03d}", None, None) for i in range(3, 11)),
+]
+
+
+def _run(
+    tmp_path: Path,
+    lines: list[str],
+    *,
+    fail_on: str = "never-matches",
+    grow: int = 1,
+    lose: int = 0,
+) -> _Run:
+    rows = tmp_path / "rows"
+    rows.write_text("", encoding="utf-8")
     script = tmp_path / "seed.sh"
     script.write_text(
         "\n".join((_FAKE_CONTENT, *_SCRIPT_HEAD, *lines)) + "\n", encoding="utf-8", newline="\n"
@@ -66,41 +88,66 @@ def _run(tmp_path: Path, lines: list[str], *, fail_on: str = "never-matches", gr
     env = {
         "PATH": os.environ["PATH"],
         "WORK": tmp_path.as_posix(),
-        "STATE": state.as_posix(),
+        "ROWS": rows.as_posix(),
         "FAIL_ON": fail_on,
         "GROW": str(grow),
+        "LOSE": str(lose),
     }
     assert _SH is not None
     done = subprocess.run(  # noqa: S603 - test-owned argv
-        [_SH, script.as_posix()], env=env, check=False, timeout=30, capture_output=True
+        [_SH, script.as_posix()], env=env, check=False, timeout=60, capture_output=True
     )
     log = tmp_path / "calls.log"
     calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
     return _Run(done.returncode, calls, done.stderr.decode("utf-8", errors="replace"))
 
 
-def test_every_contact_goes_in_under_its_own_raw_contact(tmp_path: Path) -> None:
-    run = _run(tmp_path, contacts_script(_PEOPLE))
-
-    assert run.status == 0, run.stderr
-    data = [
+def _data(calls: list[str]) -> list[str]:
+    return [
         call
-        for call in run.calls
+        for call in calls
         if call.startswith("insert --uri content://com.android.contacts/data")
     ]
-    assert len(data) == 2 + 2 + 1 + 1
-    assert all("raw_contact_id:i:1 " in call for call in data[:4])
-    assert all("raw_contact_id:i:2 " in call for call in data[4:])
-    # Quoted for sh, the name reaches ``content`` whole, quote and umlaut included.
-    assert "data1:s:Jürgen O'Neil" in data[0]
 
 
-def test_a_row_the_provider_refused_stops_the_script(tmp_path: Path) -> None:
-    run = _run(tmp_path, contacts_script(_PEOPLE), fail_on="phone_v2")
+def test_every_contact_goes_in_under_its_own_raw_contact(tmp_path: Path) -> None:
+    run = _run(tmp_path, contacts_script(_CROWD))
+
+    assert run.status == 0, run.stderr
+    # Line n of $ROWS is the raw contact with _id n; it holds that contact's place.
+    place_of = {
+        str(row_id): int(tag)
+        for row_id, tag in enumerate((tmp_path / "rows").read_text().split(), start=1)
+    }
+    assert sorted(place_of.values()) == list(range(1, len(_CROWD) + 1))
+    by_id: dict[int, list[str]] = {}
+    for call in _data(run.calls):
+        row_id = re.search(r"raw_contact_id:i:(\d+) ", call)
+        assert row_id is not None, call
+        by_id.setdefault(place_of[row_id[1]], []).append(call)
+    for place, person in enumerate(_CROWD, start=1):
+        rows = by_id[place]
+        assert len(rows) == 2 + bool(person.email) + bool(person.company)
+        # Quoted for sh, the name reaches ``content`` whole, quote and umlaut included.
+        assert f"data1:s:{person.first} {person.last} " in rows[0]
+        assert f"data1:s:{person.phone} " in rows[1]
+
+
+def test_a_refused_row_stops_its_lane_and_fails_the_script_once_all_are_done(
+    tmp_path: Path,
+) -> None:
+    # The first lane writes the 1st and the 9th person; the 1st's phone is refused.
+    run = _run(tmp_path, contacts_script(_CROWD), fail_on=_CROWD[0].phone)
 
     assert run.status != 0
     assert "Error while accessing provider" in run.stderr
-    assert not [call for call in run.calls if "email_v2" in call], "nothing after the refusal"
+    assert "a contact was not written" in run.stderr
+    lane = [c for c in run.calls if "j.oneil@gmx.de" in c or re.search(r"sync2:s:9\b", c)]
+    assert not lane, "nothing after the refusal in its lane"
+    # The other lanes ran to their end: the script never leaves a writer behind.
+    written = set(re.findall(r"sync2:s:(\d+)\b", "\n".join(run.calls)))
+    assert written == {str(n) for n in range(1, len(_CROWD) + 1)} - {"9"}
+    assert not [call for call in run.calls if call.startswith("query") and "sync2" not in call]
 
 
 def test_a_raw_contact_that_did_not_appear_stops_the_script(tmp_path: Path) -> None:
@@ -108,16 +155,11 @@ def test_a_raw_contact_that_did_not_appear_stops_the_script(tmp_path: Path) -> N
 
     assert run.status != 0
     assert "no raw contact id" in run.stderr
-    assert not [call for call in run.calls if "/data " in call]
+    assert not _data(run.calls)
 
 
 def test_a_contact_count_short_of_the_list_fails_the_script(tmp_path: Path) -> None:
-    lines = contacts_script(_PEOPLE)
-    # Drop the second person's raw contact: its rows land on the first one's id.
-    second = next(i for i, line in enumerate(lines) if i > 1 and "/raw_contacts --bind" in line)
-    del lines[second]
-
-    run = _run(tmp_path, lines)
+    run = _run(tmp_path, contacts_script(_PEOPLE), lose=2)
 
     assert run.status != 0
     assert "contacts missing" in run.stderr
