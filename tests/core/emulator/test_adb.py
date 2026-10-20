@@ -62,6 +62,21 @@ async def test_an_sdk_other_than_the_fingerprints_is_refused(console: Console) -
 
 
 @pytest.mark.asyncio
+async def test_the_app_starts_with_no_system_keys(console: Console) -> None:
+    # redroid has no physical keys: monkey's default 2% of SYS_KEYS makes it abort
+    # (exit 251) before it launches anything.
+
+    await adb.start_app("emulator-5554", "org.telegram.messenger.web")
+
+    assert console.shell_calls() == [
+        [
+            *("monkey", "--pct-syskeys", "0", "-p", "org.telegram.messenger.web"),
+            *("-c", "android.intent.category.LAUNCHER", "1"),
+        ],
+    ]
+
+
+@pytest.mark.asyncio
 async def test_the_package_list_is_read_whole(console: Console) -> None:
     console.answer = lambda _argv: "package:org.telegram.messenger.web\npackage:com.android.shell\n"
 

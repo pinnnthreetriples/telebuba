@@ -154,7 +154,12 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
     await telegram_app.enter_phone("emulator-5554", nodes, "+52 155 5000 1111")
 
     typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    # The prefilled country box is tapped to be emptied, then each box to be typed into.
     swipes = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
+    assert len(swipes) == 3  # clear the country box, then type both
+    assert 0 <= int(swipes[0][0]) <= 80
+    assert 100 <= int(swipes[0][1]) <= 150
+    swipes = swipes[1:]
     assert "".join(typed) == "5215550001111"
     assert len(swipes) == 2
     # First box bounds: [0, 100][80, 150]
@@ -164,6 +169,69 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
     assert 100 <= int(swipes[1][0]) <= 400
     assert 100 <= int(swipes[1][1]) <= 150
     assert console.shell_calls()[-1] == ["input", "keyevent", "66"]
+
+
+class _PhoneScreen:
+    """Telegram's two phone boxes as the app runs them.
+
+    A tap leaves the caret where it lands (here: at the start, the worst case) and
+    MOVE_END takes it to the end; a DEL in an empty number box goes back into the
+    country code and deletes there.
+    """
+
+    def __init__(self, country: str, number: str) -> None:
+        self.boxes = [country, number]
+        self.focus = 0
+        self.caret = 0
+
+    def _key(self, key: str) -> None:
+        if key == "123":
+            self.caret = len(self.boxes[self.focus])
+        elif key == "67":
+            if not self.boxes[self.focus] and self.focus == 1:
+                self.focus = 0
+                self.caret = len(self.boxes[0])
+            box = self.boxes[self.focus]
+            if self.caret:
+                self.boxes[self.focus] = box[: self.caret - 1] + box[self.caret :]
+                self.caret -= 1
+
+    def __call__(self, argv: list[str]) -> str:
+        command = argv[argv.index("shell") + 1 :]
+        if command[:2] == ["input", "swipe"]:
+            self.focus = 0 if int(command[2]) < 90 else 1  # the boxes' edge
+            self.caret = 0
+        elif command[:2] == ["input", "text"]:
+            box = self.boxes[self.focus]
+            self.boxes[self.focus] = box[: self.caret] + command[2] + box[self.caret :]
+            self.caret += len(command[2])
+        elif command[:2] == ["input", "keyevent"]:
+            for key in command[2:]:
+                self._key(key)
+        return ""
+
+
+@pytest.mark.parametrize(
+    ("country", "number"),
+    [("", ""), ("1", ""), ("7", "999 123 45 67"), ("", "555")],
+)
+@pytest.mark.asyncio
+async def test_the_boxes_end_up_holding_exactly_the_number(
+    console: Console, country: str, number: str
+) -> None:
+    screen = _PhoneScreen(country, number)
+    console.answer = screen
+    nodes = parse_dump(
+        _dump(
+            _node("Your phone number"),
+            _node(country, cls=_EDIT, bounds="[0,100][80,150]"),
+            _node(number, cls=_EDIT, bounds="[100,100][400,150]"),
+        )
+    )
+
+    await telegram_app.enter_phone("emulator-5554", nodes, "+49 151 1234 5678")
+
+    assert screen.boxes == ["49", "15112345678"]
 
 
 @pytest.mark.asyncio

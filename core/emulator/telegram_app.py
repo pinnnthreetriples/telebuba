@@ -34,9 +34,6 @@ if TYPE_CHECKING:
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
 
-# Enough DELs to empty Telegram's country-code box (at most four digits).
-_CLEAR_KEYS = 6
-
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
     nodes = parse_dump(await adb.dump_ui(serial))
@@ -108,14 +105,23 @@ async def press_start(serial: str, nodes: list[UiNode]) -> None:
 
 
 async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
-    """Fill the country-code box and the number box, then submit."""
+    """Empty the number box, then the country-code box; fill them in order and submit.
+
+    A DEL in Telegram's empty number box goes back and deletes from the country code,
+    so the number box is emptied first and only by as many DELs as it shows characters;
+    one too many lands in the country code, which is emptied next anyway.
+    """
     country_code, national = split_phone(phone)
     boxes = fields(nodes)
     if len(boxes) < 2:  # noqa: PLR2004 - country code + number
         raise EmulatorError(_EMULATOR_FIELD_MISSING)
-    for box, value in ((boxes[0], country_code), (boxes[1], national)):
+    country, number = boxes[0], boxes[1]
+    for box in (number, country):
+        if box.text:
+            await adb.human_tap(serial, box)
+            await adb.press(serial, adb.KEYCODE_MOVE_END, *([adb.KEYCODE_DEL] * len(box.text)))
+    for box, value in ((country, country_code), (number, national)):
         await adb.human_tap(serial, box)
-        await adb.press(serial, adb.KEYCODE_MOVE_END, *([adb.KEYCODE_DEL] * _CLEAR_KEYS))
         await adb.human_type(serial, value)
     await adb.press(serial, adb.KEYCODE_ENTER)
 
