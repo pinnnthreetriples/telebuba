@@ -9,6 +9,7 @@ dump showed.
 from __future__ import annotations
 
 import asyncio
+import secrets
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -32,8 +33,9 @@ KEYCODE_BACK = 4
 KEYCODE_ENTER = 66
 KEYCODE_DEL = 67
 KEYCODE_MOVE_END = 123
-_DUMP_PATH = "/sdcard/telebuba_ui.xml"
-_DUMP_LOG = "/sdcard/telebuba_ui.log"
+# Each dump has its own files: two reads of one phone at once never clear or serve
+# each other's.
+_DUMP_STEM = "/sdcard/telebuba_ui_"
 _DUMP_ATTEMPTS = 3
 # A slow drag's Bezier curve goes out as this many points: each ``input motionevent``
 # starts its own process on the device, and the curve keeps its shape at a dozen.
@@ -46,7 +48,7 @@ def _dump_script(xml: str, log: str) -> tuple[str, ...]:
 
     uiautomator writes the file, prints "dumped to" and then spends most of a second
     shutting its VM down; the script kills it at that print (or stops when it has
-    exited without one) and serves its output followed by the file.
+    exited without one), serves its output followed by the file and deletes both.
     """
     return (
         *("rm", "-f", xml, log, ";"),
@@ -55,11 +57,8 @@ def _dump_script(xml: str, log: str) -> tuple[str, ...]:
         *(";", "do", "sleep", "0.05", ";", "done", ";"),
         *("kill", "$p", "2>/dev/null", ";"),
         *("cat", log, xml, "2>/dev/null", ";"),
-        *("rm", "-f", log, ";", "true"),
+        *("rm", "-f", log, xml, ";", "true"),
     )
-
-
-_DUMP_SCRIPT = _dump_script(_DUMP_PATH, _DUMP_LOG)
 
 
 async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
@@ -179,7 +178,8 @@ async def dump_ui(serial: str) -> str:
     for attempt in range(_DUMP_ATTEMPTS):
         if attempt:
             await asyncio.sleep(settings.emulator.poll_seconds)
-        output = await shell(serial, *_DUMP_SCRIPT)
+        stem = f"{_DUMP_STEM}{secrets.token_hex(4)}"
+        output = await shell(serial, *_dump_script(f"{stem}.xml", f"{stem}.log"))
         marker = output.lower().find("dumped to")
         xml = output[marker:].partition("\n")[2].strip() if marker >= 0 else ""
         if xml:

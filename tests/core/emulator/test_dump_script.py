@@ -81,6 +81,7 @@ def test_the_dump_is_served_without_waiting_for_uiautomator_to_exit(tmp_path: Pa
     assert "dumped to" in marker
     assert xml.strip() == '<hierarchy rotation="0" />'
     assert not (tmp_path / "ui.log").exists()
+    assert not (tmp_path / "ui.xml").exists()
 
 
 def test_a_failed_dump_ends_the_script_and_serves_no_old_screen(tmp_path: Path) -> None:
