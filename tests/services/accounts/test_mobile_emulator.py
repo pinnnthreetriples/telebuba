@@ -349,7 +349,7 @@ async def test_an_unusable_existing_session_while_waiting_is_a_refusal_not_a_500
         await open_account_mobile("acc")
 
     assert refused.value.code == "device_primary_unavailable"
-    assert container.steps[-1] == "remove:telebuba-acc"
+    assert container.steps[-1] == "stop:telebuba-acc", "booted and seeded: kept for the next try"
 
 
 @pytest.mark.parametrize("password", ["50%off", "пароль"])

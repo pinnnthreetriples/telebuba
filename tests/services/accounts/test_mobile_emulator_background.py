@@ -16,8 +16,8 @@ import pytest
 from core.config import settings
 from core.emulator import EmulatorError
 from core.emulator.redroid import Instance
+from services.accounts import _mobile_start, mobile_pods
 from services.accounts import mobile_emulator as emulator_module
-from services.accounts import mobile_pods
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     open_account_mobile,
@@ -43,7 +43,7 @@ def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """The containers whose window is open; the background path's screen wait faked too."""
     open_windows: set[str] = set()
     monkeypatch.setattr(emulator_module, "viewer_open", lambda name: name in open_windows)
-    monkeypatch.setattr(emulator_module, "wait_screen", container.wait_screen)
+    monkeypatch.setattr(_mobile_start, "wait_screen", container.wait_screen)
     emulator_module._OPERATOR.clear()
     emulator_module._ACTIVE.clear()
     return open_windows
@@ -158,7 +158,7 @@ async def test_a_window_that_cannot_open_does_not_fail_the_open(
         code = "emulator_not_found"
         raise EmulatorError(code)
 
-    monkeypatch.setattr(emulator_module, "show_instance", no_scrcpy)
+    monkeypatch.setattr(_mobile_start, "show_instance", no_scrcpy)
 
     result = await open_account_mobile("acc")
 

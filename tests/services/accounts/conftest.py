@@ -15,7 +15,7 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.outreach_protection import OutreachProtection  # noqa: TC001
 from services import warming
-from services.accounts import _bulk_runner, _emulator_sign_in, bulk_messages
+from services.accounts import _bulk_runner, _emulator_sign_in, _mobile_start, bulk_messages
 from services.accounts import devices as devices_module
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts import privacy as privacy_module
@@ -220,7 +220,10 @@ def container(monkeypatch: pytest.MonkeyPatch) -> _Container:
     """The scripted pod on the service modules' own names."""
     fake = _Container()
     for name in _SERVICE_FAKES:
-        monkeypatch.setattr(emulator_module, name, getattr(fake, name))
+        modules = [m for m in (emulator_module, _mobile_start) if hasattr(m, name)]
+        assert modules, name
+        for module in modules:
+            monkeypatch.setattr(module, name, getattr(fake, name))
     for name in _SIGN_IN_FAKES:
         monkeypatch.setattr(_emulator_sign_in, name, getattr(fake, name))
     for name, label in _SCREEN_ACTIONS.items():

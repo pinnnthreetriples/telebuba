@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from services.accounts import _mobile_start
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import open_account_mobile
 from tests.services.accounts._mobile_support import _account, _Container
@@ -28,6 +29,7 @@ async def test_a_failed_seeding_is_logged_and_the_sign_in_goes_on(
     ) -> None:
         events.append((event, extra or {}))
 
+    monkeypatch.setattr(_mobile_start, "log_event", fake_log)
     monkeypatch.setattr(emulator_module, "log_event", fake_log)
 
     result = await open_account_mobile("acc")
@@ -59,8 +61,8 @@ async def test_a_seeding_that_breaks_outside_adb_is_logged_and_the_sign_in_goes_
     ) -> None:
         events.append((event, extra or {}))
 
-    monkeypatch.setattr(emulator_module, "seed_device_if_needed", broken)
-    monkeypatch.setattr(emulator_module, "log_event", fake_log)
+    monkeypatch.setattr(_mobile_start, "seed_device_if_needed", broken)
+    monkeypatch.setattr(_mobile_start, "log_event", fake_log)
 
     result = await open_account_mobile("acc")
 

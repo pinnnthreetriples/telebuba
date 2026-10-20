@@ -26,7 +26,9 @@ phone is shown in a scrcpy window opened by the phone button.
 - **Start**: pull or build a missing image, create what is missing (gateway first), stop whatever of the pod runs, copy the
   account's current proxy into the gateway, start it, wait until `net-gateway ready` (tun0 up,
   tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`), then create/start Android.
-  A failed start removes what it created and stops what it found. **Stop** is Android, then the
+  A failed start removes what it created and stops what it found; an open that fails once a new
+  container booted (its SDK checked) only stops it, so its seeded `/data` spares the next try a
+  first boot and a seeding. **Stop** is Android, then the
   gateway; **remove** deletes both (a host without docker has nothing to remove).
 - **Identity**: a block appended to the image's `/product/etc/build.prop` (read last by init, so it
   wins over `/vendor`'s own) before every cold boot (not on the
@@ -201,7 +203,8 @@ present is never pulled or rebuilt; after changing `docker/net-gateway`, bump th
 ## The Telegram app
 
 A container with no Telegram gets `EMULATOR__TELEGRAM_APK_PATH`. A missing file is downloaded
-(`core/emulator/assets.py`, at startup and again wherever it is needed) from telegram.org's own
+(`core/emulator/assets.py`, at startup and again wherever it is needed; for a new container,
+while its pod starts and boots, so a file that cannot be had fails the open then) from telegram.org's own
 link, which always serves the latest universal build (x86_64 included; package
 `org.telegram.messenger.web`) and publishes no checksum: the file is kept only when every signer
 of its v2/v3/v3.1 blocks carries Telegram's certificate (SHA-256 `49c15225…dcc38e1`, pinned in code), and Android checks
