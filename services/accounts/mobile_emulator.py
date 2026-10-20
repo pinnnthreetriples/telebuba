@@ -273,15 +273,18 @@ async def _open(
         if not background:
             await _show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
-        await _seed(account.account_id, serial, spec)
-        await ensure_app(serial)
-        if background:
-            screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
+        seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
+        try:
+            await ensure_app(serial)
+            # In the background only an entry screen is signed in; in front, always.
+            screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
             signed_in = screen == "chats"
-            if screen in _ENTRY_SCREENS:
+            if screen is None or screen in _ENTRY_SCREENS:
                 signed_in = await sign_in(account, serial)
-        else:
-            signed_in = await sign_in(account, serial)
+            await seeding
+        finally:
+            seeding.cancel()
+            await asyncio.gather(seeding, return_exceptions=True)
     except BaseException:
         await asyncio.shield(_undo(name, created=created))
         raise
@@ -360,10 +363,8 @@ async def _run_session(
 async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
     """Give a never-seeded container its contacts and photos; never fails the open.
 
-    Seeding only makes the phone look used: a failure is logged and the sign-in goes
-    on. The marker is written only once both are in, so the next boot tries again.
-    Anything but a cancellation is caught: a broken name file or a full host disk
-    must not stop the sign-in either.
+    Runs alongside the app's install and sign-in (they read no contacts). Anything but
+    a cancellation is logged and the sign-in goes on; with no marker, the next boot retries.
     """
     try:
         await seed_device_if_needed(serial, spec)
