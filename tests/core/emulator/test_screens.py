@@ -170,24 +170,40 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
 class _PhoneScreen:
     """Telegram's two phone boxes as the app runs them.
 
-    A DEL in an empty number box goes back into the country code and deletes there.
+    A tap leaves the caret where it lands (here: at the start, the worst case) and
+    MOVE_END takes it to the end; a DEL in an empty number box goes back into the
+    country code and deletes there.
     """
 
     def __init__(self, country: str, number: str) -> None:
         self.boxes = [country, number]
         self.focus = 0
+        self.caret = 0
+
+    def _key(self, key: str) -> None:
+        if key == "123":
+            self.caret = len(self.boxes[self.focus])
+        elif key == "67":
+            if not self.boxes[self.focus] and self.focus == 1:
+                self.focus = 0
+                self.caret = len(self.boxes[0])
+            box = self.boxes[self.focus]
+            if self.caret:
+                self.boxes[self.focus] = box[: self.caret - 1] + box[self.caret :]
+                self.caret -= 1
 
     def __call__(self, argv: list[str]) -> str:
         command = argv[argv.index("shell") + 1 :]
         if command[:2] == ["input", "swipe"]:
             self.focus = 0 if int(command[2]) < 90 else 1  # the boxes' edge
+            self.caret = 0
         elif command[:2] == ["input", "text"]:
-            self.boxes[self.focus] += command[2]
+            box = self.boxes[self.focus]
+            self.boxes[self.focus] = box[: self.caret] + command[2] + box[self.caret :]
+            self.caret += len(command[2])
         elif command[:2] == ["input", "keyevent"]:
-            for _key in (k for k in command[2:] if k == "67"):
-                if not self.boxes[self.focus] and self.focus == 1:
-                    self.focus = 0
-                self.boxes[self.focus] = self.boxes[self.focus][:-1]
+            for key in command[2:]:
+                self._key(key)
         return ""
 
 
