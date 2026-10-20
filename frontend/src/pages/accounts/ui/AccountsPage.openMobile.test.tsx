@@ -219,3 +219,52 @@ test('an account without a mobile device cannot be opened on a phone', async () 
 
   expect(phone()).toBeDisabled();
 });
+
+test('a second open starts from its own first stage, not the last one seen', async () => {
+  let stage = 'code';
+  let answer: Promise<void> = Promise.resolve();
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/open-mobile/progress') {
+      return Promise.resolve(json({ account_id: 'acc-1', phone_id: 'telebuba-acc-1', stage }));
+    }
+    if (pathname === '/api/v1/accounts/acc-1/open-mobile') {
+      return answer.then(() => json({ account_id: 'acc-1', status: 'started', signed_in: false }));
+    }
+    if (pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(json({ total: 1, active: 1, idle: 0, needs_code: 0, problem: 0 }));
+    }
+    if (pathname === '/api/v1/accounts') {
+      return Promise.resolve(json({ items: [MOBILE], next_cursor: null }));
+    }
+    if (pathname === '/api/v1/accounts/emulator') return Promise.resolve(json({ enabled: true }));
+    if (pathname === '/api/v1/proxies') return Promise.resolve(json({ proxies: [] }));
+    return Promise.resolve(json(MOBILE));
+  });
+  await renderPage();
+  await waitFor(() => {
+    expect(phone()).toBeEnabled();
+  });
+  await userEvent.click(phone());
+  const first = await screen.findByRole('dialog');
+  await waitFor(() => {
+    expect(within(first).getByText(/Закончите его вручную/)).toBeInTheDocument();
+  });
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  stage = 'pod';
+  answer = new Promise<void>(() => {}); // the second open is still starting
+  await waitFor(() => {
+    expect(phone()).toBeEnabled();
+  });
+  await userEvent.click(phone());
+
+  const second = await screen.findByRole('dialog');
+  expect(
+    within(second).getByText('Поднимаю сеть телефона через прокси аккаунта…'),
+  ).toBeInTheDocument();
+  expect(within(second).getByText('Телефон запускается…')).toBeInTheDocument();
+});

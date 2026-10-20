@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   accountDisplayName,
+  accountMobileProgressQueryKey,
   accountFilterOptionsQueryOptions,
   accountFoldersQueryOptions,
   accountsQueryOptions,
@@ -105,7 +106,10 @@ export function AccountsPage() {
   const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [openMobileBusyIds, setOpenMobileBusyIds] = useState<ReadonlySet<string>>(new Set());
   // The phone dialog of the open the operator started last; its outcome follows the request.
+  // Each open gets its own id, so a dialog (and its stepper) never carries an earlier one's state.
+  const nextMobileOpen = useRef(0);
   const [mobileDialog, setMobileDialog] = useState<{
+    openId: number;
     accountId: string;
     title: string;
     outcome: MobileOutcome;
@@ -355,9 +359,13 @@ export function AccountsPage() {
   // left for the operator to finish by hand on that screen, or refused with its code.
   const openMobileAccount = (accountId: string, title: string) => {
     setOpenMobileBusyIds((ids) => new Set(ids).add(accountId));
-    setMobileDialog({ accountId, title, outcome: { phase: 'running' } });
+    const openId = ++nextMobileOpen.current;
+    queryClient.removeQueries({
+      queryKey: accountMobileProgressQueryKey({ path: { account_id: accountId } }),
+    });
+    setMobileDialog({ openId, accountId, title, outcome: { phase: 'running' } });
     const settle = (outcome: MobileOutcome) => {
-      setMobileDialog((open) => (open?.accountId === accountId ? { ...open, outcome } : open));
+      setMobileDialog((open) => (open?.openId === openId ? { ...open, outcome } : open));
     };
     return openMobile
       .mutateAsync({ path: { account_id: accountId } })
@@ -737,6 +745,7 @@ export function AccountsPage() {
       ) : null}
       {mobileDialog ? (
         <MobileOpenDialog
+          key={mobileDialog.openId}
           accountId={mobileDialog.accountId}
           title={mobileDialog.title}
           outcome={mobileDialog.outcome}

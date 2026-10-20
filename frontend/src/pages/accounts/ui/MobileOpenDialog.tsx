@@ -65,8 +65,11 @@ export function MobileOpenDialog({
 }) {
   const { t } = useTranslation();
   const running = outcome.phase === 'running';
+  // Never kept once the dialog closes: a later open must not start from this one's stage
+  // (the page also drops it when it starts an open).
   const progress = useQuery({
     ...accountMobileProgressQueryOptions({ path: { account_id: accountId } }),
+    gcTime: 0,
     refetchInterval: running ? POLL_MS : false,
   });
   const polled = progress.data?.stage;
