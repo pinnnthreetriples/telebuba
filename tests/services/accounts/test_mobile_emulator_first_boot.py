@@ -67,7 +67,7 @@ async def test_a_new_pod_that_fails_after_its_boot_is_stopped_not_removed(
         await open_account_mobile("acc")
 
     assert refused.value.code == "emulator_code_timeout"
-    assert any(step.startswith("seed:") for step in container.steps)
+    assert "boot" in container.steps
     assert container.steps[-1] == "stop:telebuba-acc", "its seeded data spares the next start"
     assert not any(step.startswith("remove:") for step in container.steps)
 

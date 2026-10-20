@@ -118,14 +118,16 @@ The container is a real phone (`core/emulator/_profile.py`):
 ## First-boot data
 
 A fresh container has no contacts and no photos. After its first boot (and the SDK check),
-before the app is started, `core/emulator/_seeder.py` gives it both (what they are comes from
+while the app is installed and signed in (nothing there reads the address book; the open still
+waits for the seeding), `core/emulator/_seeder.py` gives it both (what they are comes from
 `_seed_data.py`), drawn from the container's serial so a container made again for the account
 gets the same ones:
 
 - **Contacts**: 25–40 people with names of the proxy country's language
   (`configs/contact_names.json`, `en_US` for a country it lacks) and that country's valid mobile
   numbers (`phonenumbers`), 70% written internationally; about a fifth have an e-mail and a
-  company. They go in through the Contacts Provider (`content insert`), tagged `sync1=telebuba`.
+  company. They go in through the Contacts Provider (`content insert`), tagged `sync1=telebuba`
+  and `sync2=<place in the list>`, so each contact's rows go under its own raw contact.
 - **Photos**: 12–20 JPEGs in `/sdcard/DCIM/Camera`, named the way the phone's camera app names
   them (the blueprint's `camera.file_style`), with that phone's EXIF: `Make`/`Model`, the build's
   incremental as `Software` on a Samsung (other makers' camera apps write their own version or
@@ -135,9 +137,12 @@ gets the same ones:
   MediaStore is asked to index the volume (`content call … scan_volume`, the per-file scan
   broadcast when the provider refuses it). EXIF carries `ExifVersion` and an offset for each time.
 
-Both run on the device as one `sh` script each (`content` starts an app_process per row). `content`
-exits 0 even when the provider refused a row, so every call goes through a wrapper that fails on the
-error it prints; the script stops at the first failure and ends by counting the tagged contacts.
+Both run on the device as `sh` scripts, at the same time. Each `content` call starts an
+app_process (about a second, mostly waiting; ~135 for an address book), so the contacts are dealt
+over 8 background lanes written at once (40 contacts in 25 s on a redroid 13 pod, against ~160 s
+one after another). `content` exits 0 even when the provider refused a row, so every call goes through
+a wrapper that fails on the error it prints; a lane stops at its first failure, the script waits for
+every lane, fails when any did, and ends by counting the tagged contacts.
 Only when both are in is `/data/local/tmp/.telebuba_seeded` written; a container that has it is
 never seeded again. A seeding that fails, for any reason but a cancellation, is logged
 (`account_mobile_seed_failed`) and the sign-in goes on; the next boot redoes it, deleting the

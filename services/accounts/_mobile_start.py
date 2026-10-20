@@ -4,7 +4,7 @@
   cannot be had fails the start then, not after the boot and the seeding (a container
   found on the host reads its app off the phone and needs no APK);
 * a container's first boot gives it contacts and photos (``core.emulator._seeder``)
-  before the app starts; a seeding that fails is logged, never fails the open;
+  alongside the app's start; a seeding that fails is logged, never fails the open;
 * on any failure the pod is stopped again, and removed only when it is new and failed
   by its boot: a booted one keeps its seeded ``/data`` for the next start.
 """
@@ -93,15 +93,17 @@ async def _start(
             await show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
         booted = True
-        await _seed(account.account_id, serial, spec)
-        await ensure_app(serial)
-        if background:
-            screen, _nodes = await wait_screen(serial, _KNOWN_SCREENS)
+        seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
+        try:
+            await ensure_app(serial)
+            # In the background only an entry screen is signed in; in front, always.
+            screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
             signed_in = screen == "chats"
-            if screen in ENTRY_SCREENS:
+            if screen is None or screen in ENTRY_SCREENS:
                 signed_in = await sign_in(account, serial)
-        else:
-            signed_in = await sign_in(account, serial)
+            await seeding
+        finally:
+            await _drop(seeding)
     except BaseException:
         await asyncio.shield(_undo(name, remove=apk is not None and not booted))
         raise
@@ -131,10 +133,8 @@ async def _drop[T](task: asyncio.Future[T] | None) -> None:
 async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
     """Give a never-seeded container its contacts and photos; never fails the open.
 
-    Seeding only makes the phone look used: a failure is logged and the sign-in goes
-    on. The marker is written only once both are in, so the next boot tries again.
-    Anything but a cancellation is caught: a broken name file or a full host disk
-    must not stop the sign-in either.
+    Runs alongside the app's install and sign-in (they read no contacts). Anything but
+    a cancellation is logged and the sign-in goes on; with no marker, the next boot retries.
     """
     try:
         await seed_device_if_needed(serial, spec)

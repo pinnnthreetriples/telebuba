@@ -93,8 +93,9 @@ async def test_a_new_pod_starts_on_the_accounts_proxy_before_android_is_used(
     sdk = next(step for step in steps if step.startswith("sdk:"))
     seed = next(step for step in steps if step.startswith("seed:"))
     assert seed == f"seed:{container.specs[0].serial}"
-    order = [steps.index(s) for s in (started, "boot", "show:1", sdk, seed, "app")]
-    assert order == sorted(order), "shown once up, seeded once its SDK is checked, then the app"
+    order = [steps.index(s) for s in (started, "boot", "show:1", sdk, "app")]
+    assert order == sorted(order), "shown once up, then the SDK checked, then the app"
+    assert steps.index(seed) > steps.index(sdk), "seeded once its SDK is checked"
 
 
 @pytest.mark.asyncio
@@ -107,7 +108,8 @@ async def test_a_signed_out_app_is_signed_in_with_a_paced_code_cut_off_before_th
     result = await open_account_mobile("acc")
 
     assert result.signed_in is True
-    flow = [s for s in container.steps if s.split(":")[0] not in {"wait", "read", "find"}]
+    skipped = {"wait", "read", "find", "seed"}  # the seeding runs alongside the sign-in
+    flow = [s for s in container.steps if s.split(":")[0] not in skipped]
     sign_in = flow[flow.index("start") :]
     assert sign_in == [
         "start",

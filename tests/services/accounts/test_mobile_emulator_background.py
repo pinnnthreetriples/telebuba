@@ -96,7 +96,8 @@ async def test_a_background_open_leaves_any_other_screen_as_it_is(
 
     assert (result.status, result.signed_in) == ("started", screen == "chats")
     assert not [s for s in container.steps if s in _SIGN_IN_STEPS]
-    assert container.steps[-2:] == ["app", "wait"], "the screen is read as the app shows it"
+    phone = [s for s in container.steps if not s.startswith("seed:")]  # runs alongside
+    assert phone[-2:] == ["app", "wait"], "the screen is read as the app shows it"
 
 
 @pytest.mark.asyncio
