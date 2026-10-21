@@ -288,7 +288,7 @@ async def stop_running_pods() -> int:
 
 
 async def remove_pod(name: str) -> bool:
-    """Delete the pod's containers and its /data diff; ``False`` when it has no container.
+    """Delete the pod's /data diff, then its containers; ``False`` when it has no container.
 
     A host without Docker has no pod to remove, so a missing docker CLI is "none",
     not an error: deleting an account must not depend on the emulator.
@@ -301,8 +301,12 @@ async def remove_pod(name: str) -> bool:
         raise
     await close_viewer(name)
     recorded = await recorded_diff(name) if android is not None else None
+    if android is not None and _up(android):
+        await _halt(android)  # its /data still before the diff goes
+    # Before the containers: a diff that could not go stays named by Android's label,
+    # so a later removal finds it again.
+    await remove_diff(name, recorded)
     for container in (android, gateway):
         if container is not None:
             await docker("rm", "--force", container.name)
-    await remove_diff(name, recorded)
     return android is not None or gateway is not None

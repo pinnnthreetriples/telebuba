@@ -195,17 +195,29 @@ async def test_an_android_made_again_keeps_its_diff(
 
 @pytest.mark.usefixtures("layers")
 @pytest.mark.asyncio
-async def test_removing_a_pod_removes_its_diff_after_its_containers(console: Console) -> None:
+async def test_removing_a_pod_removes_its_diff_before_its_containers(console: Console) -> None:
     console.answer = _docker()
 
-    assert await pod.remove_pod("telebuba-acc-2") is True
+    assert await pod.remove_pod("telebuba-acc-0") is True
 
-    removals = [call for call in console.calls if call[1] in {"rm", "run"}]
-    assert [call[-1] for call in removals] == [
-        "telebuba-acc-2",
-        "telebuba-acc-2-net",
-        "/data-diff/telebuba-acc-2",
-    ]
+    steps = [call for call in console.calls if call[1] in {"stop", "rm", "run"}]
+    assert [call[-1] for call in steps] == [
+        "telebuba-acc-0",
+        "/data-diff/telebuba-acc-0",
+        "telebuba-acc-0",
+        "telebuba-acc-0-net",
+    ], "Android stopped, its diff gone, then the containers"
+
+
+@pytest.mark.usefixtures("layers")
+@pytest.mark.asyncio
+async def test_a_diff_that_could_not_go_keeps_the_label_that_names_it(console: Console) -> None:
+    console.answer = _docker(fail=lambda argv: argv[1] == "run" and "rm" in argv)
+
+    with pytest.raises(EmulatorError):
+        await pod.remove_pod("telebuba-acc-0")
+
+    assert [call for call in console.calls if call[1] == "rm"] == [], "a retry finds it again"
 
 
 @pytest.mark.asyncio

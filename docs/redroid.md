@@ -208,7 +208,8 @@ no base. An Android made again (its gateway gone) stays on the diff its predeces
 wherever the setting points now; with shared /data turned off since, it keeps that label without
 mounting it. The diff directory may not be a filesystem root or contain `..`. The container records its diff in the `telebuba.data_diff`
 label, so deleting the account removes the recorded diff and the one configured now, even after
-`EMULATOR__DATA_DIFF_DIR` moved or was unset. Each goes after both containers, in a throwaway
+`EMULATOR__DATA_DIFF_DIR` moved or was unset. Android is stopped first; each diff goes before the
+containers (so one that cannot go stays named by the label for a later try), in a throwaway
 `alpine:3.20` running as root (Android wrote it as its own users). Pods made before it was turned
 on are not moved: they keep `/data` in the container until they are made again.
 
