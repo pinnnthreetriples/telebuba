@@ -178,6 +178,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     gateway: str,
     gpu: GpuMode = "guest",
     data: DataLayers | None = None,
+    kept_diff: str | None = None,
 ) -> Instance:
     """A new, stopped container named ``name`` presenting ``spec``'s phone.
 
@@ -187,11 +188,16 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     ``build_prop``; its screen and serial number on the command line (neither has a
     space). It draws in software (``guest``) or on the host's GPU (``host``: given
     ``/dev/dri``), as ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its
-    /data is the overlay of those layers (``core.emulator._data``), else its own.
+    /data is the overlay of those layers (``core.emulator._data``), else its own;
+    ``kept_diff`` is the diff of the Android it replaces, still labelled for deletion.
     """
     image = image_for(spec)
     device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
-    mounts = (*_volumes(data), "--label", f"{DIFF_LABEL}={data.diff.as_posix()}") if data else ()
+    # Where its diff is, for deletion; with shared /data off now, the one it replaces keeps.
+    diff = data.diff.as_posix() if data else kept_diff
+    mounts = _volumes(data) if data else ()
+    if diff:
+        mounts = (*mounts, "--label", f"{DIFF_LABEL}={diff}")
     overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
     identity = build_prop(spec)  # refused before anything is created
     await docker(

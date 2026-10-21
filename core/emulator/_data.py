@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
@@ -23,8 +24,6 @@ from core.emulator.host import PROBE_IMAGE, ensure_probe_image
 from core.emulator.redroid import DIFF_LABEL
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from schemas.emulator import EmulatorRefusalCode
 
 _EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
@@ -52,16 +51,34 @@ def _segment(name: str) -> str:
     return name
 
 
-async def data_layers(name: str, sdk: int) -> DataLayers | None:
+def _diff_parent(target: str, leaf: str) -> str:
+    """The directory holding the diff ``target`` of ``leaf``; never a root, never ``..``.
+
+    It is bind-mounted for ``rm -rf`` as root, so only a plain absolute path will do.
+    """
+    parent, _, last = target.rstrip("/").rpartition("/")
+    parts = parent.split("/")
+    if last != leaf or ".." in parts or "." in parts or not parent.strip("/"):
+        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+    if parent.rstrip("/").endswith(":"):  # a Windows drive's root
+        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+    return parent
+
+
+async def data_layers(name: str, sdk: int, recorded: str | None = None) -> DataLayers | None:
     """The container ``name``'s layers, its diff made when missing; ``None`` when off.
 
-    A base the operator has not prepared for ``sdk`` is ``emulator_data_base_missing``.
+    ``recorded`` is the diff of the Android this one replaces: it is kept, wherever
+    ``EMULATOR__DATA_DIFF_DIR`` points now. A base the operator has not prepared for
+    ``sdk`` is ``emulator_data_base_missing``.
     """
     base_root = settings.emulator.data_base_dir
     diff_root = settings.emulator.data_diff_dir
     if base_root is None or diff_root is None:
         return None
-    base, diff = base_root / str(sdk), diff_root / _segment(name)
+    leaf = _segment(name)
+    diff = Path(_diff_parent(recorded, leaf)) / leaf if recorded else diff_root / leaf
+    base = base_root / str(sdk)
     if not await asyncio.to_thread(base.is_dir):
         raise EmulatorError(_EMULATOR_DATA_BASE_MISSING)
     fresh = not await asyncio.to_thread(diff.exists)
@@ -92,10 +109,7 @@ async def remove_diff(name: str, recorded: str | None = None) -> None:
     if diff_root is not None:
         targets.add(f"{diff_root.as_posix()}/{leaf}")
     for target in sorted(targets):
-        parent, _, last = target.rstrip("/").rpartition("/")
-        if last != leaf or parent.rstrip("/").endswith(":") or not parent.strip("/"):
-            # Never a filesystem root bind-mounted for ``rm -rf``.
-            raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+        parent = _diff_parent(target, leaf)
         await ensure_probe_image()
         await docker(
             "run",

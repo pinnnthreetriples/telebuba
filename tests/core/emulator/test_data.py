@@ -15,6 +15,8 @@ from core.emulator._errors import EmulatorError
 from tests.core.emulator.test_pod import _PROXY, _SPEC, _call, _docker
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from tests.core.emulator.conftest import Console
 
 _SPEC_IMAGE = settings.emulator.redroid_images[_SPEC.sdk]
@@ -45,6 +47,11 @@ def _removals(console: Console) -> list[list[str]]:
 def test_shared_data_takes_both_absolute_directories_or_none(dirs: dict[str, Path]) -> None:
     with pytest.raises(ValidationError):
         EmulatorSettings.model_validate(dirs)
+
+
+def test_a_data_directory_never_climbs_out_with_dot_dot() -> None:
+    with pytest.raises(ValidationError):
+        EmulatorSettings(data_base_dir=Path("/srv/data-base"), data_diff_dir=Path("/var/.."))
 
 
 def test_the_diff_directory_is_never_the_filesystem_root() -> None:
@@ -247,7 +254,7 @@ async def test_a_recorded_diff_is_removed_with_shared_data_turned_off(
 
 @pytest.mark.asyncio
 async def test_a_root_is_never_mounted_to_remove_a_diff(console: Console) -> None:
-    for recorded in ("/telebuba-acc", "//telebuba-acc", "C:/telebuba-acc"):
+    for recorded in ("/telebuba-acc", "//telebuba-acc", "C:/telebuba-acc", "/var/../telebuba-acc"):
         with pytest.raises(EmulatorError):
             await _data.remove_diff("telebuba-acc", recorded)
 
@@ -304,3 +311,44 @@ async def test_a_missing_gpu_leaves_the_android_whose_gateway_went(
 
     assert refused.value.code == "emulator_gpu_missing"
     assert [call for call in console.calls if call[1] in {"rm", "create"}] == []
+
+
+def _recorded(old: str) -> Callable[[list[str]], str]:
+    """The fake docker, with ``telebuba-acc-0`` once created on the diff ``old``."""
+    docker = _docker(gateways="")
+
+    def answer(argv: list[str]) -> str:
+        if argv[1] == "inspect" and "telebuba.data_diff" in argv[3] and argv[4] == "telebuba-acc-0":
+            return old + "\n"
+        return docker(argv)
+
+    return answer
+
+
+@pytest.mark.usefixtures("layers")
+@pytest.mark.asyncio
+async def test_an_android_made_again_stays_on_its_recorded_diff(
+    console: Console, tmp_path: Path
+) -> None:
+    old = (tmp_path / "old-diff" / "telebuba-acc-0").as_posix()
+    console.answer = _recorded(old)
+
+    await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    android = _call(console, "create", "telebuba-acc-0")
+    assert f"{old}:/data-diff" in android, "not the newly configured directory"
+    assert f"telebuba.data_diff={old}" in android
+
+
+@pytest.mark.asyncio
+async def test_an_android_made_again_with_shared_data_off_keeps_its_diff_labelled(
+    console: Console, tmp_path: Path
+) -> None:
+    old = (tmp_path / "old-diff" / "telebuba-acc-0").as_posix()
+    console.answer = _recorded(old)
+
+    await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    android = _call(console, "create", "telebuba-acc-0")
+    assert "--volume" not in android
+    assert f"telebuba.data_diff={old}" in android, "deleting the account still finds it"

@@ -108,7 +108,9 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             android, current = await _find(name)
             # Only an Android about to be made needs its base: refused before anything is.
             remade = android is None or current is None
-            layers = await data_layers(name, spec.sdk) if remade else None
+            # The diff of an Android made again stays its own, whatever is configured now.
+            kept = await recorded_diff(name) if android is not None and current is None else None
+            layers = await data_layers(name, spec.sdk, kept) if remade else None
             # Before an Android is removed: a GPU the host lacks must not leave none.
             gpu = await gpu_mode() if remade else "guest"
             if android is not None and current is None:
@@ -131,7 +133,9 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         await wait_for_tunnel(gateway)
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
-            await create_instance(name, spec, index=index, gateway=gateway, gpu=gpu, data=layers)
+            await create_instance(
+                name, spec, index=index, gateway=gateway, gpu=gpu, data=layers, kept_diff=kept
+            )
         else:
             await refresh_identity(name, spec)  # the proxy may have moved country
         await launch_instance(name, index)
