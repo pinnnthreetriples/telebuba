@@ -95,14 +95,16 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
     assert "--privileged" in create
-    image = create.index("redroid/redroid:13.0.0-latest")
+    image = create.index("redroid/redroid:13.0.0_64only-latest")
     assert create[image + 1 :] == [
         f"androidboot.redroid_width={_SPEC.screen.width}",
         f"androidboot.redroid_height={_SPEC.screen.height}",
         f"androidboot.redroid_dpi={_SPEC.screen.dpi}",
         f"androidboot.serialno={_SPEC.serial}",
         "androidboot.use_memfd=true",
+        "androidboot.redroid_gpu_mode=guest",
     ]
+    assert "--device" not in create, "software drawing needs no GPU"
     take, give = _docker_calls(ps, "cp")
     assert take[2] == give[3] == "telebuba-new:/product/etc/build.prop", "read last by init"
     ours = "".join(f"{key}={value}\n" for key, value in aosp_boot_properties(_SPEC).items())
@@ -114,6 +116,21 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "a model with a space survives: it is not on the command line"
     )
     assert ps.calls.index(give) > ps.calls.index(create), "written before the first boot"
+
+
+@pytest.mark.asyncio
+async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> None:
+    ps.answer = _product_prop(_IMAGE_PROP, [])
+
+    await redroid.create_instance(
+        "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net", gpu="host"
+    )
+
+    create = _docker_calls(ps, "create")[0]
+    image = create.index("redroid/redroid:13.0.0_64only-latest")
+    assert create[create.index("--device") + 1] == "/dev/dri:/dev/dri"
+    assert create.index("--device") < image, "a docker option, not a boot argument"
+    assert create[-1] == "androidboot.redroid_gpu_mode=host"
 
 
 @pytest.mark.asyncio

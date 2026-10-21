@@ -11,7 +11,7 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _gateway, pod
+from core.emulator import _gateway, host, pod
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import container_spec
 from schemas.proxy import ProxySettings
@@ -163,6 +163,21 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
     config, proxy, address = copied[0]
     assert (proxy, address) == (_PROXY_TEXT, "203.0.113.7\n")
     assert not config.exists(), "the host-side copy is deleted"
+
+
+@pytest.mark.asyncio
+async def test_a_new_android_is_drawn_as_the_host_allows(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "gpu_mode", "auto")
+    monkeypatch.setattr(host, "_dri_seen", False)
+    console.answer = _docker()
+
+    await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    android = _call(console, "create", "telebuba-new")
+    assert android[android.index("--device") + 1] == "/dev/dri:/dev/dri"
+    assert android[-1] == "androidboot.redroid_gpu_mode=host"
 
 
 @pytest.mark.asyncio

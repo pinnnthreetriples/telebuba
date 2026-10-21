@@ -16,6 +16,10 @@ Between close visits ``pause_pod`` freezes Android (``docker pause``: no CPU, it
 kept) and leaves the gateway up; ``unpause_pod`` thaws it in a moment, with no boot.
 A paused container is ended with ``docker kill`` right after it is thawed: a few
 seconds of grace would let the app reconnect and show the account online.
+
+With shared /data on (``core.emulator._data``) Android's writes go to the pod's diff
+directory, which outlives the container: an Android made again after its gateway
+went finds the account's sign-in there. Only ``remove_pod`` deletes it.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.emulator._data import data_layers, remove_diff
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
     create_gateway,
@@ -37,6 +42,7 @@ from core.emulator._gateway import (
     wait_for_tunnel,
 )
 from core.emulator._process import docker
+from core.emulator.host import gpu_mode
 from core.emulator.images import ensure_pod_images
 from core.emulator.redroid import (
     Instance,
@@ -92,6 +98,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)
+    layers = await data_layers(name, spec.sdk)  # a missing base, before anything is created
     await ensure_pod_images(spec)  # a pull or build may take minutes: outside the lock
     gateway = gateway_name(name)
     found: set[str] = set()
@@ -119,7 +126,8 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         await wait_for_tunnel(gateway)
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
-            await create_instance(name, spec, index=index, gateway=gateway)
+            gpu = await gpu_mode()
+            await create_instance(name, spec, index=index, gateway=gateway, gpu=gpu, data=layers)
         else:
             await refresh_identity(name, spec)  # the proxy may have moved country
         await launch_instance(name, index)
@@ -262,7 +270,7 @@ async def stop_running_pods() -> int:
 
 
 async def remove_pod(name: str) -> bool:
-    """Delete the pod's containers; ``False`` when it has none.
+    """Delete the pod's containers and its /data diff; ``False`` when it has no container.
 
     A host without Docker has no pod to remove, so a missing docker CLI is "none",
     not an error: deleting an account must not depend on the emulator.
@@ -277,4 +285,5 @@ async def remove_pod(name: str) -> bool:
     for container in (android, gateway):
         if container is not None:
             await docker("rm", "--force", container.name)
+    await remove_diff(name)
     return android is not None or gateway is not None

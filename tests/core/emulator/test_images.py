@@ -22,7 +22,7 @@ _SPEC = container_spec(
     ),
     "DE",
 )
-_ANDROID = "redroid/redroid:14.0.0-latest"
+_ANDROID = "redroid/redroid:14.0.0_64only-latest"
 _GATEWAY = "telebuba/net-gateway:1"
 
 

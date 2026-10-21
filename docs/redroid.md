@@ -33,14 +33,20 @@ phone is shown in a scrcpy window opened by the phone button.
 - **Identity**: a block appended to the image's `/product/etc/build.prop` (read last by init, so it
   wins over `/vendor`'s own) before every cold boot (not on the
   command line: redroid's init re-splits it on spaces, so `Pixel 7` would become `Pixel`); the
-  image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK. See
+  image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK (by default the
+  64-bit-only `*_64only-latest` tags, published for amd64 and arm64 alike). See
   [Identity and region](#identity-and-region).
+- **Boot arguments**: the screen, the serial, `androidboot.use_memfd=true` (memfd instead of the
+  deprecated ashmem) and `androidboot.redroid_gpu_mode`; with shared /data also
+  `androidboot.use_redroid_overlayfs=1`. See [GPU and shared /data](#gpu-and-shared-data).
 - **Window** (only with `EMULATOR__DESKTOP_VIEWER=true`): `scrcpy --serial … --window-title <container>`,
   one per container. Off by default: the window encodes video for as long as it is open, warming
   visits included. The web screen below replaces it.
 
 Android keeps its `/data` across stop/start (it is re-created only when its gateway is gone, since
-its namespace went with it); deleting the account runs `docker rm --force` on both.
+its namespace went with it); deleting the account runs `docker rm --force` on both. With shared
+/data on, `/data` lives in the pod's diff directory instead, which outlives the container: an
+Android made again finds the account's sign-in there, and only deleting the account removes it.
 
 **Coming from #551** (one container per account, no gateway): such a container has no gateway, so
 the first start after the upgrade removes it and makes the pod anew. Its `/data` goes with it,
@@ -157,12 +163,77 @@ Starting warming with device `mobile` (`services/warming/_mobile_prep.py`) first
 fix: `emulator_docker_unavailable` (no docker CLI or its daemon down), `emulator_adb_missing`, or
 `emulator_binder_missing` (the kernel below; probed in a throwaway container of `alpine:3.20`, the
 gateway's base image, pulled first when missing, and not asked again once found capable; a pull
-that fails is `emulator_image_unavailable`). Then a background job readies the rest while the card
+that fails is `emulator_image_unavailable`), or, with `EMULATOR__GPU_MODE=host`,
+`emulator_gpu_missing` (no `/dev/dri`; probed the same way). Then a background job readies the rest while the card
 says "preparing the phone": the scrcpy-server, and the pod itself with its images pulled or built, Telegram installed and signed in
 through the account's existing session, parked for the first visit within
 `EMULATOR__MAX_RUNNING_PODS` (a host still full after 30 minutes fails it as `emulator_capacity`); the job ends with the stint's loop, so Stop or Promote cancels it. Visits are skipped as `emulator_preparing` while it runs; a failed
 job leaves its code on the card until a visit warms. A visit that finds the app signed out signs it
 in, so a phone the job could not finish (or one prepared before a restart) heals on its own.
+
+## GPU and shared /data
+
+Both are fixed when an Android container is created: a container made before a change keeps how
+it was made until it is made again (its gateway gone, or the account deleted and added back).
+
+**GPU** (`EMULATOR__GPU_MODE`, `core/emulator/host.py`): every container is created with
+`androidboot.redroid_gpu_mode=guest|host`.
+
+- `guest` (default): software rendering, any host, no probe.
+- `host`: the host's GPU; the container is given `--device /dev/dri:/dev/dri`. A host without
+  `/dev/dri` (probed in a throwaway `alpine:3.20` given that device) is refused as
+  `emulator_gpu_missing`, at the phone stint's host check and at a pod's create.
+- `auto`: `host` when the probe finds `/dev/dri`, else `guest`. A GPU found is not probed again
+  while the process runs; a missing one is, so a driver installed later is picked up.
+
+Servers without a GPU (Ampere Altra, Graviton) stay on `guest`. On an RK3588 board `/dev/dri`
+appears with the Mali driver (panthor, or the vendor kernel's own) and Mesa on the host.
+
+**Shared /data** (`EMULATOR__DATA_BASE_DIR` + `EMULATOR__DATA_DIFF_DIR`, `core/emulator/_data.py`):
+off unless both are set to absolute directories on the Docker host (one without the other, or a
+relative one, fails the settings at startup; empty is off). Then a new Android is created with
+
+```text
+--volume <DATA_BASE_DIR>/<sdk>:/data-base:ro
+--volume <DATA_DIFF_DIR>/<container>:/data-diff
+androidboot.use_redroid_overlayfs=1
+```
+
+so its `/data` is the overlay of the SDK's shared base, read-only, under its own diff, where
+everything the phone writes lands. A start checks the base first and refuses, before anything is
+created, as `emulator_data_base_missing` when `<DATA_BASE_DIR>/<sdk>` is not a directory; the diff
+is made when missing. Deleting the account removes the diff after both containers, in a throwaway
+`alpine:3.20` running as root (Android wrote it as its own users). Pods made before it was turned
+on are not moved: they keep `/data` in the container until they are made again.
+
+### Preparing /data-base
+
+One base per SDK in `EMULATOR__REDROID_IMAGES`, made by the operator from a phone that has booted
+once and done nothing else: never started by the app, so it holds no Telegram, contacts, photos or
+seeding marker. On the Docker host, as root (`34` and its image; repeat for `33`):
+
+```bash
+SDK=34 IMAGE=redroid/redroid:14.0.0_64only-latest ROOT=/srv/telebuba
+mkdir -p "$ROOT/template-$SDK" "$ROOT/data-base/$SDK" "$ROOT/data-diff"
+docker run -d --name telebuba-template --privileged -v "$ROOT/template-$SDK:/data" \
+  "$IMAGE" androidboot.use_memfd=true androidboot.redroid_gpu_mode=guest
+until [ "$(docker exec telebuba-template getprop sys.boot_completed)" = 1 ]; do sleep 2; done
+sleep 30 && docker stop telebuba-template && docker rm telebuba-template
+cd "$ROOT/template-$SDK"
+rm -f system/users/0/settings_ssaid.xml system/users/0/settings_secure.xml \
+  system_ce/0/accounts_ce.db* system_de/0/accounts_de.db* misc/adb/adb_keys \
+  property/persistent_properties
+rm -rf misc/keystore/* local/tmp/.telebuba_*
+cp -a . "$ROOT/data-base/$SDK/" && cd / && rm -rf "$ROOT/template-$SDK"
+```
+
+What is removed is what tells one phone from another: the per-app Android IDs (SSAID), the secure
+settings that carry the device's own ids, the keystore's keys, any accounts, adb's keys and the
+persisted properties; each pod writes its own into its diff on its first boot. `cp -a` keeps the
+owners, modes and extended attributes Android needs. Then set
+`EMULATOR__DATA_BASE_DIR=/srv/telebuba/data-base` and `EMULATOR__DATA_DIFF_DIR=/srv/telebuba/data-diff`.
+Never write into a base pods are running on: overlayfs does not expect its lower layer to change
+under it. To change a base, stop the pods, replace it, and make their Androids again.
 
 ## Host setup (Windows, Docker Desktop on WSL2)
 
@@ -205,12 +276,38 @@ and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each
 `EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
 present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag.
 
+## Host setup (Linux ARM64)
+
+The production hosts: Ubuntu or Debian on arm64 (Ampere Altra, AWS Graviton, RK3588 boards), the
+app and Docker on the same machine, ext4 under the shared /data directories. The images are the
+`*_64only` tags: Ampere and other cores without 32-bit EL0 cannot run a 32-bit userspace, and
+Telegram's universal APK carries `arm64-v8a`.
+
+```bash
+apt-get install -y docker.io adb linux-modules-extra-$(uname -r)
+echo 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/binder.conf
+printf '%s\n' binder_linux ip_tables iptable_filter ip6_tables ip6table_filter \
+  > /etc/modules-load.d/telebuba.conf
+systemctl restart systemd-modules-load
+```
+
+Check: `grep binder /proc/filesystems` prints a `binder` line (the app probes the same at a
+phone stint's start, `emulator_binder_missing` otherwise). The iptables modules are the legacy
+filter tables Android's netd uses, as on WSL. A vendor kernel without `binder_linux` (some RK3588
+images) needs `CONFIG_ANDROID_BINDER_IPC`, `CONFIG_ANDROID_BINDERFS` and
+`CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"` built in. memfd needs nothing:
+`androidboot.use_memfd=true` replaces ashmem, which these kernels no longer have.
+
+Set `EMULATOR__ADB_PATH=adb`; scrcpy itself is needed only with `EMULATOR__DESKTOP_VIEWER=true`
+(the web screen pushes its own scrcpy-server). Then pick a GPU mode and, if wanted, prepare the
+shared /data bases ([GPU and shared /data](#gpu-and-shared-data)).
+
 ## The Telegram app
 
 A container with no Telegram gets `EMULATOR__TELEGRAM_APK_PATH`. A missing file is downloaded
 (`core/emulator/assets.py`, at startup and again wherever it is needed; for a new container,
 while its pod starts and boots, so a file that cannot be had fails the open then) from telegram.org's own
-link, which always serves the latest universal build (x86_64 included; package
+link, which always serves the latest universal build (arm64-v8a and x86_64 included; package
 `org.telegram.messenger.web`) and publishes no checksum: the file is kept only when every signer
 of its v2/v3/v3.1 blocks carries Telegram's certificate (SHA-256 `49c15225…dcc38e1`, pinned in code), and Android checks
 the signature against that certificate on install. A file already there (the operator's own APK

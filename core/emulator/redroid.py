@@ -22,7 +22,9 @@ from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
 
 if TYPE_CHECKING:
+    from core.emulator._data import DataLayers
     from core.emulator._profile import ContainerSpec
+    from core.emulator.host import GpuMode
     from schemas.emulator import EmulatorRefusalCode
 
 _EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
@@ -42,6 +44,8 @@ _POD_FORMAT = _LIST_FORMAT + '|{{.Label "telebuba.gateway"}}'
 # Where the container's identity goes (see ``_give_identity``), after this mark.
 _IDENTITY_FILE = "/product/etc/build.prop"
 _IDENTITY_MARK = "# telebuba: the phone this container presents\n"
+# redroid's switch for /data as the overlay of /data-base and /data-diff.
+_OVERLAY_ARGUMENT = "androidboot.use_redroid_overlayfs=1"
 
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
@@ -153,16 +157,39 @@ def image_for(spec: ContainerSpec) -> str:
     return image
 
 
-async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway: str) -> Instance:
+def _volumes(data: DataLayers) -> tuple[str, ...]:
+    """The ``docker create`` options that mount ``data`` where redroid looks for it."""
+    return (
+        "--volume",
+        f"{data.base.as_posix()}:/data-base:ro",
+        "--volume",
+        f"{data.diff.as_posix()}:/data-diff",
+    )
+
+
+async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod decides
+    name: str,
+    spec: ContainerSpec,
+    *,
+    index: int,
+    gateway: str,
+    gpu: GpuMode = "guest",
+    data: DataLayers | None = None,
+) -> Instance:
     """A new, stopped container named ``name`` presenting ``spec``'s phone.
 
     It takes the pod's ``index`` and joins the network namespace of the container
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
     ``build_prop``; its screen and serial number on the command line (neither has a
-    space).
+    space). It draws in software (``guest``) or on the host's GPU (``host``: given
+    ``/dev/dri``), as ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its
+    /data is the overlay of those layers (``core.emulator._data``), else its own.
     """
     image = image_for(spec)
+    device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
+    mounts = _volumes(data) if data is not None else ()
+    overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
     identity = build_prop(spec)  # refused before anything is created
     await docker(
         "create",
@@ -179,12 +206,16 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
         str(settings.emulator.cpu_cores),
         "--memory",
         f"{settings.emulator.memory_mb}m",
+        *device,
+        *mounts,
         image,
         f"androidboot.redroid_width={spec.screen.width}",
         f"androidboot.redroid_height={spec.screen.height}",
         f"androidboot.redroid_dpi={spec.screen.dpi}",
         f"androidboot.serialno={spec.serial}",
         "androidboot.use_memfd=true",
+        f"androidboot.redroid_gpu_mode={gpu}",
+        *overlay,
     )
     await _give_identity(name, identity)
     return Instance(index, name, running=False)
