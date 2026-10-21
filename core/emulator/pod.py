@@ -102,12 +102,15 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     gateway = gateway_name(name)
     found: set[str] = set()
     created: set[str] = set()
+    layers = None
     try:
         async with _CREATE_LOCK:
             android, current = await _find(name)
             # Only an Android about to be made needs its base: refused before anything is.
             remade = android is None or current is None
             layers = await data_layers(name, spec.sdk) if remade else None
+            # Before an Android is removed: a GPU the host lacks must not leave none.
+            gpu = await gpu_mode() if remade else "guest"
             if android is not None and current is None:
                 # Its namespace went with its gateway: Android is made again in the new one.
                 await docker("rm", "--force", name)
@@ -128,15 +131,24 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         await wait_for_tunnel(gateway)
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
-            gpu = await gpu_mode()
             await create_instance(name, spec, index=index, gateway=gateway, gpu=gpu, data=layers)
         else:
             await refresh_identity(name, spec)  # the proxy may have moved country
         await launch_instance(name, index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))
+        if layers is not None and layers.fresh:
+            await asyncio.shield(_forget_diff(name))
         raise
     return Instance(index, name, running=True)
+
+
+async def _forget_diff(name: str) -> None:
+    """Remove the diff a failed start made, so no later Android boots on its leftovers."""
+    try:
+        await remove_diff(name)
+    except EmulatorError as exc:
+        logger.warning("pod cleanup of %s's data failed (%s)", name, exc.code)
 
 
 async def _stop(container: str) -> None:

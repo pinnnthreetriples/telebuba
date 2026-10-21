@@ -202,8 +202,9 @@ androidboot.use_redroid_overlayfs=1
 so its `/data` is the overlay of the SDK's shared base, read-only, under its own diff, where
 everything the phone writes lands. A start that is about to make Android checks the base first
 and refuses, before anything is created, as `emulator_data_base_missing` when
-`<DATA_BASE_DIR>/<sdk>` is not a directory; the diff is made when missing. A start that finds its
-Android still there needs no base. The container records its diff in the `telebuba.data_diff`
+`<DATA_BASE_DIR>/<sdk>` is not a directory; the diff is made when missing, and a start that fails
+removes the diff it made (never one it found). A start that finds its Android still there needs
+no base. The diff directory may not be a filesystem root. The container records its diff in the `telebuba.data_diff`
 label, so deleting the account removes the recorded diff and the one configured now, even after
 `EMULATOR__DATA_DIFF_DIR` moved or was unset. Each goes after both containers, in a throwaway
 `alpine:3.20` running as root (Android wrote it as its own users). Pods made before it was turned

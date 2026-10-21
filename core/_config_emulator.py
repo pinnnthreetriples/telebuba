@@ -139,4 +139,8 @@ class EmulatorSettings(BaseSettings):
         ):
             msg = "data_base_dir and data_diff_dir must be absolute paths"
             raise ValueError(msg)
+        # A pod's diff is removed as root with ``rm -rf``: never directly under ``/``.
+        if self.data_diff_dir is not None and self.data_diff_dir.parent == self.data_diff_dir:
+            msg = "data_diff_dir must not be the filesystem root"
+            raise ValueError(msg)
         return self

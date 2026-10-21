@@ -42,6 +42,8 @@ class DataLayers(NamedTuple):
 
     base: Path
     diff: Path
+    # Made by this call: a start that fails takes it away again.
+    fresh: bool = False
 
 
 def _segment(name: str) -> str:
@@ -59,15 +61,16 @@ async def data_layers(name: str, sdk: int) -> DataLayers | None:
     diff_root = settings.emulator.data_diff_dir
     if base_root is None or diff_root is None:
         return None
-    layers = DataLayers(base_root / str(sdk), diff_root / _segment(name))
-    if not await asyncio.to_thread(layers.base.is_dir):
+    base, diff = base_root / str(sdk), diff_root / _segment(name)
+    if not await asyncio.to_thread(base.is_dir):
         raise EmulatorError(_EMULATOR_DATA_BASE_MISSING)
+    fresh = not await asyncio.to_thread(diff.exists)
     try:
-        await asyncio.to_thread(layers.diff.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(diff.mkdir, parents=True, exist_ok=True)
     except OSError as exc:
         logger.warning("the pod's data layer could not be made (%s)", type(exc).__name__)
         raise EmulatorError(_EMULATOR_COMMAND_FAILED) from exc
-    return layers
+    return DataLayers(base, diff, fresh=fresh)
 
 
 async def recorded_diff(name: str) -> str | None:
@@ -90,7 +93,8 @@ async def remove_diff(name: str, recorded: str | None = None) -> None:
         targets.add(f"{diff_root.as_posix()}/{leaf}")
     for target in sorted(targets):
         parent, _, last = target.rstrip("/").rpartition("/")
-        if last != leaf or not parent:
+        if last != leaf or parent.rstrip("/").endswith(":") or not parent.strip("/"):
+            # Never a filesystem root bind-mounted for ``rm -rf``.
             raise EmulatorError(_EMULATOR_COMMAND_FAILED)
         await ensure_probe_image()
         await docker(

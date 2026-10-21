@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from core._config_emulator import EmulatorSettings
 from core.config import settings
-from core.emulator import _data, pod
+from core.emulator import _data, host, pod
 from core.emulator._errors import EmulatorError
 from tests.core.emulator.test_pod import _PROXY, _SPEC, _call, _docker
 
@@ -47,6 +47,11 @@ def test_shared_data_takes_both_absolute_directories_or_none(dirs: dict[str, Pat
         EmulatorSettings.model_validate(dirs)
 
 
+def test_the_diff_directory_is_never_the_filesystem_root() -> None:
+    with pytest.raises(ValidationError):
+        EmulatorSettings(data_base_dir=Path("/srv/data-base"), data_diff_dir=Path("/"))
+
+
 def test_empty_directories_in_the_env_file_are_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EMULATOR__DATA_BASE_DIR", "")
     monkeypatch.setenv("EMULATOR__DATA_DIFF_DIR", "")
@@ -77,7 +82,7 @@ async def test_a_pods_diff_is_made_under_its_sdks_base(layers: tuple[Path, Path]
 
     found = await _data.data_layers("telebuba-acc", _SPEC.sdk)
 
-    assert found == (base / str(_SPEC.sdk), diff / "telebuba-acc")
+    assert found == (base / str(_SPEC.sdk), diff / "telebuba-acc", True)
     assert (diff / "telebuba-acc").is_dir()
 
 
@@ -238,3 +243,64 @@ async def test_a_recorded_diff_is_removed_with_shared_data_turned_off(
     ]
     with pytest.raises(EmulatorError):
         await _data.remove_diff("telebuba-acc", "/srv/elsewhere/other-pod")
+
+
+@pytest.mark.asyncio
+async def test_a_root_is_never_mounted_to_remove_a_diff(console: Console) -> None:
+    for recorded in ("/telebuba-acc", "//telebuba-acc", "C:/telebuba-acc"):
+        with pytest.raises(EmulatorError):
+            await _data.remove_diff("telebuba-acc", recorded)
+
+    assert _removals(console) == []
+
+
+def _android_start_fails(argv: list[str]) -> bool:
+    return argv[1] == "start" and argv[-1] == "telebuba-new"
+
+
+@pytest.mark.usefixtures("layers")
+@pytest.mark.asyncio
+async def test_a_failed_start_takes_away_the_diff_it_made(console: Console) -> None:
+    console.answer = _docker(fail=_android_start_fails)
+
+    with pytest.raises(EmulatorError):
+        await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    assert [call[-1] for call in _removals(console)] == ["/data-diff/telebuba-new"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_start_keeps_a_diff_it_found(
+    console: Console, layers: tuple[Path, Path]
+) -> None:
+    _base, diff = layers
+    (diff / "telebuba-new").mkdir(parents=True)
+    console.answer = _docker(fail=_android_start_fails)
+
+    with pytest.raises(EmulatorError):
+        await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+
+    assert _removals(console) == [], "an earlier pod's sign-in may live there"
+
+
+@pytest.mark.asyncio
+async def test_a_missing_gpu_leaves_the_android_whose_gateway_went(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "gpu_mode", "host")
+    monkeypatch.setattr(host, "_dri_seen", False)
+    docker = _docker(gateways="")
+
+    def answer(argv: list[str]) -> str:
+        if argv[1] == "run" and "--device" in argv:
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        return docker(argv)
+
+    console.answer = answer
+
+    with pytest.raises(EmulatorError) as refused:
+        await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    assert refused.value.code == "emulator_gpu_missing"
+    assert [call for call in console.calls if call[1] in {"rm", "create"}] == []
