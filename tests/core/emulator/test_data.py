@@ -194,3 +194,47 @@ async def test_removing_a_pod_removes_its_diff_after_its_containers(console: Con
         "telebuba-acc-2-net",
         "/data-diff/telebuba-acc-2",
     ]
+
+
+@pytest.mark.asyncio
+async def test_a_running_pod_needs_no_base_to_start_again(
+    console: Console, layers: tuple[Path, Path]
+) -> None:
+    base, _diff = layers
+    (base / str(_SPEC.sdk)).rmdir()
+    console.answer = _docker(gateways="0|telebuba-acc-0-net|exited\n")
+
+    await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    assert _call(console, "start", "telebuba-acc-0"), "made before shared /data: its own /data"
+
+
+@pytest.mark.asyncio
+async def test_the_diff_recorded_at_create_is_removed_after_the_setting_moved(
+    console: Console, layers: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _base, diff = layers
+    console.answer = _docker()
+    await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+    android = _call(console, "create", "telebuba-new")
+    assert f"telebuba.data_diff={(diff / 'telebuba-new').as_posix()}" in android
+    moved = tmp_path / "moved"
+    monkeypatch.setattr(settings.emulator, "data_diff_dir", moved)
+
+    await pod.remove_pod("telebuba-new")
+
+    mounts = sorted(call[call.index("--volume") + 1] for call in _removals(console))
+    assert mounts == sorted([f"{diff.as_posix()}:/data-diff", f"{moved.as_posix()}:/data-diff"])
+
+
+@pytest.mark.asyncio
+async def test_a_recorded_diff_is_removed_with_shared_data_turned_off(
+    console: Console, tmp_path: Path
+) -> None:
+    await _data.remove_diff("telebuba-acc", f"{tmp_path.as_posix()}/old/telebuba-acc")
+
+    assert [call[call.index("--volume") + 1] for call in _removals(console)] == [
+        f"{tmp_path.as_posix()}/old:/data-diff"
+    ]
+    with pytest.raises(EmulatorError):
+        await _data.remove_diff("telebuba-acc", "/srv/elsewhere/other-pod")

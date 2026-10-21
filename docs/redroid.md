@@ -200,9 +200,12 @@ androidboot.use_redroid_overlayfs=1
 ```
 
 so its `/data` is the overlay of the SDK's shared base, read-only, under its own diff, where
-everything the phone writes lands. A start checks the base first and refuses, before anything is
-created, as `emulator_data_base_missing` when `<DATA_BASE_DIR>/<sdk>` is not a directory; the diff
-is made when missing. Deleting the account removes the diff after both containers, in a throwaway
+everything the phone writes lands. A start that is about to make Android checks the base first
+and refuses, before anything is created, as `emulator_data_base_missing` when
+`<DATA_BASE_DIR>/<sdk>` is not a directory; the diff is made when missing. A start that finds its
+Android still there needs no base. The container records its diff in the `telebuba.data_diff`
+label, so deleting the account removes the recorded diff and the one configured now, even after
+`EMULATOR__DATA_DIFF_DIR` moved or was unset. Each goes after both containers, in a throwaway
 `alpine:3.20` running as root (Android wrote it as its own users). Pods made before it was turned
 on are not moved: they keep `/data` in the container until they are made again.
 
@@ -284,7 +287,9 @@ app and Docker on the same machine, ext4 under the shared /data directories. The
 Telegram's universal APK carries `arm64-v8a`.
 
 ```bash
-apt-get install -y docker.io adb linux-modules-extra-$(uname -r)
+apt-get install -y docker.io adb
+# Stock Ubuntu kernels ship binder_linux here; a vendor kernel has no such package (see below).
+apt-get install -y "linux-modules-extra-$(uname -r)" || true
 echo 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/binder.conf
 printf '%s\n' binder_linux ip_tables iptable_filter ip6_tables ip6table_filter \
   > /etc/modules-load.d/telebuba.conf

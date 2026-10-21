@@ -29,7 +29,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from core.emulator._data import data_layers, remove_diff
+from core.emulator._data import data_layers, recorded_diff, remove_diff
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
     create_gateway,
@@ -98,7 +98,6 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)
-    layers = await data_layers(name, spec.sdk)  # a missing base, before anything is created
     await ensure_pod_images(spec)  # a pull or build may take minutes: outside the lock
     gateway = gateway_name(name)
     found: set[str] = set()
@@ -106,6 +105,9 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     try:
         async with _CREATE_LOCK:
             android, current = await _find(name)
+            # Only an Android about to be made needs its base: refused before anything is.
+            remade = android is None or current is None
+            layers = await data_layers(name, spec.sdk) if remade else None
             if android is not None and current is None:
                 # Its namespace went with its gateway: Android is made again in the new one.
                 await docker("rm", "--force", name)
@@ -282,8 +284,9 @@ async def remove_pod(name: str) -> bool:
             return False
         raise
     await close_viewer(name)
+    recorded = await recorded_diff(name) if android is not None else None
     for container in (android, gateway):
         if container is not None:
             await docker("rm", "--force", container.name)
-    await remove_diff(name)
+    await remove_diff(name, recorded)
     return android is not None or gateway is not None

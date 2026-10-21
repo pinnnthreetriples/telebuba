@@ -37,6 +37,9 @@ _EMULATOR_SDK_MISMATCH: EmulatorRefusalCode = "emulator_sdk_mismatch"
 ANDROID_LABEL = "telebuba.emulator"
 GATEWAY_LABEL = "telebuba.gateway"
 INDEX_LABEL = "telebuba.index"
+# Where an Android on shared /data keeps its diff, so deleting it finds that directory
+# even after ``EMULATOR__DATA_DIFF_DIR`` changed.
+DIFF_LABEL = "telebuba.data_diff"
 ADB_PORT = 5555
 _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
 # Both kinds of a pod in one listing: the last field is set on gateways only.
@@ -188,7 +191,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     """
     image = image_for(spec)
     device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
-    mounts = _volumes(data) if data is not None else ()
+    mounts = (*_volumes(data), "--label", f"{DIFF_LABEL}={data.diff.as_posix()}") if data else ()
     overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
     identity = build_prop(spec)  # refused before anything is created
     await docker(

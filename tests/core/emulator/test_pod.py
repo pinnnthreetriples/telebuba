@@ -52,6 +52,7 @@ def _docker(
     (or once created); ``inspect`` answers each gateway's and Android's start time.
     """
     lists = {"android": androids.splitlines(), "gateway": gateways.splitlines()}
+    diffs: dict[str, str] = {}  # each Android's recorded shared-/data diff
     networks = {"exists": network}
 
     def answer(argv: list[str]) -> str:
@@ -63,6 +64,8 @@ def _docker(
             raise EmulatorError(code)
         if argv[1:3] == ["network", "create"]:
             networks["exists"] = True
+        if argv[1] == "inspect" and "telebuba.data_diff" in argv[3]:
+            return diffs.get(argv[4], "") + "\n"
         if argv[1] == "inspect":
             return "".join(
                 f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n"
@@ -76,6 +79,8 @@ def _docker(
         if argv[1] == "ps":
             role = "gateway" if argv[4] == "label=telebuba.gateway" else "android"
             return "".join(f"{line}\n" for line in lists[role])
+        if argv[1] == "create" and (label := next((a for a in argv if "data_diff=" in a), "")):
+            diffs[argv[argv.index("--name") + 1]] = label.split("=", 1)[1]
         _track(lists, argv)
         return ""
 

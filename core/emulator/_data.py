@@ -5,7 +5,8 @@ redroid (``androidboot.use_redroid_overlayfs=1``) mounts ``/data`` as an overlay
 ``/data-base`` (``<base>/<sdk>``, read-only, prepared by the operator with no phone's
 identifiers in it) and ``/data-diff`` (``<diff>/<container>``), where everything the
 phone writes lands. The diff outlives its container: a pod made again after its
-gateway went keeps the account's sign-in. ``remove_diff`` deletes it with the pod.
+gateway went keeps the account's sign-in. ``remove_diff`` deletes it with the pod: the
+directory the container recorded at create (``DIFF_LABEL``) and the one configured now.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._process import docker
 from core.emulator.host import PROBE_IMAGE, ensure_probe_image
+from core.emulator.redroid import DIFF_LABEL
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,25 +70,37 @@ async def data_layers(name: str, sdk: int) -> DataLayers | None:
     return layers
 
 
-async def remove_diff(name: str) -> None:
-    """Delete the container ``name``'s diff, when shared /data is on.
+async def recorded_diff(name: str) -> str | None:
+    """The diff directory the Android container ``name`` was created on, if any."""
+    label_format = f'{{{{index .Config.Labels "{DIFF_LABEL}"}}}}'
+    label = await docker("inspect", "--format", label_format, name)
+    return label.strip() or None
+
+
+async def remove_diff(name: str, recorded: str | None = None) -> None:
+    """Delete the container ``name``'s diff: ``recorded`` and the configured one.
 
     Android wrote its files as its own users (root, system, apps), so the app's user
     may not delete them: a throwaway container does, as root.
     """
+    leaf = _segment(name)
     diff_root = settings.emulator.data_diff_dir
-    if diff_root is None:
-        return
-    target = f"/data-diff/{_segment(name)}"
-    await ensure_probe_image()
-    await docker(
-        "run",
-        "--rm",
-        "--volume",
-        f"{diff_root.as_posix()}:/data-diff",
-        "--entrypoint",
-        "rm",
-        PROBE_IMAGE,
-        "-rf",
-        target,
-    )
+    targets = {recorded} if recorded else set()
+    if diff_root is not None:
+        targets.add(f"{diff_root.as_posix()}/{leaf}")
+    for target in sorted(targets):
+        parent, _, last = target.rstrip("/").rpartition("/")
+        if last != leaf or not parent:
+            raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+        await ensure_probe_image()
+        await docker(
+            "run",
+            "--rm",
+            "--volume",
+            f"{parent}:/data-diff",
+            "--entrypoint",
+            "rm",
+            PROBE_IMAGE,
+            "-rf",
+            f"/data-diff/{leaf}",
+        )
