@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class CallLogSeedEntry:
+    """A simulated call-log record to seed into Android telephony provider."""
+
     number: str
     timestamp_ms: int
     duration_sec: int
@@ -25,6 +27,8 @@ class CallLogSeedEntry:
 
 @dataclass(frozen=True, slots=True)
 class SmsSeedEntry:
+    """A simulated SMS message to seed into Android telephony provider."""
+
     sender: str
     body: str
     timestamp_ms: int
@@ -184,10 +188,25 @@ def build_call_and_sms_seed_commands(
     """Build best-effort content insert commands for Android call log and SMS providers."""
     cmds: list[str] = [
         "appops set com.android.shell WRITE_SMS allow 2>/dev/null || true",
-        "appops set com.android.shell WRITE_CALL_LOG allow 2>/dev/null || true",
         "appops set com.android.shell READ_SMS allow 2>/dev/null || true",
+        "appops set com.android.shell RECEIVE_SMS allow 2>/dev/null || true",
+        "appops set com.android.shell WRITE_CALL_LOG allow 2>/dev/null || true",
         "appops set com.android.shell READ_CALL_LOG allow 2>/dev/null || true",
+        "appops set com.android.shell WRITE_CONTACTS allow 2>/dev/null || true",
+        "appops set com.android.shell READ_CONTACTS allow 2>/dev/null || true",
     ]
+    if calls:
+        call_dates = ",".join(str(c.timestamp_ms) for c in calls)
+        cmds.append(
+            f"content delete --uri content://call_log/calls "
+            f"--where {shell_quote(f'date IN ({call_dates})')} 2>/dev/null || true"
+        )
+    if sms_list:
+        sms_dates = ",".join(str(s.timestamp_ms) for s in sms_list)
+        cmds.append(
+            f"content delete --uri content://sms "
+            f"--where {shell_quote(f'date IN ({sms_dates})')} 2>/dev/null || true"
+        )
     cmds.extend(
         "content insert --uri content://call_log/calls "
         f"--bind number:s:{shell_quote(c.number)} "

@@ -133,6 +133,7 @@ class _Container:
         account_id: str | None = None,
         seed: int | str | None = None,
     ) -> None:
+        """Record fake container battery telemetry step."""
         del account_id, seed
         self.on_serial(serial, "battery")
 

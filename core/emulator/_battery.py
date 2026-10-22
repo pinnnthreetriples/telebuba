@@ -23,6 +23,7 @@ class BatteryTelemetryState:
 
     @property
     def charge_counter_uah(self) -> int:
+        """Estimated charge counter in microampere-hours."""
         return int(self.capacity_mah * 1000 * (self.level / 100.0))
 
 

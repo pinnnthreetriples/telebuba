@@ -208,6 +208,7 @@ _MILLIS_PER_MINUTE = 60_000
 
 
 def _decimal_to_dms(deg_float: float) -> tuple[IFDRational, IFDRational, IFDRational]:
+    """Convert decimal coordinate degree float to GPS IFD rational (degrees, minutes, seconds)."""
     val = abs(deg_float)
     deg = int(val)
     rem = (val - deg) * _SECONDS_PER_MINUTE

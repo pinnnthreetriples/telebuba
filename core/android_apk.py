@@ -80,41 +80,42 @@ class PinnedApkNotFoundError(FileNotFoundError):
         self.version = version
 
 
+def _scan_app_apks(slug: str, app_dir: Path) -> list[LocalApkVersion]:
+    """Scan a validated app directory for non-empty APK versions."""
+    apks: list[LocalApkVersion] = []
+    for apk in sorted(app_dir.glob("*.apk")):
+        target = apk.resolve()
+        if not target.is_file() or not target.is_relative_to(app_dir) or target.parent != app_dir:
+            continue
+        stat = target.stat()
+        if stat.st_size > 0:
+            apks.append(LocalApkVersion(slug, target.stem, target, stat.st_size))
+    return apks
+
+
 def list_local_apk_versions(store_dir: Path, app_slug: str | None = None) -> list[LocalApkVersion]:
     """Scan local APK versions catalog (/store_dir/<app_slug>/<version>.apk)."""
     base = store_dir.resolve()
     if not base.exists() or not base.is_dir():
         return []
 
-    results: list[LocalApkVersion] = []
     if app_slug is not None:
         target_dir = (base / app_slug).resolve()
-        if (
+        invalid = (
             target_dir == base
             or not target_dir.is_relative_to(base)
             or target_dir.parent != base
             or not target_dir.is_dir()
-        ):
-            return []
-        app_dirs = [target_dir]
-    else:
-        app_dirs = [p for p in base.iterdir() if p.is_dir()]
+        )
+        return [] if invalid else _scan_app_apks(app_slug, target_dir)
 
-    for app_dir in sorted(app_dirs):
-        if not app_dir.exists() or not app_dir.is_dir():
-            continue
-        for apk_file in sorted(app_dir.glob("*.apk")):
-            stat = apk_file.stat()
-            if stat.st_size > 0:
-                results.append(
-                    LocalApkVersion(
-                        app_slug=app_dir.name,
-                        version=apk_file.stem,
-                        file_path=apk_file.resolve(),
-                        size_bytes=stat.st_size,
-                    )
-                )
-    return results
+    app_dirs: list[tuple[str, Path]] = []
+    for p in sorted(base.iterdir()):
+        resolved = p.resolve()
+        if p.is_dir() and resolved != base and resolved.is_relative_to(base) and resolved.is_dir():
+            app_dirs.append((p.name, resolved))
+
+    return [apk for slug, dir_path in app_dirs for apk in _scan_app_apks(slug, dir_path)]
 
 
 def resolve_pinned_apk_path(

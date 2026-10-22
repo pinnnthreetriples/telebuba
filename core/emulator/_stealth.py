@@ -93,7 +93,7 @@ async def apply_battery_telemetry(
     script: list[str] = []
     for cmd in commands:
         if script:
-            script.append(";")
+            script.append("&&")
         script.extend(cmd.split())
     await adb.shell(serial, *script)
     return resolved_state
@@ -142,14 +142,21 @@ async def step_battery_discharge(
         return None
 
     next_state = step_battery_state(current_state, seed=seed, min_level=min_level)
-    commands = [
-        *build_battery_telemetry_commands(next_state),
-        *build_sensor_jitter_commands(seed=seed),
-    ]
-    script: list[str] = []
-    for cmd in commands:
-        if script:
-            script.append(";")
-        script.extend(cmd.split())
-    await adb.shell(serial, *script)
+    battery_commands = build_battery_telemetry_commands(next_state)
+    battery_script: list[str] = []
+    for cmd in battery_commands:
+        if battery_script:
+            battery_script.append("&&")
+        battery_script.extend(cmd.split())
+    await adb.shell(serial, *battery_script)
+
+    sensor_commands = build_sensor_jitter_commands(seed=seed)
+    if sensor_commands:
+        sensor_script: list[str] = []
+        for cmd in sensor_commands:
+            if sensor_script:
+                sensor_script.append(";")
+            sensor_script.extend(cmd.split())
+        with suppress(EmulatorError):
+            await adb.shell(serial, *sensor_script)
     return next_state
