@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import shlex
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -17,14 +18,23 @@ from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator._process import adb_command
+from core.emulator._profile import (
+    build_container_isolation_commands,
+    build_usb_stealth_commands,
+    build_user_build_resetprop_commands,
+    generate_instance_boot_id,
+)
 from core.emulator._text import escape_input_text, shell_quote
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from core.emulator.ui_dump import UiNode
     from schemas.emulator import EmulatorRefusalCode
 
 _EMULATOR_APK_MISSING: EmulatorRefusalCode = "emulator_apk_missing"
 _EMULATOR_BOOT_TIMEOUT: EmulatorRefusalCode = "emulator_boot_timeout"
+_EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_INSTALL_FAILED: EmulatorRefusalCode = "emulator_install_failed"
 _EMULATOR_SDK_MISMATCH: EmulatorRefusalCode = "emulator_sdk_mismatch"
 
@@ -309,3 +319,36 @@ async def double_tap(
     event = (engine or _default_input_engine).sample_gaussian_tap(node.bounds)
     x, y = str(event.x), str(event.y)
     await shell(serial, "input", "tap", x, y, ";", "input", "tap", x, y)
+
+
+async def exec_root_script(serial: str, commands: Sequence[str]) -> str:
+    """Execute a list of shell commands inside the container as root."""
+    joined = " && ".join(commands)
+    script = (
+        f"if command -v su >/dev/null 2>&1; then su 0 sh -c {shlex.quote(joined)}; "
+        f"else sh -c {shlex.quote(joined)}; fi"
+    )
+    return await shell(serial, script)
+
+
+async def apply_stealth_profile(
+    serial: str,
+    *,
+    extra_props: Mapping[str, str] | None = None,
+    boot_id: str | None = None,
+) -> str:
+    """Apply user-build profile, isolate container markers and mask USB/ADB."""
+    instance_boot_id = boot_id or generate_instance_boot_id()
+    commands = [
+        *build_container_isolation_commands(instance_boot_id),
+        *build_user_build_resetprop_commands(extra_props),
+        *build_usb_stealth_commands(),
+    ]
+
+    await exec_root_script(serial, commands)
+
+    probe = await shell(serial, "echo ok")
+    if probe.strip() != "ok":
+        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+
+    return instance_boot_id

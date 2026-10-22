@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,7 +14,13 @@ from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator import adb, redroid
 from core.emulator._errors import EmulatorError
-from core.emulator._profile import aosp_boot_properties, container_spec
+from core.emulator._profile import (
+    aosp_boot_properties,
+    build_container_isolation_commands,
+    build_usb_stealth_commands,
+    build_user_build_resetprop_commands,
+    container_spec,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -296,3 +304,47 @@ async def test_a_refused_connection_is_left_to_the_next_adb_call(console: Consol
     console.answer = refuse
 
     await adb.connect_device("127.0.0.1:5600")
+
+
+def test_profile_command_builders_include_all_stage3_requirements() -> None:
+    isolation = "\n".join(
+        build_container_isolation_commands("11111111-2222-4333-8444-555555555555")
+    )
+    assert "rm -f /.dockerenv" in isolation
+    assert "mount --bind -o ro /dev/.boot_id /proc/sys/kernel/random/boot_id" in isolation
+
+    resetprops = "\n".join(build_user_build_resetprop_commands({"ro.product.model": "SM-S921B"}))
+    assert "resetprop --delete" in resetprops
+    assert "resetprop -n ro.build.type user" in resetprops
+    assert "resetprop -n ro.build.tags release-keys" in resetprops
+    assert "resetprop -n ro.debuggable 0" in resetprops
+    assert "resetprop -n ro.secure 1" in resetprops
+    assert "resetprop -n ro.boot.verifiedbootstate green" in resetprops
+    assert "resetprop -n ro.boot.flash.locked 1" in resetprops
+    assert "resetprop -n ro.boot.vbmeta.device_state locked" in resetprops
+
+    usb_cmds = "\n".join(build_usb_stealth_commands())
+    assert "settings put global adb_enabled 0" in usb_cmds
+    assert "settings put global development_settings_enabled 0" in usb_cmds
+    assert "resetprop -n sys.usb.state mtp" in usb_cmds
+    assert "resetprop -n sys.usb.config mtp" in usb_cmds
+
+
+@pytest.mark.asyncio
+async def test_apply_stealth_profile_functional_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_shell = AsyncMock(side_effect=["", "ok"])
+    monkeypatch.setattr(adb, "shell", mock_shell)
+
+    boot_id = await adb.apply_stealth_profile("127.0.0.1:5555")
+    assert str(uuid.UUID(boot_id, version=4)) == boot_id
+    assert mock_shell.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_stealth_profile_raises_emulator_error_on_disconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(adb, "shell", AsyncMock(side_effect=["", ""]))
+    with pytest.raises(EmulatorError) as exc_info:
+        await adb.apply_stealth_profile("127.0.0.1:5555")
+    assert exc_info.value.code == "emulator_command_failed"

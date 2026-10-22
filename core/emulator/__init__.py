@@ -20,6 +20,7 @@ from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
 from core.emulator._text import escape_input_text
 from core.emulator.adb import (
+    apply_stealth_profile,
     assert_sdk,
     connect_device,
     human_swipe,
@@ -72,6 +73,7 @@ __all__ = [
     "TapEvent",
     "TelegramMobilePlaybook",
     "adb_serial",
+    "apply_stealth_profile",
     "assert_sdk",
     "bring_app_to_front",
     "confirm_number",
