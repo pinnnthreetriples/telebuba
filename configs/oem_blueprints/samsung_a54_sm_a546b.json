@@ -17,6 +17,7 @@
     "focal_length_mm": 5.5,
     "file_style": "samsung"
   },
+  "soc": "s5e8835",
   "builds": {
     "33": {
       "release": "13",

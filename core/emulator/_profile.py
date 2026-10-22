@@ -22,7 +22,7 @@ import uuid
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.device_fingerprint_android import ANDROID_DEVICES, android_device_model
-from core.emulator._blueprints import Camera, OemBuild, Screen, find_build
+from core.emulator._blueprints import Camera, OemBuild, Screen, find_build, load_socs
 from core.emulator._errors import EmulatorError
 from core.emulator._geo import Region, region_for
 
@@ -52,6 +52,8 @@ class ContainerSpec(NamedTuple):
     camera: Camera
     build: OemBuild
     region: Region
+    # The phone's chip (a ``configs/soc`` stem); ``None``: the host's CPUs show through.
+    soc: str | None = None
 
 
 def _derived(seed: str, purpose: str) -> int:
@@ -100,6 +102,7 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
         camera=blueprint.camera,
         build=build,
         region=region_for(country, fingerprint.system_lang_code, seed=seed),
+        soc=blueprint.soc,
     )
 
 
@@ -116,9 +119,10 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
 
     Left out on purpose: ``ro.build.version.sdk`` (the image's own, which the SDK check
     reads), ``ro.hardware`` / ``ro.board.platform`` (they pick the HALs the image boots
-    with), the security flags (``ro.debuggable``, ``ro.secure``: adbd depends on them)
-    and ``ro.serialno`` (init sets it from ``androidboot.serialno`` before any
-    ``build.prop`` is read, so it goes on the command line).
+    with; the chip is told by ``ro.soc.*`` instead), the security flags
+    (``ro.debuggable``, ``ro.secure``: adbd depends on them) and ``ro.serialno`` (init
+    sets it from ``androidboot.serialno`` before any ``build.prop`` is read, so it goes
+    on the command line).
     """
     build = spec.build
     fingerprint = build_fingerprint(spec)
@@ -149,6 +153,10 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
         "persist.sys.timezone": spec.region.timezone,
         "persist.sys.locale": spec.region.locale,
     }
+    if spec.soc is not None:
+        soc = load_socs()[spec.soc]
+        props["ro.soc.manufacturer"] = soc.manufacturer
+        props["ro.soc.model"] = soc.model
     carrier = spec.region.carrier
     if carrier is not None and spec.region.country is not None:
         for side in ("gsm.sim.operator", "gsm.operator"):

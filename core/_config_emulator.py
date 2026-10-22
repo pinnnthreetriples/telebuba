@@ -52,8 +52,11 @@ class EmulatorSettings(BaseSettings):
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
     # CPU cores and RAM of a new container (its screen is its phone's, ``configs/``).
+    # A phone with a chip (``configs/soc``) gets that chip's cores instead of ``cpu_cores``,
+    # and sees its topology, written under ``cpu_topology_dir`` (``core.emulator._topology``).
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
+    cpu_topology_dir: Path = Path("emulator/cpu")
     # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android
     # boot; one screen to appear; the login code to reach the account's existing
     # session; the screen poll interval.
