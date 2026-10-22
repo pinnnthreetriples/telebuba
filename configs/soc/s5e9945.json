@@ -1,0 +1,63 @@
+{
+  "model": "s5e9945",
+  "manufacturer": "Samsung",
+  "bogomips": "51.20",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16 dgh bti ecv afp wfxt",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x0",
+          "part": "0xd80",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [400000, 576000, 672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 1959000]
+    },
+    {
+      "cores": [
+        {
+          "count": 3,
+          "implementer": "0x41",
+          "variant": "0x0",
+          "part": "0xd81",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2016000, 2112000, 2208000, 2304000, 2400000, 2496000, 2592000]
+    },
+    {
+      "cores": [
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x0",
+          "part": "0xd81",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2016000, 2112000, 2208000, 2304000, 2400000, 2496000, 2592000, 2688000, 2784000, 2880000, 2900000]
+    },
+    {
+      "cores": [
+        {
+          "count": 1,
+          "implementer": "0x41",
+          "variant": "0x0",
+          "part": "0xd82",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2016000, 2112000, 2208000, 2304000, 2400000, 2496000, 2592000, 2688000, 2784000, 2880000, 2976000, 3072000, 3207000]
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/samsung/e1s/e1sxxx-user-14-UP1A.231005.007-S921BXXU1AXCB-release-keys/vendor.build.prop",
+    "https://github.com/codepdbh/nfsu2-recompiled/issues/1208",
+    "https://github.com/hrw/arm-socs-table/issues/106",
+    "https://raw.githubusercontent.com/s5e9945-aosp/android_device_samsung_s5e9945/HEAD/overlay/frameworks/base/core/res/res/xml/power_profile.xml",
+    "https://raw.githubusercontent.com/fcuzzocrea/android_device_samsung_s5e9945/HEAD/rro_overlay/FrameworkResOverlayCommon/res/xml/power_profile.xml"
+  ]
+}

@@ -8,6 +8,7 @@ import pytest
 
 from core.country_zones import ZONE_BY_COUNTRY
 from core.device_fingerprint_android import ANDROID_DEVICES, generate_android_fingerprint
+from core.emulator import _profile
 from core.emulator._blueprints import find_build, load_blueprints
 from core.emulator._errors import EmulatorError
 from core.emulator._geo import load_carriers, region_for
@@ -18,6 +19,7 @@ from core.emulator._profile import (
     derive_serial,
 )
 from core.web_login._countries import COUNTRY
+from tests.core.emulator.test_topology import CHIP
 
 
 def _fingerprint(model: str, sdk: str, *, account_id: str = "acc", lang: str = "de-DE"):
@@ -60,6 +62,21 @@ def test_the_container_is_the_phone_its_firmware_and_its_region() -> None:
     left_to_the_image = {"ro.build.version.sdk", "ro.hardware", "ro.debuggable", "ro.secure"}
     assert not left_to_the_image & props.keys()
     assert "ro.serialno" not in props, "init sets it from androidboot.serialno first"
+
+
+def test_the_chip_is_told_by_ro_soc_and_the_hals_stay_the_images(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_profile, "load_socs", lambda: {"chip": CHIP})
+    spec = container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE")
+
+    props = aosp_boot_properties(spec._replace(soc="chip"))
+    assert props["ro.soc.model"] == "SM0000"
+    assert props["ro.soc.manufacturer"] == "QTI"
+    assert not {"ro.hardware", "ro.board.platform"} & props.keys()
+    assert not any(
+        key.startswith("ro.soc.") for key in aosp_boot_properties(spec._replace(soc=None))
+    )
 
 
 def test_the_language_is_the_fingerprints_not_the_proxy_countrys() -> None:

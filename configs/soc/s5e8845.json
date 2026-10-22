@@ -1,0 +1,38 @@
+{
+  "model": "s5e8845",
+  "manufacturer": "Samsung",
+  "bogomips": "51.20",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x2",
+          "part": "0xd05",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [533000, 672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2050000]
+    },
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd41",
+          "revision": 2
+        }
+      ],
+      "frequencies_khz": [533000, 672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2016000, 2112000, 2208000, 2304000, 2400000, 2496000, 2592000, 2688000, 2750000]
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/samsung/a55x/a55xnaxx-user-14-UP1A.231005.007-A556BXXS2AXD3-release-keys/vendor.build.prop",
+    "https://github.com/getActivity/AndroidSystemPropertyCollect/blob/HEAD/OneUI/OneUI%207.0%20Android%2015%20Galaxy%20A55.txt",
+    "https://github.com/hrw/arm-socs-table/issues/164",
+    "https://raw.githubusercontent.com/exynos1480/android_device_samsung_a55x/HEAD/rro_overlays/FrameworkResOverlay/res/xml/power_profile.xml"
+  ]
+}

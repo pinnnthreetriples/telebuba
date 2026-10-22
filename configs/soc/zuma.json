@@ -1,0 +1,48 @@
+{
+  "model": "Tensor G3",
+  "manufacturer": "Google",
+  "bogomips": "49.15",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bti",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd46",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [324000, 610000, 820000, 955000, 1098000, 1197000, 1328000, 1425000, 1548000, 1704000]
+    },
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd4d",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [402000, 578000, 697000, 712000, 910000, 1065000, 1221000, 1328000, 1418000, 1572000, 1836000, 1945000, 2130000, 2245000, 2367000]
+    },
+    {
+      "cores": [
+        {
+          "count": 1,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd4e",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [500000, 880000, 1164000, 1298000, 1557000, 1745000, 1885000, 2049000, 2147000, 2294000, 2363000, 2556000, 2687000, 2850000, 2914000]
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/google/shiba/shiba-user-14-AP2A.240605.024-11860263-release-keys/vendor.build.prop",
+    "https://github.com/pytorch/cpuinfo/blob/main/test/mock/pixel-8.h"
+  ]
+}

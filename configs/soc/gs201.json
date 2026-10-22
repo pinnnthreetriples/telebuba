@@ -1,0 +1,49 @@
+{
+  "model": "GS201",
+  "manufacturer": "Google",
+  "bogomips": "49.15",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x2",
+          "part": "0xd05",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [300000, 574000, 738000, 930000, 1098000, 1197000, 1328000, 1401000, 1598000, 1704000, 1803000]
+    },
+    {
+      "cores": [
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd41",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [400000, 553000, 696000, 799000, 910000, 1024000, 1197000, 1328000, 1491000, 1663000, 1836000, 1999000, 2130000, 2253000, 2348000]
+    },
+    {
+      "cores": [
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd44",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [500000, 851000, 984000, 1106000, 1277000, 1426000, 1582000, 1745000, 1826000, 2048000, 2188000, 2252000, 2401000, 2507000, 2630000, 2704000, 2802000, 2850000]
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/google/panther/panther-user-13-TD1A.220804.009.A2-8940162-release-keys/vendor.build.prop",
+    "https://github.com/fastfetch-cli/fastfetch/issues/1529#issuecomment-2785147069",
+    "https://raw.githubusercontent.com/LineageOS/android_device_google_pantah/HEAD/panther/overlay/FrameworkResOverlayVendorPanther/res/xml/power_profile.xml"
+  ]
+}
