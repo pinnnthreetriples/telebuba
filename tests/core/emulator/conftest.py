@@ -25,6 +25,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.emulator, "adb_path", tmp_path / "adb.exe")
     monkeypatch.setattr(settings.emulator, "docker_path", tmp_path / "docker.exe")
     monkeypatch.setattr(settings.emulator, "scrcpy_path", tmp_path / "scrcpy.exe")
+    monkeypatch.setattr(settings.emulator, "cpu_topology_dir", tmp_path / "cpu")
     monkeypatch.setattr(settings.emulator, "desktop_viewer", True)
     monkeypatch.setattr(settings.emulator, "poll_seconds", 0.01)
     monkeypatch.setattr(settings.emulator, "boot_timeout_seconds", 0.1)

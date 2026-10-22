@@ -20,6 +20,7 @@ from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
+from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
 
 if TYPE_CHECKING:
     from core.emulator._data import DataLayers
@@ -191,11 +192,12 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     ``/dev/dri``), as ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its
     /data is the overlay of those layers (``core.emulator._data``), else its own;
     ``kept_diff`` is the diff of the Android it replaces, still labelled for deletion.
-    With ``cpuset`` it runs on those host cores only (``core.emulator._cpuset``).
+    Its chip's CPUs go in through ``_cpu_options`` and the init script that binds
+    its cpuinfo; one without a chip runs on the host cores ``cpuset`` names, if any
+    (``core.emulator._cpuset``).
     """
     image = image_for(spec)
     device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
-    pinned = ("--cpuset-cpus", cpuset) if cpuset else ()
     # Where its diff is, for deletion; with shared /data off now, the one it replaces keeps.
     diff = data.diff.as_posix() if data else kept_diff
     mounts = _volumes(data) if data else ()
@@ -203,6 +205,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         mounts = (*mounts, "--label", f"{DIFF_LABEL}={diff}")
     overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
     identity = build_prop(spec)  # refused before anything is created
+    cpus, topology = await _cpu_options(spec, index, cpuset)
     await docker(
         "create",
         "--name",
@@ -214,9 +217,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         "--privileged",
         "--network",
         f"container:{gateway}",
-        "--cpus",
-        str(settings.emulator.cpu_cores),
-        *pinned,
+        *cpus,
         "--memory",
         f"{settings.emulator.memory_mb}m",
         *device,
@@ -230,18 +231,52 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         f"androidboot.redroid_gpu_mode={gpu}",
         *overlay,
     )
+    if topology is not None:
+        await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
     await _give_identity(name, identity)
     return Instance(index, name, running=False)
 
 
-async def refresh_identity(name: str, spec: ContainerSpec) -> None:
+async def _cpu_options(
+    spec: ContainerSpec, index: int, cpuset: str | None
+) -> tuple[list[str], Path | None]:
+    """``docker create``'s CPU options for ``spec`` and its topology directory, if any.
+
+    A phone with a chip is pinned to the pod's cores and sees the chip's topology
+    (``core.emulator._topology``); one without gets ``cpu_cores`` of the host's, on the
+    cores ``cpuset`` names when ``EMULATOR__CPUSET_CORES`` pins it.
+    """
+    if spec.soc is None:
+        pinned = ["--cpuset-cpus", cpuset] if cpuset else []
+        return ["--cpus", str(settings.emulator.cpu_cores), *pinned], None
+    placement = await place_cpus(spec.soc, index)
+    directory = placement.directory
+    return [
+        "--cpuset-cpus",
+        placement.cpuset,
+        "--volume",
+        f"{directory / 'cpu'}:{SYSFS_CPU}:ro",
+        "--volume",
+        f"{directory / 'cpuinfo'}:{CPUINFO_STAGE}:ro",
+    ], directory
+
+
+async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     """Rewrite a stopped container's ``build_prop`` before it boots again.
 
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
-    follow it.
+    follow it. A phone with a chip is pinned to the pod's cores again, its quota
+    raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
+    does not clear it); its mounts are a new container's only (one made before has
+    none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
+    if spec.soc is not None:
+        placement = await place_cpus(spec.soc, index)
+        await docker(
+            "update", "--cpus", str(placement.cores), "--cpuset-cpus", placement.cpuset, name
+        )
 
 
 async def launch_instance(name: str, index: int) -> None:

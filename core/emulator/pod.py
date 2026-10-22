@@ -115,7 +115,8 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             layers = await data_layers(name, spec.sdk, kept) if remade else None
             # Before an Android is removed: a GPU the host lacks must not leave none.
             gpu = await gpu_mode() if remade else "guest"
-            cores = settings.emulator.cpuset_cores
+            # A phone with a chip is pinned by its chip (``core.emulator._topology``) instead.
+            cores = settings.emulator.cpuset_cores if spec.soc is None else 0
             pool = await host_cpus() if remade and cores else 0
             if android is not None and current is None:
                 # Its namespace went with its gateway: Android is made again in the new one.
@@ -148,7 +149,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
                 cpuset=cpuset_for(index, cores, pool) if pool else None,
             )
         else:
-            await refresh_identity(name, spec)  # the proxy may have moved country
+            await refresh_identity(name, spec, index)  # the proxy may have moved country
         await launch_instance(name, index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))

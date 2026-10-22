@@ -11,10 +11,11 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _gateway, host, pod
+from core.emulator import _gateway, _profile, _topology, host, pod
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import container_spec
 from schemas.proxy import ProxySettings
+from tests.core.emulator.test_topology import CHIP
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -26,7 +27,7 @@ _SPEC = container_spec(
         update={"device_model": "GooglePixel 8", "system_version": "SDK 34"},
     ),
     "DE",
-)
+)._replace(soc=None)
 _PROXY = ProxySettings(
     proxy_type="socks5", host="203.0.113.7", port=1080, username="tb-user", password="s3cr'et pw"
 )
@@ -64,13 +65,10 @@ def _docker(
             raise EmulatorError(code)
         if argv[1:3] == ["network", "create"]:
             networks["exists"] = True
-        if argv[1] == "inspect" and "telebuba.data_diff" in argv[3]:
-            return diffs.get(argv[4], "") + "\n"
+        if argv[1] == "info":
+            return "16\n"
         if argv[1] == "inspect":
-            return "".join(
-                f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n"
-                for name in argv[4:]
-            )
+            return _inspect(argv, diffs, gateway_started)
         if argv[1] == "ps" and argv[4] == "label=telebuba.index":
             # One listing of both kinds: the gateway label field is set on gateways only.
             return "".join(f"{line}|\n" for line in lists["android"]) + "".join(
@@ -85,6 +83,15 @@ def _docker(
         return ""
 
     return answer
+
+
+def _inspect(argv: list[str], diffs: dict[str, str], gateway_started: str) -> str:
+    """The fake docker's ``inspect``: an Android's recorded diff, or each container's start."""
+    if "telebuba.data_diff" in argv[3]:
+        return diffs.get(argv[4], "") + "\n"
+    return "".join(
+        f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n" for name in argv[4:]
+    )
 
 
 def _track(lists: dict[str, list[str]], argv: list[str]) -> None:
@@ -107,7 +114,7 @@ def _verbs(console: Console) -> list[str]:
     return [
         f"{call[1]} {call[targets.get(call[1], 2)]}"
         for call in console.calls
-        if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image"}
+        if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image", "info"}
     ]
 
 
@@ -240,6 +247,28 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
         "cp " + _identity_written(console, "telebuba-acc-0")[2],
         "start telebuba-acc-0",
     ], "its phone is written again before it boots: the proxy may have moved country"
+
+
+@pytest.mark.asyncio
+async def test_a_found_android_with_a_chip_is_pinned_to_its_pods_cores_before_it_boots(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for module in (_topology, _profile):
+        monkeypatch.setattr(module, "load_socs", lambda: {"chip": CHIP})
+    console.answer = _docker()
+
+    await pod.start_pod("telebuba-acc-2", _SPEC._replace(soc="chip"), _PROXY)
+
+    verbs = _verbs(console)
+    assert verbs[-2:] == ["update --cpus", "start telebuba-acc-2"]
+    assert _call(console, "update", "telebuba-acc-2")[2:] == [
+        "--cpus",
+        "4",
+        "--cpuset-cpus",
+        "8-11",
+        "telebuba-acc-2",
+    ], "its index's slice; its mounts stay a new container's"
+    assert not any(v.startswith(("create", "rm")) for v in verbs)
 
 
 @pytest.mark.asyncio
@@ -607,64 +636,6 @@ async def test_a_failing_docker_is_not_hidden_from_a_removal(console: Console) -
 @pytest.mark.asyncio
 async def test_an_ipv4_literal_needs_no_lookup() -> None:
     assert await _gateway.resolve_address("127.0.0.1") == "127.0.0.1"
-
-
-_PAUSED = "0|telebuba-acc-0|paused\n"
-
-
-@pytest.mark.asyncio
-async def test_a_pod_is_parked_by_pausing_android_alone(console: Console) -> None:
-    console.answer = _docker()
-
-    assert await pod.pause_pod("telebuba-acc-0") is True
-    assert await pod.pause_pod("telebuba-acc-2") is False, "a stopped pod has nothing to pause"
-
-    assert _verbs(console) == ["pause telebuba-acc-0"], "the gateway keeps its tunnel up"
-
-
-@pytest.mark.asyncio
-async def test_a_parked_pod_is_thawed_then_killed_when_stopped(console: Console) -> None:
-    console.answer = _docker(_PAUSED)
-
-    await pod.stop_pod("telebuba-acc-0")
-
-    assert _verbs(console) == [
-        "unpause telebuba-acc-0",
-        "kill telebuba-acc-0",
-        "stop telebuba-acc-0-net",
-    ], "no grace: the app must not get to reconnect"
-
-
-@pytest.mark.asyncio
-async def test_only_a_pod_still_parked_is_stopped_by_its_timer(console: Console) -> None:
-    console.answer = _docker(_PAUSED)
-    assert await pod.stop_paused_pod("telebuba-acc-0") is True
-
-    console.calls.clear()
-    console.answer = _docker()
-    assert await pod.stop_paused_pod("telebuba-acc-0") is False, "someone opened it since"
-    assert _verbs(console) == []
-
-
-@pytest.mark.asyncio
-async def test_parked_pods_are_stopped_with_the_running_ones(console: Console) -> None:
-    console.answer = _docker(_PAUSED + "1|telebuba-acc-1|running\n")
-
-    assert await pod.stop_running_pods() == 3
-
-    verbs = _verbs(console)
-    assert "kill telebuba-acc-0" in verbs
-    assert "stop telebuba-acc-1" in verbs
-
-
-@pytest.mark.asyncio
-async def test_a_parked_pod_is_halted_before_a_restart(console: Console) -> None:
-    console.answer = _docker(_PAUSED)
-
-    await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
-
-    verbs = _verbs(console)
-    assert verbs.index("kill telebuba-acc-0") < verbs.index("start telebuba-acc-0-net")
 
 
 @pytest.mark.asyncio

@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.emulator import host, pod
+from core.emulator import _profile, _topology, host, pod
 from core.emulator._cpuset import cpuset_for
 from core.emulator._errors import EmulatorError
 from tests.core.emulator.test_pod import _PROXY, _SPEC, _call, _docker
+from tests.core.emulator.test_topology import CHIP
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -158,3 +159,20 @@ async def test_a_host_that_cannot_say_its_cores_leaves_the_android_whose_gateway
 
     assert refused.value.code == "emulator_command_failed"
     assert [call for call in console.calls if call[1] in {"rm", "create"}] == []
+
+
+@pytest.mark.asyncio
+async def test_a_phone_with_a_chip_is_pinned_by_its_chip_alone(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for module in (_topology, _profile):
+        monkeypatch.setattr(module, "load_socs", lambda: {"chip": CHIP})
+    monkeypatch.setattr(settings.emulator, "cpuset_cores", 2)
+    console.answer = _with_cpus("16", _docker())
+
+    await pod.start_pod("telebuba-new", _SPEC._replace(soc="chip"), _PROXY)
+
+    android = _call(console, "create", "telebuba-new")
+    assert android.count("--cpuset-cpus") == 1
+    assert android[android.index("--cpuset-cpus") + 1] == "4-7", "the chip's 4 cores, slice 1"
+    assert host._cpus_seen == 0, "the chipless probe is not asked"

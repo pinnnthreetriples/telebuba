@@ -10,21 +10,24 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import adb, redroid
+from core.emulator import _profile, _topology, adb, redroid
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import aosp_boot_properties, container_spec
+from tests.core.emulator.test_topology import CHIP
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from tests.core.emulator.conftest import Console
 
+# A phone without a chip: the host's CPUs, ``cpu_cores`` of them.
 _SPEC = container_spec(
     generate_android_fingerprint("acc", None).model_copy(
         update={"device_model": "GooglePixel 7", "system_version": "SDK 33"},
     ),
     "DE",
-)
+)._replace(soc=None)
+_CHIP_SPEC = _SPEC._replace(soc="chip")
 _PS = "0|telebuba-acc-1|running\n2|telebuba-acc-2|exited\n|stray|running\n"
 _IMAGE_PROP = "ro.product.product.model=redroid13_x86_64\nro.build.characteristics=default"
 
@@ -95,6 +98,9 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
     assert "--privileged" in create
+    assert create[create.index("--cpus") + 1] == "2"
+    assert "--cpuset-cpus" not in create
+    assert "--volume" not in create, "the host's own CPUs show through"
     image = create.index("redroid/redroid:13.0.0_64only-latest")
     assert create[image + 1 :] == [
         f"androidboot.redroid_width={_SPEC.screen.width}",
@@ -193,12 +199,54 @@ async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -
     ps.answer = _product_prop(first, copied)
     moved = _SPEC._replace(region=_SPEC.region._replace(timezone="Europe/Warsaw"))
 
-    await redroid.refresh_identity("telebuba-acc-2", moved)
+    await redroid.refresh_identity("telebuba-acc-2", moved, 2)
 
     (written,) = copied
     assert written == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(moved))
     assert "persist.sys.timezone=Europe/Warsaw\n" in written
     assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
+    assert _docker_calls(ps, "update") == [], "a phone without a chip keeps its CPUs"
+
+
+@pytest.fixture
+def chip(ps: Console, monkeypatch: pytest.MonkeyPatch) -> Console:
+    """``CHIP`` (4 cores) is the phone's chip; Docker's VM has 16 CPUs."""
+    for module in (_topology, _profile):
+        monkeypatch.setattr(module, "load_socs", lambda: {"chip": CHIP})
+    product = _product_prop(_IMAGE_PROP, [])
+    ps.answer = lambda argv: "16\n" if argv[1] == "info" else product(argv)
+    return ps
+
+
+@pytest.mark.asyncio
+async def test_a_new_container_with_a_chip_is_pinned_and_sees_its_topology(chip: Console) -> None:
+    await redroid.create_instance("telebuba-new", _CHIP_SPEC, index=1, gateway="telebuba-new-net")
+
+    create = _docker_calls(chip, "create")[0]
+    assert "--cpus" not in create
+    assert create[create.index("--cpuset-cpus") + 1] == "4-7", "pod 1's own slice"
+    directory = settings.emulator.cpu_topology_dir.resolve() / "chip-4"
+    mounts = [create[i + 1] for i, arg in enumerate(create) if arg == "--volume"]
+    assert mounts == [
+        f"{directory / 'cpu'}:/sys/devices/system/cpu:ro",
+        f"{directory / 'cpuinfo'}:/dev/cpuinfo:ro",
+    ]
+    assert (directory / "cpu/cpu3/cpufreq/cpuinfo_max_freq").read_text() == "3187200\n"
+    (rc,) = [c for c in _docker_calls(chip, "cp") if c[-1].endswith("cpuinfo.rc")]
+    assert rc[2:] == [str(directory / "cpuinfo.rc"), "telebuba-new:/vendor/etc/init/cpuinfo.rc"]
+    assert chip.calls.index(rc) > chip.calls.index(create)
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_pins_a_chips_container_without_new_mounts(chip: Console) -> None:
+    await redroid.refresh_identity("telebuba-acc-2", _CHIP_SPEC, 2)
+
+    (update,) = _docker_calls(chip, "update")
+    assert update[2:] == ["--cpus", "4", "--cpuset-cpus", "8-11", "telebuba-acc-2"], (
+        "pod 2's own slice, its old --cpus quota raised to all of it"
+    )
+    assert not [c for c in chip.calls if c[1] in {"create", "rm"}], "nothing is made again"
+    assert not [c for c in _docker_calls(chip, "cp") if c[-1].endswith("cpuinfo.rc")]
 
 
 @pytest.mark.asyncio

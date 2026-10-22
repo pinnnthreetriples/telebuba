@@ -120,6 +120,18 @@ The container is a real phone (`core/emulator/_profile.py`):
   mobile fingerprint's `system_lang_code`, which the app sends Telegram as that same field.
 - A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
   country moves the timezone and carrier; a running one is left alone.
+- **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
+  `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps) gets `ro.soc.model` /
+  `ro.soc.manufacturer` and as many host cores as the chip has (fewer on a smaller Docker VM),
+  pinned with `--cpuset-cpus`: pod N gets its own slice while the VM has room for it, else the
+  first one. A new container sees the chip: `/sys/devices/system/cpu` is replaced read-only by a
+  generated tree (cpufreq, topology; WSL2's own has no cpufreq), and `/proc/cpuinfo` is bound by
+  an init script (`/vendor/etc/init/cpuinfo.rc`) from `/dev/cpuinfo` at every boot: init mounts
+  a fresh proc over Docker's, so Docker cannot mount it there. The files live once per chip and
+  core count under `EMULATOR__CPU_TOPOLOGY_DIR`. A container made before gets only the cpuset
+  (`docker update`). A phone without a chip keeps `EMULATOR__CPU_CORES` of the host's CPUs.
+  The image stays x86_64 (`ro.product.cpu.abilist` starts with `x86_64`), so an app comparing
+  its ABI with the ARM cpuinfo can tell.
 
 ## First-boot data
 
@@ -244,7 +256,8 @@ under it. To change a base, stop the pods, replace it, and make their Androids a
 
 ## CPU pinning
 
-Off unless `EMULATOR__CPUSET_CORES` is above 0 (`core/emulator/_cpuset.py`). Then a new Android is
+For phones without a chip (a phone with one is pinned by its chip, see Identity and region). Off
+unless `EMULATOR__CPUSET_CORES` is above 0 (`core/emulator/_cpuset.py`). Then a new Android is
 created with `--cpuset-cpus`, a slice of that many of the Docker host's cores picked by its pod's
 index: with 8 on a 16-core host pod 0 gets `0-7`, pod 1 `8-15`, pod 2 `0-7` again. Cores left over
 after the last whole slice are not used; a host with no more cores than one slice gives every pod
@@ -381,4 +394,5 @@ EMULATOR__ADB_PATH=C:/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/Genymo
 EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org when missing
 ```
 
-`EMULATOR__CPU_CORES` and `EMULATOR__MEMORY_MB` size new containers; the screen is the phone's.
+`EMULATOR__CPU_CORES` (phones without a chip) and `EMULATOR__MEMORY_MB` size new containers;
+the screen is the phone's.
