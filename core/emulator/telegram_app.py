@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import phonenumbers
 
-from core.android_apk import local_apk_identity
+from core.android_apk import app_identity, find_store_apk, local_apk_identity
 from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
@@ -28,6 +28,8 @@ from core.emulator.ui_dump import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from core.emulator.ui_dump import Screen, UiNode
     from schemas.emulator import EmulatorRefusalCode
 
@@ -79,12 +81,17 @@ async def leave_app(serial: str) -> None:
     await adb.press(serial, adb.KEYCODE_HOME)
 
 
-async def ensure_app(serial: str) -> None:
+async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
     """Install Telegram when the container lacks it (fetching the APK first), then start it."""
     package = await app_package(serial)
     if package is None:
-        package = (await ensure_telegram_apk()).package
-        await adb.install_apk(serial)
+        target_apk = apk_path or find_store_apk(settings.emulator.telegram_package)
+        if target_apk is None:
+            package = (await ensure_telegram_apk()).package
+            target_apk = settings.emulator.telegram_apk_path
+        else:
+            package = app_identity(target_apk).package
+        await adb.install_apk(serial, target_apk)
     await adb.start_app(serial, package)
 
 

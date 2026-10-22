@@ -52,6 +52,12 @@ class AppIdentity(NamedTuple):
     version: str  # "versionName (versionCode)"
 
 
+class ApkStoreEntry(NamedTuple):
+    package: str
+    version: str  # "versionName (versionCode)"
+    path: Path
+
+
 def signing_certificate_sha256(path: Path) -> str:
     """The SHA-256 (hex) of the one certificate every v2/v3/v3.1 signer of the APK uses."""
     data = path.read_bytes()
@@ -114,6 +120,38 @@ def _cached_identity(path: str, _mtime_ns: int, _size: int) -> AppIdentity | Non
         return app_identity(Path(path))
     except (ValueError, OSError):
         return None
+
+
+def list_store_apks(store_dir: Path | None = None) -> list[ApkStoreEntry]:
+    """List valid APKs found in the local versioned store (<store_dir>/**/*.apk)."""
+    root = store_dir or settings.emulator.apk_store_dir
+    if not root.is_dir():
+        return []
+    entries: list[ApkStoreEntry] = []
+    for file in sorted(root.glob("**/*.apk")):
+        if not file.is_file():
+            continue
+        try:
+            identity = app_identity(file)
+            entries.append(
+                ApkStoreEntry(package=identity.package, version=identity.version, path=file)
+            )
+        except (ValueError, OSError):
+            continue
+    return entries
+
+
+def find_store_apk(
+    package: str,
+    version: str | None = None,
+    *,
+    store_dir: Path | None = None,
+) -> Path | None:
+    """Find an APK in the local store matching package and optional version."""
+    for entry in list_store_apks(store_dir):
+        if entry.package == package and (version is None or entry.version == version):
+            return entry.path
+    return None
 
 
 def _signing_blocks(data: bytes) -> dict[int, bytes]:

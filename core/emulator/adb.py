@@ -19,6 +19,8 @@ from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
 from core.emulator._process import adb_command
 from core.emulator._profile import (
+    build_battery_stealth_commands,
+    build_cellular_stealth_commands,
     build_container_isolation_commands,
     build_usb_stealth_commands,
     build_user_build_resetprop_commands,
@@ -28,6 +30,7 @@ from core.emulator._text import escape_input_text, shell_quote
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from pathlib import Path
 
     from core.emulator.ui_dump import UiNode
     from schemas.emulator import EmulatorRefusalCode
@@ -130,18 +133,26 @@ async def installed_packages(serial: str) -> set[str]:
     return {line.strip().removeprefix("package:") for line in listed.splitlines() if line.strip()}
 
 
-async def install_apk(serial: str) -> None:
-    """Install the configured Telegram APK; ``emulator_apk_missing`` when there is no file."""
-    apk = settings.emulator.telegram_apk_path
+async def install_apk(
+    serial: str,
+    path: Path | None = None,
+    *,
+    installer_package: str | None = "com.android.vending",
+) -> None:
+    """Install the configured (or given) APK; ``emulator_apk_missing`` when there is no file.
+
+    By default simulates installation from Google Play Store using -i com.android.vending.
+    """
+    apk = path or settings.emulator.telegram_apk_path
     if not apk.is_file():
         raise EmulatorError(_EMULATOR_APK_MISSING)
+    args = ["-s", serial, "install", "-r"]
+    if installer_package:
+        args.extend(["-i", installer_package])
+    args.append(str(apk))
     try:
         await adb_command(
-            "-s",
-            serial,
-            "install",
-            "-r",
-            str(apk),
+            *args,
             seconds=settings.emulator.install_timeout_seconds,
             step="adb install",
         )
@@ -336,13 +347,17 @@ async def apply_stealth_profile(
     *,
     extra_props: Mapping[str, str] | None = None,
     boot_id: str | None = None,
+    battery_level: int | None = None,
+    battery_temp: int | None = None,
 ) -> str:
-    """Apply user-build profile, isolate container markers and mask USB/ADB."""
+    """Apply user-build profile, isolate container markers and simulate battery/LTE."""
     instance_boot_id = boot_id or generate_instance_boot_id()
     commands = [
         *build_container_isolation_commands(instance_boot_id),
         *build_user_build_resetprop_commands(extra_props),
         *build_usb_stealth_commands(),
+        *build_battery_stealth_commands(level=battery_level, temp=battery_temp),
+        *build_cellular_stealth_commands(),
     ]
 
     await exec_root_script(serial, commands)
@@ -352,3 +367,18 @@ async def apply_stealth_profile(
         raise EmulatorError(_EMULATOR_COMMAND_FAILED)
 
     return instance_boot_id
+
+
+async def step_battery_discharge(serial: str, decrement: int = 1) -> None:
+    """Safely decrement battery level by ``decrement``% (clamped to minimum 5%)."""
+    output = await shell(serial, "dumpsys", "battery")
+    level: int | None = None
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("level:"):
+            with suppress(ValueError):
+                level = int(stripped.split(":", 1)[1].strip())
+            break
+    if level is not None:
+        new_level = max(5, level - decrement)
+        await shell(serial, "dumpsys", "battery", "set", "level", str(new_level))

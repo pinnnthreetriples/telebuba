@@ -15,6 +15,7 @@ telephony to give it to).
 from __future__ import annotations
 
 import hashlib
+import random
 import shlex
 import string
 import uuid
@@ -242,3 +243,28 @@ def build_usb_stealth_commands() -> list[str]:
     for key, value in USB_STEALTH_PROPS.items():
         commands.append(f"resetprop -n {shlex.quote(key)} {shlex.quote(value)}")
     return commands
+
+
+def build_battery_stealth_commands(
+    level: int | None = None,
+    temp: int | None = None,
+) -> list[str]:
+    """Commands simulating a realistic mobile battery discharge state."""
+    resolved_level = random.randint(35, 90) if level is None else level  # nosec B311  # noqa: S311
+    resolved_temp = random.randint(310, 340) if temp is None else temp  # nosec B311  # noqa: S311
+    return [
+        "dumpsys battery set status 3",
+        "dumpsys battery set ac 0",
+        "dumpsys battery set usb 0",
+        "dumpsys battery set wireless 0",
+        f"dumpsys battery set level {resolved_level}",
+        f"dumpsys battery set temp {resolved_temp}",
+    ]
+
+
+def build_cellular_stealth_commands() -> list[str]:
+    """Commands setting container radio properties to LTE / connected state."""
+    return [
+        "resetprop -n gsm.network.type LTE",
+        "resetprop -n gsm.sim.state READY",
+    ]

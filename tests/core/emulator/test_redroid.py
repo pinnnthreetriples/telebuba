@@ -16,6 +16,8 @@ from core.emulator import adb, redroid
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import (
     aosp_boot_properties,
+    build_battery_stealth_commands,
+    build_cellular_stealth_commands,
     build_container_isolation_commands,
     build_usb_stealth_commands,
     build_user_build_resetprop_commands,
@@ -328,6 +330,18 @@ def test_profile_command_builders_include_all_stage3_requirements() -> None:
     assert "settings put global development_settings_enabled 0" in usb_cmds
     assert "resetprop -n sys.usb.state mtp" in usb_cmds
     assert "resetprop -n sys.usb.config mtp" in usb_cmds
+
+    battery_cmds = "\n".join(build_battery_stealth_commands(level=65, temp=320))
+    assert "dumpsys battery set status 3" in battery_cmds
+    assert "dumpsys battery set ac 0" in battery_cmds
+    assert "dumpsys battery set usb 0" in battery_cmds
+    assert "dumpsys battery set wireless 0" in battery_cmds
+    assert "dumpsys battery set level 65" in battery_cmds
+    assert "dumpsys battery set temp 320" in battery_cmds
+
+    cellular_cmds = "\n".join(build_cellular_stealth_commands())
+    assert "resetprop -n gsm.network.type LTE" in cellular_cmds
+    assert "resetprop -n gsm.sim.state READY" in cellular_cmds
 
 
 @pytest.mark.asyncio

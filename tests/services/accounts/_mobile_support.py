@@ -118,6 +118,10 @@ class _Container:
     async def assert_sdk(self, serial: str, sdk: int) -> None:
         self.on_serial(serial, f"sdk:{sdk}")
 
+    async def apply_stealth_profile(self, serial: str) -> str:
+        self.on_serial(serial, "stealth")
+        return "fake-boot-id"
+
     async def ensure_app(self, serial: str) -> None:
         self.on_serial(serial, "app")
 
@@ -177,6 +181,7 @@ _SERVICE_FAKES = (
     "connect_device",
     "show_instance",
     "assert_sdk",
+    "apply_stealth_profile",
     "ensure_app",
     "ensure_telegram_apk",
     "seed_device_if_needed",
