@@ -272,7 +272,8 @@ git clone --depth 1 --branch linux-msft-wsl-6.6.87.2 https://github.com/microsof
 cd ~/WSL2-Linux-Kernel && cp Microsoft/config-wsl .config
 scripts/config --enable ANDROID_BINDER_IPC --enable ANDROID_BINDERFS \
   --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" --disable LOCALVERSION_AUTO \
-  --enable IP_NF_IPTABLES --enable IP_NF_FILTER --enable IP6_NF_IPTABLES --enable IP6_NF_FILTER
+  --enable IP_NF_IPTABLES --enable IP_NF_FILTER --enable IP6_NF_IPTABLES --enable IP6_NF_FILTER \
+  --enable NETFILTER_XT_TARGET_HL --enable IP_NF_TARGET_TTL
 make olddefconfig && make -j"$(nproc)"
 make INSTALL_MOD_PATH="$PWD/modules" modules_install
 sudo ./Microsoft/scripts/gen_modules_vhdx.sh "$PWD/modules" "$(make -s kernelrelease)" modules.vhdx

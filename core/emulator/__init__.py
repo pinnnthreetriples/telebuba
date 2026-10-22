@@ -20,11 +20,13 @@ from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
 from core.emulator._text import escape_input_text
 from core.emulator.adb import (
+    apply_stealth_profile,
     assert_sdk,
     connect_device,
     human_swipe,
     human_tap,
     human_type,
+    step_battery_discharge,
     wait_for_boot,
 )
 from core.emulator.assets import ensure_telegram_apk
@@ -72,6 +74,7 @@ __all__ = [
     "TapEvent",
     "TelegramMobilePlaybook",
     "adb_serial",
+    "apply_stealth_profile",
     "assert_sdk",
     "bring_app_to_front",
     "confirm_number",
@@ -98,6 +101,7 @@ __all__ = [
     "seed_device_if_needed",
     "show_instance",
     "start_pod",
+    "step_battery_discharge",
     "stop_paused_pod",
     "stop_pod",
     "stop_running_pods",

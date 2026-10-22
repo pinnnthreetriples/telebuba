@@ -15,7 +15,10 @@ telephony to give it to).
 from __future__ import annotations
 
 import hashlib
+import random
+import shlex
 import string
+import uuid
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.device_fingerprint_android import ANDROID_DEVICES, android_device_model
@@ -24,6 +27,8 @@ from core.emulator._errors import EmulatorError
 from core.emulator._geo import Region, region_for
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.emulator import EmulatorRefusalCode
 
@@ -159,3 +164,115 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
             props[f"{side}.alpha"] = carrier.alpha
             props[f"{side}.iso-country"] = spec.region.country
     return props
+
+
+REDROID_BOOT_PROP_KEYS: tuple[str, ...] = (
+    "ro.boot.redroid_width",
+    "ro.boot.redroid_height",
+    "ro.boot.redroid_dpi",
+    "ro.boot.redroid_fps",
+    "ro.boot.redroid_gpu_mode",
+    "ro.boot.redroid_overlayfs",
+    "ro.boot.use_memfd",
+    "ro.boot.use_redroid_overlayfs",
+)
+
+USER_BUILD_HARDENING_PROPS: dict[str, str] = {
+    "ro.build.type": "user",
+    "ro.build.tags": "release-keys",
+    "ro.debuggable": "0",
+    "ro.secure": "1",
+    "ro.boot.verifiedbootstate": "green",
+    "ro.boot.flash.locked": "1",
+    "ro.boot.vbmeta.device_state": "locked",
+}
+
+USB_STEALTH_PROPS: dict[str, str] = {
+    "sys.usb.state": "mtp",
+    "sys.usb.config": "mtp",
+}
+
+
+def generate_instance_boot_id() -> str:
+    """A unique UUIDv4 string for /proc/sys/kernel/random/boot_id."""
+    return str(uuid.uuid4())
+
+
+def build_container_isolation_commands(boot_id: str | None = None) -> list[str]:
+    """Commands removing /.dockerenv and bind-mounting a unique boot_id."""
+    resolved_boot_id = boot_id or generate_instance_boot_id()
+    quoted_boot_id = shlex.quote(resolved_boot_id)
+    return [
+        "{ umount -l /.dockerenv 2>/dev/null || true; }",
+        "{ rm -f /.dockerenv 2>/dev/null || true; }",
+        f"printf '%s\\n' {quoted_boot_id} > /dev/.boot_id",
+        "chmod 0444 /dev/.boot_id",
+        "{ umount -l /proc/sys/kernel/random/boot_id 2>/dev/null || true; }",
+        "mount --bind -o ro /dev/.boot_id /proc/sys/kernel/random/boot_id",
+    ]
+
+
+def build_redroid_cleanup_script() -> str:
+    """Shell command deleting all dynamic ro.boot.redroid_* properties via getprop + resetprop."""
+    return (
+        "for prop in $(getprop | sed -n 's/^\\[\\(ro\\.boot\\.redroid_[^]]*\\)\\]:.*/\\1/p'); do "
+        '{ resetprop --delete "$prop" 2>/dev/null || true; }; '
+        "done"
+    )
+
+
+def build_user_build_resetprop_commands(
+    extra_props: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Commands setting container user-build properties using resetprop -n."""
+    commands: list[str] = [build_redroid_cleanup_script()]
+    commands.extend(
+        f"{{ resetprop --delete {shlex.quote(key)} 2>/dev/null || true; }}"
+        for key in REDROID_BOOT_PROP_KEYS
+    )
+
+    merged_props = dict(USER_BUILD_HARDENING_PROPS)
+    if extra_props:
+        merged_props.update(extra_props)
+
+    for key, value in merged_props.items():
+        commands.append(f"resetprop -n {shlex.quote(key)} {shlex.quote(str(value))}")
+
+    return commands
+
+
+def build_usb_stealth_commands() -> list[str]:
+    """Commands masking USB/ADB status without triggering adbd shutdown."""
+    commands: list[str] = [
+        "resetprop -n service.adb.tcp.port 5555",
+        "settings put global adb_enabled 0",
+        "settings put global development_settings_enabled 0",
+    ]
+    for key, value in USB_STEALTH_PROPS.items():
+        commands.append(f"resetprop -n {shlex.quote(key)} {shlex.quote(value)}")
+    return commands
+
+
+def build_battery_stealth_commands(
+    level: int | None = None,
+    temp: int | None = None,
+) -> list[str]:
+    """Commands simulating a realistic mobile battery discharge state."""
+    resolved_level = random.randint(35, 90) if level is None else level  # nosec B311  # noqa: S311
+    resolved_temp = random.randint(310, 340) if temp is None else temp  # nosec B311  # noqa: S311
+    return [
+        "dumpsys battery set status 3",
+        "dumpsys battery set ac 0",
+        "dumpsys battery set usb 0",
+        "dumpsys battery set wireless 0",
+        f"dumpsys battery set level {resolved_level}",
+        f"dumpsys battery set temp {resolved_temp}",
+    ]
+
+
+def build_cellular_stealth_commands() -> list[str]:
+    """Commands setting container radio properties to LTE / connected state."""
+    return [
+        "resetprop -n gsm.network.type LTE",
+        "resetprop -n gsm.sim.state READY",
+    ]
