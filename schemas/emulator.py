@@ -41,6 +41,8 @@ EmulatorRefusalCode = Literal[
     "emulator_docker_unavailable",
     "emulator_adb_missing",
     "emulator_binder_missing",
+    "emulator_gpu_missing",
+    "emulator_data_base_missing",
     "emulator_preparing",
     "emulator_screen_timeout",
 ]

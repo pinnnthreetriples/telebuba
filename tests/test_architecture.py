@@ -125,7 +125,8 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
     Compares by type so the template's natural forms all pass: booleans as
     ``true``/``false``, numbers by value (so a ``float`` default of ``30.0`` may be
     written ``30``), lists/dicts as JSON (tuples normalise to JSON arrays), paths in
-    their POSIX form, everything else as its ``str``.
+    their POSIX form, ``None`` as an empty value (the field reads it back as unset),
+    everything else as its ``str``.
     """
     if isinstance(default, bool):
         return raw == ("true" if default else "false")
@@ -146,6 +147,8 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
         # the template writes the one POSIX-style form for both platforms — so the
         # separator would otherwise be the thing under test.
         default = default.as_posix()
+    if default is None:
+        default = ""
     return raw == str(default)
 
 
