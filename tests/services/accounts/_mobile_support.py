@@ -125,6 +125,17 @@ class _Container:
             raise RuntimeError(msg)
         return "fake-boot-id"
 
+    async def apply_battery_telemetry(
+        self,
+        serial: str,
+        _state: object | None = None,
+        *,
+        account_id: str | None = None,
+        seed: int | str | None = None,
+    ) -> None:
+        del account_id, seed
+        self.on_serial(serial, "battery")
+
     async def ensure_app(self, serial: str, *, apk_path: object = None) -> None:
         del apk_path
         self.on_serial(serial, "app")
@@ -186,6 +197,7 @@ _SERVICE_FAKES = (
     "show_instance",
     "assert_sdk",
     "apply_stealth_profile",
+    "apply_battery_telemetry",
     "ensure_app",
     "ensure_telegram_apk",
     "seed_device_if_needed",

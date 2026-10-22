@@ -95,3 +95,10 @@ async def adb_command(*args: str, seconds: float | None = None, step: str) -> st
         seconds=seconds or settings.emulator.command_timeout_seconds,
         step=step,
     )
+
+
+async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
+    """Run an adb shell command on ``serial``."""
+    return await adb_command(
+        "-s", serial, "shell", *args, seconds=seconds, step=f"adb shell {args[0]}"
+    )

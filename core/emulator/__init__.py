@@ -20,6 +20,8 @@ from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
 from core.emulator._text import escape_input_text
 from core.emulator.adb import (
+    BatteryTelemetryState,
+    apply_battery_telemetry,
     apply_stealth_profile,
     assert_sdk,
     connect_device,
@@ -64,6 +66,7 @@ from core.emulator.telegram_app import (
 )
 
 __all__ = [
+    "BatteryTelemetryState",
     "ContainerSpec",
     "EmulatorError",
     "HumanInputEngine",
@@ -74,6 +77,7 @@ __all__ = [
     "TapEvent",
     "TelegramMobilePlaybook",
     "adb_serial",
+    "apply_battery_telemetry",
     "apply_stealth_profile",
     "assert_sdk",
     "bring_app_to_front",

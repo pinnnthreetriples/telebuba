@@ -26,11 +26,18 @@ from zoneinfo import ZoneInfo
 
 import phonenumbers
 from PIL import Image, ImageDraw, ImageFilter
-from PIL.ExifTags import IFD, Base
+from PIL.ExifTags import GPS, IFD, Base
 from PIL.TiffImagePlugin import IFDRational
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.emulator._blueprints import CONFIGS_DIR
+from core.emulator._geo import COUNTRY_COORDINATES
+from core.emulator._telephony import (
+    CallLogSeedEntry,
+    SmsSeedEntry,
+    build_call_and_sms_seed_commands,
+    generate_call_and_sms_history,
+)
 
 if TYPE_CHECKING:
     from core.emulator._blueprints import Camera
@@ -195,6 +202,27 @@ def _rational(value: float) -> IFDRational:
     return IFDRational(round(value * 100), 100)
 
 
+_SECONDS_PER_MINUTE = 60.0
+_MIN_SEC_LIMIT = 60
+_MILLIS_PER_MINUTE = 60_000
+
+
+def _decimal_to_dms(deg_float: float) -> tuple[IFDRational, IFDRational, IFDRational]:
+    val = abs(deg_float)
+    deg = int(val)
+    rem = (val - deg) * _SECONDS_PER_MINUTE
+    minute = int(rem)
+    sec = (rem - minute) * _SECONDS_PER_MINUTE
+    sec_millis = round(sec * 1000)
+    if sec_millis >= _MILLIS_PER_MINUTE:
+        sec_millis -= _MILLIS_PER_MINUTE
+        minute += 1
+    if minute >= _MIN_SEC_LIMIT:
+        minute -= _MIN_SEC_LIMIT
+        deg += 1
+    return (IFDRational(deg, 1), IFDRational(minute, 1), IFDRational(sec_millis, 1000))
+
+
 def photo_exif(spec: ContainerSpec, taken: datetime, rng: random.Random) -> Image.Exif:
     """The EXIF ``spec``'s phone writes for a photo taken at ``taken`` (local, aware)."""
     stamp = taken.strftime(_EXIF_TIME)
@@ -221,6 +249,23 @@ def photo_exif(spec: ContainerSpec, taken: datetime, rng: random.Random) -> Imag
     sub[Base.ExposureTime] = IFDRational(1, rng.choice(_EXPOSURE_DENOMINATORS))
     sub[Base.Flash] = 0
     sub[Base.ExifImageWidth], sub[Base.ExifImageHeight] = _PHOTO_SIZE
+
+    country_code = (spec.region.country or "US").upper()
+    centroid = COUNTRY_COORDINATES.get(
+        country_code, COUNTRY_COORDINATES.get("US", (37.0902, -95.7129))
+    )
+    lat_offset = rng.uniform(0.1, 0.3) * rng.choice((-1.0, 1.0))
+    lon_offset = rng.uniform(0.1, 0.3) * rng.choice((-1.0, 1.0))
+    lat = max(-89.9, min(89.9, centroid[0] + lat_offset))
+    lon = max(-179.9, min(179.9, centroid[1] + lon_offset))
+
+    gps = exif.get_ifd(IFD.GPSInfo)
+    gps[GPS.GPSVersionID] = b"\x02\x03\x00\x00"
+    gps[GPS.GPSLatitudeRef] = "N" if lat >= 0 else "S"
+    gps[GPS.GPSLatitude] = _decimal_to_dms(lat)
+    gps[GPS.GPSLongitudeRef] = "E" if lon >= 0 else "W"
+    gps[GPS.GPSLongitude] = _decimal_to_dms(lon)
+
     return exif
 
 
@@ -266,3 +311,18 @@ def make_photos(
         )
         photos.append(Photo(photo_name(spec.camera, taken, rng), taken, buffer.getvalue()))
     return photos
+
+
+__all__ = (
+    "CallLogSeedEntry",
+    "Contact",
+    "Photo",
+    "SmsSeedEntry",
+    "build_call_and_sms_seed_commands",
+    "generate_call_and_sms_history",
+    "load_name_packs",
+    "make_contacts",
+    "make_photos",
+    "photo_exif",
+    "photo_name",
+)

@@ -23,6 +23,7 @@ import hashlib
 import struct
 import zipfile
 import zlib
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -57,6 +58,106 @@ class ApkStoreEntry(NamedTuple):
     package: str
     version: str  # "versionName (versionCode)"
     path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class LocalApkVersion:
+    """A cached local APK version in the host store."""
+
+    app_slug: str
+    version: str
+    file_path: Path
+    size_bytes: int
+
+
+class PinnedApkNotFoundError(FileNotFoundError):
+    """Raised when a requested pinned APK version is missing or empty."""
+
+    def __init__(self, app_slug: str, version: str) -> None:
+        msg = f"Pinned APK version not found in local store: {app_slug}@{version}"
+        super().__init__(msg)
+        self.app_slug = app_slug
+        self.version = version
+
+
+def list_local_apk_versions(store_dir: Path, app_slug: str | None = None) -> list[LocalApkVersion]:
+    """Scan local APK versions catalog (/store_dir/<app_slug>/<version>.apk)."""
+    base = store_dir.resolve()
+    if not base.exists() or not base.is_dir():
+        return []
+
+    results: list[LocalApkVersion] = []
+    if app_slug is not None:
+        target_dir = (base / app_slug).resolve()
+        if (
+            target_dir == base
+            or not target_dir.is_relative_to(base)
+            or target_dir.parent != base
+            or not target_dir.is_dir()
+        ):
+            return []
+        app_dirs = [target_dir]
+    else:
+        app_dirs = [p for p in base.iterdir() if p.is_dir()]
+
+    for app_dir in sorted(app_dirs):
+        if not app_dir.exists() or not app_dir.is_dir():
+            continue
+        for apk_file in sorted(app_dir.glob("*.apk")):
+            stat = apk_file.stat()
+            if stat.st_size > 0:
+                results.append(
+                    LocalApkVersion(
+                        app_slug=app_dir.name,
+                        version=apk_file.stem,
+                        file_path=apk_file.resolve(),
+                        size_bytes=stat.st_size,
+                    )
+                )
+    return results
+
+
+def resolve_pinned_apk_path(
+    store_dir: Path,
+    app_slug: str,
+    version: str,
+    *,
+    validate: bool = False,
+) -> Path:
+    """Return verified path to a specific APK version in local store.
+
+    When ``validate=True``, verifies the APK manifest identity and signing certificates
+    via ``app_identity`` and ``signing_certificate_sha256``.
+    """
+    base = store_dir.resolve()
+    app_dir = (base / app_slug).resolve()
+    if (
+        app_dir == base
+        or not app_dir.is_relative_to(base)
+        or app_dir.parent != base
+        or not app_dir.is_dir()
+    ):
+        raise PinnedApkNotFoundError(app_slug, version)
+
+    candidate = (app_dir / f"{version}.apk").resolve()
+    if (
+        not candidate.is_relative_to(app_dir)
+        or candidate.parent != app_dir
+        or not candidate.is_file()
+        or candidate.stat().st_size == 0
+    ):
+        raise PinnedApkNotFoundError(app_slug, version)
+    if validate:
+        app_identity(candidate)
+        signing_certificate_sha256(candidate)
+    return candidate
+
+
+def verify_local_apk(path: Path) -> tuple[AppIdentity, str]:
+    """Verify and return ``(AppIdentity, signing_cert_sha256)`` for a local APK file."""
+    identity = app_identity(path)
+    cert_sha256 = signing_certificate_sha256(path)
+    return identity, cert_sha256
 
 
 def signing_certificate_sha256(path: Path) -> str:

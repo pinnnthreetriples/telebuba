@@ -144,6 +144,18 @@ async def test_install_apk_supports_custom_or_no_installer_package(
 
 
 @pytest.mark.asyncio
+async def test_install_apk_accepts_explicit_apk_path(
+    console: Console,
+    tmp_path,
+) -> None:
+    custom_apk = tmp_path / "custom.apk"
+    custom_apk.write_bytes(b"custom-apk-content")
+    await adb.install_apk("emulator-5554", apk_path=custom_apk)
+
+    assert console.calls[0][3:] == ["install", "-r", "-i", "com.android.vending", str(custom_apk)]
+
+
+@pytest.mark.asyncio
 async def test_step_battery_discharge_decrements_level(
     console: Console,
 ) -> None:
