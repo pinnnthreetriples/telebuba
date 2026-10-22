@@ -43,9 +43,9 @@ phone is shown in a scrcpy window opened by the phone button.
   one per container. Off by default: the window encodes video for as long as it is open, warming
   visits included. The web screen below replaces it.
 
-Android keeps its `/data` across stop/start (it is re-created only when its gateway is gone, since
-its namespace went with it); deleting the account runs `docker rm --force` on both. With shared
-/data on, `/data` lives in the pod's diff directory instead, which outlives the container: an
+Android keeps its `/data` across stop/start (it is re-created only when its gateway is gone or
+made again, since its namespace goes with it); deleting the account runs `docker rm --force` on
+both. With shared /data on, `/data` lives in the pod's diff directory instead, which outlives the container: an
 Android made again finds the account's sign-in there, and only deleting the account removes it.
 
 **Coming from #551** (one container per account, no gateway): such a container has no gateway, so
@@ -298,8 +298,9 @@ Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing
 pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
 and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each bounded by
 `EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
-present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag. A gateway
-made before keeps its old image until its pod is made again.
+present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag. A pod made
+before gets the new image at its next start: a gateway made from another image (compared by image
+ID) is removed and made again at the pod's index, and its Android with it, using its existing diff.
 
 ## Host setup (Linux ARM64)
 

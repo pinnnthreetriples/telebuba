@@ -36,6 +36,7 @@ _ANDROIDS = "0|telebuba-acc-0|running\n2|telebuba-acc-2|exited\n"
 _GATEWAYS = "0|telebuba-acc-0-net|running\n2|telebuba-acc-2-net|exited\n"
 _GATEWAY_STARTED = "2026-10-17T08:00:00.1Z"
 _ANDROID_STARTED = "2026-10-17T08:00:04.123456789Z"
+_GATEWAY_IMAGE_ID = "sha256:5ca1ab1e"
 
 
 def _docker(
@@ -50,7 +51,8 @@ def _docker(
 
     ``create`` adds a container to its list and ``rm`` takes it out, so a pod it made
     is found again by the next listing. The gateways' network exists when ``network``
-    (or once created); ``inspect`` answers each gateway's and Android's start time.
+    (or once created); ``inspect`` answers each gateway's and Android's start time,
+    and every gateway was made from the configured image.
     """
     lists = {"android": androids.splitlines(), "gateway": gateways.splitlines()}
     diffs: dict[str, str] = {}  # each Android's recorded shared-/data diff
@@ -67,7 +69,7 @@ def _docker(
             networks["exists"] = True
         if argv[1] == "info":
             return "16\n"
-        if argv[1] == "inspect":
+        if argv[1] in {"inspect", "image"}:
             return _inspect(argv, diffs, gateway_started)
         if argv[1] == "ps" and argv[4] == "label=telebuba.index":
             # One listing of both kinds: the gateway label field is set on gateways only.
@@ -86,7 +88,9 @@ def _docker(
 
 
 def _inspect(argv: list[str], diffs: dict[str, str], gateway_started: str) -> str:
-    """The fake docker's ``inspect``: an Android's recorded diff, or each container's start."""
+    """The fake docker's ``inspect``: an image, an Android's recorded diff or each start."""
+    if argv[1] == "image" or argv[3] == "{{.Image}}":
+        return _GATEWAY_IMAGE_ID + "\n"
     if "telebuba.data_diff" in argv[3]:
         return diffs.get(argv[4], "") + "\n"
     return "".join(
