@@ -17,6 +17,7 @@
     "focal_length_mm": 5.59,
     "file_style": "xiaomi"
   },
+  "soc": "mt6877",
   "builds": {
     "33": {
       "release": "13",

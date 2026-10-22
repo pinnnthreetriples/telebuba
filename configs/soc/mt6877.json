@@ -1,0 +1,39 @@
+{
+  "model": "MT6877V/TTZA",
+  "manufacturer": "Mediatek",
+  "bogomips": "26.00",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 6,
+          "implementer": "0x41",
+          "variant": "0x2",
+          "part": "0xd05",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [500000, 650000, 740000, 900000, 980000, 1053000, 1150000, 1260000, 1310000, 1407000, 1503000, 1600000, 1703000, 1800000, 1903000, 2000000]
+    },
+    {
+      "cores": [
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd41",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [650000, 740000, 910000, 1040000, 1140000, 1300000, 1430000, 1540000, 1660000, 1800000, 1900000, 2000000, 2150000, 2275000, 2400000, 2600000]
+    }
+  ],
+  "sources": [
+    "https://github.com/codepdbh/nfsmwpc-recompiled/issues/7",
+    "https://github.com/getActivity/AndroidSystemPropertyCollect/blob/HEAD/realmeUI/realmeUI%206.0%20Android%2015%20realme%2010%20Pro%2B.txt",
+    "https://github.com/MiCode/Xiaomi_Kernel_OpenSource/blob/ruby-s-oss/arch/arm64/boot/dts/mediatek/mt6877.dts",
+    "https://raw.githubusercontent.com/Doze-off/vendor_hardware_overlay/HEAD/Xiaomi/RedmiNote12Pro5G/res/xml/power_profile.xml",
+    "https://github.com/fastfetch-cli/fastfetch/issues/1529#issuecomment-2785147069"
+  ]
+}
