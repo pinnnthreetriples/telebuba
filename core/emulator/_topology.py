@@ -61,8 +61,8 @@ def _span(first: int, last: int) -> str:
 
 
 def cpuset(cores: int, index: int, host_cores: int) -> str:
-    """The host cores of pod ``index``: its own slice while the host has room, else the first."""
-    first = index * cores if host_cores >= (index + 1) * cores else 0
+    """The host cores of pod ``index``: its own slice, reused round-robin once they run out."""
+    first = index % (host_cores // cores) * cores
     return _span(first, first + cores - 1)
 
 

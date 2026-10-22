@@ -49,7 +49,7 @@ class EmulatorSettings(BaseSettings):
     data_diff_dir: Path | None = None
     # The pod's network side, built from docker/net-gateway (docs/redroid.md), and the
     # bridge network its gateways join (created when missing, containers isolated).
-    gateway_image: str = Field(default="telebuba/net-gateway:1", min_length=1)
+    gateway_image: str = Field(default="telebuba/net-gateway:2", min_length=1)
     gateway_network: str = Field(default="telebuba-emulator", min_length=1)
     # Installed into a container with no Telegram; a missing file is fetched from
     # telegram.org, kept only when Telegram signed it (``core.emulator.assets``).

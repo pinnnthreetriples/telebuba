@@ -99,7 +99,10 @@ def test_a_cluster_lists_its_frequencies_ascending() -> None:
     [
         (8, 0, 16, "0-7"),
         (8, 1, 16, "8-15"),
-        (8, 2, 16, "0-7"),  # no third slice: the shared first one
+        (8, 2, 16, "0-7"),  # no third slice: round-robin from the first
+        (8, 3, 16, "8-15"),
+        (8, 9, 64, "8-15"),  # pods past the eighth spread, not all on 0-7
+        (8, 29, 64, "40-47"),
         (9, 1, 16, "0-8"),
         (4, 3, 16, "12-15"),
         (1, 0, 1, "0"),
