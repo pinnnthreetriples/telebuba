@@ -121,7 +121,10 @@ The container is a real phone (`core/emulator/_profile.py`):
 - A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
   country moves the timezone and carrier; a running one is left alone.
 - **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
-  `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps) gets `ro.soc.model` /
+  `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps; `mt6877` has no public
+  cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its
+  BogoMIPS follows its 13 MHz timer; A78 is MediaTek's spec for its big cores, where ruby's
+  kernel DT carries a generic `cortex-a76` compatible) gets `ro.soc.model` /
   `ro.soc.manufacturer` and as many host cores as the chip has (fewer on a smaller Docker VM),
   pinned with `--cpuset-cpus`: pod N gets its own slice while the VM has room for it, else the
   first one. A new container sees the chip: `/sys/devices/system/cpu` is replaced read-only by a
