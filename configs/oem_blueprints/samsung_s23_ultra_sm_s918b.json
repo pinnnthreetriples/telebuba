@@ -17,6 +17,7 @@
     "focal_length_mm": 6.3,
     "file_style": "samsung"
   },
+  "soc": "sm8550_ac",
   "builds": {
     "33": {
       "release": "13",

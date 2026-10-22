@@ -1,0 +1,60 @@
+{
+  "model": "SM8550",
+  "manufacturer": "QTI",
+  "bogomips": "38.40",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp flagm2 frint i8mm bf16 bti",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 3,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd46",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [307200, 441600, 556800, 672000, 787200, 902400, 1017600, 1113600, 1228800, 1344000, 1459200, 1555200, 1670400, 1785600, 1900800, 2016000]
+    },
+    {
+      "cores": [
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd4d",
+          "revision": 0
+        },
+        {
+          "count": 2,
+          "implementer": "0x41",
+          "variant": "0x2",
+          "part": "0xd47",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [499200, 614400, 729600, 844800, 940800, 1056000, 1171200, 1286400, 1401600, 1536000, 1651200, 1785600, 1920000, 2054400, 2188800, 2323200, 2457600, 2592000, 2707200, 2803200]
+    },
+    {
+      "cores": [
+        {
+          "count": 1,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd4e",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [595200, 729600, 864000, 998400, 1132800, 1248000, 1363200, 1478400, 1593600, 1708800, 1843200, 1977600, 2092800, 2227200, 2342400, 2476800, 2592000, 2726400, 2841600, 2956800, 3187200]
+    }
+  ],
+  "sources": [
+    "https://github.com/codepdbh/nfsu2-recompiled/issues/632",
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/oneplus/op594dl1/qssi-user-UpsideDownCake-UP1A.230407.001-1686798181605-release-keys--IN/vendor.build.prop",
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/xiaomi/fuxi/missi_phone_global-userdebug-14-UKQ1.230705.002-V14.0.6.0.UMCMIXM-test-keys/vendor.build.prop",
+    "https://github.com/getActivity/AndroidSystemPropertyCollect/blob/HEAD/HyperOS/HyperOS%202.0208.0%20Android%2015%20Redmi%20K70.txt",
+    "https://github.com/hrw/arm-socs-table/issues/88",
+    "https://raw.githubusercontent.com/LineageOS/android_device_xiaomi_fuxi/HEAD/overlay/FrameworkResOverlayFuxi/res/xml/power_profile.xml",
+    "https://raw.githubusercontent.com/LineageOS/android_device_oneplus_salami/HEAD/overlay/OPlusFrameworksResTarget/res/xml/power_profile.xml"
+  ]
+}

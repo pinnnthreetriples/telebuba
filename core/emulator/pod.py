@@ -121,7 +121,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             created.add(name)  # before: a failed identity copy leaves it half made
             await create_instance(name, spec, index=index, gateway=gateway)
         else:
-            await refresh_identity(name, spec)  # the proxy may have moved country
+            await refresh_identity(name, spec, index)  # the proxy may have moved country
         await launch_instance(name, index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))

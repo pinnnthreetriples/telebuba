@@ -17,6 +17,7 @@
     "focal_length_mm": 5.43,
     "file_style": "xiaomi"
   },
+  "soc": "sm7475",
   "builds": {
     "33": {
       "release": "13",
