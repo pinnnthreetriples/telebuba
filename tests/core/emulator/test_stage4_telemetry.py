@@ -280,6 +280,17 @@ def test_call_and_sms_history_generation() -> None:
         assert any("\u0400" <= c <= "\u04ff" for c in sms.body)
 
 
+def test_call_and_sms_history_deterministic_without_now_ms() -> None:
+    """Test that seed without now_ms produces stable deterministic timestamps across retries."""
+    contacts = [Contact("John", "Doe", "+12025550111", None, None)]
+    calls1, sms1 = generate_call_and_sms_history(contacts, seed="stable-retry-seed")
+    calls2, sms2 = generate_call_and_sms_history(contacts, seed="stable-retry-seed")
+
+    assert [c.timestamp_ms for c in calls1] == [c.timestamp_ms for c in calls2]
+    assert [s.timestamp_ms for s in sms1] == [s.timestamp_ms for s in sms2]
+    assert [c.number for c in calls1] == [c.number for c in calls2]
+
+
 def test_build_call_and_sms_seed_commands() -> None:
     """Test call and SMS content delete and insert commands."""
     calls = [

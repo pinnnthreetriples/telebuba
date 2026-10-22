@@ -149,6 +149,8 @@ def generate_call_and_sms_history(  # noqa: PLR0913
         base_ms = int(now_ms.timestamp() * 1000)
     elif now_ms is not None:
         base_ms = int(now_ms)
+    elif seed is not None:
+        base_ms = 1792627200000 + (rng.randint(0, 86400 * 14) * 1000)
     else:
         base_ms = int(datetime.now(UTC).timestamp() * 1000)
     raw_pool: list[str] = [str(getattr(c, "phone", c)) for c in phone_numbers]

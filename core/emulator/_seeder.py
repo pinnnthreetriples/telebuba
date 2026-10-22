@@ -235,11 +235,14 @@ async def seed_contacts(serial: str, spec: ContainerSpec) -> None:
     contacts = await asyncio.to_thread(
         make_contacts, spec.region.country, rng_for(spec, "contacts")
     )
+    time_rng = rng_for(spec, "telephony_time")
+    base_ms = 1792627200000 + (time_rng.randint(0, 86400 * 14) * 1000)
     calls, sms_list = await asyncio.to_thread(
         generate_call_and_sms_history,
         contacts,
         seed=f"telephony:{spec.serial}",
         locale=spec.region.locale,
+        now_ms=base_ms,
     )
     script_lines = contacts_script(contacts) + build_call_and_sms_seed_commands(calls, sms_list)
     await _run_script(serial, script_lines)
