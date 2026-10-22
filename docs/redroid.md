@@ -126,8 +126,9 @@ The container is a real phone (`core/emulator/_profile.py`):
   BogoMIPS follows its 13 MHz timer; A78 is MediaTek's spec for its big cores, where ruby's
   kernel DT carries a generic `cortex-a76` compatible) gets `ro.soc.model` /
   `ro.soc.manufacturer` and as many host cores as the chip has (fewer on a smaller Docker VM),
-  pinned with `--cpuset-cpus`: pod N gets its own slice while the VM has room for it, else the
-  first one. A new container sees the chip: `/sys/devices/system/cpu` is replaced read-only by a
+  pinned with `--cpuset-cpus`: pod N gets its own slice, and once the VM's slices run out they
+  are shared round-robin (pod 8 of a 64-core host with 8-core chips is back on 0-7, pod 9 on
+  8-15). A new container sees the chip: `/sys/devices/system/cpu` is replaced read-only by a
   generated tree (cpufreq, topology; WSL2's own has no cpufreq), and `/proc/cpuinfo` is bound by
   an init script (`/vendor/etc/init/cpuinfo.rc`) from `/dev/cpuinfo` at every boot: init mounts
   a fresh proc over Docker's, so Docker cannot mount it there. The files live once per chip and

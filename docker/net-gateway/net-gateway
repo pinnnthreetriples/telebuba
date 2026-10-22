@@ -80,9 +80,12 @@ allow_tunnel() {
 	iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -p udp --dport 53 -j DNAT --to-destination 198.18.0.2:53
 	iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -p tcp --dport 53 -j DNAT --to-destination 198.18.0.2:53
 	# tun0's MTU is 1400: SYNs announce a segment size that fits it. Mobile TTL=64.
+	# Neither guards egress, so a kernel without xt_TCPMSS or xt_HL only loses the rule.
 	iptables -t mangle -F POSTROUTING
-	iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-	iptables -t mangle -A POSTROUTING -j TTL --ttl-set 64 2>/dev/null || true
+	iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu ||
+		echo "net-gateway: no xt_TCPMSS, MSS left unclamped" >&2
+	iptables -t mangle -A POSTROUTING -j TTL --ttl-set 64 ||
+		echo "net-gateway: no xt_HL, TTL left as is" >&2
 }
 
 # $1 address, $2 port, $3 username, $4 password

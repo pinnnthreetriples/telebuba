@@ -104,12 +104,22 @@ def test_egress_is_dropped_before_the_tunnel_starts_and_the_rules_are_fail_close
     assert embedded_dns < run.calls.index("iptables -A OUTPUT -o lo -j ACCEPT")
 
 
-@pytest.mark.parametrize("step", ["-P OUTPUT DROP", "--ctdir REPLY", "--dport 5555", "TCPMSS"])
+@pytest.mark.parametrize("step", ["-P OUTPUT DROP", "--ctdir REPLY", "--dport 5555", "--dport 853"])
 def test_a_rule_that_fails_stops_the_gateway_before_the_tunnel(tmp_path: Path, step: str) -> None:
     run = _run(tmp_path, fail_on=step)
 
     assert run.status != 0
     assert not any(call.startswith("hev-socks5-tunnel") for call in run.calls)
+
+
+@pytest.mark.parametrize("step", ["TCPMSS", "--ttl-set"])
+def test_a_kernel_without_a_mangle_target_still_starts_the_tunnel(
+    tmp_path: Path, step: str
+) -> None:
+    run = _run(tmp_path, fail_on=step)
+
+    assert run.status == 1, "only the faked tunnel's exit ends it"
+    assert any(call.startswith("hev-socks5-tunnel") for call in run.calls)
 
 
 @pytest.mark.parametrize(
