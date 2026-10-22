@@ -1,0 +1,38 @@
+{
+  "model": "s5e8835",
+  "manufacturer": "Samsung",
+  "bogomips": "52.00",
+  "features": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "clusters": [
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x2",
+          "part": "0xd05",
+          "revision": 0
+        }
+      ],
+      "frequencies_khz": [533000, 672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2002000]
+    },
+    {
+      "cores": [
+        {
+          "count": 4,
+          "implementer": "0x41",
+          "variant": "0x1",
+          "part": "0xd41",
+          "revision": 1
+        }
+      ],
+      "frequencies_khz": [533000, 672000, 768000, 864000, 960000, 1056000, 1152000, 1248000, 1344000, 1440000, 1536000, 1632000, 1728000, 1824000, 1920000, 2016000, 2112000, 2208000, 2304000, 2400000]
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/xdaGari/tadiphone-buildprop-archive/main/samsung/a54x/a54xnaxx-user-14-UP1A.231005.007-A546BXXS8CXF1-release-keys/vendor.build.prop",
+    "https://github.com/Buku313/Skate3-Mobile/issues/179",
+    "https://github.com/hrw/arm-socs-table/issues/169",
+    "https://raw.githubusercontent.com/Doze-off/vendor_hardware_overlay/HEAD/Samsung/a54x/res/xml/power_profile.xml"
+  ]
+}

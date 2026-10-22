@@ -20,6 +20,7 @@ from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
+from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
 
 if TYPE_CHECKING:
     from core.emulator._profile import ContainerSpec
@@ -160,10 +161,12 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
     ``build_prop``; its screen and serial number on the command line (neither has a
-    space).
+    space); its chip's CPUs through ``_cpu_options`` and the init script that binds
+    its cpuinfo.
     """
     image = image_for(spec)
     identity = build_prop(spec)  # refused before anything is created
+    cpus, topology = await _cpu_options(spec, index)
     await docker(
         "create",
         "--name",
@@ -175,8 +178,7 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
         "--privileged",
         "--network",
         f"container:{gateway}",
-        "--cpus",
-        str(settings.emulator.cpu_cores),
+        *cpus,
         "--memory",
         f"{settings.emulator.memory_mb}m",
         image,
@@ -186,18 +188,44 @@ async def create_instance(name: str, spec: ContainerSpec, *, index: int, gateway
         f"androidboot.serialno={spec.serial}",
         "androidboot.use_memfd=true",
     )
+    if topology is not None:
+        await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
     await _give_identity(name, identity)
     return Instance(index, name, running=False)
 
 
-async def refresh_identity(name: str, spec: ContainerSpec) -> None:
+async def _cpu_options(spec: ContainerSpec, index: int) -> tuple[list[str], Path | None]:
+    """``docker create``'s CPU options for ``spec`` and its topology directory, if any.
+
+    A phone with a chip is pinned to the pod's cores and sees the chip's topology
+    (``core.emulator._topology``); one without gets ``cpu_cores`` of the host's.
+    """
+    if spec.soc is None:
+        return ["--cpus", str(settings.emulator.cpu_cores)], None
+    placement = await place_cpus(spec.soc, index)
+    directory = placement.directory
+    return [
+        "--cpuset-cpus",
+        placement.cpuset,
+        "--volume",
+        f"{directory / 'cpu'}:{SYSFS_CPU}:ro",
+        "--volume",
+        f"{directory / 'cpuinfo'}:{CPUINFO_STAGE}:ro",
+    ], directory
+
+
+async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     """Rewrite a stopped container's ``build_prop`` before it boots again.
 
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
-    follow it.
+    follow it. A phone with a chip is pinned to the pod's cores again; its mounts
+    are a new container's only (one made before has none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
+    if spec.soc is not None:
+        placement = await place_cpus(spec.soc, index)
+        await docker("update", "--cpuset-cpus", placement.cpuset, name)
 
 
 async def launch_instance(name: str, index: int) -> None:

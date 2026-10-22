@@ -11,10 +11,11 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _gateway, pod
+from core.emulator import _gateway, _profile, _topology, pod
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import container_spec
 from schemas.proxy import ProxySettings
+from tests.core.emulator.test_topology import CHIP
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -26,7 +27,7 @@ _SPEC = container_spec(
         update={"device_model": "GooglePixel 8", "system_version": "SDK 34"},
     ),
     "DE",
-)
+)._replace(soc=None)
 _PROXY = ProxySettings(
     proxy_type="socks5", host="203.0.113.7", port=1080, username="tb-user", password="s3cr'et pw"
 )
@@ -63,6 +64,8 @@ def _docker(
             raise EmulatorError(code)
         if argv[1:3] == ["network", "create"]:
             networks["exists"] = True
+        if argv[1] == "info":
+            return "16\n"
         if argv[1] == "inspect":
             return "".join(
                 f"{gateway_started if name.endswith('-net') else _ANDROID_STARTED}\n"
@@ -102,7 +105,7 @@ def _verbs(console: Console) -> list[str]:
     return [
         f"{call[1]} {call[targets.get(call[1], 2)]}"
         for call in console.calls
-        if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image"}
+        if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image", "info"}
     ]
 
 
@@ -220,6 +223,26 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
         "cp " + _identity_written(console, "telebuba-acc-0")[2],
         "start telebuba-acc-0",
     ], "its phone is written again before it boots: the proxy may have moved country"
+
+
+@pytest.mark.asyncio
+async def test_a_found_android_with_a_chip_is_pinned_to_its_pods_cores_before_it_boots(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for module in (_topology, _profile):
+        monkeypatch.setattr(module, "load_socs", lambda: {"chip": CHIP})
+    console.answer = _docker()
+
+    await pod.start_pod("telebuba-acc-2", _SPEC._replace(soc="chip"), _PROXY)
+
+    verbs = _verbs(console)
+    assert verbs[-2:] == ["update --cpuset-cpus", "start telebuba-acc-2"]
+    assert _call(console, "update", "telebuba-acc-2")[2:] == [
+        "--cpuset-cpus",
+        "8-11",
+        "telebuba-acc-2",
+    ], "its index's slice; its mounts stay a new container's"
+    assert not any(v.startswith(("create", "rm")) for v in verbs)
 
 
 @pytest.mark.asyncio

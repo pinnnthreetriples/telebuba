@@ -17,6 +17,7 @@
     "focal_length_mm": 5.4,
     "file_style": "xiaomi"
   },
+  "soc": "sm8550",
   "builds": {
     "33": {
       "release": "13",

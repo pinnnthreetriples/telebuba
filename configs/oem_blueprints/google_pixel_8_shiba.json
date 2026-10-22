@@ -17,6 +17,7 @@
     "focal_length_mm": 6.9,
     "file_style": "pixel"
   },
+  "soc": "zuma",
   "builds": {
     "34": {
       "release": "14",
