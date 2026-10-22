@@ -23,7 +23,7 @@ _SPEC = container_spec(
     "DE",
 )
 _ANDROID = "redroid/redroid:14.0.0_64only-latest"
-_GATEWAY = "telebuba/net-gateway:1"
+_GATEWAY = "telebuba/net-gateway:2"
 
 
 @pytest.fixture(autouse=True)
