@@ -6,9 +6,9 @@ Split out of ``core.config`` for the file-size budget; re-exported there.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,13 +28,25 @@ class EmulatorSettings(BaseSettings):
     # The desktop scrcpy window on every open. Off by default: it encodes video for as
     # long as it is open (warming stints included); the web screen does that on demand.
     desktop_viewer: bool = False
+    # 64-bit-only tags, amd64 and arm64 alike: ARM64 servers without 32-bit EL0
+    # (Ampere) cannot boot the images that carry a 32-bit userspace.
     redroid_images: dict[int, str] = Field(
         default_factory=lambda: {
-            33: "redroid/redroid:13.0.0-latest",
-            34: "redroid/redroid:14.0.0-latest",
+            33: "redroid/redroid:13.0.0_64only-latest",
+            34: "redroid/redroid:14.0.0_64only-latest",
         }
     )
+    # How Android draws: ``guest`` in software (any host), ``host`` on the host's GPU
+    # through /dev/dri (refused when the host has none), ``auto`` the GPU when there is
+    # one. Fixed at a container's create: a container made before keeps its mode.
+    gpu_mode: Literal["guest", "host", "auto"] = "guest"
     redroid_first_adb_port: int = Field(default=5600, ge=1024, le=65000)
+    # Android's /data as overlayfs (docs/redroid.md, Shared /data): ``<base>/<sdk>`` is
+    # the read-only lower layer the operator prepared, ``<diff>/<container>`` the pod's
+    # own. Both absolute paths on the Docker host, or neither: /data then lives in the
+    # container. Fixed at a container's create, like ``gpu_mode``.
+    data_base_dir: Path | None = None
+    data_diff_dir: Path | None = None
     # The pod's network side, built from docker/net-gateway (docs/redroid.md), and the
     # bridge network its gateways join (created when missing, containers isolated).
     gateway_image: str = Field(default="telebuba/net-gateway:1", min_length=1)
@@ -110,3 +122,31 @@ class EmulatorSettings(BaseSettings):
             "weather",
         ],
     )
+
+    @field_validator("data_base_dir", "data_diff_dir", mode="before")
+    @classmethod
+    def _empty_is_off(cls, value: object) -> object:
+        # ``EMULATOR__DATA_BASE_DIR=`` in .env is "off", not the working directory.
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def _check_data_layers(self) -> EmulatorSettings:
+        layers = (self.data_base_dir, self.data_diff_dir)
+        if (layers[0] is None) != (layers[1] is None):
+            msg = "data_base_dir and data_diff_dir are set together or not at all"
+            raise ValueError(msg)
+        # A relative ``docker -v`` source is a named volume, not a directory.
+        if any(
+            layer is not None and not (layer.is_absolute() or layer.as_posix().startswith("/"))
+            for layer in layers
+        ):
+            msg = "data_base_dir and data_diff_dir must be absolute paths"
+            raise ValueError(msg)
+        if any(layer is not None and ".." in layer.parts for layer in layers):
+            msg = "data_base_dir and data_diff_dir must not contain '..'"
+            raise ValueError(msg)
+        # A pod's diff is removed as root with ``rm -rf``: never directly under ``/``.
+        if self.data_diff_dir is not None and self.data_diff_dir.parent == self.data_diff_dir:
+            msg = "data_diff_dir must not be the filesystem root"
+            raise ValueError(msg)
+        return self

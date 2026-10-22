@@ -1439,6 +1439,8 @@
       "emulator_docker_unavailable": "Docker на сервере недоступен: запустите Docker Desktop.",
       "emulator_adb_missing": "На сервере нет adb: установите scrcpy и укажите его adb в EMULATOR__ADB_PATH.",
       "emulator_binder_missing": "В ядре сервера нет binder, телефон не запустится: поставьте ядро WSL по docs/redroid.md.",
+      "emulator_gpu_missing": "EMULATOR__GPU_MODE=host, но на сервере нет /dev/dri: поставьте драйвер GPU или выберите режим guest или auto.",
+      "emulator_data_base_missing": "Общий /data включён, но в EMULATOR__DATA_BASE_DIR нет подготовленной базы для версии Android этого телефона (docs/redroid.md).",
       "emulator_preparing": "Телефон ещё готовится — визит подождёт.",
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя. Попробуйте ещё раз."
     },
@@ -2121,6 +2123,8 @@
     "emulator_docker_unavailable": "Docker недоступен",
     "emulator_adb_missing": "нет adb",
     "emulator_binder_missing": "ядро без binder",
+    "emulator_gpu_missing": "нет GPU (/dev/dri)",
+    "emulator_data_base_missing": "нет базы /data для этой версии Android",
     "emulator_preparing": "телефон ещё готовится",
     "emulator_screen_timeout": "экран не открылся"
   },

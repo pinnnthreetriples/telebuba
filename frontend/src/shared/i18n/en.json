@@ -1404,6 +1404,8 @@
       "emulator_docker_unavailable": "Docker is not reachable on the server: start Docker Desktop.",
       "emulator_adb_missing": "adb is missing on the server: install scrcpy and point EMULATOR__ADB_PATH at its adb.",
       "emulator_binder_missing": "The server's kernel has no binder, so a phone cannot run: install the WSL kernel from docs/redroid.md.",
+      "emulator_gpu_missing": "EMULATOR__GPU_MODE=host, but the server has no /dev/dri: install the GPU driver or set the mode to guest or auto.",
+      "emulator_data_base_missing": "Shared /data is on, but the server has no prepared base for this phone's Android version in EMULATOR__DATA_BASE_DIR (docs/redroid.md).",
       "emulator_preparing": "The phone is still being prepared — the visit waits.",
       "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again."
     },
@@ -2086,6 +2088,8 @@
     "emulator_docker_unavailable": "Docker unavailable",
     "emulator_adb_missing": "no adb",
     "emulator_binder_missing": "kernel without binder",
+    "emulator_gpu_missing": "no GPU (/dev/dri)",
+    "emulator_data_base_missing": "no /data base for this Android",
     "emulator_preparing": "phone still being prepared",
     "emulator_screen_timeout": "screen did not open"
   },

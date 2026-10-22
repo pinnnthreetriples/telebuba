@@ -21,6 +21,7 @@ _PROBE = "alpine:3.20"
 @pytest.fixture(autouse=True)
 def _fresh(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(host, "_binder_seen", False)
+    monkeypatch.setattr(host, "_dri_seen", False)
     monkeypatch.setattr(images, "_LOCKS", {})
 
 
@@ -131,3 +132,67 @@ async def test_a_probe_image_that_cannot_be_pulled_refuses_the_start(console: Co
 def test_the_probe_image_is_the_gateways_own_base() -> None:
     dockerfile = (images.GATEWAY_CONTEXT / "Dockerfile").read_text(encoding="utf-8")
     assert f"FROM {host.PROBE_IMAGE}" in dockerfile.splitlines()
+
+
+_DRI_PROBE = ["run", "--rm", "--device", "/dev/dri:/dev/dri", "--entrypoint", "true", _PROBE]
+
+
+def _no_dri(argv: list[str]) -> EmulatorRefusalCode | None:
+    return "emulator_command_failed" if "--device" in argv else None
+
+
+def _dri_probes(console: Console) -> list[list[str]]:
+    return [call[1:] for call in _probes(console) if "--device" in call]
+
+
+@pytest.mark.asyncio
+async def test_guest_drawing_never_probes_the_gpu(console: Console) -> None:
+    console.answer = _host(refuse=_no_dri)
+
+    await host.check_host()
+
+    assert await host.gpu_mode() == "guest"
+    assert _dri_probes(console) == []
+
+
+@pytest.mark.asyncio
+async def test_host_drawing_without_a_gpu_refuses_the_start(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "gpu_mode", "host")
+    console.answer = _host(refuse=_no_dri)
+
+    with pytest.raises(EmulatorError) as refusal:
+        await host.check_host()
+
+    assert refusal.value.code == "emulator_gpu_missing"
+    assert _dri_probes(console) == [_DRI_PROBE]
+
+
+@pytest.mark.parametrize("mode", ["host", "auto"])
+@pytest.mark.asyncio
+async def test_a_gpu_found_is_drawn_on_and_not_asked_again(
+    console: Console, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    monkeypatch.setattr(settings.emulator, "gpu_mode", mode)
+    console.answer = _host()
+
+    await host.check_host()
+
+    assert await host.gpu_mode() == "host"
+    assert await host.gpu_mode() == "host"
+    assert len(_dri_probes(console)) == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_without_a_gpu_draws_in_software_and_asks_again_later(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.emulator, "gpu_mode", "auto")
+    console.answer = _host(refuse=_no_dri)
+
+    await host.check_host()
+    assert await host.gpu_mode() == "guest"
+    assert await host.gpu_mode() == "guest"
+
+    assert _dri_probes(console) == [_DRI_PROBE, _DRI_PROBE], "a driver installed later is found"

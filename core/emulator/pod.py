@@ -16,6 +16,10 @@ Between close visits ``pause_pod`` freezes Android (``docker pause``: no CPU, it
 kept) and leaves the gateway up; ``unpause_pod`` thaws it in a moment, with no boot.
 A paused container is ended with ``docker kill`` right after it is thawed: a few
 seconds of grace would let the app reconnect and show the account online.
+
+With shared /data on (``core.emulator._data``) Android's writes go to the pod's diff
+directory, which outlives the container: an Android made again after its gateway
+went finds the account's sign-in there. Only ``remove_pod`` deletes it.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.emulator._data import data_layers, recorded_diff, remove_diff
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
     create_gateway,
@@ -37,6 +42,7 @@ from core.emulator._gateway import (
     wait_for_tunnel,
 )
 from core.emulator._process import docker
+from core.emulator.host import gpu_mode
 from core.emulator.images import ensure_pod_images
 from core.emulator.redroid import (
     Instance,
@@ -96,9 +102,17 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     gateway = gateway_name(name)
     found: set[str] = set()
     created: set[str] = set()
+    layers = None
     try:
         async with _CREATE_LOCK:
             android, current = await _find(name)
+            # Only an Android about to be made needs its base: refused before anything is.
+            remade = android is None or current is None
+            # The diff of an Android made again stays its own, whatever is configured now.
+            kept = await recorded_diff(name) if android is not None and current is None else None
+            layers = await data_layers(name, spec.sdk, kept) if remade else None
+            # Before an Android is removed: a GPU the host lacks must not leave none.
+            gpu = await gpu_mode() if remade else "guest"
             if android is not None and current is None:
                 # Its namespace went with its gateway: Android is made again in the new one.
                 await docker("rm", "--force", name)
@@ -119,14 +133,26 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         await wait_for_tunnel(gateway)
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
-            await create_instance(name, spec, index=index, gateway=gateway)
+            await create_instance(
+                name, spec, index=index, gateway=gateway, gpu=gpu, data=layers, kept_diff=kept
+            )
         else:
             await refresh_identity(name, spec, index)  # the proxy may have moved country
         await launch_instance(name, index)
     except BaseException:
         await asyncio.shield(_undo((name, gateway), found=found, created=created))
+        if layers is not None and layers.fresh:
+            await asyncio.shield(_forget_diff(name))
         raise
     return Instance(index, name, running=True)
+
+
+async def _forget_diff(name: str) -> None:
+    """Remove the diff a failed start made, so no later Android boots on its leftovers."""
+    try:
+        await remove_diff(name)
+    except EmulatorError as exc:
+        logger.warning("pod cleanup of %s's data failed (%s)", name, exc.code)
 
 
 async def _stop(container: str) -> None:
@@ -262,7 +288,7 @@ async def stop_running_pods() -> int:
 
 
 async def remove_pod(name: str) -> bool:
-    """Delete the pod's containers; ``False`` when it has none.
+    """Delete the pod's /data diff, then its containers; ``False`` when it has no container.
 
     A host without Docker has no pod to remove, so a missing docker CLI is "none",
     not an error: deleting an account must not depend on the emulator.
@@ -274,6 +300,12 @@ async def remove_pod(name: str) -> bool:
             return False
         raise
     await close_viewer(name)
+    recorded = await recorded_diff(name) if android is not None else None
+    if android is not None and _up(android):
+        await _halt(android)  # its /data still before the diff goes
+    # Before the containers: a diff that could not go stays named by Android's label,
+    # so a later removal finds it again.
+    await remove_diff(name, recorded)
     for container in (android, gateway):
         if container is not None:
             await docker("rm", "--force", container.name)
