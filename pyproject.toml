@@ -98,6 +98,14 @@ override-dependencies = [
     # CVE-2026-97687/97688/97689 in urllib3 <2.8.0 (via requests/semgrep).
     # Recheck when transitive dependents require a fixed version themselves.
     "urllib3>=2.8.0",
+    # CVE-2026-114603 in opentelemetry-api <1.45.1 (semgrep pins ~=1.37.0).
+    # The SDK and instrumentation pin the API exactly, so the family moves together.
+    # Recheck when semgrep's opentelemetry pins catch up.
+    "opentelemetry-api>=1.45.1,<1.46",
+    "opentelemetry-sdk>=1.45.1,<1.46",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.1,<1.46",
+    "opentelemetry-instrumentation-requests>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-threading>=0.66b1,<0.67",
     # PYSEC-2026-4011/4012/4013/4014 in virtualenv <21.7.13 and
     # CVE-2026-113722/113725/113726/113732/113776 below 21.14.9 (via pre-commit).
     # Recheck when pre-commit's lower bound reaches the patched line.
