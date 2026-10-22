@@ -5,12 +5,14 @@ The gateway (``core.emulator._gateway``) owns the network: Android is created wi
 and no ports (the gateway publishes adb at the pod's index). Both containers carry
 that index.
 
-``start_pod`` creates what is missing, gives the gateway the CURRENT proxy, starts it
-and waits for its tunnel before Android is started: Android's first packet meets the
-tunnel or the kill-switch, never a direct route. ``stop_pod`` stops Android, then the
-gateway; ``remove_pod`` deletes both. A failed start undoes what it did: the
-containers it created are removed, the ones it found are stopped. ``stop_running_pods``
-stops every pod this app left running (a crash, a restart), Androids before gateways.
+``start_pod`` creates what is missing (and remakes a gateway made from an image other
+than ``EMULATOR__GATEWAY_IMAGE``, with its Android), gives the gateway the CURRENT
+proxy, starts it and waits for its tunnel before Android is started: Android's first
+packet meets the tunnel or the kill-switch, never a direct route. ``stop_pod`` stops
+Android, then the gateway; ``remove_pod`` deletes both. A failed start undoes what it
+did: the containers it created are removed, the ones it found are stopped.
+``stop_running_pods`` stops every pod this app left running (a crash, a restart),
+Androids before gateways.
 
 Between close visits ``pause_pod`` freezes Android (``docker pause``: no CPU, its memory
 kept) and leaves the gateway up; ``unpause_pod`` thaws it in a moment, with no boot.
@@ -29,6 +31,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.emulator._data import data_layers, recorded_diff, remove_diff
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
@@ -106,19 +109,27 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     try:
         async with _CREATE_LOCK:
             android, current = await _find(name)
+            # A gateway of an image other than the configured one is made again, so a
+            # bumped tag reaches the pods made before it.
+            stale = current is not None and await _stale_gateway(gateway)
+            gone = current is None or stale
             # Only an Android about to be made needs its base: refused before anything is.
-            remade = android is None or current is None
+            remade = android is None or gone
             # The diff of an Android made again stays its own, whatever is configured now.
-            kept = await recorded_diff(name) if android is not None and current is None else None
+            kept = await recorded_diff(name) if android is not None and gone else None
             layers = await data_layers(name, spec.sdk, kept) if remade else None
             # Before an Android is removed: a GPU the host lacks must not leave none.
             gpu = await gpu_mode() if remade else "guest"
-            if android is not None and current is None:
-                # Its namespace went with its gateway: Android is made again in the new one.
+            if android is not None and gone:
+                # Its namespace goes with its gateway: Android is made again in the new one.
                 await docker("rm", "--force", name)
                 android = None
-            if current is None:
-                index = await _free_index()
+            if stale:
+                await docker("rm", "--force", gateway)
+            if current is None or stale:
+                # A remade gateway keeps its pod's index, so its adb port and cores.
+                index = current.index if current is not None else await _free_index()
+                current = None
                 await ensure_network()
                 created.add(gateway)  # before: a cancelled create may have made it
                 await create_gateway(gateway, index)
@@ -145,6 +156,15 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             await asyncio.shield(_forget_diff(name))
         raise
     return Instance(index, name, running=True)
+
+
+async def _stale_gateway(gateway: str) -> bool:
+    """Whether ``gateway`` was made from an image other than the configured one, by image ID."""
+    made_from = await docker("inspect", "--format", "{{.Image}}", gateway)
+    configured = await docker(
+        "image", "inspect", "--format", "{{.Id}}", settings.emulator.gateway_image
+    )
+    return made_from.strip() != configured.strip()
 
 
 async def _forget_diff(name: str) -> None:
