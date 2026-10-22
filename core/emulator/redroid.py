@@ -219,13 +219,17 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
 
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
-    follow it. A phone with a chip is pinned to the pod's cores again; its mounts
-    are a new container's only (one made before has none), nothing is made again.
+    follow it. A phone with a chip is pinned to the pod's cores again, its quota
+    raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
+    does not clear it); its mounts are a new container's only (one made before has
+    none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
     if spec.soc is not None:
         placement = await place_cpus(spec.soc, index)
-        await docker("update", "--cpuset-cpus", placement.cpuset, name)
+        await docker(
+            "update", "--cpus", str(placement.cores), "--cpuset-cpus", placement.cpuset, name
+        )
 
 
 async def launch_instance(name: str, index: int) -> None:

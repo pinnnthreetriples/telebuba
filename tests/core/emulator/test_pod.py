@@ -236,8 +236,10 @@ async def test_a_found_android_with_a_chip_is_pinned_to_its_pods_cores_before_it
     await pod.start_pod("telebuba-acc-2", _SPEC._replace(soc="chip"), _PROXY)
 
     verbs = _verbs(console)
-    assert verbs[-2:] == ["update --cpuset-cpus", "start telebuba-acc-2"]
+    assert verbs[-2:] == ["update --cpus", "start telebuba-acc-2"]
     assert _call(console, "update", "telebuba-acc-2")[2:] == [
+        "--cpus",
+        "4",
         "--cpuset-cpus",
         "8-11",
         "telebuba-acc-2",

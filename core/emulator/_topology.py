@@ -48,9 +48,10 @@ _GOVERNOR = "schedutil"
 
 
 class CpuPlacement(NamedTuple):
-    """The host cores a container runs on and the directory of what it sees."""
+    """The host cores a container runs on, how many, and the directory of what it sees."""
 
     cpuset: str
+    cores: int
     directory: Path
 
 
@@ -172,4 +173,4 @@ async def place_cpus(key: str, index: int) -> CpuPlacement:
     host = await host_cores()
     cores = min(soc.cores, host)
     directory = await asyncio.to_thread(write_topology, key, soc, cores)
-    return CpuPlacement(cpuset(cores, index, host), directory)
+    return CpuPlacement(cpuset(cores, index, host), cores, directory)

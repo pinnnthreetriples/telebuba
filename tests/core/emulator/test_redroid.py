@@ -199,7 +199,9 @@ async def test_a_refresh_pins_a_chips_container_without_new_mounts(chip: Console
     await redroid.refresh_identity("telebuba-acc-2", _CHIP_SPEC, 2)
 
     (update,) = _docker_calls(chip, "update")
-    assert update[2:] == ["--cpuset-cpus", "8-11", "telebuba-acc-2"], "pod 2's own slice"
+    assert update[2:] == ["--cpus", "4", "--cpuset-cpus", "8-11", "telebuba-acc-2"], (
+        "pod 2's own slice, its old --cpus quota raised to all of it"
+    )
     assert not [c for c in chip.calls if c[1] in {"create", "rm"}], "nothing is made again"
     assert not [c for c in _docker_calls(chip, "cp") if c[-1].endswith("cpuinfo.rc")]
 
