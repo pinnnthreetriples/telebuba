@@ -12,7 +12,8 @@ dependencies = [
     "loguru>=0.7.3",
     "opentele2>=1.2.1",
     "phonenumbers>=9.0.32",
-    "pillow>=11.0.0",
+    # CVE-2026-112395/112397/112400/112404/112895/112896/112897/112899 below 13.0.0.
+    "pillow>=13.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.15.0",
@@ -59,7 +60,10 @@ dev = [
 exclude-newer = "7 days"
 # PyJWT 2.15.0 contains the CVE-2026-101918 fix but landed hours after the
 # rolling cutoff. Admit that release only; 2.15.1 remains in cooldown.
-exclude-newer-package = { pyjwt = "2026-09-24T00:00:00Z" }
+# certifi 2026.10.19 (PYSEC-2026-4320), pillow 13.0.0 (CVE-2026-112395 and
+# seven more) and virtualenv 21.14.9 (CVE-2026-113722/113725/113726/113732/113776)
+# are admitted the same way: each cutoff sits just after that release's upload.
+exclude-newer-package = { pyjwt = "2026-09-24T00:00:00Z", certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-17T00:00:00Z", virtualenv = "2026-10-17T17:00:00Z" }
 # Override transitive deps when upstream upper-pins a vulnerable version.
 # Each entry must reference a CVE / advisory and be revisited when the
 # upstream chain catches up.
@@ -88,9 +92,12 @@ override-dependencies = [
     # CVE-2026-97687/97688/97689 in urllib3 <2.8.0 (via requests/semgrep).
     # Recheck when transitive dependents require a fixed version themselves.
     "urllib3>=2.8.0",
-    # PYSEC-2026-4011/4012/4013/4014 in virtualenv <21.7.13 (via pre-commit).
+    # PYSEC-2026-4011/4012/4013/4014 in virtualenv <21.7.13 and
+    # CVE-2026-113722/113725/113726/113732/113776 below 21.14.9 (via pre-commit).
     # Recheck when pre-commit's lower bound reaches the patched line.
-    "virtualenv>=21.7.13",
+    "virtualenv>=21.14.9",
+    # PYSEC-2026-4320 in certifi <2026.10.19 (via httpx/requests).
+    "certifi>=2026.10.19",
 ]
 
 # ============================================================================
