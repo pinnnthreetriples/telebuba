@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import struct
 import zipfile
+import zlib
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -86,7 +87,7 @@ def app_identity(path: Path) -> AppIdentity:
     try:
         with zipfile.ZipFile(path) as apk:
             manifest = apk.read("AndroidManifest.xml")
-    except (zipfile.BadZipFile, KeyError) as exc:
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, KeyError, zlib.error) as exc:
         msg = "no manifest"
         raise ValueError(msg) from exc
     try:
@@ -141,17 +142,36 @@ def list_store_apks(store_dir: Path | None = None) -> list[ApkStoreEntry]:
     return entries
 
 
+def _parse_version_code(version: str) -> int:
+    """Extract integer versionCode from 'versionName (versionCode)' or 0."""
+    try:
+        if "(" in version and version.endswith(")"):
+            return int(version.rsplit("(", 1)[1][:-1].strip())
+    except (ValueError, IndexError):
+        pass
+    return 0
+
+
 def find_store_apk(
     package: str,
     version: str | None = None,
     *,
     store_dir: Path | None = None,
 ) -> Path | None:
-    """Find an APK in the local store matching package and optional version."""
-    for entry in list_store_apks(store_dir):
-        if entry.package == package and (version is None or entry.version == version):
-            return entry.path
-    return None
+    """Find an APK in the local store matching package and optional version.
+
+    When ``version`` is omitted, selects the newest APK according to integer versionCode.
+    """
+    matches = [entry for entry in list_store_apks(store_dir) if entry.package == package]
+    if not matches:
+        return None
+    if version is not None:
+        for entry in matches:
+            if entry.version == version:
+                return entry.path
+        return None
+    newest = max(matches, key=lambda entry: _parse_version_code(entry.version))
+    return newest.path
 
 
 def _signing_blocks(data: bytes) -> dict[int, bytes]:

@@ -85,7 +85,18 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
     """Install Telegram when the container lacks it (fetching the APK first), then start it."""
     package = await app_package(serial)
     if package is None:
-        target_apk = apk_path or find_store_apk(settings.emulator.telegram_package)
+        target_apk = apk_path or find_store_apk(
+            settings.emulator.telegram_package,
+            version=settings.emulator.telegram_app_version or None,
+        )
+        if (
+            target_apk is None
+            and settings.emulator.telegram_package != "org.telegram.messenger.web"
+        ):
+            target_apk = find_store_apk(
+                "org.telegram.messenger.web",
+                version=settings.emulator.telegram_app_version or None,
+            )
         if target_apk is None:
             package = (await ensure_telegram_apk()).package
             target_apk = settings.emulator.telegram_apk_path

@@ -195,11 +195,11 @@ def build_container_isolation_commands(boot_id: str | None = None) -> list[str]:
     resolved_boot_id = boot_id or generate_instance_boot_id()
     quoted_boot_id = shlex.quote(resolved_boot_id)
     return [
-        "umount -l /.dockerenv 2>/dev/null || true",
-        "rm -f /.dockerenv 2>/dev/null || true",
+        "{ umount -l /.dockerenv 2>/dev/null || true; }",
+        "{ rm -f /.dockerenv 2>/dev/null || true; }",
         f"printf '%s\\n' {quoted_boot_id} > /dev/.boot_id",
         "chmod 0444 /dev/.boot_id",
-        "umount -l /proc/sys/kernel/random/boot_id 2>/dev/null || true",
+        "{ umount -l /proc/sys/kernel/random/boot_id 2>/dev/null || true; }",
         "mount --bind -o ro /dev/.boot_id /proc/sys/kernel/random/boot_id",
     ]
 
@@ -208,7 +208,7 @@ def build_redroid_cleanup_script() -> str:
     """Shell command deleting all dynamic ro.boot.redroid_* properties via getprop + resetprop."""
     return (
         "for prop in $(getprop | sed -n 's/^\\[\\(ro\\.boot\\.redroid_[^]]*\\)\\]:.*/\\1/p'); do "
-        'resetprop --delete "$prop" 2>/dev/null || true; '
+        '{ resetprop --delete "$prop" 2>/dev/null || true; }; '
         "done"
     )
 
@@ -219,7 +219,7 @@ def build_user_build_resetprop_commands(
     """Commands setting container user-build properties using resetprop -n."""
     commands: list[str] = [build_redroid_cleanup_script()]
     commands.extend(
-        f"resetprop --delete {shlex.quote(key)} 2>/dev/null || true"
+        f"{{ resetprop --delete {shlex.quote(key)} 2>/dev/null || true; }}"
         for key in REDROID_BOOT_PROP_KEYS
     )
 

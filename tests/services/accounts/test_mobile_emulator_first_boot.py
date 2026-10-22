@@ -80,3 +80,14 @@ async def test_a_new_pod_with_the_wrong_sdk_is_removed(container: _Container) ->
         await open_account_mobile("acc")
 
     assert container.steps[-1] == "remove:telebuba-acc"
+
+
+@pytest.mark.asyncio
+async def test_a_new_pod_that_fails_at_stealth_is_removed(container: _Container) -> None:
+    await _account()
+    container.fail_at = "stealth"
+
+    with pytest.raises(EmulatorRefusedError):
+        await open_account_mobile("acc")
+
+    assert container.steps[-1] == "remove:telebuba-acc"

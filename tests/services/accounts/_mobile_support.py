@@ -120,9 +120,13 @@ class _Container:
 
     async def apply_stealth_profile(self, serial: str) -> str:
         self.on_serial(serial, "stealth")
+        if self.fail_at == "stealth":
+            msg = "simulated stealth failure"
+            raise RuntimeError(msg)
         return "fake-boot-id"
 
-    async def ensure_app(self, serial: str) -> None:
+    async def ensure_app(self, serial: str, *, apk_path: object = None) -> None:
+        del apk_path
         self.on_serial(serial, "app")
 
     async def seed_device_if_needed(self, serial: str, spec: ContainerSpec) -> bool:

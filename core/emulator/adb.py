@@ -336,7 +336,8 @@ async def exec_root_script(serial: str, commands: Sequence[str]) -> str:
     """Execute a list of shell commands inside the container as root."""
     joined = " && ".join(commands)
     script = (
-        f"if command -v su >/dev/null 2>&1; then su 0 sh -c {shlex.quote(joined)}; "
+        f'if [ "$(id -u 2>/dev/null)" = "0" ]; then sh -c {shlex.quote(joined)}; '
+        f"elif command -v su >/dev/null 2>&1; then su 0 sh -c {shlex.quote(joined)}; "
         f"else sh -c {shlex.quote(joined)}; fi"
     )
     return await shell(serial, script)
@@ -361,6 +362,10 @@ async def apply_stealth_profile(
     ]
 
     await exec_root_script(serial, commands)
+
+    actual_boot_id = (await shell(serial, "cat", "/proc/sys/kernel/random/boot_id")).strip()
+    if actual_boot_id != instance_boot_id:
+        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
 
     probe = await shell(serial, "echo ok")
     if probe.strip() != "ok":

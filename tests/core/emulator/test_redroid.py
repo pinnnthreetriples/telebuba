@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
@@ -346,19 +345,34 @@ def test_profile_command_builders_include_all_stage3_requirements() -> None:
 
 @pytest.mark.asyncio
 async def test_apply_stealth_profile_functional_flow(monkeypatch: pytest.MonkeyPatch) -> None:
-    mock_shell = AsyncMock(side_effect=["", "ok"])
+    expected_id = "11111111-2222-4333-8444-555555555555"
+    mock_shell = AsyncMock(side_effect=["", expected_id, "ok"])
     monkeypatch.setattr(adb, "shell", mock_shell)
 
-    boot_id = await adb.apply_stealth_profile("127.0.0.1:5555")
-    assert str(uuid.UUID(boot_id, version=4)) == boot_id
-    assert mock_shell.await_count == 2
+    boot_id = await adb.apply_stealth_profile("127.0.0.1:5555", boot_id=expected_id)
+    assert boot_id == expected_id
+    assert mock_shell.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_apply_stealth_profile_raises_emulator_error_on_boot_id_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_id = "11111111-2222-4333-8444-555555555555"
+    mock_shell = AsyncMock(side_effect=["", "wrong-host-boot-id", "ok"])
+    monkeypatch.setattr(adb, "shell", mock_shell)
+
+    with pytest.raises(EmulatorError) as exc_info:
+        await adb.apply_stealth_profile("127.0.0.1:5555", boot_id=expected_id)
+    assert exc_info.value.code == "emulator_command_failed"
 
 
 @pytest.mark.asyncio
 async def test_apply_stealth_profile_raises_emulator_error_on_disconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(adb, "shell", AsyncMock(side_effect=["", ""]))
+    expected_id = "11111111-2222-4333-8444-555555555555"
+    monkeypatch.setattr(adb, "shell", AsyncMock(side_effect=["", expected_id, ""]))
     with pytest.raises(EmulatorError) as exc_info:
-        await adb.apply_stealth_profile("127.0.0.1:5555")
+        await adb.apply_stealth_profile("127.0.0.1:5555", boot_id=expected_id)
     assert exc_info.value.code == "emulator_command_failed"

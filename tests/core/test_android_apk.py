@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import zipfile
 from typing import TYPE_CHECKING
 
 import pytest
@@ -137,5 +138,13 @@ def test_list_and_find_store_apks(tmp_path: Path) -> None:
     found_v1 = android_apk.find_store_apk("org.telegram.messenger", "10.0.0 (100)", store_dir=store)
     assert found_v1 == apk1
     found_any = android_apk.find_store_apk("org.telegram.messenger", store_dir=store)
-    assert found_any in (apk1, apk2)
+    assert found_any == apk2
     assert android_apk.find_store_apk("unknown.pkg", store_dir=store) is None
+
+
+def test_corrupted_or_truncated_manifest_is_refused(tmp_path: Path) -> None:
+    bad = tmp_path / "corrupted.apk"
+    with zipfile.ZipFile(bad, "w") as zf:
+        zf.writestr("AndroidManifest.xml", b"\x00\x01\x02\x03")
+    with pytest.raises(ValueError, match=r"(truncated manifest|no manifest)"):
+        app_identity(bad)
