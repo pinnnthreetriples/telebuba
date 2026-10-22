@@ -76,9 +76,12 @@ allow_tunnel() {
 	# address and the proxy resolves the name when the connection is made.
 	iptables -t nat -F OUTPUT
 	iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -p udp --dport 53 -j DNAT --to-destination 198.18.0.2:53
-	# tun0's MTU is 1400: SYNs announce a segment size that fits it.
+	iptables -t nat -A OUTPUT ! -d 127.0.0.0/8 -p tcp --dport 53 -j DNAT --to-destination 198.18.0.2:53
+	iptables -A OUTPUT -p tcp --dport 853 -j DROP
+	# tun0's MTU is 1400: SYNs announce a segment size that fits it. Mobile TTL=64.
 	iptables -t mangle -F POSTROUTING
 	iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+	iptables -t mangle -A POSTROUTING -j TTL --ttl-set 64
 }
 
 # $1 address, $2 port, $3 username, $4 password
