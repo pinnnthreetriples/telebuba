@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from core.emulator import (
     EmulatorError,
     adb_serial,
+    apply_stealth_profile,
     assert_sdk,
     ensure_app,
     ensure_telegram_apk,
@@ -100,6 +101,7 @@ async def _start(
         if not background:
             await show(name, instance.index)
         await assert_sdk(serial, spec.sdk)
+        await apply_stealth_profile(serial)
         booted = True
         report_stage(account.account_id, "app")
         seeding = asyncio.create_task(_seed(account.account_id, serial, spec))

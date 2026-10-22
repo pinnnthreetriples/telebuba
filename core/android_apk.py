@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import struct
 import zipfile
+import zlib
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -52,6 +53,12 @@ class AppIdentity(NamedTuple):
     version: str  # "versionName (versionCode)"
 
 
+class ApkStoreEntry(NamedTuple):
+    package: str
+    version: str  # "versionName (versionCode)"
+    path: Path
+
+
 def signing_certificate_sha256(path: Path) -> str:
     """The SHA-256 (hex) of the one certificate every v2/v3/v3.1 signer of the APK uses."""
     data = path.read_bytes()
@@ -80,7 +87,7 @@ def app_identity(path: Path) -> AppIdentity:
     try:
         with zipfile.ZipFile(path) as apk:
             manifest = apk.read("AndroidManifest.xml")
-    except (zipfile.BadZipFile, KeyError) as exc:
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, KeyError, zlib.error) as exc:
         msg = "no manifest"
         raise ValueError(msg) from exc
     try:
@@ -114,6 +121,57 @@ def _cached_identity(path: str, _mtime_ns: int, _size: int) -> AppIdentity | Non
         return app_identity(Path(path))
     except (ValueError, OSError):
         return None
+
+
+def list_store_apks(store_dir: Path | None = None) -> list[ApkStoreEntry]:
+    """List valid APKs found in the local versioned store (<store_dir>/**/*.apk)."""
+    root = store_dir or settings.emulator.apk_store_dir
+    if not root.is_dir():
+        return []
+    entries: list[ApkStoreEntry] = []
+    for file in sorted(root.glob("**/*.apk")):
+        if not file.is_file():
+            continue
+        try:
+            identity = app_identity(file)
+            entries.append(
+                ApkStoreEntry(package=identity.package, version=identity.version, path=file)
+            )
+        except (ValueError, OSError):
+            continue
+    return entries
+
+
+def _parse_version_code(version: str) -> int:
+    """Extract integer versionCode from 'versionName (versionCode)' or 0."""
+    try:
+        if "(" in version and version.endswith(")"):
+            return int(version.rsplit("(", 1)[1][:-1].strip())
+    except (ValueError, IndexError):
+        pass
+    return 0
+
+
+def find_store_apk(
+    package: str,
+    version: str | None = None,
+    *,
+    store_dir: Path | None = None,
+) -> Path | None:
+    """Find an APK in the local store matching package and optional version.
+
+    When ``version`` is omitted, selects the newest APK according to integer versionCode.
+    """
+    matches = [entry for entry in list_store_apks(store_dir) if entry.package == package]
+    if not matches:
+        return None
+    if version is not None:
+        for entry in matches:
+            if entry.version == version:
+                return entry.path
+        return None
+    newest = max(matches, key=lambda entry: _parse_version_code(entry.version))
+    return newest.path
 
 
 def _signing_blocks(data: bytes) -> dict[int, bytes]:

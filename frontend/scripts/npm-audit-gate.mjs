@@ -27,6 +27,46 @@ const IGNORED = new Map([
     'GHSA-vfj7-8cjw-p6xm',
     'braces: build-time only via steiger, fed our own glob patterns; no patched release',
   ],
+  [
+    // Storybook origin validation in preview: dev/catalog tool only, not in production bundle.
+    'GHSA-f2ph-cmg5-wxc8',
+    'storybook: dev/catalog tool only, never exposed or shipped in production bundle',
+  ],
+  [
+    // Vitest manual mock registration: test runner devDependency only.
+    'GHSA-qxg6-89mg-rqv8',
+    'vitest: test runner only, never shipped in bundle',
+  ],
+  [
+    // Vitest Windows backslash traversal: test runner devDependency only.
+    'GHSA-xp26-3454-mjgp',
+    'vitest: test runner only, never shipped in bundle',
+  ],
+  [
+    // Vite launch-editor Windows escaping: dev server editor opener only.
+    'GHSA-698v-4r3x-3vcv',
+    'vite (launch-editor): dev-server editor integration only',
+  ],
+  [
+    // Vite launch-editor flag misinterpretation: dev server editor opener only.
+    'GHSA-r825-w8mm-5pxw',
+    'vite (launch-editor): dev-server editor integration only',
+  ],
+  [
+    // Vite launch-editor Windows existence check: dev server editor opener only.
+    'GHSA-587h-7wmj-h5pm',
+    'vite (launch-editor): dev-server editor integration only',
+  ],
+  [
+    // Vite custom middleware XSS: dev server only, production is static bundle.
+    'GHSA-9jrq-w75r-8gcw',
+    'vite: dev-server middleware only, static assets built for production',
+  ],
+  [
+    // Vite server.fs.allow traversal: dev server only, production is static bundle.
+    'GHSA-rq7h-c2jc-7f22',
+    'vite: dev-server file-serving only, not in production build',
+  ],
 ]);
 
 function runAudit() {

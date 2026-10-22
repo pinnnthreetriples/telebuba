@@ -54,6 +54,8 @@ class EmulatorSettings(BaseSettings):
     # Installed into a container with no Telegram; a missing file is fetched from
     # telegram.org, kept only when Telegram signed it (``core.emulator.assets``).
     telegram_apk_path: Path = Path("emulator/telegram.apk")
+    # Directory storing versioned APKs (<store_dir>/<package>/<version>.apk).
+    apk_store_dir: Path = Path("emulator/apk_store")
     # The Telegram a container already has is driven: this package first, else the APK's.
     telegram_package: str = Field(default="org.telegram.messenger", min_length=1)
     # That APK's "versionName (versionCode)": new mobile fingerprints claim it, so the

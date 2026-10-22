@@ -122,7 +122,36 @@ async def test_a_failed_install_has_its_own_code(
         await adb.install_apk("emulator-5554")
 
     assert refused.value.code == "emulator_install_failed"
-    assert console.calls[0][3:] == ["install", "-r", str(apk)]
+    assert console.calls[0][3:] == ["install", "-r", "-i", "com.android.vending", str(apk)]
+
+
+@pytest.mark.asyncio
+async def test_install_apk_supports_custom_or_no_installer_package(
+    console: Console,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    apk = tmp_path / "telegram.apk"
+    apk.write_bytes(b"apk")
+    monkeypatch.setattr(settings.emulator, "telegram_apk_path", apk)
+
+    console.answer = lambda _argv: "Success"
+    await adb.install_apk("emulator-5554", installer_package=None)
+    assert console.calls[-1][3:] == ["install", "-r", str(apk)]
+
+    await adb.install_apk("emulator-5554", installer_package="org.custom.store")
+    assert console.calls[-1][3:] == ["install", "-r", "-i", "org.custom.store", str(apk)]
+
+
+@pytest.mark.asyncio
+async def test_step_battery_discharge_decrements_level(
+    console: Console,
+) -> None:
+    console.answer = lambda argv: "  level: 80\n  status: 3" if "dumpsys" in argv else ""
+    await adb.step_battery_discharge("emulator-5554", decrement=3)
+
+    set_call = console.shell_calls()[-1]
+    assert set_call == ["dumpsys", "battery", "set", "level", "77"]
 
 
 @pytest.mark.asyncio
