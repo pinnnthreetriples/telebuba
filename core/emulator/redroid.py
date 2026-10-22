@@ -179,6 +179,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     gpu: GpuMode = "guest",
     data: DataLayers | None = None,
     kept_diff: str | None = None,
+    cpuset: str | None = None,
 ) -> Instance:
     """A new, stopped container named ``name`` presenting ``spec``'s phone.
 
@@ -190,9 +191,11 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     ``/dev/dri``), as ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its
     /data is the overlay of those layers (``core.emulator._data``), else its own;
     ``kept_diff`` is the diff of the Android it replaces, still labelled for deletion.
+    With ``cpuset`` it runs on those host cores only (``core.emulator._cpuset``).
     """
     image = image_for(spec)
     device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
+    pinned = ("--cpuset-cpus", cpuset) if cpuset else ()
     # Where its diff is, for deletion; with shared /data off now, the one it replaces keeps.
     diff = data.diff.as_posix() if data else kept_diff
     mounts = _volumes(data) if data else ()
@@ -213,6 +216,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         f"container:{gateway}",
         "--cpus",
         str(settings.emulator.cpu_cores),
+        *pinned,
         "--memory",
         f"{settings.emulator.memory_mb}m",
         *device,

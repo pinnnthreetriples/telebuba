@@ -12,6 +12,10 @@ capable is not asked again while the process runs.
 The GPU (``EMULATOR__GPU_MODE``) is probed the same way, a throwaway container given
 ``/dev/dri``: ``host`` without one is ``emulator_gpu_missing`` (at the first Start too),
 ``auto`` without one draws in software (``guest``). A GPU found is not asked again.
+
+The Docker host's core count (``EMULATOR__CPUSET_CORES``, ``core.emulator._cpuset``)
+is asked of docker itself, not of this machine (which may be Windows next to WSL2),
+once per process.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ if TYPE_CHECKING:
 
 _EMULATOR_ADB_MISSING: EmulatorRefusalCode = "emulator_adb_missing"
 _EMULATOR_BINDER_MISSING: EmulatorRefusalCode = "emulator_binder_missing"
+_EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_DOCKER_UNAVAILABLE: EmulatorRefusalCode = "emulator_docker_unavailable"
 _EMULATOR_GPU_MISSING: EmulatorRefusalCode = "emulator_gpu_missing"
 
@@ -42,6 +47,7 @@ _PROBE_PULL_SECONDS = 120.0
 
 _binder_seen = False
 _dri_seen = False
+_cpus_seen = 0
 
 
 async def check_host() -> None:
@@ -69,6 +75,17 @@ async def gpu_mode() -> GpuMode:
     if mode == "host":
         raise EmulatorError(_EMULATOR_GPU_MISSING)
     return "guest"
+
+
+async def host_cpus() -> int:
+    """How many cores the Docker host has; an answer that is not a count is a failed command."""
+    global _cpus_seen  # noqa: PLW0603 - a process-wide fact about the host's cores
+    if not _cpus_seen:
+        answer = (await _process.docker("info", "--format", "{{.NCPU}}")).strip()
+        if not answer.isdigit() or int(answer) < 1:
+            raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+        _cpus_seen = int(answer)
+    return _cpus_seen
 
 
 async def _check_binder() -> None:

@@ -63,6 +63,10 @@ class EmulatorSettings(BaseSettings):
     instance_prefix: str = Field(default="telebuba-", min_length=1)
     # CPU cores and RAM of a new container (its screen is its phone's, ``configs/``).
     cpu_cores: int = Field(default=2, ge=1, le=8)
+    # Pin a new container to this many of the Docker host's cores (``--cpuset-cpus``),
+    # the slice its pod's index picks; pods past the host's last slice reuse the first
+    # ones. 0 pins nothing. ``cpu_cores`` still caps its share of them.
+    cpuset_cores: int = Field(default=0, ge=0, le=64)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
     # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android
     # boot; one screen to appear; the login code to reach the account's existing

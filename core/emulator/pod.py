@@ -29,6 +29,8 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from core.config import settings
+from core.emulator._cpuset import cpuset_for
 from core.emulator._data import data_layers, recorded_diff, remove_diff
 from core.emulator._errors import EmulatorError
 from core.emulator._gateway import (
@@ -42,7 +44,7 @@ from core.emulator._gateway import (
     wait_for_tunnel,
 )
 from core.emulator._process import docker
-from core.emulator.host import gpu_mode
+from core.emulator.host import gpu_mode, host_cpus
 from core.emulator.images import ensure_pod_images
 from core.emulator.redroid import (
     Instance,
@@ -113,6 +115,8 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
             layers = await data_layers(name, spec.sdk, kept) if remade else None
             # Before an Android is removed: a GPU the host lacks must not leave none.
             gpu = await gpu_mode() if remade else "guest"
+            cores = settings.emulator.cpuset_cores
+            pool = await host_cpus() if remade and cores else 0
             if android is not None and current is None:
                 # Its namespace went with its gateway: Android is made again in the new one.
                 await docker("rm", "--force", name)
@@ -134,7 +138,14 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
             await create_instance(
-                name, spec, index=index, gateway=gateway, gpu=gpu, data=layers, kept_diff=kept
+                name,
+                spec,
+                index=index,
+                gateway=gateway,
+                gpu=gpu,
+                data=layers,
+                kept_diff=kept,
+                cpuset=cpuset_for(index, cores, pool) if pool else None,
             )
         else:
             await refresh_identity(name, spec)  # the proxy may have moved country

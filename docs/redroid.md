@@ -242,6 +242,17 @@ owners, modes and extended attributes Android needs. Then set
 Never write into a base pods are running on: overlayfs does not expect its lower layer to change
 under it. To change a base, stop the pods, replace it, and make their Androids again.
 
+## CPU pinning
+
+Off unless `EMULATOR__CPUSET_CORES` is above 0 (`core/emulator/_cpuset.py`). Then a new Android is
+created with `--cpuset-cpus`, a slice of that many of the Docker host's cores picked by its pod's
+index: with 8 on a 16-core host pod 0 gets `0-7`, pod 1 `8-15`, pod 2 `0-7` again. Cores left over
+after the last whole slice are not used; a host with no more cores than one slice gives every pod
+all of them. The core count is asked of docker (`docker info --format {{.NCPU}}`), so it is the
+Docker host's (the WSL2 VM on Windows), once per process; an answer that is not a count fails the
+start as `emulator_command_failed` before anything is removed. `EMULATOR__CPU_CORES` still caps
+the container's share (`--cpus`). Like the GPU mode, it is fixed at a container's create.
+
 ## Host setup (Windows, Docker Desktop on WSL2)
 
 redroid needs binder in the kernel, and Android's netd needs the legacy iptables filter tables

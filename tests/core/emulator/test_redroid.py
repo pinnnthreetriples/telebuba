@@ -134,6 +134,32 @@ async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> N
 
 
 @pytest.mark.asyncio
+async def test_a_pinned_container_is_given_its_cpuset(ps: Console) -> None:
+    ps.answer = _product_prop(_IMAGE_PROP, [])
+
+    await redroid.create_instance(
+        "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net", cpuset="8-15"
+    )
+
+    create = _docker_calls(ps, "create")[0]
+    pinned = create.index("--cpuset-cpus")
+    assert create[pinned + 1] == "8-15"
+    assert create[pinned - 2 : pinned] == ["--cpus", str(settings.emulator.cpu_cores)]
+    assert pinned < create.index("redroid/redroid:13.0.0_64only-latest"), "a docker option"
+
+
+@pytest.mark.asyncio
+async def test_an_unpinned_container_has_no_cpuset(ps: Console) -> None:
+    ps.answer = _product_prop(_IMAGE_PROP, [])
+
+    await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
+
+    create = _docker_calls(ps, "create")[0]
+    assert "--cpuset-cpus" not in create
+    assert "--cpus" in create
+
+
+@pytest.mark.asyncio
 async def test_an_sdk_without_an_image_is_refused_before_anything_is_created(
     ps: Console,
 ) -> None:
