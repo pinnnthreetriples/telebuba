@@ -3653,6 +3653,14 @@
       "today": "Today {{done}} of {{cap}} actions",
       "todayNoCap": "Today {{done}} actions",
       "next": "next visit in {{time}}",
+      "mechanics": "Mechanics: {{list}}",
+      "mechanic": {
+        "join": "joins",
+        "read": "reading",
+        "reactions": "reactions",
+        "stories": "stories",
+        "dialogue": "dialogues"
+      },
       "dmOn": "DMs: on",
       "dmOff": "DMs: off, {{reason}}",
       "dmReason": {
