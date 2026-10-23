@@ -134,6 +134,12 @@ def _identity_written(console: Console, name: str) -> list[str]:
     return next(c for c in console.calls if c[1] == "cp" and c[3] == target)
 
 
+def _features_given(console: Console, name: str) -> list[str]:
+    """The ``docker cp`` of the phone's feature files into ``name``."""
+    target = f"{name}:/vendor/etc/permissions"
+    return next(c for c in console.calls if c[1] == "cp" and c[3] == target)
+
+
 @pytest.mark.asyncio
 async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: Console) -> None:
     copied: list[tuple[Path, str, str]] = []
@@ -159,6 +165,7 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
         "create telebuba-new",
         "cp telebuba-new:/product/etc/build.prop",
         "cp " + _identity_written(console, "telebuba-new")[2],
+        "cp " + _features_given(console, "telebuba-new")[2],
         "start telebuba-new",
     ]
     gateway = _call(console, "create", "telebuba-new-net")
@@ -251,6 +258,7 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
         "exec telebuba-acc-0-net",
         "cp telebuba-acc-0:/product/etc/build.prop",
         "cp " + _identity_written(console, "telebuba-acc-0")[2],
+        "cp " + _features_given(console, "telebuba-acc-0")[2],
         "start telebuba-acc-0",
     ], "its phone is written again before it boots: the proxy may have moved country"
 

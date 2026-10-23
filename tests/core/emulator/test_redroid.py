@@ -46,7 +46,7 @@ def _product_prop(image_prop: str, written: list[str]) -> Callable[[list[str]], 
     def answer(argv: list[str]) -> str:
         if argv[1] == "cp" and argv[2].startswith("telebuba-"):  # container -> host
             Path(argv[3]).write_text(image_prop, encoding="utf-8")
-        elif argv[1] == "cp":  # read while the scratch copy still exists
+        elif argv[1] == "cp" and argv[3].endswith("build.prop"):  # read while it still exists
             written.append(Path(argv[2]).read_text(encoding="utf-8"))
         return _PS if argv[1] == "ps" else ""
 
@@ -61,6 +61,11 @@ def ps(console: Console) -> Console:
 
 def _docker_calls(console: Console, verb: str) -> list[list[str]]:
     return [call for call in console.calls if call[1] == verb]
+
+
+def _feature_copies(console: Console) -> list[list[str]]:
+    """The ``docker cp`` of the feature files: a directory's contents, merged into Android's."""
+    return [c for c in _docker_calls(console, "cp") if c[-1].endswith(":/vendor/etc/permissions")]
 
 
 def test_only_labelled_lines_with_an_index_are_containers() -> None:
@@ -119,7 +124,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "androidboot.redroid_gpu_mode=guest",
     ]
     assert "--device" not in create, "software drawing needs no GPU"
-    take, give = _docker_calls(ps, "cp")
+    take, give = [c for c in _docker_calls(ps, "cp") if c[-1].endswith("build.prop")]
     assert take[2] == give[3] == "telebuba-new:/product/etc/build.prop", "read last by init"
     ours = "".join(f"{key}={value}\n" for key, value in aosp_boot_properties(_SPEC).items())
     (written,) = copied
@@ -130,6 +135,8 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "a model with a space survives: it is not on the command line"
     )
     assert ps.calls.index(give) > ps.calls.index(create), "written before the first boot"
+    (features,) = _feature_copies(ps)
+    assert ps.calls.index(features) > ps.calls.index(create)
 
 
 @pytest.mark.asyncio
@@ -188,6 +195,7 @@ async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -
     assert "persist.sys.timezone=Europe/Warsaw\n" in written
     assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
     assert _docker_calls(ps, "update") == [], "a phone without a chip keeps its CPUs"
+    assert len(_feature_copies(ps)) == 1, "a container made before gets them too"
 
 
 @pytest.fixture
