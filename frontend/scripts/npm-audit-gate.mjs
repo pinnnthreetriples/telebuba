@@ -67,6 +67,12 @@ const IGNORED = new Map([
     'GHSA-rq7h-c2jc-7f22',
     'vite: dev-server file-serving only, not in production build',
   ],
+  [
+    // Zod unbounded array issues exhaust memory: our schemas validate the operator's own
+    // form fields in their browser, with no z.array; the fix is zod 4.6.6 (a major bump).
+    'GHSA-mrhx-c7xc-m3w5',
+    'zod: client-side form schemas only, no array schema, no untrusted input',
+  ],
 ]);
 
 function runAudit() {
