@@ -310,7 +310,7 @@ class Sensors : public BnSensors {
                 const float value = info.type == SensorType::PROXIMITY
                                             ? info.maxRange
                                             : quantize(static_cast<float>(scene_.lux() * (1 + scene_.gauss(0.01))),
-                                                       std::max(info.resolution, 1.0f), info.maxRange);
+                                                       info.resolution, info.maxRange);
                 if (a.reported && value == a.last) return false;
                 a.reported = true;
                 a.last = value;
