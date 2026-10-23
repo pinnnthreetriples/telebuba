@@ -18,6 +18,9 @@
     "file_style": "xiaomi"
   },
   "soc": "mt6877",
+  "hardware": "mt6877",
+  "board": "ruby",
+  "platform": "mt6877",
   "builds": {
     "33": {
       "release": "13",

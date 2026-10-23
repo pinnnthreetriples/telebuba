@@ -18,6 +18,9 @@
     "file_style": "pixel"
   },
   "soc": "gs201",
+  "hardware": "panther",
+  "board": "panther",
+  "platform": "gs201",
   "builds": {
     "33": {
       "release": "13",

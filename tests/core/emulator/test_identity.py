@@ -64,16 +64,35 @@ def test_the_container_is_the_phone_its_firmware_and_its_region() -> None:
     assert "ro.serialno" not in props, "init sets it from androidboot.serialno first"
 
 
-def test_the_chip_is_told_by_ro_soc_and_the_hals_stay_the_images(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_the_container_is_the_phones_board_and_keeps_the_images_composer() -> None:
+    spec = container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE")
+
+    assert (spec.hardware, spec.board, spec.platform) == ("panther", "panther", "gs201")
+    props = aosp_boot_properties(spec)
+    assert props["ro.product.board"] == "panther"
+    assert props["ro.board.platform"] == "gs201"
+    assert props["ro.hardware.hwcomposer"] == "redroid", "found before ro.hardware's name"
+    assert "ro.hardware" not in props, "init sets it from androidboot.hardware first"
+
+
+# What Telegram's EmuDetector looks for in Build.HARDWARE, BOARD and PRODUCT.
+_EMULATOR_MARKS = ("goldfish", "ranchu", "vbox86", "android_x86", "nox", "generic", "sdk", "qemu")
+
+
+def test_no_blueprint_board_names_an_emulator() -> None:
+    for blueprint in load_blueprints():
+        for name in (blueprint.hardware, blueprint.board, blueprint.platform):
+            assert not any(mark in name.lower() for mark in _EMULATOR_MARKS), name
+            assert "redroid" not in name, name
+
+
+def test_the_chip_is_told_by_ro_soc(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_profile, "load_socs", lambda: {"chip": CHIP})
     spec = container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE")
 
     props = aosp_boot_properties(spec._replace(soc="chip"))
     assert props["ro.soc.model"] == "SM0000"
     assert props["ro.soc.manufacturer"] == "QTI"
-    assert not {"ro.hardware", "ro.board.platform"} & props.keys()
     assert not any(
         key.startswith("ro.soc.") for key in aosp_boot_properties(spec._replace(soc=None))
     )

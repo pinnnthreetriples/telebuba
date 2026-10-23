@@ -18,6 +18,9 @@
     "file_style": "samsung"
   },
   "soc": "sm8550_ac",
+  "hardware": "qcom",
+  "board": "kalama",
+  "platform": "kalama",
   "builds": {
     "33": {
       "release": "13",

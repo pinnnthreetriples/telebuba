@@ -18,6 +18,9 @@
     "file_style": "oneplus"
   },
   "soc": "sm8550",
+  "hardware": "qcom",
+  "board": "kalama",
+  "platform": "kalama",
   "builds": {
     "33": {
       "release": "13",

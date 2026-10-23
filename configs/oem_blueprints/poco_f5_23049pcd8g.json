@@ -18,6 +18,9 @@
     "file_style": "xiaomi"
   },
   "soc": "sm7475",
+  "hardware": "qcom",
+  "board": "marble",
+  "platform": "taro",
   "builds": {
     "33": {
       "release": "13",

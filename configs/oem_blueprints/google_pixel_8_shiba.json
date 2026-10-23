@@ -18,6 +18,9 @@
     "file_style": "pixel"
   },
   "soc": "zuma",
+  "hardware": "shiba",
+  "board": "shiba",
+  "platform": "zuma",
   "builds": {
     "34": {
       "release": "14",

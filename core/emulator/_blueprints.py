@@ -131,6 +131,13 @@ class OemBlueprint(_Frozen):
     builds: dict[int, OemBuild] = Field(min_length=1)
     # The ``configs/soc`` file stem of its chip; ``None``: the host's CPUs, ``cpu_cores`` of them.
     soc: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
+    # ``ro.hardware`` (what its bootloader passes as ``androidboot.hardware``: Pixels their
+    # codename, Qualcomm phones ``qcom``), ``ro.product.board`` and ``ro.board.platform``,
+    # as its stock vendor ``build.prop`` and device tree name them. One word each: the
+    # first goes on the container's command line.
+    hardware: str = Field(pattern=r"^[a-z0-9_]+$")
+    board: str = Field(pattern=r"^[a-z0-9_]+$")
+    platform: str = Field(pattern=r"^[a-z0-9_]+$")
 
 
 @cache

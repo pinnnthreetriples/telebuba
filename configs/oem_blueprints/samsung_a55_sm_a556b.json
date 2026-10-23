@@ -18,6 +18,9 @@
     "file_style": "samsung"
   },
   "soc": "s5e8845",
+  "hardware": "s5e8845",
+  "board": "s5e8845",
+  "platform": "erd8845",
   "builds": {
     "34": {
       "release": "14",
