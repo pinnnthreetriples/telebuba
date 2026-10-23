@@ -18,6 +18,7 @@
     "file_style": "xiaomi"
   },
   "soc": "mt6877",
+  "board": "ruby",
   "builds": {
     "33": {
       "release": "13",
@@ -25,6 +26,10 @@
       "incremental": "V14.0.6.0.TMOMIXM",
       "security_patch": "2023-11-01",
       "description": "missi_phone_global-user 13 TP1A.220624.014 V14.0.6.0.TMOMIXM release-keys",
+      "build_user": "builder",
+      "build_host": "pangu-build-component-system-211462-xhz7d-6wwms-h3m84",
+      "build_date": "Thu Nov 16 09:22:49 UTC 2023",
+      "build_date_utc": 1700126569,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/redmi/ruby/missi_phone_global-user-13-TP1A.220624.014-V14.0.6.0.TMOMIXM-release-keys"
     }
   }

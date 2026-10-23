@@ -18,12 +18,17 @@
     "file_style": "samsung"
   },
   "soc": "s5e9945",
+  "board": "s5e9945",
   "builds": {
     "34": {
       "release": "14",
       "build_id": "UP1A.231005.007",
       "incremental": "S921BXXU1AXCB",
       "security_patch": "2024-04-01",
+      "build_user": "dpi",
+      "build_host": "21DK7B24",
+      "build_date": "Wed Mar 20 19:15:35 KST 2024",
+      "build_date_utc": 1710929735,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/e1s/e1sxxx-user-14-UP1A.231005.007-S921BXXU1AXCB-release-keys"
     }
   }
