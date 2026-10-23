@@ -20,6 +20,7 @@
 
 #include <aidl/android/hardware/sensors/BnSensors.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -247,15 +248,17 @@ class Sensors : public BnSensors {
         events_.wake(ISensors::EVENT_QUEUE_FLAG_BITS_READ_AND_PROCESS);
     }
 
-    float quantize(float value, float resolution) {
-        return resolution > 0 ? std::round(value / resolution) * resolution : value;
+    // To the part's resolution, and never past the range it declares: a real one saturates.
+    float quantize(float value, float resolution, float range) {
+        if (resolution > 0) value = std::round(value / resolution) * resolution;
+        return range > 0 ? std::clamp(value, -range, range) : value;
     }
 
     Payload::Vec3 vec3(const Vec& v, const SensorInfo& info, double noise) {
         Payload::Vec3 out;
-        out.x = quantize(static_cast<float>(v.x + scene_.gauss(noise)), info.resolution);
-        out.y = quantize(static_cast<float>(v.y + scene_.gauss(noise)), info.resolution);
-        out.z = quantize(static_cast<float>(v.z + scene_.gauss(noise)), info.resolution);
+        out.x = quantize(static_cast<float>(v.x + scene_.gauss(noise)), info.resolution, info.maxRange);
+        out.y = quantize(static_cast<float>(v.y + scene_.gauss(noise)), info.resolution, info.maxRange);
+        out.z = quantize(static_cast<float>(v.z + scene_.gauss(noise)), info.resolution, info.maxRange);
         out.status = SensorStatus::ACCURACY_HIGH;
         return out;
     }
@@ -307,7 +310,7 @@ class Sensors : public BnSensors {
                 const float value = info.type == SensorType::PROXIMITY
                                             ? info.maxRange
                                             : quantize(static_cast<float>(scene_.lux() * (1 + scene_.gauss(0.01))),
-                                                       std::max(info.resolution, 1.0f));
+                                                       std::max(info.resolution, 1.0f), info.maxRange);
                 if (a.reported && value == a.last) return false;
                 a.reported = true;
                 a.last = value;
