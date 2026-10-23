@@ -188,6 +188,7 @@ async def test_no_session_while_the_operator_holds_the_pod(
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
     emulator_module._OPERATOR.add("acc")
+    monkeypatch.setattr(settings.emulator, "desktop_viewer", True)
     monkeypatch.setattr(emulator_module, "viewer_open", lambda name: name == "telebuba-acc")
 
     with pytest.raises(EmulatorBusyError):

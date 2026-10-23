@@ -33,6 +33,7 @@ from core.emulator.adb import (
 from core.emulator.assets import ensure_telegram_apk
 from core.emulator.playbook import TelegramMobilePlaybook
 from core.emulator.pod import (
+    StartedPod,
     pause_pod,
     pod_runs_proxy,
     remove_pod,
@@ -72,6 +73,7 @@ __all__ = [
     "Instance",
     "KeystrokeEvent",
     "ScreenStream",
+    "StartedPod",
     "SwipeTrajectory",
     "TapEvent",
     "TelegramMobilePlaybook",

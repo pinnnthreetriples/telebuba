@@ -46,10 +46,10 @@ async def test_a_pod_held_up_by_its_image_check_does_not_hold_up_another_pod(
 
     other = await asyncio.wait_for(pod.start_pod("telebuba-b", _SPEC, _PROXY), timeout=5)
 
-    assert other == (1, "telebuba-b", True, False)
+    assert other.instance == (1, "telebuba-b", True, False)
     assert not first.done(), "the first start is still at its check"
     check.gate.set()
-    assert await first == (0, "telebuba-a", True, False)
+    assert (await first).instance == (0, "telebuba-a", True, False)
 
 
 @pytest.mark.asyncio
@@ -73,8 +73,8 @@ async def test_a_new_pod_held_up_by_its_gpu_probe_does_not_hold_up_another_new_p
     gate.set()
     late = await first
 
-    assert other.index == 0, "the pod not held up took the first free index"
-    assert late.index == 1, "the held-up one picked its index after, never the same one"
+    assert other.instance.index == 0, "the pod not held up took the first free index"
+    assert late.instance.index == 1, "the held-up one picked its index after, never the same one"
 
 
 @pytest.mark.asyncio

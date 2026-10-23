@@ -8,10 +8,11 @@ account's existing session), spends the visit's time in the app, and stops the p
 happened. A visit that went well parks the pod instead (``docker pause``: no CPU, its
 memory kept), and the account's next open thaws it with no boot; a pod parked
 ``pause_ttl_seconds`` is stopped, unless someone opened it since. Stops run on their
-own, so a Stop of the warming never waits for Docker. At most ``max_running_pods``
-warming pods run or wait parked at once; a cycle finding none free stops the longest
-parked pod first, and is skipped (``emulator_capacity``) when none is parked: a full
-host is not the account's failure.
+own, so a Stop of the warming never waits for Docker; a pod the operator took as the
+visit ended (their open, controls or hold) is left to them, neither parked nor stopped.
+At most ``max_running_pods`` warming pods run or wait parked at once; a cycle finding
+none free stops the longest parked pod first, and is skipped (``emulator_capacity``)
+when none is parked: a full host is not the account's failure.
 
 A pod that cannot open or a session that fails is a failed cycle with the refusal
 code as its detail, never a fallback to Telethon. A passing cause (a timeout, a
@@ -42,6 +43,7 @@ from services.accounts.mobile_emulator import (
     EmulatorRefusedError,
     open_account_mobile,
     open_mobile_visit,
+    operator_holds,
     phone_activity,
     run_mobile_activity,
     stop_account_pod,
@@ -55,6 +57,7 @@ from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
 
+    from schemas.device_farm import PhoneStatus
     from schemas.emulator import EmulatorRefusalCode, PlaybookResult
     from schemas.warming import WarmingCycleRequest
 
@@ -96,6 +99,8 @@ _PARKED: dict[str, int] = {}
 _TOKENS = itertools.count()
 # Strong references to the detached pod stops; the event loop holds tasks weakly.
 _DETACHED: set[asyncio.Task[None]] = set()
+# What the operator holds a pod by once a visit is over: their controls, or their open.
+_HANDED_OVER: frozenset[PhoneStatus] = frozenset({"manual", "starting"})
 
 
 def session_seconds(budget: int | None) -> int:
@@ -166,11 +171,10 @@ async def run_mobile_cycle(
     except AccountActionError as exc:
         return await _log_failure(account_id, exc.code, getattr(exc, "partial", None))
     finally:
-        # An operator who took the phone's controls meanwhile keeps it running: theirs.
-        if not owned or phone_activity(account_id) == "manual":
-            _RUNNING.discard(account_id)
-        else:
+        if owned:
             _detach(_park(account_id) if went_well else _stop_and_free(account_id))
+        else:
+            _RUNNING.discard(account_id)
     _STREAKS.pop(account_id, None)
     await log_event(
         "INFO",
@@ -222,10 +226,10 @@ async def prepare_pod(account_id: str) -> bool:
         owned = False
         raise
     finally:
-        if not owned or phone_activity(account_id) == "manual":
-            _RUNNING.discard(account_id)
-        else:
+        if owned:
             _detach(_park(account_id) if signed_in else _stop_and_free(account_id))
+        else:
+            _RUNNING.discard(account_id)
     return signed_in
 
 
@@ -251,9 +255,19 @@ def _detach(work: Coroutine[object, object, None]) -> None:
     task.add_done_callback(_DETACHED.discard)
 
 
+def _handed_over(account_id: str) -> bool:
+    """Whether the operator took the pod since the visit: their controls, open or hold.
+
+    Asked right before the pod's lock is taken, with no await between: an open the
+    operator starts later finds the lock held and is busy, never paused under them.
+    """
+    return phone_activity(account_id) in _HANDED_OVER or operator_holds(account_id)
+
+
 async def _stop_and_free(account_id: str) -> None:
     try:
-        await stop_account_pod(account_id)
+        if not _handed_over(account_id):
+            await stop_account_pod(account_id)
     finally:
         _RUNNING.discard(account_id)
 
@@ -261,9 +275,13 @@ async def _stop_and_free(account_id: str) -> None:
 async def _park(account_id: str) -> None:
     """Park the pod for the next visit; stop it once parked ``pause_ttl_seconds``.
 
-    A pod that cannot be parked, or a TTL of 0, is stopped at once. A later visit
+    A pod the operator took meanwhile is left to them. A pod that cannot be parked, or a
+    TTL of 0, is stopped at once. A later visit
     takes the pod back by popping its token, which this timer then no longer finds.
     """
+    if _handed_over(account_id):
+        _RUNNING.discard(account_id)
+        return
     ttl = settings.emulator.pause_ttl_seconds
     if not ttl or not await park_account_pod(account_id):
         await _stop_and_free(account_id)

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from core.android_apk import AppIdentity
 from core.emulator import EmulatorError
+from core.emulator.pod import StartedPod
 from core.emulator.redroid import Instance
 from core.repositories.proxies import create_and_assign_proxy, update_proxy_check
 from core.telegram_client import TelegramClientPoolError
@@ -60,6 +61,7 @@ class _Container:
         self.booting = asyncio.Event()
         self.apk_fails = False
         self.battery_now: datetime | None = None
+        self.data_kept = False
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -80,14 +82,15 @@ class _Container:
         self.step(f"find:{name}")
         return self.instance
 
-    async def start_pod(self, name: str, spec: ContainerSpec, proxy: ProxySettings) -> Instance:
+    async def start_pod(self, name: str, spec: ContainerSpec, proxy: ProxySettings) -> StartedPod:
         self.step(f"pod:{spec.manufacturer}{spec.model}:{spec.sdk}:{proxy.host}")
         self.specs.append(spec)
+        fresh = self.instance is None and not self.data_kept
         self.instance = Instance(1, name, running=True)
         self.launched.set()
         if self.launch_gate is not None:
             await self.launch_gate.wait()
-        return self.instance
+        return StartedPod(self.instance, fresh_data=fresh)
 
     async def pod_runs_proxy(self, _name: str, proxy: ProxySettings) -> bool:
         self.step(f"proxy?:{proxy.host}")

@@ -84,7 +84,7 @@ async def apply_battery_telemetry(
     seed: int | str | None = None,
     now: datetime | None = None,
 ) -> BatteryTelemetryState:
-    """Set realistic discharging battery and temperature telemetry on the device.
+    """Set the battery the phone has at ``now``: discharging by day, charging by night.
 
     ``now`` is the phone's own clock (its timezone), whose hour the level follows.
     """

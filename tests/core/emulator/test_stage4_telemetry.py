@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import io
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
@@ -88,31 +89,72 @@ def test_battery_telemetry_deterministic_for_account_and_time() -> None:
     assert (first.level, first.temp_tenths_c) != (other_account.level, other_account.temp_tenths_c)
 
 
-@pytest.mark.parametrize("account_id", ["acc-123", "acc-456", "acc-789"])
-def test_battery_drains_through_the_day_and_is_charged_overnight(account_id: str) -> None:
+_ACCOUNTS = ["acc-123", "acc-456", "acc-789", "acc-1", "acc-2"]
+_CHARGING, _DISCHARGING, _FULL = 2, 3, 5
+
+
+def _at(account_id: str, day: int, hour: int, minute: int = 0):
+    return generate_initial_battery_state(
+        account_id, datetime(2026, 10, day, hour, minute, tzinfo=UTC)
+    )
+
+
+@pytest.mark.parametrize("account_id", _ACCOUNTS)
+def test_battery_drains_through_the_day_unplugged(account_id: str) -> None:
     """A cold boot or a visit later in the day reads a lower level, never the morning's."""
-    day = [
-        generate_initial_battery_state(account_id, datetime(2026, 10, 22, hour, tzinfo=UTC)).level
-        for hour in (5, 10, 14, 18, 22)
+    day = [_at(account_id, 22, hour) for hour in (10, 14, 18, 21)]
+
+    assert [s.level for s in day] == sorted((s.level for s in day), reverse=True)
+    assert day[0].level > day[3].level
+    assert min(s.level for s in day) >= 15
+    assert {(s.status, s.plugged) for s in day} == {(_DISCHARGING, False)}
+
+
+@pytest.mark.parametrize("account_id", _ACCOUNTS)
+def test_battery_charges_through_the_night_and_never_jumps_at_midnight(account_id: str) -> None:
+    """Plugged in by 23:30: rising to the morning's level, the same either side of midnight."""
+    before, after = _at(account_id, 22, 23, 59), _at(account_id, 23, 0, 1)
+    night = [before, after, *(_at(account_id, 23, hour) for hour in (2, 4, 5))]
+    morning = _at(account_id, 23, 10)
+
+    assert abs(after.level - before.level) <= 1, "no jump back to full at midnight"
+    assert [s.level for s in night] == sorted(s.level for s in night), "rising until unplugged"
+    assert all(s.plugged and s.status in {_CHARGING, _FULL} for s in night)
+    assert (morning.status, morning.plugged) == (_DISCHARGING, False)
+    assert morning.level <= night[-1].level, "unplugged at the level the night charged it to"
+
+
+@pytest.mark.parametrize("account_id", _ACCOUNTS[:3])
+def test_battery_level_never_jumps_minute_to_minute(account_id: str) -> None:
+    """Two days minute by minute: unplug, plug-in and midnight all move it one step at most."""
+    start = datetime(2026, 10, 22, tzinfo=UTC)
+    levels = [
+        generate_initial_battery_state(account_id, start + timedelta(minutes=m)).level
+        for m in range(2 * 24 * 60)
     ]
-    assert day == sorted(day, reverse=True)
-    assert day[1] > day[4]
-    assert min(day) >= 15
-    next_morning = generate_initial_battery_state(
-        account_id, datetime(2026, 10, 23, 5, tzinfo=UTC)
-    ).level
-    assert next_morning > day[4]
+
+    assert max(abs(b - a) for a, b in pairwise(levels)) <= 1
 
 
 def test_battery_day_is_the_phone_s_local_day() -> None:
-    """One instant: still night in Mexico (full), afternoon in Tokyo (drained)."""
+    """One instant: still night in Mexico (on its charger), afternoon in Tokyo (unplugged)."""
     instant = datetime(2026, 10, 22, 7, tzinfo=UTC)
     mexico = generate_initial_battery_state(
         "acc-123", instant.astimezone(ZoneInfo("America/Mexico_City"))
     )
     tokyo = generate_initial_battery_state("acc-123", instant.astimezone(ZoneInfo("Asia/Tokyo")))
-    assert mexico.level >= 88
+    assert mexico.plugged
+    assert not tokyo.plugged
     assert tokyo.level < mexico.level
+
+
+def test_a_charging_battery_is_reported_plugged_in() -> None:
+    state = _at("acc-123", 23, 3)
+
+    cmds = build_battery_telemetry_commands(state)
+
+    assert "dumpsys battery set ac 1" in cmds
+    assert f"dumpsys battery set status {state.status}" in cmds
 
 
 @pytest.mark.asyncio

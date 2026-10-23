@@ -34,9 +34,8 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
   stands and never starts one; it ends with what it did when its time is up, and a
   failed one carries what it did on the refusal (``partial``). A warming visit opens
   with ``open_mobile_visit``, whose serial spares its session checking the pod again;
-* a background open (warming's) shows no window, and leaves a pod the operator
-  opened alone while its window is open; the operator's open answers
-  ``emulator_busy`` while a session runs;
+* a background open (warming's) shows no window, and leaves a pod the operator opened
+  alone (``operator_holds``); the operator's open is ``emulator_busy`` while a session runs;
 * a window that cannot open (no scrcpy) is a warning, never a failed open;
 * an operator holding a phone's controls on the web screen (``claim_manual``) excludes
   an open and an activity session, and they exclude it: the second is ``emulator_busy``.
@@ -82,6 +81,7 @@ from services.accounts._mobile_holds import (
     _ACTIVE,
     _LOCKS,
     _MANUAL,
+    _OPERATOR,
     EmulatorBusyError,
     EmulatorRefusedError,
     claim_manual,
@@ -127,6 +127,7 @@ __all__ = [
     "open_account_mobile",
     "open_mobile_progress",
     "open_mobile_visit",
+    "operator_holds",
     "phone_activity",
     "release_manual",
     "remove_account_container",
@@ -134,9 +135,6 @@ __all__ = [
     "running_serial",
     "stop_account_pod",
 ]
-
-# Accounts whose pod the operator opened; theirs while its window stays open.
-_OPERATOR: set[str] = set()
 
 # A session gets this long past its own length to finish its last read before it is cut.
 _SESSION_GRACE_SECONDS = 60
@@ -183,9 +181,14 @@ async def _refuse_what_cannot_work(
     return fingerprint, proxy
 
 
-def _operator_holds(account_id: str) -> bool:
-    """Whether the operator opened the account's pod and its window is still open."""
-    if account_id in _OPERATOR and viewer_open(container_name(account_id)):
+def operator_holds(account_id: str) -> bool:
+    """Whether the pod is the operator's: opened by them, its window open while there are any.
+
+    With no desktop window it stays theirs until they stop it or end their control of it.
+    """
+    if account_id not in _OPERATOR:
+        return False
+    if not settings.emulator.desktop_viewer or viewer_open(container_name(account_id)):
         return True
     _OPERATOR.discard(account_id)
     return False
@@ -217,7 +220,7 @@ async def open_mobile_visit(account_id: str) -> str | None:
 async def _open_reported(account_id: str, *, background: bool) -> tuple[OpenMobileResult, str]:
     """``open_account_mobile``'s open, with the pod's serial; refusals logged and reported."""
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
-    held = _operator_holds(account_id) if background else account_id in _ACTIVE
+    held = operator_holds(account_id) if background else account_id in _ACTIVE
     # An operator's hands on the phone: an open would pull the app to the front, sign
     # in over them or restart the pod (and a warming cycle would then stop it).
     if lock.locked() or held or account_id in _MANUAL:
@@ -327,7 +330,7 @@ async def run_mobile_activity(
     it, and the session fails on its first command like one cut off later). Who holds
     the pod is still asked: those are this process's own sets, no I/O.
     """
-    if phone_activity(account_id) is not None or _operator_holds(account_id):
+    if phone_activity(account_id) is not None or operator_holds(account_id):
         raise EmulatorBusyError
     _ACTIVE.add(account_id)
     playbook: TelegramMobilePlaybook | None = None

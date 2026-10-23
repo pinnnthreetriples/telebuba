@@ -30,6 +30,8 @@ _LOCKS: dict[str, asyncio.Lock] = {}
 # Accounts with an activity session running; accounts an operator controls by hand.
 _ACTIVE: set[str] = set()
 _MANUAL: set[str] = set()
+# Accounts whose pod the operator opened (``mobile_emulator.operator_holds``).
+_OPERATOR: set[str] = set()
 
 
 class EmulatorRefusedError(AccountActionError):
@@ -74,4 +76,7 @@ def claim_manual(account_id: str) -> None:
 
 
 def release_manual(account_id: str) -> None:
+    """Give the controls back; with no desktop window, the operator's open is done too."""
     _MANUAL.discard(account_id)
+    if not settings.emulator.desktop_viewer:
+        _OPERATOR.discard(account_id)

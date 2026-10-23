@@ -77,7 +77,7 @@ async def test_a_gateway_of_an_older_image_is_made_again_with_android_on_its_kep
     assert verbs.index("create telebuba-acc-2-net") < verbs.index("create telebuba-acc-2")
     assert _call(console, "create", "telebuba-acc-2-net")[-1] == settings.emulator.gateway_image
     assert f"telebuba.data_diff={old}" in _call(console, "create", "telebuba-acc-2")
-    assert instance.index == 2, "the pod keeps its index, so its adb port"
+    assert instance.instance.index == 2, "the pod keeps its index, so its adb port"
 
 
 @pytest.mark.asyncio

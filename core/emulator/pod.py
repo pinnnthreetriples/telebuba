@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.emulator._data import data_layers, recorded_diff, remove_diff
@@ -59,6 +59,7 @@ from core.emulator.redroid import (
 )
 
 if TYPE_CHECKING:
+    from core.emulator._data import DataLayers
     from core.emulator._profile import ContainerSpec
     from schemas.emulator import EmulatorRefusalCode
     from schemas.proxy import ProxySettings
@@ -67,6 +68,15 @@ _EMULATOR_NOT_FOUND: EmulatorRefusalCode = "emulator_not_found"
 
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
+
+
+class StartedPod(NamedTuple):
+    """The running Android of a started pod, and whether this start made its /data."""
+
+    instance: Instance
+    # An Android on a diff an earlier one left (its sign-in) has none of its own.
+    fresh_data: bool
+
 
 # Picking a free index and creating the gateway that holds it is one step (a stale
 # gateway's removal too, so its index is not taken meanwhile); nothing slower goes in it.
@@ -95,8 +105,8 @@ async def _free_index() -> int:
     return next(n for n in range(len(used) + 1) if n not in used)
 
 
-async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Instance:
-    """Start the pod whose Android container is ``name``, on ``proxy``; its running Instance.
+async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> StartedPod:
+    """Start the pod whose Android container is ``name``, on ``proxy``: its ``StartedPod``.
 
     The phone and the proxy are refused before anything is created. Whatever of the
     pod is running is stopped first, so the gateway always starts on ``proxy``. Starts
@@ -115,7 +125,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
 
 async def _start(
     name: str, spec: ContainerSpec, proxy_text: str, address: str, gateway_image: str | None
-) -> Instance:
+) -> StartedPod:
     """``start_pod`` once its inputs are checked, holding the pod's own lock.
 
     ``gateway_image`` is the configured gateway image's ID as ``ensure_pod_images`` read it
@@ -163,8 +173,10 @@ async def _start(
         await give_proxy(gateway, proxy_text, address)
         await docker("start", gateway)
         await wait_for_tunnel(gateway)
+        fresh = False
         if android is None:
             created.add(name)  # before: a failed identity copy leaves it half made
+            fresh = _own_data(layers)
             await create_instance(
                 name, spec, index=index, gateway=gateway, gpu=gpu, data=layers, kept_diff=kept
             )
@@ -176,7 +188,12 @@ async def _start(
         if layers is not None and layers.fresh:
             await asyncio.shield(_forget_diff(name))
         raise
-    return Instance(index, name, running=True)
+    return StartedPod(Instance(index, name, running=True), fresh_data=fresh)
+
+
+def _own_data(layers: DataLayers | None) -> bool:
+    """Whether a new Android's /data is its own: in the container, or on a diff just made."""
+    return layers is None or layers.fresh
 
 
 async def _stale_gateway(gateway: str, configured: str | None) -> bool:
