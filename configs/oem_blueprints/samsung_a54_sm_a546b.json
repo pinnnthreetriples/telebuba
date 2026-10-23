@@ -18,8 +18,8 @@
     "file_style": "samsung"
   },
   "soc": "s5e8835",
-  "hardware": "s5e8835",
   "board": "s5e8835",
+  "hardware": "s5e8835",
   "platform": "erd8835",
   "builds": {
     "33": {
@@ -27,6 +27,10 @@
       "build_id": "TP1A.220624.014",
       "incremental": "A546BXXS4AWF7",
       "security_patch": "2023-07-01",
+      "build_user": "dpi",
+      "build_host": "SWDK6112",
+      "build_date": "Tue Jun 27 10:00:25 KST 2023",
+      "build_date_utc": 1687827625,
       "source": "https://github.com/leddaz-dump-stash/samsung_a54x_dump/tree/a54xnaxx-user-13-TP1A.220624.014-A546BXXS4AWF7-release-keys"
     },
     "34": {
@@ -34,6 +38,10 @@
       "build_id": "UP1A.231005.007",
       "incremental": "A546BXXS8CXF1",
       "security_patch": "2024-06-01",
+      "build_user": "dpi",
+      "build_host": "21DKGA07",
+      "build_date": "Mon Jun 10 11:04:27 KST 2024",
+      "build_date_utc": 1717985067,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/a54x/a54xnaxx-user-14-UP1A.231005.007-A546BXXS8CXF1-release-keys"
     }
   }

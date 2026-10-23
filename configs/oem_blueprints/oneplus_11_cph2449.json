@@ -18,8 +18,8 @@
     "file_style": "oneplus"
   },
   "soc": "sm8550",
-  "hardware": "qcom",
   "board": "kalama",
+  "hardware": "qcom",
   "platform": "kalama",
   "builds": {
     "33": {
@@ -29,6 +29,10 @@
       "security_patch": "2023-06-05",
       "description": "qssi-user 13 TP1A.220905.001 1685961336643 release-keys",
       "display_id": "CPH2449_13.1.0.580(EX01)",
+      "build_user": "root",
+      "build_host": "dg02-pool03-kvm73",
+      "build_date": "Mon Jun  5 18:35:36 CST 2023",
+      "build_date_utc": 1685961336,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/oneplus/op594dl1/qssi-user-13-TP1A.220905.001-1685961336643-release-keys--EUEX"
     }
   }

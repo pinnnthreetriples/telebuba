@@ -106,6 +106,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
     assert "--privileged" in create
+    assert create[create.index("--cgroupns") + 1] == "private", "no host cgroups on cgroup v1"
     assert create[create.index("--cpus") + 1] == "2"
     assert "--cpuset-cpus" not in create
     assert "--volume" not in create, "the host's own CPUs show through"
@@ -387,12 +388,14 @@ def test_profile_command_builders_include_all_stage3_requirements() -> None:
     assert "setprop sys.usb.config mtp" in usb_cmds
 
     battery_cmds = "\n".join(build_battery_stealth_commands(level=65, temp=320))
+    assert "dumpsys battery set present 1" in battery_cmds
     assert "dumpsys battery set status 3" in battery_cmds
     assert "dumpsys battery set ac 0" in battery_cmds
     assert "dumpsys battery set usb 0" in battery_cmds
     assert "dumpsys battery set wireless 0" in battery_cmds
     assert "dumpsys battery set level 65" in battery_cmds
     assert "dumpsys battery set temp 320" in battery_cmds
+    assert battery_cmds.endswith("dumpsys battery set present 1"), "after the level, not at 0"
 
     cellular_cmds = "\n".join(build_cellular_stealth_commands())
     assert "setprop gsm.network.type LTE" in cellular_cmds

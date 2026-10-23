@@ -168,6 +168,7 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
     assert gateway[gateway.index("--network") + 1] == "telebuba-emulator"
     assert gateway[gateway.index("--tmpfs") + 1] == "/run", "the rendered config stays in RAM"
     assert "telebuba.gateway=1" in gateway
+    assert gateway[gateway.index("--cgroupns") + 1] == "private"
     assert "telebuba.index=1" in gateway
     android = _call(console, "create", "telebuba-new")
     assert android[android.index("--network") + 1] == "container:telebuba-new-net"

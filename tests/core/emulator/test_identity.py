@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal
 
 import pytest
 
 from core.country_zones import ZONE_BY_COUNTRY
-from core.device_fingerprint_android import ANDROID_DEVICES, generate_android_fingerprint
+from core.device_fingerprint_android import (
+    ANDROID_DEVICES,
+    android_device_model,
+    generate_android_fingerprint,
+)
 from core.emulator import _profile
 from core.emulator._blueprints import find_build, load_blueprints
 from core.emulator._errors import EmulatorError
@@ -73,17 +78,6 @@ def test_the_container_is_the_phones_board_and_keeps_the_images_composer() -> No
     assert props["ro.board.platform"] == "gs201"
     assert props["ro.hardware.hwcomposer"] == "redroid", "found before ro.hardware's name"
     assert "ro.hardware" not in props, "init sets it from androidboot.hardware first"
-
-
-# What Telegram's EmuDetector looks for in Build.HARDWARE, BOARD and PRODUCT.
-_EMULATOR_MARKS = ("goldfish", "ranchu", "vbox86", "android_x86", "nox", "generic", "sdk", "qemu")
-
-
-def test_no_blueprint_board_names_an_emulator() -> None:
-    for blueprint in load_blueprints():
-        for name in (blueprint.hardware, blueprint.board, blueprint.platform):
-            assert not any(mark in name.lower() for mark in _EMULATOR_MARKS), name
-            assert "redroid" not in name, name
 
 
 def test_the_chip_is_told_by_ro_soc(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,3 +191,66 @@ def test_the_fingerprint_is_put_together_from_the_build() -> None:
     assert build_fingerprint(spec) == (
         f"google/panther/panther:13/{build.build_id}/{build.incremental}:user/release-keys"
     )
+
+
+def test_the_vendor_dlkm_partition_names_the_phone_and_its_user_build() -> None:
+    props = aosp_boot_properties(container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE"))
+
+    assert props["ro.product.vendor_dlkm.model"] == "Pixel 7"
+    assert props["ro.product.vendor_dlkm.brand"] == "google"
+    assert props["ro.vendor_dlkm.build.fingerprint"] == props["ro.build.fingerprint"]
+    assert props["ro.vendor_dlkm.build.type"] == "user"
+    assert props["ro.vendor_dlkm.build.tags"] == "release-keys"
+
+
+def test_the_builder_host_date_and_board_are_the_firmwares() -> None:
+    props = aosp_boot_properties(container_spec(_fingerprint("GooglePixel 7", "SDK 33"), "DE"))
+
+    assert props["ro.build.user"] == "android-build"
+    assert props["ro.build.host"] == "abfarm-release-rbe-64-2004-0074"
+    assert props["ro.product.board"] == "panther"
+    for partition in ("", "system.", "system_ext.", "product.", "vendor.", "odm.", "vendor_dlkm."):
+        assert props[f"ro.{partition}build.date"] == "Sat Feb 11 17:43:27 UTC 2023", partition
+        assert props[f"ro.{partition}build.date.utc"] == "1676137407", partition
+
+
+# The zones the makers' build servers print their dates in.
+_BUILD_ZONES = {"UTC": 0, "CST": 8, "KST": 9}
+
+
+def test_every_build_date_is_its_utc_moment_near_its_security_patch() -> None:
+    for blueprint in load_blueprints():
+        for sdk, build in blueprint.builds.items():
+            *moment, zone, year = build.build_date.split()
+            zone_offset = timezone(timedelta(hours=_BUILD_ZONES[zone]))
+            printed = " ".join([*moment, year])
+            local = datetime.strptime(printed, "%a %b %d %H:%M:%S %Y").replace(tzinfo=zone_offset)
+            utc = datetime.fromtimestamp(build.build_date_utc, UTC)
+            assert local == utc, (blueprint.model, sdk)
+            patch = datetime.strptime(build.security_patch, "%Y-%m-%d").replace(tzinfo=UTC)
+            assert abs(utc - patch) <= timedelta(days=62), (blueprint.model, sdk)
+
+
+# What Telegram's EmuDetector and EmuInputDevicesDetector (DrKLO/Telegram) look for in
+# Build.* and system properties; one hit sends Telegram the "emulator" flag (1024).
+_EMULATOR_WORDS = (
+    "goldfish", "ranchu", "nox", "vbox86", "android_x86", "generic", "sdk", "emulator",
+    "genymotion", "droid4x", "bluestacks", "memuhyperv", "virtualbox", "qemu",
+)  # fmt: skip
+
+
+def test_no_property_of_any_phone_names_an_emulator() -> None:
+    for device in ANDROID_DEVICES:
+        for sdk in device.sdk_levels:
+            fingerprint = _fingerprint(android_device_model(device), f"SDK {sdk}")
+            props = aosp_boot_properties(container_spec(fingerprint, "DE"))
+            for key, value in props.items():
+                assert not [w for w in _EMULATOR_WORDS if w in value.lower()], (key, value)
+                assert "qemu" not in key, key
+
+
+def test_no_blueprint_hardware_names_an_emulator() -> None:
+    """``ro.hardware`` goes on the command line, so the property check above misses it."""
+    for blueprint in load_blueprints():
+        name = blueprint.hardware
+        assert not [w for w in (*_EMULATOR_WORDS, "redroid") if w in name], name

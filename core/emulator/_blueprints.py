@@ -40,6 +40,12 @@ class OemBuild(_Frozen):
     # ``<product>-user <release> <build_id> <incremental> release-keys`` and ``build_id``.
     description: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._ -]+$")
     display_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._()-]+$")
+    # ``Build.USER`` / ``Build.HOST`` / ``Build.TIME``: who built it, where, and when, as
+    # the firmware prints them (``ro.build.date`` in the build server's zone).
+    build_user: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    build_host: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
+    build_date: str = Field(pattern=r"^[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d [\d:]{8} [A-Z]+ \d{4}$")
+    build_date_utc: int = Field(gt=0)
     # Where the build was read: a public dump of that firmware's build.prop.
     source: str = Field(pattern=r"^https://\S+$")
 
@@ -131,12 +137,13 @@ class OemBlueprint(_Frozen):
     builds: dict[int, OemBuild] = Field(min_length=1)
     # The ``configs/soc`` file stem of its chip; ``None``: the host's CPUs, ``cpu_cores`` of them.
     soc: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
-    # ``ro.hardware`` (what its bootloader passes as ``androidboot.hardware``: Pixels their
-    # codename, Qualcomm phones ``qcom``), ``ro.product.board`` and ``ro.board.platform``,
-    # as its stock vendor ``build.prop`` and device tree name them. One word each: the
-    # first goes on the container's command line.
-    hardware: str = Field(pattern=r"^[a-z0-9_]+$")
+    # ``Build.BOARD`` (``ro.product.board``): the phone's board as its vendor partition names it.
     board: str = Field(pattern=r"^[a-z0-9_]+$")
+    # ``ro.hardware`` (what its bootloader passes as ``androidboot.hardware``: Pixels their
+    # codename, Qualcomm phones ``qcom``) and ``ro.board.platform``, as its stock vendor
+    # ``build.prop`` and device tree name them. One word each: the first goes on the
+    # container's command line.
+    hardware: str = Field(pattern=r"^[a-z0-9_]+$")
     platform: str = Field(pattern=r"^[a-z0-9_]+$")
 
 

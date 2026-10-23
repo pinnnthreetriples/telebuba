@@ -18,8 +18,8 @@
     "file_style": "samsung"
   },
   "soc": "sm8550_ac",
-  "hardware": "qcom",
   "board": "kalama",
+  "hardware": "qcom",
   "platform": "kalama",
   "builds": {
     "33": {
@@ -27,6 +27,10 @@
       "build_id": "TP1A.220624.014",
       "incremental": "S918BXXS3AWHR",
       "security_patch": "2023-09-01",
+      "build_user": "dpi",
+      "build_host": "SWDK6915",
+      "build_date": "Thu Aug 31 14:30:46 KST 2023",
+      "build_date_utc": 1693459846,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm3q/dm3qxxx-user-13-TP1A.220624.014-S918BXXS3AWHR-release-keys"
     },
     "34": {
@@ -34,6 +38,10 @@
       "build_id": "UP1A.231005.007",
       "incremental": "S918BXXS6CXFE",
       "security_patch": "2024-07-01",
+      "build_user": "dpi",
+      "build_host": "21DKGB19",
+      "build_date": "Fri Jul  5 08:55:40 KST 2024",
+      "build_date_utc": 1720137340,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm3q/dm3qxxx-user-14-UP1A.231005.007-S918BXXS6CXFE-release-keys"
     }
   }
