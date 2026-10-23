@@ -9,7 +9,8 @@ A mobile account is opened in a **pod** of two containers (`core/emulator/pod.py
   (`core/emulator/redroid.py`), created with `--network container:<name>-net`.
 
 Both are created with `--cgroupns private` (their own cgroup tree, not the host's): Docker's
-default on cgroup v2 hosts, set anyway for v1.
+default on cgroup v2 hosts, set anyway for v1. The flag needs Docker Engine 20.10 (API 1.41) or
+newer.
 
 Android itself knows nothing of the proxy: no VPN, no in-app setting. It presents the mobile
 fingerprint's maker, model and SDK and is signed in through `adb`. Docker has no window, so the
@@ -335,6 +336,7 @@ Telegram's universal APK carries `arm64-v8a`.
 
 ```bash
 apt-get install -y docker.io adb
+# Docker Engine 20.10 (API 1.41) or newer: pods are created with --cgroupns private.
 # Stock Ubuntu kernels ship binder_linux here; a vendor kernel has no such package (see below).
 apt-get install -y "linux-modules-extra-$(uname -r)" || true
 echo 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/binder.conf
