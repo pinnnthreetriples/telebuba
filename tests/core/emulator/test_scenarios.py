@@ -7,6 +7,7 @@ tap inside a node, BACK, a deep link, typed text); time is the fake clock of
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -279,6 +280,42 @@ async def test_a_voice_note_is_played_for_most_of_its_length(
     assert tapped(PLAY)(play)
     assert 0.9 * 20 <= clock.slept[0] <= 20
     assert session.result.media_consumed == 1
+    assert session.result.notes_played == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_no_note_is_played_once_the_budget_is_spent(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _app(monkeypatch, console, {"feed": [PLAY, DURATION]}, "feed")
+    session = _playbook()
+    session._deadline = 600
+    session.plan = PlaybookPlan(max_actions=1)
+    session.result.channels_read = 1  # the read that opened this feed spent it
+
+    await session.consume_feed_media(SERIAL)
+
+    assert session.result.notes_played == 0
+    assert console.shell_calls() == []
+
+
+@pytest.mark.asyncio
+async def test_a_note_cut_off_while_it_plays_still_counts(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _app(monkeypatch, console, {"feed": [PLAY, DURATION]}, "feed")
+    session = _playbook()
+    session._deadline = 600
+
+    async def _cut_off(_seconds: float) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(_scenarios.asyncio, "sleep", _cut_off)
+    with pytest.raises(asyncio.CancelledError):
+        await session.consume_feed_media(SERIAL)
+
+    assert session.result.notes_played == 1, "the note was tapped: it is spent"
 
 
 @pytest.mark.asyncio
@@ -311,6 +348,27 @@ async def test_a_long_voice_note_is_listened_to_for_a_minute_at_most(
     await session.consume_feed_media(SERIAL)
 
     assert clock.slept == [60.0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_plan_without_notes_never_plays_one_but_still_looks_at_photos(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _app(monkeypatch, console, {"feed": [PLAY, DURATION], "viewer": []}, "feed")
+    session = _playbook()
+    session.plan = PlaybookPlan(media=True, notes=False)
+
+    await session.consume_feed_media(SERIAL)
+
+    assert console.shell_calls() == [], "the voice/video switches are off"
+    assert session.result.skipped == ["no_media"]
+    app.screens["feed"] = [PHOTO, PLAY, DURATION]
+    app.move("feed", tapped(PHOTO), "viewer")
+
+    await session.consume_feed_media(SERIAL)
+
+    assert (session.result.media_consumed, session.result.notes_played) == (1, 0)
 
 
 @pytest.mark.asyncio

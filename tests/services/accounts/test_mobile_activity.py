@@ -42,7 +42,8 @@ class _Playbook:
     fail: EmulatorRefusalCode | None = None
     gate: asyncio.Event | None = None
 
-    def __init__(self) -> None:
+    def __init__(self, *, progress: PlaybookResult | None = None) -> None:
+        del progress
         self.result = PlaybookResult()
 
     async def run_session(

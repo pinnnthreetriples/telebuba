@@ -16,6 +16,7 @@ from core.telegram_client._react import _whitelist_cache
 from schemas.spam_status import SpamStatusVerdict
 from services import warming
 from services.warming import _fleet, _iteration, _runtime, _seams
+from tests.services.warming._mobile_support import pod, telethon  # noqa: F401 - mobile fixtures
 from tests.services.warming._support import _ZERO_DELAY_FIELDS
 
 if TYPE_CHECKING:

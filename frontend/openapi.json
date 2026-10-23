@@ -32577,7 +32577,8 @@
                   "emulator_gpu_missing",
                   "emulator_data_base_missing",
                   "emulator_preparing",
-                  "emulator_screen_timeout"
+                  "emulator_screen_timeout",
+                  "emulator_app_offline"
                 ]
               },
               {
@@ -37293,6 +37294,11 @@
                 "type": "null"
               }
             ]
+          },
+          "phone_no_channels": {
+            "type": "boolean",
+            "title": "Phone No Channels",
+            "default": false
           }
         },
         "type": "object",
