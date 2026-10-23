@@ -24,7 +24,11 @@ const twoIssueSchema = z.object({
     ),
 });
 
-function Harness({ validator = schema }: { validator?: z.ZodTypeAny }) {
+function Harness({
+  validator = schema,
+}: {
+  validator?: z.ZodType<{ name: string }, { name: string }>;
+}) {
   const form = useForm({
     defaultValues: { name: '' },
     validators: { onChange: validator },
