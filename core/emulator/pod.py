@@ -138,14 +138,15 @@ async def _start(
         layers = await data_layers(name, spec.sdk, kept) if remade else None
         # Before an Android is removed: a GPU the host lacks must not leave none.
         gpu = await gpu_mode() if remade else "guest"
-        if android is not None and gone:
-            # Its namespace goes with its gateway: Android is made again in the new one.
-            # Its index stays held by the gateway (or is given up when there is none).
-            await docker("rm", "--force", name)
-            android = None
         if current is None or stale:
             await ensure_network()  # safe to race: another start may make it first
             async with _CREATE_LOCK:
+                # Only once the lock is held: a start cancelled while it waits has removed
+                # nothing, so Android's label still names its diff for the next start.
+                if android is not None:
+                    # Its namespace goes with its gateway: Android is made again in the new one.
+                    await docker("rm", "--force", name)
+                    android = None
                 if stale:
                     await docker("rm", "--force", gateway)
                 # A remade gateway keeps its pod's index, so its adb port and cores.
