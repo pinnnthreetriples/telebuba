@@ -137,7 +137,7 @@ def build_battery_telemetry_commands(state: BatteryTelemetryState) -> list[str]:
         "dumpsys battery set usb 0",
         "dumpsys battery set wireless 0",
         f"dumpsys battery set status {state.status}",
-        f"dumpsys battery set level {state.level}",
+        f"dumpsys battery set level {max(1, state.level)}",  # 0 + present: shutdown
         f"dumpsys battery set temp {state.temp_tenths_c}",
         f"dumpsys battery set counter {state.charge_counter_uah}",
         "dumpsys battery set present 1",

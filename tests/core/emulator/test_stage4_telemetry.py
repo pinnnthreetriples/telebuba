@@ -24,12 +24,17 @@ from core.android_apk import (
 from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator import adb
 from core.emulator._battery import (
+    BatteryTelemetryState,
     build_battery_telemetry_commands,
     generate_initial_battery_state,
 )
 from core.emulator._errors import EmulatorError
 from core.emulator._geo import COUNTRY_COORDINATES
-from core.emulator._profile import aosp_boot_properties, container_spec
+from core.emulator._profile import (
+    aosp_boot_properties,
+    build_battery_stealth_commands,
+    container_spec,
+)
 from core.emulator._seed_data import (
     CallLogSeedEntry,
     Contact,
@@ -78,6 +83,14 @@ def test_battery_telemetry_state_and_commands() -> None:
     assert cmds[-1] == "dumpsys battery set present 1", (
         "a present battery at level 0 shuts Android down: present only once the level is set"
     )
+
+
+def test_a_present_battery_is_never_given_level_zero() -> None:
+    """A present battery at level 0 shuts Android down: the lowest level sent is 1."""
+    empty = BatteryTelemetryState(level=0, temp_tenths_c=320, voltage_mv=3650)
+
+    assert "dumpsys battery set level 1" in build_battery_telemetry_commands(empty)
+    assert "dumpsys battery set level 1" in build_battery_stealth_commands(level=0, temp=320)
 
 
 def test_battery_telemetry_deterministic_for_account_and_time() -> None:

@@ -223,7 +223,7 @@ def build_battery_stealth_commands(
         "dumpsys battery set ac 0",
         "dumpsys battery set usb 0",
         "dumpsys battery set wireless 0",
-        f"dumpsys battery set level {resolved_level}",
+        f"dumpsys battery set level {max(1, resolved_level)}",  # 0 + present: shutdown
         f"dumpsys battery set temp {resolved_temp}",
         # Last: a present battery still at level 0 shuts Android down.
         "dumpsys battery set present 1",
