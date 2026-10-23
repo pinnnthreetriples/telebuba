@@ -75,8 +75,8 @@ async def start_and_sign_in(
     *,
     new: bool,
     background: bool,
-) -> OpenMobileResult:
-    """Start the account's stopped (or ``new``) pod on ``proxy`` and sign its app in."""
+) -> tuple[OpenMobileResult, str]:
+    """Start the account's stopped (or ``new``) pod on ``proxy``, sign its app in; its serial."""
     # A new container has no Telegram yet: its APK is fetched while the pod starts.
     apk = asyncio.create_task(ensure_telegram_apk()) if new else None
     try:
@@ -92,7 +92,7 @@ async def _start(
     *,
     apk: asyncio.Task[AppIdentity] | None,
     background: bool,
-) -> OpenMobileResult:
+) -> tuple[OpenMobileResult, str]:
     name = container_name(account.account_id)
     instance = await start_pod(name, spec, proxy)  # undoes itself when it fails
     booted = False
@@ -129,7 +129,7 @@ async def _start(
         status="started",
         signed_in=signed_in,
         sign_in_refusal=refusal,
-    )
+    ), serial
 
 
 async def sign_in_or_hand_over(

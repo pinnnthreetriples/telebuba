@@ -41,6 +41,7 @@ from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     EmulatorRefusedError,
     open_account_mobile,
+    open_mobile_visit,
     phone_activity,
     run_mobile_activity,
     stop_account_pod,
@@ -151,11 +152,13 @@ async def run_mobile_cycle(
     owned = True
     went_well = False
     try:
-        opened = await open_account_mobile(account_id, background=True)
-        if not opened.signed_in:
+        serial = await open_mobile_visit(account_id)
+        if serial is None:
             return await _log_failure(account_id, _NOT_SIGNED_IN, None)
         await on_step("read")
-        activity = await run_mobile_activity(account_id, seconds, await session_plan(request))
+        plan = await session_plan(request)
+        # The open just checked the pod and put the app in front: the session goes on from there.
+        activity = await run_mobile_activity(account_id, seconds, plan, opened=serial)
         went_well = True
     except EmulatorBusyError:
         owned = False

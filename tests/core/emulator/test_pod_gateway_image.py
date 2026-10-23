@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -86,6 +87,8 @@ async def test_a_gateway_of_the_configured_image_is_used_as_it_is(console: Conso
     await pod.start_pod("telebuba-acc-2", _SPEC, _PROXY)
 
     assert ["inspect", "--format", "{{.Image}}", "telebuba-acc-2-net"] in _image_calls(console)
+    configured = ["image", "inspect", "--format", "{{.Id}}", settings.emulator.gateway_image]
+    assert _image_calls(console).count(configured) == 1, "its ID read once, for both checks"
     assert not any(v.startswith(("create", "rm")) for v in _verbs(console))
 
 
@@ -117,3 +120,20 @@ async def test_a_running_pod_of_an_older_gateway_image_is_only_replaced_at_its_n
 
     assert _image_calls(console) == []
     assert not any(v.startswith(("create", "rm")) for v in _verbs(console))
+
+
+@pytest.mark.asyncio
+async def test_a_start_cancelled_while_it_waits_to_remake_the_gateway_removes_nothing(
+    console: Console,
+) -> None:
+    console.answer = _older_gateways(_docker(), ["telebuba-acc-2-net"])
+    async with pod._CREATE_LOCK:  # another pod's start is creating its gateway
+        start = asyncio.create_task(pod.start_pod("telebuba-acc-2", _SPEC, _PROXY))
+        await asyncio.sleep(0.05)
+        start.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await start
+
+    assert [c[-1] for c in console.calls if c[1] == "rm"] == [], (
+        "Android keeps its label naming its diff for the next start"
+    )

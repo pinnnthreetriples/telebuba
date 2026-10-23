@@ -45,6 +45,8 @@ _RC_TEXT = (
 _KERNEL_MAX = 31
 # The upstream default; vendors' own (Pixel's ``sched_pixel``) are not in the chip files.
 _GOVERNOR = "schedutil"
+# ``host_cores``, once read; process-local like the rest of the runtime state.
+_host_cores: int | None = None
 
 
 class CpuPlacement(NamedTuple):
@@ -163,8 +165,15 @@ def write_topology(key: str, soc: Soc, cores: int) -> Path:
 
 
 async def host_cores() -> int:
-    """The CPUs Docker's VM has (not Windows's count): what a cpuset can name."""
-    return int((await docker("info", "--format", "{{.NCPU}}")).strip())
+    """The CPUs Docker's VM has (not Windows's count): what a cpuset can name.
+
+    Read once per process (``docker info`` on every start cost a docker call): the VM's
+    size changes only with Docker's own settings, which restart Docker.
+    """
+    global _host_cores  # noqa: PLW0603 - a process-wide fact about the Docker host
+    if _host_cores is None:
+        _host_cores = int((await docker("info", "--format", "{{.NCPU}}")).strip())
+    return _host_cores
 
 
 async def place_cpus(key: str, index: int) -> CpuPlacement:

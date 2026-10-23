@@ -6,6 +6,7 @@ sign-in even after the host's APK became telegram.org's ``org.telegram.messenger
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 from core import android_apk
 from core.android_apk import AppIdentity
 from core.config import settings
-from core.emulator import telegram_app
+from core.emulator import redroid, telegram_app
 
 if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
@@ -193,3 +194,60 @@ async def test_ensure_app_installs_catalog_found_web_apk_with_packageinstaller(
         str(apk),
     ]
     assert _started(console) == [_WEB]
+
+
+def _listings(console: Console) -> int:
+    return sum(call[-2:] == ["list", "packages"] for call in console.calls)
+
+
+@pytest.mark.asyncio
+async def test_the_phones_telegram_is_read_once_per_container_run(console: Console) -> None:
+    _phone(console, _WEB)
+
+    await telegram_app.bring_app_to_front(_SERIAL)
+    await telegram_app.bring_app_to_front(_SERIAL)
+
+    assert _listings(console) == 1
+    assert _started(console) == [_WEB, _WEB]
+    await redroid.launch_instance("telebuba-acc", 0)  # _SERIAL's index: maybe another phone now
+    await telegram_app.bring_app_to_front(_SERIAL)
+    assert _listings(console) == 2, "a started container's apps are read again"
+
+
+@pytest.mark.asyncio
+async def test_a_phone_given_telegram_is_read_again(
+    console: Console, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apk = tmp_path / "telegram.apk"
+    apk.write_bytes(b"apk")
+    monkeypatch.setattr(settings.emulator, "telegram_apk_path", apk)
+    _phone(console)
+    await telegram_app.ensure_app(_SERIAL)
+    _phone(console, _WEB)
+
+    await telegram_app.bring_app_to_front(_SERIAL)
+
+    assert _listings(console) == 2, "no Telegram is never remembered: the install is seen"
+    assert _started(console) == [_WEB, _WEB]
+
+
+@pytest.mark.asyncio
+async def test_a_lookup_overtaken_by_a_new_container_is_not_remembered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listed = asyncio.Event()
+    release = asyncio.Event()
+
+    async def old_phone(_serial: str) -> set[str]:
+        listed.set()
+        await release.wait()
+        return {_WEB}
+
+    monkeypatch.setattr(telegram_app.adb, "installed_packages", old_phone)
+    lookup = asyncio.create_task(telegram_app.app_package(_SERIAL))
+    await listed.wait()
+    telegram_app.forget_app(_SERIAL)  # a new container started on this index meanwhile
+    release.set()
+
+    assert await lookup == _WEB
+    assert _SERIAL not in telegram_app._PACKAGES, "the old phone's app is not the new one's"

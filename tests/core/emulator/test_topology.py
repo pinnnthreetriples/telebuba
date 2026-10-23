@@ -188,3 +188,16 @@ async def test_the_host_cores_come_from_docker_not_windows(
     assert console.calls[0][1:] == ["info", "--format", "{{.NCPU}}"]
     assert placement.cpuset == "0-3", "6 host cores hold one slice of 4"
     assert placement.directory.name == "chip-4"
+
+
+@pytest.mark.asyncio
+async def test_the_host_cores_are_read_once_per_process(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_topology, "load_socs", lambda: {"chip": CHIP})
+    console.answer = lambda argv: "6\n" if argv[1] == "info" else ""
+
+    await _topology.place_cpus("chip", 1)
+    await _topology.place_cpus("chip", 2)
+
+    assert [call[1] for call in console.calls] == ["info"], "no docker info at the second start"

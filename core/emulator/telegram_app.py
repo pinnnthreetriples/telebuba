@@ -38,6 +38,14 @@ _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
 _WEB_PACKAGE = "org.telegram.messenger.web"
 _PACKAGE_INSTALLER = "com.android.packageinstaller"
 _PLAY_STORE_INSTALLER = "com.android.vending"
+# The Telegram found on each phone, by serial, so a bring-to-front or a link needs no
+# ``pm list packages``. A phone without one is never remembered, so ``ensure_app``'s
+# install is seen at the next read; forgotten whenever a container starts
+# (``forget_app``): a serial is a pod index's, and the next container there may be
+# another phone.
+_PACKAGES: dict[str, str] = {}
+# How often each serial was forgotten: a lookup a new container overtook is not remembered.
+_FORGOTTEN: dict[str, int] = {}
 
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
@@ -68,10 +76,22 @@ async def app_package(serial: str) -> str | None:
     A phone set up from an older APK keeps its app (and its sign-in): the package is
     read off the phone, never assumed from whichever APK is on the host now.
     """
+    if (known := _PACKAGES.get(serial)) is not None:
+        return known
     apk = local_apk_identity()
     wanted = [settings.emulator.telegram_package, *([apk.package] if apk else [])]
+    generation = _FORGOTTEN.get(serial, 0)
     installed = await adb.installed_packages(serial)
-    return next((package for package in wanted if package in installed), None)
+    package = next((package for package in wanted if package in installed), None)
+    if package is not None and _FORGOTTEN.get(serial, 0) == generation:
+        _PACKAGES[serial] = package
+    return package
+
+
+def forget_app(serial: str) -> None:
+    """Drop what ``app_package`` knows of ``serial``'s phone: it is read again next time."""
+    _PACKAGES.pop(serial, None)
+    _FORGOTTEN[serial] = _FORGOTTEN.get(serial, 0) + 1
 
 
 async def bring_app_to_front(serial: str) -> None:
