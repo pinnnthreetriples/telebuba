@@ -39,11 +39,14 @@ if TYPE_CHECKING:
 
     from schemas.device_fingerprint import DeviceType
     from schemas.warming import WarmingCycleRequest
+    from services.warming._steps import _ChannelTally
 
 _PREPARING = "emulator_preparing"
 _NOT_SIGNED_IN = "emulator_not_signed_in"
 # Anything unexpected still ends the job: a phone left "preparing" would skip every visit.
 _UNEXPECTED = "emulator_command_failed"
+# A visit's detail when the app opened and ran but found nothing to do.
+_NOTHING_TO_DO = "no activity"
 
 
 async def prepare_phone(
@@ -93,9 +96,15 @@ async def _prepare_after(previous: asyncio.Task[None] | None, account_id: str) -
 
 
 async def run_visit(
-    request: WarmingCycleRequest, *, on_step: Callable[[str], Awaitable[None]]
+    request: WarmingCycleRequest,
+    *,
+    on_step: Callable[[str], Awaitable[None]],
+    tally: _ChannelTally | None = None,
 ) -> WarmingCycleResult:
-    """A mobile visit, skipped while its phone is being prepared."""
+    """A mobile visit, skipped while its phone is being prepared.
+
+    A visit that ran in the app clears a failed preparation's note: the phone works.
+    """
     account_id = request.account_id
     if account_id in _state.JOBS:
         await log_event(
@@ -105,8 +114,8 @@ async def run_visit(
             extra={"reason": _PREPARING},
         )
         return WarmingCycleResult(account_id=account_id, status="skipped", detail=_PREPARING)
-    result = await run_mobile_cycle(request, on_step=on_step)
-    if result.status == "ok":
+    result = await run_mobile_cycle(request, on_step=on_step, tally=tally)
+    if result.status in {"ok", "flood_wait"} or result.detail == _NOTHING_TO_DO:
         _state.STATE.pop(account_id, None)
     return result
 

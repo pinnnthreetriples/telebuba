@@ -67,3 +67,24 @@ test('a phone being prepared, or one that failed, says so on its card', () => {
   expect(failed).toHaveLength(1);
   expect(failed[0]).toHaveAttribute('role', 'status');
 });
+
+test('a phone with no channel to read says so on its card', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[
+          { ...account('acc-empty', false), phone_no_channels: true },
+          account('acc-reading', false),
+        ]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  const notes = screen.getAllByText(/На телефоне нет каналов для чтения/);
+  expect(notes).toHaveLength(1);
+  expect(notes[0]).toHaveAttribute('role', 'status');
+});

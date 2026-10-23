@@ -8,156 +8,32 @@ really settles.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
-import pytest_asyncio
 
 from core.config import settings
-from core.db import fetch_warming_state, upsert_warming_state
-from core.repositories.warming_daily_stats import list_warming_daily_stats
+from core.db import upsert_warming_state
+from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
 from schemas._warming_visits import VisitKind, VisitPlan
-from schemas.emulator import OpenMobileResult, PlaybookPlan, PlaybookResult
+from schemas.emulator import PlaybookPlan, PlaybookResult
 from schemas.warming import WarmingCycleRequest, WarmingStateWrite
-from services import warming
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
-from services.warming import _loop, _mobile_cycle, _seams
+from services.warming import _loop, _mobile_cycle, _mobile_plan, _seams
 from services.warming._mobile_cycle import session_seconds
-from services.warming.daily_stats import stats_day
-from tests.services.warming._support import _no_quiet_days, _ok, _seed_warming_account
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    from schemas.device_fingerprint import DeviceType
     from schemas.devices import DeviceRefusalCode
-    from schemas.telegram_actions import ActionResult, TelegramAction
-    from schemas.warming import ActivityPersona, WarmingStateRecord
-    from schemas.warming_daily_stats import WarmingDailyStats
-
-
-class _Pod:
-    """Records the pod calls; ``open_error``/``run_error`` make that step refuse."""
-
-    def __init__(self) -> None:
-        self.calls: list[str] = []
-        self.plans: list[PlaybookPlan | None] = []
-        self.signed_in = True
-        self.open_error: Exception | None = None
-        self.run_error: BaseException | None = None
-        self.activity = PlaybookResult(channels_read=2, scrolls=9, stories_watched=3, reactions=1)
-        # Set to hold the stop until the test releases it.
-        self.stop_gate: asyncio.Event | None = None
-        self.parks = True
-
-    async def open(self, account_id: str, *, background: bool = False) -> OpenMobileResult:
-        self.calls.append("open:background" if background else "open")
-        if self.open_error is not None:
-            raise self.open_error
-        return OpenMobileResult(account_id=account_id, status="started", signed_in=self.signed_in)
-
-    async def visit(self, account_id: str) -> str | None:
-        return "serial" if (await self.open(account_id, background=True)).signed_in else None
-
-    async def run(
-        self,
-        account_id: str,
-        duration_sec: int,
-        plan: PlaybookPlan | None = None,
-        *,
-        opened: str | None = None,
-    ) -> PlaybookResult:
-        del account_id
-        self.calls.append(f"run:{duration_sec}:{opened}")
-        self.plans.append(plan)
-        if self.run_error is not None:
-            raise self.run_error
-        return self.activity
-
-    async def stop(self, account_id: str) -> None:
-        del account_id
-        if self.stop_gate is not None:
-            await self.stop_gate.wait()
-        self.calls.append("stop")
-
-    async def park(self, account_id: str) -> bool:
-        del account_id
-        self.calls.append("park")
-        return self.parks
-
-    async def stop_parked(self, account_id: str) -> None:
-        self.calls.append(f"stop_parked:{account_id}")
-
-
-@pytest_asyncio.fixture
-async def pod(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Pod]:
-    """The fake pod, the emulator on, and one warming account ready for a cycle."""
-    _no_quiet_days(monkeypatch)
-    await _seed_warming_account()
-    fake = _Pod()
-    monkeypatch.setattr(settings.emulator, "enabled", True)
-    monkeypatch.setattr(_mobile_cycle, "open_account_mobile", fake.open)
-    monkeypatch.setattr(_mobile_cycle, "open_mobile_visit", fake.visit)
-    monkeypatch.setattr(_mobile_cycle, "run_mobile_activity", fake.run)
-    monkeypatch.setattr(_mobile_cycle, "stop_account_pod", fake.stop)
-    monkeypatch.setattr(_mobile_cycle, "_STREAKS", {})
-    monkeypatch.setattr(_mobile_cycle, "_RUNNING", set())
-    monkeypatch.setattr(_mobile_cycle, "_PARKED", {})
-    monkeypatch.setattr(_mobile_cycle, "park_account_pod", fake.park)
-    monkeypatch.setattr(_mobile_cycle, "stop_parked_pod", fake.stop_parked)
-    # Stopped after every visit unless a test parks it.
-    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 0)
-    yield fake
-    if fake.stop_gate is not None:
-        fake.stop_gate.set()
-    await _stops_done()
-
-
-async def _stops_done() -> None:
-    """Let the detached pod stops finish."""
-    await asyncio.gather(*_mobile_cycle._DETACHED)
-
-
-@pytest.fixture
-def telethon(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    sent: list[str] = []
-
-    async def gateway(account_id: str, action: TelegramAction, **_kwargs: object) -> ActionResult:
-        sent.append(action.action_type)
-        return _ok(account_id, action)
-
-    monkeypatch.setattr(_seams, "_gateway_execute", gateway)
-    return sent
-
-
-async def _iterate_on(device: DeviceType) -> None:
-    """One real iteration inside a task bound to ``device``, as the loop task is."""
-
-    async def body() -> None:
-        _seams.bind_device(device)
-        await warming.run_loop_iteration("acc-1")
-
-    await asyncio.create_task(body())
-
-
-async def _record() -> WarmingStateRecord:
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    return record
-
-
-async def _today() -> WarmingDailyStats | None:
-    day = await stats_day("acc-1", datetime.now(UTC))
-    rows = await list_warming_daily_stats("acc-1", day)
-    return rows[0] if rows else None
-
-
-def _refusal(code: str) -> EmulatorRefusedError:
-    error = EmulatorRefusedError("emulator_not_running")
-    error.code = code
-    return error
+    from schemas.warming import ActivityPersona
+from tests.services.warming._mobile_support import (
+    _iterate_on,
+    _Pod,
+    _record,
+    _refusal,
+    _stops_done,
+    _today,
+)
 
 
 @pytest.mark.asyncio
@@ -185,7 +61,7 @@ async def test_a_mobile_stint_opens_its_pod_spends_the_visit_and_stops_it(
     assert record.state == "sleeping"
     assert record.last_event == "cycle:ok"
     assert record.cycles_completed == 1
-    assert record.daily_actions == 3, "channels read and reactions spend the day's budget"
+    assert record.daily_actions == 4, "reads, reactions and the story glance spend the budget"
     assert record.warmed_days == 1
     stats = await _today()
     assert stats is not None
@@ -218,7 +94,13 @@ async def test_a_mobile_stint_with_the_emulator_off_skips_the_cycle_and_says_why
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "code",
-    ["emulator_command_timeout", "emulator_boot_timeout", "emulator_not_running"],
+    [
+        "emulator_command_timeout",
+        "emulator_boot_timeout",
+        "emulator_not_running",
+        "emulator_field_missing",
+        "emulator_screen_timeout",
+    ],
 )
 async def test_a_passing_cause_fails_the_cycle_and_the_loop_retries(
     pod: _Pod, telethon: list[str], code: str
@@ -252,7 +134,6 @@ async def test_a_passing_cause_fails_the_cycle_and_the_loop_retries(
         "emulator_proxy_unsupported",
         "emulator_twofa_missing",
         "emulator_sdk_mismatch",
-        "emulator_field_missing",
     ],
 )
 async def test_a_cause_a_retry_cannot_fix_parks_the_account_in_error(
@@ -487,6 +368,7 @@ def test_a_visit_buys_seconds_by_its_budget_within_the_cap(
 class _Controls:
     def __init__(self, *, reactions: bool) -> None:
         self.reactions_enabled = reactions
+        self.extra_toggles = EXTRA_TOGGLE_DEFAULTS
 
 
 @pytest.mark.asyncio
@@ -504,7 +386,7 @@ async def test_the_session_plan_follows_the_persona_and_the_reactions_switch(
     async def controls() -> _Controls:
         return _Controls(reactions=reactions)
 
-    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_mobile_plan, "load_warming_settings", controls)
     request = WarmingCycleRequest(account_id="acc-1", activity_persona=persona, remaining_actions=6)
 
     plan = await _mobile_cycle.session_plan(request)
@@ -521,7 +403,7 @@ async def test_the_session_plan_takes_the_visits_shape_and_the_stories_switch(
     async def controls() -> _Controls:
         return _Controls(reactions=True)
 
-    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_mobile_plan, "load_warming_settings", controls)
     monkeypatch.setattr(settings.warming, "story_view_enabled", False)
     visit = VisitPlan(kind="glance", channels=1, stories_first=True)
     request = WarmingCycleRequest(account_id="acc-1", visit=visit)
@@ -542,7 +424,7 @@ async def test_a_visit_beyond_a_glance_looks_at_media_and_may_search(
     async def controls() -> _Controls:
         return _Controls(reactions=True)
 
-    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_mobile_plan, "load_warming_settings", controls)
     monkeypatch.setattr(settings.emulator, "search_queries", ["news"])
     monkeypatch.setattr(_seams.rng, "random", lambda: draw)
     request = WarmingCycleRequest(account_id="acc-1", visit=VisitPlan(kind=kind))
@@ -559,7 +441,7 @@ async def test_a_glance_neither_searches_nor_plays_media(monkeypatch: pytest.Mon
     async def controls() -> _Controls:
         return _Controls(reactions=True)
 
-    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_mobile_plan, "load_warming_settings", controls)
     monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
     request = WarmingCycleRequest(account_id="acc-1", visit=VisitPlan(kind="glance"))
 
@@ -667,7 +549,7 @@ async def test_a_cycle_counts_reads_and_reactions_and_reports_the_read_step(
     async def controls() -> _Controls:
         return _Controls(reactions=True)
 
-    monkeypatch.setattr(_mobile_cycle, "load_warming_settings", controls)
+    monkeypatch.setattr(_mobile_plan, "load_warming_settings", controls)
     steps: list[str] = []
 
     async def on_step(step: str) -> None:
@@ -678,7 +560,7 @@ async def test_a_cycle_counts_reads_and_reactions_and_reports_the_read_step(
     )
     await _stops_done()
 
-    assert (result.channels_read, result.reactions_sent, result.attempted_actions) == (2, 1, 3)
+    assert (result.channels_read, result.reactions_sent, result.attempted_actions) == (2, 1, 4)
     assert pod.calls[1] == "run:120:serial", "4 budgeted actions buy 120 s in the app"
     assert steps == ["read"]
 

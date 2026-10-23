@@ -6079,6 +6079,7 @@ export type PhoneList = {
     | 'emulator_data_base_missing'
     | 'emulator_preparing'
     | 'emulator_screen_timeout'
+    | 'emulator_app_offline'
     | null;
   /**
    * Phones
@@ -8637,6 +8638,10 @@ export type WarmingAccountState = {
    */
   mobile_emulator_off?: boolean;
   phone_prep?: PhonePrep | null;
+  /**
+   * Phone No Channels
+   */
+  phone_no_channels?: boolean;
 };
 
 /**

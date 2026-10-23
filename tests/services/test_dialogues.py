@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from schemas.device_fingerprint import DeviceType
+
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -50,7 +52,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     reset_logging_for_tests()
 
 
-async def _seed_warming(account_id: str, status: AccountStatus = "new") -> None:
+async def _seed_warming(
+    account_id: str, status: AccountStatus = "new", device_mode: DeviceType = "desktop"
+) -> None:
     await create_account(AccountCreate(account_id=account_id))
     if status != "new":
         await update_account_from_session_check(
@@ -61,7 +65,9 @@ async def _seed_warming(account_id: str, status: AccountStatus = "new") -> None:
                 is_temporary=False,
             ),
         )
-    await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="active"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id=account_id, state="active", device_mode=device_mode)
+    )
 
 
 @pytest.mark.asyncio
@@ -94,6 +100,19 @@ async def test_assign_pairs_excludes_dead_accounts() -> None:
     await assign_pairs()
 
     assert (await get_partners("acc-dead")).partners == []
+    assert set((await get_partners("acc-1")).partners) <= {"acc-2"}
+
+
+@pytest.mark.asyncio
+async def test_assign_pairs_leaves_out_phone_stints() -> None:
+    """A phone visit never writes a DM: its partner would wait on a reply that cannot come."""
+    await _seed_warming("acc-1")
+    await _seed_warming("acc-2")
+    await _seed_warming("acc-phone", device_mode="mobile")
+
+    await assign_pairs()
+
+    assert (await get_partners("acc-phone")).partners == []
     assert set((await get_partners("acc-1")).partners) <= {"acc-2"}
 
 

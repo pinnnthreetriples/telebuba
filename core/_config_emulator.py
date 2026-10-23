@@ -11,6 +11,9 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# A word ``input text`` can type into the app's search: letters, digits and spaces.
+_Typeable = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ]{1,31}$")]
+
 
 class EmulatorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EMULATOR__", extra="ignore")
@@ -109,9 +112,7 @@ class EmulatorSettings(BaseSettings):
     pause_ttl_seconds: int = Field(default=1200, ge=0)
     # Words a warming session may type into the app's global search, one a visit at
     # most: letters, digits and spaces only, as ``input text`` types nothing else.
-    search_queries: list[
-        Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ]{1,31}$")]
-    ] = Field(
+    search_queries: list[_Typeable] = Field(
         min_length=1,
         default_factory=lambda: [
             "news",
@@ -123,6 +124,18 @@ class EmulatorSettings(BaseSettings):
             "books",
             "weather",
         ],
+    )
+    # The same, per phone language (ISO 639-1) where its words can be typed; a phone
+    # whose language is missing here (Cyrillic, say: ``input text`` cannot type it)
+    # searches with ``search_queries``.
+    search_queries_by_language: dict[str, list[_Typeable]] = Field(
+        default_factory=lambda: {
+            "de": ["nachrichten", "musik", "reisen", "rezepte", "fussball", "wetter"],
+            "es": ["noticias", "musica", "viajes", "recetas", "futbol", "tiempo"],
+            "fr": ["actualites", "musique", "voyage", "recettes", "football", "meteo"],
+            "it": ["notizie", "musica", "viaggi", "ricette", "calcio", "meteo"],
+            "pt": ["noticias", "musica", "viagens", "receitas", "futebol", "tempo"],
+        },
     )
 
     @field_validator("data_base_dir", "data_diff_dir", mode="before")

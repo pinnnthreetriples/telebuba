@@ -45,6 +45,7 @@ EmulatorRefusalCode = Literal[
     "emulator_data_base_missing",
     "emulator_preparing",
     "emulator_screen_timeout",
+    "emulator_app_offline",
 ]
 
 # A search query ``input text`` can type: 2-32 letters, digits and spaces.
@@ -122,10 +123,13 @@ class PlaybookPlan(BaseModel):
 
     ``channels`` caps the channels opened (``None``: as many as time allows),
     ``reaction_probability`` is the chance of one reaction per channel read (0 turns
-    reactions off), ``max_actions`` caps channels read plus reactions (``None``: no cap).
+    reactions off), ``max_actions`` caps the actions a visit books as desktop warming
+    does: channels read, reactions, one story glance and the notes played (``None``: no
+    cap).
 
     The scenarios a session mixes in are off unless asked for: ``media`` opens a photo
-    or plays a note in a channel read, each of ``search_queries`` is typed into the
+    or, with ``notes``, plays a voice or video note in a channel read, each of
+    ``search_queries`` is typed into the
     global search once (printable ASCII: ``input text`` types nothing else). Account
     changes have switches of their own: ``join_channels`` joins (and sometimes mutes)
     a channel the search opened, ``folders`` adds a recommended folder or creates
@@ -138,6 +142,7 @@ class PlaybookPlan(BaseModel):
     stories_first: bool = False
     max_actions: int | None = Field(default=None, ge=0)
     media: bool = False
+    notes: bool = True
     search_queries: list[Annotated[str, StringConstraints(pattern=_TYPEABLE)]] = Field(
         default_factory=list
     )
@@ -157,6 +162,8 @@ class PlaybookResult(BaseModel):
     reactions: int = Field(default=0, ge=0)
     searches_done: int = Field(default=0, ge=0)
     media_consumed: int = Field(default=0, ge=0)
+    # Of ``media_consumed``, the voice and video notes played (photos are the rest).
+    notes_played: int = Field(default=0, ge=0)
     channels_joined: int = Field(default=0, ge=0)
     folders_created: int = Field(default=0, ge=0)
     webapps_opened: int = Field(default=0, ge=0)
