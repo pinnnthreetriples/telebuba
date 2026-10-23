@@ -1,7 +1,7 @@
 ---
 name: runtime-warming
 description: Warming scheduling, budget, dialogue, recovery and board runtime.
-last_updated: 2026-10-15
+last_updated: 2026-10-24
 edges:
   - target: patterns/account-devices.md
     condition: the warming device
@@ -43,6 +43,6 @@ grounds_to:
 - Start refuses any account neurocomment already owns: the running listener and an in-flight channel-discovery run are hard exclusions; a live cooldown either runtime recorded is a health verdict and obeys the operator's `enforce_readiness` switch, like warming's own flood deadline does through trust. Refusals carry a stable code, never readiness reasons, and change only whether warming starts.
 - A running neuroshilling campaign is refused the same ungated way, via the shared in-memory ownership registry, not a point check: warming claims each account it spawns and releases only on an identity match, and neuroshilling's start refuses against that claim — weaken either side and two paced streams share a session. Warming's re-spawn of an account it holds bypasses the refusal, safe only because refusal and eviction share the per-account lifecycle lock.
 - Geo never refuses a start; consent is per `PHONE>PROXY` pair. Cards count settled actions.
-- Board reads stay bulk-loaded; loop failures are logged and persisted.
+- Board reads stay bulk-loaded; loop failures are logged and persisted. Each card carries its own mechanics: the board's switches, and a mobile stint drops joins and dialogues, which a phone visit never runs.
 
 Exact caps and timings belong to config/tests/code, not memory.
