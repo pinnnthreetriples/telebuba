@@ -18,12 +18,17 @@
     "file_style": "pixel"
   },
   "soc": "gs201",
+  "board": "panther",
   "builds": {
     "33": {
       "release": "13",
       "build_id": "TQ2A.230305.008",
       "incremental": "9595452",
       "security_patch": "2023-03-05",
+      "build_user": "android-build",
+      "build_host": "abfarm-release-rbe-64-2004-0074",
+      "build_date": "Sat Feb 11 17:43:27 UTC 2023",
+      "build_date_utc": 1676137407,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/google/panther/panther-user-13-TQ2A.230305.008-9595452-release-keys"
     },
     "34": {
@@ -31,6 +36,10 @@
       "build_id": "AP2A.240605.024",
       "incremental": "11860263",
       "security_patch": "2024-06-05",
+      "build_user": "android-build",
+      "build_host": "r-82b05a39f2cf359a-53m8",
+      "build_date": "Sat May 18 07:10:19 UTC 2024",
+      "build_date_utc": 1716016219,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/google/panther/panther-user-14-AP2A.240605.024-11860263-release-keys"
     }
   }
