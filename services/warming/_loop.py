@@ -256,7 +256,7 @@ async def _execute_cycle(
     """
     if _seams.bound_device() == "mobile":
         if settings.emulator.enabled:
-            return await run_visit(request, on_step=on_step)
+            return await run_visit(request, on_step=on_step, tally=tally)
         await log_event("WARNING", "warming_mobile_emulator_off", account_id=request.account_id)
         return WarmingCycleResult(
             account_id=request.account_id, status="skipped", detail="mobile_emulator_disabled"

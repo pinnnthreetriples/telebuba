@@ -311,12 +311,14 @@ async def run_mobile_activity(
     plan: PlaybookPlan | None = None,
     *,
     opened: str | None = None,
+    progress: PlaybookResult | None = None,
 ) -> PlaybookResult:
     """Spend up to ``duration_sec`` (capped) in the account's running Telegram app.
 
     ``plan`` shapes the session (channels, reactions, stories, an action cap); none is
-    the playbook's default. A finished session leaves the app with HOME and gives it a
-    poll interval to go offline, as a phone put away does, before the pod is stopped.
+    the playbook's default; it counts into ``progress``, read by a caller cancelled
+    mid-session. A finished session leaves the app with HOME and gives it a poll
+    interval to go offline, as a phone put away does, before the pod is stopped.
 
     The pod is used as it stands: one that is down, or whose gateway runs another
     proxy, answers ``emulator_not_running``. The session does not hold the account's
@@ -337,8 +339,15 @@ async def run_mobile_activity(
     try:
         serial = opened or await _serial_on_current_proxy(account_id)
         seconds = min(duration_sec, settings.emulator.activity_max_seconds)
-        playbook = TelegramMobilePlaybook()
-        result = await _run_session(playbook, serial, seconds, plan)
+        playbook = TelegramMobilePlaybook(progress=progress)
+        timeout = asyncio.timeout(seconds + _SESSION_GRACE_SECONDS)
+        try:
+            async with timeout:
+                result = await playbook.run_session(serial, seconds, plan)
+        except TimeoutError:
+            if not timeout.expired():
+                raise
+            result = playbook.result
         await leave_app(serial)
         await asyncio.sleep(settings.emulator.poll_seconds)
     except EmulatorError as exc:
@@ -373,20 +382,6 @@ async def _serial_on_current_proxy(account_id: str) -> str:
     await connect_device(serial)
     await bring_app_to_front(serial)
     return serial
-
-
-async def _run_session(
-    playbook: TelegramMobilePlaybook, serial: str, seconds: int, plan: PlaybookPlan | None
-) -> PlaybookResult:
-    """The playbook's session, cut ``_SESSION_GRACE_SECONDS`` past its length."""
-    timeout = asyncio.timeout(seconds + _SESSION_GRACE_SECONDS)
-    try:
-        async with timeout:
-            return await playbook.run_session(serial, seconds, plan)
-    except TimeoutError:
-        if not timeout.expired():
-            raise
-    return playbook.result
 
 
 async def stop_account_pod(account_id: str) -> None:

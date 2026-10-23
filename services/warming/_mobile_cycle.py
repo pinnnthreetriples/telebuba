@@ -16,13 +16,16 @@ when none is parked: a full host is not the account's failure.
 
 A pod that cannot open or a session that fails is a failed cycle with the refusal
 code as its detail, never a fallback to Telethon. A passing cause (a timeout, a
-login-code pause) sleeps it off and retries; anything else, or
-``_FAILURE_LIMIT`` failures in a row, parks the account in ``error``. A pod the
-operator holds, no free slot and a session that found nothing to do are skipped
-cycles, not the account's failures. A failed session keeps what it did before failing.
+login-code pause, a screen it could not read, an app that stayed offline) sleeps it
+off and retries; anything else, or ``_FAILURE_LIMIT`` failures in a row, parks the
+account in ``error``. Telegram's limit dialog in the app is a ``flood_wait`` of
+unknown length, as on desktop. A pod the operator holds, no free slot and a session
+that found nothing to do are skipped cycles, not the account's failures. A failed or
+cancelled session keeps what it did spent (``spent_actions``).
 
 The day's totals keep their columns: channels read go to ``reads``, reactions to
-``reactions``; stories, scrolls and the seconds spent go to the log event only.
+``reactions``; stories, scrolls and the seconds spent go to the log event only. A
+phone that found no channel to read says so on its card until it reads one.
 The failure streaks and slots are process-local, like the rest of the runtime state.
 """
 
@@ -33,9 +36,9 @@ import itertools
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import load_warming_settings
+from core.emulator.playbook import spent_actions
 from core.logging import log_event
-from schemas.emulator import PlaybookPlan
+from schemas.emulator import PlaybookResult
 from schemas.warming import WarmingCycleResult
 from services.accounts._result import AccountActionError
 from services.accounts.mobile_emulator import (
@@ -49,20 +52,21 @@ from services.accounts.mobile_emulator import (
     stop_account_pod,
 )
 from services.accounts.mobile_pods import park_account_pod, stop_parked_pod
-from services.warming import _seams
-from services.warming._phases import persona_reaction_probability
-from services.warming._snapshot import current_snapshot
+from services.warming import _mobile_prep_state
+from services.warming._mobile_plan import session_plan, session_seconds
 from services.warming._transitions import MOBILE_REFUSED_ACTION, MOBILE_SESSION_ACTION
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
 
     from schemas.device_farm import PhoneStatus
-    from schemas.emulator import EmulatorRefusalCode, PlaybookResult
+    from schemas.emulator import EmulatorRefusalCode
     from schemas.warming import WarmingCycleRequest
+    from services.warming._steps import _ChannelTally
 
 _NOT_SIGNED_IN = "emulator_not_signed_in"
 _CAPACITY: EmulatorRefusalCode = "emulator_capacity"
+_APP_OFFLINE: EmulatorRefusalCode = "emulator_app_offline"
 # Causes a later cycle may not meet again; every other code needs the operator.
 _PASSING_CODES = frozenset(
     {
@@ -72,20 +76,15 @@ _PASSING_CODES = frozenset(
         "emulator_boot_timeout",
         "emulator_code_timeout",
         "emulator_not_running",
+        "emulator_field_missing",
+        "emulator_screen_timeout",
+        _APP_OFFLINE,
         "device_code_cooldown",
         "device_primary_unavailable",
     }
 )
 # Failed cycles in a row after which even a passing cause parks the account.
 _FAILURE_LIMIT = 5
-# One budgeted action buys this many seconds in the app; a cycle gets at least
-# the floor, and never more than the emulator's session cap.
-_SECONDS_PER_ACTION = 30
-_MIN_SECONDS = 60
-# The chance a visit searches the app for a channel, by persona; a glance never does,
-# nor looks at photos and notes.
-_SEARCH_CHANCE = {"calm": 0.15, "normal": 0.3, "active": 0.5}
-
 # A phone being prepared waits this long between tries for a free slot.
 _SLOT_WAIT_SECONDS = 30
 # ...and gives up after this long: the job fails as ``emulator_capacity`` on the card.
@@ -103,49 +102,16 @@ _DETACHED: set[asyncio.Task[None]] = set()
 _HANDED_OVER: frozenset[PhoneStatus] = frozenset({"manual", "starting"})
 
 
-def session_seconds(budget: int | None) -> int:
-    """The seconds a visit with ``budget`` actions spends in the app."""
-    cap = settings.emulator.activity_max_seconds
-    if budget is None:
-        return cap
-    return min(cap, max(_MIN_SECONDS, budget * _SECONDS_PER_ACTION))
-
-
-async def session_plan(request: WarmingCycleRequest) -> PlaybookPlan:
-    """The visit's shape for the app, as the Telethon cycle would walk it.
-
-    Its channels and stories order, the persona's reaction chance (none while the
-    operator turned reactions off), stories only while story viewing is on, and the
-    visit's action budget as the session's cap. Beyond a glance it looks at photos and
-    notes, and with the persona's ``_SEARCH_CHANCE`` searches for one of the
-    configured words. It never joins, makes folders or opens a Mini App: those
-    change the account and stay off until the operator asks for them.
-    """
-    snapshot = current_snapshot(request.account_id)
-    controls = snapshot.controls if snapshot else await load_warming_settings()
-    visit = request.visit
-    reaction = persona_reaction_probability(request.activity_persona)
-    glance = visit is not None and visit.kind == "glance"
-    searching = not glance and _seams.rng.random() < _SEARCH_CHANCE[request.activity_persona]
-    return PlaybookPlan(
-        channels=visit.channels if visit else None,
-        reaction_probability=reaction if controls.reactions_enabled else 0.0,
-        stories=settings.warming.story_view_enabled,
-        stories_first=visit.stories_first if visit else False,
-        max_actions=request.remaining_actions,
-        media=not glance,
-        search_queries=[_seams.rng.choice(settings.emulator.search_queries)] if searching else [],
-    )
-
-
 async def run_mobile_cycle(
     request: WarmingCycleRequest,
     *,
     on_step: Callable[[str], Awaitable[None]],
+    tally: _ChannelTally | None = None,
 ) -> WarmingCycleResult:
     """Open the pod, spend the visit in the app, park or stop the pod; never raises a refusal.
 
     A pod busy with the operator's own open or session is left running: it is theirs.
+    Cancelled mid-session, what the phone already did goes on ``tally``: it stays spent.
     """
     account_id = request.account_id
     # Its own parked pod holds its slot already; the open thaws it.
@@ -156,6 +122,7 @@ async def run_mobile_cycle(
     seconds = session_seconds(request.remaining_actions)
     owned = True
     went_well = False
+    progress = PlaybookResult()
     try:
         serial = await open_mobile_visit(account_id)
         if serial is None:
@@ -163,8 +130,14 @@ async def run_mobile_cycle(
         await on_step("read")
         plan = await session_plan(request)
         # The open just checked the pod and put the app in front: the session goes on from there.
-        activity = await run_mobile_activity(account_id, seconds, plan, opened=serial)
+        activity = await run_mobile_activity(
+            account_id, seconds, plan, opened=serial, progress=progress
+        )
         went_well = True
+    except asyncio.CancelledError:
+        if tally is not None:
+            tally.attempts += spent_actions(progress)
+        raise
     except EmulatorBusyError:
         owned = False
         return await _log_skip(account_id, "emulator_busy")
@@ -175,6 +148,14 @@ async def run_mobile_cycle(
             _detach(_park(account_id) if went_well else _stop_and_free(account_id))
         else:
             _RUNNING.discard(account_id)
+    return await _settle(account_id, seconds, activity)
+
+
+async def _settle(account_id: str, seconds: int, activity: PlaybookResult) -> WarmingCycleResult:
+    """The cycle's result from what a session that ran in the app did and met."""
+    _note_channels(account_id, activity)
+    if "app_offline" in activity.skipped:
+        return await _log_failure(account_id, _APP_OFFLINE, activity)
     _STREAKS.pop(account_id, None)
     await log_event(
         "INFO",
@@ -182,6 +163,8 @@ async def run_mobile_cycle(
         account_id=account_id,
         extra={"seconds": seconds, **activity.model_dump(mode="json")},
     )
+    if "app_error" in activity.skipped:
+        return _limited(account_id, activity)
     if not (
         activity.channels_read
         or activity.reactions
@@ -196,8 +179,28 @@ async def run_mobile_cycle(
         status="ok",
         channels_read=activity.channels_read,
         reactions_sent=activity.reactions,
-        attempted_actions=activity.channels_read + activity.reactions,
+        attempted_actions=spent_actions(activity),
     )
+
+
+def _limited(account_id: str, activity: PlaybookResult) -> WarmingCycleResult:
+    """Telegram's limit dialog: a flood wait of unknown length, the desktop's fallback."""
+    return WarmingCycleResult(
+        account_id=account_id,
+        status="flood_wait",
+        channels_read=activity.channels_read,
+        reactions_sent=activity.reactions,
+        attempted_actions=spent_actions(activity),
+        last_failed_action=MOBILE_SESSION_ACTION,
+    )
+
+
+def _note_channels(account_id: str, activity: PlaybookResult) -> None:
+    """Flag the card of a phone that had no channel to read; a read lifts it."""
+    if activity.channels_read:
+        _mobile_prep_state.NO_CHANNELS.discard(account_id)
+    elif "no_channel" in activity.skipped:
+        _mobile_prep_state.NO_CHANNELS.add(account_id)
 
 
 async def prepare_pod(account_id: str) -> bool:
@@ -320,15 +323,14 @@ async def _log_failure(
         account_id=account_id,
         extra={"reason": code, "retry": retry, "streak": streak},
     )
-    read = partial.channels_read if partial is not None else 0
-    reactions = partial.reactions if partial is not None else 0
+    done = partial if partial is not None else PlaybookResult()
     return WarmingCycleResult(
         account_id=account_id,
         status="failed",
         detail=code,
         failures=1,
-        channels_read=read,
-        reactions_sent=reactions,
-        attempted_actions=read + reactions,
+        channels_read=done.channels_read,
+        reactions_sent=done.reactions,
+        attempted_actions=spent_actions(done),
         last_failed_action=MOBILE_SESSION_ACTION if retry else MOBILE_REFUSED_ACTION,
     )

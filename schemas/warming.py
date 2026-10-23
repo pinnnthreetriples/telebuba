@@ -363,6 +363,7 @@ class WarmingAccountState(WarmingCardConsole):
     spam_check_warning: bool = False  # @SpamBot silent ``spam_unknown_warn_streak`` times
     mobile_emulator_off: bool = False  # a phone stint whose visits wait for the emulator
     phone_prep: PhonePrep | None = None  # a phone stint's phone, readied at its start
+    phone_no_channels: bool = False  # a phone stint whose last visit had no channel to read
 
 
 class WarmingBoardState(BaseModel):

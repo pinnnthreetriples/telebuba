@@ -198,6 +198,26 @@ through the account's existing session, parked for the first visit within
 job leaves its code on the card until a visit warms. A visit that finds the app signed out signs it
 in, so a phone the job could not finish (or one prepared before a restart) heals on its own.
 
+## A warming visit on the phone
+
+A visit (`services/warming/_mobile_cycle.py`, its plan in `_mobile_plan.py`) reads the channels
+the phone's chat list shows, reacts with the persona's chance while reactions are on, glances at
+stories (never on a «Глянул» visit), looks at photos, plays voice and video notes only while the
+`video` or `voice` extra is on, and searches only while the `search_messages` extra is on, with a
+word of the phone's language from `EMULATOR__SEARCH_QUERIES_BY_LANGUAGE`, else
+`EMULATOR__SEARCH_QUERIES` (`input text` types ASCII only, so a Cyrillic phone searches in
+English). It never joins, writes a DM or runs other extras: a phone stint is nobody's dialogue
+partner and never draws a reply-only visit, and its card shows only the steps the app takes.
+
+It books the day's budget as desktop warming would: a channel read and a reaction each, one story
+glance however many stories it showed, each note played; a search or a photo books nothing. A
+Stop or restart mid-session keeps what the phone already did spent. Telegram's limit dialog in
+the app is a `flood_wait` of unknown length (desktop's fallback hours and margin); an app that
+stays offline (`emulator_app_offline`), a screen it cannot read (`emulator_field_missing`) and a
+screen that does not open are passing failures that retry up to the failure limit. A full host
+retries the visit in 5-15 minutes. A phone whose visit found no channel to read says so on its
+card until a visit reads one; a visit that ran in the app clears a failed preparation's note.
+
 ## GPU and shared /data
 
 Both are fixed when an Android container is created: a container made before a change keeps how

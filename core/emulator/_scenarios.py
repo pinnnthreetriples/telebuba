@@ -226,9 +226,9 @@ class ScenarioSteps:
             await self._tap(serial, mute)
 
     async def consume_feed_media(self, serial: str) -> None:
-        """Look at a photo of the open feed full screen, or play a voice or video note."""
+        """Look at a photo of the open feed full screen, or play a note the plan allows."""
         _screen, nodes = await self._screen(serial)
-        pictures, notes = photos(nodes), playable(nodes)
+        pictures, notes = photos(nodes), playable(nodes) if self.plan.notes else []
         if not pictures and not notes:
             self._skip("no_media")
             return
@@ -240,6 +240,7 @@ class ScenarioSteps:
             await self._tap(serial, button)
             listen = min(seconds * rng.uniform(*_NOTE_SHARE), _NOTE_MAX_SECONDS)
             await asyncio.sleep(max(0.0, min(listen, self._seconds_left())))
+            self.result.notes_played += 1
         self.result.media_consumed += 1
 
     async def _view_photo(self, serial: str, photo: UiNode, size: tuple[int, int]) -> None:

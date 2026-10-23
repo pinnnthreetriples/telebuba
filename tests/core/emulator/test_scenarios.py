@@ -279,6 +279,7 @@ async def test_a_voice_note_is_played_for_most_of_its_length(
     assert tapped(PLAY)(play)
     assert 0.9 * 20 <= clock.slept[0] <= 20
     assert session.result.media_consumed == 1
+    assert session.result.notes_played == 1
 
 
 @pytest.mark.asyncio
@@ -311,6 +312,27 @@ async def test_a_long_voice_note_is_listened_to_for_a_minute_at_most(
     await session.consume_feed_media(SERIAL)
 
     assert clock.slept == [60.0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_plan_without_notes_never_plays_one_but_still_looks_at_photos(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _app(monkeypatch, console, {"feed": [PLAY, DURATION], "viewer": []}, "feed")
+    session = _playbook()
+    session.plan = PlaybookPlan(media=True, notes=False)
+
+    await session.consume_feed_media(SERIAL)
+
+    assert console.shell_calls() == [], "the voice/video switches are off"
+    assert session.result.skipped == ["no_media"]
+    app.screens["feed"] = [PHOTO, PLAY, DURATION]
+    app.move("feed", tapped(PHOTO), "viewer")
+
+    await session.consume_feed_media(SERIAL)
+
+    assert (session.result.media_consumed, session.result.notes_played) == (1, 0)
 
 
 @pytest.mark.asyncio

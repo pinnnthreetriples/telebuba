@@ -11,12 +11,10 @@ import pytest
 
 from core.config import settings
 from services.warming import _mobile_cycle
-from tests.services.warming.test_mobile_cycle import (  # noqa: F401 - pod, telethon: fixtures
+from tests.services.warming._mobile_support import (
     _iterate_on,
     _Pod,
     _stops_done,
-    pod,
-    telethon,
 )
 
 if TYPE_CHECKING:
