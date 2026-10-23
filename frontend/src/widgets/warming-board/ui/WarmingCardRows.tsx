@@ -91,6 +91,21 @@ export function TodayRow({ account }: { account: WarmingAccountState }) {
   return <p className="m-0 mt-3 type-small text-content-muted">{parts.join(' · ')}</p>;
 }
 
+// The optional steps this card's stint runs, reading first: a phone card drops what a
+// visit never does (joins, dialogues), and a step the settings switched off is left out.
+const MECHANICS = ['join', 'reactions', 'stories', 'dialogue'] as const;
+
+export function MechanicsRow({ account }: { account: WarmingAccountState }) {
+  const { t } = useTranslation();
+  const on = MECHANICS.filter((step) => account.mechanics?.[step] ?? true);
+  const list = ['read', ...on].map((step) => t(`warming.console.mechanic.${step}`)).join(' · ');
+  return (
+    <p className="m-0 mt-3 type-small text-content-muted">
+      {t('warming.console.mechanics', { list })}
+    </p>
+  );
+}
+
 // While a cycle runs: which kind of visit it is and how far along its own step order
 // (`cycle_plan`, item 4.4). The engine only ever moves `last_action` forward along
 // that order, so the bar never jumps back.

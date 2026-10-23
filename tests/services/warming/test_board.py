@@ -239,3 +239,32 @@ async def test_a_card_says_when_its_phone_is_in_a_visit() -> None:
     [card] = resting.warming
     assert (card.device_mode, card.live_phone_id) == ("mobile", None)
     assert visiting.warming[0].live_phone_id == "telebuba-acc-phone"
+
+
+@pytest.mark.asyncio
+async def test_a_phone_card_shows_only_the_steps_a_visit_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "story_view_enabled", True)
+    await _set_settings(chat=True, reactions=True, key="test-key-not-real")
+    await create_account(AccountCreate(account_id="acc-phone"))
+    await create_account(AccountCreate(account_id="acc-desk"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-phone", state="active", device_mode="mobile")
+    )
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-desk", state="active"))
+
+    board = await warming.load_board()
+
+    cards = {card.account_id: card.mechanics for card in board.warming}
+    # A phone visit never joins a channel or takes a dialogue turn.
+    phone = cards["acc-phone"]
+    assert (phone.join, phone.reactions, phone.stories, phone.dialogue) == (
+        False,
+        True,
+        True,
+        False,
+    )
+    assert cards["acc-desk"] == board.mechanics
+    assert board.mechanics.join
+    assert board.mechanics.dialogue

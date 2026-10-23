@@ -348,6 +348,8 @@ class WarmingAccountState(WarmingCardConsole):
     # so the card can show its screen. ``None`` between visits: the phone sleeps.
     device_mode: DeviceType = "desktop"
     live_phone_id: str | None = None
+    # The optional steps this stint runs: the board's, less what a phone visit never does.
+    mechanics: WarmingMechanics = Field(default_factory=WarmingMechanics)
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).

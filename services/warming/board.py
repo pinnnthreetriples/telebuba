@@ -62,6 +62,7 @@ from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.device_fingerprint import DeviceType
     from schemas.survival import AccountSurvival
     from schemas.warming import WarmingReadiness, WarmingStateRecord
 
@@ -112,6 +113,7 @@ def _to_card(
     *,
     readiness: WarmingReadiness | None = None,
     survival: AccountSurvival | None = None,
+    mechanics: WarmingMechanics | None = None,
 ) -> WarmingAccountState:
     state: WarmingState = record.state if record else "idle"
     # Collapse the per-field `record.x if record else default` ternaries (one per
@@ -131,6 +133,9 @@ def _to_card(
         health=warming_health(state),
         readiness=readiness,
         survival=survival,
+        mechanics=_card_mechanics(
+            mechanics or WarmingMechanics(), record.device_mode if record else "desktop"
+        ),
         spam_check_warning=(
             record is not None
             and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak
@@ -199,7 +204,11 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
             spam_block_known=spam_block_known(record),
         )
         card = _to_card(
-            account, record, readiness=readiness, survival=survivals.get(account.account_id)
+            account,
+            record,
+            readiness=readiness,
+            survival=survivals.get(account.account_id),
+            mechanics=_derive_mechanics(masked),
         )
 
         age_hours = _account_age_hours(account, now)
@@ -340,6 +349,18 @@ def _derive_mechanics(masked: WarmingSettings) -> WarmingMechanics:
         stories=settings.warming.story_view_enabled,
         dialogue=masked.inter_account_chat and (masked.has_gemini_key or masked.has_deepseek_key),
     )
+
+
+def _card_mechanics(mechanics: WarmingMechanics, device_mode: DeviceType) -> WarmingMechanics:
+    """The board's mechanics as one card's stint runs them.
+
+    A phone visit (``_mobile_cycle.session_plan``) reads, reacts and watches stories
+    under the same switches, but never joins a channel or takes a dialogue turn:
+    both are Telethon cycle steps.
+    """
+    if device_mode != "mobile":
+        return mechanics
+    return mechanics.model_copy(update={"join": False, "dialogue": False})
 
 
 async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
