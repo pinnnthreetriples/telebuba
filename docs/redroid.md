@@ -228,7 +228,7 @@ glance however many stories it showed, each note played; a search or a photo boo
 Stop or restart mid-session keeps what the phone already did spent. Telegram's limit dialog in
 the app is a `flood_wait` of unknown length (desktop's fallback hours and margin); an app that
 stays offline (`emulator_app_offline`), a screen it cannot read (`emulator_field_missing`) and a
-screen that does not open are passing failures that retry up to the failure limit. A full host
+screen that does not open are retryable failures, retried up to the failure limit. A full host
 retries the visit in 5-15 minutes. A phone whose visit found no channel to read says so on its
 card until a visit reads one; a visit that ran in the app clears a failed preparation's note.
 
