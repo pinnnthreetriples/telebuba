@@ -6,16 +6,13 @@ Extracted from ``adb.py`` to keep that module under the aislop file-size cap.
 from __future__ import annotations
 
 import shlex
-from contextlib import suppress
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING
 
 from core.emulator import adb
 from core.emulator._battery import (
     BatteryTelemetryState,
     build_battery_telemetry_commands,
-    build_sensor_jitter_commands,
     generate_initial_battery_state,
-    step_battery_state,
 )
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import (
@@ -28,6 +25,7 @@ from core.emulator._profile import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import datetime
 
     from schemas.emulator import EmulatorRefusalCode
 
@@ -84,10 +82,15 @@ async def apply_battery_telemetry(
     *,
     account_id: str | None = None,
     seed: int | str | None = None,
+    now: datetime | None = None,
 ) -> BatteryTelemetryState:
-    """Set realistic discharging battery and temperature telemetry on the device."""
+    """Set realistic discharging battery and temperature telemetry on the device.
+
+    ``now`` is the phone's own clock (its timezone), whose hour the level follows.
+    """
     resolved_state = state or generate_initial_battery_state(
         account_id=account_id or (str(seed) if seed is not None else serial),
+        now=now,
         seed=seed,
     )
     commands = build_battery_telemetry_commands(resolved_state)
@@ -98,66 +101,3 @@ async def apply_battery_telemetry(
         script.extend(cmd.split())
     await adb.shell(serial, *script)
     return resolved_state
-
-
-@overload
-async def step_battery_discharge(
-    serial: str,
-    current_state: BatteryTelemetryState,
-    *,
-    seed: int | str | None = None,
-    min_level: int = 15,
-) -> BatteryTelemetryState: ...
-
-
-@overload
-async def step_battery_discharge(
-    serial: str,
-    current_state: None = None,
-    *,
-    decrement: int = 1,
-) -> None: ...
-
-
-async def step_battery_discharge(
-    serial: str,
-    current_state: BatteryTelemetryState | None = None,
-    *,
-    decrement: int = 1,
-    seed: int | str | None = None,
-    min_level: int = 15,
-) -> BatteryTelemetryState | None:
-    """Safely decrement battery level by ``decrement``% or advance live telemetry state."""
-    if current_state is None:
-        output = await adb.shell(serial, "dumpsys", "battery")
-        level: int | None = None
-        for line in output.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("level:"):
-                with suppress(ValueError):
-                    level = int(stripped.split(":", 1)[1].strip())
-                break
-        if level is not None:
-            new_level = max(5, level - decrement)
-            await adb.shell(serial, "dumpsys", "battery", "set", "level", str(new_level))
-        return None
-
-    next_state = step_battery_state(current_state, seed=seed, min_level=min_level)
-    battery_commands = build_battery_telemetry_commands(next_state)
-    battery_script: list[str] = []
-    for cmd in battery_commands:
-        if battery_script:
-            battery_script.append("&&")
-        battery_script.extend(cmd.split())
-    await adb.shell(serial, *battery_script)
-
-    sensor_commands = build_sensor_jitter_commands(seed=seed)
-    if sensor_commands:
-        sensor_script: list[str] = []
-        for cmd in sensor_commands:
-            if sensor_script:
-                sensor_script.append(";")
-            sensor_script.extend(cmd.split())
-        with suppress(EmulatorError):
-            await adb.shell(serial, *sensor_script)
-    return next_state

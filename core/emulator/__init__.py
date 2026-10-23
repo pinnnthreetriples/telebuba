@@ -28,7 +28,6 @@ from core.emulator.adb import (
     human_swipe,
     human_tap,
     human_type,
-    step_battery_discharge,
     wait_for_boot,
 )
 from core.emulator.assets import ensure_telegram_apk
@@ -105,7 +104,6 @@ __all__ = [
     "seed_device_if_needed",
     "show_instance",
     "start_pod",
-    "step_battery_discharge",
     "stop_paused_pod",
     "stop_pod",
     "stop_running_pods",

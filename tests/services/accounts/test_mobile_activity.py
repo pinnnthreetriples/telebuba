@@ -281,6 +281,7 @@ async def test_a_warming_visit_checks_its_pod_once(
         "find:telebuba-acc",
         "proxy?:10.0.0.5",
         "connect",
+        "battery",
         "front",
         "read",
         "home",

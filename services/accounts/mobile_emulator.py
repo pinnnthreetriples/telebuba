@@ -92,6 +92,7 @@ from services.accounts._mobile_holds import (
 from services.accounts._mobile_progress import forget_progress, open_progress, report_stage
 from services.accounts._mobile_start import (
     ENTRY_SCREENS,
+    set_battery,
     show,
     sign_in_or_hand_over,
     start_and_sign_in,
@@ -279,6 +280,7 @@ async def _open(
             serial = adb_serial(instance.index)
             report_stage(account.account_id, "app")
             await connect_device(serial)
+            await set_battery(serial, account.account_id, spec.region.timezone)
             if not background:
                 await show(name, instance.index)
             await bring_app_to_front(serial)

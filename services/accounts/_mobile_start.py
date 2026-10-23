@@ -19,7 +19,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from datetime import datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from core.emulator import (
     EmulatorError,
@@ -105,8 +107,7 @@ async def _start(
         await assert_sdk(serial, spec.sdk)
         await apply_stealth_profile(serial)
         booted = True
-        with suppress(EmulatorError):
-            await apply_battery_telemetry(serial, account_id=account.account_id)
+        await set_battery(serial, account.account_id, spec.region.timezone)
         report_stage(account.account_id, "app")
         seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
         try:
@@ -130,6 +131,18 @@ async def _start(
         signed_in=signed_in,
         sign_in_refusal=refusal,
     ), serial
+
+
+async def set_battery(serial: str, account_id: str, timezone: str) -> None:
+    """Show the battery the phone has at this hour of its ``timezone`` (``_battery``).
+
+    Applied at every boot and every visit to a running pod, so the level drops through
+    the phone's day. A phone that refuses it is left as it is: never a reason to fail
+    the open.
+    """
+    now = datetime.now(ZoneInfo(timezone))
+    with suppress(EmulatorError):
+        await apply_battery_telemetry(serial, account_id=account_id, now=now)
 
 
 async def sign_in_or_hand_over(

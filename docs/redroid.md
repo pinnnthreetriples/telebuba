@@ -121,6 +121,11 @@ The container is a real phone (`core/emulator/_profile.py`):
   mobile fingerprint's `system_lang_code`, which the app sends Telegram as that same field.
 - A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
   country moves the timezone and carrier; a running one is left alone.
+- **Battery** (`core/emulator/_battery.py`): discharging, on no charger, at the level the
+  account's day has reached on the phone's own clock (its timezone, above): unplugged at
+  88–100% between 06:00 and 09:00, 3–5% less each hour after, never below 15%, full again
+  the next morning (all drawn per account and date). Set after every boot and at every open of a running pod, so it drops through the
+  day across stops and pauses. A phone that refuses it keeps its old level.
 - **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
   `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps; `mt6877` has no public
   cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its

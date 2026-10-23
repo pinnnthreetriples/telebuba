@@ -21,6 +21,8 @@ from services.accounts import add_account
 from services.accounts import devices as devices_module
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     import pytest
 
     from core.emulator._profile import ContainerSpec
@@ -57,6 +59,7 @@ class _Container:
         self.boot_gate: asyncio.Event | None = None
         self.booting = asyncio.Event()
         self.apk_fails = False
+        self.battery_now: datetime | None = None
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -132,9 +135,11 @@ class _Container:
         *,
         account_id: str | None = None,
         seed: int | str | None = None,
+        now: datetime | None = None,
     ) -> None:
-        """Record fake container battery telemetry step."""
+        """Record fake container battery telemetry step, and the phone's clock it was given."""
         del account_id, seed
+        self.battery_now = now
         self.on_serial(serial, "battery")
 
     async def ensure_app(self, serial: str, *, apk_path: object = None) -> None:
