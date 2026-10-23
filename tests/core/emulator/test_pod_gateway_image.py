@@ -86,6 +86,8 @@ async def test_a_gateway_of_the_configured_image_is_used_as_it_is(console: Conso
     await pod.start_pod("telebuba-acc-2", _SPEC, _PROXY)
 
     assert ["inspect", "--format", "{{.Image}}", "telebuba-acc-2-net"] in _image_calls(console)
+    configured = ["image", "inspect", "--format", "{{.Id}}", settings.emulator.gateway_image]
+    assert _image_calls(console).count(configured) == 1, "its ID read once, for both checks"
     assert not any(v.startswith(("create", "rm")) for v in _verbs(console))
 
 

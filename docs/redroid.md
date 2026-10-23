@@ -298,7 +298,7 @@ new tag when Microsoft ships one.
 
 Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
 pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
-and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway`, each bounded by
+and a missing `EMULATOR__GATEWAY_IMAGE` is built from `docker/net-gateway` (both at once), each bounded by
 `EMULATOR__IMAGE_TIMEOUT_SECONDS` (`emulator_image_unavailable` when it fails). An image already
 present is never pulled or rebuilt; after changing `docker/net-gateway`, bump the tag. A pod made
 before gets the new image at its next start: a gateway made from another image (compared by image

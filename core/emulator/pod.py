@@ -107,13 +107,20 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)
-    await ensure_pod_images(spec)  # a pull or build may take minutes: outside the lock
+    # A pull or build may take minutes: outside the locks.
+    gateway_image = await ensure_pod_images(spec)
     async with _POD_LOCKS.setdefault(name, asyncio.Lock()):
-        return await _start(name, spec, proxy_text, address)
+        return await _start(name, spec, proxy_text, address, gateway_image)
 
 
-async def _start(name: str, spec: ContainerSpec, proxy_text: str, address: str) -> Instance:
-    """``start_pod`` once its inputs are checked, holding the pod's own lock."""
+async def _start(
+    name: str, spec: ContainerSpec, proxy_text: str, address: str, gateway_image: str | None
+) -> Instance:
+    """``start_pod`` once its inputs are checked, holding the pod's own lock.
+
+    ``gateway_image`` is the configured gateway image's ID as ``ensure_pod_images`` read it
+    (``None``: just built, not read yet).
+    """
     gateway = gateway_name(name)
     found: set[str] = set()
     created: set[str] = set()
@@ -122,7 +129,7 @@ async def _start(name: str, spec: ContainerSpec, proxy_text: str, address: str) 
         android, current = await _find(name)
         # A gateway of an image other than the configured one is made again, so a
         # bumped tag reaches the pods made before it.
-        stale = current is not None and await _stale_gateway(gateway)
+        stale = current is not None and await _stale_gateway(gateway, gateway_image)
         gone = current is None or stale
         # Only an Android about to be made needs its base: refused before anything is.
         remade = android is None or gone
@@ -171,12 +178,15 @@ async def _start(name: str, spec: ContainerSpec, proxy_text: str, address: str) 
     return Instance(index, name, running=True)
 
 
-async def _stale_gateway(gateway: str) -> bool:
-    """Whether ``gateway`` was made from an image other than the configured one, by image ID."""
+async def _stale_gateway(gateway: str, configured: str | None) -> bool:
+    """Whether ``gateway`` was made from an image other than the configured one, by image ID.
+
+    ``configured`` is that image's ID when already read, else it is read here.
+    """
     made_from = await docker("inspect", "--format", "{{.Image}}", gateway)
-    configured = await docker(
-        "image", "inspect", "--format", "{{.Id}}", settings.emulator.gateway_image
-    )
+    if configured is None:
+        image = settings.emulator.gateway_image
+        configured = await docker("image", "inspect", "--format", "{{.Id}}", image)
     return made_from.strip() != configured.strip()
 
 

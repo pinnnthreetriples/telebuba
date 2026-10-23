@@ -26,7 +26,7 @@ class _SlowCheck:
         self.waiting = asyncio.Event()
         self.checked: list[str] = []
 
-    async def __call__(self, gateway: str) -> bool:
+    async def __call__(self, gateway: str, _configured: str | None) -> bool:
         self.checked.append(gateway)
         if gateway == self.slow:
             self.waiting.set()

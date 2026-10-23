@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -12,7 +13,7 @@ from core.emulator import EmulatorError, images
 from core.emulator._profile import container_spec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from tests.core.emulator.conftest import Console
 
@@ -70,9 +71,10 @@ async def test_missing_images_are_built_and_pulled(console: Console) -> None:
 async def test_present_images_are_left_alone(console: Console) -> None:
     console.answer = _docker({_ANDROID, _GATEWAY})
 
-    await images.ensure_pod_images(_SPEC)
+    gateway = await images.ensure_pod_images(_SPEC)
 
     assert _made(console) == []
+    assert gateway == "sha256:abc", "the gateway image's ID, for the pod's stale check"
 
 
 @pytest.mark.asyncio
@@ -97,3 +99,30 @@ async def test_a_missing_docker_stays_not_found(console: Console) -> None:
         await images.ensure_pod_images(_SPEC)
 
     assert refused.value.code == "emulator_not_found"
+
+
+@pytest.mark.asyncio
+async def test_the_build_does_not_wait_for_the_pull(monkeypatch: pytest.MonkeyPatch) -> None:
+    pulling = asyncio.Event()
+    present: set[str] = set()
+
+    async def docker(argv: Sequence[str], *, seconds: float, step: str) -> str:
+        del seconds, step
+        if argv[1:3] == ["image", "inspect"]:
+            if argv[-1] not in present:
+                code = "emulator_command_failed"
+                raise EmulatorError(code)
+            return f"sha256:{argv[-1]}\n"
+        if argv[1] == "build":
+            await pulling.wait()  # only ends while the pull runs alongside
+            present.add(argv[3])
+        else:
+            pulling.set()
+            present.add(argv[2])
+        return ""
+
+    monkeypatch.setattr("core.emulator._process.run_command", docker)
+
+    gateway = await asyncio.wait_for(images.ensure_pod_images(_SPEC), timeout=5)
+
+    assert gateway is None, "just built: its ID is read where it is compared"
