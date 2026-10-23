@@ -32,7 +32,8 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
   enters is reported for the operator's dialog (``open_mobile_progress``);
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
   stands and never starts one; it ends with what it did when its time is up, and a
-  failed one carries what it did on the refusal (``partial``);
+  failed one carries what it did on the refusal (``partial``). A warming visit opens
+  with ``open_mobile_visit``, whose serial spares its session checking the pod again;
 * a background open (warming's) shows no window, and leaves a pod the operator
   opened alone while its window is open; the operator's open answers
   ``emulator_busy`` while a session runs;
@@ -124,6 +125,7 @@ __all__ = [
     "container_name",
     "open_account_mobile",
     "open_mobile_progress",
+    "open_mobile_visit",
     "phone_activity",
     "release_manual",
     "remove_account_container",
@@ -196,6 +198,23 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     while the operator holds the pod; the operator's open is busy while an activity
     session runs.
     """
+    return (await _open_reported(account_id, background=background))[0]
+
+
+async def open_mobile_visit(account_id: str) -> str | None:
+    """Warming's open (``background``): the serial of the pod it left signed in, else ``None``.
+
+    The visit hands it straight to ``run_mobile_activity``: this open has just read the
+    account, matched the gateway's proxy, connected adb and put the app in front, so
+    the session does not do it all again (two DB passes, a ``docker ps``, a
+    ``docker exec sha256sum``, ``adb connect``, ``pm list packages``, ``monkey``).
+    """
+    result, serial = await _open_reported(account_id, background=True)
+    return serial if result.signed_in else None
+
+
+async def _open_reported(account_id: str, *, background: bool) -> tuple[OpenMobileResult, str]:
+    """``open_account_mobile``'s open, with the pod's serial; refusals logged and reported."""
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     held = _operator_holds(account_id) if background else account_id in _ACTIVE
     # An operator's hands on the phone: an open would pull the app to the front, sign
@@ -207,7 +226,7 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
         async with lock:
             account = await require_account(account_id)
             fingerprint, proxy = await _refuse_what_cannot_work(account)
-            result = await _open(account, fingerprint, proxy, background=background)
+            result, serial = await _open(account, fingerprint, proxy, background=background)
     except (EmulatorError, AccountActionError) as exc:
         report_stage(account_id, "failed", exc.code)
         await log_event(
@@ -229,7 +248,7 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     if not background:
         _OPERATOR.add(account_id)
     await log_event("INFO", "account_mobile_opened", account_id=account_id)
-    return result
+    return result, serial
 
 
 def open_mobile_progress(account_id: str) -> MobileOpenProgress:
@@ -243,7 +262,7 @@ async def _open(
     proxy: ProxySettings,
     *,
     background: bool,
-) -> OpenMobileResult:
+) -> tuple[OpenMobileResult, str]:
     spec = container_spec(
         fingerprint, account.proxy_country_code or country_for_phone(account.phone)
     )
@@ -274,7 +293,7 @@ async def _open(
                 status="already_running",
                 signed_in=signed_in,
                 sign_in_refusal=refusal,
-            )
+            ), serial
         await stop_pod(name)
     return await start_and_sign_in(
         account, spec, proxy, new=instance is None, background=background
@@ -282,7 +301,11 @@ async def _open(
 
 
 async def run_mobile_activity(
-    account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+    account_id: str,
+    duration_sec: int,
+    plan: PlaybookPlan | None = None,
+    *,
+    opened: str | None = None,
 ) -> PlaybookResult:
     """Spend up to ``duration_sec`` (capped) in the account's running Telegram app.
 
@@ -296,21 +319,18 @@ async def run_mobile_activity(
     on its next command; the refusal carries what it did (``partial``). One session per
     account, none while a start is in flight or the operator holds the pod. A session
     still going ``_SESSION_GRACE_SECONDS`` past its length ends there, with what it did.
+
+    ``opened`` is the serial ``open_mobile_visit`` just gave the same visit: the pod is
+    then used as that open left it, unchecked (a proxy change or deletion since stopped
+    it, and the session fails on its first command like one cut off later). Who holds
+    the pod is still asked: those are this process's own sets, no I/O.
     """
     if phone_activity(account_id) is not None or _operator_holds(account_id):
         raise EmulatorBusyError
     _ACTIVE.add(account_id)
     playbook: TelegramMobilePlaybook | None = None
     try:
-        account = await require_account(account_id)
-        _fingerprint, proxy = await _refuse_what_cannot_work(account)
-        name = container_name(account_id)
-        instance = await find_instance(name)
-        if instance is None or not instance.running or not await pod_runs_proxy(name, proxy):
-            raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
-        serial = adb_serial(instance.index)
-        await connect_device(serial)
-        await bring_app_to_front(serial)
+        serial = opened or await _serial_on_current_proxy(account_id)
         seconds = min(duration_sec, settings.emulator.activity_max_seconds)
         playbook = TelegramMobilePlaybook()
         result = await _run_session(playbook, serial, seconds, plan)
@@ -334,6 +354,20 @@ async def run_mobile_activity(
         extra=result.model_dump(mode="json"),
     )
     return result
+
+
+async def _serial_on_current_proxy(account_id: str) -> str:
+    """The running pod's serial, its app in front; ``emulator_not_running`` off the proxy."""
+    account = await require_account(account_id)
+    _fingerprint, proxy = await _refuse_what_cannot_work(account)
+    name = container_name(account_id)
+    instance = await find_instance(name)
+    if instance is None or not instance.running or not await pod_runs_proxy(name, proxy):
+        raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
+    serial = adb_serial(instance.index)
+    await connect_device(serial)
+    await bring_app_to_front(serial)
+    return serial
 
 
 async def _run_session(

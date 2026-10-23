@@ -20,6 +20,9 @@ from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     EmulatorRefusedError,
+    claim_manual,
+    open_mobile_visit,
+    release_manual,
     run_mobile_activity,
 )
 from tests.services.accounts._mobile_support import _account, _Container
@@ -260,3 +263,52 @@ async def test_a_failed_session_does_not_press_home(
         await run_mobile_activity("acc", 60)
 
     assert "home" not in container.steps
+
+
+@pytest.mark.asyncio
+async def test_a_warming_visit_checks_its_pod_once(
+    container: _Container,
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+
+    serial = await open_mobile_visit("acc")
+    await run_mobile_activity("acc", 60, opened=serial)
+
+    assert playbook.runs == [("127.0.0.1:5601", 60)]
+    assert container.steps == [
+        "find:telebuba-acc",
+        "proxy?:10.0.0.5",
+        "connect",
+        "front",
+        "read",
+        "home",
+    ], "the session goes on from the open's checks: no second docker ps, sha256sum or monkey"
+
+
+@pytest.mark.asyncio
+async def test_a_signed_out_visit_hands_no_serial(container: _Container) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    container.screens = ["confirm"]
+
+    assert await open_mobile_visit("acc") is None
+
+
+@pytest.mark.asyncio
+async def test_a_visit_session_still_yields_to_a_hand_on_the_phone(
+    container: _Container,
+    playbook: type[_Playbook],
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    serial = await open_mobile_visit("acc")
+    claim_manual("acc")
+    try:
+        with pytest.raises(EmulatorBusyError):
+            await run_mobile_activity("acc", 60, opened=serial)
+    finally:
+        release_manual("acc")
+
+    assert playbook.runs == []

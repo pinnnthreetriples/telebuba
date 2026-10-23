@@ -58,11 +58,19 @@ class _Pod:
             raise self.open_error
         return OpenMobileResult(account_id=account_id, status="started", signed_in=self.signed_in)
 
+    async def visit(self, account_id: str) -> str | None:
+        return "serial" if (await self.open(account_id, background=True)).signed_in else None
+
     async def run(
-        self, account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+        self,
+        account_id: str,
+        duration_sec: int,
+        plan: PlaybookPlan | None = None,
+        *,
+        opened: str | None = None,
     ) -> PlaybookResult:
         del account_id
-        self.calls.append(f"run:{duration_sec}")
+        self.calls.append(f"run:{duration_sec}:{opened}")
         self.plans.append(plan)
         if self.run_error is not None:
             raise self.run_error
@@ -91,6 +99,7 @@ async def pod(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Pod]:
     fake = _Pod()
     monkeypatch.setattr(settings.emulator, "enabled", True)
     monkeypatch.setattr(_mobile_cycle, "open_account_mobile", fake.open)
+    monkeypatch.setattr(_mobile_cycle, "open_mobile_visit", fake.visit)
     monkeypatch.setattr(_mobile_cycle, "run_mobile_activity", fake.run)
     monkeypatch.setattr(_mobile_cycle, "stop_account_pod", fake.stop)
     monkeypatch.setattr(_mobile_cycle, "_STREAKS", {})
@@ -169,7 +178,7 @@ async def test_a_mobile_stint_opens_its_pod_spends_the_visit_and_stops_it(
     await _stops_done()
 
     assert pod.calls[0] == "open:background", "a warming open shows no window"
-    assert pod.calls[1].startswith("run:")
+    assert pod.calls[1].endswith(":serial"), "the session goes on from the open's own checks"
     assert pod.calls[2:] == ["stop"]
     assert telethon == [], "no MTProto action on a mobile stint"
     record = await _record()
@@ -441,7 +450,7 @@ async def test_a_stop_mid_session_is_not_held_by_the_pod_stop(
     started = asyncio.Event()
 
     async def endless(
-        account_id: str, duration_sec: int, plan: PlaybookPlan | None = None
+        account_id: str, duration_sec: int, plan: PlaybookPlan | None = None, **_opened: str
     ) -> PlaybookResult:
         del account_id, duration_sec, plan
         started.set()
@@ -670,7 +679,7 @@ async def test_a_cycle_counts_reads_and_reactions_and_reports_the_read_step(
     await _stops_done()
 
     assert (result.channels_read, result.reactions_sent, result.attempted_actions) == (2, 1, 3)
-    assert pod.calls[1] == "run:120", "4 budgeted actions buy 120 s in the app"
+    assert pod.calls[1] == "run:120:serial", "4 budgeted actions buy 120 s in the app"
     assert steps == ["read"]
 
 
