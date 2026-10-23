@@ -86,4 +86,110 @@ async def test_a_phone_without_telegram_gets_the_hosts_apk(
 
     assert host_apk == ["apk"], "fetched (or read) before the install"
     assert [call[-1] for call in _installs(console)] == [str(apk)]
+    assert _installs(console)[0][3:] == [
+        "install",
+        "-r",
+        "-i",
+        "com.android.packageinstaller",
+        str(apk),
+    ]
+    assert _started(console) == [_WEB]
+
+
+@pytest.mark.asyncio
+async def test_ensure_app_installs_play_store_apk_with_vending_installer(
+    console: Console, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apk = tmp_path / "telegram.apk"
+    apk.write_bytes(b"apk")
+    store_identity = AppIdentity(_STORE, "11.4.2 (5555)")
+
+    async def ensure_store() -> AppIdentity:
+        return store_identity
+
+    monkeypatch.setattr(telegram_app, "local_apk_identity", lambda: store_identity)
+    monkeypatch.setattr(telegram_app, "find_store_apk", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(telegram_app, "ensure_telegram_apk", ensure_store)
+    monkeypatch.setattr(settings.emulator, "telegram_apk_path", apk)
+    _phone(console)
+
+    await telegram_app.ensure_app(_SERIAL)
+
+    assert _installs(console)[0][3:] == [
+        "install",
+        "-r",
+        "-i",
+        "com.android.vending",
+        str(apk),
+    ]
+    assert _started(console) == [_STORE]
+
+
+@pytest.mark.asyncio
+async def test_ensure_app_installs_explicit_apk_path_with_packageinstaller(
+    console: Console, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apk = tmp_path / "web.apk"
+    apk.write_bytes(b"web-apk")
+    web_identity = AppIdentity(_WEB, "13.0.3 (71839)")
+
+    monkeypatch.setattr(telegram_app, "app_identity", lambda _p: web_identity)
+    _phone(console)
+
+    await telegram_app.ensure_app(_SERIAL, apk_path=apk)
+
+    assert _installs(console)[0][3:] == [
+        "install",
+        "-r",
+        "-i",
+        "com.android.packageinstaller",
+        str(apk),
+    ]
+    assert _started(console) == [_WEB]
+
+
+@pytest.mark.asyncio
+async def test_ensure_app_installs_explicit_apk_path_with_vending(
+    console: Console, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apk = tmp_path / "store.apk"
+    apk.write_bytes(b"store-apk")
+    store_identity = AppIdentity(_STORE, "11.4.2 (5555)")
+
+    monkeypatch.setattr(telegram_app, "app_identity", lambda _p: store_identity)
+    _phone(console)
+
+    await telegram_app.ensure_app(_SERIAL, apk_path=apk)
+
+    assert _installs(console)[0][3:] == [
+        "install",
+        "-r",
+        "-i",
+        "com.android.vending",
+        str(apk),
+    ]
+    assert _started(console) == [_STORE]
+
+
+@pytest.mark.asyncio
+async def test_ensure_app_installs_catalog_found_web_apk_with_packageinstaller(
+    console: Console, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    apk = tmp_path / "store_catalog.apk"
+    apk.write_bytes(b"catalog-apk")
+    web_identity = AppIdentity(_WEB, "13.0.3 (71839)")
+
+    monkeypatch.setattr(telegram_app, "find_store_apk", lambda *_args, **_kwargs: apk)
+    monkeypatch.setattr(telegram_app, "app_identity", lambda _p: web_identity)
+    _phone(console)
+
+    await telegram_app.ensure_app(_SERIAL)
+
+    assert _installs(console)[0][3:] == [
+        "install",
+        "-r",
+        "-i",
+        "com.android.packageinstaller",
+        str(apk),
+    ]
     assert _started(console) == [_WEB]

@@ -134,6 +134,8 @@ async def install_apk(
     """Install the configured (or given) APK; ``emulator_apk_missing`` when there is no file.
 
     By default simulates installation from Google Play Store using -i com.android.vending.
+    Pass ``installer_package='com.android.packageinstaller'`` for direct web builds, or
+    ``installer_package=None`` to omit installer attribution.
     """
     apk = apk_path or path or settings.emulator.telegram_apk_path
     if not apk.is_file():
