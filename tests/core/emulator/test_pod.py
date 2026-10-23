@@ -148,9 +148,9 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
 
     console.answer = answer
 
-    instance = await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+    started = await pod.start_pod("telebuba-new", _SPEC, _PROXY)
 
-    assert instance == (1, "telebuba-new", True, False), "the lowest index free in both lists"
+    assert started == ((1, "telebuba-new", True, False), True), "the lowest index free in both"
     assert _verbs(console) == [
         "create telebuba-new-net",
         "cp " + str(copied[0][0]),
@@ -242,7 +242,7 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
 
     instance = await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
 
-    assert instance == (0, "telebuba-acc-0", True, False)
+    assert instance == ((0, "telebuba-acc-0", True, False), False)
     verbs = _verbs(console)
     assert verbs[:2] == ["stop telebuba-acc-0", "stop telebuba-acc-0-net"]
     assert verbs[2].startswith("cp ")
@@ -289,7 +289,7 @@ async def test_an_android_whose_gateway_is_gone_is_made_again_in_a_new_one(
     assert verbs[:2] == ["rm --force", "create telebuba-acc-2-net"]
     assert _call(console, "rm", "telebuba-acc-2")[2:] == ["--force", "telebuba-acc-2"]
     assert "create telebuba-acc-2" in verbs
-    assert instance.index == 1
+    assert instance.instance.index == 1
 
 
 @pytest.mark.parametrize(
@@ -509,7 +509,7 @@ async def test_two_pods_started_at_once_take_different_indexes(
         pod.start_pod("telebuba-b", _SPEC, _PROXY),
     )
 
-    assert {first.index, second.index} == {0, 1}
+    assert {first.instance.index, second.instance.index} == {0, 1}
 
 
 @pytest.mark.asyncio

@@ -5,8 +5,9 @@
   found on the host reads its app off the phone and needs no APK);
 * a container's first boot gives it contacts and photos (``core.emulator._seeder``)
   alongside the app's start; a seeding that fails is logged, never fails the open;
-* on any failure the pod is stopped again, and removed only when it is new and failed
-  by its boot: a booted one keeps its seeded ``/data`` for the next start;
+* on any failure the pod is stopped again, and removed only when it is new, its
+  ``/data`` too, and failed by its boot: a booted one keeps its seeded ``/data`` for the
+  next start, and a shared ``/data`` an earlier pod left (a sign-in) is never removed;
 * the operator's sign-in that stops short (no login code to read, a cooldown, a screen
   it did not expect) is not a failure of the open: it is logged, and the pod is left
   up on its screen with the refusal, for the operator to finish the sign-in by hand.
@@ -96,7 +97,7 @@ async def _start(
     background: bool,
 ) -> tuple[OpenMobileResult, str]:
     name = container_name(account.account_id)
-    instance = await start_pod(name, spec, proxy)  # undoes itself when it fails
+    instance, fresh_data = await start_pod(name, spec, proxy)  # undoes itself when it fails
     booted = False
     try:
         serial = adb_serial(instance.index)
@@ -123,7 +124,8 @@ async def _start(
         finally:
             await _drop(seeding)
     except BaseException:
-        await asyncio.shield(_undo(name, remove=apk is not None and not booted))
+        remove = apk is not None and fresh_data and not booted
+        await asyncio.shield(_undo(name, remove=remove))
         raise
     return OpenMobileResult(
         account_id=account.account_id,
@@ -136,8 +138,8 @@ async def _start(
 async def set_battery(serial: str, account_id: str, timezone: str) -> None:
     """Show the battery the phone has at this hour of its ``timezone`` (``_battery``).
 
-    Applied at every boot and every visit to a running pod, so the level drops through
-    the phone's day. A phone that refuses it is left as it is: never a reason to fail
+    Applied at every boot and every visit to a running pod, so the level moves through
+    the phone's day and night. A phone that refuses it is left as it is: never a reason to fail
     the open.
     """
     now = datetime.now(ZoneInfo(timezone))
@@ -206,7 +208,7 @@ async def _seed(account_id: str, serial: str, spec: ContainerSpec) -> None:
 
 
 async def _undo(name: str, *, remove: bool) -> None:
-    """Stop the pod this start began; ``remove`` it (a new one that failed by its boot).
+    """Stop the pod this start began; ``remove`` it (new data that failed by its boot).
 
     A new container that booted is kept stopped: its seeded ``/data`` (and any app
     already in) spare the next start a first boot and a seeding.

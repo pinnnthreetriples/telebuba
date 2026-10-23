@@ -20,7 +20,9 @@ from services.accounts import _mobile_start, mobile_pods
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
+    claim_manual,
     open_account_mobile,
+    release_manual,
     stop_account_pod,
 )
 from services.accounts.mobile_pods import shutdown_mobile_pods, stop_orphaned_pods
@@ -46,6 +48,7 @@ def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
     monkeypatch.setattr(_mobile_start, "wait_screen", container.wait_screen)
     emulator_module._OPERATOR.clear()
     emulator_module._ACTIVE.clear()
+    emulator_module._MANUAL.clear()
     return open_windows
 
 
@@ -110,7 +113,9 @@ async def test_a_background_open_leaves_any_other_screen_as_it_is(
 async def test_a_pod_the_operator_holds_is_busy_for_warming_until_its_window_closes(
     container: _Container,
     windows: set[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(settings.emulator, "desktop_viewer", True)
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
     await open_account_mobile("acc")
@@ -121,6 +126,26 @@ async def test_a_pod_the_operator_holds_is_busy_for_warming_until_its_window_clo
         await open_account_mobile("acc", background=True)
 
     windows.clear()  # the operator closed the window
+    result = await open_account_mobile("acc", background=True)
+
+    assert result.status == "already_running"
+    assert "acc" not in emulator_module._OPERATOR
+
+
+@pytest.mark.asyncio
+async def test_with_no_desktop_window_the_operator_holds_the_pod_until_their_control_ends(
+    container: _Container,
+    windows: set[str],  # noqa: ARG001 - none ever opens: the desktop viewer is off
+) -> None:
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    await open_account_mobile("acc")
+
+    with pytest.raises(EmulatorBusyError):
+        await open_account_mobile("acc", background=True)
+
+    claim_manual("acc")  # the operator's hands on the web screen...
+    release_manual("acc")  # ...and off again: done with the phone
     result = await open_account_mobile("acc", background=True)
 
     assert result.status == "already_running"

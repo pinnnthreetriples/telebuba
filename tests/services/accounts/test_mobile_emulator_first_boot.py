@@ -56,6 +56,21 @@ async def test_an_apk_that_cannot_be_had_fails_a_new_pod_during_its_boot(
 
 
 @pytest.mark.asyncio
+async def test_a_new_pod_on_data_kept_from_before_is_stopped_when_its_boot_fails(
+    container: _Container,
+) -> None:
+    await _account()
+    container.apk_fails = True
+    container.data_kept = True  # its Android went, its shared /data (and sign-in) stayed
+
+    with pytest.raises(EmulatorRefusedError):
+        await open_account_mobile("acc")
+
+    assert container.steps[-1] == "stop:telebuba-acc", "the account's sign-in stays on disk"
+    assert not any(step.startswith("remove:") for step in container.steps)
+
+
+@pytest.mark.asyncio
 async def test_a_new_pod_that_fails_after_its_boot_is_stopped_not_removed(
     container: _Container,
 ) -> None:

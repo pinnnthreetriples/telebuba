@@ -364,3 +364,28 @@ async def test_an_android_made_again_with_shared_data_off_keeps_its_diff_labelle
     android = _call(console, "create", "telebuba-acc-0")
     assert "--volume" not in android
     assert f"telebuba.data_diff={old}" in android, "deleting the account still finds it"
+
+
+@pytest.mark.asyncio
+async def test_a_started_pod_says_whether_its_data_is_new(
+    console: Console, layers: tuple[Path, Path]
+) -> None:
+    _base, diff = layers
+    (diff / "telebuba-kept").mkdir(parents=True)
+    console.answer = _docker()
+
+    made = await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+    kept = await pod.start_pod("telebuba-kept", _SPEC, _PROXY)
+
+    assert made.fresh_data is True
+    assert kept.fresh_data is False, "an earlier pod's sign-in lives there"
+
+
+@pytest.mark.asyncio
+async def test_without_shared_data_only_a_made_android_has_new_data(console: Console) -> None:
+    console.answer = _docker()
+
+    made = await pod.start_pod("telebuba-new", _SPEC, _PROXY)
+    found = await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
+
+    assert (made.fresh_data, found.fresh_data) == (True, False)

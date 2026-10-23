@@ -29,7 +29,9 @@ phone is shown in a scrcpy window opened by the phone button.
   gateway that exited meanwhile fails the start at once), then create/start Android.
   A failed start removes what it created and stops what it found; an open that fails once a new
   container booted (its SDK checked) only stops it, so its seeded `/data` spares the next try a
-  first boot and a seeding. **Stop** is Android, then the
+  first boot and a seeding. A new Android on a shared-/data diff an earlier one left (its
+  sign-in) is only stopped too, whenever it fails: that diff is never removed by a failed open.
+  **Stop** is Android, then the
   gateway; **remove** deletes both (a host without docker has nothing to remove).
 - **Identity**: a block appended to the image's `/product/etc/build.prop` (read last by init, so it
   wins over `/vendor`'s own) before every cold boot (not on the
@@ -121,11 +123,13 @@ The container is a real phone (`core/emulator/_profile.py`):
   mobile fingerprint's `system_lang_code`, which the app sends Telegram as that same field.
 - A stopped container gets its `build.prop` rewritten before it boots, so a proxy that moved
   country moves the timezone and carrier; a running one is left alone.
-- **Battery** (`core/emulator/_battery.py`): discharging, on no charger, at the level the
-  account's day has reached on the phone's own clock (its timezone, above): unplugged at
-  88–100% between 06:00 and 09:00, 3–5% less each hour after, never below 15%, full again
-  the next morning (all drawn per account and date). Set after every boot and at every open of a running pod, so it drops through the
-  day across stops and pauses. A phone that refuses it keeps its old level.
+- **Battery** (`core/emulator/_battery.py`): the level the account's day has reached on the
+  phone's own clock (its timezone, above): unplugged at 88–100% between 06:00 and 09:00, then
+  discharging, 3–5% less each hour, never below 15%; plugged in (AC, charging) between 21:30
+  and 23:30 and charged 15–25% an hour up to the next morning's level, which it always reaches
+  before it is unplugged (all drawn per account and date). So it never jumps, at midnight or
+  anywhere else. Set after every boot and at every open of a running pod, so it moves through
+  the day across stops and pauses. A phone that refuses it keeps its old level.
 - **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
   `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps; `mt6877` has no public
   cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its
@@ -374,7 +378,11 @@ screen; the warming card shows an eye while a mobile visit runs. The screen is a
   and removes the forward. Nothing encodes while nobody watches, and a sleeping phone costs nothing.
 - **One viewer per phone**: a new one supersedes the old (`screen_superseded`), so two encoders never
   run on one phone. `view` starts the server without a control socket; `control` holds the phone
-  (`manual`) and excludes a warming visit, and the other way round.
+  (`manual`) and excludes a warming visit, and the other way round. A phone the operator opened
+  (Start, or the account's phone button) is theirs as well: warming skips it until they put it to
+  sleep or end a `control` session on it (with `EMULATOR__DESKTOP_VIEWER`, until its window closes).
+  A visit that ends while the operator opens or holds its phone leaves it to them, neither paused
+  nor stopped.
 - **The video** is passed through as the server writes it (codec header, then a 12-byte header per
   frame: `raw_stream` stays off, the decoder needs the keyframe flags); the browser decodes h264 in
   hardware (`@yume-chan/scrcpy` + `scrcpy-decoder-webcodecs`, loaded only when a screen opens).
