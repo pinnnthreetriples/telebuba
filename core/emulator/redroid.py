@@ -214,6 +214,9 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         "--label",
         f"{INDEX_LABEL}={index}",
         "--privileged",
+        # Its own cgroup tree, not the host's: Docker's default on cgroup v2, not on v1.
+        "--cgroupns",
+        "private",
         "--network",
         f"container:{gateway}",
         *cpus,
