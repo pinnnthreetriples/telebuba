@@ -109,6 +109,8 @@ async def create_gateway(gateway: str, index: int) -> None:
         settings.emulator.gateway_network,
         "--tmpfs",
         "/run",
+        "--cgroupns",
+        "private",
         "--label",
         f"{GATEWAY_LABEL}=1",
         "--label",

@@ -35,7 +35,7 @@ _EMULATOR_DEVICE_UNKNOWN: EmulatorRefusalCode = "emulator_device_unknown"
 _SERIAL_ALPHABETS = {"alnum": string.digits + string.ascii_uppercase, "hex": "0123456789abcdef"}
 # "35" is a GSMA reporting-body prefix; the rest of the body is derived.
 # Every partition a ``ro.product.<partition>.*`` / ``ro.<partition>.build.*`` exists for.
-_PARTITIONS = ("", "system.", "system_ext.", "product.", "vendor.", "odm.")
+_PARTITIONS = ("", "system.", "system_ext.", "product.", "vendor.", "odm.", "vendor_dlkm.")
 
 
 class ContainerSpec(NamedTuple):
@@ -46,6 +46,8 @@ class ContainerSpec(NamedTuple):
     product: str
     device: str
     serial: str
+    # ``ro.product.board``: the phone's board, which ``Build.BOARD`` reads.
+    board: str
     screen: Screen
     camera: Camera
     build: OemBuild
@@ -96,6 +98,7 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
         serial=derive_serial(
             blueprint.serial_prefix, blueprint.serial_length, blueprint.serial_charset, seed
         ),
+        board=blueprint.board,
         screen=blueprint.screen,
         camera=blueprint.camera,
         build=build,
@@ -114,6 +117,9 @@ def build_fingerprint(spec: ContainerSpec) -> str:
 
 def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
     """The system properties that make Android report ``spec``'s phone, firmware and region.
+
+    ``Build.BOARD`` (``ro.product.board``) is the phone's board: unlike
+    ``ro.board.platform``, no HAL is looked up by it.
 
     Left out on purpose: ``ro.build.version.sdk`` (the image's own, which the SDK check
     reads), ``ro.hardware`` / ``ro.board.platform`` (they pick the HALs the image boots
@@ -137,6 +143,8 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
         props[f"ro.{partition}build.version.release"] = build.release
         props[f"ro.{partition}build.tags"] = "release-keys"
         props[f"ro.{partition}build.type"] = "user"
+        props[f"ro.{partition}build.date"] = build.build_date
+        props[f"ro.{partition}build.date.utc"] = str(build.build_date_utc)
     props |= {
         "ro.bootimage.build.fingerprint": fingerprint,
         "ro.build.display.id": build.display_id or build.build_id,
@@ -147,6 +155,9 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
         or f"{spec.product}-user {build.release} {build.build_id} {build.incremental} release-keys",
         "ro.build.flavor": f"{spec.product}-user",
         "ro.build.product": spec.device,
+        "ro.build.user": build.build_user,
+        "ro.build.host": build.build_host,
+        "ro.product.board": spec.board,
         "ro.sf.lcd_density": str(spec.screen.dpi),
         "persist.sys.timezone": spec.region.timezone,
         "persist.sys.locale": spec.region.locale,
@@ -214,6 +225,8 @@ def build_battery_stealth_commands(
         "dumpsys battery set wireless 0",
         f"dumpsys battery set level {resolved_level}",
         f"dumpsys battery set temp {resolved_temp}",
+        # Last: a present battery still at level 0 shuts Android down.
+        "dumpsys battery set present 1",
     ]
 
 

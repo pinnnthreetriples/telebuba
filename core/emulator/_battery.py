@@ -126,7 +126,12 @@ def generate_initial_battery_state(
 
 
 def build_battery_telemetry_commands(state: BatteryTelemetryState) -> list[str]:
-    """Build dumpsys battery commands to apply the state."""
+    """Build dumpsys battery commands to apply the state.
+
+    redroid has no battery and reports none until told ``present``, which comes last:
+    a present battery still at level 0 shuts Android down at once. Its voltage and
+    technology cannot be set (``dumpsys battery set`` refuses both).
+    """
     return [
         f"dumpsys battery set ac {int(state.plugged)}",
         "dumpsys battery set usb 0",
@@ -135,4 +140,5 @@ def build_battery_telemetry_commands(state: BatteryTelemetryState) -> list[str]:
         f"dumpsys battery set level {state.level}",
         f"dumpsys battery set temp {state.temp_tenths_c}",
         f"dumpsys battery set counter {state.charge_counter_uah}",
+        "dumpsys battery set present 1",
     ]

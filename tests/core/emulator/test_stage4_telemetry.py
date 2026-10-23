@@ -67,6 +67,7 @@ def test_battery_telemetry_state_and_commands() -> None:
 
     cmds = build_battery_telemetry_commands(state)
     cmd_text = "\n".join(cmds)
+    assert "dumpsys battery set present 1" in cmd_text, "redroid reports no battery otherwise"
     assert "dumpsys battery set ac 0" in cmd_text
     assert "dumpsys battery set usb 0" in cmd_text
     assert "dumpsys battery set wireless 0" in cmd_text
@@ -74,6 +75,9 @@ def test_battery_telemetry_state_and_commands() -> None:
     assert f"dumpsys battery set level {state.level}" in cmd_text
     assert f"dumpsys battery set temp {state.temp_tenths_c}" in cmd_text
     assert f"dumpsys battery set counter {state.charge_counter_uah}" in cmd_text
+    assert cmds[-1] == "dumpsys battery set present 1", (
+        "a present battery at level 0 shuts Android down: present only once the level is set"
+    )
 
 
 def test_battery_telemetry_deterministic_for_account_and_time() -> None:

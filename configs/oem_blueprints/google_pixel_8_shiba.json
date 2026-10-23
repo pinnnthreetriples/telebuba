@@ -18,12 +18,17 @@
     "file_style": "pixel"
   },
   "soc": "zuma",
+  "board": "shiba",
   "builds": {
     "34": {
       "release": "14",
       "build_id": "AP2A.240605.024",
       "incremental": "11860263",
       "security_patch": "2024-06-05",
+      "build_user": "android-build",
+      "build_host": "r-82b05a39f2cf359a-z8kw",
+      "build_date": "Sat May 18 07:10:12 UTC 2024",
+      "build_date_utc": 1716016212,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/google/shiba/shiba-user-14-AP2A.240605.024-11860263-release-keys"
     }
   }
