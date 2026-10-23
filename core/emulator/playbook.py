@@ -316,9 +316,12 @@ class TelegramMobilePlaybook(ScenarioSteps):
         for _ in range(self.engine.rng.randint(1, max(1, max_stories))):
             if not self._time_left():
                 return
+            # Counted as it shows: a session cut off while it is watched has still seen it.
+            self.result.stories_watched += 1
             await asyncio.sleep(self.engine.sample_story_view_sec())
             screen, nodes = await read_screen(serial)
             if screen == "chats":  # the viewer never opened, or the stories ran out
+                self.result.stories_watched -= 1
                 return
             width, height = screen_size(nodes)
             # The viewer's right third moves to the next story.
@@ -326,7 +329,6 @@ class TelegramMobilePlaybook(ScenarioSteps):
             await adb.human_tap(
                 serial, UiNode("", "", "", password=False, bounds=next_zone), engine=self.engine
             )
-            self.result.stories_watched += 1
 
     async def react_to_post(self, serial: str, node: UiNode) -> None:
         """Double-tap the post: Telegram's quick reaction."""

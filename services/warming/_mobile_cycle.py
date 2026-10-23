@@ -140,12 +140,17 @@ async def run_mobile_cycle(
     except asyncio.CancelledError:
         if tally is not None:
             tally.attempts += spent_actions(progress)
+        _lift_note(account_id, progress)
         raise
     except EmulatorBusyError:
         owned = False
         return await _log_skip(account_id, "emulator_busy")
     except AccountActionError as exc:
-        return await _log_failure(account_id, exc.code, getattr(exc, "partial", None))
+        partial = getattr(exc, "partial", None)
+        if tally is not None and partial is not None:
+            tally.attempts = spent_actions(partial)  # before the awaits that log it
+        _lift_note(account_id, partial)
+        return await _log_failure(account_id, exc.code, partial)
     finally:
         if owned:
             _detach(_park(account_id) if went_well else _stop_and_free(account_id))
@@ -196,6 +201,12 @@ def _limited(account_id: str, activity: PlaybookResult) -> WarmingCycleResult:
         attempted_actions=spent_actions(activity),
         last_failed_action=MOBILE_SESSION_ACTION,
     )
+
+
+def _lift_note(account_id: str, activity: PlaybookResult | None) -> None:
+    """A read lifts the no-channel note, also on a visit that failed or was stopped."""
+    if activity is not None and activity.channels_read:
+        _mobile_prep_state.NO_CHANNELS.discard(account_id)
 
 
 def _note_channels(account_id: str, activity: PlaybookResult) -> None:

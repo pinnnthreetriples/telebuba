@@ -14,6 +14,7 @@ from core.config import settings
 from core.db import upsert_warming_state
 from schemas.emulator import PlaybookPlan, PlaybookResult
 from schemas.warming import PhonePrep, WarmingStateWrite
+from services.accounts.mobile_emulator import EmulatorRefusedError
 from services.warming import _mobile_cycle, _mobile_prep_state, _transitions
 from services.warming.board import load_board
 from tests.services.warming._mobile_support import _iterate_on, _Pod, _record, _stops_done
@@ -107,6 +108,32 @@ async def test_a_stop_while_a_finished_session_settles_keeps_it_spent(
     await _stops_done()
 
     assert (await _record()).daily_actions == 3, "the session was over: its actions stay spent"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
+async def test_a_stop_while_a_failed_session_is_logged_keeps_its_reads_spent(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pod.run_error = EmulatorRefusedError(
+        "emulator_field_missing", partial=PlaybookResult(channels_read=2)
+    )
+    _mobile_prep_state.NO_CHANNELS.add("acc-1")
+    logging = asyncio.Event()
+
+    async def held(*_args: object, **_kwargs: object) -> None:
+        logging.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(_mobile_cycle, "log_event", held)
+    task = asyncio.create_task(_iterate_on("mobile"))
+    await logging.wait()
+    task.cancel()
+    await asyncio.wait({task}, timeout=1)
+    await _stops_done()
+
+    assert (await _record()).daily_actions == 2, "the reads before the failure stay spent"
+    assert "acc-1" not in _mobile_prep_state.NO_CHANNELS, "it read a channel: no note"
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ tap inside a node, BACK, a deep link, typed text); time is the fake clock of
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -297,6 +298,24 @@ async def test_no_note_is_played_once_the_budget_is_spent(
 
     assert session.result.notes_played == 0
     assert console.shell_calls() == []
+
+
+@pytest.mark.asyncio
+async def test_a_note_cut_off_while_it_plays_still_counts(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _app(monkeypatch, console, {"feed": [PLAY, DURATION]}, "feed")
+    session = _playbook()
+    session._deadline = 600
+
+    async def _cut_off(_seconds: float) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(_scenarios.asyncio, "sleep", _cut_off)
+    with pytest.raises(asyncio.CancelledError):
+        await session.consume_feed_media(SERIAL)
+
+    assert session.result.notes_played == 1, "the note was tapped: it is spent"
 
 
 @pytest.mark.asyncio

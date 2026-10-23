@@ -243,9 +243,9 @@ class ScenarioSteps:
         else:
             button, seconds = rng.choice(notes)
             await self._tap(serial, button)
+            self.result.notes_played += 1  # playing: spent even if the session is cut off
             listen = min(seconds * rng.uniform(*_NOTE_SHARE), _NOTE_MAX_SECONDS)
             await asyncio.sleep(max(0.0, min(listen, self._seconds_left())))
-            self.result.notes_played += 1
         self.result.media_consumed += 1
 
     async def _view_photo(self, serial: str, photo: UiNode, size: tuple[int, int]) -> None:
