@@ -18,12 +18,17 @@
     "file_style": "samsung"
   },
   "soc": "sm8550_ac",
+  "board": "kalama",
   "builds": {
     "33": {
       "release": "13",
       "build_id": "TP1A.220624.014",
       "incremental": "S911BXXS1AWD1",
       "security_patch": "2023-05-01",
+      "build_user": "dpi",
+      "build_host": "SWDK6221",
+      "build_date": "Thu Apr 13 15:18:41 KST 2023",
+      "build_date_utc": 1681366721,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm1q/dm1qxxx-user-13-TP1A.220624.014-S911BXXS1AWD1-release-keys"
     },
     "34": {
@@ -31,6 +36,10 @@
       "build_id": "UP1A.231005.007",
       "incremental": "S911BXXU3CXD3",
       "security_patch": "2024-04-01",
+      "build_user": "dpi",
+      "build_host": "21DKGA09",
+      "build_date": "Mon Apr  8 09:40:30 KST 2024",
+      "build_date_utc": 1712536830,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/samsung/dm1q/dm1qxxx-user-14-UP1A.231005.007-S911BXXU3CXD3-release-keys"
     }
   }
