@@ -3712,6 +3712,14 @@
       "today": "Сегодня {{done}} из {{cap}} действий",
       "todayNoCap": "Сегодня {{done}} действий",
       "next": "следующий заход через {{time}}",
+      "mechanics": "Механики: {{list}}",
+      "mechanic": {
+        "join": "вступления",
+        "read": "чтение",
+        "reactions": "реакции",
+        "stories": "сторис",
+        "dialogue": "диалоги"
+      },
       "dmOn": "ЛС: вкл.",
       "dmOff": "ЛС: выкл., {{reason}}",
       "dmReason": {

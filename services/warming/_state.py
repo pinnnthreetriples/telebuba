@@ -15,7 +15,8 @@ from schemas.warming import (
     WarmingStateWriteResult,
     warming_health,
 )
-from services.warming.board import _to_card
+from services.warming.board import _card_mechanics, _derive_mechanics, _to_card
+from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
     from schemas._warming_visits import CycleMarks
@@ -155,8 +156,9 @@ def _carry(record: WarmingStateRecord | None, field: str) -> str | None:
 async def _current_card(account_id: str) -> WarmingAccountState:
     account = await fetch_account(account_id)
     record = await fetch_warming_state(account_id)
+    mechanics = _derive_mechanics(await load_settings())
     if account is not None:
-        return _to_card(account, record)
+        return _to_card(account, record, mechanics=mechanics)
     state: WarmingState = record.state if record else "idle"
     # No account row (deleted mid-flight): synthesise the card from the warming
     # record alone, mirroring ``_to_card``'s model-dump spread so every column
@@ -186,5 +188,6 @@ async def _current_card(account_id: str) -> WarmingAccountState:
         label=account_id,
         state=state,
         health=warming_health(state),
+        mechanics=_card_mechanics(mechanics, record.device_mode if record else "desktop"),
         **record_fields,
     )
