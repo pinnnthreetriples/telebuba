@@ -171,7 +171,12 @@ class TelegramMobilePlaybook(ScenarioSteps):
         self._stories_left = self.plan.stories
         self._start_scenarios(self.plan)
         await self.return_to_chats(serial)
-        if self.plan.stories_first and not self._halted and await self._open_stories(serial):
+        if (
+            self.plan.stories_first
+            and not self._halted
+            and not self._actions_spent()
+            and await self._open_stories(serial)
+        ):
             await self.return_to_chats(serial)
         while self._time_left() and not self._actions_spent() and not self._halted:
             if not await self._take_turn(serial):
@@ -244,7 +249,7 @@ class TelegramMobilePlaybook(ScenarioSteps):
         return True
 
     async def _open_stories(self, serial: str) -> bool:
-        if not self._stories_left:
+        if not self._stories_left or self._actions_spent():
             return False
         self._stories_left = False
         before = self.result.stories_watched

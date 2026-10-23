@@ -89,6 +89,28 @@ async def test_a_stop_mid_session_keeps_what_the_phone_already_did_spent(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("telethon")
+async def test_a_stop_while_a_finished_session_settles_keeps_it_spent(
+    pod: _Pod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pod.activity = PlaybookResult(channels_read=2, reactions=1)
+    settling = asyncio.Event()
+
+    async def held(*_args: object, **_kwargs: object) -> None:
+        settling.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(_mobile_cycle, "log_event", held)
+    task = asyncio.create_task(_iterate_on("mobile"))
+    await settling.wait()
+    task.cancel()
+    await asyncio.wait({task}, timeout=1)
+    await _stops_done()
+
+    assert (await _record()).daily_actions == 3, "the session was over: its actions stay spent"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("telethon")
 async def test_stories_and_notes_spend_the_budget_like_on_desktop(pod: _Pod) -> None:
     """One story glance is one action however many stories it shows; a played note is one."""
     pod.activity = PlaybookResult(

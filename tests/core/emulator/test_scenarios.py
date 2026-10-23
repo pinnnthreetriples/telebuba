@@ -284,6 +284,23 @@ async def test_a_voice_note_is_played_for_most_of_its_length(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("clock")
+async def test_no_note_is_played_once_the_budget_is_spent(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _app(monkeypatch, console, {"feed": [PLAY, DURATION]}, "feed")
+    session = _playbook()
+    session._deadline = 600
+    session.plan = PlaybookPlan(max_actions=1)
+    session.result.channels_read = 1  # the read that opened this feed spent it
+
+    await session.consume_feed_media(SERIAL)
+
+    assert session.result.notes_played == 0
+    assert console.shell_calls() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
 async def test_a_note_longer_than_the_session_is_cut_at_its_end(
     console: Console,
     monkeypatch: pytest.MonkeyPatch,

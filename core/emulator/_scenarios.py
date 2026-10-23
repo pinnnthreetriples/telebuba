@@ -101,6 +101,7 @@ class ScenarioSteps:
 
         def _seconds_left(self) -> float: ...
         def _time_left(self) -> bool: ...
+        def _actions_spent(self) -> bool: ...
         async def _screen(self, serial: str) -> tuple[Screen, list[UiNode]]: ...
         async def _chat_list(self, serial: str) -> list[UiNode]: ...
         async def return_to_chats(self, serial: str) -> None: ...
@@ -226,9 +227,13 @@ class ScenarioSteps:
             await self._tap(serial, mute)
 
     async def consume_feed_media(self, serial: str) -> None:
-        """Look at a photo of the open feed full screen, or play a note the plan allows."""
+        """Look at a photo of the open feed full screen, or play a note the plan allows.
+
+        A note spends an action, so none plays once the budget is spent; a photo books none.
+        """
         _screen, nodes = await self._screen(serial)
-        pictures, notes = photos(nodes), playable(nodes) if self.plan.notes else []
+        pictures = photos(nodes)
+        notes = playable(nodes) if self.plan.notes and not self._actions_spent() else []
         if not pictures and not notes:
             self._skip("no_media")
             return

@@ -134,6 +134,9 @@ async def run_mobile_cycle(
             account_id, seconds, plan, opened=serial, progress=progress
         )
         went_well = True
+        if tally is not None:
+            # Done in the app before the awaits that settle it: a Stop there keeps it spent.
+            tally.attempts = spent_actions(activity)
     except asyncio.CancelledError:
         if tally is not None:
             tally.attempts += spent_actions(progress)

@@ -176,6 +176,20 @@ async def test_the_story_glance_spends_one_action_of_the_budget(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("clock")
+async def test_a_spent_budget_opens_no_stories_first(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
+
+    result = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(stories_first=True, max_actions=0, reaction_probability=0.0)
+    )
+
+    assert spent_actions(result) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
 async def test_a_session_counts_into_the_progress_it_is_given(
     console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
