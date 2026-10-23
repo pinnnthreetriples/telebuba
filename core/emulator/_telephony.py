@@ -227,4 +227,5 @@ def build_call_and_sms_seed_commands(
         "--bind type:i:1 2>/dev/null || true"
         for s in sms_list
     )
+    cmds.append("appops reset com.android.shell 2>/dev/null || true")
     return cmds

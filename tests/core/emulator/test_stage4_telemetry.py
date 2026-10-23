@@ -324,6 +324,24 @@ def test_build_call_and_sms_seed_commands() -> None:
     assert "--bind body:s:'Hello there'" in cmds[10]
     assert cmds[10].endswith("2>/dev/null || true")
 
+    assert cmds[11] == "appops reset com.android.shell 2>/dev/null || true"
+    assert cmds[-1] == "appops reset com.android.shell 2>/dev/null || true"
+    assert [c for c in cmds if "appops reset" in c] == [
+        "appops reset com.android.shell 2>/dev/null || true"
+    ]
+
+    empty_cmds = build_call_and_sms_seed_commands([], [])
+    assert empty_cmds[-1] == "appops reset com.android.shell 2>/dev/null || true"
+
+    calls_only = build_call_and_sms_seed_commands(calls, [])
+    assert calls_only[-1] == "appops reset com.android.shell 2>/dev/null || true"
+
+    sms_only = build_call_and_sms_seed_commands([], sms)
+    assert sms_only[-1] == "appops reset com.android.shell 2>/dev/null || true"
+
+    multi_cmds = build_call_and_sms_seed_commands([*calls, *calls], [*sms, *sms])
+    assert multi_cmds[-1] == "appops reset com.android.shell 2>/dev/null || true"
+
 
 def test_step_battery_state_positional_seed() -> None:
     """Test step_battery_state with positional seed argument."""

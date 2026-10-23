@@ -35,6 +35,9 @@ if TYPE_CHECKING:
 
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
+_WEB_PACKAGE = "org.telegram.messenger.web"
+_PACKAGE_INSTALLER = "com.android.packageinstaller"
+_PLAY_STORE_INSTALLER = "com.android.vending"
 
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
@@ -89,12 +92,9 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
             settings.emulator.telegram_package,
             version=settings.emulator.telegram_app_version or None,
         )
-        if (
-            target_apk is None
-            and settings.emulator.telegram_package != "org.telegram.messenger.web"
-        ):
+        if target_apk is None and settings.emulator.telegram_package != _WEB_PACKAGE:
             target_apk = find_store_apk(
-                "org.telegram.messenger.web",
+                _WEB_PACKAGE,
                 version=settings.emulator.telegram_app_version or None,
             )
         if target_apk is None:
@@ -102,7 +102,8 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
             target_apk = settings.emulator.telegram_apk_path
         else:
             package = app_identity(target_apk).package
-        await adb.install_apk(serial, target_apk)
+        installer = _PACKAGE_INSTALLER if package == _WEB_PACKAGE else _PLAY_STORE_INSTALLER
+        await adb.install_apk(serial, target_apk, installer_package=installer)
     await adb.start_app(serial, package)
 
 
