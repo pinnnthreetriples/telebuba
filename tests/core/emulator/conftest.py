@@ -9,7 +9,7 @@ import pytest
 
 from core.config import settings
 from core.db import configure_database
-from core.emulator import pod
+from core.emulator import _topology, pod, telegram_app
 from core.logging import reset_logging_for_tests, setup_logging
 
 if TYPE_CHECKING:
@@ -33,6 +33,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Module-level and bound to the first loop that waits on it: a fresh one per test.
     monkeypatch.setattr(pod, "_CREATE_LOCK", asyncio.Lock())
     monkeypatch.setattr(pod, "_POD_LOCKS", {})
+    # Process-wide caches: each test meets its own host and phones.
+    monkeypatch.setattr(_topology, "_host_cores", None)
+    monkeypatch.setattr(telegram_app, "_PACKAGES", {})
     reset_logging_for_tests()
     setup_logging()
     yield

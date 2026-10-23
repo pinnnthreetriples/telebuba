@@ -38,6 +38,11 @@ _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
 _WEB_PACKAGE = "org.telegram.messenger.web"
 _PACKAGE_INSTALLER = "com.android.packageinstaller"
 _PLAY_STORE_INSTALLER = "com.android.vending"
+# The Telegram found on each phone, by serial, so a bring-to-front or a link needs no
+# ``pm list packages``. Forgotten when ``ensure_app`` installs one and whenever a
+# container starts (``forget_app``): a serial is a pod index's, and the next container
+# at that index may be another phone.
+_PACKAGES: dict[str, str] = {}
 
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
@@ -68,10 +73,20 @@ async def app_package(serial: str) -> str | None:
     A phone set up from an older APK keeps its app (and its sign-in): the package is
     read off the phone, never assumed from whichever APK is on the host now.
     """
+    if (known := _PACKAGES.get(serial)) is not None:
+        return known
     apk = local_apk_identity()
     wanted = [settings.emulator.telegram_package, *([apk.package] if apk else [])]
     installed = await adb.installed_packages(serial)
-    return next((package for package in wanted if package in installed), None)
+    package = next((package for package in wanted if package in installed), None)
+    if package is not None:
+        _PACKAGES[serial] = package
+    return package
+
+
+def forget_app(serial: str) -> None:
+    """Drop what ``app_package`` knows of ``serial``'s phone: it is read again next time."""
+    _PACKAGES.pop(serial, None)
 
 
 async def bring_app_to_front(serial: str) -> None:
@@ -103,6 +118,7 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
         else:
             package = app_identity(target_apk).package
         installer = _PACKAGE_INSTALLER if package == _WEB_PACKAGE else _PLAY_STORE_INSTALLER
+        forget_app(serial)  # an install, even a failed one, may change what the phone has
         await adb.install_apk(serial, target_apk, installer_package=installer)
     await adb.start_app(serial, package)
 

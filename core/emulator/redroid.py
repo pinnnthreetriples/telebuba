@@ -21,6 +21,7 @@ from core.emulator._errors import EmulatorError
 from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
 from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
+from core.emulator.telegram_app import forget_app
 
 if TYPE_CHECKING:
     from core.emulator._data import DataLayers
@@ -277,8 +278,10 @@ async def launch_instance(name: str, index: int) -> None:
     """Start the container ``name``; adb forgets its old connection to ``index``'s port.
 
     A connection kept from the container's previous run stays ``offline`` and is
-    never retried by itself; ``adb.wait_for_boot`` connects afresh.
+    never retried by itself; ``adb.wait_for_boot`` connects afresh. The Telegram known
+    at that serial is forgotten too: the container may be a new one at the same index.
     """
+    forget_app(adb_serial(index))
     await docker("start", name)
     with suppress(EmulatorError):
         await adb_command("disconnect", adb_serial(index), step="adb disconnect")

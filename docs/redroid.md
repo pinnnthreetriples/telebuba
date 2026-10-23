@@ -126,7 +126,8 @@ The container is a real phone (`core/emulator/_profile.py`):
   cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its
   BogoMIPS follows its 13 MHz timer; A78 is MediaTek's spec for its big cores, where ruby's
   kernel DT carries a generic `cortex-a76` compatible) gets `ro.soc.model` /
-  `ro.soc.manufacturer` and as many host cores as the chip has (fewer on a smaller Docker VM),
+  `ro.soc.manufacturer` and as many host cores as the chip has (fewer on a smaller Docker VM,
+  whose CPU count is read once per process: restart the app after resizing the VM),
   pinned with `--cpuset-cpus`: pod N gets its own slice, and once the VM's slices run out they
   are shared round-robin (pod 8 of a 64-core host with 8-core chips is back on 0-7, pod 9 on
   8-15). A new container sees the chip: `/sys/devices/system/cpu` is replaced read-only by a
@@ -344,7 +345,9 @@ included) is never replaced or updated. The package and `versionName (versionCod
 the APK (`core/android_apk.py`): new mobile fingerprints claim that version unless
 `EMULATOR__TELEGRAM_APP_VERSION` is set, and a container is driven through the Telegram it already
 has (`EMULATOR__TELEGRAM_PACKAGE` first, else the APK's), so a phone set up from an older
-`org.telegram.messenger` APK keeps its app and its sign-in.
+`org.telegram.messenger` APK keeps its app and its sign-in. Which one a phone has is read
+(`pm list packages`) once per container run: again after an install and at every container start,
+since the next container at the pod's index (and adb serial) may be another phone.
 
 Each screen read is one `uiautomator dump` (`core/emulator/adb.py`). On Docker Desktop/WSL2 it
 costs about 2 s: about 0.1 s VM start, then uiautomator's fixed 1 s wait for an idle screen, a few
