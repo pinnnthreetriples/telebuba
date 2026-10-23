@@ -27,8 +27,6 @@ from core.emulator._errors import EmulatorError
 from core.emulator._geo import Region, region_for
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.emulator import EmulatorRefusalCode
 
@@ -169,27 +167,6 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
     return props
 
 
-REDROID_BOOT_PROP_KEYS: tuple[str, ...] = (
-    "ro.boot.redroid_width",
-    "ro.boot.redroid_height",
-    "ro.boot.redroid_dpi",
-    "ro.boot.redroid_fps",
-    "ro.boot.redroid_gpu_mode",
-    "ro.boot.redroid_overlayfs",
-    "ro.boot.use_memfd",
-    "ro.boot.use_redroid_overlayfs",
-)
-
-USER_BUILD_HARDENING_PROPS: dict[str, str] = {
-    "ro.build.type": "user",
-    "ro.build.tags": "release-keys",
-    "ro.debuggable": "0",
-    "ro.secure": "1",
-    "ro.boot.verifiedbootstate": "green",
-    "ro.boot.flash.locked": "1",
-    "ro.boot.vbmeta.device_state": "locked",
-}
-
 USB_STEALTH_PROPS: dict[str, str] = {
     "sys.usb.state": "mtp",
     "sys.usb.config": "mtp",
@@ -215,44 +192,11 @@ def build_container_isolation_commands(boot_id: str | None = None) -> list[str]:
     ]
 
 
-def build_redroid_cleanup_script() -> str:
-    """Shell command deleting all dynamic ro.boot.redroid_* properties via getprop + resetprop."""
-    return (
-        "for prop in $(getprop | sed -n 's/^\\[\\(ro\\.boot\\.redroid_[^]]*\\)\\]:.*/\\1/p'); do "
-        '{ resetprop --delete "$prop" 2>/dev/null || true; }; '
-        "done"
-    )
-
-
-def build_user_build_resetprop_commands(
-    extra_props: Mapping[str, str] | None = None,
-) -> list[str]:
-    """Commands setting container user-build properties using resetprop -n."""
-    commands: list[str] = [build_redroid_cleanup_script()]
-    commands.extend(
-        f"{{ resetprop --delete {shlex.quote(key)} 2>/dev/null || true; }}"
-        for key in REDROID_BOOT_PROP_KEYS
-    )
-
-    merged_props = dict(USER_BUILD_HARDENING_PROPS)
-    if extra_props:
-        merged_props.update(extra_props)
-
-    for key, value in merged_props.items():
-        commands.append(f"resetprop -n {shlex.quote(key)} {shlex.quote(str(value))}")
-
-    return commands
-
-
 def build_usb_stealth_commands() -> list[str]:
-    """Commands masking USB/ADB status without triggering adbd shutdown."""
-    commands: list[str] = [
-        "resetprop -n service.adb.tcp.port 5555",
-        "settings put global adb_enabled 0",
-        "settings put global development_settings_enabled 0",
-    ]
+    """Commands masking USB status; ``adb_enabled`` stays on, or adbd stops for good."""
+    commands: list[str] = ["settings put global development_settings_enabled 0"]
     for key, value in USB_STEALTH_PROPS.items():
-        commands.append(f"resetprop -n {shlex.quote(key)} {shlex.quote(value)}")
+        commands.append(f"setprop {shlex.quote(key)} {shlex.quote(value)}")
     return commands
 
 
@@ -276,6 +220,6 @@ def build_battery_stealth_commands(
 def build_cellular_stealth_commands() -> list[str]:
     """Commands setting container radio properties to LTE / connected state."""
     return [
-        "resetprop -n gsm.network.type LTE",
-        "resetprop -n gsm.sim.state READY",
+        "setprop gsm.network.type LTE",
+        "setprop gsm.sim.state READY",
     ]
