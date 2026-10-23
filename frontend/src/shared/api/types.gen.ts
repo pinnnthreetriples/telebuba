@@ -8608,6 +8608,7 @@ export type WarmingAccountState = {
    * Live Phone Id
    */
   live_phone_id?: string | null;
+  mechanics?: WarmingMechanics;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc

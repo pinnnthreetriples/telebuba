@@ -26,7 +26,7 @@ import {
 
 import { FloodMemoryLine } from './FloodMemoryLine';
 import { SpamBlockPanel } from './SpamBlockPanel';
-import { AttentionRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
+import { AttentionRow, MechanicsRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
 import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
 
@@ -332,6 +332,7 @@ function WarmingCard({
       </div>
 
       {!complete && !blocked ? <TodayRow account={account} /> : null}
+      {!complete && !blocked ? <MechanicsRow account={account} /> : null}
       <VisitRow account={account} />
       {blocked ? (
         <SpamBlockPanel

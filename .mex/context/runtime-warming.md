@@ -1,7 +1,7 @@
 ---
 name: runtime-warming
 description: Warming scheduling, budget, dialogue, recovery and board runtime.
-last_updated: 2026-10-15
+last_updated: 2026-10-24
 edges:
   - target: patterns/account-devices.md
     condition: the warming device
