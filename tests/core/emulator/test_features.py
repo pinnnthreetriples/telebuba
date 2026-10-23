@@ -62,6 +62,7 @@ def test_the_phone_has_a_gsm_radio_a_multitouch_screen_and_usb() -> None:
         in declared["android.hardware.touchscreen.multitouch.jazzhand.xml"]
     ), "every touchscreen phone has it"
     assert declared["android.hardware.usb.host.xml"] == ["android.hardware.usb.host"]
+    assert declared["android.hardware.usb.accessory.xml"] == ["android.hardware.usb.accessory"]
 
 
 def test_ethernet_is_no_longer_declared() -> None:
