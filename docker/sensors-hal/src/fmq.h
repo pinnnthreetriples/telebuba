@@ -58,6 +58,7 @@ class Queue {
     }
 
     bool mapped() const { return ring_ != nullptr; }
+    void reset() { unmap(); }
     int32_t quantum() const { return quantum_; }
 
     // Appends `count` items of `quantum` bytes; false (nothing written) when they don't fit.

@@ -202,12 +202,17 @@ class Sensors : public BnSensors {
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto& [handle, a] : state_) a.enabled = false;
         callback_ = callback;
+        // A refused initialize leaves no queue mapped: nothing is written until the next one.
         if (!events_.map(events) || !wakeLocks_.map(wakeLocks)) {
             LOGE("cannot map the event queues");
+            events_.reset();
+            wakeLocks_.reset();
             return ScopedAStatus::fromServiceSpecificError(ISensors::ERROR_BAD_VALUE);
         }
         if (events_.quantum() != static_cast<int32_t>(sizeof(Event))) {
             LOGE("event size %d, built for %zu", events_.quantum(), sizeof(Event));
+            events_.reset();
+            wakeLocks_.reset();
             return ScopedAStatus::fromServiceSpecificError(ISensors::ERROR_BAD_VALUE);
         }
         LOGI("initialized with %zu sensors", list_.size());
