@@ -1,0 +1,127 @@
+{
+  "device": "e1s",
+  "sources": [
+    "https://github.com/jukulta/syksy2024/blob/HEAD/Python/Viikko%201%20fysiikka/Acceleration%20without%20g%202024-09-08%2017-20-33/meta/device.csv",
+    "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json",
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "LSM6DSVTR Accelerometer",
+      "vendor": "STM",
+      "version": 15933,
+      "max_range": 156.90640258789062,
+      "resolution": 0.004788403399288654,
+      "power_ma": 0.15,
+      "min_delay_us": 2000,
+      "max_delay_us": 160000,
+      "fifo_max_events": 3000,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "magnetometer",
+      "name": "AK09918C Magnetometer",
+      "vendor": "Asahi Kasei Microdevices",
+      "version": 2,
+      "max_range": 4900.02001953125,
+      "resolution": 0.05999999865889549,
+      "power_ma": 1.1,
+      "min_delay_us": 8000,
+      "max_delay_us": 320000,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "gyroscope",
+      "name": "LSM6DSVTR Gyroscope",
+      "vendor": "STM",
+      "version": 1,
+      "max_range": 34.906063079833984,
+      "resolution": 0.0012217304902151227,
+      "power_ma": 0.65,
+      "min_delay_us": 2000,
+      "max_delay_us": 160000,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "light",
+      "name": "STK33F11 Light",
+      "vendor": "Sitronix",
+      "version": 3002,
+      "max_range": 60000,
+      "resolution": 1,
+      "power_ma": 0.75,
+      "min_delay_us": 200000,
+      "max_delay_us": 200000,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "proximity",
+      "name": "Palm Proximity Sensor version 2",
+      "vendor": "Samsung",
+      "version": 1000,
+      "max_range": 5,
+      "resolution": 1,
+      "power_ma": 0.75,
+      "min_delay_us": 0,
+      "max_delay_us": 0,
+      "fifo_max_events": 100,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "gravity",
+      "name": "Gravity Sensor",
+      "vendor": "Samsung Electronics",
+      "version": 3,
+      "max_range": 19.613300323486328,
+      "resolution": 5.960464477539063e-08,
+      "power_ma": 1.1,
+      "min_delay_us": 10000,
+      "max_delay_us": 0,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "Linear Acceleration Sensor",
+      "vendor": "Samsung Electronics",
+      "version": 3,
+      "max_range": 156.90640258789062,
+      "resolution": 0.004788403399288654,
+      "power_ma": 1.1,
+      "min_delay_us": 10000,
+      "max_delay_us": 0,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "rotation_vector",
+      "name": "Samsung Rotation Vector",
+      "vendor": "Samsung Inc.",
+      "version": 1,
+      "max_range": 1,
+      "resolution": 5.960464477539063e-08,
+      "power_ma": 1.1,
+      "min_delay_us": 10000,
+      "max_delay_us": 160000,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    },
+    {
+      "type": "game_rotation_vector",
+      "name": "Samsung Game Rotation Vector",
+      "vendor": "Samsung Inc.",
+      "version": null,
+      "max_range": 1,
+      "resolution": 5.960464477539063e-08,
+      "power_ma": null,
+      "min_delay_us": 10000,
+      "max_delay_us": 160000,
+      "fifo_max_events": 0,
+      "source": "https://github.com/leo-01000111/MostMobileMouse/blob/7cb53b82e11e07b497e3e1430f0a54c3530b1f99/notes/device_caps_S24.json"
+    }
+  ]
+}

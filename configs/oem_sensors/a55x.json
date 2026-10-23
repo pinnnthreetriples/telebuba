@@ -1,0 +1,86 @@
+{
+  "device": "a55x",
+  "sources": [
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "LSM6DSVTR Accelerometer",
+      "vendor": "STM",
+      "version": null,
+      "max_range": 78.453,
+      "resolution": 0.0023942,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "magnetometer",
+      "name": "MXG4300S Magnetometer",
+      "vendor": "Haechitech",
+      "version": null,
+      "max_range": 4914.0,
+      "resolution": 0.001,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "gyroscope",
+      "name": "LSM6DSVTR Gyroscope",
+      "vendor": "STM",
+      "version": null,
+      "max_range": 17.453,
+      "resolution": 0.00061087,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "light",
+      "name": "STK31610 Light",
+      "vendor": "Sitronix",
+      "version": null,
+      "max_range": 60000.0,
+      "resolution": 1.0,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "proximity",
+      "name": "Ear Hover Proximity Sensor (ProToS)",
+      "vendor": "Samsung Electronics.",
+      "version": null,
+      "max_range": null,
+      "resolution": null,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "Samsung Linear Acceleration Sensor",
+      "vendor": "Samsung Electronics",
+      "version": null,
+      "max_range": 78.453,
+      "resolution": 0.0023942,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    }
+  ]
+}

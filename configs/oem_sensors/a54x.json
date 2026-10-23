@@ -1,0 +1,121 @@
+{
+  "device": "a54x",
+  "sources": [
+    "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "LSM6DSOTR Accelerometer",
+      "vendor": "STM",
+      "version": 15933,
+      "max_range": 78.4532,
+      "resolution": 0.0023942017,
+      "power_ma": 0.15,
+      "min_delay_us": 2000,
+      "max_delay_us": 160000,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "magnetometer",
+      "name": "AK09918C Magnetometer",
+      "vendor": "Asahi Kasei Microdevices",
+      "version": 2,
+      "max_range": 4900.02,
+      "resolution": 0.06,
+      "power_ma": 1.1,
+      "min_delay_us": 8000,
+      "max_delay_us": 80000,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "gyroscope",
+      "name": "LSM6DSOTR Gyroscope",
+      "vendor": "STM",
+      "version": 1,
+      "max_range": 17.453032,
+      "resolution": 0.00061086525,
+      "power_ma": 0.65,
+      "min_delay_us": 2000,
+      "max_delay_us": 160000,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "light",
+      "name": "STK31610 Light",
+      "vendor": "Sitronix",
+      "version": 2002,
+      "max_range": 60000.0,
+      "resolution": 1.0,
+      "power_ma": 0.75,
+      "min_delay_us": 200000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "proximity",
+      "name": "Ear Hover Proximity Sensor (ProToS)",
+      "vendor": "Samsung Electronics.",
+      "version": 1,
+      "max_range": 5.0,
+      "resolution": 1.0,
+      "power_ma": 0.75,
+      "min_delay_us": 0,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "gravity",
+      "name": "Samsung Gravity Sensor",
+      "vendor": "Samsung Electronics",
+      "version": 1,
+      "max_range": 19.6133,
+      "resolution": 0.0023942017,
+      "power_ma": 1.9,
+      "min_delay_us": 10000,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "Samsung Linear Acceleration Sensor",
+      "vendor": "Samsung Electronics",
+      "version": 1,
+      "max_range": 78.4532,
+      "resolution": 0.0023942017,
+      "power_ma": 1.9,
+      "min_delay_us": 10000,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    },
+    {
+      "type": "rotation_vector",
+      "name": "Samsung Rotation Vector Sensor",
+      "vendor": "Samsung Electronics",
+      "version": 3,
+      "max_range": 1.0,
+      "resolution": 5.9604645e-08,
+      "power_ma": 1.9,
+      "min_delay_us": 10000,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/kajiLabTeam/pedestrian-behavior-comparison-system/blob/HEAD/data/part/A/meta/device.csv",
+      "sibling": "SC-53D"
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "device": "dm3q",
+  "sources": [
+    "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv",
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "lsm6dso LSM6DSO Accelerometer Non-wakeup",
+      "vendor": "STMicro",
+      "version": 15933,
+      "max_range": 156.9064,
+      "resolution": 0.0047856453,
+      "power_ma": 0.17,
+      "min_delay_us": 2404,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "magnetometer",
+      "name": "AK09918 Magnetometer",
+      "vendor": "akm",
+      "version": 146988,
+      "max_range": 4912.0503,
+      "resolution": 0.15,
+      "power_ma": 1.1,
+      "min_delay_us": 10000,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "gyroscope",
+      "name": "lsm6dso LSM6DSO Gyroscope Non-wakeup",
+      "vendor": "STMicro",
+      "version": 15933,
+      "max_range": 34.906036,
+      "resolution": 0.0012217296,
+      "power_ma": 0.55,
+      "min_delay_us": 2404,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "light",
+      "name": "TMD4913 Light  Non-wakeup",
+      "vendor": "AMS-OSLRAM",
+      "version": 2,
+      "max_range": 9999999.0,
+      "resolution": 1.0,
+      "power_ma": 0.38,
+      "min_delay_us": 0,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "proximity",
+      "name": "Palm Proximity Sensor version 2",
+      "vendor": "Samsung",
+      "version": 1000,
+      "max_range": 5.0,
+      "resolution": 1.0,
+      "power_ma": 0.625,
+      "min_delay_us": 0,
+      "max_delay_us": 0,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "gravity",
+      "name": "gravity  Non-wakeup",
+      "vendor": "QTI",
+      "version": 1,
+      "max_range": 156.91,
+      "resolution": 0.01,
+      "power_ma": 0.515,
+      "min_delay_us": 5000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "linear_acceleration",
+      "vendor": "QTI",
+      "version": 1,
+      "max_range": 156.91,
+      "resolution": 0.01,
+      "power_ma": 0.515,
+      "min_delay_us": 5000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    },
+    {
+      "type": "rotation_vector",
+      "name": "Rotation Vector  Non-wakeup",
+      "vendor": "QTI",
+      "version": 1,
+      "max_range": 1.0,
+      "resolution": 0.01,
+      "power_ma": 1.415,
+      "min_delay_us": 5000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/SwastiKh/ML4QS/blob/HEAD/ML4QS-master/Python3Code/random_test-data/meta/device.csv"
+    }
+  ]
+}

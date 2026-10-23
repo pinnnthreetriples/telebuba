@@ -1,0 +1,120 @@
+{
+  "device": "ruby",
+  "sources": [
+    "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "ACCELEROMETER",
+      "vendor": "lsm6dsoq_acc",
+      "version": 1,
+      "max_range": 78.453606,
+      "resolution": 0.0012,
+      "power_ma": 0.001,
+      "min_delay_us": 2500,
+      "max_delay_us": 80000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "magnetometer",
+      "name": "MAGNETOMETER",
+      "vendor": "qmc6308",
+      "version": null,
+      "max_range": 4912.1,
+      "resolution": 0.15,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "gyroscope",
+      "name": "GYROSCOPE",
+      "vendor": "lsm6dsoq_gyro",
+      "version": 1,
+      "max_range": 34.9063,
+      "resolution": 0.0011,
+      "power_ma": 0.001,
+      "min_delay_us": 2500,
+      "max_delay_us": 80000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "light",
+      "name": "LIGHT",
+      "vendor": "stk3a5x_l",
+      "version": 1,
+      "max_range": 65535.0,
+      "resolution": 1.0,
+      "power_ma": 0.001,
+      "min_delay_us": 0,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "proximity",
+      "name": "Elliptic Proximity",
+      "vendor": "Elliptic Labs",
+      "version": 4,
+      "max_range": 5.0,
+      "resolution": 0.0001,
+      "power_ma": 0.5,
+      "min_delay_us": 0,
+      "max_delay_us": 10000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "gravity",
+      "name": "GRAVITY",
+      "vendor": "MTK",
+      "version": 1,
+      "max_range": 39.226803,
+      "resolution": 0.0012,
+      "power_ma": 0.001,
+      "min_delay_us": 5000,
+      "max_delay_us": 20000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "LINEARACCEL",
+      "vendor": "MTK",
+      "version": 1,
+      "max_range": 39.226803,
+      "resolution": 0.0012,
+      "power_ma": 0.001,
+      "min_delay_us": 5000,
+      "max_delay_us": 20000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    },
+    {
+      "type": "rotation_vector",
+      "name": "ROTATION_VECTOR",
+      "vendor": "MTK",
+      "version": 1,
+      "max_range": 1.0,
+      "resolution": 5.9604645e-08,
+      "power_ma": 0.001,
+      "min_delay_us": 5000,
+      "max_delay_us": 20000,
+      "fifo_max_events": null,
+      "source": "https://github.com/ZzKokonutzZ/prepa/blob/HEAD/MP2I/physique/meta/device.csv",
+      "sibling": "22101316UG"
+    }
+  ]
+}

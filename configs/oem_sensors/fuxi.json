@@ -1,0 +1,86 @@
+{
+  "device": "fuxi",
+  "sources": [
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "bmi26x Accelerometer Non-wakeup",
+      "vendor": "BOSCH",
+      "version": null,
+      "max_range": 156.91,
+      "resolution": 0.0047856,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "magnetometer",
+      "name": "ak0991x Magnetometer Non-wakeup",
+      "vendor": "akm",
+      "version": null,
+      "max_range": 4912.1,
+      "resolution": 0.15,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "gyroscope",
+      "name": "bmi26x Gyroscope Non-wakeup",
+      "vendor": "BOSCH",
+      "version": null,
+      "max_range": 34.907,
+      "resolution": 0.0010653,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "light",
+      "name": "TCS3720ALSPRX Ambient Light Sensor Non-wakeup",
+      "vendor": "xiaomi",
+      "version": null,
+      "max_range": 20000.0,
+      "resolution": 1.0,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "proximity",
+      "name": "proximity Proximity Sensor Wakeup",
+      "vendor": "XiaoMi",
+      "version": null,
+      "max_range": null,
+      "resolution": null,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "linear_acceleration",
+      "vendor": "QTI",
+      "version": null,
+      "max_range": 156.91,
+      "resolution": 0.01,
+      "power_ma": null,
+      "min_delay_us": null,
+      "max_delay_us": null,
+      "fifo_max_events": null,
+      "source": "https://phyphox.org/sensordb/"
+    }
+  ]
+}

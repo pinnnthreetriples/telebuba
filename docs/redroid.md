@@ -147,6 +147,29 @@ The container is a real phone (`core/emulator/_profile.py`):
   (`docker update`). A phone without a chip keeps `EMULATOR__CPU_CORES` of the host's CPUs.
   The image stays x86_64 (`ro.product.cpu.abilist` starts with `x86_64`), so an app comparing
   its ABI with the ARM cpuinfo can tell.
+- **Sensors** (`core/emulator/_sensors.py`, `docker/sensors-hal`): redroid has no sensors HAL,
+  so `SensorManager` finds nothing. With `EMULATOR__SENSORS_HAL_DIR` set, a new or refreshed
+  container gets one in `/vendor` before it boots: an AIDL `android.hardware.sensors` service
+  (`bin/hw/android.hardware.sensors-service.multihal`, AOSP's multi-HAL name), its init script,
+  VINTF fragment (`ISensors/default`, v2), config (`etc/sensors/sensors.conf`) and the
+  `android.hardware.sensor.*` features of what it serves. It reports the phone's own chips from
+  `configs/oem_sensors/<device>.json` (names, vendors, ranges, delays from public dumps:
+  phyphox exports and its sensor DB; a field no dump showed takes its kind's usual value):
+  accelerometer, gyroscope, magnetometer, light, proximity (the wake-up default), and gravity,
+  linear acceleration and rotation vectors where the phone has them (else Android's own AOSP
+  fusion sensors stand in). Readings follow a seed from the serial: held in a hand (tilted
+  25–50°, slow drift, 8–12 Hz tremor) or lying on a desk, noise, bias and quantisation of a real
+  part, indoor light, proximity far, and the Earth's field (2020 dipole) at the proxy country,
+  so a refresh after a move moves it. One worker thread, idle while no sensor is on: ~0% CPU,
+  ~5 MB. Tested on the x86_64 13 and 14 `_64only` images (dumpsys, `getDefaultSensor` and
+  events from an `app_process` probe, HAL restart); the arm64 build is not yet tested on an
+  arm64 host. Build it once on an x86_64 machine (the NDK has no arm64 host) and copy the
+  directory to each host: `docker build --output type=local,dest=emulator/sensors-hal
+  docker/sensors-hal` writes `arm64-v8a/` and `x86_64/`; the host's Docker architecture picks
+  one, and a host without its build boots phones without sensors (a warning). Every input is
+  pinned (NDK r27d and build-tools 34 by sha256, AOSP `android-14.0.0_r75` by commit); two builds
+  give the same bytes. The binary holds no emulator names; libc++'s own `generic_category`
+  string is in it, as in every phone's `libc++.so`.
 
 ## First-boot data
 
@@ -408,3 +431,5 @@ EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org w
 
 `EMULATOR__CPU_CORES` (phones without a chip) and `EMULATOR__MEMORY_MB` size new containers;
 the screen is the phone's.
+`EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
+Sensors).

@@ -1,0 +1,113 @@
+{
+  "device": "shiba",
+  "sources": [
+    "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv",
+    "https://phyphox.org/sensordb/"
+  ],
+  "sensors": [
+    {
+      "type": "accelerometer",
+      "name": "ICM45631 Accelerometer",
+      "vendor": "Invensense",
+      "version": 1,
+      "max_range": 156.9064,
+      "resolution": 0.0005985504,
+      "power_ma": 0.001,
+      "min_delay_us": 2500,
+      "max_delay_us": 666667,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "magnetometer",
+      "name": "MMC56X3X Magnetometer",
+      "vendor": "MEMSIC",
+      "version": 1,
+      "max_range": 3198.1567,
+      "resolution": 0.0976,
+      "power_ma": 0.001,
+      "min_delay_us": 10000,
+      "max_delay_us": 800000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "gyroscope",
+      "name": "ICM45631 Gyroscope",
+      "vendor": "Invensense",
+      "version": 1,
+      "max_range": 34.906586,
+      "resolution": 0.00013323124,
+      "power_ma": 0.001,
+      "min_delay_us": 2500,
+      "max_delay_us": 666667,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "light",
+      "name": "TMD3719 Ambient Light",
+      "vendor": "AMS",
+      "version": 1,
+      "max_range": 1000000.0,
+      "resolution": 0.01,
+      "power_ma": 0.001,
+      "min_delay_us": 0,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "proximity",
+      "name": "TMD3719 Proximity (wake-up)",
+      "vendor": "AMS",
+      "version": 1,
+      "max_range": 5.0,
+      "resolution": 1.0,
+      "power_ma": 0.001,
+      "min_delay_us": 0,
+      "max_delay_us": 1000000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "gravity",
+      "name": "Gravity Sensor",
+      "vendor": "Google",
+      "version": 1,
+      "max_range": 9.81,
+      "resolution": 1e-05,
+      "power_ma": 0.001,
+      "min_delay_us": 5000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "linear_acceleration",
+      "name": "Linear Acceleration Sensor",
+      "vendor": "Google",
+      "version": 1,
+      "max_range": 156.96,
+      "resolution": 1e-05,
+      "power_ma": 0.001,
+      "min_delay_us": 20000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    },
+    {
+      "type": "rotation_vector",
+      "name": "Rotation Vector Sensor",
+      "vendor": "Google",
+      "version": 1,
+      "max_range": 1.0,
+      "resolution": 1e-05,
+      "power_ma": 0.001,
+      "min_delay_us": 5000,
+      "max_delay_us": 200000,
+      "fifo_max_events": null,
+      "source": "https://github.com/sebasaguerre/ML_for_Sensor_data/blob/HEAD/train_data/meta/device.csv"
+    }
+  ]
+}
