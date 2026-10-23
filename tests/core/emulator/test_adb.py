@@ -158,18 +158,6 @@ async def test_install_apk_accepts_explicit_apk_path(
 
 
 @pytest.mark.asyncio
-async def test_step_battery_discharge_decrements_level(
-    console: Console,
-) -> None:
-    """Test that step_battery_discharge decrements battery level by specified percentage."""
-    console.answer = lambda argv: "  level: 80\n  status: 3" if "dumpsys" in argv else ""
-    await adb.step_battery_discharge("emulator-5554", decrement=3)
-
-    set_call = console.shell_calls()[-1]
-    assert set_call == ["dumpsys", "battery", "set", "level", "77"]
-
-
-@pytest.mark.asyncio
 async def test_a_missing_adb_is_not_waited_out_as_a_slow_boot(console: Console) -> None:
     def missing(_argv: list[str]) -> str:
         code = "emulator_not_found"

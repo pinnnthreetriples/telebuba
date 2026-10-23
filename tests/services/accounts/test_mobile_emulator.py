@@ -163,6 +163,18 @@ async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
     ]
 
 
+@pytest.mark.asyncio
+async def test_the_battery_is_set_on_the_phone_s_own_clock(container: _Container) -> None:
+    """Its day (unplugged in the morning) is the phone's, not UTC's: a +52 phone is in Mexico."""
+    await _account()
+    container.instance = Instance(1, "telebuba-acc", running=True)
+
+    await open_account_mobile("acc")
+
+    assert container.battery_now is not None
+    assert str(container.battery_now.tzinfo) == "America/Mexico_City"
+
+
 @pytest.mark.parametrize("entry", ["intro", "phone"])
 @pytest.mark.asyncio
 async def test_a_running_signed_out_app_is_signed_in_where_it_stands(

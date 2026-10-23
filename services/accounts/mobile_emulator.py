@@ -280,7 +280,7 @@ async def _open(
             serial = adb_serial(instance.index)
             report_stage(account.account_id, "app")
             await connect_device(serial)
-            await set_battery(serial, account.account_id)
+            await set_battery(serial, account.account_id, spec.region.timezone)
             if not background:
                 await show(name, instance.index)
             await bring_app_to_front(serial)

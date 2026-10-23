@@ -27,7 +27,7 @@ class BatteryTelemetryState:
         return int(self.capacity_mah * 1000 * (self.level / 100.0))
 
 
-# The phone's day: unplugged full-ish in the morning (UTC), drained at a steady rate
+# The phone's day: unplugged full-ish in its morning, drained at a steady rate
 # with the screen mostly off, never below the level a user would let it reach.
 _UNPLUGGED_HOURS = (6.0, 9.0)
 _UNPLUGGED_LEVEL = (88, 100)
@@ -42,6 +42,9 @@ def generate_initial_battery_state(
     seed: int | str | None = None,
 ) -> BatteryTelemetryState:
     """The discharging battery at ``now`` (temp 31.0..33.8°C), the same for that moment.
+
+    ``now`` is the phone's own clock: its hour and date are read as they are (UTC when
+    not given).
 
     The level follows the account's day (drawn per account and date): full when it was
     unplugged in the morning, lower each hour after, charged again by the next morning.
@@ -68,27 +71,6 @@ def generate_initial_battery_state(
         voltage_mv=voltage_mv,
         capacity_mah=4500,
         status=3,
-    )
-
-
-def step_battery_state(
-    state: BatteryTelemetryState,
-    seed: int | str | None = None,
-    *,
-    min_level: int = 15,
-) -> BatteryTelemetryState:
-    """Step battery state down by 1% with temperature jitter."""
-    rng = random.Random(seed)  # noqa: S311  # nosec B311 - fixture telemetry, not crypto
-    next_level = max(min_level, state.level - 1)
-    temp_delta = rng.choice((-3, -2, -1, 0, 1, 2, 3))
-    next_temp = max(295, min(368, state.temp_tenths_c + temp_delta))
-    next_voltage = 3650 + int((next_level / 100.0) * 620) + rng.randint(-10, 10)
-    return BatteryTelemetryState(
-        level=next_level,
-        temp_tenths_c=next_temp,
-        voltage_mv=next_voltage,
-        capacity_mah=state.capacity_mah,
-        status=state.status,
     )
 
 

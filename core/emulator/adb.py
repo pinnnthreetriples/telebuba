@@ -22,7 +22,6 @@ from core.emulator._stealth import (
     apply_battery_telemetry,
     apply_stealth_profile,
     exec_root_script,
-    step_battery_discharge,
 )
 from core.emulator._text import escape_input_text, shell_quote
 
@@ -347,7 +346,6 @@ __all__ = [
     "push",
     "shell",
     "start_app",
-    "step_battery_discharge",
     "type_text",
     "wait_for_boot",
 ]
