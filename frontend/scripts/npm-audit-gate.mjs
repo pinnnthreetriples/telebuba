@@ -16,65 +16,21 @@ import { fileURLToPath } from 'node:url';
 // Пакет фронтенда — откуда бы скрипт ни запустили (CI идёт из `frontend`, setup.md — из корня).
 const FRONTEND_DIR = fileURLToPath(new URL('..', import.meta.url));
 
+// `under` сужает пропуск до одной ветки дерева: рекомендация пропускается, только
+// если КАЖДЫЙ уязвимый узел лежит под этим путём. Тот же пакет где-то ещё — снова
+// красный гейт, а не тихий пропуск по тому же GHSA.
 const IGNORED = new Map([
   [
-    // braces <= 3.0.3: стек переполняется на глубоко вложенных шаблонах. Патча нет
-    // (последний релиз — 3.0.3, май 2024; micromatch/braces#70). С переходом на
-    // Tailwind 4 его тянет только steiger (micromatch, и через globby → fast-glob тот
-    // же micromatch) — линтер архитектуры, который кормит его НАШИМИ шаблонами из
-    // `steiger.config.ts` и путями `src/`; в бандл он не попадает. Убрать, как только
-    // выйдет исправленный braces или steiger от micromatch откажется.
-    'GHSA-vfj7-8cjw-p6xm',
-    'braces: build-time only via steiger, fed our own glob patterns; no patched release',
-  ],
-  [
-    // zod < 4.6.6: память кончается при проверке огромных ограниченных коллекций. Патч
-    // только в zod 4. У нас zod 3 проверяет лишь формы оператора (прокси, 2FA, профиль,
-    // лимиты) — короткий ввод самого оператора в его же браузере, не чужие данные; ещё
-    // zod 3 тянут eslint-plugin-react-hooks и steiger (только сборка). Убрать при
-    // переходе на zod 4, когда его примут и эти инструменты.
+    // zod < 4.6.6: память исчерпывается на огромных коллекциях с ограничениями. Сам
+    // фронтенд уже на zod 4; остался только zod 3 внутри steiger — линтера архитектуры,
+    // который валидирует им СВОЙ конфиг (`steiger.config.ts`); в бандл он не попадает.
+    // Патча для zod 3 нет, а steiger (вплоть до 0.8.0) на zod 4 падает
+    // (`z.function(...).args is not a function`). Убрать, как только steiger перейдёт на zod 4.
     'GHSA-mrhx-c7xc-m3w5',
-    'zod 3: validates only the operator’s own short form input; fix exists only in zod 4',
-  ],
-  [
-    // Storybook origin validation in preview: dev/catalog tool only, not in production bundle.
-    'GHSA-f2ph-cmg5-wxc8',
-    'storybook: dev/catalog tool only, never exposed or shipped in production bundle',
-  ],
-  [
-    // Vitest manual mock registration: test runner devDependency only.
-    'GHSA-qxg6-89mg-rqv8',
-    'vitest: test runner only, never shipped in bundle',
-  ],
-  [
-    // Vitest Windows backslash traversal: test runner devDependency only.
-    'GHSA-xp26-3454-mjgp',
-    'vitest: test runner only, never shipped in bundle',
-  ],
-  [
-    // Vite launch-editor Windows escaping: dev server editor opener only.
-    'GHSA-698v-4r3x-3vcv',
-    'vite (launch-editor): dev-server editor integration only',
-  ],
-  [
-    // Vite launch-editor flag misinterpretation: dev server editor opener only.
-    'GHSA-r825-w8mm-5pxw',
-    'vite (launch-editor): dev-server editor integration only',
-  ],
-  [
-    // Vite launch-editor Windows existence check: dev server editor opener only.
-    'GHSA-587h-7wmj-h5pm',
-    'vite (launch-editor): dev-server editor integration only',
-  ],
-  [
-    // Vite custom middleware XSS: dev server only, production is static bundle.
-    'GHSA-9jrq-w75r-8gcw',
-    'vite: dev-server middleware only, static assets built for production',
-  ],
-  [
-    // Vite server.fs.allow traversal: dev server only, production is static bundle.
-    'GHSA-rq7h-c2jc-7f22',
-    'vite: dev-server file-serving only, not in production build',
+    {
+      under: 'node_modules/steiger/',
+      reason: 'zod 3: build-time only via steiger, validating our own config; no zod 3 patch',
+    },
   ],
 ]);
 
@@ -103,16 +59,27 @@ for (const [name, entry] of Object.entries(report.vulnerabilities)) {
   for (const via of entry.via) {
     if (typeof via === 'string') continue;
     const id = /GHSA-[\w-]+/.exec(via.url ?? '')?.[0] ?? String(via.source);
-    found.set(id, `${name} (${via.severity}): ${via.title} ${via.url ?? ''}`.trim());
+    const hit = found.get(id) ?? { line: '', nodes: [] };
+    hit.line = `${name} (${via.severity}): ${via.title} ${via.url ?? ''}`.trim();
+    hit.nodes.push(...(entry.nodes ?? []));
+    found.set(id, hit);
   }
 }
 
-const blocking = [...found].filter(([id]) => !IGNORED.has(id));
-for (const [id, reason] of IGNORED) {
-  if (found.has(id)) console.log(`ignored ${id} — ${reason}`);
+const isIgnored = (id, { nodes }) => {
+  const rule = IGNORED.get(id);
+  if (!rule) return false;
+  return !rule.under || (nodes.length > 0 && nodes.every((node) => node.startsWith(rule.under)));
+};
+
+const blocking = [...found].filter(([id, hit]) => !isIgnored(id, hit));
+for (const [id, { reason }] of IGNORED) {
+  const hit = found.get(id);
+  if (hit && isIgnored(id, hit)) console.log(`ignored ${id} — ${reason}`);
+  else if (hit) console.log(`${id} is reported outside ${IGNORED.get(id).under}; not ignored`);
   else console.log(`::warning::${id} is no longer reported by npm audit; remove it from IGNORED`);
 }
-for (const [, line] of blocking) console.error(line);
+for (const [, { line }] of blocking) console.error(line);
 if (blocking.length > 0) {
   console.error(`${blocking.length} unreviewed advisory(ies) — fix or add a reviewed ignore`);
   process.exit(1);
