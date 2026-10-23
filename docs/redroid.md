@@ -177,9 +177,10 @@ restarts forever, no screen), EGL and Vulkan by `ro.hardware.egl` / `ro.hardware
 audio and the rest find no `<class>.<name>.so` and fall back to `default`, as before.
 
 None of the names is one Telegram's `EmuDetector` looks for (`goldfish`, `ranchu`, `vbox86`,
-`nox`, ...), which a test keeps. A container made before keeps `redroid` until it is made again
-(its entrypoint is fixed at create); its `build.prop` gets the new lines, which change nothing
-for it. Still `redroid` after this: `ro.hardware.gralloc`, `ro.hardware.hwcomposer`, the
+`nox`, ...), which a test keeps. A container made before keeps `ro.hardware=redroid` until it is
+made again (its entrypoint is fixed at create), but its next cold boot reads the rewritten
+`build.prop`: from then on its `ro.product.board` and `ro.board.platform` are the phone's, next
+to `redroid` as its hardware (its composer still found by that name). Still `redroid` after this: `ro.hardware.gralloc`, `ro.hardware.hwcomposer`, the
 `ro.boot.redroid_*` boot arguments, `ro.product.vendor_dlkm.*` and the HAL file names under
 `/vendor/lib64/hw`.
 
