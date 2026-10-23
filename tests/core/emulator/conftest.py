@@ -36,6 +36,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Process-wide caches: each test meets its own host and phones.
     monkeypatch.setattr(_topology, "_host_cores", None)
     monkeypatch.setattr(telegram_app, "_PACKAGES", {})
+    monkeypatch.setattr(telegram_app, "_FORGOTTEN", {})
     reset_logging_for_tests()
     setup_logging()
     yield

@@ -44,6 +44,8 @@ _PLAY_STORE_INSTALLER = "com.android.vending"
 # (``forget_app``): a serial is a pod index's, and the next container there may be
 # another phone.
 _PACKAGES: dict[str, str] = {}
+# How often each serial was forgotten: a lookup a new container overtook is not remembered.
+_FORGOTTEN: dict[str, int] = {}
 
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
@@ -78,9 +80,10 @@ async def app_package(serial: str) -> str | None:
         return known
     apk = local_apk_identity()
     wanted = [settings.emulator.telegram_package, *([apk.package] if apk else [])]
+    generation = _FORGOTTEN.get(serial, 0)
     installed = await adb.installed_packages(serial)
     package = next((package for package in wanted if package in installed), None)
-    if package is not None:
+    if package is not None and _FORGOTTEN.get(serial, 0) == generation:
         _PACKAGES[serial] = package
     return package
 
@@ -88,6 +91,7 @@ async def app_package(serial: str) -> str | None:
 def forget_app(serial: str) -> None:
     """Drop what ``app_package`` knows of ``serial``'s phone: it is read again next time."""
     _PACKAGES.pop(serial, None)
+    _FORGOTTEN[serial] = _FORGOTTEN.get(serial, 0) + 1
 
 
 async def bring_app_to_front(serial: str) -> None:

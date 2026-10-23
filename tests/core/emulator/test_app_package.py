@@ -6,6 +6,7 @@ sign-in even after the host's APK became telegram.org's ``org.telegram.messenger
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -228,3 +229,25 @@ async def test_a_phone_given_telegram_is_read_again(
 
     assert _listings(console) == 2, "no Telegram is never remembered: the install is seen"
     assert _started(console) == [_WEB, _WEB]
+
+
+@pytest.mark.asyncio
+async def test_a_lookup_overtaken_by_a_new_container_is_not_remembered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listed = asyncio.Event()
+    release = asyncio.Event()
+
+    async def old_phone(_serial: str) -> set[str]:
+        listed.set()
+        await release.wait()
+        return {_WEB}
+
+    monkeypatch.setattr(telegram_app.adb, "installed_packages", old_phone)
+    lookup = asyncio.create_task(telegram_app.app_package(_SERIAL))
+    await listed.wait()
+    telegram_app.forget_app(_SERIAL)  # a new container started on this index meanwhile
+    release.set()
+
+    assert await lookup == _WEB
+    assert _SERIAL not in telegram_app._PACKAGES, "the old phone's app is not the new one's"
