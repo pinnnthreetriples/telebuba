@@ -18,12 +18,17 @@
     "file_style": "xiaomi"
   },
   "soc": "sm8550",
+  "board": "kalama",
   "builds": {
     "33": {
       "release": "13",
       "build_id": "TKQ1.220905.001",
       "incremental": "V14.0.9.0.TMCMIXM",
       "security_patch": "2023-08-01",
+      "build_user": "builder",
+      "build_host": "pangu-build-component-system-307247-3f62v-4bfz9-wgtnh",
+      "build_date": "Thu Aug  3 11:42:21 UTC 2023",
+      "build_date_utc": 1691062941,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/xiaomi/fuxi/missi_phone_global-user-13-TKQ1.220905.001-V14.0.9.0.TMCMIXM-release-keys"
     },
     "34": {
@@ -31,6 +36,10 @@
       "build_id": "UKQ1.230804.001",
       "incremental": "V816.0.5.0.UMCMIXM",
       "security_patch": "2024-05-01",
+      "build_user": "builder",
+      "build_host": "pangu-build-component-system-292349-p28nz-18rcr-77nvx",
+      "build_date": "Mon May 20 14:17:54 UTC 2024",
+      "build_date_utc": 1716214674,
       "source": "https://github.com/xdaGari/tadiphone-buildprop-archive/tree/main/xiaomi/fuxi/missi_phone_global-user-14-UKQ1.230804.001-V816.0.5.0.UMCMIXM-release-keys"
     }
   }

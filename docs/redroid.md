@@ -8,6 +8,10 @@ A mobile account is opened in a **pod** of two containers (`core/emulator/pod.py
 - `<name>`, the [redroid](https://github.com/remote-android/redroid-doc) **Android** container
   (`core/emulator/redroid.py`), created with `--network container:<name>-net`.
 
+Both are created with `--cgroupns private` (their own cgroup tree, not the host's): Docker's
+default on cgroup v2 hosts, set anyway for v1. The flag needs Docker Engine 20.10 (API 1.41) or
+newer.
+
 Android itself knows nothing of the proxy: no VPN, no in-app setting. It presents the mobile
 fingerprint's maker, model and SDK and is signed in through `adb`. Docker has no window, so the
 phone is shown in a scrcpy window opened by the phone button.
@@ -105,12 +109,19 @@ The container is a real phone (`core/emulator/_profile.py`):
 
 - **Firmware**: `configs/oem_blueprints/*.json` holds one file per phone of the catalogue
   (`core/device_fingerprint_android.py`), with one real build per Android SDK it ran, taken from
-  public firmware listings. `ro.product.*` (every partition), `ro.build.*` and
+  public firmware listings. `ro.product.*` (every partition, `vendor_dlkm` too), `ro.build.*` and
   `ro.build.fingerprint` / `ro.build.description` (put together from the build's fields) name
-  that phone and build. `ro.sf.lcd_density` and the screen (`androidboot.redroid_width/height/dpi`)
+  that phone and build. `Build.USER` / `Build.HOST` / `Build.TIME` (`ro.build.user`,
+  `ro.build.host`, `ro.<partition>.build.date[.utc]`) are that build's, read from the same dump,
+  its date in the build server's zone; `Build.BOARD` (`ro.product.board`) is the phone's board as
+  its vendor partition names it (`panther`, `kalama`, `s5e8835`). No value carries a word
+  Telegram's `EmuDetector` looks for (goldfish, ranchu, nox, vbox86, generic, sdk, emulator...;
+  `tests/core/emulator/test_identity.py`). `ro.sf.lcd_density` and the screen (`androidboot.redroid_width/height/dpi`)
   are the phone's container screen. Left to the image: `ro.build.version.sdk` (the SDK check
-  reads it), `ro.hardware` / `ro.board.platform` (they pick the HALs it boots with) and the
-  security flags adbd depends on.
+  reads it), `ro.hardware` / `ro.board.platform` (`ro.hardware` comes only from
+  `androidboot.hardware`; HALs are looked up by both), the security flags adbd depends on, and
+  `/system/xbin/su`: adbd runs as `shell` (uid 2000), and the stealth step's root (the boot_id
+  bind mount) goes through `su`.
 - **Serial and IMEI** are derived from the account id, so the account keeps its phone when its
   container is made again. The serial goes on the command line (`androidboot.serialno`): init
   sets `ro.serialno` from it before any `build.prop` is read. redroid has no radio (no RIL), so
@@ -129,7 +140,10 @@ The container is a real phone (`core/emulator/_profile.py`):
   and 23:30 and charged 15–25% an hour up to the next morning's level, which it always reaches
   before it is unplugged (all drawn per account and date). So it never jumps, at midnight or
   anywhere else. Set after every boot and at every open of a running pod, so it moves through
-  the day across stops and pauses. A phone that refuses it keeps its old level.
+  the day across stops and pauses. A phone that refuses it keeps its old level. redroid has no
+  battery (`present: false`, level 0) until told `present 1`, which comes last: a present battery
+  still at level 0 shuts Android down at once. Its voltage and technology cannot be set
+  (`dumpsys battery set` refuses both).
 - **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
   `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps; `mt6877` has no public
   cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its
@@ -345,6 +359,7 @@ Telegram's universal APK carries `arm64-v8a`.
 
 ```bash
 apt-get install -y docker.io adb
+# Docker Engine 20.10 (API 1.41) or newer: pods are created with --cgroupns private.
 # Stock Ubuntu kernels ship binder_linux here; a vendor kernel has no such package (see below).
 apt-get install -y "linux-modules-extra-$(uname -r)" || true
 echo 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/binder.conf
