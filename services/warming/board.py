@@ -113,7 +113,7 @@ def _to_card(
     *,
     readiness: WarmingReadiness | None = None,
     survival: AccountSurvival | None = None,
-    mechanics: WarmingMechanics | None = None,
+    mechanics: WarmingMechanics,
 ) -> WarmingAccountState:
     state: WarmingState = record.state if record else "idle"
     # Collapse the per-field `record.x if record else default` ternaries (one per
@@ -133,9 +133,7 @@ def _to_card(
         health=warming_health(state),
         readiness=readiness,
         survival=survival,
-        mechanics=_card_mechanics(
-            mechanics or WarmingMechanics(), record.device_mode if record else "desktop"
-        ),
+        mechanics=_card_mechanics(mechanics, record.device_mode if record else "desktop"),
         spam_check_warning=(
             record is not None
             and record.spam_unknown_streak >= settings.warming.spam_unknown_warn_streak

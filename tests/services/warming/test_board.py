@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -27,6 +28,7 @@ from schemas.warming import (
 )
 from services import warming
 from services.accounts import mobile_emulator
+from services.warming import _state
 from tests.services.warming._support import (
     _seed_ready_account,
     _set_settings,
@@ -268,3 +270,31 @@ async def test_a_phone_card_shows_only_the_steps_a_visit_runs(
     assert cards["acc-desk"] == board.mechanics
     assert board.mechanics.join
     assert board.mechanics.dialogue
+
+
+@pytest.mark.asyncio
+async def test_a_single_card_reply_carries_the_settings_mechanics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "story_view_enabled", True)
+    await _set_settings(chat=True, reactions=False, key="test-key-not-real")
+    await create_account(AccountCreate(account_id="acc-phone"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-phone", state="idle", device_mode="mobile")
+    )
+    request = StopWarmingRequest(account_id="acc-phone")
+
+    kept = await warming.stop_warming(request)
+    # Deleted mid-flight: the card comes from the warming record alone.
+    monkeypatch.setattr(_state, "fetch_account", AsyncMock(return_value=None))
+    orphan = await warming.stop_warming(request)
+
+    for card in (kept, orphan):
+        mechanics = card.mechanics
+        # Reactions follow the switch; a phone never joins or takes a dialogue turn.
+        assert (mechanics.join, mechanics.reactions, mechanics.stories, mechanics.dialogue) == (
+            False,
+            False,
+            True,
+            False,
+        )
