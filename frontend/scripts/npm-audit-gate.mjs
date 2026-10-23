@@ -28,6 +28,15 @@ const IGNORED = new Map([
     'braces: build-time only via steiger, fed our own glob patterns; no patched release',
   ],
   [
+    // zod < 4.6.6: память кончается при проверке огромных ограниченных коллекций. Патч
+    // только в zod 4. У нас zod 3 проверяет лишь формы оператора (прокси, 2FA, профиль,
+    // лимиты) — короткий ввод самого оператора в его же браузере, не чужие данные; ещё
+    // zod 3 тянут eslint-plugin-react-hooks и steiger (только сборка). Убрать при
+    // переходе на zod 4, когда его примут и эти инструменты.
+    'GHSA-mrhx-c7xc-m3w5',
+    'zod 3: validates only the operator’s own short form input; fix exists only in zod 4',
+  ],
+  [
     // Storybook origin validation in preview: dev/catalog tool only, not in production bundle.
     'GHSA-f2ph-cmg5-wxc8',
     'storybook: dev/catalog tool only, never exposed or shipped in production bundle',
