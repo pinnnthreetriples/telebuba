@@ -38,12 +38,16 @@ if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
     from schemas.proxy import ProxySettings
 
+_EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_COMMAND_TIMEOUT: EmulatorRefusalCode = "emulator_command_timeout"
 _EMULATOR_PROXY_UNSUPPORTED: EmulatorRefusalCode = "emulator_proxy_unsupported"
 
 # ``docker cp`` of this directory lands at /etc/net-gateway, where the entrypoint reads it.
 _CONFIG_DIR = "net-gateway"
 _PROXY_FILE = f"/etc/{_CONFIG_DIR}/proxy"
+# Seconds between tunnel probes: the tunnel is usually up within a second or two of the
+# start, and every poll interval past that is added to the pod's start.
+_TUNNEL_POLL_SECONDS = 0.2
 
 
 def gateway_name(name: str) -> str:
@@ -143,16 +147,31 @@ async def give_proxy(gateway: str, proxy_text: str, address: str) -> None:
 async def wait_for_tunnel(gateway: str) -> None:
     """Return once the gateway's tunnel carries its namespace; ``emulator_command_timeout`` else.
 
-    A failed probe is polled again: ``docker exec`` right after ``docker start`` can
-    exit 255 while the container comes up. A gateway whose entrypoint failed has
-    exited, so its probes keep failing until the time runs out.
+    A failed probe is polled again while the gateway runs: ``docker exec`` right after
+    ``docker start`` can exit 255 while the container comes up. A gateway whose
+    entrypoint failed (a kill-switch rule, a dead tunnel) has exited: that is
+    ``emulator_command_failed`` at once, not a wait for the timeout. Each docker call
+    is bounded by the time left, so none runs far past the deadline.
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + settings.emulator.tunnel_timeout_seconds
-    while await docker_or_none("exec", gateway, "net-gateway", "ready") is None:
-        if loop.time() >= deadline:
-            raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
-        await asyncio.sleep(settings.emulator.poll_seconds)
+    while (left := deadline - loop.time()) > 0:
+        if await docker_or_none("exec", gateway, "net-gateway", "ready", seconds=left) is not None:
+            return
+        if not await _running(gateway, deadline - loop.time()):
+            raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+        await asyncio.sleep(max(0.0, min(_TUNNEL_POLL_SECONDS, deadline - loop.time())))
+    raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
+
+
+async def _running(container: str, left: float) -> bool:
+    """Whether ``container`` still runs (``False`` once it is gone), within ``left`` seconds."""
+    if left <= 0:
+        raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
+    state = await docker_or_none(
+        "inspect", "--format", "{{.State.Running}}", container, seconds=left
+    )
+    return state is not None and state.strip() == "true"
 
 
 async def runs_proxy(gateway: str, proxy_text: str) -> bool:

@@ -91,6 +91,8 @@ def _inspect(argv: list[str], diffs: dict[str, str], gateway_started: str) -> st
     """The fake docker's ``inspect``: an image, an Android's recorded diff or each start."""
     if argv[1] == "image" or argv[3] == "{{.Image}}":
         return _GATEWAY_IMAGE_ID + "\n"
+    if argv[3] == "{{.State.Running}}":
+        return "true\n"
     if "telebuba.data_diff" in argv[3]:
         return diffs.get(argv[4], "") + "\n"
     return "".join(
@@ -325,7 +327,7 @@ async def test_a_tunnel_that_never_comes_up_removes_the_gateway_it_created(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings.emulator, "tunnel_timeout_seconds", 2.5)
-    monkeypatch.setattr(settings.emulator, "poll_seconds", 1.0)
+    monkeypatch.setattr(_gateway, "_TUNNEL_POLL_SECONDS", 1.0)
     console.answer = _docker(fail=lambda argv: argv[1] == "exec")
     loop = asyncio.get_running_loop()
     clock = {"now": loop.time()}
@@ -341,7 +343,7 @@ async def test_a_tunnel_that_never_comes_up_removes_the_gateway_it_created(
 
     assert failed.value.code == "emulator_command_timeout"
     probes = [call for call in console.calls if call[1] == "exec"]
-    assert len(probes) == 4, "polled at 0, 1, 2 and 3 s, not given up on the first failure"
+    assert len(probes) == 3, "polled at 0, 1 and 2 s up to the deadline, not given up at once"
     assert _verbs(console)[-1] == "rm --force"
     assert console.calls[-1][2:] == ["--force", "telebuba-new-net"]
     assert "create telebuba-new" not in _verbs(console), "Android is never created"
@@ -380,7 +382,7 @@ async def test_a_probe_that_fails_while_the_gateway_comes_up_is_polled_again(
 
     await _gateway.wait_for_tunnel("telebuba-acc-0-net")
 
-    assert len(console.calls) == 3
+    assert [call[1] for call in console.calls] == ["exec", "inspect"] * 2 + ["exec"]
 
 
 @pytest.mark.asyncio

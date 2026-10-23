@@ -25,7 +25,8 @@ phone is shown in a scrcpy window opened by the phone button.
   but the Docker gateway, which is where the published loopback port arrives from.
 - **Start**: pull or build a missing image, create what is missing (gateway first), stop whatever of the pod runs, copy the
   account's current proxy into the gateway, start it, wait until `net-gateway ready` (tun0 up,
-  tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`), then create/start Android.
+  tunnel running, routing in place; `EMULATOR__TUNNEL_TIMEOUT_SECONDS`, probed every 0.2 s; a
+  gateway that exited meanwhile fails the start at once), then create/start Android.
   A failed start removes what it created and stops what it found; an open that fails once a new
   container booted (its SDK checked) only stops it, so its seeded `/data` spares the next try a
   first boot and a seeding. **Stop** is Android, then the
