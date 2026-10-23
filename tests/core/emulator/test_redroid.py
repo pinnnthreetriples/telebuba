@@ -19,7 +19,6 @@ from core.emulator._profile import (
     build_cellular_stealth_commands,
     build_container_isolation_commands,
     build_usb_stealth_commands,
-    build_user_build_resetprop_commands,
     container_spec,
 )
 from tests.core.emulator.test_topology import CHIP
@@ -379,21 +378,10 @@ def test_profile_command_builders_include_all_stage3_requirements() -> None:
     assert "rm -f /.dockerenv" in isolation
     assert "mount --bind -o ro /dev/.boot_id /proc/sys/kernel/random/boot_id" in isolation
 
-    resetprops = "\n".join(build_user_build_resetprop_commands({"ro.product.model": "SM-S921B"}))
-    assert "resetprop --delete" in resetprops
-    assert "resetprop -n ro.build.type user" in resetprops
-    assert "resetprop -n ro.build.tags release-keys" in resetprops
-    assert "resetprop -n ro.debuggable 0" in resetprops
-    assert "resetprop -n ro.secure 1" in resetprops
-    assert "resetprop -n ro.boot.verifiedbootstate green" in resetprops
-    assert "resetprop -n ro.boot.flash.locked 1" in resetprops
-    assert "resetprop -n ro.boot.vbmeta.device_state locked" in resetprops
-
     usb_cmds = "\n".join(build_usb_stealth_commands())
-    assert "settings put global adb_enabled 0" in usb_cmds
     assert "settings put global development_settings_enabled 0" in usb_cmds
-    assert "resetprop -n sys.usb.state mtp" in usb_cmds
-    assert "resetprop -n sys.usb.config mtp" in usb_cmds
+    assert "setprop sys.usb.state mtp" in usb_cmds
+    assert "setprop sys.usb.config mtp" in usb_cmds
 
     battery_cmds = "\n".join(build_battery_stealth_commands(level=65, temp=320))
     assert "dumpsys battery set status 3" in battery_cmds
@@ -404,8 +392,25 @@ def test_profile_command_builders_include_all_stage3_requirements() -> None:
     assert "dumpsys battery set temp 320" in battery_cmds
 
     cellular_cmds = "\n".join(build_cellular_stealth_commands())
-    assert "resetprop -n gsm.network.type LTE" in cellular_cmds
-    assert "resetprop -n gsm.sim.state READY" in cellular_cmds
+    assert "setprop gsm.network.type LTE" in cellular_cmds
+    assert "setprop gsm.sim.state READY" in cellular_cmds
+
+
+@pytest.mark.asyncio
+async def test_stealth_script_keeps_adb_and_needs_no_resetprop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # redroid ships no resetprop (exit 127 failed every open), and adb_enabled=0 stops
+    # adbd for good: the setting persists in /data and the app loses the phone.
+    expected_id = "11111111-2222-4333-8444-555555555555"
+    mock_shell = AsyncMock(side_effect=["", expected_id, "ok"])
+    monkeypatch.setattr(adb, "shell", mock_shell)
+
+    await adb.apply_stealth_profile("127.0.0.1:5555", boot_id=expected_id)
+
+    script = mock_shell.await_args_list[0].args[1]
+    assert "resetprop" not in script
+    assert "adb_enabled" not in script
 
 
 @pytest.mark.asyncio

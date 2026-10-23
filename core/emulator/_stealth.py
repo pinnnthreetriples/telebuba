@@ -23,12 +23,11 @@ from core.emulator._profile import (
     build_cellular_stealth_commands,
     build_container_isolation_commands,
     build_usb_stealth_commands,
-    build_user_build_resetprop_commands,
     generate_instance_boot_id,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from schemas.emulator import EmulatorRefusalCode
 
@@ -49,16 +48,18 @@ async def exec_root_script(serial: str, commands: Sequence[str]) -> str:
 async def apply_stealth_profile(
     serial: str,
     *,
-    extra_props: Mapping[str, str] | None = None,
     boot_id: str | None = None,
     battery_level: int | None = None,
     battery_temp: int | None = None,
 ) -> str:
-    """Apply user-build profile, isolate container markers and simulate battery/LTE."""
+    """Isolate container markers and simulate USB, battery and LTE, without ``resetprop``.
+
+    redroid ships no ``resetprop``, so no ``ro.*`` property changes here: the user build
+    goes into ``build.prop`` before boot (``core.emulator.redroid.build_prop``).
+    """
     instance_boot_id = boot_id or generate_instance_boot_id()
     commands = [
         *build_container_isolation_commands(instance_boot_id),
-        *build_user_build_resetprop_commands(extra_props),
         *build_usb_stealth_commands(),
         *build_battery_stealth_commands(level=battery_level, temp=battery_temp),
         *build_cellular_stealth_commands(),
