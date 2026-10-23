@@ -10,26 +10,23 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-import shlex
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.config import settings
+from core.emulator._battery import BatteryTelemetryState
 from core.emulator._errors import EmulatorError
 from core.emulator._input import HumanInputEngine
-from core.emulator._process import adb_command
-from core.emulator._profile import (
-    build_battery_stealth_commands,
-    build_cellular_stealth_commands,
-    build_container_isolation_commands,
-    build_usb_stealth_commands,
-    build_user_build_resetprop_commands,
-    generate_instance_boot_id,
+from core.emulator._process import adb_command, shell
+from core.emulator._stealth import (
+    apply_battery_telemetry,
+    apply_stealth_profile,
+    exec_root_script,
+    step_battery_discharge,
 )
 from core.emulator._text import escape_input_text, shell_quote
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from core.emulator.ui_dump import UiNode
@@ -74,12 +71,6 @@ def _dump_script(xml: str, log: str) -> tuple[str, ...]:
         *("kill", "$p", "2>/dev/null", ";"),
         *("cat", log, xml, "2>/dev/null", ";"),
         *("rm", "-f", log, xml, ";", "true"),
-    )
-
-
-async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
-    return await adb_command(
-        "-s", serial, "shell", *args, seconds=seconds, step=f"adb shell {args[0]}"
     )
 
 
@@ -137,13 +128,14 @@ async def install_apk(
     serial: str,
     path: Path | None = None,
     *,
+    apk_path: Path | None = None,
     installer_package: str | None = "com.android.vending",
 ) -> None:
     """Install the configured (or given) APK; ``emulator_apk_missing`` when there is no file.
 
     By default simulates installation from Google Play Store using -i com.android.vending.
     """
-    apk = path or settings.emulator.telegram_apk_path
+    apk = apk_path or path or settings.emulator.telegram_apk_path
     if not apk.is_file():
         raise EmulatorError(_EMULATOR_APK_MISSING)
     args = ["-s", serial, "install", "-r"]
@@ -332,58 +324,28 @@ async def double_tap(
     await shell(serial, "input", "tap", x, y, ";", "input", "tap", x, y)
 
 
-async def exec_root_script(serial: str, commands: Sequence[str]) -> str:
-    """Execute a list of shell commands inside the container as root."""
-    joined = " && ".join(commands)
-    script = (
-        f'if [ "$(id -u 2>/dev/null)" = "0" ]; then sh -c {shlex.quote(joined)}; '
-        f"elif command -v su >/dev/null 2>&1; then su 0 sh -c {shlex.quote(joined)}; "
-        f"else sh -c {shlex.quote(joined)}; fi"
-    )
-    return await shell(serial, script)
-
-
-async def apply_stealth_profile(
-    serial: str,
-    *,
-    extra_props: Mapping[str, str] | None = None,
-    boot_id: str | None = None,
-    battery_level: int | None = None,
-    battery_temp: int | None = None,
-) -> str:
-    """Apply user-build profile, isolate container markers and simulate battery/LTE."""
-    instance_boot_id = boot_id or generate_instance_boot_id()
-    commands = [
-        *build_container_isolation_commands(instance_boot_id),
-        *build_user_build_resetprop_commands(extra_props),
-        *build_usb_stealth_commands(),
-        *build_battery_stealth_commands(level=battery_level, temp=battery_temp),
-        *build_cellular_stealth_commands(),
-    ]
-
-    await exec_root_script(serial, commands)
-
-    actual_boot_id = (await shell(serial, "cat", "/proc/sys/kernel/random/boot_id")).strip()
-    if actual_boot_id != instance_boot_id:
-        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
-
-    probe = await shell(serial, "echo ok")
-    if probe.strip() != "ok":
-        raise EmulatorError(_EMULATOR_COMMAND_FAILED)
-
-    return instance_boot_id
-
-
-async def step_battery_discharge(serial: str, decrement: int = 1) -> None:
-    """Safely decrement battery level by ``decrement``% (clamped to minimum 5%)."""
-    output = await shell(serial, "dumpsys", "battery")
-    level: int | None = None
-    for line in output.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("level:"):
-            with suppress(ValueError):
-                level = int(stripped.split(":", 1)[1].strip())
-            break
-    if level is not None:
-        new_level = max(5, level - decrement)
-        await shell(serial, "dumpsys", "battery", "set", "level", str(new_level))
+__all__ = [
+    "BatteryTelemetryState",
+    "HumanInputEngine",
+    "apply_battery_telemetry",
+    "apply_stealth_profile",
+    "assert_sdk",
+    "connect_device",
+    "double_tap",
+    "dump_ui",
+    "exec_root_script",
+    "getprop",
+    "human_swipe",
+    "human_tap",
+    "human_type",
+    "install_apk",
+    "installed_packages",
+    "open_uri",
+    "press",
+    "push",
+    "shell",
+    "start_app",
+    "step_battery_discharge",
+    "type_text",
+    "wait_for_boot",
+]

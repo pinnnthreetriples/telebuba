@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.emulator import (
     EmulatorError,
     adb_serial,
+    apply_battery_telemetry,
     apply_stealth_profile,
     assert_sdk,
     ensure_app,
@@ -103,6 +105,8 @@ async def _start(
         await assert_sdk(serial, spec.sdk)
         await apply_stealth_profile(serial)
         booted = True
+        with suppress(EmulatorError):
+            await apply_battery_telemetry(serial, account_id=account.account_id)
         report_stage(account.account_id, "app")
         seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
         try:

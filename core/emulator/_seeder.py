@@ -34,7 +34,13 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.emulator import adb
 from core.emulator._errors import EmulatorError
-from core.emulator._seed_data import make_contacts, make_photos, rng_for
+from core.emulator._seed_data import (
+    build_call_and_sms_seed_commands,
+    generate_call_and_sms_history,
+    make_contacts,
+    make_photos,
+    rng_for,
+)
 from core.emulator._text import shell_quote
 
 if TYPE_CHECKING:
@@ -224,12 +230,22 @@ async def _run_script(serial: str, lines: list[str], remote: str = _SCRIPT) -> N
 
 
 async def seed_contacts(serial: str, spec: ContainerSpec) -> None:
-    """Write the contacts of ``spec``'s proxy country into the container's address book."""
+    """Write the contacts and telephony history of ``spec``'s proxy country."""
     # Off the event loop: a sparse numbering plan keeps ``phonenumbers`` busy a while.
     contacts = await asyncio.to_thread(
         make_contacts, spec.region.country, rng_for(spec, "contacts")
     )
-    await _run_script(serial, contacts_script(contacts))
+    time_rng = rng_for(spec, "telephony_time")
+    base_ms = 1792627200000 + (time_rng.randint(0, 86400 * 14) * 1000)
+    calls, sms_list = await asyncio.to_thread(
+        generate_call_and_sms_history,
+        contacts,
+        seed=f"telephony:{spec.serial}",
+        locale=spec.region.locale,
+        now_ms=base_ms,
+    )
+    script_lines = contacts_script(contacts) + build_call_and_sms_seed_commands(calls, sms_list)
+    await _run_script(serial, script_lines)
 
 
 def _write_photos(folder: Path, photos: list[Photo]) -> list[str]:

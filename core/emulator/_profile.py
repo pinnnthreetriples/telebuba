@@ -163,6 +163,9 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
             props[f"{side}.numeric"] = carrier.numeric
             props[f"{side}.alpha"] = carrier.alpha
             props[f"{side}.iso-country"] = spec.region.country
+        props["gsm.network.type"] = "LTE"
+        props["gsm.current.phone-type"] = "1"
+        props["gsm.sim.state"] = "READY"
     return props
 
 

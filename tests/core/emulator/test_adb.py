@@ -131,6 +131,7 @@ async def test_install_apk_supports_custom_or_no_installer_package(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test that install_apk accepts custom installer_package or None."""
     apk = tmp_path / "telegram.apk"
     apk.write_bytes(b"apk")
     monkeypatch.setattr(settings.emulator, "telegram_apk_path", apk)
@@ -144,9 +145,23 @@ async def test_install_apk_supports_custom_or_no_installer_package(
 
 
 @pytest.mark.asyncio
+async def test_install_apk_accepts_explicit_apk_path(
+    console: Console,
+    tmp_path,
+) -> None:
+    """Test that install_apk accepts explicit apk_path with Play Store flag."""
+    custom_apk = tmp_path / "custom.apk"
+    custom_apk.write_bytes(b"custom-apk-content")
+    await adb.install_apk("emulator-5554", apk_path=custom_apk)
+
+    assert console.calls[0][3:] == ["install", "-r", "-i", "com.android.vending", str(custom_apk)]
+
+
+@pytest.mark.asyncio
 async def test_step_battery_discharge_decrements_level(
     console: Console,
 ) -> None:
+    """Test that step_battery_discharge decrements battery level by specified percentage."""
     console.answer = lambda argv: "  level: 80\n  status: 3" if "dumpsys" in argv else ""
     await adb.step_battery_discharge("emulator-5554", decrement=3)
 
