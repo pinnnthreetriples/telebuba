@@ -39,9 +39,10 @@ _WEB_PACKAGE = "org.telegram.messenger.web"
 _PACKAGE_INSTALLER = "com.android.packageinstaller"
 _PLAY_STORE_INSTALLER = "com.android.vending"
 # The Telegram found on each phone, by serial, so a bring-to-front or a link needs no
-# ``pm list packages``. Forgotten when ``ensure_app`` installs one and whenever a
-# container starts (``forget_app``): a serial is a pod index's, and the next container
-# at that index may be another phone.
+# ``pm list packages``. A phone without one is never remembered, so ``ensure_app``'s
+# install is seen at the next read; forgotten whenever a container starts
+# (``forget_app``): a serial is a pod index's, and the next container there may be
+# another phone.
 _PACKAGES: dict[str, str] = {}
 
 
@@ -118,7 +119,6 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
         else:
             package = app_identity(target_apk).package
         installer = _PACKAGE_INSTALLER if package == _WEB_PACKAGE else _PLAY_STORE_INSTALLER
-        forget_app(serial)  # an install, even a failed one, may change what the phone has
         await adb.install_apk(serial, target_apk, installer_package=installer)
     await adb.start_app(serial, package)
 
