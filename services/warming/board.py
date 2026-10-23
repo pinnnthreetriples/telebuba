@@ -50,7 +50,7 @@ from services.warming._console import (
     geo_accepted,
     settled_today,
 )
-from services.warming._mobile_prep_state import phone_prep
+from services.warming._mobile_prep_state import phone_no_channels, phone_prep
 from services.warming._pool_requests import pending_refill_request
 from services.warming.pacing import (
     _account_age_hours,
@@ -145,6 +145,12 @@ def _to_card(
             phone_prep(account.account_id)
             if record is not None and record.device_mode == "mobile" and is_warming(state)
             else None
+        ),
+        phone_no_channels=(
+            record is not None
+            and record.device_mode == "mobile"
+            and is_warming(state)
+            and phone_no_channels(account.account_id)
         ),
         live_phone_id=(
             container_name(account.account_id)
