@@ -60,12 +60,15 @@ async def _eligible_accounts() -> dict[str, str | None]:
     """Warming accounts that can talk, sorted, each with its phone's language.
 
     An account with a confirmed spam block cannot write to strangers, so it is never
-    anyone's partner: the other side would wait on a reply that cannot come.
+    anyone's partner: the other side would wait on a reply that cannot come. Nor is a
+    phone stint: its visits happen in the app, which never writes a DM.
     """
     warming_ids = {
         record.account_id
         for record in await list_warming_states()
-        if is_warming(record.state) and not spam_block_known(record)
+        if is_warming(record.state)
+        and not spam_block_known(record)
+        and record.device_mode != "mobile"
     }
     eligible = {
         account.account_id: account_language(account.phone)

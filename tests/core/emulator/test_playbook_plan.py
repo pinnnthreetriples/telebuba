@@ -14,8 +14,13 @@ import pytest
 
 from core.emulator import playbook
 from core.emulator._input import HumanInputEngine
-from core.emulator.playbook import TelegramMobilePlaybook, channel_rows, story_avatars
-from schemas.emulator import PlaybookPlan
+from core.emulator.playbook import (
+    TelegramMobilePlaybook,
+    channel_rows,
+    spent_actions,
+    story_avatars,
+)
+from schemas.emulator import PlaybookPlan, PlaybookResult
 from tests.core.emulator.test_playbook import (  # noqa: F401 - the clock fixture
     CHANNEL_ROW,
     MENU,
@@ -150,6 +155,54 @@ async def test_stories_first_are_watched_before_any_channel(
     assert left <= int(first_tap[2]) < right
     assert top <= int(first_tap[3]) < bottom
     assert result.stories_watched >= 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_the_story_glance_spends_one_action_of_the_budget(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """As on desktop: one story view however many stories it shows, then the budget is gone."""
+    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
+
+    result = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(stories_first=True, max_actions=1, reaction_probability=0.0)
+    )
+
+    assert result.stories_watched >= 1
+    assert result.channels_read == 0
+    assert spent_actions(result) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_spent_budget_opens_no_stories_first(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _phone(monkeypatch, console, [STORY, CHANNEL_ROW])
+
+    result = await _playbook().run_session(
+        SERIAL, 600, PlaybookPlan(stories_first=True, max_actions=0, reaction_probability=0.0)
+    )
+
+    assert spent_actions(result) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_session_counts_into_the_progress_it_is_given(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The caller reads what was done so far even if the session never returns."""
+    monkeypatch.setattr(playbook, "_STORIES_SHARE", 0.0)
+    _phone(monkeypatch, console, [CHANNEL_ROW])
+    progress = PlaybookResult()
+    session = TelegramMobilePlaybook(_playbook().engine, progress=progress)
+
+    result = await session.run_session(SERIAL, 600, NO_REACTIONS)
+
+    assert result is progress
+    assert progress.channels_read == 1
 
 
 def test_a_long_text_is_read_longer_than_a_picture() -> None:

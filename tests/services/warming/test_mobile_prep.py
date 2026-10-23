@@ -225,9 +225,9 @@ class _Visits:
         self.status: CycleStatus = status
 
     async def __call__(
-        self, request: WarmingCycleRequest, *, on_step: object
+        self, request: WarmingCycleRequest, *, on_step: object, tally: object = None
     ) -> WarmingCycleResult:
-        del on_step
+        del on_step, tally
         self.calls += 1
         return WarmingCycleResult(account_id=request.account_id, status=self.status)
 

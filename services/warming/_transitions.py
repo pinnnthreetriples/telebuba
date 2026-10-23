@@ -52,6 +52,10 @@ MOBILE_REFUSED_ACTION = "mobile_refused"
 # A failed cycle that did no work but stopped on one of these sleeps it off and
 # retries instead of parking the account in ``error``.
 _RETRYABLE_ACTIONS = frozenset({"set_online", MOBILE_SESSION_ACTION})
+# A phone visit skipped for a full host (``emulator_capacity``) tries again this many
+# seconds later, drawn in the range, not a whole visit gap later: a slot frees soon.
+_CAPACITY_DETAIL = "emulator_capacity"
+CAPACITY_RETRY_SECONDS = (300.0, 900.0)
 
 
 class _PhaseEvent(NamedTuple):
@@ -257,6 +261,9 @@ async def _calculate_next_run(
             next_state = "sleeping"
         else:
             next_state = "error"
+    elif result.status == "skipped" and result.detail == _CAPACITY_DETAIL:
+        sleep_seconds = _seams.rng.uniform(*CAPACITY_RETRY_SECONDS)
+        next_state = "sleeping"
     else:
         # Persona-derived gap: the active window split into the persona's
         # sessions/day (capped by what the phase budget affords), ±jitter.

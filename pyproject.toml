@@ -62,9 +62,9 @@ exclude-newer = "7 days"
 # rolling cutoff. Admit that release only; 2.15.1 remains in cooldown.
 # certifi 2026.10.19 (PYSEC-2026-4320), pillow 13.0.0 (CVE-2026-112395 and
 # seven more) and virtualenv 21.14.9 (CVE-2026-113722/113725/113726/113732/113776)
-# are admitted the same way: each cutoff sits just after that release's upload.
-# virtualenv 21.14.10 (CVE-2026-113713) and filelock 4.2.1 (CVE-2026-112907/112913/
-# 112937/112940) replace the earlier virtualenv cutoff likewise.
+# and filelock 4.2.1 (CVE-2026-112914/112940) are admitted the same way: each
+# cutoff sits just after that release's upload. virtualenv 21.14.10 (CVE-2026-113713)
+# moves its cutoff past that upload likewise.
 exclude-newer-package = { pyjwt = "2026-09-24T00:00:00Z", certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-17T00:00:00Z", virtualenv = "2026-10-17T18:00:00Z", filelock = "2026-10-17T17:00:00Z" }
 # Override transitive deps when upstream upper-pins a vulnerable version.
 # Each entry must reference a CVE / advisory and be revisited when the
@@ -114,6 +114,9 @@ override-dependencies = [
     "virtualenv>=21.14.9",
     # PYSEC-2026-4320 in certifi <2026.10.19 (via httpx/requests).
     "certifi>=2026.10.19",
+    # CVE-2026-112914/112940 in filelock <4.2.1 (via virtualenv and pip-audit's
+    # cachecontrol). Recheck when those dependents require the patched line.
+    "filelock>=4.2.1",
 ]
 
 # ============================================================================

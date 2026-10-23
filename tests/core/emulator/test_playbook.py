@@ -7,6 +7,7 @@ list), and time is a fake clock that only ``asyncio.sleep`` moves.
 
 from __future__ import annotations
 
+import asyncio
 import random
 from typing import TYPE_CHECKING
 
@@ -336,6 +337,24 @@ async def test_stories_stop_when_the_viewer_closes(
 
     assert len(console.shell_calls()) == 1, "only the avatar; no tap on the chat list"
     assert session.result.stories_watched == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("clock")
+async def test_a_story_cut_off_while_it_shows_still_counts(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _phone(monkeypatch, console, [STORY])
+    session = _playbook()
+
+    async def _cut_off(_seconds: float) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(playbook.asyncio, "sleep", _cut_off)
+    with pytest.raises(asyncio.CancelledError):
+        await session.watch_stories(SERIAL, max_stories=1)
+
+    assert session.result.stories_watched == 1, "the viewer opened: the glance is spent"
 
 
 @pytest.mark.asyncio

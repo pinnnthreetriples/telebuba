@@ -44,6 +44,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# What a phone visit does in the app (``_mobile_cycle``): it never joins, DMs or runs extras.
+_PHONE_STEPS = frozenset({"set_online", "stories", "read", "react"})
+
 
 class _IterationPlan(NamedTuple):
     age_hours: float
@@ -173,11 +176,18 @@ async def _plan_this_visit(
 
     The budget is the day's remainder split over the visits left (4.3), capped by the
     kind's share (4.4); what the visit leaves unspent returns through the reconcile.
-    «Только ответить» is offered only while a partner's DM waits and DMs are allowed.
+    «Только ответить» is offered only while a partner's DM waits and DMs are allowed,
+    never to a phone, which never writes one; a phone visit's card shows only the steps
+    the app takes.
     """
-    dm_waiting = plan.dm_allowed and await oldest_unreplied_for(account_id) is not None
+    phone = _seams.bound_device() == "mobile"
+    dm_waiting = (
+        plan.dm_allowed and not phone and await oldest_unreplied_for(account_id) is not None
+    )
     kind = choose_visit_kind(plan.persona, plan.phase, _seams.rng, dm_waiting=dm_waiting)
     visit = plan_visit(kind, _seams.rng)
+    if phone:
+        visit.steps = [step for step in visit.steps if step in _PHONE_STEPS]
     split = visit_budget(plan.persona, plan.effective_cap, plan.remaining)
     return visit, kind_budget(kind, split, plan.remaining, _seams.rng)
 

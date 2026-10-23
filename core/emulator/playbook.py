@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from core.emulator.ui_dump import Screen
     from schemas.emulator import EmulatorRefusalCode
 
-__all__ = ["TelegramMobilePlaybook", "channel_rows", "posts", "story_avatars"]
+__all__ = ["TelegramMobilePlaybook", "channel_rows", "posts", "spent_actions", "story_avatars"]
 
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_NOT_SIGNED_IN: EmulatorRefusalCode = "emulator_not_signed_in"
@@ -87,6 +87,17 @@ _DUMP_EVERY = 2
 
 def _now() -> float:
     return asyncio.get_running_loop().time()
+
+
+def spent_actions(result: PlaybookResult) -> int:
+    """The actions a session spent as desktop warming books them.
+
+    A channel read and a reaction each, one story glance however many stories it showed
+    (desktop's one story view), and each voice or video note played (desktop's media
+    extras). A search and a photo are reads that book nothing, like desktop's read extras.
+    """
+    glance = 1 if result.stories_watched else 0
+    return result.channels_read + result.reactions + glance + result.notes_played
 
 
 def story_avatars(nodes: list[UiNode]) -> list[UiNode]:
@@ -127,8 +138,11 @@ def posts(nodes: list[UiNode]) -> list[UiNode]:
 class TelegramMobilePlaybook(ScenarioSteps):
     """Telegram: channel feeds read with pauses, stories watched, an occasional reaction."""
 
-    def __init__(self, engine: HumanInputEngine | None = None) -> None:
+    def __init__(
+        self, engine: HumanInputEngine | None = None, *, progress: PlaybookResult | None = None
+    ) -> None:
         self.engine = engine or HumanInputEngine()
+        self._progress = progress
         self.result = PlaybookResult()
         self.plan = PlaybookPlan()
         # No end until a session sets one: a feed read on its own runs its scrolls.
@@ -146,16 +160,23 @@ class TelegramMobilePlaybook(ScenarioSteps):
 
         Starts and ends on the chat list. A channel is read at most once and the
         stories are watched at most once a session; stops early when there is nothing
-        left to open, or the plan's channels or actions are spent.
+        left to open, or the plan's channels or actions are spent. Counts into the
+        playbook's ``progress`` when it was given one, so a caller cut off mid-session
+        still knows what was done.
         """
-        self.result = PlaybookResult()
+        self.result = self._progress if self._progress is not None else PlaybookResult()
         self.plan = plan or PlaybookPlan()
         self._deadline = _now() + duration_sec
         self._read = set()
         self._stories_left = self.plan.stories
         self._start_scenarios(self.plan)
         await self.return_to_chats(serial)
-        if self.plan.stories_first and not self._halted and await self._open_stories(serial):
+        if (
+            self.plan.stories_first
+            and not self._halted
+            and not self._actions_spent()
+            and await self._open_stories(serial)
+        ):
             await self.return_to_chats(serial)
         while self._time_left() and not self._actions_spent() and not self._halted:
             if not await self._take_turn(serial):
@@ -205,7 +226,7 @@ class TelegramMobilePlaybook(ScenarioSteps):
 
     def _actions_spent(self) -> bool:
         cap = self.plan.max_actions
-        return cap is not None and self.result.channels_read + self.result.reactions >= cap
+        return cap is not None and spent_actions(self.result) >= cap
 
     async def _open_channel(self, serial: str) -> bool:
         if self.plan.channels is not None and self.result.channels_read >= self.plan.channels:
@@ -228,7 +249,7 @@ class TelegramMobilePlaybook(ScenarioSteps):
         return True
 
     async def _open_stories(self, serial: str) -> bool:
-        if not self._stories_left:
+        if not self._stories_left or self._actions_spent():
             return False
         self._stories_left = False
         before = self.result.stories_watched
@@ -295,9 +316,12 @@ class TelegramMobilePlaybook(ScenarioSteps):
         for _ in range(self.engine.rng.randint(1, max(1, max_stories))):
             if not self._time_left():
                 return
+            # Counted as it shows: a session cut off while it is watched has still seen it.
+            self.result.stories_watched += 1
             await asyncio.sleep(self.engine.sample_story_view_sec())
             screen, nodes = await read_screen(serial)
             if screen == "chats":  # the viewer never opened, or the stories ran out
+                self.result.stories_watched -= 1
                 return
             width, height = screen_size(nodes)
             # The viewer's right third moves to the next story.
@@ -305,7 +329,6 @@ class TelegramMobilePlaybook(ScenarioSteps):
             await adb.human_tap(
                 serial, UiNode("", "", "", password=False, bounds=next_zone), engine=self.engine
             )
-            self.result.stories_watched += 1
 
     async def react_to_post(self, serial: str, node: UiNode) -> None:
         """Double-tap the post: Telegram's quick reaction."""

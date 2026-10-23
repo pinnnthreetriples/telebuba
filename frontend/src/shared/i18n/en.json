@@ -1393,7 +1393,7 @@
       "emulator_twofa_missing": "The account has a cloud password that is not stored.",
       "emulator_not_running": "The container's Telegram app is not running on the account's current proxy — open it first.",
       "emulator_not_signed_in": "Telegram in the container is not signed in — finish the sign-in first.",
-      "emulator_capacity": "All warming pods are busy — the account retries on its next visit.",
+      "emulator_capacity": "All warming pods are busy — the account retries in a few minutes.",
       "not_graduated": "The account is no longer warmed — refresh the page",
       "not_spam_blocked": "The account is no longer stopped on a spam block — refresh the page",
       "emulator_scrcpy_missing": "The scrcpy-server file for the screen is missing — put it at EMULATOR__SCRCPY_SERVER_PATH.",
@@ -1407,7 +1407,8 @@
       "emulator_gpu_missing": "EMULATOR__GPU_MODE=host, but the server has no /dev/dri: install the GPU driver or set the mode to guest or auto.",
       "emulator_data_base_missing": "Shared /data is on, but the server has no prepared base for this phone's Android version in EMULATOR__DATA_BASE_DIR (docs/redroid.md).",
       "emulator_preparing": "The phone is still being prepared — the visit waits.",
-      "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again."
+      "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again.",
+      "emulator_app_offline": "The phone's Telegram kept waiting for the network: check the account's proxy."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -2091,7 +2092,8 @@
     "emulator_gpu_missing": "no GPU (/dev/dri)",
     "emulator_data_base_missing": "no /data base for this Android",
     "emulator_preparing": "phone still being prepared",
-    "emulator_screen_timeout": "screen did not open"
+    "emulator_screen_timeout": "screen did not open",
+    "emulator_app_offline": "the phone's app stayed offline"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
@@ -3282,6 +3284,7 @@
       "emulatorOff": "The emulator is switched off: phone visits are skipped until EMULATOR__ENABLED is on.",
       "phonePreparing": "Preparing the phone: Docker images, Telegram and its sign-in. Visits wait until it is ready.",
       "phonePrepFailed": "The phone is not ready: {{reason}}",
+      "phoneNoChannels": "The phone has no channel to read: its visits only glance at stories and search. Subscribe the account to a few channels: phone visits never join one.",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
       "floodTotal": "Floods total: {{total}}",
