@@ -8,7 +8,8 @@
 An image already present is used as it is: nothing is pulled or rebuilt behind the
 operator's back. A pull or build is bounded by ``image_timeout_seconds`` and fails as
 ``emulator_image_unavailable``; concurrent callers wait for the one in flight. A pod's
-two images are made present side by side: a build need not wait for a pull.
+two images are made present side by side: a build need not wait for a pull, and a
+failure of either ends both.
 """
 
 from __future__ import annotations
@@ -42,20 +43,23 @@ _LOCKS: dict[str, asyncio.Lock] = {}
 async def ensure_pod_images(spec: ContainerSpec) -> str | None:
     """Make the gateway image and ``spec``'s Android image present; the gateway image's ID.
 
-    Both at once; each one's failure is raised once both are done. The ID is what a
+    Both at once. The first failure is raised at once: the other is cancelled, its pull
+    or build killed (``_process.run_command``) and its lock let go. The ID is what a
     pod's gateway is compared with (``core.emulator.pod``), so it is not inspected twice;
     ``None`` when the image was just built (the comparison then reads it itself).
     """
-    gateway, android = await asyncio.gather(
-        ensure_gateway_image(),
-        _ensure(image_for(spec), ("pull", "{image}")),
-        return_exceptions=True,
-    )
-    if isinstance(gateway, BaseException):
-        raise gateway
-    if isinstance(android, BaseException):
-        raise android
-    return gateway
+    gateway = asyncio.ensure_future(ensure_gateway_image())
+    android = asyncio.ensure_future(_ensure(image_for(spec), ("pull", "{image}")))
+    try:
+        await asyncio.wait((gateway, android), return_when=asyncio.FIRST_EXCEPTION)
+    finally:
+        for task in (gateway, android):
+            task.cancel()
+        await asyncio.gather(gateway, android, return_exceptions=True)
+    for task in (gateway, android):
+        if not task.cancelled() and (failure := task.exception()) is not None:
+            raise failure
+    return gateway.result()
 
 
 async def ensure_gateway_image() -> str | None:

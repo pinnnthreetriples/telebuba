@@ -126,3 +126,35 @@ async def test_the_build_does_not_wait_for_the_pull(monkeypatch: pytest.MonkeyPa
     gateway = await asyncio.wait_for(images.ensure_pod_images(_SPEC), timeout=5)
 
     assert gateway is None, "just built: its ID is read where it is compared"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_build_ends_the_call_and_the_pull_beside_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pulling, pull_cancelled = asyncio.Event(), asyncio.Event()
+
+    async def docker(argv: Sequence[str], *, seconds: float, step: str) -> str:
+        del seconds, step
+        if argv[1:3] == ["image", "inspect"]:
+            code = "emulator_command_failed"  # neither image is here
+            raise EmulatorError(code)
+        if argv[1] == "pull":
+            pulling.set()
+            try:
+                await asyncio.Event().wait()  # a pull that would take its whole timeout
+            except asyncio.CancelledError:
+                pull_cancelled.set()  # where run_command kills its child
+                raise
+        await pulling.wait()
+        code = "emulator_command_failed"  # the build fails while the pull runs
+        raise EmulatorError(code)
+
+    monkeypatch.setattr("core.emulator._process.run_command", docker)
+
+    with pytest.raises(EmulatorError) as refused:
+        await asyncio.wait_for(images.ensure_pod_images(_SPEC), timeout=5)
+
+    assert refused.value.code == "emulator_image_unavailable"
+    assert pull_cancelled.is_set(), "the pull is cancelled, not waited for"
+    assert not images._LOCKS[_ANDROID].locked(), "the next start may pull it again"
