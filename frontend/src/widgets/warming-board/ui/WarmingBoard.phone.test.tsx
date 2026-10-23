@@ -69,3 +69,40 @@ test('the visit ending leaves the open screen be, and the next visit opens nothi
 
   expect(screen.queryByText('screen telebuba-acc-live view')).toBeNull();
 });
+
+test('a phone card lists only the steps its visit runs', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[
+          {
+            ...account('acc-phone', null),
+            mechanics: { join: false, reactions: true, stories: true, dialogue: false },
+          },
+        ]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  expect(screen.getByText('Механики: чтение · реакции · сторис')).toBeTruthy();
+});
+
+test('a card without mechanics falls back to the schema defaults', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[{ ...account('acc-old', null), device_mode: 'desktop' }]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  expect(screen.getByText('Механики: чтение · вступления · реакции · сторис')).toBeTruthy();
+});

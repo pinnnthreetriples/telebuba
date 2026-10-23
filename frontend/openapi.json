@@ -37231,6 +37231,9 @@
             ],
             "title": "Live Phone Id"
           },
+          "mechanics": {
+            "$ref": "#/components/schemas/WarmingMechanics"
+          },
           "readiness": {
             "anyOf": [
               {
