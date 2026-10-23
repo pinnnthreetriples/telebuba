@@ -149,8 +149,9 @@ async def wait_for_tunnel(gateway: str) -> None:
 
     A failed probe is polled again while the gateway runs: ``docker exec`` right after
     ``docker start`` can exit 255 while the container comes up. A gateway whose
-    entrypoint failed (a kill-switch rule, a dead tunnel) has exited: that is
-    ``emulator_command_failed`` at once, not a wait for the timeout. Each docker call
+    entrypoint failed (a kill-switch rule, a dead tunnel) has exited: docker saying so
+    is ``emulator_command_failed`` at once, not a wait for the timeout. An inspect that
+    fails too (a daemon hiccup) says nothing, and the polling goes on. Each docker call
     is bounded by the time left, so none runs far past the deadline.
     """
     loop = asyncio.get_running_loop()
@@ -158,20 +159,20 @@ async def wait_for_tunnel(gateway: str) -> None:
     while (left := deadline - loop.time()) > 0:
         if await docker_or_none("exec", gateway, "net-gateway", "ready", seconds=left) is not None:
             return
-        if not await _running(gateway, deadline - loop.time()):
+        if await _exited(gateway, deadline - loop.time()):
             raise EmulatorError(_EMULATOR_COMMAND_FAILED)
         await asyncio.sleep(max(0.0, min(_TUNNEL_POLL_SECONDS, deadline - loop.time())))
     raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
 
 
-async def _running(container: str, left: float) -> bool:
-    """Whether ``container`` still runs (``False`` once it is gone), within ``left`` seconds."""
+async def _exited(container: str, left: float) -> bool:
+    """Whether docker says ``container`` is not running; an inspect that failed says not."""
     if left <= 0:
         raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
     state = await docker_or_none(
         "inspect", "--format", "{{.State.Running}}", container, seconds=left
     )
-    return state is not None and state.strip() == "true"
+    return state is not None and state.strip() == "false"
 
 
 async def runs_proxy(gateway: str, proxy_text: str) -> bool:

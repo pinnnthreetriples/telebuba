@@ -51,6 +51,27 @@ async def test_a_gateway_that_exited_fails_at_once_not_at_the_timeout(
 
 
 @pytest.mark.asyncio
+async def test_an_inspect_that_fails_too_keeps_the_polling_going(
+    console: Console, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_gateway, "_TUNNEL_POLL_SECONDS", 0.001)
+    hiccups = {"left": 2}
+
+    def answer(argv: list[str]) -> str:
+        if hiccups["left"] > 0:  # the daemon answers neither the probe nor the inspect
+            hiccups["left"] -= argv[1] == "inspect"
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
+        return "true\n" if argv[1] == "inspect" else ""
+
+    console.answer = answer
+
+    await _gateway.wait_for_tunnel(_GATEWAY)
+
+    assert [call[1] for call in console.calls] == ["exec", "inspect"] * 2 + ["exec"]
+
+
+@pytest.mark.asyncio
 async def test_a_running_gateway_is_probed_until_its_tunnel_is_up(
     console: Console, monkeypatch: pytest.MonkeyPatch
 ) -> None:
