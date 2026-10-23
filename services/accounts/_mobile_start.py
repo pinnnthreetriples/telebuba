@@ -105,8 +105,7 @@ async def _start(
         await assert_sdk(serial, spec.sdk)
         await apply_stealth_profile(serial)
         booted = True
-        with suppress(EmulatorError):
-            await apply_battery_telemetry(serial, account_id=account.account_id)
+        await set_battery(serial, account.account_id)
         report_stage(account.account_id, "app")
         seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
         try:
@@ -130,6 +129,16 @@ async def _start(
         signed_in=signed_in,
         sign_in_refusal=refusal,
     ), serial
+
+
+async def set_battery(serial: str, account_id: str) -> None:
+    """Show the battery the phone has at this hour (``core.emulator._battery``).
+
+    Applied at every boot and every visit to a running pod, so the level drops through
+    the day. A phone that refuses it is left as it is: never a reason to fail the open.
+    """
+    with suppress(EmulatorError):
+        await apply_battery_telemetry(serial, account_id=account_id)
 
 
 async def sign_in_or_hand_over(

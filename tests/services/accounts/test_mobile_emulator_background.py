@@ -77,7 +77,13 @@ async def test_a_background_open_heals_a_running_app_that_fell_signed_out(
     result = await open_account_mobile("acc", background=True)
 
     assert (result.status, result.signed_in) == ("already_running", True)
-    assert container.steps[:4] == ["find:telebuba-acc", "proxy?:10.0.0.5", "connect", "front"]
+    assert container.steps[:5] == [
+        "find:telebuba-acc",
+        "proxy?:10.0.0.5",
+        "connect",
+        "battery",
+        "front",
+    ]
     assert "cutoff" in container.steps
     assert not [s for s in container.steps if s.startswith("show:")]
 

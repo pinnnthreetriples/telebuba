@@ -156,6 +156,7 @@ async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
         "find:telebuba-acc",
         "proxy?:10.0.0.5",
         "connect",
+        "battery",
         "show:1",
         "front",
         "read",

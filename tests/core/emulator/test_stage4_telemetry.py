@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import random
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -24,7 +24,6 @@ from core.emulator import adb
 from core.emulator._battery import (
     BatteryTelemetryState,
     build_battery_telemetry_commands,
-    build_sensor_jitter_commands,
     generate_initial_battery_state,
     step_battery_state,
 )
@@ -78,12 +77,12 @@ def test_battery_telemetry_state_and_commands() -> None:
     assert f"dumpsys battery set counter {stepped.charge_counter_uah}" in cmd_text
 
 
-def test_battery_telemetry_deterministic_for_account_and_date() -> None:
-    """Test determinism of initial battery state for same account and date."""
-    today = date(2026, 10, 22)
-    first = generate_initial_battery_state("acc-123", today)
-    again = generate_initial_battery_state("acc-123", today)
-    other_account = generate_initial_battery_state("acc-456", today)
+def test_battery_telemetry_deterministic_for_account_and_time() -> None:
+    """Test determinism of the battery state for the same account and moment."""
+    noon = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
+    first = generate_initial_battery_state("acc-123", noon)
+    again = generate_initial_battery_state("acc-123", noon)
+    other_account = generate_initial_battery_state("acc-456", noon)
 
     assert first.level == again.level
     assert first.temp_tenths_c == again.temp_tenths_c
@@ -92,19 +91,27 @@ def test_battery_telemetry_deterministic_for_account_and_date() -> None:
     assert (first.level, first.temp_tenths_c) != (other_account.level, other_account.temp_tenths_c)
 
 
+@pytest.mark.parametrize("account_id", ["acc-123", "acc-456", "acc-789"])
+def test_battery_drains_through_the_day_and_is_charged_overnight(account_id: str) -> None:
+    """A cold boot or a visit later in the day reads a lower level, never the morning's."""
+    day = [
+        generate_initial_battery_state(account_id, datetime(2026, 10, 22, hour, tzinfo=UTC)).level
+        for hour in (5, 10, 14, 18, 22)
+    ]
+    assert day == sorted(day, reverse=True)
+    assert day[1] > day[4]
+    assert min(day) >= 15
+    next_morning = generate_initial_battery_state(
+        account_id, datetime(2026, 10, 23, 5, tzinfo=UTC)
+    ).level
+    assert next_morning > day[4]
+
+
 def test_battery_min_level_clamping() -> None:
     """Test that battery discharge respects min_level clamping."""
     low = BatteryTelemetryState(level=15, temp_tenths_c=310, voltage_mv=3700)
     stepped = step_battery_state(low, min_level=15)
     assert stepped.level == 15
-
-
-def test_sensor_jitter_commands() -> None:
-    """Test accelerometer and gyroscope sensor jitter commands generation."""
-    cmds = build_sensor_jitter_commands(seed=42)
-    assert len(cmds) == 2
-    assert "setprop debug.sensors.accelerometer" in cmds[0]
-    assert "setprop debug.sensors.gyroscope" in cmds[1]
 
 
 @pytest.mark.asyncio
@@ -125,8 +132,8 @@ async def test_adb_battery_telemetry_functions(monkeypatch: pytest.MonkeyPatch) 
 
     next_state = await adb.step_battery_discharge("emulator-5554", initial, seed=10)
     assert next_state.level == initial.level - 1
-    # 1 from apply_battery_telemetry, 2 from step_battery_discharge (battery && + sensor ;)
-    assert mock_shell.await_count == 3
+    # 1 from apply_battery_telemetry, 1 from step_battery_discharge
+    assert mock_shell.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -143,28 +150,6 @@ async def test_adb_battery_telemetry_propagates_battery_failure(
     initial = BatteryTelemetryState(level=50, temp_tenths_c=320, voltage_mv=3800)
     with pytest.raises(EmulatorError, match="emulator_command_failed"):
         await adb.step_battery_discharge("emulator-5554", initial, seed=10)
-
-
-@pytest.mark.asyncio
-async def test_adb_battery_telemetry_tolerates_sensor_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test that sensor jitter failures are suppressed and do not fail the battery step."""
-    calls: list[list[str]] = []
-
-    async def shell_side_effect(_serial: str, *args: str, **_kwargs: object) -> str:
-        calls.append(list(args))
-        if any("sensors" in a for a in args):
-            code = "emulator_command_failed"
-            raise EmulatorError(code)
-        return ""
-
-    monkeypatch.setattr(adb, "shell", shell_side_effect)
-
-    initial = BatteryTelemetryState(level=50, temp_tenths_c=320, voltage_mv=3800)
-    next_state = await adb.step_battery_discharge("emulator-5554", initial, seed=10)
-    assert next_state.level == 49
-    assert len(calls) == 2
 
 
 def test_lte_cellular_properties_in_aosp_boot_properties() -> None:

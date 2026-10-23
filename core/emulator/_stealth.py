@@ -13,7 +13,6 @@ from core.emulator import adb
 from core.emulator._battery import (
     BatteryTelemetryState,
     build_battery_telemetry_commands,
-    build_sensor_jitter_commands,
     generate_initial_battery_state,
     step_battery_state,
 )
@@ -151,13 +150,4 @@ async def step_battery_discharge(
         battery_script.extend(cmd.split())
     await adb.shell(serial, *battery_script)
 
-    sensor_commands = build_sensor_jitter_commands(seed=seed)
-    if sensor_commands:
-        sensor_script: list[str] = []
-        for cmd in sensor_commands:
-            if sensor_script:
-                sensor_script.append(";")
-            sensor_script.extend(cmd.split())
-        with suppress(EmulatorError):
-            await adb.shell(serial, *sensor_script)
     return next_state
