@@ -97,7 +97,8 @@ const MECHANICS = ['join', 'reactions', 'stories', 'dialogue'] as const;
 
 export function MechanicsRow({ account }: { account: WarmingAccountState }) {
   const { t } = useTranslation();
-  const on = MECHANICS.filter((step) => account.mechanics?.[step] ?? true);
+  // An absent value takes the schema default: dialogue off, the rest on.
+  const on = MECHANICS.filter((step) => account.mechanics?.[step] ?? step !== 'dialogue');
   const list = ['read', ...on].map((step) => t(`warming.console.mechanic.${step}`)).join(' · ');
   return (
     <p className="m-0 mt-3 type-small text-content-muted">

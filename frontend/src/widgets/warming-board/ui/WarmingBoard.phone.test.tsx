@@ -90,3 +90,19 @@ test('a phone card lists only the steps its visit runs', () => {
 
   expect(screen.getByText('Механики: чтение · реакции · сторис')).toBeTruthy();
 });
+
+test('a card without mechanics falls back to the schema defaults', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[{ ...account('acc-old', null), device_mode: 'desktop' }]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  expect(screen.getByText('Механики: чтение · вступления · реакции · сторис')).toBeTruthy();
+});
