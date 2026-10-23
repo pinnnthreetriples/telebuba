@@ -68,8 +68,12 @@ _EMULATOR_NOT_FOUND: EmulatorRefusalCode = "emulator_not_found"
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
 
-# Picking a free index and creating the gateway that holds it is one step.
+# Picking a free index and creating the gateway that holds it is one step (a stale
+# gateway's removal too, so its index is not taken meanwhile); nothing slower goes in it.
 _CREATE_LOCK = asyncio.Lock()
+# One start per pod at a time: what one start found must not be changed under it by
+# another of the same pod. Different pods start side by side.
+_POD_LOCKS: dict[str, asyncio.Lock] = {}
 # Seconds ``docker stop`` waits for a container's own shutdown before it kills it:
 # redroid's init may not act on SIGTERM, and a stop must fit the app's shutdown.
 STOP_GRACE_SECONDS = 3
@@ -95,46 +99,55 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Ins
     """Start the pod whose Android container is ``name``, on ``proxy``; its running Instance.
 
     The phone and the proxy are refused before anything is created. Whatever of the
-    pod is running is stopped first, so the gateway always starts on ``proxy``.
+    pod is running is stopped first, so the gateway always starts on ``proxy``. Starts
+    of one pod queue behind each other (``_POD_LOCKS``); only the index pick and the
+    gateway create are shared with other pods' starts (``_CREATE_LOCK``).
     """
     image_for(spec)
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)
     await ensure_pod_images(spec)  # a pull or build may take minutes: outside the lock
+    async with _POD_LOCKS.setdefault(name, asyncio.Lock()):
+        return await _start(name, spec, proxy_text, address)
+
+
+async def _start(name: str, spec: ContainerSpec, proxy_text: str, address: str) -> Instance:
+    """``start_pod`` once its inputs are checked, holding the pod's own lock."""
     gateway = gateway_name(name)
     found: set[str] = set()
     created: set[str] = set()
     layers = None
     try:
-        async with _CREATE_LOCK:
-            android, current = await _find(name)
-            # A gateway of an image other than the configured one is made again, so a
-            # bumped tag reaches the pods made before it.
-            stale = current is not None and await _stale_gateway(gateway)
-            gone = current is None or stale
-            # Only an Android about to be made needs its base: refused before anything is.
-            remade = android is None or gone
-            # The diff of an Android made again stays its own, whatever is configured now.
-            kept = await recorded_diff(name) if android is not None and gone else None
-            layers = await data_layers(name, spec.sdk, kept) if remade else None
-            # Before an Android is removed: a GPU the host lacks must not leave none.
-            gpu = await gpu_mode() if remade else "guest"
-            if android is not None and gone:
-                # Its namespace goes with its gateway: Android is made again in the new one.
-                await docker("rm", "--force", name)
-                android = None
-            if stale:
-                await docker("rm", "--force", gateway)
-            if current is None or stale:
+        android, current = await _find(name)
+        # A gateway of an image other than the configured one is made again, so a
+        # bumped tag reaches the pods made before it.
+        stale = current is not None and await _stale_gateway(gateway)
+        gone = current is None or stale
+        # Only an Android about to be made needs its base: refused before anything is.
+        remade = android is None or gone
+        # The diff of an Android made again stays its own, whatever is configured now.
+        kept = await recorded_diff(name) if android is not None and gone else None
+        layers = await data_layers(name, spec.sdk, kept) if remade else None
+        # Before an Android is removed: a GPU the host lacks must not leave none.
+        gpu = await gpu_mode() if remade else "guest"
+        if android is not None and gone:
+            # Its namespace goes with its gateway: Android is made again in the new one.
+            # Its index stays held by the gateway (or is given up when there is none).
+            await docker("rm", "--force", name)
+            android = None
+        if current is None or stale:
+            await ensure_network()  # safe to race: another start may make it first
+            async with _CREATE_LOCK:
+                if stale:
+                    await docker("rm", "--force", gateway)
                 # A remade gateway keeps its pod's index, so its adb port and cores.
                 index = current.index if current is not None else await _free_index()
                 current = None
-                await ensure_network()
                 created.add(gateway)  # before: a cancelled create may have made it
                 await create_gateway(gateway, index)
-            else:
-                index = current.index
+        else:
+            index = current.index
         for container in (android, current):
             if container is not None:
                 found.add(container.name)

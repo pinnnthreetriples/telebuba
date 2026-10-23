@@ -32,6 +32,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.emulator, "ui_timeout_seconds", 0.1)
     # Module-level and bound to the first loop that waits on it: a fresh one per test.
     monkeypatch.setattr(pod, "_CREATE_LOCK", asyncio.Lock())
+    monkeypatch.setattr(pod, "_POD_LOCKS", {})
     reset_logging_for_tests()
     setup_logging()
     yield
