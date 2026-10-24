@@ -273,6 +273,30 @@ export type AccountPage = {
 };
 
 /**
+ * AccountPasskeyView
+ *
+ * Whether the account has a passkey, and whether passkeys can be used at all.
+ */
+export type AccountPasskeyView = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Has Passkey
+   */
+  has_passkey: boolean;
+  /**
+   * Created At
+   */
+  created_at?: string | null;
+  /**
+   * Vault Configured
+   */
+  vault_configured: boolean;
+};
+
+/**
  * AccountPrivacyOutcome
  *
  * One account's result in the fleet-wide apply.
@@ -12224,6 +12248,213 @@ export type ClearAccountTwofaEmailResponses = {
 
 export type ClearAccountTwofaEmailResponse =
   ClearAccountTwofaEmailResponses[keyof ClearAccountTwofaEmailResponses];
+
+export type RemoveAccountPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey';
+};
+
+export type RemoveAccountPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RemoveAccountPasskeyError =
+  RemoveAccountPasskeyErrors[keyof RemoveAccountPasskeyErrors];
+
+export type RemoveAccountPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyView;
+};
+
+export type RemoveAccountPasskeyResponse =
+  RemoveAccountPasskeyResponses[keyof RemoveAccountPasskeyResponses];
+
+export type GetAccountPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey';
+};
+
+export type GetAccountPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountPasskeyError = GetAccountPasskeyErrors[keyof GetAccountPasskeyErrors];
+
+export type GetAccountPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyView;
+};
+
+export type GetAccountPasskeyResponse =
+  GetAccountPasskeyResponses[keyof GetAccountPasskeyResponses];
+
+export type CreateAccountPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey';
+};
+
+export type CreateAccountPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CreateAccountPasskeyError =
+  CreateAccountPasskeyErrors[keyof CreateAccountPasskeyErrors];
+
+export type CreateAccountPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyView;
+};
+
+export type CreateAccountPasskeyResponse =
+  CreateAccountPasskeyResponses[keyof CreateAccountPasskeyResponses];
+
+export type LoginAccountWithPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey/login';
+};
+
+export type LoginAccountWithPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type LoginAccountWithPasskeyError =
+  LoginAccountWithPasskeyErrors[keyof LoginAccountWithPasskeyErrors];
+
+export type LoginAccountWithPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyView;
+};
+
+export type LoginAccountWithPasskeyResponse =
+  LoginAccountWithPasskeyResponses[keyof LoginAccountWithPasskeyResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

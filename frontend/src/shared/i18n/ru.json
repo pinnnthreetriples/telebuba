@@ -317,7 +317,19 @@
         "save": "Сохранить",
         "clear": "Очистить",
         "error": "Не удалось сохранить дату."
-      }
+      },
+      "passkey": "Ключ доступа",
+      "passkeyUnknown": "—",
+      "passkeyOn": "Есть",
+      "passkeyOff": "Нет",
+      "passkeyHint": "Ключ доступа позволяет войти в аккаунт без SMS-кода, если сессия слетела. Секрет ключа хранится в сейфе ключей, Telebuba видит только подписи. При входе всё равно нужен 2FA-пароль.",
+      "passkeyVaultMissing": "Сейф ключей не настроен: задайте PASSKEY_VAULT__TOKEN в .env и перезапустите Telebuba.",
+      "passkeyCreatedAt": "Ключ создан {{date}}",
+      "passkeyCreate": "Создать ключ доступа",
+      "passkeyLogin": "Войти по ключу",
+      "passkeyRemove": "Удалить ключ",
+      "passkeyRemoveTitle": "Удалить ключ доступа?",
+      "passkeyRemoveBody": "Ключ будет удалён из Telegram и из сейфа. Без него слетевшую сессию снова можно будет восстановить только по SMS-коду."
     },
     "actions": {
       "add": "Аккаунт",
@@ -1443,7 +1455,17 @@
       "emulator_data_base_missing": "Общий /data включён, но в EMULATOR__DATA_BASE_DIR нет подготовленной базы для версии Android этого телефона (docs/redroid.md).",
       "emulator_preparing": "Телефон ещё готовится — визит подождёт.",
       "emulator_screen_timeout": "Телефон не начал показывать экран вовремя. Попробуйте ещё раз.",
-      "emulator_app_offline": "Telegram на телефоне так и не дождался сети: проверьте прокси аккаунта."
+      "emulator_app_offline": "Telegram на телефоне так и не дождался сети: проверьте прокси аккаунта.",
+      "passkey_exists": "У аккаунта уже есть ключ доступа",
+      "passkey_missing": "У аккаунта нет ключа доступа",
+      "passkey_vault_disabled": "Сейф ключей не настроен",
+      "passkey_vault_unreachable": "Сейф ключей недоступен — проверьте, что OpenBao запущен и открыт",
+      "passkey_vault_rejected": "Сейф ключей отказал в операции",
+      "passkey_options_invalid": "Telegram прислал неожиданный ответ на запрос ключа",
+      "passkey_telegram_refused": "Telegram отказал в операции с ключом доступа",
+      "passkey_twofa_missing": "Для входа нужен 2FA-пароль, а он не сохранён в Telebuba",
+      "passkey_user_mismatch": "Ключ привёл в другой аккаунт — вход отменён",
+      "passkey_login_failed": "Не удалось войти по ключу"
     },
     "sessionError": "Не удалось проверить сессию. Проверьте соединение и попробуйте снова.",
     "sessionRetry": "Повторить",
@@ -1949,7 +1971,12 @@
     "warming_spam_block_kept": "Аккаунт со спамблоком оставлен",
     "warming_spam_block_lifted": "@SpamBot снял ограничения — спамблок снят",
     "warming_rewarmed": "Аккаунт возвращён в прогрев — новая волна с нуля",
-    "phone_screen_opened": "Открыт экран телефона"
+    "phone_screen_opened": "Открыт экран телефона",
+    "passkey_created": "Ключ доступа создан",
+    "passkey_create_failed": "Не удалось создать ключ доступа",
+    "passkey_login_success": "Вход по ключу доступа выполнен",
+    "passkey_login_failed": "Не удалось войти по ключу доступа",
+    "passkey_removed": "Ключ доступа удалён"
   },
   "logEventReason": {
     "retired": "аккаунт списан",
