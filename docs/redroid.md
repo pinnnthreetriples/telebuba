@@ -184,7 +184,8 @@ The container is a real phone (`core/emulator/_profile.py`):
   arm64 host. Build it once on an x86_64 machine (the NDK has no arm64 host) and copy the
   directory to each host: `docker build --output type=local,dest=emulator/sensors-hal
   docker/sensors-hal` writes `arm64-v8a/` and `x86_64/`; the host's Docker architecture picks
-  one, and a host without its build boots phones without sensors (a warning). Every input is
+  one, and a host without its build boots phones without sensors (a warning). Turned off
+  later, a refresh writes inert files over the ones a container got (no service, no features). Every input is
   pinned (NDK r27d and build-tools 34 by sha256, AOSP `android-14.0.0_r75` by commit); two builds
   give the same bytes. The binary holds no emulator names; libc++'s own `generic_category`
   string is in it, as in every phone's `libc++.so`.
