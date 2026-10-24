@@ -102,3 +102,15 @@ async def test_a_console_that_cannot_be_started_is_a_code(monkeypatch: pytest.Mo
         await run_command(["docker.exe", "ps"], seconds=5, step="ps")
 
     assert failed.value.code == "emulator_command_failed"
+
+
+@pytest.mark.asyncio
+async def test_stdin_is_fed_to_the_command() -> None:
+    out = await run_command(
+        [sys.executable, "-c", "import sys; print(len(sys.stdin.buffer.read()))"],
+        seconds=30,
+        step="count",
+        stdin=b"\x00tar\xff",
+    )
+
+    assert out.strip() == "5", "bytes arrive as they are, a tar for docker cp -"

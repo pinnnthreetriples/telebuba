@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import io
+import tarfile
 from typing import TYPE_CHECKING
 
 import pytest
@@ -26,6 +28,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.emulator, "docker_path", tmp_path / "docker.exe")
     monkeypatch.setattr(settings.emulator, "scrcpy_path", tmp_path / "scrcpy.exe")
     monkeypatch.setattr(settings.emulator, "cpu_topology_dir", tmp_path / "cpu")
+    monkeypatch.setattr(settings.emulator, "battery_dir", tmp_path / "battery")
     monkeypatch.setattr(settings.emulator, "desktop_viewer", True)
     monkeypatch.setattr(settings.emulator, "poll_seconds", 0.01)
     monkeypatch.setattr(settings.emulator, "boot_timeout_seconds", 0.1)
@@ -51,14 +54,32 @@ class Console:
     def __init__(self, answer: Callable[[list[str]], str] | None = None) -> None:
         self.calls: list[list[str]] = []
         self.seconds: list[float] = []  # each call's bound, by index
+        self.stdins: list[bytes | None] = []  # what each call was fed, by index
         self.answer = answer or (lambda _argv: "")
 
-    async def __call__(self, argv: Sequence[str], *, seconds: float, step: str) -> str:
+    async def __call__(
+        self, argv: Sequence[str], *, seconds: float, step: str, stdin: bytes | None = None
+    ) -> str:
         assert seconds > 0
         assert step
         self.calls.append(list(argv))
         self.seconds.append(seconds)
+        self.stdins.append(stdin)
         return self.answer(list(argv))
+
+    def archive(self, call: list[str]) -> dict[str, tuple[tarfile.TarInfo, bytes]]:
+        """The tar a ``docker cp -`` call was fed: name -> (entry, content)."""
+        data = self.stdins[next(i for i, c in enumerate(self.calls) if c is call)]
+        assert data is not None
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            return {
+                info.name: (info, (tar.extractfile(info) or io.BytesIO()).read())
+                for info in tar.getmembers()
+            }
+
+    def copies_into(self, target: str) -> list[list[str]]:
+        """Every ``docker cp -a -`` call that unpacks a tar at ``target`` (``name:/dir``)."""
+        return [c for c in self.calls if c[1:4] == ["cp", "-a", "-"] and c[4] == target]
 
     def shell_calls(self) -> list[list[str]]:
         """The device-side part (after ``shell``) of every adb shell call."""

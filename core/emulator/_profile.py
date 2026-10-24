@@ -59,6 +59,8 @@ class ContainerSpec(NamedTuple):
     platform: str
     # The phone's chip (a ``configs/soc`` stem); ``None``: the host's CPUs show through.
     soc: str | None = None
+    # Whose phone: its battery follows that account's day (``core.emulator._battery``).
+    account_id: str | None = None
 
 
 def _derived(seed: str, purpose: str) -> int:
@@ -111,6 +113,7 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
         hardware=blueprint.hardware,
         platform=blueprint.platform,
         soc=blueprint.soc,
+        account_id=seed,
     )
 
 

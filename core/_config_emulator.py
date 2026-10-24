@@ -76,6 +76,8 @@ class EmulatorSettings(BaseSettings):
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
     cpu_topology_dir: Path = Path("emulator/cpu")
+    # One ``power_supply`` tree per pod index, mounted for its battery HAL (``_battery``).
+    battery_dir: Path = Path("emulator/battery")
     # ``docker build --output`` of docker/sensors-hal: ``<dir>/<abi>/`` holds the sensors
     # HAL a new or refreshed container gets (``core.emulator._sensors``). Empty: no sensors.
     sensors_hal_dir: Path | None = None

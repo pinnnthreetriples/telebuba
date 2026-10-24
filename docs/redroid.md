@@ -37,8 +37,9 @@ phone is shown in a scrcpy window opened by the phone button.
   sign-in) is only stopped too, whenever it fails: that diff is never removed by a failed open.
   **Stop** is Android, then the
   gateway; **remove** deletes both (a host without docker has nothing to remove).
-- **Identity**: a block appended to the image's `/product/etc/build.prop` (read last by init, so it
-  wins over `/vendor`'s own) before every cold boot (not on the
+- **Identity**: the phone's properties appended to the image's `/product/etc/build.prop` (read
+  last by init, so they win over `/vendor`'s own) before every cold boot, replacing the image's
+  lines and our earlier ones for the same keys, with no comment of ours (not on the
   command line: redroid's init re-splits it on spaces, so `Pixel 7` would become `Pixel`); the
   image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK (by default the
   64-bit-only `*_64only-latest` tags, published for amd64 and arm64 alike). See
@@ -87,9 +88,11 @@ therefore created without it (`core/emulator/redroid.py`, `_UNPRIVILEGED`):
   open any character device it makes (binderfs's major is picked by the host's kernel at boot,
   so it cannot be named at create), no block device. The host needs `/dev/fuse` (FUSE built
   in or loaded), which Android's external storage uses.
-- Still visible, as before: sysfs is the host's (`/sys/bus`, `/sys/class`; on WSL2
-  `/sys/bus/vmbus`), so are `/proc/tty/drivers`, `/proc/mounts` and SELinux `Disabled`; and
-  Android's own `/proc` lets its root write the host's global sysctls.
+- Still visible, as before: sysfs is the host's (`/sys/bus`, `/sys/class` but its
+  `power_supply`; on WSL2 `/sys/bus/vmbus`), so are `/proc/tty/drivers`, `/proc/mounts` and
+  SELinux `Disabled`; and Android's own `/proc` lets its root write the host's global sysctls.
+  With SELinux disabled no file has a context to set: copied files get owners and modes only
+  ([Files copied into a container](#files-copied-into-a-container)).
 
 A container on the host's GPU (`host`) stays privileged: what a GPU needs beside `/dev/dri`
 (Mali's `dma_heap`, for one) is untried without it. A container made before keeps how it was
@@ -179,7 +182,15 @@ The container is a real phone (`core/emulator/_profile.py`):
   the day across stops and pauses. A phone that refuses it keeps its old level. redroid has no
   battery (`present: false`, level 0) until told `present 1`, which comes last: a present battery
   still at level 0 shuts Android down at once. Its voltage and technology cannot be set
-  (`dumpsys battery set` refuses both).
+  (`dumpsys battery set` refuses both), so a new container's health HAL reads them from a
+  `power_supply` tree instead: `EMULATOR__BATTERY_DIR/<pod index>/battery` (type, present,
+  status, health `Good`, technology `Li-ion`, capacity, `voltage_now`, temp, charge counter and
+  full charge, in the kernel's units) is mounted read-only over `/sys/class/power_supply` and
+  written before every boot from the same day's state, so the voltage matches the level the boot
+  starts at (3.65–4.27 V). `dumpsys` then moves level and status through the day; the voltage
+  stays what the boot read. Checked on redroid 14: `dumpsys battery` shows present, its level,
+  voltage, temperature, `Li-ion` and health good instead of zeros. A container made before has no
+  mount until it is made again.
 - **CPU** (`core/emulator/_topology.py`): a phone whose blueprint names its chip (`soc`, one
   `configs/soc/*.json` each, read from public cpuinfo/cpufreq dumps; `mt6877` has no public
   cpuinfo, so its A55/A78 ids and `Features` are the ones every other such dump shows and its
@@ -194,7 +205,10 @@ The container is a real phone (`core/emulator/_profile.py`):
   an init script (`/vendor/etc/init/cpuinfo.rc`) from `/dev/cpuinfo` at every boot: init mounts
   a fresh proc over Docker's, so Docker cannot mount it there. The files live once per chip and
   core count under `EMULATOR__CPU_TOPOLOGY_DIR`. A container made before gets only the cpuset
-  (`docker update`). A phone without a chip keeps `EMULATOR__CPU_CORES` of the host's CPUs.
+  (`docker update`). A phone without a chip keeps `EMULATOR__CPU_CORES` of the host's CPUs as its
+  quota and sees at most 8 of them, a phone's count: it is pinned to its pod's slice of 8
+  (`--cpuset-cpus`, all of a smaller VM's), so `nproc` says 8 instead of the VM's; a container
+  made before is pinned at its next start (`docker update`).
   The image stays x86_64 (`ro.product.cpu.abilist` starts with `x86_64`), so an app comparing
   its ABI with the ARM cpuinfo can tell.
 - **Hardware features** (`core/emulator/_features.py`): `pm list features` /
@@ -266,6 +280,19 @@ The container is a real phone (`core/emulator/_profile.py`):
   pinned (NDK r27d and build-tools 34 by sha256, AOSP `android-14.0.0_r75` by commit); two builds
   give the same bytes. The binary holds no emulator names; libc++'s own `generic_category`
   string is in it, as in every phone's `libc++.so`.
+
+### Files copied into a container
+
+`docker cp` of a host path packs it with the host's modes, and from Windows every file arrives
+`-rwxr-xr-x`: an executable `build.prop` or init script, which no phone has. Every file a
+container is given before boot (`build.prop`, the feature XMLs, the network overlay, the sensors
+HAL tree, `cpuinfo.rc`) is packed into a tar here instead (`core/emulator/_archive.py`) and
+unpacked with `docker cp -a - <container>:<dir>`, so it lands as the image's own are: files
+`0644` root:root, the HAL binary `0755` root:shell, and the /vendor directories it names root:shell
+(`bin` and `bin/hw` `0751`), as the image has them (unpacking sets a named directory's owner
+and mode, existing ones too). `build.prop` keeps the image's mode, `0644` root:root. Checked on
+redroid 14: the files and directories as above, the phone's `ro.product.model` and fingerprint,
+nothing in `build.prop` names the app, boot unchanged.
 
 ### The phone's hardware name
 
@@ -647,6 +674,7 @@ EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org w
 
 `EMULATOR__CPU_CORES` (phones without a chip) and `EMULATOR__MEMORY_MB` size new containers;
 the screen is the phone's.
+`EMULATOR__BATTERY_DIR` holds each pod's battery tree (Identity and region, Battery).
 `EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
 Sensors).
 `EMULATOR__NETWORK_TRANSPORT` (`cellular` or `ethernet`) is the network Android reports for eth0
