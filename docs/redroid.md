@@ -494,7 +494,7 @@ new tag when Microsoft ships one. A running WSL holds `modules.vhdx` open, so a 
 both files in `new`, keeps the old pair, and swaps them in with WSL stopped (PowerShell):
 
 ```powershell
-$k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd)"
+$k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd-HHmmss)"; $old
 New-Item -ItemType Directory -Force $old | Out-Null
 Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
 docker desktop stop; wsl --shutdown
@@ -503,7 +503,9 @@ Move-Item -Force "$k\new\bzImage", "$k\new\modules.vhdx" $k
 
 Start Docker Desktop from the Start menu (over SSH, `docker desktop start` runs it in the SSH
 session, which takes it down on logout). To roll back, stop Docker Desktop and WSL the same way,
-`Copy-Item -Force "$old\bzImage", "$old\modules.vhdx" $k`, and start it again.
+copy both files back from the backup folder the swap printed (in a new PowerShell, name it:
+`$old = 'C:\wsl-kernel\backup-…'`) with `Copy-Item -Force "$old\bzImage", "$old\modules.vhdx"
+C:\wsl-kernel`, and start it again.
 
 Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
 pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
