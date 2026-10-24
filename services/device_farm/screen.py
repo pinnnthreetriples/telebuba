@@ -1,7 +1,7 @@
 """A phone's web screen: one viewer at a time, scrcpy running only while one watches.
 
-* The phone must already run: watching never starts a pod (the start is minutes and
-  may need a login code; the farm's Start button does that).
+* The phone must already run: watching never starts a pod (the start is minutes; the
+  farm's Start button does that).
 * One viewer per phone: a new one supersedes the current one, which is told so
   (``screen_superseded``) and gone before the new server starts — two encoders on
   one phone would cost twice the CPU for a picture nobody sees twice. A viewer

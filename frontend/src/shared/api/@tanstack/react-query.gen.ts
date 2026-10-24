@@ -7734,7 +7734,7 @@ export const listPhonesOptions = (options?: Options<ListPhonesData>) =>
 /**
  * Start Phone
  *
- * Start the phone and sign its app in, in the background (``starting`` at once).
+ * Boot the phone in the background, its app untouched (``starting`` at once).
  */
 export const startPhoneMutation = (
   options?: Partial<Options<StartPhoneData>>,

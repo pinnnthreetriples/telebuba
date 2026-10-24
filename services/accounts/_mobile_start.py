@@ -12,6 +12,9 @@
   it did not expect) is not a failure of the open: it is logged, and the pod is left
   up on its screen with the refusal, for the operator to finish the sign-in by hand.
   Warming's background open still fails: nobody watches its pod;
+* a phone started without its ``app`` (the device farm's) fetches no APK, and installs,
+  starts and signs in nothing: it is booted, seeded and shown, and handed over as it is.
+  The account's own open of it while it runs installs the app and signs it in;
 * each stage is reported as it begins (``_mobile_progress``) for the operator's dialog.
 """
 
@@ -21,17 +24,20 @@ import asyncio
 import logging
 from contextlib import suppress
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
 from core.emulator import (
     EmulatorError,
     adb_serial,
+    app_package,
     apply_battery_telemetry,
     apply_stealth_profile,
     assert_sdk,
+    bring_app_to_front,
     ensure_app,
     ensure_telegram_apk,
+    read_screen,
     remove_pod,
     seed_device_if_needed,
     show_instance,
@@ -57,8 +63,12 @@ if TYPE_CHECKING:
 # Stdlib sink, codes and step names only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
 
+# Who opens the pod: the operator (in front, signed in), warming (in the background,
+# only an entry screen signed in), or the device farm (booted alone, the app untouched).
+type OpenMode = Literal["operator", "warming", "boot"]
+
 # A running app on one of these still needs signing in; anything else is left as is.
-ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
+_ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
 # A background open waits for the app to show one of these, then reads it as it is.
 _KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
 
@@ -77,55 +87,30 @@ async def start_and_sign_in(
     proxy: ProxySettings,
     *,
     new: bool,
-    background: bool,
+    mode: OpenMode,
 ) -> tuple[OpenMobileResult, str]:
-    """Start the account's stopped (or ``new``) pod on ``proxy``, sign its app in; its serial."""
+    """Start the account's stopped (or ``new``) pod on ``proxy``, sign its app in; its serial.
+
+    The device farm's ``boot`` only boots the pod: no APK, no install, no sign-in.
+    """
+    name = container_name(account.account_id)
     # A new container has no Telegram yet: its APK is fetched while the pod starts.
-    apk = asyncio.create_task(ensure_telegram_apk()) if new else None
+    apk = asyncio.create_task(ensure_telegram_apk()) if new and mode != "boot" else None
     try:
-        return await _start(account, spec, proxy, apk=apk, background=background)
+        instance, fresh_data = await start_pod(name, spec, proxy)  # undoes itself on failure
+        serial = adb_serial(instance.index)
+        try:
+            shown = None if mode == "warming" else instance.index
+            await _boot(account.account_id, serial, spec, apk, show_on=shown)
+        except BaseException:
+            await asyncio.shield(_undo(name, remove=new and fresh_data))
+            raise
     finally:
         await _drop(apk)
-
-
-async def _start(
-    account: AccountRead,
-    spec: ContainerSpec,
-    proxy: ProxySettings,
-    *,
-    apk: asyncio.Task[AppIdentity] | None,
-    background: bool,
-) -> tuple[OpenMobileResult, str]:
-    name = container_name(account.account_id)
-    instance, fresh_data = await start_pod(name, spec, proxy)  # undoes itself when it fails
-    booted = False
     try:
-        serial = adb_serial(instance.index)
-        report_stage(account.account_id, "boot")
-        await _boot(serial, apk)
-        if not background:
-            await show(name, instance.index)
-        await assert_sdk(serial, spec.sdk)
-        await apply_stealth_profile(serial)
-        booted = True
-        await set_battery(serial, account.account_id, spec.region.timezone)
-        report_stage(account.account_id, "app")
-        seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
-        try:
-            await ensure_app(serial)
-            # In the background only an entry screen is signed in; in front, always.
-            screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
-            signed_in, refusal = screen == "chats", None
-            if screen is None or screen in ENTRY_SCREENS:
-                signed_in, refusal = await sign_in_or_hand_over(
-                    account, serial, background=background
-                )
-            await seeding
-        finally:
-            await _drop(seeding)
+        signed_in, refusal = await _bring_up(account, serial, spec, mode)
     except BaseException:
-        remove = apk is not None and fresh_data and not booted
-        await asyncio.shield(_undo(name, remove=remove))
+        await asyncio.shield(_undo(name, remove=False))
         raise
     return OpenMobileResult(
         account_id=account.account_id,
@@ -133,6 +118,71 @@ async def _start(
         signed_in=signed_in,
         sign_in_refusal=refusal,
     ), serial
+
+
+async def _boot(
+    account_id: str,
+    serial: str,
+    spec: ContainerSpec,
+    apk: asyncio.Task[AppIdentity] | None,
+    *,
+    show_on: int | None,
+) -> None:
+    """Boot Android (with a new container's APK), show it, check its SDK, hide the tells."""
+    report_stage(account_id, "boot")
+    await _wait_boot(serial, apk)
+    if show_on is not None:
+        await show(container_name(account_id), show_on)
+    await assert_sdk(serial, spec.sdk)
+    await apply_stealth_profile(serial)
+
+
+async def _bring_up(
+    account: AccountRead, serial: str, spec: ContainerSpec, mode: OpenMode
+) -> tuple[bool, str | None]:
+    """A booted pod's battery, seeding and (but for ``boot``) its app signed in."""
+    await set_battery(serial, account.account_id, spec.region.timezone)
+    if mode != "boot":
+        report_stage(account.account_id, "app")
+    seeding = asyncio.create_task(_seed(account.account_id, serial, spec))
+    try:
+        signed_in, refusal = False, None
+        if mode != "boot":
+            background = mode == "warming"
+            signed_in, refusal = await _app_signed_in(account, serial, background=background)
+        await seeding
+    finally:
+        await _drop(seeding)
+    return signed_in, refusal
+
+
+async def _app_signed_in(
+    account: AccountRead, serial: str, *, background: bool
+) -> tuple[bool, str | None]:
+    """Install and start the app, then sign it in: ``(signed in, why it stopped short)``."""
+    await ensure_app(serial)
+    # In the background only an entry screen is signed in; in front, always.
+    screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
+    if screen is not None and screen not in _ENTRY_SCREENS:
+        return screen == "chats", None
+    return await sign_in_or_hand_over(account, serial, background=background)
+
+
+async def running_app_signed_in(
+    account: AccountRead, serial: str, *, background: bool
+) -> tuple[bool, str | None]:
+    """A running pod's app put in front, signed in on an entry screen only.
+
+    A phone the device farm booted has no Telegram yet: it is installed and signed in
+    as on a start, not read off the launcher as a screen to leave alone.
+    """
+    if await app_package(serial) is None:
+        return await _app_signed_in(account, serial, background=background)
+    await bring_app_to_front(serial)
+    screen, _nodes = await read_screen(serial)
+    if screen in _ENTRY_SCREENS:
+        return await sign_in_or_hand_over(account, serial, background=background)
+    return screen == "chats", None
 
 
 async def set_battery(serial: str, account_id: str, timezone: str) -> None:
@@ -169,7 +219,7 @@ async def sign_in_or_hand_over(
         return False, exc.code
 
 
-async def _boot(serial: str, apk: asyncio.Task[AppIdentity] | None) -> None:
+async def _wait_boot(serial: str, apk: asyncio.Task[AppIdentity] | None) -> None:
     """Wait for Android and, for a new container, its APK; the first failure ends both."""
     boot = asyncio.ensure_future(wait_for_boot(serial))
     pending = {boot, *([] if apk is None else [apk])}
