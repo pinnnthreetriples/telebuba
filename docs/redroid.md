@@ -499,7 +499,7 @@ $ErrorActionPreference = 'Stop'  # a failed backup stops here, before WSL goes d
 $k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd-HHmmss)"; $old
 New-Item -ItemType Directory -Force $old | Out-Null
 Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
-docker desktop stop; if ($LASTEXITCODE) { throw 'docker desktop stop failed' }
+docker desktop stop --timeout 60; if ($LASTEXITCODE) { throw 'docker desktop stop failed' }
 wsl --shutdown; if ($LASTEXITCODE) { throw 'wsl --shutdown failed' }
 Move-Item -Force "$k\new\bzImage", "$k\new\modules.vhdx" $k
 ```
