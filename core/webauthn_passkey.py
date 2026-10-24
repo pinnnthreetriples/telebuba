@@ -18,7 +18,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import struct
 from typing import NamedTuple
 
@@ -61,9 +60,18 @@ def b64url_decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def new_credential_id() -> str:
-    """A fresh random credential id, base64url as Telegram's ``id``/``raw_id`` take it."""
-    return b64url(os.urandom(_CREDENTIAL_ID_BYTES))
+def credential_id_for(public_key_pem: str) -> str:
+    """The credential id of a public key, base64url as Telegram's ``id``/``raw_id`` take it.
+
+    Derived, not random: a create retried after Telegram's answer was lost reaches the
+    same id, so it can find the passkey the first attempt registered instead of adding
+    a second one nothing tracks.
+    """
+    public = serialization.load_pem_public_key(public_key_pem.encode())
+    der = public.public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return b64url(hashlib.sha256(der).digest()[:_CREDENTIAL_ID_BYTES])
 
 
 def _cbor_head(major: int, length: int) -> bytes:

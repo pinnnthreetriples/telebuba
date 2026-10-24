@@ -326,6 +326,9 @@
       "passkeyLogin": "Sign in with passkey",
       "passkeyRemove": "Remove passkey",
       "passkeyRemoveTitle": "Remove the passkey?",
+      "passkeyForget": "Forget passkey",
+      "passkeyForgetTitle": "Forget the passkey?",
+      "passkeyForgetBody": "Telegram cannot be reached for this account, so the passkey is removed from Telebuba and the vault only. Telegram will still list it, but nobody can sign in with it any more; delete it there later in an official app.",
       "passkeyRemoveBody": "The passkey is removed from Telegram and from the vault. A lost session can then only be restored with an SMS code again."
     },
     "actions": {

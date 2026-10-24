@@ -25,7 +25,7 @@ from core.telegram_client._passkey import (
     register_passkey,
 )
 from core.telegram_client._pool import TelegramClientPoolError
-from core.webauthn_passkey import b64url, new_credential_id
+from core.webauthn_passkey import b64url, credential_id_for
 
 _HANDLE = "1:257221571"
 _PEM = (
@@ -34,6 +34,7 @@ _PEM = (
     .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
     .decode()
 )
+_CREDENTIAL_ID = credential_id_for(_PEM)
 
 
 def _options(user_id: str | None = None, challenge: object = "Y2hhbGxlbmdl") -> SimpleNamespace:
@@ -74,9 +75,15 @@ def _borrow(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
 async def test_registration_sends_the_credential_and_returns_the_user_handle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _Client({InitPasskeyRegistrationRequest: _options(), RegisterPasskeyRequest: object()})
+    client = _Client(
+        {
+            InitPasskeyRegistrationRequest: _options(),
+            GetPasskeysRequest: SimpleNamespace(passkeys=[SimpleNamespace(id="other")]),
+            RegisterPasskeyRequest: object(),
+        }
+    )
     _borrow(monkeypatch, client)
-    credential_id = new_credential_id()
+    credential_id = _CREDENTIAL_ID
 
     handle = await register_passkey("acc-1", public_key_pem=_PEM, credential_id=credential_id)
 
@@ -93,6 +100,20 @@ async def test_registration_sends_the_credential_and_returns_the_user_handle(
     assert client_data["type"] == "webauthn.create"
     assert client_data["challenge"] == "Y2hhbGxlbmdl"
     assert response.attestation_data.startswith(b"\xa3\x63fmt\x64none")
+
+
+@pytest.mark.asyncio
+async def test_a_retry_adopts_the_passkey_a_lost_answer_already_registered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listed = SimpleNamespace(passkeys=[SimpleNamespace(id=_CREDENTIAL_ID)])
+    client = _Client({InitPasskeyRegistrationRequest: _options(), GetPasskeysRequest: listed})
+    _borrow(monkeypatch, client)
+
+    handle = await register_passkey("acc-1", public_key_pem=_PEM, credential_id=_CREDENTIAL_ID)
+
+    assert handle == _HANDLE
+    assert not any(isinstance(r, RegisterPasskeyRequest) for r in client.requests)
 
 
 @pytest.mark.parametrize(
@@ -116,7 +137,7 @@ async def test_telegram_failures_become_bounded_codes(
 ) -> None:
     _borrow(monkeypatch, _Client({InitPasskeyRegistrationRequest: raised}))
     with pytest.raises(PasskeyGatewayError) as caught:
-        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=new_credential_id())
+        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=_CREDENTIAL_ID)
     assert caught.value.code == code
     assert caught.value.retry_after_seconds == seconds
     assert "user:pass" not in str(caught.value)
@@ -126,7 +147,7 @@ async def test_telegram_failures_become_bounded_codes(
 async def test_an_unusable_pool_client_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     _borrow(monkeypatch, TelegramClientPoolError("acc-1", OSError("down")))
     with pytest.raises(PasskeyGatewayError) as caught:
-        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=new_credential_id())
+        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=_CREDENTIAL_ID)
     assert caught.value.code == "unavailable"
     assert caught.value.error_type == "TelegramClientPoolError"
 
@@ -142,7 +163,7 @@ async def test_options_without_a_usable_user_handle_are_refused(
     client = _Client({InitPasskeyRegistrationRequest: _options(user_id=user_id)})
     _borrow(monkeypatch, client)
     with pytest.raises(PasskeyGatewayError) as caught:
-        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=new_credential_id())
+        await register_passkey("acc-1", public_key_pem=_PEM, credential_id=_CREDENTIAL_ID)
     assert caught.value.code == "passkey_options_invalid"
     assert not any(isinstance(r, RegisterPasskeyRequest) for r in client.requests)
 

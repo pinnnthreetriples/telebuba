@@ -19,7 +19,7 @@ from core.webauthn_passkey import (
     build_assertion,
     build_registration,
     cbor_encode,
-    new_credential_id,
+    credential_id_for,
 )
 
 
@@ -64,15 +64,19 @@ def test_base64url_round_trips_without_padding() -> None:
     assert b64url_decode(text) == raw
 
 
-def test_a_new_credential_id_is_sixteen_random_bytes() -> None:
-    first, second = new_credential_id(), new_credential_id()
-    assert len(b64url_decode(first)) == 16
-    assert first != second
+def test_a_credential_id_is_sixteen_bytes_fixed_by_the_public_key() -> None:
+    key, other = (
+        _pem(ec.generate_private_key(ec.SECP256R1())),
+        _pem(ec.generate_private_key(ec.SECP256R1())),
+    )
+    assert len(b64url_decode(credential_id_for(key))) == 16
+    assert credential_id_for(key) == credential_id_for(key)
+    assert credential_id_for(key) != credential_id_for(other)
 
 
 def test_the_registration_carries_the_public_key_and_credential_id() -> None:
     key = ec.generate_private_key(ec.SECP256R1())
-    credential_id = new_credential_id()
+    credential_id = credential_id_for(_pem(key))
     registration = build_registration("Y2hhbGxlbmdl", _pem(key), credential_id)
 
     client_data = json.loads(registration.client_data_json)
@@ -104,9 +108,9 @@ def test_the_registration_carries_the_public_key_and_credential_id() -> None:
 
 def test_a_registration_refuses_a_key_that_is_not_p256() -> None:
     with pytest.raises(TypeError, match="P-256"):
-        build_registration("c", _pem(ed25519.Ed25519PrivateKey.generate()), new_credential_id())
+        build_registration("c", _pem(ed25519.Ed25519PrivateKey.generate()), "Y3JlZA")
     with pytest.raises(TypeError, match="P-256"):
-        build_registration("c", _pem(ec.generate_private_key(ec.SECP384R1())), new_credential_id())
+        build_registration("c", _pem(ec.generate_private_key(ec.SECP384R1())), "Y3JlZA")
 
 
 def test_the_assertion_payload_is_what_a_verifier_checks() -> None:

@@ -44,19 +44,17 @@ def test_the_vault_is_configured_only_with_a_token(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_creating_a_key_asks_for_a_non_exportable_p256_and_returns_the_newest_pem() -> None:
+async def test_creating_a_key_asks_for_a_non_exportable_p256_and_returns_its_pem() -> None:
     with respx.mock:
         create = respx.post(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(204))
         respx.get(f"{_BASE}/keys/tb-acc").mock(
             return_value=httpx.Response(
                 200,
-                json={
-                    "data": {"keys": {"1": {"public_key": _PEM_V1}, "2": {"public_key": _PEM_V2}}}
-                },
+                json={"data": {"keys": {"1": {"public_key": _PEM_V1}}}},
             ),
         )
         pem = await create_signing_key("tb-acc")
-    assert pem == _PEM_V2
+    assert pem == _PEM_V1
     assert json.loads(create.calls.last.request.content) == {
         "type": "ecdsa-p256",
         "exportable": False,
@@ -71,6 +69,11 @@ async def test_creating_a_key_asks_for_a_non_exportable_p256_and_returns_the_new
         ({"data": None}, "no_key_versions"),
         ({"data": {"keys": {"1": {"public_key": ""}}}}, "no_public_key"),
         ({"data": {"keys": {"1": "not-a-dict"}}}, "no_public_key"),
+        # Telegram knows version 1 only; a rotated key would sign with another one.
+        (
+            {"data": {"keys": {"1": {"public_key": _PEM_V1}, "2": {"public_key": _PEM_V2}}}},
+            "key_rotated",
+        ),
     ],
 )
 @pytest.mark.asyncio
@@ -98,6 +101,7 @@ async def test_signing_returns_the_der_bytes_behind_the_version_prefix() -> None
     assert json.loads(route.calls.last.request.content) == {
         "input": base64.b64encode(b"payload").decode(),
         "marshaling_algorithm": "asn1",
+        "key_version": 1,
     }
 
 

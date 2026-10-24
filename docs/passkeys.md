@@ -23,8 +23,17 @@ key (`core/passkey_vault.py`); Telebuba only ever sees the public half and signa
 
 - Run one local node on `127.0.0.1:8200` with integrated `raft` storage (OpenBao 2.x has no
   `file` backend) and mount `transit`.
-- Give Telebuba a token whose policy covers only `transit/keys/tb-*`,
-  `transit/keys/tb-*/config` and `transit/sign/tb-*`.
+- Keep the mount for Telebuba alone and give it a token whose policy grants, by `+`
+  (one path segment) rather than a trailing `*` (which also matches `<key>/rotate`):
+  - `transit/keys/+`: create, read, update, delete, with `allowed_parameters` limited
+    to `type = ecdsa-p256` and `exportable = false`;
+  - `transit/keys/+/config`: update, `deletion_allowed = true` only;
+  - `transit/sign/+/sha2-256`: update, with `input`, `marshaling_algorithm = asn1`
+    and `key_version`.
+
+  Never grant `rotate`, `trim`, `export`, `backup` or `restore`: Telegram holds only
+  version 1's public key, so Telebuba signs with `key_version = 1` and refuses a key
+  that has been rotated.
 - The node starts sealed after every restart: unseal it with the key kept off the machine (a
   flash drive) before using passkeys.
 

@@ -116,12 +116,19 @@ async def _borrowed[T](account_id: str, call: Callable[[TelegramClient], Awaitab
 
 
 async def register_passkey(account_id: str, *, public_key_pem: str, credential_id: str) -> str:
-    """Add a passkey for ``public_key_pem`` to the account; return Telegram's user handle."""
+    """Add a passkey for ``public_key_pem`` to the account; return Telegram's user handle.
+
+    A passkey Telegram already lists under ``credential_id`` is adopted, not registered
+    again: it is an earlier attempt whose answer never arrived.
+    """
 
     async def _register(client: TelegramClient) -> str:
         options = await client(InitPasskeyRegistrationRequest())
         public = public_key_options(options.options.data)
         handle = _user_handle(public)
+        listed = await client(GetPasskeysRequest())
+        if any(p.id == credential_id for p in listed.passkeys):
+            return handle
         registration = build_registration(str(public["challenge"]), public_key_pem, credential_id)
         credential = InputPasskeyCredentialPublicKey(
             id=credential_id,

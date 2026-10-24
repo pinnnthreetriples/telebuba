@@ -40,7 +40,7 @@ from core.telegram_client import (
     login_with_passkey,
     register_passkey,
 )
-from core.webauthn_passkey import new_credential_id
+from core.webauthn_passkey import credential_id_for
 from schemas.passkey import AccountPasskeyView, StoredPasskey
 from services.accounts._result import AccountActionError, AccountNotFoundError
 from services.inbox_runtime import start_account_inbox
@@ -93,9 +93,10 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
             msg = "passkey_exists"
             raise AccountActionError(msg)
         key_name = vault_key_name(account_id)
-        credential_id = new_credential_id()
         try:
+            # The vault key survives a failed attempt, so a retry derives the same id.
             public_key = await create_signing_key(key_name)
+            credential_id = credential_id_for(public_key)
             handle = await register_passkey(
                 account_id, public_key_pem=public_key, credential_id=credential_id
             )
@@ -141,8 +142,15 @@ async def relogin_with_passkey(account_id: str) -> AccountPasskeyView:
     return _view(account_id, passkey)
 
 
-async def remove_account_passkey(account_id: str) -> AccountPasskeyView:
-    """Remove the passkey from Telegram, then forget it and delete its vault key."""
+async def remove_account_passkey(
+    account_id: str, *, forget_only: bool = False
+) -> AccountPasskeyView:
+    """Remove the passkey from Telegram, then forget it and delete its vault key.
+
+    ``forget_only`` skips Telegram: removing there needs a live session, and a dead
+    one is what a passkey is for. With the vault key gone the passkey Telegram still
+    lists can never sign in again; the operator can delete it in an official app.
+    """
     await _require_account(account_id)
     _require_vault()
     async with _passkey_lock(account_id):
@@ -151,10 +159,13 @@ async def remove_account_passkey(account_id: str) -> AccountPasskeyView:
             msg = "passkey_missing"
             raise AccountActionError(msg)
         try:
-            await delete_passkey(account_id, passkey.credential_id)
+            if not forget_only:
+                await delete_passkey(account_id, passkey.credential_id)
             await delete_account_passkey(account_id)
             await delete_signing_key(passkey.vault_key_name)
         except (PasskeyGatewayError, PasskeyVaultError) as exc:
             raise _gateway_error(exc) from exc
-    await log_event("INFO", "passkey_removed", account_id=account_id)
+    await log_event(
+        "INFO", "passkey_removed", account_id=account_id, extra={"forget_only": forget_only}
+    )
     return _view(account_id, None)

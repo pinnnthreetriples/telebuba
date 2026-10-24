@@ -1723,6 +1723,9 @@ export const clearAccountTwofaEmail = <ThrowOnError extends boolean = false>(
  * Remove Account Passkey
  *
  * Remove the passkey from Telegram and delete its vault key.
+ *
+ * ``?forget_only=true`` leaves Telegram alone, for an account whose session cannot
+ * reach it; the vault key is deleted all the same, so the passkey is dead there.
  */
 export const removeAccountPasskey = <ThrowOnError extends boolean = false>(
   options: Options<RemoveAccountPasskeyData, ThrowOnError>,

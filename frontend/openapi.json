@@ -6840,7 +6840,7 @@
           "accounts"
         ],
         "summary": "Remove Account Passkey",
-        "description": "Remove the passkey from Telegram and delete its vault key.",
+        "description": "Remove the passkey from Telegram and delete its vault key.\n\n``?forget_only=true`` leaves Telegram alone, for an account whose session cannot\nreach it; the vault key is deleted all the same, so the passkey is dead there.",
         "operationId": "removeAccountPasskey",
         "parameters": [
           {
@@ -6850,6 +6850,16 @@
             "schema": {
               "type": "string",
               "title": "Account Id"
+            }
+          },
+          {
+            "name": "forget_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Forget Only"
             }
           },
           {

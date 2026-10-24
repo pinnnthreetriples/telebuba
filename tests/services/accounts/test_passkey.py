@@ -99,6 +99,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
         monkeypatch.setattr(svc, name, fake)
     monkeypatch.setattr(svc, "passkey_vault_configured", lambda: state["configured"])
     monkeypatch.setattr(svc, "vault_key_name", lambda account_id: f"tb-{account_id}")
+    monkeypatch.setattr(svc, "credential_id_for", lambda pem: f"id-of-{pem}")
     return state
 
 
@@ -133,7 +134,7 @@ async def test_creating_makes_the_vault_key_first_and_stores_the_row_last(
     row: StoredPasskey = wire["row"]  # ty: ignore[invalid-assignment]
     assert row.user_handle == _HANDLE
     assert row.vault_key_name == "tb-acc-1"
-    assert row.credential_id == wire["credential_id"]
+    assert row.credential_id == wire["credential_id"] == "id-of-PEM"
     assert ("INFO", "passkey_created", None) in wire["events"]  # ty: ignore[unsupported-operator]
 
 
@@ -259,6 +260,19 @@ async def test_removal_asks_telegram_first_and_deletes_the_vault_key_last(
 
     assert view.has_passkey is False
     assert wire["log"] == ["telegram_delete:Y3JlZA", "forget", "vault_delete:tb-acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_forgetting_leaves_telegram_alone_and_still_kills_the_vault_key(
+    wire: dict[str, object],
+) -> None:
+    wire["row"] = _stored()
+
+    view = await svc.remove_account_passkey("acc-1", forget_only=True)
+
+    assert view.has_passkey is False
+    assert wire["log"] == ["forget", "vault_delete:tb-acc-1"]
+    assert ("INFO", "passkey_removed", {"forget_only": True}) in wire["events"]  # ty: ignore[unsupported-operator]
 
 
 @pytest.mark.asyncio

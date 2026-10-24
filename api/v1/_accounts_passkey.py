@@ -60,7 +60,14 @@ async def login_account_with_passkey(account_id: str) -> AccountPasskeyView:
     operation_id="removeAccountPasskey",
     responses=SERVICE_ERRORS,
 )
-async def remove_account_passkey(account_id: str) -> AccountPasskeyView:
-    """Remove the passkey from Telegram and delete its vault key."""
+async def remove_account_passkey(
+    account_id: str,
+    forget_only: bool = False,  # noqa: FBT001, FBT002 - a FastAPI query parameter
+) -> AccountPasskeyView:
+    """Remove the passkey from Telegram and delete its vault key.
+
+    ``?forget_only=true`` leaves Telegram alone, for an account whose session cannot
+    reach it; the vault key is deleted all the same, so the passkey is dead there.
+    """
     with service_errors_to_http():
-        return await accounts.remove_account_passkey(account_id)
+        return await accounts.remove_account_passkey(account_id, forget_only=forget_only)

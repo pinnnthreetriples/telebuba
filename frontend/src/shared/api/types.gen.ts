@@ -12257,7 +12257,12 @@ export type RemoveAccountPasskeyData = {
      */
     account_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Forget Only
+     */
+    forget_only?: boolean;
+  };
   url: '/api/v1/accounts/{account_id}/passkey';
 };
 

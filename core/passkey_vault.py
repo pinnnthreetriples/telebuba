@@ -26,6 +26,10 @@ PasskeyVaultCode = Literal[
     "passkey_vault_rejected",
 ]
 _KEY_TYPE = "ecdsa-p256"
+# Telegram holds version 1's public key and nothing else: a rotation would make the
+# vault sign with a key Telegram never saw. Sign with it explicitly, and refuse a key
+# that has been rotated (the app's policy denies rotation; root does not).
+_KEY_VERSION = 1
 _SIGNATURE_PREFIX_PARTS = 3  # ``vault:v<N>:<base64 DER>``
 
 
@@ -67,15 +71,18 @@ async def _request(method: str, path: str, body: dict[str, object] | None = None
     return response
 
 
-def _latest_public_key(payload: Any) -> str:  # noqa: ANN401 - parsed JSON
-    """The PEM public key of the newest version in a ``keys/<name>`` read."""
+def _first_public_key(payload: Any) -> str:  # noqa: ANN401 - parsed JSON
+    """The PEM public key of version 1 in a ``keys/<name>`` read; a rotated key is refused."""
     data = payload.get("data")
     keys = data.get("keys") if isinstance(data, dict) else None
     if not isinstance(keys, dict) or not keys:
         msg = "passkey_vault_rejected"
         raise PasskeyVaultError(msg, "no_key_versions")
-    newest = keys[str(max(int(version) for version in keys))]
-    pem = newest.get("public_key") if isinstance(newest, dict) else None
+    if set(keys) != {str(_KEY_VERSION)}:
+        msg = "passkey_vault_rejected"
+        raise PasskeyVaultError(msg, "key_rotated")
+    first = keys[str(_KEY_VERSION)]
+    pem = first.get("public_key") if isinstance(first, dict) else None
     if not isinstance(pem, str) or not pem:
         msg = "passkey_vault_rejected"
         raise PasskeyVaultError(msg, "no_public_key")
@@ -86,7 +93,7 @@ async def create_signing_key(name: str) -> str:
     """Create the non-exportable P-256 key ``name`` (a no-op if it exists); its PEM public key."""
     await _request("POST", f"keys/{name}", {"type": _KEY_TYPE, "exportable": False})
     response = await _request("GET", f"keys/{name}")
-    return _latest_public_key(response.json())
+    return _first_public_key(response.json())
 
 
 async def sign_with_key(name: str, data: bytes) -> bytes:
@@ -94,7 +101,11 @@ async def sign_with_key(name: str, data: bytes) -> bytes:
     response = await _request(
         "POST",
         f"sign/{name}/sha2-256",
-        {"input": base64.b64encode(data).decode(), "marshaling_algorithm": "asn1"},
+        {
+            "input": base64.b64encode(data).decode(),
+            "marshaling_algorithm": "asn1",
+            "key_version": _KEY_VERSION,
+        },
     )
     data_field = response.json().get("data")
     signature = data_field.get("signature") if isinstance(data_field, dict) else None

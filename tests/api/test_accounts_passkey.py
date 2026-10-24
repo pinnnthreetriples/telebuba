@@ -43,7 +43,7 @@ async def test_each_route_answers_the_service_view(  # noqa: PLR0913 - one row o
     service: str,
     has_passkey: bool,  # noqa: FBT001 - parametrized
 ) -> None:
-    async def _fake(account_id: str) -> AccountPasskeyView:
+    async def _fake(account_id: str, **_: object) -> AccountPasskeyView:
         assert account_id == "acc-1"
         return _view(has_passkey=has_passkey)
 
@@ -53,6 +53,28 @@ async def test_each_route_answers_the_service_view(  # noqa: PLR0913 - one row o
 
     assert resp.status_code == 200
     assert resp.json() == _view(has_passkey=has_passkey).model_dump()
+
+
+@pytest.mark.parametrize(("query", "forget_only"), [("", False), ("?forget_only=true", True)])
+@pytest.mark.asyncio
+async def test_removal_passes_forget_only_through(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str,
+    forget_only: bool,  # noqa: FBT001 - parametrized
+) -> None:
+    seen: list[bool] = []
+
+    async def _remove(_account_id: str, *, forget_only: bool) -> AccountPasskeyView:
+        seen.append(forget_only)
+        return _view(has_passkey=False)
+
+    monkeypatch.setattr("services.accounts.remove_account_passkey", _remove)
+    async with _client(app) as client:
+        resp = await client.delete(_URL + query)
+
+    assert resp.status_code == 200
+    assert seen == [forget_only]
 
 
 @pytest.mark.asyncio

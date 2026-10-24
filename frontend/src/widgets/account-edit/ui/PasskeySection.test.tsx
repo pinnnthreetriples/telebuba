@@ -91,3 +91,42 @@ test('without a key vault the card says so and offers nothing', async () => {
   expect(await screen.findByText(/Сейф ключей не настроен/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Создать ключ доступа' })).toBeNull();
 });
+
+test('a removal Telegram could not reach offers to forget the passkey locally', async () => {
+  const stored = view({ has_passkey: true, created_at: '2026-10-24T12:00:00+00:00' });
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const forget = new URL(request.url).searchParams.get('forget_only') === 'true';
+    if (request.method === 'DELETE' && !forget) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { code: 'conflict', message: 'unavailable' } }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+    const body = request.method === 'DELETE' ? view() : stored;
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+  await renderSection();
+
+  expect(await screen.findByRole('button', { name: 'Удалить ключ' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Забыть ключ' })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить ключ' }));
+  const removes = screen.getAllByRole('button', { name: 'Удалить ключ' });
+  await userEvent.click(removes[removes.length - 1] as HTMLElement);
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Забыть ключ' }));
+  expect(await screen.findByText('Забыть ключ доступа?')).toBeInTheDocument();
+  const forgets = screen.getAllByRole('button', { name: 'Забыть ключ' });
+  await userEvent.click(forgets[forgets.length - 1] as HTMLElement);
+
+  const last = passkeyWrites().at(-1);
+  expect(last?.method).toBe('DELETE');
+  expect(new URL(last?.url ?? '').searchParams.get('forget_only')).toBe('true');
+});
