@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
+from core.emulator._features import PERMISSIONS_DIR, write_permission_files
 from core.emulator._process import adb_command, docker
 from core.emulator._profile import aosp_boot_properties
 from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
@@ -158,6 +159,17 @@ async def _give_identity(name: str, identity: str) -> None:
         await docker("cp", str(local), f"{name}:{_IDENTITY_FILE}")
 
 
+async def _give_features(name: str) -> None:
+    """Copy the phone's feature files (``core.emulator._features``) into the stopped container.
+
+    One ``docker cp`` of a directory's contents: they replace the image's files of the
+    same name and leave the others alone. Idempotent, so every refresh does it again.
+    """
+    with tempfile.TemporaryDirectory(prefix="telebuba-features-") as scratch:
+        await asyncio.to_thread(write_permission_files, Path(scratch))
+        await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:{PERMISSIONS_DIR}")
+
+
 def image_for(spec: ContainerSpec) -> str:
     """The image configured for ``spec``'s SDK, or ``emulator_sdk_mismatch``."""
     image = settings.emulator.redroid_images.get(spec.sdk)
@@ -191,14 +203,14 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     It takes the pod's ``index`` and joins the network namespace of the container
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
-    ``build_prop``; its screen, serial number and ``ro.hardware`` on the command line
-    (none has a space), the image's entrypoint replaced since it names redroid. It
-    draws in software (``guest``) or on the host's GPU (``host``: given ``/dev/dri``),
-    as ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its /data is the
-    overlay of those layers (``core.emulator._data``), else its own;
-    ``kept_diff`` is the diff of the Android it replaces, still labelled for deletion.
-    Its chip's CPUs go in through ``_cpu_options`` and the init script that binds
-    its cpuinfo.
+    ``build_prop``, its hardware features through ``_give_features``; its screen,
+    serial number and ``ro.hardware`` on the command line (none has a space), the
+    image's entrypoint replaced since it names redroid. It draws in software
+    (``guest``) or on the host's GPU (``host``: given ``/dev/dri``), as
+    ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its /data is the
+    overlay of those layers (``core.emulator._data``), else its own; ``kept_diff`` is
+    the diff of the Android it replaces, still labelled for deletion. Its chip's CPUs
+    go in through ``_cpu_options`` and the init script that binds its cpuinfo.
     """
     image = image_for(spec)
     device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
@@ -245,6 +257,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     if topology is not None:
         await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
     await _give_identity(name, identity)
+    await _give_features(name)
     return Instance(index, name, running=False)
 
 
@@ -273,12 +286,14 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
 
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
-    follow it. A phone with a chip is pinned to the pod's cores again, its quota
+    follow it. Its feature files are copied again (a container made before has the
+    image's). A phone with a chip is pinned to the pod's cores again, its quota
     raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
     does not clear it); its mounts are a new container's only (one made before has
     none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
+    await _give_features(name)
     if spec.soc is not None:
         placement = await place_cpus(spec.soc, index)
         await docker(

@@ -128,8 +128,8 @@ The container is a real phone (`core/emulator/_profile.py`):
   bind mount) goes through `su`.
 - **Serial and IMEI** are derived from the account id, so the account keeps its phone when its
   container is made again. The serial goes on the command line (`androidboot.serialno`): init
-  sets `ro.serialno` from it before any `build.prop` is read. redroid has no telephony, so the
-  IMEI (the model's TAC + Luhn) is not given to the container.
+  sets `ro.serialno` from it before any `build.prop` is read. redroid has no radio (no RIL), so
+  the IMEI (the model's TAC + Luhn) is not given to the container.
 - **Region**: the timezone (`persist.sys.timezone`, `core/country_zones.py`, the web window's
   table too) and the SIM operator (`gsm.sim.operator.*`, `gsm.operator.*`, from
   `configs/carriers_mcc_mnc.json`, one carrier per account) follow the proxy's country, or the
@@ -165,6 +165,29 @@ The container is a real phone (`core/emulator/_profile.py`):
   (`docker update`). A phone without a chip keeps `EMULATOR__CPU_CORES` of the host's CPUs.
   The image stays x86_64 (`ro.product.cpu.abilist` starts with `x86_64`), so an app comparing
   its ABI with the ARM cpuinfo can tell.
+- **Hardware features** (`core/emulator/_features.py`): `pm list features` /
+  `hasSystemFeature` answer from the XML files of `/vendor/etc/permissions`, which SystemConfig
+  reads at every boot. redroid's declare `android.hardware.ethernet`, a single-touch screen and no
+  telephony. Before every cold boot (a container made before included) AOSP's own
+  `android.hardware.telephony.gsm.xml`, `touchscreen.multitouch.jazzhand.xml`, `usb.host.xml` and
+  `usb.accessory.xml` (`frameworks/native/data/etc`, the same in 13 and 14) are copied in, and
+  `android.hardware.ethernet.xml` is emptied. eth0 stays up: the Ethernet service starts for
+  `usb.host` too (`EthernetTracker` still brings eth0 up as the default network). Checked on
+  redroid 13 and 14: boot, eth0, screencap and Telegram's launch unchanged, no crash. Telegram's
+  EmuDetector reads telephony only behind `setCheckTelephony(true)`, which the app never calls, and
+  no file names anything it looks for (a test holds that). `faketouch` stays: every touchscreen
+  phone declares it.
+- **Not given** (no HAL in the image): NFC and fingerprint (declared, they would come with a
+  missing adapter, `isHardwareDetected() == false`, which no real phone shows) and **sensors**:
+  `dumpsys sensorservice` says `No Sensors on the device`. The image ships no `ISensors` service
+  at all (no `/vendor/bin/hw/*sensors*`, no VINTF entry), while its `handheld_core_hardware.xml`
+  still declares the accelerometer and compass. Telegram reads sensors for raise-to-listen,
+  wallpaper parallax and Mini Apps (`BotSensors`: a Mini App asking for the accelerometer or
+  gyroscope learns there is none), and sends none of it in `initConnection`. Giving them takes a
+  sensors HAL built for the image (AIDL `android.hardware.sensors`, with its event FMQ), shipped
+  into `/vendor` with a VINTF fragment and an init service; AOSP's example service is not in
+  redroid and names its sensors `Vendor String`. Kernel devices (`uinput`, IIO) are not an option:
+  the host kernel is shared by every pod.
 
 ### The phone's hardware name
 
