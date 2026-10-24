@@ -53,6 +53,7 @@ from core.emulator.redroid import (
 )
 from core.emulator.scrcpy import ScreenStream, open_screen
 from core.emulator.telegram_app import (
+    app_package,
     bring_app_to_front,
     confirm_number,
     ensure_app,
@@ -78,6 +79,7 @@ __all__ = [
     "TapEvent",
     "TelegramMobilePlaybook",
     "adb_serial",
+    "app_package",
     "apply_battery_telemetry",
     "apply_stealth_profile",
     "assert_sdk",

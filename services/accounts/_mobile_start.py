@@ -13,7 +13,8 @@
   up on its screen with the refusal, for the operator to finish the sign-in by hand.
   Warming's background open still fails: nobody watches its pod;
 * a phone started without its ``app`` (the device farm's) fetches no APK, and installs,
-  starts and signs in nothing: it is booted, seeded and shown, and handed over as it is;
+  starts and signs in nothing: it is booted, seeded and shown, and handed over as it is.
+  The account's own open of it while it runs installs the app and signs it in;
 * each stage is reported as it begins (``_mobile_progress``) for the operator's dialog.
 """
 
@@ -29,6 +30,7 @@ from zoneinfo import ZoneInfo
 from core.emulator import (
     EmulatorError,
     adb_serial,
+    app_package,
     apply_battery_telemetry,
     apply_stealth_profile,
     assert_sdk,
@@ -66,7 +68,7 @@ logger = logging.getLogger(__name__)
 type OpenMode = Literal["operator", "warming", "boot"]
 
 # A running app on one of these still needs signing in; anything else is left as is.
-ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
+_ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
 # A background open waits for the app to show one of these, then reads it as it is.
 _KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
 
@@ -161,15 +163,26 @@ async def _app_signed_in(
     await ensure_app(serial)
     # In the background only an entry screen is signed in; in front, always.
     screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
-    if screen is not None and screen not in ENTRY_SCREENS:
+    if screen is not None and screen not in _ENTRY_SCREENS:
         return screen == "chats", None
     return await sign_in_or_hand_over(account, serial, background=background)
 
 
-async def front_screen(serial: str) -> Screen:
-    """The screen a running app shows once it is put in front."""
+async def running_app_signed_in(
+    account: AccountRead, serial: str, *, background: bool
+) -> tuple[bool, str | None]:
+    """A running pod's app put in front, signed in on an entry screen only.
+
+    A phone the device farm booted has no Telegram yet: it is installed and signed in
+    as on a start, not read off the launcher as a screen to leave alone.
+    """
+    if await app_package(serial) is None:
+        return await _app_signed_in(account, serial, background=background)
     await bring_app_to_front(serial)
-    return (await read_screen(serial))[0]
+    screen, _nodes = await read_screen(serial)
+    if screen in _ENTRY_SCREENS:
+        return await sign_in_or_hand_over(account, serial, background=background)
+    return screen == "chats", None
 
 
 async def set_battery(serial: str, account_id: str, timezone: str) -> None:

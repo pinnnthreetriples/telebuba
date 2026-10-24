@@ -8,9 +8,12 @@ the account's main session needs can stop the phone from coming up.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from core.emulator.redroid import Instance
+from services.accounts import _mobile_start
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import (
     EmulatorRefusedError,
@@ -19,6 +22,10 @@ from services.accounts.mobile_emulator import (
     open_mobile_progress,
 )
 from tests.services.accounts._mobile_support import _account, _Container
+
+if TYPE_CHECKING:
+    from core.emulator.ui_dump import Screen
+    from schemas.emulator import MobileOpenStage
 
 pytestmark = pytest.mark.usefixtures("mobile_enabled")
 
@@ -115,3 +122,63 @@ async def test_a_failed_boot_is_refused_and_a_new_pods_fresh_data_removed(
     assert refused.value.code == "emulator_boot_timeout"
     assert container.steps[-1] == f"{undo}:telebuba-acc"
     assert open_mobile_progress("acc").stage == "failed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("background", "screens"),
+    [(False, ["phone", "code", "chats"]), (True, ["phone", "phone", "code", "chats"])],
+)
+async def test_the_accounts_own_open_of_a_booted_phone_installs_and_signs_in_its_app(
+    container: _Container,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    background: bool,
+    screens: list[Screen],
+) -> None:
+    """A running phone with no Telegram is no screen to leave alone: it gets the app."""
+    monkeypatch.setattr(_mobile_start, "wait_screen", container.wait_screen)
+    await _account()
+    container.app_installed = False
+    await boot_account_phone("acc")
+    emulator_module._OPERATOR.clear()  # its window closed: warming may take it too
+    container.instance = Instance(1, "telebuba-acc", running=True)
+    container.steps.clear()
+    container.screens = screens
+
+    result = await open_account_mobile("acc", background=background)
+
+    assert (result.status, result.signed_in) == ("already_running", True)
+    assert "app" in container.steps
+    assert "front" not in container.steps, "no app to bring to the front"
+    assert "code:12345" in container.steps
+    assert not any(step.startswith(("pod:", "stop:")) for step in container.steps)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("running", "stages"), [(False, ["pod", "boot", "done"]), (True, ["pod", "done"])]
+)
+async def test_the_dialog_never_shows_an_app_stage_for_a_boot(
+    container: _Container,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    running: bool,
+    stages: list[str],
+) -> None:
+    await _account()
+    if running:
+        container.instance = Instance(1, "telebuba-acc", running=True)
+    seen: list[str] = []
+    real = emulator_module.report_stage
+
+    def spy(account_id: str, stage: MobileOpenStage, reason: str | None = None) -> None:
+        seen.append(stage)
+        real(account_id, stage, reason)
+
+    for module in (emulator_module, _mobile_start):
+        monkeypatch.setattr(module, "report_stage", spy)
+
+    await boot_account_phone("acc")
+
+    assert seen == stages

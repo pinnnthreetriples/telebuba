@@ -91,12 +91,10 @@ from services.accounts._mobile_holds import (
 )
 from services.accounts._mobile_progress import forget_progress, open_progress, report_stage
 from services.accounts._mobile_start import (
-    ENTRY_SCREENS,
     OpenMode,
-    front_screen,
+    running_app_signed_in,
     set_battery,
     show,
-    sign_in_or_hand_over,
     start_and_sign_in,
 )
 from services.accounts._result import AccountActionError
@@ -286,18 +284,19 @@ async def _open(
     if instance is not None and instance.running:
         if await pod_runs_proxy(name, proxy):
             # Up already and on the current proxy: not booted or reconfigured again.
-            # Only an entry screen is acted on, through its nodes.
+            # Only an entry screen (or an app never installed) is acted on.
             serial = adb_serial(instance.index)
-            report_stage(account.account_id, "app")
+            if mode != "boot":
+                report_stage(account.account_id, "app")
             await connect_device(serial)
             await set_battery(serial, account.account_id, spec.region.timezone)
             if mode != "warming":
                 await show(name, instance.index)
-            screen = None if mode == "boot" else await front_screen(serial)
-            signed_in, refusal = screen == "chats", None
-            if screen in ENTRY_SCREENS:
-                signed_in, refusal = await sign_in_or_hand_over(
-                    account, serial, background=mode == "warming"
+            signed_in, refusal = False, None
+            if mode != "boot":
+                background = mode == "warming"
+                signed_in, refusal = await running_app_signed_in(
+                    account, serial, background=background
                 )
             return OpenMobileResult(
                 account_id=account.account_id,
