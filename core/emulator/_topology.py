@@ -1,8 +1,9 @@
 """The phone's CPUs inside its container: how many, which host cores, what they look like.
 
 Without a chip (``ContainerSpec.soc``) a container gets ``cpu_cores`` of the host's CPUs
-and sees the host's own. With one it is pinned to as many host cores as the chip has
-(``--cpuset-cpus``, fewer on a smaller host) and sees that chip:
+and sees the host's own, at most ``PHONE_CORES`` of them (``phone_cpuset``). With one it
+is pinned to as many host cores as the chip has (``--cpuset-cpus``, fewer on a smaller
+host) and sees that chip:
 
 * ``/sys/devices/system/cpu`` is replaced whole by a directory written here: WSL2's
   sysfs has no ``cpufreq/`` to mount single files onto, and Android's init leaves
@@ -41,6 +42,8 @@ _RC_TEXT = (
     f"    mount none {CPUINFO_STAGE} /proc/cpuinfo bind\n"
     f"    umount {CPUINFO_STAGE}\n"
 )
+# What a phone has (``nproc``) and a container without a chip sees at most.
+PHONE_CORES = 8
 # GKI arm64 kernels are built with CONFIG_NR_CPUS=32.
 _KERNEL_MAX = 31
 # The upstream default; vendors' own (Pixel's ``sched_pixel``) are not in the chip files.
@@ -183,3 +186,9 @@ async def place_cpus(key: str, index: int) -> CpuPlacement:
     cores = min(soc.cores, host)
     directory = await asyncio.to_thread(write_topology, key, soc, cores)
     return CpuPlacement(cpuset(cores, index, host), cores, directory)
+
+
+async def phone_cpuset(index: int) -> str:
+    """Pod ``index``'s host cores when its phone has no chip: a phone's count, its own slice."""
+    host = await host_cores()
+    return cpuset(min(PHONE_CORES, host), index, host)

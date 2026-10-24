@@ -18,6 +18,7 @@ from tests.core.emulator.test_redroid import _SPEC, _product_prop
 if TYPE_CHECKING:
     from tests.core.emulator.conftest import Console
 
+_ARCHITECTURE = "{{.Architecture}}"
 # What Telegram's EmuDetector and its kind look for in names and files.
 _EMULATOR_WORDS = (
     "goldfish",
@@ -178,15 +179,15 @@ def hal_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _sensors_console(
     console: Console, architecture: str, *, installed: bool = False
 ) -> list[list[str]]:
-    """``docker info`` answers ``architecture``; each copy into /vendor lists its files.
+    """``docker info`` answers ``architecture``; each copy into /vendor lists its entries.
 
     The container has the HAL's init script from an earlier start when ``installed``.
     """
     trees: list[list[str]] = []
-    product = _product_prop("ro.a=b", [])
+    product = _product_prop("ro.a=b")
 
     def answer(argv: list[str]) -> str:
-        if argv[1] == "info":
+        if argv[1:4] == ["info", "--format", _ARCHITECTURE]:
             return architecture + "\n"
         if argv[1] == "cp" and argv[2].endswith(f"/{_sensors.HAL_NAME}.rc"):
             if not installed:
@@ -195,8 +196,7 @@ def _sensors_console(
             Path(argv[3]).write_text("service ...\n", encoding="utf-8")
             return ""
         if argv[1] == "cp" and argv[-1].endswith(":/vendor"):
-            root = Path(argv[2].removesuffix("/."))
-            trees.append(sorted(p.relative_to(root).as_posix() for p in root.rglob("*")))
+            trees.append(sorted(console.archive(console.calls[-1])))
             return ""
         return product(argv)
 
@@ -217,8 +217,20 @@ async def test_a_new_container_gets_the_sensors_hal_before_it_boots(console: Con
     copy = next(call for call in console.calls if call[-1] == "telebuba-new:/vendor")
     create = next(call for call in console.calls if call[1] == "create")
     assert console.calls.index(copy) > console.calls.index(create)
-    infos = [call for call in console.calls if call[1] == "info"]
-    assert infos == [[str(settings.emulator.docker_path), "info", "--format", "{{.Architecture}}"]]
+    infos = [call for call in console.calls if _ARCHITECTURE in call]
+    assert infos == [[str(settings.emulator.docker_path), "info", "--format", _ARCHITECTURE]]
+    entries = console.archive(copy)
+    owners = {
+        name: (info.mode, info.uid, info.gid)
+        for name, (info, _data) in entries.items()
+        if name.startswith("bin") or name.endswith(".rc")
+    }
+    assert owners == {
+        "bin": (0o751, 0, 2000),
+        "bin/hw": (0o751, 0, 2000),
+        f"bin/hw/{_sensors.HAL_NAME}": (0o755, 0, 2000),
+        f"etc/init/{_sensors.HAL_NAME}.rc": (0o644, 0, 0),
+    }, "as the image's own /vendor: root:shell directories, no executable init script"
 
 
 @pytest.mark.usefixtures("hal_dir")
@@ -233,7 +245,7 @@ async def test_a_refresh_copies_the_hal_again_with_the_new_countrys_field(
     await redroid.refresh_identity("telebuba-acc-2", moved, 2)
 
     assert len(trees) == 2
-    infos = [call for call in console.calls if call[1] == "info"]
+    infos = [call for call in console.calls if _ARCHITECTURE in call]
     assert len(infos) == 1, "the host's architecture is asked once per process"
 
 
@@ -258,7 +270,7 @@ async def test_no_hal_is_copied_while_it_is_off(console: Console) -> None:
     await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
 
     assert trees == []
-    assert not [call for call in console.calls if call[1] == "info"]
+    assert not [call for call in console.calls if _ARCHITECTURE in call]
 
 
 def test_a_disabled_tree_leaves_init_nothing_to_start(tmp_path: Path) -> None:

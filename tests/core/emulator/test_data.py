@@ -142,13 +142,18 @@ async def test_a_new_pod_boots_on_its_layers(console: Console, layers: tuple[Pat
     await pod.start_pod("telebuba-new", _SPEC, _PROXY)
 
     android = _call(console, "create", "telebuba-new")
-    volumes = [android[i + 1] for i, arg in enumerate(android) if arg == "--volume"]
-    assert volumes == [
+    assert _data_mounts(android) == [
         f"{(base / str(_SPEC.sdk)).as_posix()}:/data-base:ro",
         f"{(diff / 'telebuba-new').as_posix()}:/data-diff",
     ]
     assert android[-1] == "androidboot.use_redroid_overlayfs=1"
     assert android.index("--volume") < android.index(_SPEC_IMAGE), "docker options"
+
+
+def _data_mounts(android: list[str]) -> list[str]:
+    """The ``--volume`` mounts of ``/data``'s layers (its battery has one of its own)."""
+    volumes = [android[i + 1] for i, arg in enumerate(android) if arg == "--volume"]
+    return [volume for volume in volumes if ":/data-" in volume]
 
 
 @pytest.mark.asyncio
@@ -158,7 +163,7 @@ async def test_a_pod_without_shared_data_mounts_nothing(console: Console) -> Non
     await pod.start_pod("telebuba-new", _SPEC, _PROXY)
 
     android = _call(console, "create", "telebuba-new")
-    assert "--volume" not in android
+    assert _data_mounts(android) == []
     assert "androidboot.use_redroid_overlayfs=1" not in android
 
 
@@ -362,7 +367,7 @@ async def test_an_android_made_again_with_shared_data_off_keeps_its_diff_labelle
     await pod.start_pod("telebuba-acc-0", _SPEC, _PROXY)
 
     android = _call(console, "create", "telebuba-acc-0")
-    assert "--volume" not in android
+    assert _data_mounts(android) == []
     assert f"telebuba.data_diff={old}" in android, "deleting the account still finds it"
 
 

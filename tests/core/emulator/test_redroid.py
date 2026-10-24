@@ -41,8 +41,8 @@ _PS = "0|telebuba-acc-1|running\n2|telebuba-acc-2|exited\n|stray|running\n"
 _IMAGE_PROP = "ro.product.product.model=redroid13_x86_64\nro.build.characteristics=default"
 
 
-def _product_prop(image_prop: str, written: list[str]) -> Callable[[list[str]], str]:
-    """``docker cp`` out hands over ``image_prop``; ``docker cp`` in records what came back."""
+def _product_prop(image_prop: str) -> Callable[[list[str]], str]:
+    """``docker cp`` out hands over ``image_prop``; Docker's VM has 16 CPUs."""
 
     def answer(argv: list[str]) -> str:
         if argv[1] == "cp" and argv[2].endswith(SENSORS_RC):  # no HAL from an earlier start
@@ -50,16 +50,23 @@ def _product_prop(image_prop: str, written: list[str]) -> Callable[[list[str]], 
             raise EmulatorError(code)
         if argv[1] == "cp" and argv[2].startswith("telebuba-"):  # container -> host
             Path(argv[3]).write_text(image_prop, encoding="utf-8")
-        elif argv[1] == "cp" and argv[3].endswith("build.prop"):  # read while it still exists
-            written.append(Path(argv[2]).read_text(encoding="utf-8"))
-        return _PS if argv[1] == "ps" else ""
+        return {"ps": _PS, "info": "16\n"}.get(argv[1], "")
 
     return answer
 
 
+def written_prop(console: Console, name: str) -> list[str]:
+    """Each ``build.prop`` copied back into ``name``, as text."""
+    return [
+        data.decode("utf-8")
+        for copy in console.copies_into(f"{name}:/product/etc")
+        for _info, data in console.archive(copy).values()
+    ]
+
+
 @pytest.fixture
 def ps(console: Console) -> Console:
-    console.answer = lambda argv: _PS if argv[1] == "ps" else ""
+    console.answer = lambda argv: {"ps": _PS, "info": "16\n"}.get(argv[1], "")
     return console
 
 
@@ -107,8 +114,7 @@ async def test_a_container_is_found_by_name_among_the_apps_own(ps: Console) -> N
 async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     ps: Console,
 ) -> None:
-    copied: list[str] = []
-    ps.answer = _product_prop(_IMAGE_PROP, copied)
+    ps.answer = _product_prop(_IMAGE_PROP)
 
     instance = await redroid.create_instance(
         "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net"
@@ -121,8 +127,9 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "telebuba.index=1" in create
     assert create[create.index("--cgroupns") + 1] == "private", "no host cgroups on cgroup v1"
     assert create[create.index("--cpus") + 1] == "2"
-    assert "--cpuset-cpus" not in create
-    assert "--volume" not in create, "the host's own CPUs show through"
+    assert create[create.index("--cpuset-cpus") + 1] == "8-15", "a phone's 8 of the host's"
+    mounts = _values(create, "--volume")
+    assert [m for m in mounts if "/sys/devices/system/cpu" in m] == [], "no chip to show"
     image = create.index("redroid/redroid:13.0.0_64only-latest")
     assert create[image - 2 : image] == ["--entrypoint", "/init"], "the image's names redroid"
     assert create[image + 1 :] == [
@@ -136,11 +143,12 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "androidboot.redroid_gpu_mode=guest",
     ]
     assert "/dev/dri:/dev/dri" not in create, "software drawing needs no GPU"
-    take, give = [c for c in _docker_calls(ps, "cp") if c[-1].endswith("build.prop")]
-    assert take[2] == give[3] == "telebuba-new:/product/etc/build.prop", "read last by init"
+    (take,) = [c for c in _docker_calls(ps, "cp") if c[2].endswith("build.prop")]
+    (give,) = ps.copies_into("telebuba-new:/product/etc")
+    assert take[2] == "telebuba-new:/product/etc/build.prop", "read last by init"
     ours = "".join(f"{key}={value}\n" for key, value in aosp_boot_properties(_SPEC).items())
-    (written,) = copied
-    assert written.startswith(_IMAGE_PROP + "\n"), "the image's own lines are kept"
+    (written,) = written_prop(ps, "telebuba-new")
+    assert written.startswith("ro.build.characteristics=default\n"), "the image's own stay"
     assert written.endswith(ours), "ours come after them, so they win"
     assert "ro.product.product.model=Pixel 7\n" in ours
     assert "ro.product.model=Pixel 7\n" in ours, (
@@ -163,7 +171,7 @@ async def test_a_container_drawing_in_software_sees_none_of_the_hosts_devices(
     ps: Console,
 ) -> None:
     """Not privileged: /dev holds only Android's own nodes (docs/redroid.md, Host devices)."""
-    ps.answer = _product_prop(_IMAGE_PROP, [])
+    ps.answer = _product_prop(_IMAGE_PROP)
 
     await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
 
@@ -182,7 +190,7 @@ async def test_a_container_drawing_in_software_sees_none_of_the_hosts_devices(
 
 @pytest.mark.asyncio
 async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> None:
-    ps.answer = _product_prop(_IMAGE_PROP, [])
+    ps.answer = _product_prop(_IMAGE_PROP)
 
     await redroid.create_instance(
         "telebuba-new", _SPEC, index=1, gateway="telebuba-new-net", gpu="host"
@@ -227,17 +235,17 @@ async def test_an_identity_that_would_add_properties_is_refused(ps: Console) -> 
 @pytest.mark.asyncio
 async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -> None:
     first = redroid.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC))
-    copied: list[str] = []
-    ps.answer = _product_prop(first, copied)
+    ps.answer = _product_prop(first)
     moved = _SPEC._replace(region=_SPEC.region._replace(timezone="Europe/Warsaw"))
 
     await redroid.refresh_identity("telebuba-acc-2", moved, 2)
 
-    (written,) = copied
+    (written,) = written_prop(ps, "telebuba-acc-2")
     assert written == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(moved))
     assert "persist.sys.timezone=Europe/Warsaw\n" in written
     assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
-    assert _docker_calls(ps, "update") == [], "a phone without a chip keeps its CPUs"
+    (update,) = _docker_calls(ps, "update")
+    assert "--cpus" not in update, "a phone without a chip keeps its quota"
     assert len(_feature_copies(ps)) == 1, "a container made before gets them too"
     assert len(_transport_copies(ps)) == 1, "and its network label, as configured now"
 
@@ -248,19 +256,16 @@ async def test_the_overlay_copied_is_the_configured_transports(
     ps: Console, monkeypatch: pytest.MonkeyPatch, transport: _transport.Transport
 ) -> None:
     monkeypatch.setattr(settings.emulator, "network_transport", transport)
-    copied: list[bytes] = []
-    product = _product_prop(_IMAGE_PROP, [])
-
-    def answer(argv: list[str]) -> str:
-        if argv[1] == "cp" and argv[-1].endswith(":/product"):
-            (apk,) = Path(argv[2].removesuffix("/.")).rglob("*.apk")
-            copied.append(apk.read_bytes())
-        return product(argv)
-
-    ps.answer = answer
+    ps.answer = _product_prop(_IMAGE_PROP)
 
     await redroid.refresh_identity("telebuba-acc-2", _SPEC, 2)
 
+    copied = [
+        data
+        for copy in _transport_copies(ps)
+        for name, (_info, data) in ps.archive(copy).items()
+        if name.endswith(".apk")
+    ]
     assert copied == [_transport.overlay_apk(transport)], "ethernet turns a cellular one back"
 
 
@@ -269,8 +274,7 @@ def chip(ps: Console, monkeypatch: pytest.MonkeyPatch) -> Console:
     """``CHIP`` (4 cores) is the phone's chip; Docker's VM has 16 CPUs."""
     for module in (_topology, _profile):
         monkeypatch.setattr(module, "load_socs", lambda: {"chip": CHIP})
-    product = _product_prop(_IMAGE_PROP, [])
-    ps.answer = lambda argv: "16\n" if argv[1] == "info" else product(argv)
+    ps.answer = _product_prop(_IMAGE_PROP)
     return ps
 
 
@@ -283,13 +287,13 @@ async def test_a_new_container_with_a_chip_is_pinned_and_sees_its_topology(chip:
     assert create[create.index("--cpuset-cpus") + 1] == "4-7", "pod 1's own slice"
     directory = settings.emulator.cpu_topology_dir.resolve() / "chip-4"
     mounts = [create[i + 1] for i, arg in enumerate(create) if arg == "--volume"]
-    assert mounts == [
+    assert mounts[:2] == [
         f"{directory / 'cpu'}:/sys/devices/system/cpu:ro",
         f"{directory / 'cpuinfo'}:/dev/cpuinfo:ro",
     ]
     assert (directory / "cpu/cpu3/cpufreq/cpuinfo_max_freq").read_text() == "3187200\n"
-    (rc,) = [c for c in _docker_calls(chip, "cp") if c[-1].endswith("cpuinfo.rc")]
-    assert rc[2:] == [str(directory / "cpuinfo.rc"), "telebuba-new:/vendor/etc/init/cpuinfo.rc"]
+    (rc,) = chip.copies_into("telebuba-new:/vendor/etc/init")
+    assert list(chip.archive(rc)) == ["cpuinfo.rc"]
     assert chip.calls.index(rc) > chip.calls.index(create)
 
 
@@ -302,7 +306,7 @@ async def test_a_refresh_pins_a_chips_container_without_new_mounts(chip: Console
         "pod 2's own slice, its old --cpus quota raised to all of it"
     )
     assert not [c for c in chip.calls if c[1] in {"create", "rm"}], "nothing is made again"
-    assert not [c for c in _docker_calls(chip, "cp") if c[-1].endswith("cpuinfo.rc")]
+    assert not chip.copies_into("telebuba-acc-2:/vendor/etc/init")
 
 
 @pytest.mark.asyncio

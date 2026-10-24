@@ -31,8 +31,10 @@ async def _kill(process: asyncio.subprocess.Process) -> None:
     await asyncio.shield(process.wait())
 
 
-async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
-    """Run ``argv`` without a shell and return its stdout.
+async def run_command(
+    argv: Sequence[str], *, seconds: float, step: str, stdin: bytes | None = None
+) -> str:
+    """Run ``argv`` without a shell, fed ``stdin`` when given, and return its stdout.
 
     A missing binary, a timeout and a non-zero exit each raise ``EmulatorError`` with
     their own code. A cancelled caller kills the child before the cancellation goes on:
@@ -41,6 +43,7 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
     try:
         process = await asyncio.create_subprocess_exec(  # nosec B603 - argv list, no shell
             *argv,
+            stdin=None if stdin is None else asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -51,7 +54,7 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
         raise EmulatorError(_EMULATOR_COMMAND_FAILED) from exc
     try:
         async with asyncio.timeout(seconds):
-            stdout, _stderr = await process.communicate()
+            stdout, _stderr = await process.communicate(stdin)
     except TimeoutError as exc:
         await _kill(process)
         logger.warning("emulator step %s timed out", step)
@@ -65,12 +68,13 @@ async def run_command(argv: Sequence[str], *, seconds: float, step: str) -> str:
     return stdout.decode("utf-8", errors="replace")
 
 
-async def docker(*args: str, seconds: float | None = None) -> str:
+async def docker(*args: str, seconds: float | None = None, stdin: bytes | None = None) -> str:
     """One docker CLI call, bounded like every other console step (or by ``seconds``)."""
     return await run_command(
         [str(settings.emulator.docker_path), *args],
         seconds=seconds or settings.emulator.command_timeout_seconds,
         step=f"docker {args[0]}",
+        stdin=stdin,
     )
 
 

@@ -1,7 +1,8 @@
 """The container's battery telemetry.
 
 Pure functions that calculate realistic discharging battery levels, temperatures,
-and dumpsys commands to apply them to an Android container.
+and dumpsys commands to apply them to an Android container; and the ``power_supply``
+tree its health HAL reads them from at boot (``write_power_supply``).
 """
 
 from __future__ import annotations
@@ -9,12 +10,18 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # BatteryManager.BATTERY_STATUS_*.
 _CHARGING = 2
 _DISCHARGING = 3
 _FULL = 5
+# Where the health HAL looks for supplies; the kernel's names for each status.
+POWER_SUPPLY = "/sys/class/power_supply"
+_STATUS_NAMES = {_CHARGING: "Charging", _DISCHARGING: "Discharging", _FULL: "Full"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,3 +149,36 @@ def build_battery_telemetry_commands(state: BatteryTelemetryState) -> list[str]:
         f"dumpsys battery set counter {state.charge_counter_uah}",
         "dumpsys battery set present 1",
     ]
+
+
+def power_supply_files(state: BatteryTelemetryState) -> dict[str, str]:
+    """``POWER_SUPPLY``'s battery at ``state``, in the kernel's units: path -> content.
+
+    redroid has no supply, so its health HAL reports a missing battery at 0 V, 0°C and
+    no technology; ``dumpsys battery set`` cannot set the voltage or technology. Read
+    from these files instead, the HAL reports a Li-ion cell in good health, and the
+    level and status ``dumpsys`` sets later start from the same day's (``_battery``).
+    """
+    capacity_uah = state.capacity_mah * 1000
+    values = {
+        "type": "Battery",
+        "present": "1",
+        "status": _STATUS_NAMES.get(state.status, "Discharging"),
+        "health": "Good",
+        "technology": "Li-ion",
+        "capacity": str(state.level),
+        "voltage_now": str(state.voltage_mv * 1000),
+        "temp": str(state.temp_tenths_c),
+        "charge_counter": str(state.charge_counter_uah),
+        "charge_full": str(capacity_uah),
+        "charge_full_design": str(capacity_uah),
+    }
+    return {f"battery/{name}": f"{value}\n" for name, value in values.items()}
+
+
+def write_power_supply(directory: Path, state: BatteryTelemetryState) -> None:
+    """Write ``power_supply_files`` under ``directory``, the host side of its mount."""
+    for name, text in power_supply_files(state).items():
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")

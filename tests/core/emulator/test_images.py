@@ -106,7 +106,7 @@ async def test_the_build_does_not_wait_for_the_pull(monkeypatch: pytest.MonkeyPa
     pulling = asyncio.Event()
     present: set[str] = set()
 
-    async def docker(argv: Sequence[str], *, seconds: float, step: str) -> str:
+    async def docker(argv: Sequence[str], *, seconds: float, step: str, **_stdin: object) -> str:
         del seconds, step
         if argv[1:3] == ["image", "inspect"]:
             if argv[-1] not in present:
@@ -134,7 +134,7 @@ async def test_a_failed_build_ends_the_call_and_the_pull_beside_it(
 ) -> None:
     pulling, pull_cancelled = asyncio.Event(), asyncio.Event()
 
-    async def docker(argv: Sequence[str], *, seconds: float, step: str) -> str:
+    async def docker(argv: Sequence[str], *, seconds: float, step: str, **_stdin: object) -> str:
         del seconds, step
         if argv[1:3] == ["image", "inspect"]:
             code = "emulator_command_failed"  # neither image is here

@@ -116,11 +116,14 @@ def _track(lists: dict[str, list[str]], argv: list[str]) -> None:
 
 
 def _verbs(console: Console) -> list[str]:
-    """Each docker call as ``verb target`` (listings and the network left out)."""
+    """Each docker call as ``verb target`` (listings and the network left out).
+
+    A tar unpacked into a container (``cp -a -``) is named by where it goes.
+    """
     docker = str(settings.emulator.docker_path)
-    targets = {"start": -1, "stop": -1, "create": 3}
+    targets = {"start": -1, "stop": -1, "update": -1, "create": 3}
     return [
-        f"{call[1]} {call[targets.get(call[1], 2)]}"
+        f"{call[1]} {call[-1] if call[2:4] == ['-a', '-'] else call[targets.get(call[1], 2)]}"
         for call in console.calls
         if call[0] == docker and call[1] not in {"ps", "network", "inspect", "image", "info"}
     ]
@@ -128,23 +131,6 @@ def _verbs(console: Console) -> list[str]:
 
 def _call(console: Console, verb: str, target: str) -> list[str]:
     return next(c for c in console.calls if c[1] == verb and target in c)
-
-
-def _identity_written(console: Console, name: str) -> list[str]:
-    """The ``docker cp`` that writes the phone's ``build.prop`` back into ``name``."""
-    target = f"{name}:/product/etc/build.prop"
-    return next(c for c in console.calls if c[1] == "cp" and c[3] == target)
-
-
-def _features_given(console: Console, name: str) -> list[str]:
-    """The ``docker cp`` of the phone's feature files into ``name``."""
-    target = f"{name}:/vendor/etc/permissions"
-    return next(c for c in console.calls if c[1] == "cp" and c[3] == target)
-
-
-def _transport_given(console: Console, name: str) -> list[str]:
-    """The ``docker cp`` of the network overlay into ``name``'s /product."""
-    return next(c for c in console.calls if c[1] == "cp" and c[3] == f"{name}:/product")
 
 
 @pytest.mark.asyncio
@@ -171,9 +157,9 @@ async def test_a_new_pod_starts_its_gateway_and_tunnel_before_android(console: C
         "exec telebuba-new-net",
         "create telebuba-new",
         "cp telebuba-new:/product/etc/build.prop",
-        "cp " + _identity_written(console, "telebuba-new")[2],
-        "cp " + _features_given(console, "telebuba-new")[2],
-        "cp " + _transport_given(console, "telebuba-new")[2],
+        "cp telebuba-new:/product/etc",
+        "cp telebuba-new:/vendor/etc/permissions",
+        "cp telebuba-new:/product",
         "start telebuba-new",
     ]
     gateway = _call(console, "create", "telebuba-new-net")
@@ -266,10 +252,11 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
         "start telebuba-acc-0-net",
         "exec telebuba-acc-0-net",
         "cp telebuba-acc-0:/product/etc/build.prop",
-        "cp " + _identity_written(console, "telebuba-acc-0")[2],
-        "cp " + _features_given(console, "telebuba-acc-0")[2],
-        "cp " + _transport_given(console, "telebuba-acc-0")[2],
+        "cp telebuba-acc-0:/product/etc",
+        "cp telebuba-acc-0:/vendor/etc/permissions",
+        "cp telebuba-acc-0:/product",
         f"cp telebuba-acc-0:{SENSORS_RC}",  # a sensors HAL to turn off? none here
+        "update telebuba-acc-0",  # a phone's cores
         "start telebuba-acc-0",
     ], "its phone is written again before it boots: the proxy may have moved country"
 
@@ -285,7 +272,7 @@ async def test_a_found_android_with_a_chip_is_pinned_to_its_pods_cores_before_it
     await pod.start_pod("telebuba-acc-2", _SPEC._replace(soc="chip"), _PROXY)
 
     verbs = _verbs(console)
-    assert verbs[-2:] == ["update --cpus", "start telebuba-acc-2"]
+    assert verbs[-2:] == ["update telebuba-acc-2", "start telebuba-acc-2"]
     assert _call(console, "update", "telebuba-acc-2")[2:] == [
         "--cpus",
         "4",
@@ -375,7 +362,7 @@ async def test_a_failed_start_stops_what_it_found_and_removes_what_it_created(
     console.answer = _docker(
         androids="0|telebuba-acc-0|running\n",
         gateways="0|telebuba-acc-0-net|running\n3|telebuba-new-net|exited\n",
-        fail=lambda argv: argv[1] == "cp" and argv[3].endswith(":/product/etc/build.prop"),
+        fail=lambda argv: argv[1] == "cp" and argv[-1].endswith(":/product/etc"),
     )
 
     with pytest.raises(EmulatorError):
@@ -517,9 +504,11 @@ async def test_two_pods_started_at_once_take_different_indexes(
 ) -> None:
     console.answer = _docker(androids="", gateways="")
 
-    async def yielding(argv: Sequence[str], *, seconds: float, step: str) -> str:
+    async def yielding(
+        argv: Sequence[str], *, seconds: float, step: str, stdin: bytes | None = None
+    ) -> str:
         await asyncio.sleep(0)  # each docker call lets the other start run
-        return await console(argv, seconds=seconds, step=step)
+        return await console(argv, seconds=seconds, step=step, stdin=stdin)
 
     monkeypatch.setattr("core.emulator._process.run_command", yielding)
 

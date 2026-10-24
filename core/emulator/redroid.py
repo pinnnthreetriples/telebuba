@@ -13,21 +13,32 @@ import asyncio
 import logging
 import tempfile
 from contextlib import suppress
-from pathlib import Path
+from datetime import datetime
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, NamedTuple
+from zoneinfo import ZoneInfo
 
 from core.config import settings
+from core.emulator._archive import SHELL, copy_in, pack, read_tree
+from core.emulator._battery import POWER_SUPPLY, generate_initial_battery_state, write_power_supply
 from core.emulator._errors import EmulatorError
 from core.emulator._features import PERMISSIONS_DIR, write_permission_files
 from core.emulator._process import adb_command, docker, docker_or_none
 from core.emulator._profile import aosp_boot_properties
 from core.emulator._sensors import (
+    HAL_NAME,
     SENSORS_RC,
     hal_binary,
     write_disabled_tree,
     write_vendor_tree,
 )
-from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
+from core.emulator._topology import (
+    CPUINFO_RC,
+    CPUINFO_STAGE,
+    SYSFS_CPU,
+    phone_cpuset,
+    place_cpus,
+)
 from core.emulator._transport import write_overlay_tree
 from core.emulator.telegram_app import forget_app
 
@@ -54,9 +65,14 @@ ADB_PORT = 5555
 _LIST_FORMAT = '{{.Label "telebuba.index"}}|{{.Names}}|{{.State}}'
 # Both kinds of a pod in one listing: the last field is set on gateways only.
 _POD_FORMAT = _LIST_FORMAT + '|{{.Label "telebuba.gateway"}}'
-# Where the container's identity goes (see ``_give_identity``), after this mark.
-_IDENTITY_FILE = "/product/etc/build.prop"
-_IDENTITY_MARK = "# telebuba: the phone this container presents\n"
+# Where the container's identity goes (see ``_give_identity``).
+_IDENTITY_FILE = PurePosixPath("/product/etc/build.prop")
+# What earlier versions wrote before their identity block: dropped with that block.
+_LEGACY_MARK = "# telebuba: the phone this container presents\n"
+# Ours though an identity may leave them out (no carrier, no chip); never the image's.
+_OWN_PREFIXES = ("gsm.", "ro.soc.")
+# /vendor's directories that are not listable, as the image has them (``_archive``).
+_VENDOR_DIRECTORIES = {"bin": 0o751, "bin/hw": 0o751}
 # redroid's switch for /data as the overlay of /data-base and /data-diff.
 _OVERLAY_ARGUMENT = "androidboot.use_redroid_overlayfs=1"
 # The image's entrypoint is ``/init qemu=1 androidboot.hardware=redroid``, and init keeps
@@ -157,16 +173,23 @@ def build_prop(spec: ContainerSpec) -> str:
 
 
 def with_identity(image_prop: str, identity: str) -> str:
-    """The product ``build.prop``: the image's own lines, then ``identity`` (ours replaced)."""
-    own = image_prop.split(_IDENTITY_MARK, 1)[0]
-    if own and not own.endswith("\n"):
-        own += "\n"
-    return own + _IDENTITY_MARK + identity
+    """The product ``build.prop``: the image's lines but those ``identity`` sets, then it.
+
+    Ours from an earlier start go as well: a line ``identity`` sets again, a carrier's
+    or chip's (``_OWN_PREFIXES``), and an older version's whole block after its mark.
+    AOSP's comments and the image's other lines stay; nothing of ours is a comment.
+    """
+    keys = {line.partition("=")[0] for line in identity.splitlines()}
+    own = image_prop.split(_LEGACY_MARK, 1)[0].splitlines()
+    return "".join(f"{line}\n" for line in own if not _ours(line, keys)) + identity
 
 
-def _rewrite(path: Path, identity: str) -> None:
-    text = path.read_text(encoding="utf-8")
-    path.write_text(with_identity(text, identity), encoding="utf-8", newline="\n")
+def _ours(line: str, keys: set[str]) -> bool:
+    key, equals, _value = line.partition("=")
+    key = key.strip()
+    if not equals or key.startswith("#"):
+        return False
+    return key in keys or key.startswith(_OWN_PREFIXES)
 
 
 async def _give_identity(name: str, identity: str) -> None:
@@ -175,14 +198,15 @@ async def _give_identity(name: str, identity: str) -> None:
     init reads the product partition's ``build.prop`` LAST of all, and a property read
     later wins over the same one read earlier: only there do ours beat the image's own
     ``ro.product.vendor.*`` / ``ro.vendor.build.*`` (read from ``/vendor``, after
-    ``/system``). The image's lines are kept; our block after the mark replaces the one
-    an earlier start wrote.
+    ``/system``). The image's other lines are kept, ours replace the ones an earlier
+    start wrote, and the file goes back as the image's is: root's, ``0644``.
     """
     with tempfile.TemporaryDirectory(prefix="telebuba-redroid-") as scratch:
-        local = Path(scratch) / "build.prop"
+        local = Path(scratch) / _IDENTITY_FILE.name
         await docker("cp", f"{name}:{_IDENTITY_FILE}", str(local))
-        await asyncio.to_thread(_rewrite, local, identity)
-        await docker("cp", str(local), f"{name}:{_IDENTITY_FILE}")
+        image_prop = await asyncio.to_thread(local.read_text, encoding="utf-8")
+    prop = with_identity(image_prop, identity).encode("utf-8")
+    await copy_in(name, str(_IDENTITY_FILE.parent), pack({_IDENTITY_FILE.name: prop}))
 
 
 async def _give_features(name: str) -> None:
@@ -193,7 +217,8 @@ async def _give_features(name: str) -> None:
     """
     with tempfile.TemporaryDirectory(prefix="telebuba-features-") as scratch:
         await asyncio.to_thread(write_permission_files, Path(scratch))
-        await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:{PERMISSIONS_DIR}")
+        files = await asyncio.to_thread(read_tree, Path(scratch))
+    await copy_in(name, PERMISSIONS_DIR, pack(files))
 
 
 async def _give_transport(name: str) -> None:
@@ -206,7 +231,8 @@ async def _give_transport(name: str) -> None:
     with tempfile.TemporaryDirectory(prefix="telebuba-transport-") as scratch:
         transport = settings.emulator.network_transport
         await asyncio.to_thread(write_overlay_tree, Path(scratch), transport)
-        await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:/product")
+        files = await asyncio.to_thread(read_tree, Path(scratch))
+    await copy_in(name, "/product", pack(files))
 
 
 async def _give_sensors(name: str, spec: ContainerSpec, *, refresh: bool = False) -> None:
@@ -222,10 +248,22 @@ async def _give_sensors(name: str, spec: ContainerSpec, *, refresh: bool = False
     with tempfile.TemporaryDirectory(prefix="telebuba-sensors-") as scratch:
         tree = Path(scratch) / "vendor"
         if binary is not None and await asyncio.to_thread(write_vendor_tree, tree, spec, binary):
-            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+            await _give_vendor(name, tree)
         elif refresh and await _has_sensors(name, Path(scratch) / "rc"):
             await asyncio.to_thread(write_disabled_tree, tree)
-            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+            await _give_vendor(name, tree)
+
+
+async def _give_vendor(name: str, tree: Path) -> None:
+    """Copy ``tree`` into /vendor as the image's own: root:shell, the HAL executable."""
+    files = await asyncio.to_thread(read_tree, tree)
+    archive = pack(
+        files,
+        group=SHELL,
+        executables={f"bin/hw/{HAL_NAME}"},
+        directories=_VENDOR_DIRECTORIES,
+    )
+    await copy_in(name, "/vendor", archive)
 
 
 async def _has_sensors(name: str, scratch: Path) -> bool:
@@ -275,7 +313,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     With ``data`` its /data is the overlay of those layers (``core.emulator._data``),
     else its own; ``kept_diff`` is the diff of the Android it replaces, still labelled
     for deletion. Its chip's CPUs go in through ``_cpu_options`` and the init script
-    that binds its cpuinfo.
+    that binds its cpuinfo; its battery through the tree ``_give_battery`` writes.
     """
     image = image_for(spec)
     access = ("--privileged", "--device", "/dev/dri:/dev/dri") if gpu == "host" else _UNPRIVILEGED
@@ -287,6 +325,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
     identity = build_prop(spec)  # refused before anything is created
     cpus, topology = await _cpu_options(spec, index)
+    battery = await _give_battery(spec, index)
     await docker(
         "create",
         "--name",
@@ -301,6 +340,8 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         "--network",
         f"container:{gateway}",
         *cpus,
+        "--volume",
+        f"{battery}:{POWER_SUPPLY}:ro",
         "--memory",
         f"{settings.emulator.memory_mb}m",
         *access,
@@ -319,7 +360,9 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         *overlay,
     )
     if topology is not None:
-        await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
+        script = await asyncio.to_thread((topology / "cpuinfo.rc").read_bytes)
+        rc = PurePosixPath(CPUINFO_RC)
+        await copy_in(name, str(rc.parent), pack({rc.name: script}))
     await _give_identity(name, identity)
     await _give_features(name)
     await _give_transport(name)
@@ -331,10 +374,12 @@ async def _cpu_options(spec: ContainerSpec, index: int) -> tuple[list[str], Path
     """``docker create``'s CPU options for ``spec`` and its topology directory, if any.
 
     A phone with a chip is pinned to the pod's cores and sees the chip's topology
-    (``core.emulator._topology``); one without gets ``cpu_cores`` of the host's.
+    (``core.emulator._topology``); one without gets ``cpu_cores`` of the host's, pinned
+    to a phone's count of them (``phone_cpuset``).
     """
     if spec.soc is None:
-        return ["--cpus", str(settings.emulator.cpu_cores)], None
+        cpus = ["--cpus", str(settings.emulator.cpu_cores)]
+        return [*cpus, "--cpuset-cpus", await phone_cpuset(index)], None
     placement = await place_cpus(spec.soc, index)
     directory = placement.directory
     return [
@@ -356,18 +401,34 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     made before has the image's), and its sensors HAL with the new magnetic field
     (``_give_sensors``). A phone with a chip is pinned to the pod's cores again, its quota
     raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
-    does not clear it); its mounts are a new container's only (one made before has
-    none), nothing is made again.
+    does not clear it); one without is pinned to a phone's count, its quota left. Its
+    battery tree is written again for this boot. Its mounts are a new container's only
+    (one made before has none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
     await _give_features(name)
     await _give_transport(name)
     await _give_sensors(name, spec, refresh=True)
-    if spec.soc is not None:
-        placement = await place_cpus(spec.soc, index)
-        await docker(
-            "update", "--cpus", str(placement.cores), "--cpuset-cpus", placement.cpuset, name
-        )
+    await _give_battery(spec, index)
+    if spec.soc is None:
+        await docker("update", "--cpuset-cpus", await phone_cpuset(index), name)
+        return
+    placement = await place_cpus(spec.soc, index)
+    await docker("update", "--cpus", str(placement.cores), "--cpuset-cpus", placement.cpuset, name)
+
+
+async def _give_battery(spec: ContainerSpec, index: int) -> Path:
+    """Write pod ``index``'s ``power_supply`` tree: the battery its account has now.
+
+    One directory per pod index (``battery_dir``), mounted over ``POWER_SUPPLY`` by
+    ``create_instance`` and written again before each boot, so the health HAL starts
+    from the level of the phone's hour (its timezone), with a voltage to match.
+    """
+    now = datetime.now(ZoneInfo(spec.region.timezone))
+    state = generate_initial_battery_state(spec.account_id, now)
+    directory = settings.emulator.battery_dir.resolve() / str(index)
+    await asyncio.to_thread(write_power_supply, directory, state)
+    return directory
 
 
 async def launch_instance(name: str, index: int) -> None:
