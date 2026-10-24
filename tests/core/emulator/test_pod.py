@@ -14,6 +14,7 @@ from core.device_fingerprint_android import generate_android_fingerprint
 from core.emulator import _gateway, _profile, _topology, host, pod
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import container_spec
+from core.emulator._sensors import SENSORS_RC
 from schemas.proxy import ProxySettings
 from tests.core.emulator.test_topology import CHIP
 
@@ -59,7 +60,8 @@ def _docker(
     networks = {"exists": network}
 
     def answer(argv: list[str]) -> str:
-        if fail(argv):
+        # No container has a sensors HAL from an earlier start.
+        if fail(argv) or (argv[1] == "cp" and argv[2].endswith(SENSORS_RC)):
             code = "emulator_command_failed"
             raise EmulatorError(code)
         if argv[1:3] == ["network", "inspect"] and not networks["exists"]:
@@ -252,6 +254,7 @@ async def test_a_running_pod_is_stopped_android_first_then_restarted_on_the_prox
         "exec telebuba-acc-0-net",
         "cp telebuba-acc-0:/product/etc/build.prop",
         "cp " + _identity_written(console, "telebuba-acc-0")[2],
+        f"cp telebuba-acc-0:{SENSORS_RC}",  # a sensors HAL to turn off? none here
         "start telebuba-acc-0",
     ], "its phone is written again before it boots: the proxy may have moved country"
 

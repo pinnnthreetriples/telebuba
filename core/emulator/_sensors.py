@@ -39,6 +39,7 @@ _SHEETS_DIR = CONFIGS_DIR / "oem_sensors"
 # AOSP's AIDL multi-HAL service name: what Pixels run, nothing a detector looks for.
 HAL_NAME = "android.hardware.sensors-service.multihal"
 SENSORS_CONF = "/vendor/etc/sensors/sensors.conf"
+SENSORS_RC = f"/vendor/etc/init/{HAL_NAME}.rc"
 _RC = f"""service vendor.sensors-hal-multihal /vendor/bin/hw/{HAL_NAME} {SENSORS_CONF}
     class hal
     user system
@@ -226,6 +227,33 @@ def _feature_xml(feature: str) -> str:
     )
 
 
+def _write_files(directory: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def write_disabled_tree(directory: Path) -> None:
+    """Write over ``write_vendor_tree``'s files what turns an installed HAL off.
+
+    A stopped container's files cannot be deleted from outside, only replaced: an init
+    script with no service, a VINTF fragment with no HAL, no config, and no features.
+    The binary stays, never started.
+    """
+    files = {
+        f"etc/init/{HAL_NAME}.rc": "",
+        f"etc/vintf/manifest/{HAL_NAME}.xml": '<manifest version="1.0" type="device" />\n',
+        "etc/sensors/sensors.conf": "",
+    }
+    for kind in _KINDS.values():
+        if kind.feature is not None:
+            files[f"etc/permissions/android.hardware.sensor.{kind.feature}.xml"] = (
+                '<?xml version="1.0" encoding="utf-8"?>\n<permissions />\n'
+            )
+    _write_files(directory, files)
+
+
 def write_vendor_tree(directory: Path, spec: ContainerSpec, binary: Path) -> bool:
     """Write under ``directory`` what goes into the container's ``/vendor``; False: nothing.
 
@@ -244,10 +272,7 @@ def write_vendor_tree(directory: Path, spec: ContainerSpec, binary: Path) -> boo
         feature = _KINDS[sensor.type].feature
         if feature is not None:
             files[f"etc/permissions/android.hardware.sensor.{feature}.xml"] = _feature_xml(feature)
-    for name, text in files.items():
-        path = directory / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8", newline="\n")
+    _write_files(directory, files)
     service = directory / "bin" / "hw" / HAL_NAME
     service.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(binary, service)

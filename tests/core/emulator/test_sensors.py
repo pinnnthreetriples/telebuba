@@ -12,6 +12,7 @@ import pytest
 from core.config import settings
 from core.emulator import _sensors, redroid
 from core.emulator._blueprints import load_blueprints
+from core.emulator._errors import EmulatorError
 from tests.core.emulator.test_redroid import _SPEC, _product_prop
 
 if TYPE_CHECKING:
@@ -174,14 +175,25 @@ def hal_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return directory
 
 
-def _sensors_console(console: Console, architecture: str) -> list[list[str]]:
-    """``docker info`` answers ``architecture``; each copy into /vendor lists its files."""
+def _sensors_console(
+    console: Console, architecture: str, *, installed: bool = False
+) -> list[list[str]]:
+    """``docker info`` answers ``architecture``; each copy into /vendor lists its files.
+
+    The container has the HAL's init script from an earlier start when ``installed``.
+    """
     trees: list[list[str]] = []
     product = _product_prop("ro.a=b", [])
 
     def answer(argv: list[str]) -> str:
         if argv[1] == "info":
             return architecture + "\n"
+        if argv[1] == "cp" and argv[2].endswith(f"/{_sensors.HAL_NAME}.rc"):
+            if not installed:
+                code = "emulator_command_failed"
+                raise EmulatorError(code)
+            Path(argv[3]).write_text("service ...\n", encoding="utf-8")
+            return ""
         if argv[1] == "cp" and argv[-1].endswith(":/vendor"):
             root = Path(argv[2].removesuffix("/."))
             trees.append(sorted(p.relative_to(root).as_posix() for p in root.rglob("*")))
@@ -247,3 +259,30 @@ async def test_no_hal_is_copied_while_it_is_off(console: Console) -> None:
 
     assert trees == []
     assert not [call for call in console.calls if call[1] == "info"]
+
+
+def test_a_disabled_tree_leaves_init_nothing_to_start(tmp_path: Path) -> None:
+    _sensors.write_disabled_tree(tmp_path)
+
+    rc = (tmp_path / f"etc/init/{_sensors.HAL_NAME}.rc").read_text()
+    assert "service" not in rc
+    manifest = (tmp_path / f"etc/vintf/manifest/{_sensors.HAL_NAME}.xml").read_text()
+    assert "<hal" not in manifest
+    assert "<manifest" in manifest, "still a valid fragment"
+    assert (tmp_path / "etc/sensors/sensors.conf").read_text() == ""
+    gyroscope = (tmp_path / "etc/permissions/android.hardware.sensor.gyroscope.xml").read_text()
+    assert "<feature" not in gyroscope
+    assert not (tmp_path / "bin").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_with_the_hal_off_disables_one_an_earlier_start_installed(
+    console: Console,
+) -> None:
+    trees = _sensors_console(console, "x86_64", installed=True)
+
+    await redroid.refresh_identity("telebuba-acc-2", _SPEC, 2)
+
+    (tree,) = trees
+    assert f"etc/init/{_sensors.HAL_NAME}.rc" in tree
+    assert not [path for path in tree if path.startswith("bin/")]

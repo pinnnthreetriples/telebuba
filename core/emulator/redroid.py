@@ -18,9 +18,14 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.emulator._errors import EmulatorError
-from core.emulator._process import adb_command, docker
+from core.emulator._process import adb_command, docker, docker_or_none
 from core.emulator._profile import aosp_boot_properties
-from core.emulator._sensors import hal_binary, write_vendor_tree
+from core.emulator._sensors import (
+    SENSORS_RC,
+    hal_binary,
+    write_disabled_tree,
+    write_vendor_tree,
+)
 from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
 from core.emulator.telegram_app import forget_app
 
@@ -159,19 +164,28 @@ async def _give_identity(name: str, identity: str) -> None:
         await docker("cp", str(local), f"{name}:{_IDENTITY_FILE}")
 
 
-async def _give_sensors(name: str, spec: ContainerSpec) -> None:
+async def _give_sensors(name: str, spec: ContainerSpec, *, refresh: bool = False) -> None:
     """Copy the sensors HAL (``core.emulator._sensors``) into the stopped container's /vendor.
 
-    Nothing while it is off, not built for the host, or the phone has no sensor sheet.
     One ``docker cp`` of a directory's contents: the image has none of these files, and
-    a refresh replaces its own. Idempotent, so every refresh does it again.
+    a refresh replaces its own. Idempotent, so every refresh does it again. While it is
+    off, not built for the host, or the phone has no sensor sheet, a refresh turns off a
+    HAL an earlier start installed (``write_disabled_tree``); a container without one,
+    or a new one, is left alone.
     """
     binary = await hal_binary()
-    if binary is None:
-        return
     with tempfile.TemporaryDirectory(prefix="telebuba-sensors-") as scratch:
-        if await asyncio.to_thread(write_vendor_tree, Path(scratch), spec, binary):
-            await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:/vendor")
+        tree = Path(scratch) / "vendor"
+        if binary is not None and await asyncio.to_thread(write_vendor_tree, tree, spec, binary):
+            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+        elif refresh and await _has_sensors(name, Path(scratch) / "rc"):
+            await asyncio.to_thread(write_disabled_tree, tree)
+            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+
+
+async def _has_sensors(name: str, scratch: Path) -> bool:
+    """Whether the stopped container has the HAL's init script (copied out to ``scratch``)."""
+    return await docker_or_none("cp", f"{name}:{SENSORS_RC}", str(scratch)) is not None
 
 
 def image_for(spec: ContainerSpec) -> str:
@@ -297,7 +311,7 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
-    await _give_sensors(name, spec)
+    await _give_sensors(name, spec, refresh=True)
     if spec.soc is not None:
         placement = await place_cpus(spec.soc, index)
         await docker(
