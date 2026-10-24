@@ -1464,6 +1464,7 @@
       "passkey_options_invalid": "Telegram прислал неожиданный ответ на запрос ключа",
       "passkey_telegram_refused": "Telegram отказал в операции с ключом доступа",
       "passkey_twofa_missing": "Для входа нужен 2FA-пароль, а он не сохранён в Telebuba",
+      "passkey_twofa_invalid": "Telegram не принял сохранённый 2FA-пароль — обновите его в карточке 2FA",
       "passkey_user_mismatch": "Ключ привёл в другой аккаунт — вход отменён",
       "passkey_login_failed": "Не удалось войти по ключу"
     },

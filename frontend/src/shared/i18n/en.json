@@ -1429,6 +1429,7 @@
       "passkey_options_invalid": "Telegram sent an unexpected passkey response",
       "passkey_telegram_refused": "Telegram refused the passkey operation",
       "passkey_twofa_missing": "Signing in needs the 2FA password, which Telebuba does not have",
+      "passkey_twofa_invalid": "Telegram rejected the stored 2FA password — update it in the 2FA card",
       "passkey_user_mismatch": "The passkey signed in to a different account — the sign-in was undone",
       "passkey_login_failed": "Passkey sign-in failed"
     },

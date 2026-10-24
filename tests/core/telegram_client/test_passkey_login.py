@@ -196,6 +196,37 @@ async def test_a_2fa_account_without_a_stored_password_is_refused(wire: dict[str
 
 
 @pytest.mark.asyncio
+async def test_a_stored_password_telegram_rejects_is_reported_as_invalid(
+    wire: dict[str, object],
+) -> None:
+    client = _Client(finish=errors.SessionPasswordNeededError(request=None))
+
+    async def _rejected(**_: str) -> None:
+        raise errors.PasswordHashInvalidError(request=None)
+
+    client.sign_in = _rejected  # ty: ignore[invalid-assignment]
+    wire["client"] = client
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "unauthorized"
+    assert result.error_message == "passkey_twofa_invalid"
+
+
+@pytest.mark.asyncio
+async def test_a_passkey_telegram_refuses_is_a_refusal_not_a_temporary_fault(
+    wire: dict[str, object],
+) -> None:
+    wire["client"] = _Client(finish=errors.RPCError(request=None, message="PASSKEY_INVALID"))
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "unauthorized"
+    assert result.error_message == "passkey_telegram_refused"
+    assert result.is_temporary is False
+
+
+@pytest.mark.asyncio
 async def test_an_authorized_session_is_reported_alive_without_a_login(
     wire: dict[str, object],
 ) -> None:

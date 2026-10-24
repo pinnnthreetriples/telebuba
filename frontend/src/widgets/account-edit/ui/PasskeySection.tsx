@@ -92,7 +92,7 @@ export function PasskeySection({ account }: { account: AccountRead }) {
                 <Button
                   disabled={busy}
                   onClick={() => {
-                    void login.mutateAsync(path).then(refresh);
+                    login.mutate(path, { onSettled: refresh });
                   }}
                 >
                   {t('accounts.edit.passkeyLogin')}
@@ -111,7 +111,7 @@ export function PasskeySection({ account }: { account: AccountRead }) {
               <Button
                 disabled={busy || !view}
                 onClick={() => {
-                  void create.mutateAsync(path).then(refresh);
+                  create.mutate(path, { onSettled: refresh });
                 }}
               >
                 {t('accounts.edit.passkeyCreate')}
@@ -129,7 +129,7 @@ export function PasskeySection({ account }: { account: AccountRead }) {
           onClose={() => {
             setConfirmRemove(false);
           }}
-          onConfirm={() => remove.mutateAsync(path).then(refresh)}
+          onConfirm={() => remove.mutateAsync(path).finally(refresh)}
         />
       ) : null}
     </>

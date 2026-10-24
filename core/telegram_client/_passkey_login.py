@@ -67,6 +67,18 @@ async def _signed_credential(
 
 
 async def _finish_login(client: TelegramClient, passkey: StoredPasskey) -> None:
+    try:
+        await _passkey_steps(client, passkey)
+    except errors.FloodWaitError:
+        raise
+    except errors.RPCError as exc:
+        # A passkey Telegram no longer knows, a stale challenge: a refusal, not a
+        # temporary fault worth retrying.
+        msg = "passkey_telegram_refused"
+        raise PasskeyGatewayError(msg, error_type=type(exc).__name__) from exc
+
+
+async def _passkey_steps(client: TelegramClient, passkey: StoredPasskey) -> None:
     session = client.session
     if session is None or session.auth_key is None or session.auth_key.key_id is None:
         msg = "unavailable"
@@ -93,7 +105,11 @@ async def _finish_login(client: TelegramClient, passkey: StoredPasskey) -> None:
         if not password:
             msg = "passkey_twofa_missing"
             raise PasskeyGatewayError(msg) from None
-        await client.sign_in(password=password)
+        try:
+            await client.sign_in(password=password)
+        except errors.PasswordHashInvalidError:
+            msg = "passkey_twofa_invalid"
+            raise PasskeyGatewayError(msg) from None
 
 
 async def _log_out_quietly(client: TelegramClient) -> None:
