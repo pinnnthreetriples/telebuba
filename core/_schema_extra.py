@@ -14,6 +14,7 @@ from core import (
     _schema_lifecycle,
     _schema_notifications,
     _schema_outreach,
+    _schema_passkeys,
     _schema_recipients,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "_schema_lifecycle",
     "_schema_notifications",
     "_schema_outreach",
+    "_schema_passkeys",
     "_schema_recipients",
 ]

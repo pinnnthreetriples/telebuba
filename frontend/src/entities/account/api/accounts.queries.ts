@@ -100,6 +100,8 @@ export {
   getAccountChannelOptions as accountChannelQueryOptions,
   getAccountChannelQueryKey as accountChannelQueryKey,
   getAccountDeleteReasonOptions as accountDeleteReasonQueryOptions,
+  getAccountPasskeyOptions as accountPasskeyQueryOptions,
+  getAccountPasskeyQueryKey as accountPasskeyQueryKey,
   getAccountPrivacyOptions as accountPrivacyQueryOptions,
   getAccountPrivacyQueryKey as accountPrivacyQueryKey,
   getAccountProfileSnapshotOptions as accountProfileSnapshotQueryOptions,

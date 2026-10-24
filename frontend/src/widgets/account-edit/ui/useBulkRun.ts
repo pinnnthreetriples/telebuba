@@ -9,6 +9,9 @@ export type BulkRow = {
 /** One account's share of the batch. `index` is its position, for per-account material. */
 export type BulkStep = (accountId: string, index: number) => Promise<unknown>;
 
+/** Milliseconds to wait before the next account; drawn afresh for every gap. */
+export type BulkPause = () => number;
+
 // The bulk editor's engine: one account at a time, in list order, whatever the
 // tab is applying — profile text, a photo, a story, a track.
 //
@@ -22,32 +25,58 @@ export type BulkStep = (accountId: string, index: number) => Promise<unknown>;
 // The step is passed per run rather than baked in: the tabs differ only in what
 // one account's turn does, and every one of them needs the same rows, the same
 // stop and the same generation guard.
+//
+// An optional `pause` spaces the accounts out (the passkey step: one registration
+// burst per batch reads as automation). `nextAt` is when the wait ends, for a
+// countdown; Stop and unmount cut a wait short instead of sitting it out.
 export function useBulkRun() {
   const [rows, setRows] = useState<BulkRow[]>([]);
+  const [nextAt, setNextAt] = useState<number | null>(null);
   // Bumped by a new run and by unmount: a request settling afterwards must not
   // patch the list it no longer belongs to.
   const generation = useRef(0);
   const stopped = useRef(false);
+  const wake = useRef<(() => void) | null>(null);
 
   useEffect(
     () => () => {
       generation.current += 1;
+      wake.current?.();
     },
     [],
   );
+
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const timer = window.setTimeout(done, ms);
+      function done() {
+        window.clearTimeout(timer);
+        wake.current = null;
+        resolve();
+      }
+      wake.current = done;
+    });
 
   const patch = (accountId: string, gen: number, next: Partial<BulkRow>) => {
     if (gen !== generation.current) return;
     setRows((prev) => prev.map((row) => (row.accountId === accountId ? { ...row, ...next } : row)));
   };
 
-  const run = async (accountIds: string[], step: BulkStep) => {
+  const run = async (accountIds: string[], step: BulkStep, pause?: BulkPause) => {
     generation.current += 1;
     const gen = generation.current;
     stopped.current = false;
     setRows(accountIds.map((accountId) => ({ accountId, state: 'queued' as const, error: null })));
     for (const [index, accountId] of accountIds.entries()) {
       if (stopped.current || gen !== generation.current) break;
+      if (pause && index > 0) {
+        const ms = pause();
+        setNextAt(Date.now() + ms);
+        await wait(ms);
+        if (gen !== generation.current) return;
+        setNextAt(null);
+        if (stopped.current) break;
+      }
       patch(accountId, gen, { state: 'running' });
       try {
         await step(accountId, index);
@@ -71,7 +100,8 @@ export function useBulkRun() {
   // Telegram, and dropping the answer would only hide which state it landed in.
   const stop = () => {
     stopped.current = true;
+    wake.current?.();
   };
 
-  return { rows, run, stop };
+  return { rows, nextAt, run, stop };
 }

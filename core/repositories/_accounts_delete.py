@@ -120,6 +120,7 @@ def _delete_account(account_id: str) -> None:
     # are still per-account data that must not outlive the account. The proxy is
     # a shared pool row (accounts.proxy_id → proxies.id) — it is NOT a child and
     # must outlive the account, so it is left untouched here.
+    from core._schema_passkeys import _account_passkeys  # noqa: PLC0415
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.account_folders._tables import (  # noqa: PLC0415
         _account_folder_members,
@@ -189,6 +190,10 @@ def _delete_account(account_id: str) -> None:
             delete(_account_spam_status).where(
                 _account_spam_status.c.account_id == account_id,
             ),
+        )
+        # The passkey record only; its vault key is the service's to delete.
+        connection.execute(
+            delete(_account_passkeys).where(_account_passkeys.c.account_id == account_id),
         )
         connection.execute(
             delete(_device_fingerprints).where(

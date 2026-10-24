@@ -8,6 +8,7 @@ import type { AccountRead } from '@/shared/api';
 import { ActionsSection } from './ActionsSection';
 import { AccountChats } from './AccountChats';
 import { DeviceSection } from './DeviceSection';
+import { PasskeySection } from './PasskeySection';
 import { ProxySection } from './ProxySection';
 import { RegisteredSection } from './RegisteredSection';
 import { SessionSection } from './SessionSection';
@@ -46,6 +47,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <RegisteredSection account={account} />
+        <PasskeySection account={account} />
       </div>
 
       {/* The security cards sit together: the cloud password is the other half of

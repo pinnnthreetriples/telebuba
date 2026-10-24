@@ -112,6 +112,9 @@ import type {
   CreateAccountFolderData,
   CreateAccountFolderErrors,
   CreateAccountFolderResponses,
+  CreateAccountPasskeyData,
+  CreateAccountPasskeyErrors,
+  CreateAccountPasskeyResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
@@ -208,6 +211,9 @@ import type {
   GetAccountLimitsData,
   GetAccountLimitsErrors,
   GetAccountLimitsResponses,
+  GetAccountPasskeyData,
+  GetAccountPasskeyErrors,
+  GetAccountPasskeyResponses,
   GetAccountPrivacyData,
   GetAccountPrivacyErrors,
   GetAccountPrivacyResponses,
@@ -430,6 +436,9 @@ import type {
   ListWarmingWavesData,
   ListWarmingWavesErrors,
   ListWarmingWavesResponses,
+  LoginAccountWithPasskeyData,
+  LoginAccountWithPasskeyErrors,
+  LoginAccountWithPasskeyResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
@@ -472,6 +481,9 @@ import type {
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
+  RemoveAccountPasskeyData,
+  RemoveAccountPasskeyErrors,
+  RemoveAccountPasskeyResponses,
   RemoveAccountPhotoData,
   RemoveAccountPhotoErrors,
   RemoveAccountPhotoResponses,
@@ -1706,6 +1718,63 @@ export const clearAccountTwofaEmail = <ThrowOnError extends boolean = false>(
     ClearAccountTwofaEmailErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/2fa/email/recovery', ...options });
+
+/**
+ * Remove Account Passkey
+ *
+ * Remove the passkey from Telegram and delete its vault key.
+ *
+ * ``?forget_only=true`` leaves Telegram alone, for an account whose session cannot
+ * reach it; the vault key is deleted all the same, so the passkey is dead there.
+ */
+export const removeAccountPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountPasskeyData, ThrowOnError>,
+): RequestResult<RemoveAccountPasskeyResponses, RemoveAccountPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveAccountPasskeyResponses,
+    RemoveAccountPasskeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/passkey', ...options });
+
+/**
+ * Get Account Passkey
+ *
+ * Whether the account has a passkey and whether the key vault is configured.
+ */
+export const getAccountPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountPasskeyData, ThrowOnError>,
+): RequestResult<GetAccountPasskeyResponses, GetAccountPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountPasskeyResponses, GetAccountPasskeyErrors, ThrowOnError>(
+    { url: '/api/v1/accounts/{account_id}/passkey', ...options },
+  );
+
+/**
+ * Create Account Passkey
+ *
+ * Add a passkey to the account; its private key is created in the key vault.
+ */
+export const createAccountPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<CreateAccountPasskeyData, ThrowOnError>,
+): RequestResult<CreateAccountPasskeyResponses, CreateAccountPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateAccountPasskeyResponses,
+    CreateAccountPasskeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/passkey', ...options });
+
+/**
+ * Login Account With Passkey
+ *
+ * Sign the account's session back in with its passkey (no SMS code).
+ */
+export const loginAccountWithPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<LoginAccountWithPasskeyData, ThrowOnError>,
+): RequestResult<LoginAccountWithPasskeyResponses, LoginAccountWithPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    LoginAccountWithPasskeyResponses,
+    LoginAccountWithPasskeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/passkey/login', ...options });
 
 /**
  * Set Account Registered At

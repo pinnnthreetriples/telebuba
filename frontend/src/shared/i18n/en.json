@@ -314,7 +314,22 @@
         "save": "Save",
         "clear": "Clear",
         "error": "Could not save the date."
-      }
+      },
+      "passkey": "Passkey",
+      "passkeyUnknown": "—",
+      "passkeyOn": "Set",
+      "passkeyOff": "None",
+      "passkeyHint": "A passkey signs the account back in without an SMS code when its session is lost. The key's secret stays in the key vault; Telebuba only gets signatures. The 2FA password is still required.",
+      "passkeyVaultMissing": "The key vault is not configured: set PASSKEY_VAULT__TOKEN in .env and restart Telebuba.",
+      "passkeyCreatedAt": "Created {{date}}",
+      "passkeyCreate": "Create passkey",
+      "passkeyLogin": "Sign in with passkey",
+      "passkeyRemove": "Remove passkey",
+      "passkeyRemoveTitle": "Remove the passkey?",
+      "passkeyForget": "Forget passkey",
+      "passkeyForgetTitle": "Forget the passkey?",
+      "passkeyForgetBody": "Telegram cannot be reached for this account, so the passkey is removed from Telebuba and the vault only. Telegram will still list it, but nobody can sign in with it any more; delete it there later in an official app.",
+      "passkeyRemoveBody": "The passkey is removed from Telegram and from the vault. A lost session can then only be restored with an SMS code again."
     },
     "actions": {
       "add": "Account",
@@ -1131,7 +1146,22 @@
         "pending": "waiting",
         "working": "signing in…",
         "ok": "device added"
-      }
+      },
+      "stepPasskeyLabel": "Step {{n}} · passkey",
+      "passkeyIntro": "A passkey signs the account back in without an SMS code if its session is lost. The private key stays in the vault on this PC.",
+      "passkeyPacing": "Passkeys are created one at a time, 15–30 seconds apart. About {{minutes}} min.",
+      "passkeyPacingOne": "Takes a few seconds.",
+      "passkeyCreateCount_one": "Create a passkey for {{count}} account",
+      "passkeyCreateCount_other": "Create passkeys for {{count}} accounts",
+      "passkeyRowOk": "passkey created",
+      "passkeyRowExisting": "already had one",
+      "passkeyRunningNote": "Keep this window open: closing it stops the batch. Passkeys already created stay.",
+      "passkeyNextIn": "Next account in {{s}} s. Keep this window open.",
+      "passkeyWorking": "Creating passkeys…",
+      "passkeyResult": "{{done}} of {{total}} accounts have a passkey.",
+      "passkeyVaultDown": "The key vault is unreachable, the remaining accounts were skipped. Start OpenBao and retry.",
+      "passkeyRetry_one": "Retry for {{count}} account",
+      "passkeyRetry_other": "Retry for {{count}} accounts"
     },
     "schedule": {
       "mode": "When to publish",
@@ -1408,7 +1438,18 @@
       "emulator_data_base_missing": "Shared /data is on, but the server has no prepared base for this phone's Android version in EMULATOR__DATA_BASE_DIR (docs/redroid.md).",
       "emulator_preparing": "The phone is still being prepared — the visit waits.",
       "emulator_screen_timeout": "The phone did not start showing its screen in time. Try again.",
-      "emulator_app_offline": "The phone's Telegram kept waiting for the network: check the account's proxy."
+      "emulator_app_offline": "The phone's Telegram kept waiting for the network: check the account's proxy.",
+      "passkey_exists": "The account already has a passkey",
+      "passkey_missing": "The account has no passkey",
+      "passkey_vault_disabled": "The key vault is not configured",
+      "passkey_vault_unreachable": "The key vault is unreachable — check that OpenBao is running and unsealed",
+      "passkey_vault_rejected": "The key vault refused the operation",
+      "passkey_options_invalid": "Telegram sent an unexpected passkey response",
+      "passkey_telegram_refused": "Telegram refused the passkey operation",
+      "passkey_twofa_missing": "Signing in needs the 2FA password, which Telebuba does not have",
+      "passkey_twofa_invalid": "Telegram rejected the stored 2FA password — update it in the 2FA card",
+      "passkey_user_mismatch": "The passkey signed in to a different account — the sign-in was undone",
+      "passkey_login_failed": "Passkey sign-in failed"
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1914,7 +1955,12 @@
     "warming_spam_block_kept": "Spam-blocked account kept",
     "warming_spam_block_lifted": "@SpamBot says the account is clean again — spam block lifted",
     "warming_rewarmed": "Account back in warming — a new wave from zero",
-    "phone_screen_opened": "Phone screen opened"
+    "phone_screen_opened": "Phone screen opened",
+    "passkey_created": "Passkey created",
+    "passkey_create_failed": "Passkey creation failed",
+    "passkey_login_success": "Signed in with passkey",
+    "passkey_login_failed": "Passkey sign-in failed",
+    "passkey_removed": "Passkey removed"
   },
   "logEventReason": {
     "retired": "the account was retired",

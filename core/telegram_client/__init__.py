@@ -19,6 +19,7 @@ to keep each file small:
 - ``_media``   — profile photo / story / music actions
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
 - ``_privacy`` — account-privacy key read/write dispatch (avatar/bio visibility)
+- ``_passkey`` / ``_passkey_login`` — Telegram passkey add/remove and passkey sign-in
 
 Tests that monkeypatch internals target the submodule that owns the name
 (e.g. ``core.telegram_client._actions.get_client``), not this namespace.
@@ -67,6 +68,8 @@ from core.telegram_client._message_listener import (
     stop_incoming_messages,
     subscribe_incoming_messages,
 )
+from core.telegram_client._passkey import PasskeyGatewayError, delete_passkey, register_passkey
+from core.telegram_client._passkey_login import login_with_passkey
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
@@ -93,6 +96,7 @@ __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
     "ChatGatewayError",
     "DeviceUnavailableError",
+    "PasskeyGatewayError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
@@ -102,6 +106,7 @@ __all__ = [
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
+    "delete_passkey",
     "download_post_image",
     "ensure_incoming_message_connection",
     "evict_client",
@@ -118,6 +123,7 @@ __all__ = [
     "list_dialogs",
     "log_out_session",
     "login_code_cutoff",
+    "login_with_passkey",
     "mark_read",
     "media_download",
     "mobile_api_configured",
@@ -125,6 +131,7 @@ __all__ = [
     "prepare_telegram_client_profile",
     "read_history",
     "refresh_account_avatar",
+    "register_passkey",
     "remove_account_session",
     "remove_second_device",
     "removing_client",
