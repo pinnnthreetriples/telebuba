@@ -62,6 +62,25 @@ _OVERLAY_ARGUMENT = "androidboot.use_redroid_overlayfs=1"
 # a boot argument's first value: ours replaces it, keeping the rest as it was.
 _INIT = "/init"
 _INIT_ARGUMENT = "qemu=1"
+# What ``--privileged`` gave Android, but the host's devices: privileged copies every
+# node of the host's /dev into the container's. Android makes its own nodes (binderfs,
+# memfd); it is given /dev/fuse for its storage, may open any character device it makes
+# (binderfs's major is the host's own pick), no block device. /sys stays read-only, so
+# ueventd makes no node for the host's devices; init mounts its cgroup2 on the tmpfs.
+_UNPRIVILEGED = (
+    "--cap-add",
+    "ALL",
+    "--security-opt",
+    "seccomp=unconfined",
+    "--security-opt",
+    "apparmor=unconfined",
+    "--device",
+    "/dev/fuse",
+    "--device-cgroup-rule",
+    "c *:* rwm",
+    "--tmpfs",
+    "/sys/fs/cgroup",
+)
 
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
@@ -236,14 +255,15 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     ``build_prop``, its hardware features through ``_give_features``; its screen,
     serial number and ``ro.hardware`` on the command line (none has a space), the
     image's entrypoint replaced since it names redroid. It draws in software
-    (``guest``) or on the host's GPU (``host``: given ``/dev/dri``), as
-    ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its /data is the
-    overlay of those layers (``core.emulator._data``), else its own; ``kept_diff`` is
-    the diff of the Android it replaces, still labelled for deletion. Its chip's CPUs
-    go in through ``_cpu_options`` and the init script that binds its cpuinfo.
+    (``guest``: not privileged, ``_UNPRIVILEGED``) or on the host's GPU (``host``:
+    privileged, given ``/dev/dri``), as ``core.emulator.host.gpu_mode`` resolved it.
+    With ``data`` its /data is the overlay of those layers (``core.emulator._data``),
+    else its own; ``kept_diff`` is the diff of the Android it replaces, still labelled
+    for deletion. Its chip's CPUs go in through ``_cpu_options`` and the init script
+    that binds its cpuinfo.
     """
     image = image_for(spec)
-    device = ("--device", "/dev/dri:/dev/dri") if gpu == "host" else ()
+    access = ("--privileged", "--device", "/dev/dri:/dev/dri") if gpu == "host" else _UNPRIVILEGED
     # Where its diff is, for deletion; with shared /data off now, the one it replaces keeps.
     diff = data.diff.as_posix() if data else kept_diff
     mounts = _volumes(data) if data else ()
@@ -260,7 +280,6 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         f"{ANDROID_LABEL}=1",
         "--label",
         f"{INDEX_LABEL}={index}",
-        "--privileged",
         # Its own cgroup tree, not the host's: Docker's default on cgroup v2, not on v1.
         "--cgroupns",
         "private",
@@ -269,7 +288,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         *cpus,
         "--memory",
         f"{settings.emulator.memory_mb}m",
-        *device,
+        *access,
         *mounts,
         "--entrypoint",
         _INIT,

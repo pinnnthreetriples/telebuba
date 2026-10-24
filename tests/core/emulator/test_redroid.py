@@ -114,7 +114,6 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert create[create.index("--network") + 1] == "container:telebuba-new-net"
     assert "--publish" not in create, "adb is the gateway's port"
     assert "telebuba.index=1" in create
-    assert "--privileged" in create
     assert create[create.index("--cgroupns") + 1] == "private", "no host cgroups on cgroup v1"
     assert create[create.index("--cpus") + 1] == "2"
     assert "--cpuset-cpus" not in create
@@ -131,7 +130,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
         "androidboot.use_memfd=true",
         "androidboot.redroid_gpu_mode=guest",
     ]
-    assert "--device" not in create, "software drawing needs no GPU"
+    assert "/dev/dri:/dev/dri" not in create, "software drawing needs no GPU"
     take, give = [c for c in _docker_calls(ps, "cp") if c[-1].endswith("build.prop")]
     assert take[2] == give[3] == "telebuba-new:/product/etc/build.prop", "read last by init"
     ours = "".join(f"{key}={value}\n" for key, value in aosp_boot_properties(_SPEC).items())
@@ -147,6 +146,32 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert ps.calls.index(features) > ps.calls.index(create)
 
 
+def _values(argv: list[str], option: str) -> list[str]:
+    return [argv[i + 1] for i, arg in enumerate(argv) if arg == option]
+
+
+@pytest.mark.asyncio
+async def test_a_container_drawing_in_software_sees_none_of_the_hosts_devices(
+    ps: Console,
+) -> None:
+    """Not privileged: /dev holds only Android's own nodes (docs/redroid.md, Host devices)."""
+    ps.answer = _product_prop(_IMAGE_PROP, [])
+
+    await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
+
+    create = _docker_calls(ps, "create")[0]
+    options = create[: create.index("redroid/redroid:13.0.0_64only-latest")]
+    assert "--privileged" not in options, "privileged copies every host device into /dev"
+    assert _values(options, "--device") == ["/dev/fuse"], "Android's storage is FUSE"
+    assert _values(options, "--device-cgroup-rule") == ["c *:* rwm"], "binderfs, no disks"
+    assert _values(options, "--tmpfs") == ["/sys/fs/cgroup"], "init mounts its cgroup2 there"
+    assert _values(options, "--cap-add") == ["ALL"]
+    assert sorted(_values(options, "--security-opt")) == [
+        "apparmor=unconfined",
+        "seccomp=unconfined",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> None:
     ps.answer = _product_prop(_IMAGE_PROP, [])
@@ -160,6 +185,8 @@ async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> N
     assert create[create.index("--device") + 1] == "/dev/dri:/dev/dri"
     assert create.index("--device") < image, "a docker option, not a boot argument"
     assert create[-1] == "androidboot.redroid_gpu_mode=host"
+    assert "--privileged" in create, "the GPU's other nodes are untried unprivileged"
+    assert "--device-cgroup-rule" not in create
 
 
 @pytest.mark.asyncio
