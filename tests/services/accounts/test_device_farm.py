@@ -41,7 +41,7 @@ class _Farm:
             raise EmulatorError(self.fail)
         return self.instances
 
-    async def open_account_mobile(self, account_id: str) -> None:
+    async def boot_account_phone(self, account_id: str) -> None:
         self.opened.append(account_id)
         await self.open_gate.wait()
 
@@ -52,7 +52,7 @@ class _Farm:
 @pytest.fixture
 def farm(monkeypatch: pytest.MonkeyPatch) -> _Farm:
     fake = _Farm()
-    for name in ("list_instances", "open_account_mobile", "stop_account_pod"):
+    for name in ("list_instances", "boot_account_phone", "stop_account_pod"):
         monkeypatch.setattr(_phones, name, getattr(fake, name))
     emulator_module._ACTIVE.clear()
     emulator_module._MANUAL.clear()
@@ -157,7 +157,7 @@ async def test_a_failed_background_start_is_swallowed(monkeypatch: pytest.Monkey
         code: EmulatorRefusalCode = "emulator_boot_timeout"
         raise EmulatorRefusedError(code)
 
-    monkeypatch.setattr(_phones, "open_account_mobile", broken)
+    monkeypatch.setattr(_phones, "boot_account_phone", broken)
 
     await start_phone("telebuba-acc")
     await asyncio.gather(*_phones._STARTS)  # nothing raised out of the task

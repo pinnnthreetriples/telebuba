@@ -30,6 +30,7 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
   operator's sign-in that stops short is no failure: its pod stays up for the hand;
 * every refusal is logged (``account_mobile_open_failed``), and each stage the open
   enters is reported for the operator's dialog (``open_mobile_progress``);
+* the device farm's start (``boot_account_phone``) boots the phone alone, its app untouched;
 * an activity session (``run_mobile_activity``) uses a running, signed-in pod as it
   stands and never starts one; it ends with what it did when its time is up, and a
   failed one carries what it did on the refusal (``partial``). A warming visit opens
@@ -68,7 +69,6 @@ from core.emulator import (
     find_instance,
     leave_app,
     pod_runs_proxy,
-    read_screen,
     remove_pod,
     stop_pod,
     unpause_pod,
@@ -92,6 +92,8 @@ from services.accounts._mobile_holds import (
 from services.accounts._mobile_progress import forget_progress, open_progress, report_stage
 from services.accounts._mobile_start import (
     ENTRY_SCREENS,
+    OpenMode,
+    front_screen,
     set_battery,
     show,
     sign_in_or_hand_over,
@@ -122,6 +124,7 @@ _MOBILE_EMULATOR_DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
 __all__ = [
     "EmulatorBusyError",
     "EmulatorRefusedError",
+    "boot_account_phone",
     "claim_manual",
     "container_name",
     "open_account_mobile",
@@ -155,7 +158,7 @@ async def running_serial(account_id: str) -> str:
 
 
 async def _refuse_what_cannot_work(
-    account: AccountRead,
+    account: AccountRead, *, app: bool = True
 ) -> tuple[DeviceFingerprint, ProxySettings]:
     """The mobile fingerprint and proxy to build the pod from, or why there are none."""
     if not settings.emulator.enabled:
@@ -172,7 +175,7 @@ async def _refuse_what_cannot_work(
     fingerprint = await fetch_device_fingerprint(account.account_id, "mobile")
     if fingerprint is None:
         raise DeviceRefusedError(_DEVICE_MISSING)
-    password = await fetch_account_twofa_password(account.account_id)
+    password = await fetch_account_twofa_password(account.account_id) if app else None
     if password:
         try:
             escape_input_text(password)
@@ -202,7 +205,12 @@ async def open_account_mobile(account_id: str, *, background: bool = False) -> O
     while the operator holds the pod; the operator's open is busy while an activity
     session runs.
     """
-    return (await _open_reported(account_id, background=background))[0]
+    return (await _open_reported(account_id, "warming" if background else "operator"))[0]
+
+
+async def boot_account_phone(account_id: str) -> OpenMobileResult:
+    """Start (or find running) the account's phone for the operator, its app untouched."""
+    return (await _open_reported(account_id, "boot"))[0]
 
 
 async def open_mobile_visit(account_id: str) -> str | None:
@@ -213,14 +221,14 @@ async def open_mobile_visit(account_id: str) -> str | None:
     the session does not do it all again (two DB passes, a ``docker ps``, a
     ``docker exec sha256sum``, ``adb connect``, ``pm list packages``, ``monkey``).
     """
-    result, serial = await _open_reported(account_id, background=True)
+    result, serial = await _open_reported(account_id, "warming")
     return serial if result.signed_in else None
 
 
-async def _open_reported(account_id: str, *, background: bool) -> tuple[OpenMobileResult, str]:
+async def _open_reported(account_id: str, mode: OpenMode) -> tuple[OpenMobileResult, str]:
     """``open_account_mobile``'s open, with the pod's serial; refusals logged and reported."""
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
-    held = operator_holds(account_id) if background else account_id in _ACTIVE
+    held = operator_holds(account_id) if mode == "warming" else account_id in _ACTIVE
     # An operator's hands on the phone: an open would pull the app to the front, sign
     # in over them or restart the pod (and a warming cycle would then stop it).
     if lock.locked() or held or account_id in _MANUAL:
@@ -229,8 +237,8 @@ async def _open_reported(account_id: str, *, background: bool) -> tuple[OpenMobi
     try:
         async with lock:
             account = await require_account(account_id)
-            fingerprint, proxy = await _refuse_what_cannot_work(account)
-            result, serial = await _open(account, fingerprint, proxy, background=background)
+            fingerprint, proxy = await _refuse_what_cannot_work(account, app=mode != "boot")
+            result, serial = await _open(account, fingerprint, proxy, mode)
     except (EmulatorError, AccountActionError) as exc:
         report_stage(account_id, "failed", exc.code)
         await log_event(
@@ -245,11 +253,11 @@ async def _open_reported(account_id: str, *, background: bool) -> tuple[OpenMobi
     except BaseException:
         report_stage(account_id, "failed")
         raise
-    if result.signed_in:
+    if result.signed_in or mode == "boot":
         report_stage(account_id, "done")
     else:
         report_stage(account_id, "manual", result.sign_in_refusal)
-    if not background:
+    if mode != "warming":
         _OPERATOR.add(account_id)
     await log_event("INFO", "account_mobile_opened", account_id=account_id)
     return result, serial
@@ -264,8 +272,7 @@ async def _open(
     account: AccountRead,
     fingerprint: DeviceFingerprint,
     proxy: ProxySettings,
-    *,
-    background: bool,
+    mode: OpenMode,
 ) -> tuple[OpenMobileResult, str]:
     spec = container_spec(
         fingerprint, account.proxy_country_code or country_for_phone(account.phone)
@@ -284,14 +291,13 @@ async def _open(
             report_stage(account.account_id, "app")
             await connect_device(serial)
             await set_battery(serial, account.account_id, spec.region.timezone)
-            if not background:
+            if mode != "warming":
                 await show(name, instance.index)
-            await bring_app_to_front(serial)
-            screen, _nodes = await read_screen(serial)
+            screen = None if mode == "boot" else await front_screen(serial)
             signed_in, refusal = screen == "chats", None
             if screen in ENTRY_SCREENS:
                 signed_in, refusal = await sign_in_or_hand_over(
-                    account, serial, background=background
+                    account, serial, background=mode == "warming"
                 )
             return OpenMobileResult(
                 account_id=account.account_id,
@@ -300,9 +306,7 @@ async def _open(
                 sign_in_refusal=refusal,
             ), serial
         await stop_pod(name)
-    return await start_and_sign_in(
-        account, spec, proxy, new=instance is None, background=background
-    )
+    return await start_and_sign_in(account, spec, proxy, new=instance is None, mode=mode)
 
 
 async def run_mobile_activity(

@@ -2,8 +2,10 @@
 
 A phone is today one mobile account's pod, named after it (``container_name``); its
 id is that container name, so it stays the same before the container exists and
-after. Starting is the account's own open (boot, seed, sign the app in), run in the
-background because it takes minutes; the list shows ``starting`` meanwhile.
+after. Starting only boots the phone for the operator (``boot_account_phone``): its
+Telegram is neither installed nor signed in, whatever the account's main session can
+do. It runs in the background because a boot takes minutes; the list shows
+``starting`` meanwhile.
 Stopping refuses a phone that a start or an activity session holds: the warming
 board owns those.
 """
@@ -30,8 +32,8 @@ from services.accounts.lifecycle import require_account
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     EmulatorRefusedError,
+    boot_account_phone,
     container_name,
-    open_account_mobile,
     phone_activity,
     stop_account_pod,
 )
@@ -135,7 +137,7 @@ async def list_phones() -> PhoneList:
 
 async def _start_in_background(account_id: str) -> None:
     try:
-        await open_account_mobile(account_id)
+        await boot_account_phone(account_id)
     except AccountActionError:
         return  # logged by the open itself (``account_mobile_open_failed``)
     except Exception as exc:  # noqa: BLE001 - a background task has nobody to raise to
@@ -148,7 +150,7 @@ async def _start_in_background(account_id: str) -> None:
 
 
 async def start_phone(phone_id: str) -> PhoneActionResult:
-    """Start the phone and sign its app in, in the background; ``starting`` at once."""
+    """Boot the phone in the background, its app untouched; ``starting`` at once."""
     account_id = account_of(phone_id)
     await require_account(account_id)
     if not settings.emulator.enabled:
