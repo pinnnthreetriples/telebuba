@@ -494,6 +494,7 @@ new tag when Microsoft ships one. A running WSL holds `modules.vhdx` open, so a 
 both files in `new`, keeps the old pair, and swaps them in with WSL stopped (PowerShell):
 
 ```powershell
+$ErrorActionPreference = 'Stop'  # a failed backup stops here, before WSL goes down
 $k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd-HHmmss)"; $old
 New-Item -ItemType Directory -Force $old | Out-Null
 Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
