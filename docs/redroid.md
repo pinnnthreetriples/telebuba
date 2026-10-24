@@ -63,6 +63,38 @@ Android made again finds the account's sign-in there, and only deleting the acco
 the first start after the upgrade removes it and makes the pod anew. Its `/data` goes with it,
 the Telegram app's sign-in included: the next open signs the app in again with a login code.
 
+## Host devices
+
+`--privileged` copies every node of the host's `/dev` into the container's, where any app may
+list them: on WSL2 `dxg`, `hvc0`-`hvc7`, `vport0p*`, `sd*`, `vsock`, `mem`, `loop*`, `ram*`,
+`tty*`; on an arm64 server whatever it has (for instance `nvme*`, `ttyAMA*`, `kvm`, `tpm0`; RK3588
+boards `mali0`, `rga`, `mpp_service`, `dma_heap`). A container that draws in software (`guest`) is
+therefore created without it (`core/emulator/redroid.py`, `_UNPRIVILEGED`):
+
+```text
+--cap-add ALL --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+--device /dev/fuse --device-cgroup-rule 'c *:* rwm' --tmpfs /sys/fs/cgroup
+```
+
+- Its `/dev` holds only Android's own nodes (binderfs, `fuse`, `null`, `socket/`, ...): Docker
+  gives it none of the host's, and `/sys` stays read-only, so ueventd's coldboot (which writes
+  `add` into every `uevent` file) makes none either. A device the host adds while the pod runs
+  still reaches ueventd as a uevent and may get a node, as before. Nothing Telegram's `EmuDetector` looks for (`qemu_pipe`, `socket/qemud`, goldfish)
+  is added.
+- `/sys/fs/cgroup` is a tmpfs: init mounts its cgroup2 there (on Docker's read-only one it
+  cannot, and reboots with `bootstrap-apexd-failed`).
+- The capabilities and the unconfined seccomp/AppArmor are what privileged gave. Android may
+  open any character device it makes (binderfs's major is picked by the host's kernel at boot,
+  so it cannot be named at create), no block device. The host needs `/dev/fuse` (FUSE built
+  in or loaded), which Android's external storage uses.
+- Still visible, as before: sysfs is the host's (`/sys/bus`, `/sys/class`; on WSL2
+  `/sys/bus/vmbus`), so are `/proc/tty/drivers`, `/proc/mounts` and SELinux `Disabled`; and
+  Android's own `/proc` lets its root write the host's global sysctls.
+
+A container on the host's GPU (`host`) stays privileged: what a GPU needs beside `/dev/dri`
+(Mali's `dma_heap`, for one) is untried without it. A container made before keeps how it was
+made until it is made again.
+
 ## The gateway's network
 
 - **Tunnel**: [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) (version and
@@ -82,8 +114,8 @@ the Telegram app's sign-in included: the next open signs the app in again with a
 - **DNS**: every UDP query to port 53 is sent to the tunnel's mapped DNS, which answers with a
   placeholder address and lets the proxy resolve the name on connect. Android's opportunistic
   private DNS (DoT to its resolver) also goes through the tunnel. Nothing resolves on eth0.
-- **IPv6** is off (sysctls at create) and dropped by `ip6tables` too: privileged Android turns
-  link-local IPv6 back on.
+- **IPv6** is off (sysctls at create) and dropped by `ip6tables` too: Android mounts its own
+  `/proc` and turns link-local IPv6 back on, privileged or not.
 - **MSS** of outgoing SYNs is clamped to the path MTU (tun0's 1400).
 - **Proxy host**: resolved to IPv4 on the host by the app, so a hostname works and the gateway
   needs no DNS before its tunnel is up. A host with no IPv4 address is refused.
@@ -513,7 +545,8 @@ phone stint's start, `emulator_binder_missing` otherwise). The iptables modules 
 filter tables Android's netd uses, as on WSL. A vendor kernel without `binder_linux` (some RK3588
 images) needs `CONFIG_ANDROID_BINDER_IPC`, `CONFIG_ANDROID_BINDERFS` and
 `CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"` built in. memfd needs nothing:
-`androidboot.use_memfd=true` replaces ashmem, which these kernels no longer have.
+`androidboot.use_memfd=true` replaces ashmem, which these kernels no longer have. `/dev/fuse` must exist
+(`CONFIG_FUSE_FS`; built in on stock Ubuntu and Debian): a software-drawing pod is given it.
 
 Set `EMULATOR__ADB_PATH=adb`; scrcpy itself is needed only with `EMULATOR__DESKTOP_VIEWER=true`
 (the web screen pushes its own scrcpy-server). Then pick a GPU mode and, if wanted, prepare the
