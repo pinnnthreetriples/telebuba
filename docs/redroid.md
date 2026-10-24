@@ -479,8 +479,9 @@ sudo ./Microsoft/scripts/gen_modules_vhdx.sh "$PWD/modules" "$(make -s kernelrel
 mkdir -p /mnt/c/wsl-kernel/new && cp arch/x86/boot/bzImage modules.vhdx /mnt/c/wsl-kernel/new/
 ```
 
-Point WSL at it in `%UserProfile%\.wslconfig`, `wsl --shutdown`, move both files from
-`C:\wsl-kernel\new` up into `C:\wsl-kernel`, and start Docker Desktop:
+The first time, with no kernel in `C:\wsl-kernel` yet: point WSL at it in
+`%UserProfile%\.wslconfig`, `wsl --shutdown`, move both files from `C:\wsl-kernel\new` up into
+`C:\wsl-kernel`, and start Docker Desktop (a rebuild swaps them as below instead):
 
 ```ini
 [wsl2]
@@ -498,7 +499,8 @@ $ErrorActionPreference = 'Stop'  # a failed backup stops here, before WSL goes d
 $k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd-HHmmss)"; $old
 New-Item -ItemType Directory -Force $old | Out-Null
 Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
-docker desktop stop; wsl --shutdown
+docker desktop stop; if ($LASTEXITCODE) { throw 'docker desktop stop failed' }
+wsl --shutdown; if ($LASTEXITCODE) { throw 'wsl --shutdown failed' }
 Move-Item -Force "$k\new\bzImage", "$k\new\modules.vhdx" $k
 ```
 
