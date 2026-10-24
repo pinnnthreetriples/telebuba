@@ -19,6 +19,8 @@
   },
   "soc": "sm7475",
   "board": "marble",
+  "hardware": "qcom",
+  "platform": "taro",
   "builds": {
     "33": {
       "release": "13",

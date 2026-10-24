@@ -36,6 +36,8 @@ _SERIAL_ALPHABETS = {"alnum": string.digits + string.ascii_uppercase, "hex": "01
 # "35" is a GSMA reporting-body prefix; the rest of the body is derived.
 # Every partition a ``ro.product.<partition>.*`` / ``ro.<partition>.build.*`` exists for.
 _PARTITIONS = ("", "system.", "system_ext.", "product.", "vendor.", "odm.", "vendor_dlkm.")
+# The image's own ``ro.hardware``, the name its composer HAL is built under.
+IMAGE_HARDWARE = "redroid"
 
 
 class ContainerSpec(NamedTuple):
@@ -52,6 +54,9 @@ class ContainerSpec(NamedTuple):
     camera: Camera
     build: OemBuild
     region: Region
+    # ``ro.hardware`` and ``ro.board.platform`` of the phone.
+    hardware: str
+    platform: str
     # The phone's chip (a ``configs/soc`` stem); ``None``: the host's CPUs show through.
     soc: str | None = None
 
@@ -103,6 +108,8 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
         camera=blueprint.camera,
         build=build,
         region=region_for(country, fingerprint.system_lang_code, seed=seed),
+        hardware=blueprint.hardware,
+        platform=blueprint.platform,
         soc=blueprint.soc,
     )
 
@@ -118,15 +125,15 @@ def build_fingerprint(spec: ContainerSpec) -> str:
 def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
     """The system properties that make Android report ``spec``'s phone, firmware and region.
 
-    ``Build.BOARD`` (``ro.product.board``) is the phone's board: unlike
-    ``ro.board.platform``, no HAL is looked up by it.
+    The board is the phone's (``ro.product.board``, ``ro.board.platform``); its
+    ``ro.hardware`` goes on the command line (``androidboot.hardware``: init sets it
+    before any ``build.prop`` is read). ``ro.hardware`` is also the name the HAL loader
+    looks for the composer by, and the image has only ``hwcomposer.redroid.so``:
+    ``ro.hardware.hwcomposer``, looked up first, keeps it.
 
     Left out on purpose: ``ro.build.version.sdk`` (the image's own, which the SDK check
-    reads), ``ro.hardware`` / ``ro.board.platform`` (they pick the HALs the image boots
-    with; the chip is told by ``ro.soc.*`` instead), the security flags
-    (``ro.debuggable``, ``ro.secure``: adbd depends on them) and ``ro.serialno`` (init
-    sets it from ``androidboot.serialno`` before any ``build.prop`` is read, so it goes
-    on the command line).
+    reads), the security flags (``ro.debuggable``, ``ro.secure``: adbd depends on them)
+    and ``ro.serialno`` (init sets it from ``androidboot.serialno``, on the command line).
     """
     build = spec.build
     fingerprint = build_fingerprint(spec)
@@ -158,6 +165,8 @@ def aosp_boot_properties(spec: ContainerSpec) -> dict[str, str]:
         "ro.build.user": build.build_user,
         "ro.build.host": build.build_host,
         "ro.product.board": spec.board,
+        "ro.board.platform": spec.platform,
+        "ro.hardware.hwcomposer": IMAGE_HARDWARE,
         "ro.sf.lcd_density": str(spec.screen.dpi),
         "persist.sys.timezone": spec.region.timezone,
         "persist.sys.locale": spec.region.locale,

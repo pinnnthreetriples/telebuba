@@ -52,6 +52,10 @@ _IDENTITY_FILE = "/product/etc/build.prop"
 _IDENTITY_MARK = "# telebuba: the phone this container presents\n"
 # redroid's switch for /data as the overlay of /data-base and /data-diff.
 _OVERLAY_ARGUMENT = "androidboot.use_redroid_overlayfs=1"
+# The image's entrypoint is ``/init qemu=1 androidboot.hardware=redroid``, and init keeps
+# a boot argument's first value: ours replaces it, keeping the rest as it was.
+_INIT = "/init"
+_INIT_ARGUMENT = "qemu=1"
 
 # Stdlib sink, names and codes only (see ``core.emulator._errors``).
 logger = logging.getLogger(__name__)
@@ -199,8 +203,9 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     It takes the pod's ``index`` and joins the network namespace of the container
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
-    ``build_prop``, its hardware features through ``_give_features``; its screen and
-    serial number on the command line (neither has a space). It draws in software
+    ``build_prop``, its hardware features through ``_give_features``; its screen,
+    serial number and ``ro.hardware`` on the command line (none has a space), the
+    image's entrypoint replaced since it names redroid. It draws in software
     (``guest``) or on the host's GPU (``host``: given ``/dev/dri``), as
     ``core.emulator.host.gpu_mode`` resolved it. With ``data`` its /data is the
     overlay of those layers (``core.emulator._data``), else its own; ``kept_diff`` is
@@ -236,7 +241,11 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         f"{settings.emulator.memory_mb}m",
         *device,
         *mounts,
+        "--entrypoint",
+        _INIT,
         image,
+        _INIT_ARGUMENT,
+        f"androidboot.hardware={spec.hardware}",
         f"androidboot.redroid_width={spec.screen.width}",
         f"androidboot.redroid_height={spec.screen.height}",
         f"androidboot.redroid_dpi={spec.screen.dpi}",

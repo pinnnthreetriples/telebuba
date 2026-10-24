@@ -19,6 +19,8 @@
   },
   "soc": "sm8550_ac",
   "board": "kalama",
+  "hardware": "qcom",
+  "platform": "kalama",
   "builds": {
     "33": {
       "release": "13",

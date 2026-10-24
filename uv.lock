@@ -14,7 +14,7 @@ exclude-newer-span = "P7D"
 certifi = "2026-10-20T03:00:00Z"
 pillow = "2026-10-17T00:00:00Z"
 filelock = "2026-10-17T17:00:00Z"
-virtualenv = "2026-10-17T18:00:00Z"
+virtualenv = "2026-10-17T17:40:00Z"
 pyjwt = "2026-09-24T00:00:00Z"
 
 [manifest]

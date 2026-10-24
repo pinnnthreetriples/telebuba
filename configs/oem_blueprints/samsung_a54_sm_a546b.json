@@ -19,6 +19,8 @@
   },
   "soc": "s5e8835",
   "board": "s5e8835",
+  "hardware": "s5e8835",
+  "platform": "erd8835",
   "builds": {
     "33": {
       "release": "13",
