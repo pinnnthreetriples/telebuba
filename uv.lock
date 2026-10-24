@@ -14,7 +14,7 @@ exclude-newer-span = "P7D"
 certifi = "2026-10-20T03:00:00Z"
 pillow = "2026-10-17T00:00:00Z"
 filelock = "2026-10-17T17:00:00Z"
-virtualenv = "2026-10-17T18:00:00Z"
+virtualenv = "2026-10-17T17:40:00Z"
 pyjwt = "2026-09-24T00:00:00Z"
 
 [manifest]
@@ -35,7 +35,7 @@ overrides = [
     { name = "pyjwt", specifier = ">=2.15.0" },
     { name = "starlette", specifier = ">=1.3.1" },
     { name = "urllib3", specifier = ">=2.8.0" },
-    { name = "virtualenv", specifier = ">=21.14.9" },
+    { name = "virtualenv", specifier = ">=21.14.10" },
 ]
 
 [[package]]

@@ -43,9 +43,13 @@ phone is shown in a scrcpy window opened by the phone button.
   image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK (by default the
   64-bit-only `*_64only-latest` tags, published for amd64 and arm64 alike). See
   [Identity and region](#identity-and-region).
-- **Boot arguments**: the screen, the serial, `androidboot.use_memfd=true` (memfd instead of the
-  deprecated ashmem) and `androidboot.redroid_gpu_mode`; with shared /data also
-  `androidboot.use_redroid_overlayfs=1`. See [GPU and shared /data](#gpu-and-shared-data).
+- **Boot arguments**: the phone's `androidboot.hardware`, the screen, the serial,
+  `androidboot.use_memfd=true` (memfd instead of the deprecated ashmem) and
+  `androidboot.redroid_gpu_mode`; with shared /data also `androidboot.use_redroid_overlayfs=1`.
+  They follow `--entrypoint /init qemu=1`: the image's own entrypoint names `redroid` as the
+  hardware, and init keeps a boot argument's first value. See
+  [The phone's hardware name](#the-phones-hardware-name) and
+  [GPU and shared /data](#gpu-and-shared-data).
 - **Window** (only with `EMULATOR__DESKTOP_VIEWER=true`): `scrcpy --serial … --window-title <container>`,
   one per container. Off by default: the window encodes video for as long as it is open, warming
   visits included. The web screen below replaces it.
@@ -114,12 +118,12 @@ The container is a real phone (`core/emulator/_profile.py`):
   that phone and build. `Build.USER` / `Build.HOST` / `Build.TIME` (`ro.build.user`,
   `ro.build.host`, `ro.<partition>.build.date[.utc]`) are that build's, read from the same dump,
   its date in the build server's zone; `Build.BOARD` (`ro.product.board`) is the phone's board as
-  its vendor partition names it (`panther`, `kalama`, `s5e8835`). No value carries a word
-  Telegram's `EmuDetector` looks for (goldfish, ranchu, nox, vbox86, generic, sdk, emulator...;
-  `tests/core/emulator/test_identity.py`). `ro.sf.lcd_density` and the screen (`androidboot.redroid_width/height/dpi`)
-  are the phone's container screen. Left to the image: `ro.build.version.sdk` (the SDK check
-  reads it), `ro.hardware` / `ro.board.platform` (`ro.hardware` comes only from
-  `androidboot.hardware`; HALs are looked up by both), the security flags adbd depends on, and
+  its vendor partition names it (`panther`, `kalama`, `s5e8835`). `ro.hardware` and
+  `ro.board.platform` are the phone's too ([below](#the-phones-hardware-name)). No value carries
+  a word Telegram's `EmuDetector` looks for (goldfish, ranchu, nox, vbox86, generic, sdk,
+  emulator...; `tests/core/emulator/test_identity.py`). `ro.sf.lcd_density` and the screen
+  (`androidboot.redroid_width/height/dpi`) are the phone's container screen. Left to the image:
+  `ro.build.version.sdk` (the SDK check reads it), the security flags adbd depends on, and
   `/system/xbin/su`: adbd runs as `shell` (uid 2000), and the stealth step's root (the boot_id
   bind mount) goes through `su`.
 - **Serial and IMEI** are derived from the account id, so the account keeps its phone when its
@@ -184,6 +188,38 @@ The container is a real phone (`core/emulator/_profile.py`):
   pinned (NDK r27d and build-tools 34 by sha256, AOSP `android-14.0.0_r75` by commit); two builds
   give the same bytes. The binary holds no emulator names; libc++'s own `generic_category`
   string is in it, as in every phone's `libc++.so`.
+
+### The phone's hardware name
+
+`ro.hardware` (`Build.HARDWARE`) is what the bootloader passes as `androidboot.hardware`: init
+copies `ro.boot.hardware` into it before any `build.prop` is read
+([`ExportKernelBootProps`](https://android.googlesource.com/platform/system/core/+/refs/heads/android14-release/init/property_service.cpp)),
+so a `build.prop` line cannot change it. redroid's image passes `redroid` in its entrypoint
+(`/init qemu=1 androidboot.hardware=redroid`, the same for amd64 and arm64), and a second
+`androidboot.hardware` after it loses. A new Android therefore gets `--entrypoint /init` and
+`qemu=1 androidboot.hardware=<the phone's>`: `panther` / `shiba` on Pixels (their codename),
+`qcom` on Snapdragon phones, `s5eNNNN` on Exynos, `mt6877` on the Redmi
+(`configs/oem_blueprints`, `hardware`; `board` and `platform` are its `ro.product.board` and
+`ro.board.platform`, from its stock vendor `build.prop`).
+
+The name matters to Android in three places. init imports `/init.${ro.hardware}.rc` and
+`/vendor/etc/init/hw/init.${ro.hardware}.rc`: the image has neither (its `init.redroid.rc`
+sits in `/vendor/etc/init`, read under any name). ueventd reads `/ueventd.${ro.hardware}.rc`
+on images first shipped before Android 13: there is none. The HAL loader
+([`hw_get_module`](https://android.googlesource.com/platform/hardware/libhardware/+/refs/heads/android14-release/hardware.c))
+tries `ro.hardware.<class>` first, then `ro.hardware`, `ro.product.board`, `ro.board.platform`,
+then `default`: gralloc is pinned by the image (`ro.hardware.gralloc=redroid`), the composer
+by `ro.hardware.hwcomposer=redroid` in our `build.prop` block (without it SurfaceFlinger
+restarts forever, no screen), EGL and Vulkan by `ro.hardware.egl` / `ro.hardware.vulkan`;
+audio and the rest find no `<class>.<name>.so` and fall back to `default`, as before.
+
+None of the names is one Telegram's `EmuDetector` looks for (`goldfish`, `ranchu`, `vbox86`,
+`nox`, ...), which a test keeps. A container made before keeps `ro.hardware=redroid` until it is
+made again (its entrypoint is fixed at create), but its next cold boot reads the rewritten
+`build.prop`: from then on its `ro.product.board` and `ro.board.platform` are the phone's, next
+to `redroid` as its hardware (its composer still found by that name). Still `redroid` after
+this: `ro.hardware.gralloc`, `ro.hardware.hwcomposer`, the `ro.boot.redroid_*` boot arguments
+and the HAL file names under `/vendor/lib64/hw`.
 
 ## First-boot data
 

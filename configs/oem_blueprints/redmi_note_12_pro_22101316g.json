@@ -19,6 +19,8 @@
   },
   "soc": "mt6877",
   "board": "ruby",
+  "hardware": "mt6877",
+  "platform": "mt6877",
   "builds": {
     "33": {
       "release": "13",
