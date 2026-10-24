@@ -11,7 +11,7 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _profile, _topology, adb, redroid
+from core.emulator import _profile, _topology, _transport, adb, redroid
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import (
     aosp_boot_properties,
@@ -70,6 +70,11 @@ def _docker_calls(console: Console, verb: str) -> list[list[str]]:
 def _feature_copies(console: Console) -> list[list[str]]:
     """The ``docker cp`` of the feature files: a directory's contents, merged into Android's."""
     return [c for c in _docker_calls(console, "cp") if c[-1].endswith(":/vendor/etc/permissions")]
+
+
+def _transport_copies(console: Console) -> list[list[str]]:
+    """The ``docker cp`` of the network overlay: ``overlay/...`` merged into /product."""
+    return [c for c in _docker_calls(console, "cp") if c[-1].endswith(":/product")]
 
 
 def test_only_labelled_lines_with_an_index_are_containers() -> None:
@@ -144,6 +149,9 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert ps.calls.index(give) > ps.calls.index(create), "written before the first boot"
     (features,) = _feature_copies(ps)
     assert ps.calls.index(features) > ps.calls.index(create)
+    (transport,) = _transport_copies(ps)
+    assert transport[-1] == "telebuba-new:/product"
+    assert ps.calls.index(transport) > ps.calls.index(create), "before the boot that scans it"
 
 
 def _values(argv: list[str], option: str) -> list[str]:
@@ -231,6 +239,29 @@ async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -
     assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
     assert _docker_calls(ps, "update") == [], "a phone without a chip keeps its CPUs"
     assert len(_feature_copies(ps)) == 1, "a container made before gets them too"
+    assert len(_transport_copies(ps)) == 1, "and its network label, as configured now"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ["cellular", "ethernet"])
+async def test_the_overlay_copied_is_the_configured_transports(
+    ps: Console, monkeypatch: pytest.MonkeyPatch, transport: _transport.Transport
+) -> None:
+    monkeypatch.setattr(settings.emulator, "network_transport", transport)
+    copied: list[bytes] = []
+    product = _product_prop(_IMAGE_PROP, [])
+
+    def answer(argv: list[str]) -> str:
+        if argv[1] == "cp" and argv[-1].endswith(":/product"):
+            (apk,) = Path(argv[2].removesuffix("/.")).rglob("*.apk")
+            copied.append(apk.read_bytes())
+        return product(argv)
+
+    ps.answer = answer
+
+    await redroid.refresh_identity("telebuba-acc-2", _SPEC, 2)
+
+    assert copied == [_transport.overlay_apk(transport)], "ethernet turns a cellular one back"
 
 
 @pytest.fixture
