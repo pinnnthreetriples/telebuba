@@ -663,12 +663,44 @@ A container keeps what it was given. One made before gets microG at its next sta
 whose download failed (the phone is made all the same, without it). An empty
 `EMULATOR__MICROG_DIR` gives new containers none and leaves the ones that have it alone.
 
-What microG cannot be here: Play services that apps trust. redroid's images do not spoof
-signatures (no `android.permission.FAKE_PACKAGE_SIGNATURE`), and an app's Play services library
-checks that `com.google.android.gms` is signed by Google before it uses it: it finds microG's
-key and treats Play services as unavailable, so Telegram, for one, gets no FCM push through it.
-Signature spoofing needs a patched framework (`services.jar`) or Xposed, which this repo does
-not do.
+An app's Play services library checks that `com.google.android.gms` is signed by Google before
+it uses it. microG is signed with its own key, so without the patch below the library finds the
+wrong signature and treats Play services as unavailable (Telegram, for one, then gets no FCM
+push through it). `EMULATOR__FRAMEWORK_PATCH_DIR` turns that patch on (next).
+
+### Signature spoofing
+
+So apps accept microG, the framework is made to report Google's own certificate for microG's
+three packages. This is the patch LineageOS-for-microG, /e/OS and CalyxOS ship, built here
+against a redroid image instead of from source (`docker/framework-patch`, `core/emulator/_microg.py`
+has the certificate; SHA-256 `f0fd6c5b…db83`, Google's Play services signing cert):
+
+- `ComputerEngine.generatePackageInfo` (in `/system/framework/services.jar`) is where Android
+  builds the `PackageInfo` an app reads. A tiny `FakeSig` helper and one call to it are injected
+  right after it: for `com.google.android.gms`, `com.android.vending` and `com.google.android.gsf`
+  the `signatures` field is replaced with Google's certificate, every other package untouched.
+  No new permission, so nothing else on the phone can ask to be spoofed; the three are a fixed
+  allowlist in the helper (the `FAKE_PACKAGE_SIGNATURE` approach would need `framework-res` patched
+  too and a wider surface).
+- The patch is built per SDK against that SDK's image, `services.jar` disassembled with baksmali,
+  the helper added, reassembled with smali and the jar repacked (both pinned by sha256):
+
+  ```
+  docker build --build-context redroid=docker-image://redroid/redroid:14.0.0_64only-latest \
+    --output type=local,dest=emulator/framework-patch/34 docker/framework-patch
+  docker build --build-context redroid=docker-image://redroid/redroid:13.0.0_64only-latest \
+    --output type=local,dest=emulator/framework-patch/33 docker/framework-patch
+  ```
+
+  (on an ARM64 host, against that host's ARM64 images). Needs BuildKit for `--build-context`.
+- A new or refreshed container (`give_spoofing`) gets `<dir>/<sdk>/services.jar` copied over the
+  image's, and its precompiled `services.odex`/`.vdex`/`.art` overwritten with a stub so ART runs
+  the patched dex. A marker records it, so a refresh patches a container only once (reapplying
+  would force a slow `dex2oat` at every boot). Empty `EMULATOR__FRAMEWORK_PATCH_DIR`, no ABI of
+  ours, or no patch built for the SDK: nothing is copied and apps see microG's own signature.
+- Checked on redroid 13 and 14: the patch builds, the container boots (~9 s, system_server
+  healthy), and the injected helper runs in system_server for exactly the three packages, setting
+  Google's certificate. Not checked: an ARM64 host, and an app's end-to-end push.
 
 ## Web screen and the device farm
 
@@ -717,5 +749,7 @@ the screen is the phone's.
 `EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
 Sensors).
 `EMULATOR__MICROG_DIR` (empty: off) holds microG's APKs (Google apps (microG)).
+`EMULATOR__FRAMEWORK_PATCH_DIR` (empty: off) holds the built signature-spoofing patch, one
+`<sdk>/services.jar` per SDK (Signature spoofing).
 `EMULATOR__NETWORK_TRANSPORT` (`cellular` or `ethernet`) is the network Android reports for eth0
 (Identity and region, Network).

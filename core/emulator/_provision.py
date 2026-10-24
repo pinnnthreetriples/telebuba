@@ -2,7 +2,8 @@
 
 Its identity (``build.prop``), feature files, network overlay, sensors HAL and Google
 apps (microG) go in as tars (``core.emulator._archive``) with AOSP's owners and modes;
-its battery is a ``power_supply`` tree on the host, mounted by ``core.emulator.redroid``.
+the signature-spoofing patch replaces its ``services.jar``; its battery is a
+``power_supply`` tree on the host, mounted by ``core.emulator.redroid``.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from core.emulator._archive import SHELL, copy_in, pack, read_tree
 from core.emulator._battery import generate_initial_battery_state, write_power_supply
 from core.emulator._errors import EmulatorError
 from core.emulator._features import PERMISSIONS_DIR, write_permission_files
-from core.emulator._microg import PROBE, product_files
+from core.emulator._microg import INSTRUCTION_SETS, PROBE, product_files
 from core.emulator._process import docker, docker_or_none
 from core.emulator._profile import aosp_boot_properties
 from core.emulator._sensors import (
@@ -187,6 +188,48 @@ async def give_microg(name: str, *, refresh: bool = False) -> None:
         return
     files = await asyncio.to_thread(product_files, apks, abi)
     await copy_in(name, "/product", await asyncio.to_thread(pack, files))
+
+
+# The container's framework and the marker that records the signature-spoofing patch,
+# so a refresh patches a container only once (``give_spoofing``).
+_FRAMEWORK = "/system/framework"
+SPOOF_MARKER = f"{_FRAMEWORK}/.telebuba_spoof"
+# ART's precompiled copies of services.jar: overwritten so it runs the patched dex.
+_STALE_OAT = ("services.odex", "services.vdex", "services.art")
+
+
+async def give_spoofing(name: str, sdk: int, *, refresh: bool = False) -> None:
+    """Copy the signature-spoofing patch into the stopped container's /system/framework.
+
+    The built, patched ``services.jar`` (``docker/framework-patch``, one per SDK under
+    ``framework_patch_dir``) replaces the image's, and its precompiled
+    ``services.odex``/``.vdex``/``.art`` are overwritten with a stub so ART runs the new
+    dex. A marker records the patch: a refresh skips a container that already has it
+    (reapplying would force a slow ``dex2oat`` at every boot). Off (``framework_patch_dir``
+    empty), on a host with no ABI of ours, or with no patch built for ``sdk``, nothing is
+    copied and apps see microG's own signature.
+    """
+    directory = settings.emulator.framework_patch_dir
+    if directory is None or (abi := await host_abi()) is None:
+        return
+    jar = directory / str(sdk) / "services.jar"
+    if not await asyncio.to_thread(jar.is_file):
+        logger.warning(
+            "no signature-spoofing patch built for SDK %s: the phone boots unpatched", sdk
+        )
+        return
+    if refresh:
+        with tempfile.TemporaryDirectory(prefix="telebuba-spoof-") as scratch:
+            marker = await docker_or_none("cp", f"{name}:{SPOOF_MARKER}", str(Path(scratch) / "m"))
+        if marker is not None:
+            return
+    instruction_set = INSTRUCTION_SETS[abi]
+    files = {
+        "services.jar": await asyncio.to_thread(jar.read_bytes),
+        PurePosixPath(SPOOF_MARKER).name: f"{sdk}\n".encode(),
+        **{f"oat/{instruction_set}/{stale}": b"\x00" for stale in _STALE_OAT},
+    }
+    await copy_in(name, _FRAMEWORK, await asyncio.to_thread(pack, files))
 
 
 async def give_battery(spec: ContainerSpec, index: int) -> Path:

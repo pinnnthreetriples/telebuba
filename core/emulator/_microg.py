@@ -62,8 +62,8 @@ APPS = (
 )
 # A container has microG once it has this file, the smallest of them.
 PROBE = f"/product/priv-app/{APPS[-1].name}/{APPS[-1].name}.apk"
-# An APK's ABI -> the directory a system app's libraries are in (AOSP's arch names).
-_INSTRUCTION_SETS = {"x86_64": "x86_64", "arm64-v8a": "arm64"}
+# An APK's ABI -> the instruction-set directory (libraries, dex2oat output; AOSP's names).
+INSTRUCTION_SETS = {"x86_64": "x86_64", "arm64-v8a": "arm64"}
 
 
 def product_files(apks: Mapping[str, Path], abi: str) -> dict[str, bytes]:
@@ -73,7 +73,7 @@ def product_files(apks: Mapping[str, Path], abi: str) -> dict[str, bytes]:
         folder = f"priv-app/{app.name}"
         apk = apks[app.name].read_bytes()
         files[f"{folder}/{app.name}.apk"] = apk
-        files.update(_libraries(apk, abi, f"{folder}/lib/{_INSTRUCTION_SETS[abi]}"))
+        files.update(_libraries(apk, abi, f"{folder}/lib/{INSTRUCTION_SETS[abi]}"))
     return files
 
 

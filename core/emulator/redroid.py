@@ -27,6 +27,7 @@ from core.emulator._provision import (
     give_identity,
     give_microg,
     give_sensors,
+    give_spoofing,
     give_transport,
 )
 from core.emulator._topology import (
@@ -179,7 +180,8 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
     ``build_prop``, its hardware features through ``give_features``, its network's
-    transport through ``give_transport``, its Google apps through ``give_microg``; its
+    transport through ``give_transport``, its Google apps through ``give_microg`` and the
+    signature-spoofing patch through ``give_spoofing``; its
     screen, serial number and ``ro.hardware`` on the command line (none has a space), the
     image's entrypoint replaced since it names redroid. It draws in software
     (``guest``: not privileged, ``_UNPRIVILEGED``) or on the host's GPU (``host``:
@@ -242,6 +244,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     await give_transport(name)
     await give_sensors(name, spec)
     await give_microg(name)
+    await give_spoofing(name, spec.sdk)
     return Instance(index, name, running=False)
 
 
@@ -274,7 +277,8 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     account's proxy may have changed country since, and the timezone and carrier
     follow it. Its feature files and network overlay are copied again (a container
     made before has the image's), and its sensors HAL with the new magnetic field
-    (``give_sensors``); one without microG gets it (``give_microg``). A phone with a
+    (``give_sensors``); one without microG or the spoofing patch gets them
+    (``give_microg``, ``give_spoofing``). A phone with a
     chip is pinned to the pod's cores again, its quota raised to all of them (one made
     before kept ``--cpus cpu_cores``, and ``--cpus 0`` does not clear it); one without
     is pinned to a phone's count, its quota left. Its battery tree is written again for
@@ -286,6 +290,7 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     await give_transport(name)
     await give_sensors(name, spec, refresh=True)
     await give_microg(name, refresh=True)
+    await give_spoofing(name, spec.sdk, refresh=True)
     await give_battery(spec, index)
     if spec.soc is None:
         await docker("update", "--cpuset-cpus", await phone_cpuset(index), name)
