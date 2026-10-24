@@ -507,6 +507,7 @@ def test_the_protected_field_set_is_pinned() -> None:
         ("gemini", "api_key"),
         ("logging", "sentry_dsn"),
         ("openai", "api_key"),
+        ("passkey_vault", "token"),
         ("proxy", "ipinfo_token"),
         ("proxy", "maxmind_account_id"),
         ("proxy", "maxmind_license_key"),

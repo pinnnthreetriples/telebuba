@@ -11,6 +11,7 @@ The implementations live in per-concern submodules:
 - :mod:`.profile`   — profile-field updates (name / username / bio)
 - :mod:`.privacy`   — Telegram privacy keys (who may see photo / bio / last seen)
 - :mod:`.twofa`     — the account's Telegram cloud password + its recovery email
+- :mod:`.passkey`   — the account's Telegram passkey (vault-held key) and passkey sign-in
 - :mod:`.media`     — profile photo / story / music uploads
 - :mod:`.channels`  — own-channel management (create / edit / photo / delete)
 - :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
@@ -108,6 +109,12 @@ from services.accounts.mobile_emulator import (
     open_account_mobile,
     open_mobile_progress,
 )
+from services.accounts.passkey import (
+    create_account_passkey,
+    read_account_passkey,
+    relogin_with_passkey,
+    remove_account_passkey,
+)
 from services.accounts.privacy import (
     apply_account_privacy,
     apply_privacy_to_all_accounts,
@@ -177,6 +184,7 @@ __all__ = [
     "confirm_account_twofa_email",
     "count_open_web_windows",
     "create_account_channel",
+    "create_account_passkey",
     "delete_account_channel",
     "delete_account_channel_post",
     "edit_account_channel_post",
@@ -202,10 +210,13 @@ __all__ = [
     "open_mobile_progress",
     "post_account_story",
     "publish_account_channel_post",
+    "read_account_passkey",
     "read_account_privacy",
     "read_account_twofa",
     "reconcile_bulk_messages_on_startup",
+    "relogin_with_passkey",
     "remove_account",
+    "remove_account_passkey",
     "remove_account_profile_music",
     "remove_account_profile_photo",
     "remove_account_story",

@@ -37,6 +37,7 @@ from core._config_emulator import EmulatorSettings
 from core._config_masstagging import MasstaggingSettings
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
+from core._config_passkey_vault import PasskeyVaultSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_survival import SurvivalSettings
@@ -367,6 +368,7 @@ class Settings(BaseSettings):
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
+    passkey_vault: PasskeyVaultSettings = Field(default_factory=PasskeyVaultSettings)
 
 
 def load_settings() -> Settings:

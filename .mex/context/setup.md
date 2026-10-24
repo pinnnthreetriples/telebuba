@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Setup, commands, CI, hooks, Windows checkout and verification.
-last_updated: 2026-10-10
+last_updated: 2026-10-24
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -22,6 +22,9 @@ uv run uvicorn main:app
 ```
 
 No `--reload`/`--workers`: both force a Windows SelectorEventLoop that cannot spawn the web-login browser. `.env.example` is the config reference; login needs admin creds and a 32+ byte `AUTH__SECRET`, provider keys only for enabled features.
+
+## Passkey key vault (optional)
+Account passkeys keep their private key in an OpenBao (or Vault) Transit engine as a non-exportable `ecdsa-p256` key; `PASSKEY_VAULT__TOKEN` empty turns the feature off. Run one local node on `127.0.0.1:8200` with integrated `raft` storage (OpenBao 2.x has no `file` backend), mount `transit`, and give Telebuba a token whose policy covers only `transit/keys/tb-*`, `transit/keys/tb-*/config` and `transit/sign/tb-*`. The node starts sealed after every restart; unseal it with the key kept off the machine (a flash drive) before using passkeys. Losing the vault data or the unseal key loses every passkey — the accounts then fall back to SMS login.
 
 ## Verify
 ```bash

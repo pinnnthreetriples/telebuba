@@ -43,6 +43,7 @@ import {
   countLogs,
   createAccountChannel,
   createAccountFolder,
+  createAccountPasskey,
   createCampaign,
   createChatBroadcastCampaign,
   createChatCollection,
@@ -75,6 +76,7 @@ import {
   getAccountChatMedia,
   getAccountDeleteReason,
   getAccountLimits,
+  getAccountPasskey,
   getAccountPrivacy,
   getAccountProfileSnapshot,
   getAccountTwofa,
@@ -150,6 +152,7 @@ import {
   listWarmingDialogues,
   listWarmingWaves,
   login,
+  loginAccountWithPasskey,
   logout,
   logoutAccount,
   manualInputPhoneOtp,
@@ -164,6 +167,7 @@ import {
   publishAccountChannelPost,
   receiveInboundSmsWebhook,
   removeAccountMusic,
+  removeAccountPasskey,
   removeAccountPhoto,
   removeAccountsFromFolder,
   removeAccountStory,
@@ -347,6 +351,9 @@ import type {
   CreateAccountFolderData,
   CreateAccountFolderError,
   CreateAccountFolderResponse,
+  CreateAccountPasskeyData,
+  CreateAccountPasskeyError,
+  CreateAccountPasskeyResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
@@ -441,6 +448,9 @@ import type {
   GetAccountLimitsData,
   GetAccountLimitsError,
   GetAccountLimitsResponse,
+  GetAccountPasskeyData,
+  GetAccountPasskeyError,
+  GetAccountPasskeyResponse,
   GetAccountPrivacyData,
   GetAccountPrivacyError,
   GetAccountPrivacyResponse,
@@ -663,6 +673,9 @@ import type {
   ListWarmingWavesData,
   ListWarmingWavesError,
   ListWarmingWavesResponse,
+  LoginAccountWithPasskeyData,
+  LoginAccountWithPasskeyError,
+  LoginAccountWithPasskeyResponse,
   LoginData,
   LoginError,
   LoginResponse,
@@ -705,6 +718,9 @@ import type {
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
+  RemoveAccountPasskeyData,
+  RemoveAccountPasskeyError,
+  RemoveAccountPasskeyResponse,
   RemoveAccountPhotoData,
   RemoveAccountPhotoError,
   RemoveAccountPhotoResponse,
@@ -2801,6 +2817,120 @@ export const clearAccountTwofaEmailMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await clearAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Passkey
+ *
+ * Remove the passkey from Telegram and delete its vault key.
+ */
+export const removeAccountPasskeyMutation = (
+  options?: Partial<Options<RemoveAccountPasskeyData>>,
+): UseMutationOptions<
+  RemoveAccountPasskeyResponse,
+  RemoveAccountPasskeyError,
+  Options<RemoveAccountPasskeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountPasskeyResponse,
+    RemoveAccountPasskeyError,
+    Options<RemoveAccountPasskeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountPasskeyQueryKey = (options: Options<GetAccountPasskeyData>) =>
+  createQueryKey('getAccountPasskey', options);
+
+/**
+ * Get Account Passkey
+ *
+ * Whether the account has a passkey and whether the key vault is configured.
+ */
+export const getAccountPasskeyOptions = (options: Options<GetAccountPasskeyData>) =>
+  queryOptions<
+    GetAccountPasskeyResponse,
+    GetAccountPasskeyError,
+    GetAccountPasskeyResponse,
+    ReturnType<typeof getAccountPasskeyQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountPasskey({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountPasskeyQueryKey(options),
+  });
+
+/**
+ * Create Account Passkey
+ *
+ * Add a passkey to the account; its private key is created in the key vault.
+ */
+export const createAccountPasskeyMutation = (
+  options?: Partial<Options<CreateAccountPasskeyData>>,
+): UseMutationOptions<
+  CreateAccountPasskeyResponse,
+  CreateAccountPasskeyError,
+  Options<CreateAccountPasskeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateAccountPasskeyResponse,
+    CreateAccountPasskeyError,
+    Options<CreateAccountPasskeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createAccountPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Login Account With Passkey
+ *
+ * Sign the account's session back in with its passkey (no SMS code).
+ */
+export const loginAccountWithPasskeyMutation = (
+  options?: Partial<Options<LoginAccountWithPasskeyData>>,
+): UseMutationOptions<
+  LoginAccountWithPasskeyResponse,
+  LoginAccountWithPasskeyError,
+  Options<LoginAccountWithPasskeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    LoginAccountWithPasskeyResponse,
+    LoginAccountWithPasskeyError,
+    Options<LoginAccountWithPasskeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await loginAccountWithPasskey({
         ...options,
         ...fnOptions,
         throwOnError: true,
