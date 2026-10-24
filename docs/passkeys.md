@@ -15,6 +15,14 @@ Telegram accepts a WebAuthn credential from Telebuba's own api_id: RP ID `telegr
 - An already-authorized session is left alone; a sign-in that lands on another user is logged
   out.
 
+## Where the operator creates one
+
+- One account: the «Ключ доступа» card in the account editor.
+- A batch: the add-account wizard's last step, offered only when the vault is configured
+  (`PasskeyBulkStep.tsx`). It runs in the browser window one account at a time, 15–30 s apart,
+  so a batch does not register every fresh account in the same second. An account that already
+  has a passkey counts as done; a vault failure stops the batch.
+
 ## The key vault
 
 The private key lives in an OpenBao (or Vault) Transit engine as a non-exportable `ecdsa-p256`

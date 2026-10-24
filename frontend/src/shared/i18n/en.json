@@ -1146,7 +1146,22 @@
         "pending": "waiting",
         "working": "signing in…",
         "ok": "device added"
-      }
+      },
+      "stepPasskeyLabel": "Step {{n}} · passkey",
+      "passkeyIntro": "A passkey signs the account back in without an SMS code if its session is lost. The private key stays in the vault on this PC.",
+      "passkeyPacing": "Passkeys are created one at a time, 15–30 seconds apart. About {{minutes}} min.",
+      "passkeyPacingOne": "Takes a few seconds.",
+      "passkeyCreateCount_one": "Create a passkey for {{count}} account",
+      "passkeyCreateCount_other": "Create passkeys for {{count}} accounts",
+      "passkeyRowOk": "passkey created",
+      "passkeyRowExisting": "already had one",
+      "passkeyRunningNote": "Keep this window open: closing it stops the batch. Passkeys already created stay.",
+      "passkeyNextIn": "Next account in {{s}} s. Keep this window open.",
+      "passkeyWorking": "Creating passkeys…",
+      "passkeyResult": "{{done}} of {{total}} accounts have a passkey.",
+      "passkeyVaultDown": "The key vault is unreachable, the remaining accounts were skipped. Start OpenBao and retry.",
+      "passkeyRetry_one": "Retry for {{count}} account",
+      "passkeyRetry_other": "Retry for {{count}} accounts"
     },
     "schedule": {
       "mode": "When to publish",

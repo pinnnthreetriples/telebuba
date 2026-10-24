@@ -1,8 +1,9 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountPasskeyQueryOptions,
   otherDevice,
   startPhoneLoginMutation,
   type DeviceChoice,
@@ -15,6 +16,7 @@ import { Button, CloseButton, Icon, Input, Modal, Stepper } from '@/shared/ui';
 import { CodeLoginStep } from './CodeLoginStep';
 import { DeviceChoicePicker } from './DeviceChoicePicker';
 import { ImportFileList } from './ImportFileList';
+import { PasskeyBulkStep } from './PasskeyBulkStep';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
@@ -28,11 +30,12 @@ import { useBulkImport } from './useBulkImport';
 // accounts. For the phone method a STEP 3 then requests + confirms the Telegram
 // login code — run after the proxy is assigned so the first Telegram connection
 // uses it. With "both" devices picked, a step then signs the other device in, again
-// behind the proxy. A LAST step offers Telegram's cloud password for the whole batch.
+// behind the proxy. Then a step offers Telegram's cloud password for the whole batch,
+// and, when the key vault is configured, a LAST one a passkey for each account.
 // The created account ids thread across all steps.
 type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
-type StepKind = 'method' | 'proxy' | 'code' | 'device' | 'twofa';
+type StepKind = 'method' | 'proxy' | 'code' | 'device' | 'twofa' | 'passkey';
 
 // The wizard's five choice rows — three method cards on step 1 and the two proxy
 // choices on step 2 — were byte-identical apart from the icon, the two strings
@@ -128,6 +131,13 @@ export function AddAccountModal({
 
   const accountIds =
     method === 'phone' ? (createdAccountId ? [createdAccountId] : []) : bulk.accountIds;
+  // Whether the vault is configured, read off any one account's passkey view: the
+  // passkey step is offered only when it can work.
+  const passkeyView = useQuery({
+    ...accountPasskeyQueryOptions({ path: { account_id: accountIds[0] ?? '' } }),
+    enabled: accountIds.length > 0,
+  });
+  const offerPasskey = passkeyView.data?.vault_configured === true;
 
   // What the operator recognises each just-created account by on the 2FA step:
   // the file it came out of, or the number they typed. The Telegram name is
@@ -162,9 +172,20 @@ export function AddAccountModal({
     ...(method === 'phone' ? (['code'] as const) : []),
     ...(devices === 'both' ? (['device'] as const) : []),
     'twofa',
+    ...(offerPasskey ? (['passkey'] as const) : []),
   ];
   const totalSteps = flow.length;
   const stepKind = flow[step - 1] ?? 'twofa';
+  // Past the cloud password: on to the passkey step when there is one, else done.
+  // The result-phase title belongs to the 2FA step, so it goes when that step does.
+  const afterTwofa = () => {
+    if (step >= totalSteps) {
+      onClose();
+      return;
+    }
+    setTwofaResult(false);
+    setStep(step + 1);
+  };
   // Once an account exists its device is decided; the pick no longer changes anything.
   const devicesLocked = accountIds.length > 0 || bulk.importing || startLogin.isPending;
 
@@ -288,9 +309,10 @@ export function AddAccountModal({
                       ? t('accounts.addWizard.step3Label')
                       : stepKind === 'device'
                         ? t('accounts.addWizard.stepDeviceLabel', { n: step })
-                        : // The cloud password is always the LAST step, and which
-                          // number that is depends on the method.
-                          t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
+                        : stepKind === 'passkey'
+                          ? t('accounts.addWizard.stepPasskeyLabel', { n: step })
+                          : // Which number the cloud password is depends on the method.
+                            t('accounts.addWizard.stepTwofaLabel', { n: step })}
               </div>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.addWizard.close')} />
@@ -478,11 +500,13 @@ export function AddAccountModal({
                 </Button>
               </div>
             </>
+          ) : stepKind === 'passkey' ? (
+            <PasskeyBulkStep accountIds={accountIds} sources={sources} onDone={onClose} />
           ) : stepKind === 'twofa' ? (
             <TwoFactorBulkStep
               accountIds={accountIds}
               sources={sources}
-              onDone={onClose}
+              onDone={afterTwofa}
               onImported={onImported}
               onPhaseChange={setTwofaResult}
             />
