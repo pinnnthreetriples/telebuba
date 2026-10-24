@@ -1,0 +1,63 @@
+.class public Lcom/android/server/pm/FakeSig;
+.super Ljava/lang/Object;
+
+# Reports Google's certificate for microG's Play services (docs/redroid.md, Signature
+# spoofing). ``ComputerEngine.generatePackageInfo`` calls this on the PackageInfo it has
+# built; for the three packages that stand in for Google's, the legacy ``signatures``
+# field is replaced with Google's own certificate, so an app's Play services client
+# (which checks that certificate) accepts them. Every other package is returned unchanged.
+# The certificate is a build-time constant, so nothing here can fail at runtime.
+
+.method public static maybe(Landroid/content/pm/PackageInfo;)Landroid/content/pm/PackageInfo;
+    .locals 5
+
+    if-eqz p0, :done
+
+    iget-object v0, p0, Landroid/content/pm/PackageInfo;->packageName:Ljava/lang/String;
+
+    if-eqz v0, :done
+
+    const-string v1, "com.google.android.gms"
+
+    invoke-virtual {v0, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v1
+
+    if-nez v1, :spoof
+
+    const-string v1, "com.android.vending"
+
+    invoke-virtual {v0, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v1
+
+    if-nez v1, :spoof
+
+    const-string v1, "com.google.android.gsf"
+
+    invoke-virtual {v0, v1}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v1
+
+    if-eqz v1, :done
+
+    :spoof
+    const-string v1, "@CERT@"
+
+    new-instance v2, Landroid/content/pm/Signature;
+
+    invoke-direct {v2, v1}, Landroid/content/pm/Signature;-><init>(Ljava/lang/String;)V
+
+    const/4 v3, 0x1
+
+    new-array v3, v3, [Landroid/content/pm/Signature;
+
+    const/4 v4, 0x0
+
+    aput-object v2, v3, v4
+
+    iput-object v3, p0, Landroid/content/pm/PackageInfo;->signatures:[Landroid/content/pm/Signature;
+
+    :done
+    return-object p0
+.end method

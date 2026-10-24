@@ -90,6 +90,14 @@ class EmulatorSettings(BaseSettings):
     # ``docker build --output`` of docker/sensors-hal: ``<dir>/<abi>/`` holds the sensors
     # HAL a new or refreshed container gets (``core.emulator._sensors``). Empty: no sensors.
     sensors_hal_dir: Path | None = None
+    # microG's APKs, fetched from its releases and kept on their pinned sha256
+    # (``core.emulator._microg``): a new container's Google apps. Empty: none.
+    microg_dir: Path | None = Path("emulator/microg")
+    # The signature-spoofing patch (docs/redroid.md, Signature spoofing; built by
+    # ``docker/framework-patch``): ``<dir>/<sdk>/services.jar``, one patched framework per
+    # SDK, copied into a container so apps accept microG's Play services. Empty: off, and
+    # apps see microG's own signature and treat Play services as unavailable.
+    framework_patch_dir: Path | None = None
     # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android
     # boot; one screen to appear; the login code to reach the account's existing
     # session; the screen poll interval.

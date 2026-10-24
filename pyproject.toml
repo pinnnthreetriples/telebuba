@@ -214,6 +214,9 @@ ignore = [
 # CI gate helpers: subprocess to dev tools is intentional; they are standalone
 # scripts (no package) run by CI / pre-commit, not imported by the app.
 "tools/**" = ["S603", "S607", "INP001"]
+# Docker build contexts: standalone scripts (no package) that run inside their image
+# and shell out to pinned build tools on PATH; never imported by the app.
+"docker/**" = ["S603", "S607", "INP001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -239,10 +242,11 @@ unresolved-import = "error"
 
 # ============================================================================
 # bandit — scan source code; tests are excluded because asserts/test data
-# trip false positives.
+# trip false positives, and docker/ build scripts shell out to pinned tools on
+# PATH inside their image (like tools/).
 # ============================================================================
 [tool.bandit]
-exclude_dirs = ["tests", ".venv", "tools"]
+exclude_dirs = ["tests", ".venv", "tools", "docker"]
 skips = []
 
 # ============================================================================

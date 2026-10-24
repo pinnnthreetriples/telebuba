@@ -288,7 +288,7 @@ The container is a real phone (`core/emulator/_profile.py`):
 `docker cp` of a host path packs it with the host's modes, and from Windows every file arrives
 `-rwxr-xr-x`: an executable `build.prop` or init script, which no phone has. Every file a
 container is given before boot (`build.prop`, the feature XMLs, the network overlay, the sensors
-HAL tree, `cpuinfo.rc`) is packed into a tar here instead (`core/emulator/_archive.py`) and
+HAL tree, `cpuinfo.rc`, microG) is packed into a tar here instead (`core/emulator/_archive.py`) and
 unpacked with `docker cp -a - <container>:<dir>`, so it lands as the image's own are: files
 `0644` root:root, the HAL binary `0755` root:shell, and the /vendor directories it names root:shell
 (`bin` and `bin/hw` `0751`), as the image has them (unpacking sets a named directory's owner
@@ -637,6 +637,77 @@ kills uiautomator at its "dumped to" print, so a read takes about 1.25 s. The id
 hardcoded in uiautomator, and only a long-lived dump server of our own on the phone could
 shorten it.
 
+## Google apps (microG)
+
+A phone has Play services, its Services Framework and the Play Store as privileged system apps
+in `/product/priv-app`; redroid's images have none. A new container gets microG's builds of the
+three under a Pixel's names (`core/emulator/_microg.py`), copied into /product before its first
+boot like the other files (Files copied into a container), and PackageManager installs them as
+system apps at that boot:
+
+| /product/priv-app/ | Package | microG's file |
+|---|---|---|
+| `PrebuiltGmsCore` | `com.google.android.gms` | GmsCore `com.google.android.gms-252432034.apk` (0.3.17.252432) |
+| `Phonesky` | `com.android.vending` | Companion (FakeStore) `com.android.vending-84022634.apk` |
+| `GoogleServicesFramework` | `com.google.android.gsf` | GsfProxy `GsfProxy.apk` (v0.1.0) |
+
+The files are the ones microG publishes (microg.org/download.html leads to its GitHub
+releases), the plain builds, not `-hw` (Huawei) or `org.microg.gms` (no `com.google` name). They
+are downloaded into `EMULATOR__MICROG_DIR` (at startup and when a container needs them) and kept
+only when their sha256 is the one pinned in code, so a new microG version is a code change. All
+three are signed with microG's key (SHA-256 `9bd06727…d14165`, the microG F-Droid repository's
+fingerprint). PackageManager does not unpack a system app's native libraries: GmsCore's for the
+host's ABI go beside it, `lib/x86_64/` (`lib/arm64/` on ARM64). Their privileged permissions
+need no allowlist: the images set `ro.control_privapp_permissions=disable`. Checked on redroid
+13 and 14: the three are `SYSTEM PRIVILEGED PRODUCT` apps, GmsCore's `primaryCpuAbi` is
+`x86_64` and its privileged permissions are granted, `com.google.android.gms` and its
+`:persistent` process run without a crash, the copy takes about 6 s and boot is unchanged.
+microG's own defaults are kept: its cloud messaging stays off ("gcm is disabled" at boot) until
+turned on in its settings.
+
+A container keeps what it was given. One made before gets microG at its next start, as does one
+whose download failed (the phone is made all the same, without it). An empty
+`EMULATOR__MICROG_DIR` gives new containers none and leaves the ones that have it alone.
+
+An app's Play services library checks that `com.google.android.gms` is signed by Google before
+it uses it. microG is signed with its own key, so without the patch below the library finds the
+wrong signature and treats Play services as unavailable (Telegram, for one, then gets no FCM
+push through it). `EMULATOR__FRAMEWORK_PATCH_DIR` turns that patch on (next).
+
+### Signature spoofing
+
+So apps accept microG, the framework is made to report Google's own certificate for microG's
+three packages. This is the patch LineageOS-for-microG, /e/OS and CalyxOS ship, built here
+against a redroid image instead of from source (`docker/framework-patch`, `core/emulator/_microg.py`
+has the certificate; SHA-256 `f0fd6c5b…db83`, Google's Play services signing cert):
+
+- `ComputerEngine.generatePackageInfo` (in `/system/framework/services.jar`) is where Android
+  builds the `PackageInfo` an app reads. A tiny `FakeSig` helper and one call to it are injected
+  right after it: for `com.google.android.gms`, `com.android.vending` and `com.google.android.gsf`
+  the `signatures` field is replaced with Google's certificate, every other package untouched.
+  No new permission, so nothing else on the phone can ask to be spoofed; the three are a fixed
+  allowlist in the helper (the `FAKE_PACKAGE_SIGNATURE` approach would need `framework-res` patched
+  too and a wider surface).
+- The patch is built per SDK against that SDK's image, `services.jar` disassembled with baksmali,
+  the helper added, reassembled with smali and the jar repacked (both pinned by sha256):
+
+  ```
+  docker build --build-context redroid=docker-image://redroid/redroid:14.0.0_64only-latest \
+    --output type=local,dest=emulator/framework-patch/34 docker/framework-patch
+  docker build --build-context redroid=docker-image://redroid/redroid:13.0.0_64only-latest \
+    --output type=local,dest=emulator/framework-patch/33 docker/framework-patch
+  ```
+
+  (on an ARM64 host, against that host's ARM64 images). Needs BuildKit for `--build-context`.
+- A new or refreshed container (`give_spoofing`) gets `<dir>/<sdk>/services.jar` copied over the
+  image's, and its precompiled `services.odex`/`.vdex`/`.art` overwritten with a stub so ART runs
+  the patched dex. A marker records it, so a refresh patches a container only once (reapplying
+  would force a slow `dex2oat` at every boot). Empty `EMULATOR__FRAMEWORK_PATCH_DIR`, no ABI of
+  ours, or no patch built for the SDK: nothing is copied and apps see microG's own signature.
+- Checked on redroid 13 and 14: the patch builds, the container boots (~9 s, system_server
+  healthy), and the injected helper runs in system_server for exactly the three packages, setting
+  Google's certificate. Not checked: an ARM64 host, and an app's end-to-end push.
+
 ## Web screen and the device farm
 
 The **Эмуляторы** page (`/devices`, `api/v1/devices.py`) lists every mobile account's phone with its
@@ -683,5 +754,8 @@ the screen is the phone's.
 `EMULATOR__BATTERY_DIR` holds each pod's battery tree (Identity and region, Battery).
 `EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
 Sensors).
+`EMULATOR__MICROG_DIR` (empty: off) holds microG's APKs (Google apps (microG)).
+`EMULATOR__FRAMEWORK_PATCH_DIR` (empty: off) holds the built signature-spoofing patch, one
+`<sdk>/services.jar` per SDK (Signature spoofing).
 `EMULATOR__NETWORK_TRANSPORT` (`cellular` or `ethernet`) is the network Android reports for eth0
 (Identity and region, Network).

@@ -318,11 +318,15 @@ async def test_the_phone_files_are_fetched_at_startup_only_with_the_emulator_on(
     async def scrcpy() -> None:
         fetched.append("scrcpy")
 
+    async def microg() -> None:
+        fetched.append("microg")
+
     monkeypatch.setattr(mobile_pods, "ensure_telegram_apk", apk)
     monkeypatch.setattr(mobile_pods, "ensure_scrcpy_server", scrcpy)
+    monkeypatch.setattr(mobile_pods, "ensure_microg", microg)
     monkeypatch.setattr(settings.emulator, "enabled", enabled)
 
     mobile_pods.prefetch_phone_files()
     await asyncio.gather(*mobile_pods._FETCHES)
 
-    assert fetched == (["apk", "scrcpy"] if enabled else [])
+    assert fetched == (["apk", "scrcpy", "microg"] if enabled else [])
