@@ -28,6 +28,7 @@ from core.emulator._sensors import (
     write_vendor_tree,
 )
 from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
+from core.emulator._transport import write_overlay_tree
 from core.emulator.telegram_app import forget_app
 
 if TYPE_CHECKING:
@@ -176,6 +177,19 @@ async def _give_features(name: str) -> None:
         await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:{PERMISSIONS_DIR}")
 
 
+async def _give_transport(name: str) -> None:
+    """Copy the network overlay (``core.emulator._transport``) into the stopped container.
+
+    One ``docker cp`` into /product, whose ``overlay`` directory PackageManager scans at
+    every boot. The configured transport is written every time, ``ethernet`` included,
+    so a refresh turns an earlier label back.
+    """
+    with tempfile.TemporaryDirectory(prefix="telebuba-transport-") as scratch:
+        transport = settings.emulator.network_transport
+        await asyncio.to_thread(write_overlay_tree, Path(scratch), transport)
+        await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:/product")
+
+
 async def _give_sensors(name: str, spec: ContainerSpec, *, refresh: bool = False) -> None:
     """Copy the sensors HAL (``core.emulator._sensors``) into the stopped container's /vendor.
 
@@ -233,7 +247,8 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     It takes the pod's ``index`` and joins the network namespace of the container
     named ``gateway``. The image is the one configured for ``spec``'s SDK; an SDK
     without one is refused before anything is created. The phone goes in through
-    ``build_prop``, its hardware features through ``_give_features``; its screen,
+    ``build_prop``, its hardware features through ``_give_features``, its network's
+    transport through ``_give_transport``; its screen,
     serial number and ``ro.hardware`` on the command line (none has a space), the
     image's entrypoint replaced since it names redroid. It draws in software
     (``guest``) or on the host's GPU (``host``: given ``/dev/dri``), as
@@ -288,6 +303,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
     await _give_identity(name, identity)
     await _give_features(name)
+    await _give_transport(name)
     await _give_sensors(name, spec)
     return Instance(index, name, running=False)
 
@@ -317,15 +333,16 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
 
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
-    follow it. Its feature files are copied again (a container made before has the
-    image's), and its sensors HAL with the new magnetic field (``_give_sensors``). A
-    phone with a chip is pinned to the pod's cores again, its quota
+    follow it. Its feature files and network overlay are copied again (a container
+    made before has the image's), and its sensors HAL with the new magnetic field
+    (``_give_sensors``). A phone with a chip is pinned to the pod's cores again, its quota
     raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
     does not clear it); its mounts are a new container's only (one made before has
     none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
     await _give_features(name)
+    await _give_transport(name)
     await _give_sensors(name, spec, refresh=True)
     if spec.soc is not None:
         placement = await place_cpus(spec.soc, index)

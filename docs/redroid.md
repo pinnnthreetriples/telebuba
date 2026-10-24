@@ -177,6 +177,32 @@ The container is a real phone (`core/emulator/_profile.py`):
   EmuDetector reads telephony only behind `setCheckTelephony(true)`, which the app never calls, and
   no file names anything it looks for (a test holds that). `faketouch` stays: every touchscreen
   phone declares it.
+- **Network** (`core/emulator/_transport.py`, `EMULATOR__NETWORK_TRANSPORT`): AOSP's
+  `EthernetTracker` publishes eth0 as `TRANSPORT_ETHERNET`, unmetered, so `ConnectivityManager`
+  and the WebView's `navigator.connection` say the phone is wired. Its
+  [`config_ethernet_interfaces`](https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/android13-release/service/ServiceConnectivityResources/res/values/config.xml)
+  may name the transport an interface is published with
+  ([`createNetworkCapabilities`](https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/android13-release/service-t/src/com/android/server/ethernet/EthernetTracker.java)),
+  and the array is overlayable by vendor and product overlays. Before every cold boot (a container
+  made before included) a static overlay of `com.android.connectivity.resources` goes into
+  `/product/overlay/ConnectivityResourcesProduct`: `cellular` (default) files eth0 as
+  `TRANSPORT_CELLULAR`, metered, as the phone's SIM and LTE properties say; `ethernet` writes
+  AOSP's own entry back. The APK is built in Python (binary manifest, a one-entry table byte for
+  byte what aapt2 writes, a v1 signature with an ECDSA key derived from a fixed label, so the same
+  transport always gives the same bytes); PackageManager trusts any signer on /product but skips an
+  unsigned package. Only the label changes: eth0, its address, the gateway's kill-switch and adb
+  are untouched, no kernel module is involved. Checked on redroid 13 and 14 (bare containers,
+  no gateway): boot and a validated `CELLULAR` default network; on 13 also screencap, and Telegram
+  installs, launches and connects as on an unchanged container. What still tells:
+  `NetworkInfo.getTypeName()` stays `Ethernet` and `getExtraInfo()` eth0's MAC (the factory's
+  legacy name), the specifier is `EthernetNetworkSpecifier`, and `TelephonyManager` has no data
+  connection (no RIL). Telegram reads only `getType()`, which is now `TYPE_MOBILE` (its mobile
+  auto-download presets apply), and sends neither in `initConnection`. On a metered network netd
+  adds `bw_costly_eth0` legacy chains (Data Saver and quotas only, none set; root's tunnel is
+  exempt); a kernel without legacy `mangle` refuses them and nothing is added. PackageManager logs
+  that the overlay's SDK (29, what a v1-only signature allows) is below the system's: fine on 13
+  and 14, an Android 15 image would need the image's SDK and a v2 signature. Wi-Fi and the GPU:
+  [below](#wi-fi-and-the-gpu-what-stays-an-emulators).
 - **Not given** (no HAL in the image): NFC and fingerprint (declared, they would come with a
   missing adapter, `isHardwareDetected() == false`, which no real phone shows). The image has no
   sensors HAL either (`dumpsys sensorservice`: `No Sensors on the device`, while its
@@ -240,6 +266,44 @@ made again (its entrypoint is fixed at create), but its next cold boot reads the
 to `redroid` as its hardware (its composer still found by that name). Still `redroid` after
 this: `ro.hardware.gralloc`, `ro.hardware.hwcomposer`, the `ro.boot.redroid_*` boot arguments
 and the HAL file names under `/vendor/lib64/hw`.
+
+## Wi-Fi and the GPU: what stays an emulator's
+
+Measured on redroid 13 and 14 (`_64only`, guest GPU) and read in AOSP; neither is sent to
+Telegram's servers (`initConnection` carries `device_token`, `data`, `installer`, `package_id`,
+`tz_offset`, `perf_cat`), but any app and a Mini App's WebView can read both.
+
+**Wi-Fi.** `cmd wifi status` says Wi-Fi is disabled, and `wificond` logs `Failed to get NL80211
+family info`: Android's Wi-Fi needs a cfg80211 (nl80211) interface from the kernel, and the
+image's Wi-Fi HAL and `wificond` have none. The two ways to give one are kernel modules, host-wide
+and shared by every pod and the server itself, so neither is done:
+
+- `mac80211_hwsim`, redroid's old virtual Wi-Fi ([redroid-doc#10](https://github.com/remote-android/redroid-doc/issues/10)):
+  its radios are made in the host's namespace and need an access point (hostapd) in the pod;
+- `virt_wifi`, Cuttlefish's ([redroid-doc#791](https://github.com/remote-android/redroid-doc/issues/791)):
+  it wraps eth0 into a wlan0 (eth0 itself stops carrying traffic, which the kill-switch and adb
+  rules are written for) and names its network `VirtWifi`, Cuttlefish's own SSID.
+
+Labelling eth0 `TRANSPORT_WIFI` with the overlay above is possible but not offered: `WifiManager`
+would still say Wi-Fi is off and give no `WifiInfo`, a contradiction any app reads without a
+permission. A real mobile data connection (a radio HAL, `IRadio` AIDL, answering
+`setupDataCall` with the pod's interface, as Cuttlefish's RIL and modem simulator do) needs no
+kernel either, but is a project of its own: every radio service (SIM, network, data, modem,
+voice, messaging) would have to answer as a real modem does.
+
+**GPU.** `guest` draws with ANGLE on SwiftShader (`ro.hardware.egl=angle`,
+`ro.hardware.vulkan=pastel`); `dumpsys SurfaceFlinger` reports `Google Inc. (Google)`,
+`ANGLE (Google, Vulkan 1.2.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader
+driver-5.0.0)`, `OpenGL ES 3.1.0 (ANGLE 2.1.1 ...)` (Vulkan 1.3.0 on 14). Telegram reads the
+strings only for its shader cache key and a debug log; WebGL in a Mini App sees them. No phone
+reports a software renderer, and no catalogue phone's GPU is a server's: Ampere and Graviton
+have none, and an RK3588 in `host` mode reports Mesa's `Mali-G610 (Panfrost)` and an `OpenGL ES
+... Mesa` version, a GPU no catalogue phone has (Pixel 7/8 Mali-G710/G715, Snapdragon Adreno
+725/740, Exynos Mali-G68 and Xclipse 530/940, Dimensity 1080 Mali-G68) and a driver no phone
+ships. Rewriting only the strings (a GLES layer, which needs `enable_gpu_debug_layers` and
+`gpu_debug_app` in global settings any app reads, or a patched ANGLE) would leave SwiftShader's
+extensions, limits and speed under a phone's name, so it is not done. A phone's renderer needs a
+phone's GPU: hosts with the GPU of the phones they present, the operator's call.
 
 ## First-boot data
 
@@ -326,7 +390,7 @@ it was made until it is made again (its gateway gone, or the account deleted and
 - `auto`: `host` when the probe finds `/dev/dri`, else `guest`. A GPU found is not probed again
   while the process runs; a missing one is, so a driver installed later is picked up.
 
-Servers without a GPU (Ampere Altra, Graviton) stay on `guest`. On an RK3588 board `/dev/dri`
+Servers without a GPU (Ampere Altra, Graviton) stay on `guest`, whose renderer is software ([Wi-Fi and the GPU](#wi-fi-and-the-gpu-what-stays-an-emulators)). On an RK3588 board `/dev/dri`
 appears with the Mali driver (panthor, or the vendor kernel's own) and Mesa on the host.
 
 **Shared /data** (`EMULATOR__DATA_BASE_DIR` + `EMULATOR__DATA_DIFF_DIR`, `core/emulator/_data.py`):
@@ -524,3 +588,5 @@ EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org w
 the screen is the phone's.
 `EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
 Sensors).
+`EMULATOR__NETWORK_TRANSPORT` (`cellular` or `ethernet`) is the network Android reports for eth0
+(Identity and region, Network).
