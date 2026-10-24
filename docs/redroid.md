@@ -41,8 +41,10 @@ phone is shown in a scrcpy window opened by the phone button.
   last by init, so they win over `/vendor`'s own) before every cold boot, replacing the image's
   lines and our earlier ones for the same keys, with no comment of ours (not on the
   command line: redroid's init re-splits it on spaces, so `Pixel 7` would become `Pixel`); the
-  image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK (by default the
-  64-bit-only `*_64only-latest` tags, published for amd64 and arm64 alike). See
+  image is the one `EMULATOR__REDROID_IMAGES` names for the fingerprint's SDK on an amd64 Docker
+  host (by default the `*.0.0-latest` tags, whose 32-bit OMX service holds the only video encoders),
+  `EMULATOR__REDROID_IMAGES_ARM64` on an ARM64 one (`docker info`'s architecture; by default the
+  64-bit-only `*_64only-latest` tags, see [Host setup](#host-setup-linux-arm64)). See
   [Identity and region](#identity-and-region).
 - **Boot arguments**: the phone's `androidboot.hardware`, the screen, the serial,
   `androidboot.use_memfd=true` (memfd instead of the deprecated ashmem) and
@@ -478,12 +480,12 @@ on are not moved: they keep `/data` in the container until they are made again.
 
 ### Preparing /data-base
 
-One base per SDK in `EMULATOR__REDROID_IMAGES`, made by the operator from a phone that has booted
+One base per SDK in the host's images (`EMULATOR__REDROID_IMAGES`, `_ARM64` on ARM64), made by the operator from a phone that has booted
 once and done nothing else: never started by the app, so it holds no Telegram, contacts, photos or
 seeding marker. On the Docker host, as root (`34` and its image; repeat for `33`):
 
 ```bash
-SDK=34 IMAGE=redroid/redroid:14.0.0_64only-latest ROOT=/srv/telebuba
+SDK=34 IMAGE=redroid/redroid:14.0.0_64only-latest ROOT=/srv/telebuba  # amd64: 14.0.0-latest
 mkdir -p "$ROOT/template-$SDK" "$ROOT/data-base/$SDK" "$ROOT/data-diff"
 docker run -d --name telebuba-template --privileged -v "$ROOT/template-$SDK:/data" \
   "$IMAGE" androidboot.use_memfd=true androidboot.redroid_gpu_mode=guest
@@ -581,8 +583,12 @@ ID) is removed and made again at the pod's index, and its Android with it, using
 
 The production hosts: Ubuntu or Debian on arm64 (Ampere Altra, AWS Graviton, RK3588 boards), the
 app and Docker on the same machine, ext4 under the shared /data directories. The images are the
-`*_64only` tags: Ampere and other cores without 32-bit EL0 cannot run a 32-bit userspace, and
-Telegram's universal APK carries `arm64-v8a`.
+`*_64only` tags (`EMULATOR__REDROID_IMAGES_ARM64`): Ampere and other cores without 32-bit EL0
+cannot run a 32-bit userspace, and Telegram's universal APK carries `arm64-v8a`. On x86_64 the
+13.0.0 `_64only` tag lists no video or audio encoder at all (no IOmxStore; Codec2's software
+encoders do not reach `MediaCodecList`), so scrcpy-server dies at once and the web screen reads
+`screen_ended`; amd64 hosts therefore keep the `-latest` tags. Whether the arm64 `_64only` images
+have an encoder is not yet measured.
 
 ```bash
 apt-get install -y docker.io adb

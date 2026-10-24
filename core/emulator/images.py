@@ -1,7 +1,7 @@
 """The Docker images a pod runs, made present before its first container is created.
 
-- Android: the redroid image ``EMULATOR__REDROID_IMAGES`` names for the phone's SDK,
-  pulled from Docker Hub;
+- Android: the redroid image ``EMULATOR__REDROID_IMAGES`` (``_ARM64`` on an ARM64 host)
+  names for the phone's SDK, pulled from Docker Hub;
 - the net-gateway: ``EMULATOR__GATEWAY_IMAGE``, built from ``docker/net-gateway``,
   whose Dockerfile pins and checks the one file it downloads.
 
@@ -49,7 +49,7 @@ async def ensure_pod_images(spec: ContainerSpec) -> str | None:
     ``None`` when the image was just built (the comparison then reads it itself).
     """
     gateway = asyncio.ensure_future(ensure_gateway_image())
-    android = asyncio.ensure_future(_ensure(image_for(spec), ("pull", "{image}")))
+    android = asyncio.ensure_future(_ensure(await image_for(spec), ("pull", "{image}")))
     try:
         await asyncio.wait((gateway, android), return_when=asyncio.FIRST_EXCEPTION)
     finally:

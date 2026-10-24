@@ -136,6 +136,8 @@ async def test_a_failed_build_ends_the_call_and_the_pull_beside_it(
 
     async def docker(argv: Sequence[str], *, seconds: float, step: str, **_stdin: object) -> str:
         del seconds, step
+        if argv[1] == "info":
+            return "x86_64\n"
         if argv[1:3] == ["image", "inspect"]:
             code = "emulator_command_failed"  # neither image is here
             raise EmulatorError(code)
