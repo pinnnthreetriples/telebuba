@@ -56,7 +56,8 @@ _MANIFEST = """<manifest version="1.0" type="device">
 </manifest>
 """
 # docker info's architecture -> the build's directory (an Android ABI).
-_ABIS = {"x86_64": "x86_64", "aarch64": "arm64-v8a", "arm64": "arm64-v8a"}
+ARM64_ABI = "arm64-v8a"
+_ABIS = {"x86_64": "x86_64", "aarch64": ARM64_ABI, "arm64": ARM64_ABI}
 # A phone's share in a hand (else on a desk) and its room's light (lux, log-uniform).
 _HAND_SHARE = 0.75
 _LUX = (60.0, 450.0)

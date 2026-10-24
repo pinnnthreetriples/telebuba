@@ -28,6 +28,7 @@ from core.emulator._provision import (
     give_sensors,
     give_transport,
 )
+from core.emulator._sensors import ARM64_ABI, host_abi
 from core.emulator._topology import (
     CPUINFO_RC,
     CPUINFO_STAGE,
@@ -144,9 +145,22 @@ async def find_instance(name: str) -> Instance | None:
     return next((i for i in await list_instances() if i.name == name), None)
 
 
-def image_for(spec: ContainerSpec) -> str:
-    """The image configured for ``spec``'s SDK, or ``emulator_sdk_mismatch``."""
-    image = settings.emulator.redroid_images.get(spec.sdk)
+def check_image(spec: ContainerSpec) -> None:
+    """Refuse ``spec``'s SDK when no host's images name it; nothing is asked of Docker."""
+    emulator = settings.emulator
+    if not (emulator.redroid_images.get(spec.sdk) or emulator.redroid_images_arm64.get(spec.sdk)):
+        raise EmulatorError(_EMULATOR_SDK_MISMATCH)
+
+
+async def image_for(spec: ContainerSpec) -> str:
+    """The image configured for ``spec``'s SDK on this Docker host, or ``emulator_sdk_mismatch``.
+
+    ``redroid_images_arm64`` on an ARM64 host, else ``redroid_images``.
+    """
+    check_image(spec)
+    emulator = settings.emulator
+    arm64 = await host_abi() == ARM64_ABI
+    image = (emulator.redroid_images_arm64 if arm64 else emulator.redroid_images).get(spec.sdk)
     if not image:
         raise EmulatorError(_EMULATOR_SDK_MISMATCH)
     return image
@@ -188,7 +202,8 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     for deletion. Its chip's CPUs go in through ``_cpu_options`` and the init script
     that binds its cpuinfo; its battery through the tree ``give_battery`` writes.
     """
-    image = image_for(spec)
+    identity = build_prop(spec)  # refused before anything is created
+    image = await image_for(spec)
     access = ("--privileged", "--device", "/dev/dri:/dev/dri") if gpu == "host" else _UNPRIVILEGED
     # Where its diff is, for deletion; with shared /data off now, the one it replaces keeps.
     diff = data.diff.as_posix() if data else kept_diff
@@ -196,7 +211,6 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
     if diff:
         mounts = (*mounts, "--label", f"{DIFF_LABEL}={diff}")
     overlay = (_OVERLAY_ARGUMENT,) if data is not None else ()
-    identity = build_prop(spec)  # refused before anything is created
     cpus, topology = await _cpu_options(spec, index)
     battery = await give_battery(spec, index)
     await docker(

@@ -270,7 +270,6 @@ async def test_no_hal_is_copied_while_it_is_off(console: Console) -> None:
     await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
 
     assert trees == []
-    assert not [call for call in console.calls if _ARCHITECTURE in call]
 
 
 def test_a_disabled_tree_leaves_init_nothing_to_start(tmp_path: Path) -> None:

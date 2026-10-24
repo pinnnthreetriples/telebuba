@@ -39,6 +39,8 @@ _SPEC = container_spec(
 _CHIP_SPEC = _SPEC._replace(soc="chip")
 _PS = "0|telebuba-acc-1|running\n2|telebuba-acc-2|exited\n|stray|running\n"
 _IMAGE_PROP = "ro.product.product.model=redroid13_x86_64\nro.build.characteristics=default"
+# The amd64 tag: its 32-bit OMX service has the only h264 encoder scrcpy finds.
+_AMD64_IMAGE = "redroid/redroid:13.0.0-latest"
 
 
 def _product_prop(image_prop: str) -> Callable[[list[str]], str]:
@@ -130,7 +132,7 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert create[create.index("--cpuset-cpus") + 1] == "8-15", "a phone's 8 of the host's"
     mounts = _values(create, "--volume")
     assert [m for m in mounts if "/sys/devices/system/cpu" in m] == [], "no chip to show"
-    image = create.index("redroid/redroid:13.0.0_64only-latest")
+    image = create.index(_AMD64_IMAGE)
     assert create[image - 2 : image] == ["--entrypoint", "/init"], "the image's names redroid"
     assert create[image + 1 :] == [
         "qemu=1",
@@ -176,7 +178,7 @@ async def test_a_container_drawing_in_software_sees_none_of_the_hosts_devices(
     await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
 
     create = _docker_calls(ps, "create")[0]
-    options = create[: create.index("redroid/redroid:13.0.0_64only-latest")]
+    options = create[: create.index(_AMD64_IMAGE)]
     assert "--privileged" not in options, "privileged copies every host device into /dev"
     assert _values(options, "--device") == ["/dev/fuse"], "Android's storage is FUSE"
     assert _values(options, "--device-cgroup-rule") == ["c *:* rwm"], "binderfs, no disks"
@@ -197,12 +199,33 @@ async def test_a_container_on_the_host_gpu_is_given_its_device(ps: Console) -> N
     )
 
     create = _docker_calls(ps, "create")[0]
-    image = create.index("redroid/redroid:13.0.0_64only-latest")
+    image = create.index(_AMD64_IMAGE)
     assert create[create.index("--device") + 1] == "/dev/dri:/dev/dri"
     assert create.index("--device") < image, "a docker option, not a boot argument"
     assert create[-1] == "androidboot.redroid_gpu_mode=host"
     assert "--privileged" in create, "the GPU's other nodes are untried unprivileged"
     assert "--device-cgroup-rule" not in create
+
+
+@pytest.mark.parametrize(
+    ("architecture", "image"),
+    [
+        ("x86_64", _AMD64_IMAGE),
+        ("aarch64", "redroid/redroid:13.0.0_64only-latest"),
+        ("arm64", "redroid/redroid:13.0.0_64only-latest"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_image_is_the_one_for_the_docker_hosts_architecture(
+    ps: Console, architecture: str, image: str
+) -> None:
+    """amd64 keeps the images with OMX (the only video encoders); ARM64 has no 32-bit EL0."""
+    answer = _product_prop(_IMAGE_PROP)
+    ps.answer = lambda argv: f"{architecture}\n" if "{{.Architecture}}" in argv else answer(argv)
+
+    await redroid.create_instance("telebuba-new", _SPEC, index=1, gateway="telebuba-new-net")
+
+    assert image in _docker_calls(ps, "create")[0]
 
 
 @pytest.mark.asyncio

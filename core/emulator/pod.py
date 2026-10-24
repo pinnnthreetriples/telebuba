@@ -50,9 +50,9 @@ from core.emulator.images import ensure_pod_images
 from core.emulator.redroid import (
     Instance,
     build_prop,
+    check_image,
     close_viewer,
     create_instance,
-    image_for,
     launch_instance,
     list_pods,
     refresh_identity,
@@ -113,7 +113,7 @@ async def start_pod(name: str, spec: ContainerSpec, proxy: ProxySettings) -> Sta
     of one pod queue behind each other (``_POD_LOCKS``); only the index pick and the
     gateway create are shared with other pods' starts (``_CREATE_LOCK``).
     """
-    image_for(spec)
+    check_image(spec)
     build_prop(spec)
     proxy_text = proxy_file(proxy)
     address = await resolve_address(proxy.host)

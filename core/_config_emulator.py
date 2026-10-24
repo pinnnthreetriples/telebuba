@@ -31,9 +31,18 @@ class EmulatorSettings(BaseSettings):
     # The desktop scrcpy window on every open. Off by default: it encodes video for as
     # long as it is open (warming stints included); the web screen does that on demand.
     desktop_viewer: bool = False
-    # 64-bit-only tags, amd64 and arm64 alike: ARM64 servers without 32-bit EL0
-    # (Ampere) cannot boot the images that carry a 32-bit userspace.
+    # SDK -> image on an amd64 (or any non-ARM64) Docker host: the tags with a 32-bit
+    # userspace, whose OMX service holds the only video encoders (the 64-bit-only tags
+    # list none, so scrcpy cannot stream their screen).
     redroid_images: dict[int, str] = Field(
+        default_factory=lambda: {
+            33: "redroid/redroid:13.0.0-latest",
+            34: "redroid/redroid:14.0.0-latest",
+        }
+    )
+    # The same on an ARM64 host: 64-bit-only tags, since servers without 32-bit EL0
+    # (Ampere) cannot boot the images that carry a 32-bit userspace.
+    redroid_images_arm64: dict[int, str] = Field(
         default_factory=lambda: {
             33: "redroid/redroid:13.0.0_64only-latest",
             34: "redroid/redroid:14.0.0_64only-latest",
