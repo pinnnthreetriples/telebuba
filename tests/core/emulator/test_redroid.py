@@ -11,7 +11,7 @@ import pytest
 
 from core.config import settings
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.emulator import _profile, _topology, _transport, adb, redroid
+from core.emulator import _profile, _provision, _topology, _transport, adb, redroid
 from core.emulator._errors import EmulatorError
 from core.emulator._profile import (
     aosp_boot_properties,
@@ -234,14 +234,14 @@ async def test_an_identity_that_would_add_properties_is_refused(ps: Console) -> 
 
 @pytest.mark.asyncio
 async def test_a_refresh_rewrites_the_stopped_containers_identity(ps: Console) -> None:
-    first = redroid.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC))
+    first = _provision.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC))
     ps.answer = _product_prop(first)
     moved = _SPEC._replace(region=_SPEC.region._replace(timezone="Europe/Warsaw"))
 
     await redroid.refresh_identity("telebuba-acc-2", moved, 2)
 
     (written,) = written_prop(ps, "telebuba-acc-2")
-    assert written == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(moved))
+    assert written == _provision.with_identity(_IMAGE_PROP, redroid.build_prop(moved))
     assert "persist.sys.timezone=Europe/Warsaw\n" in written
     assert "Europe/Berlin" not in written, "the earlier block is replaced, not stacked"
     (update,) = _docker_calls(ps, "update")

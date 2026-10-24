@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.emulator import _profile, _topology, redroid
+from core.emulator import _profile, _provision, _topology, redroid
 from core.emulator._errors import EmulatorError
 from core.emulator._sensors import SENSORS_RC
 from tests.core.emulator.test_redroid import _CHIP_SPEC, _SPEC
@@ -85,11 +85,11 @@ async def test_a_refresh_replaces_an_earlier_block_marked_or_not(console: Consol
     await redroid.refresh_identity("telebuba-acc-2", no_carrier, 2)
 
     written = _prop(console, "telebuba-acc-2")
-    assert written == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(no_carrier))
+    assert written == _provision.with_identity(_IMAGE_PROP, redroid.build_prop(no_carrier))
     assert "telebuba" not in written.lower(), "the old mark goes with its block"
     assert "gsm." not in written, "a carrier the proxy's country lost is not kept"
-    again = redroid.with_identity(written, redroid.build_prop(_SPEC))
-    assert again == redroid.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC)), (
+    again = _provision.with_identity(written, redroid.build_prop(_SPEC))
+    assert again == _provision.with_identity(_IMAGE_PROP, redroid.build_prop(_SPEC)), (
         "an unmarked block is replaced key by key"
     )
 
