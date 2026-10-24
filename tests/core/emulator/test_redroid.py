@@ -21,6 +21,7 @@ from core.emulator._profile import (
     build_usb_stealth_commands,
     container_spec,
 )
+from core.emulator._sensors import SENSORS_RC
 from tests.core.emulator.test_topology import CHIP
 
 if TYPE_CHECKING:
@@ -44,6 +45,9 @@ def _product_prop(image_prop: str, written: list[str]) -> Callable[[list[str]], 
     """``docker cp`` out hands over ``image_prop``; ``docker cp`` in records what came back."""
 
     def answer(argv: list[str]) -> str:
+        if argv[1] == "cp" and argv[2].endswith(SENSORS_RC):  # no HAL from an earlier start
+            code = "emulator_command_failed"
+            raise EmulatorError(code)
         if argv[1] == "cp" and argv[2].startswith("telebuba-"):  # container -> host
             Path(argv[3]).write_text(image_prop, encoding="utf-8")
         elif argv[1] == "cp" and argv[3].endswith("build.prop"):  # read while it still exists

@@ -9,7 +9,7 @@ import pytest
 
 from core.config import settings
 from core.db import configure_database
-from core.emulator import _topology, pod, telegram_app
+from core.emulator import _sensors, _topology, pod, telegram_app
 from core.logging import reset_logging_for_tests, setup_logging
 
 if TYPE_CHECKING:
@@ -35,6 +35,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(pod, "_POD_LOCKS", {})
     # Process-wide caches: each test meets its own host and phones.
     monkeypatch.setattr(_topology, "_host_cores", None)
+    monkeypatch.setattr(_sensors, "_host_abi", None)
+    monkeypatch.setattr(settings.emulator, "sensors_hal_dir", None)
     monkeypatch.setattr(telegram_app, "_PACKAGES", {})
     monkeypatch.setattr(telegram_app, "_FORGOTTEN", {})
     reset_logging_for_tests()

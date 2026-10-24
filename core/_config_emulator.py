@@ -72,6 +72,9 @@ class EmulatorSettings(BaseSettings):
     cpu_cores: int = Field(default=2, ge=1, le=8)
     memory_mb: int = Field(default=2048, ge=1024, le=8192)
     cpu_topology_dir: Path = Path("emulator/cpu")
+    # ``docker build --output`` of docker/sensors-hal: ``<dir>/<abi>/`` holds the sensors
+    # HAL a new or refreshed container gets (``core.emulator._sensors``). Empty: no sensors.
+    sensors_hal_dir: Path | None = None
     # One docker/adb call; the gateway's tunnel to come up; an APK install; the Android
     # boot; one screen to appear; the login code to reach the account's existing
     # session; the screen poll interval.
@@ -138,7 +141,7 @@ class EmulatorSettings(BaseSettings):
         },
     )
 
-    @field_validator("data_base_dir", "data_diff_dir", mode="before")
+    @field_validator("data_base_dir", "data_diff_dir", "sensors_hal_dir", mode="before")
     @classmethod
     def _empty_is_off(cls, value: object) -> object:
         # ``EMULATOR__DATA_BASE_DIR=`` in .env is "off", not the working directory.

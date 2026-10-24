@@ -19,8 +19,14 @@ from typing import TYPE_CHECKING, NamedTuple
 from core.config import settings
 from core.emulator._errors import EmulatorError
 from core.emulator._features import PERMISSIONS_DIR, write_permission_files
-from core.emulator._process import adb_command, docker
+from core.emulator._process import adb_command, docker, docker_or_none
 from core.emulator._profile import aosp_boot_properties
+from core.emulator._sensors import (
+    SENSORS_RC,
+    hal_binary,
+    write_disabled_tree,
+    write_vendor_tree,
+)
 from core.emulator._topology import CPUINFO_RC, CPUINFO_STAGE, SYSFS_CPU, place_cpus
 from core.emulator.telegram_app import forget_app
 
@@ -170,6 +176,30 @@ async def _give_features(name: str) -> None:
         await docker("cp", f"{Path(scratch).as_posix()}/.", f"{name}:{PERMISSIONS_DIR}")
 
 
+async def _give_sensors(name: str, spec: ContainerSpec, *, refresh: bool = False) -> None:
+    """Copy the sensors HAL (``core.emulator._sensors``) into the stopped container's /vendor.
+
+    One ``docker cp`` of a directory's contents: the image has none of these files, and
+    a refresh replaces its own. Idempotent, so every refresh does it again. While it is
+    off, not built for the host, or the phone has no sensor sheet, a refresh turns off a
+    HAL an earlier start installed (``write_disabled_tree``); a container without one,
+    or a new one, is left alone.
+    """
+    binary = await hal_binary()
+    with tempfile.TemporaryDirectory(prefix="telebuba-sensors-") as scratch:
+        tree = Path(scratch) / "vendor"
+        if binary is not None and await asyncio.to_thread(write_vendor_tree, tree, spec, binary):
+            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+        elif refresh and await _has_sensors(name, Path(scratch) / "rc"):
+            await asyncio.to_thread(write_disabled_tree, tree)
+            await docker("cp", f"{tree.as_posix()}/.", f"{name}:/vendor")
+
+
+async def _has_sensors(name: str, scratch: Path) -> bool:
+    """Whether the stopped container has the HAL's init script (copied out to ``scratch``)."""
+    return await docker_or_none("cp", f"{name}:{SENSORS_RC}", str(scratch)) is not None
+
+
 def image_for(spec: ContainerSpec) -> str:
     """The image configured for ``spec``'s SDK, or ``emulator_sdk_mismatch``."""
     image = settings.emulator.redroid_images.get(spec.sdk)
@@ -258,6 +288,7 @@ async def create_instance(  # noqa: PLR0913 - one keyword per thing the pod deci
         await docker("cp", str(topology / "cpuinfo.rc"), f"{name}:{CPUINFO_RC}")
     await _give_identity(name, identity)
     await _give_features(name)
+    await _give_sensors(name, spec)
     return Instance(index, name, running=False)
 
 
@@ -287,13 +318,15 @@ async def refresh_identity(name: str, spec: ContainerSpec, index: int) -> None:
     The phone is the same (its serial and IMEI follow the account id), but the
     account's proxy may have changed country since, and the timezone and carrier
     follow it. Its feature files are copied again (a container made before has the
-    image's). A phone with a chip is pinned to the pod's cores again, its quota
+    image's), and its sensors HAL with the new magnetic field (``_give_sensors``). A
+    phone with a chip is pinned to the pod's cores again, its quota
     raised to all of them (one made before kept ``--cpus cpu_cores``, and ``--cpus 0``
     does not clear it); its mounts are a new container's only (one made before has
     none), nothing is made again.
     """
     await _give_identity(name, build_prop(spec))
     await _give_features(name)
+    await _give_sensors(name, spec, refresh=True)
     if spec.soc is not None:
         placement = await place_cpus(spec.soc, index)
         await docker(
