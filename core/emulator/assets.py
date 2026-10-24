@@ -2,6 +2,8 @@
 
 - ``scrcpy-server`` (the web screen): the configured version's asset of the
   github.com/Genymobile/scrcpy release, kept only when its sha256 is the configured one;
+- microG's APKs (``core.emulator._microg``): the pinned release files from microG's
+  GitHub releases, each kept only when its sha256 is the pinned one;
 - the Telegram APK: telegram.org's own download (always its latest build, package
   ``org.telegram.messenger.web``, no published checksum), kept only when it is signed
   with Telegram's certificate (``TELEGRAM_CERTIFICATE_SHA256``). Android checks the
@@ -26,6 +28,7 @@ import httpx
 
 from core.android_apk import AppIdentity, app_identity, signing_certificate_sha256
 from core.config import settings
+from core.emulator import _microg
 from core.emulator._errors import EmulatorError
 
 if TYPE_CHECKING:
@@ -61,13 +64,31 @@ async def ensure_scrcpy_server() -> Path:
     emulator = settings.emulator
     target = emulator.scrcpy_server_path
     url = _SCRCPY_SERVER_URL.format(version=emulator.scrcpy_server_version)
+    await _ensure_file(target, url, _hashed(emulator.scrcpy_server_sha256))
+    return target
+
+
+async def ensure_microg() -> dict[str, Path]:
+    """The microG APKs by ``_microg.APPS`` name, the missing downloaded first; none when off."""
+    directory = settings.emulator.microg_dir
+    if directory is None:
+        return {}
+    apks: dict[str, Path] = {}
+    for app in _microg.APPS:
+        target = directory / app.file_name
+        await _ensure_file(target, app.url, _hashed(app.sha256))
+        apks[app.name] = target
+    return apks
+
+
+def _hashed(sha256: str) -> Callable[[Path, str], Awaitable[None]]:
+    """A check that refuses a download whose sha256 is not ``sha256``."""
 
     async def same_hash(_scratch: Path, digest: str) -> None:
-        if digest != emulator.scrcpy_server_sha256:
+        if digest != sha256:
             raise EmulatorError(_EMULATOR_CHECKSUM_MISMATCH)
 
-    await _ensure_file(target, url, same_hash)
-    return target
+    return same_hash
 
 
 async def ensure_telegram_apk() -> AppIdentity:

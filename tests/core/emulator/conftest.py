@@ -40,6 +40,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(_topology, "_host_cores", None)
     monkeypatch.setattr(_sensors, "_host_abi", None)
     monkeypatch.setattr(settings.emulator, "sensors_hal_dir", None)
+    monkeypatch.setattr(settings.emulator, "microg_dir", None)
     monkeypatch.setattr(telegram_app, "_PACKAGES", {})
     monkeypatch.setattr(telegram_app, "_FORGOTTEN", {})
     reset_logging_for_tests()

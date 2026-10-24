@@ -1,13 +1,14 @@
 """What a stopped redroid container is given before it boots, as the image's own files.
 
-Its identity (``build.prop``), feature files, network overlay and sensors HAL go in
-as tars (``core.emulator._archive``) with AOSP's owners and modes; its battery is a
-``power_supply`` tree on the host, mounted by ``core.emulator.redroid``.
+Its identity (``build.prop``), feature files, network overlay, sensors HAL and Google
+apps (microG) go in as tars (``core.emulator._archive``) with AOSP's owners and modes;
+its battery is a ``power_supply`` tree on the host, mounted by ``core.emulator.redroid``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -19,22 +20,27 @@ from core.emulator._archive import SHELL, copy_in, pack, read_tree
 from core.emulator._battery import generate_initial_battery_state, write_power_supply
 from core.emulator._errors import EmulatorError
 from core.emulator._features import PERMISSIONS_DIR, write_permission_files
+from core.emulator._microg import PROBE, product_files
 from core.emulator._process import docker, docker_or_none
 from core.emulator._profile import aosp_boot_properties
 from core.emulator._sensors import (
     HAL_NAME,
     SENSORS_RC,
     hal_binary,
+    host_abi,
     write_disabled_tree,
     write_vendor_tree,
 )
 from core.emulator._transport import write_overlay_tree
+from core.emulator.assets import ensure_microg
 
 if TYPE_CHECKING:
     from core.emulator._profile import ContainerSpec
     from schemas.emulator import EmulatorRefusalCode
 
 _EMULATOR_DEVICE_UNKNOWN: EmulatorRefusalCode = "emulator_device_unknown"
+# Stdlib sink, step names only (see ``core.emulator._errors``).
+logger = logging.getLogger(__name__)
 # Where the container's identity goes (see ``give_identity``).
 _IDENTITY_FILE = PurePosixPath("/product/etc/build.prop")
 # What earlier versions wrote before their identity block: dropped with that block.
@@ -156,6 +162,31 @@ async def give_vendor(name: str, tree: Path) -> None:
 async def _has_sensors(name: str, scratch: Path) -> bool:
     """Whether the stopped container has the HAL's init script (copied out to ``scratch``)."""
     return await docker_or_none("cp", f"{name}:{SENSORS_RC}", str(scratch)) is not None
+
+
+async def give_microg(name: str, *, refresh: bool = False) -> None:
+    """Copy microG (``core.emulator._microg``) into the stopped container's /product.
+
+    One ``docker cp`` of its three APKs and GmsCore's libraries for the host's ABI,
+    which PackageManager installs as system apps at the next boot. A container keeps
+    what it was given: a refresh copies it only into one without it (made before, or
+    whose download failed). Off (``microg_dir`` empty) or on a host with no ABI of
+    ours, nothing is copied; a download that fails leaves the phone without it.
+    """
+    if settings.emulator.microg_dir is None or (abi := await host_abi()) is None:
+        return
+    if refresh:
+        with tempfile.TemporaryDirectory(prefix="telebuba-microg-") as scratch:
+            probe = await docker_or_none("cp", f"{name}:{PROBE}", str(Path(scratch) / "probe"))
+        if probe is not None:
+            return
+    try:
+        apks = await ensure_microg()
+    except EmulatorError as exc:
+        logger.warning("microG not fetched (%s): the phone boots without it", exc.code)
+        return
+    files = await asyncio.to_thread(product_files, apks, abi)
+    await copy_in(name, "/product", await asyncio.to_thread(pack, files))
 
 
 async def give_battery(spec: ContainerSpec, index: int) -> Path:

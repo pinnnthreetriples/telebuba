@@ -286,7 +286,7 @@ The container is a real phone (`core/emulator/_profile.py`):
 `docker cp` of a host path packs it with the host's modes, and from Windows every file arrives
 `-rwxr-xr-x`: an executable `build.prop` or init script, which no phone has. Every file a
 container is given before boot (`build.prop`, the feature XMLs, the network overlay, the sensors
-HAL tree, `cpuinfo.rc`) is packed into a tar here instead (`core/emulator/_archive.py`) and
+HAL tree, `cpuinfo.rc`, microG) is packed into a tar here instead (`core/emulator/_archive.py`) and
 unpacked with `docker cp -a - <container>:<dir>`, so it lands as the image's own are: files
 `0644` root:root, the HAL binary `0755` root:shell, and the /vendor directories it names root:shell
 (`bin` and `bin/hw` `0751`), as the image has them (unpacking sets a named directory's owner
@@ -631,6 +631,45 @@ kills uiautomator at its "dumped to" print, so a read takes about 1.25 s. The id
 hardcoded in uiautomator, and only a long-lived dump server of our own on the phone could
 shorten it.
 
+## Google apps (microG)
+
+A phone has Play services, its Services Framework and the Play Store as privileged system apps
+in `/product/priv-app`; redroid's images have none. A new container gets microG's builds of the
+three under a Pixel's names (`core/emulator/_microg.py`), copied into /product before its first
+boot like the other files (Files copied into a container), and PackageManager installs them as
+system apps at that boot:
+
+| /product/priv-app/ | Package | microG's file |
+|---|---|---|
+| `PrebuiltGmsCore` | `com.google.android.gms` | GmsCore `com.google.android.gms-252432034.apk` (0.3.17.252432) |
+| `Phonesky` | `com.android.vending` | Companion (FakeStore) `com.android.vending-84022634.apk` |
+| `GoogleServicesFramework` | `com.google.android.gsf` | GsfProxy `GsfProxy.apk` (v0.1.0) |
+
+The files are the ones microG publishes (microg.org/download.html leads to its GitHub
+releases), the plain builds, not `-hw` (Huawei) or `org.microg.gms` (no `com.google` name). They
+are downloaded into `EMULATOR__MICROG_DIR` (at startup and when a container needs them) and kept
+only when their sha256 is the one pinned in code, so a new microG version is a code change. All
+three are signed with microG's key (SHA-256 `9bd06727…d14165`, the microG F-Droid repository's
+fingerprint). PackageManager does not unpack a system app's native libraries: GmsCore's for the
+host's ABI go beside it, `lib/x86_64/` (`lib/arm64/` on ARM64). Their privileged permissions
+need no allowlist: the images set `ro.control_privapp_permissions=disable`. Checked on redroid
+13 and 14: the three are `SYSTEM PRIVILEGED PRODUCT` apps, GmsCore's `primaryCpuAbi` is
+`x86_64` and its privileged permissions are granted, `com.google.android.gms` and its
+`:persistent` process run without a crash, the copy takes about 6 s and boot is unchanged.
+microG's own defaults are kept: its cloud messaging stays off ("gcm is disabled" at boot) until
+turned on in its settings.
+
+A container keeps what it was given. One made before gets microG at its next start, as does one
+whose download failed (the phone is made all the same, without it). An empty
+`EMULATOR__MICROG_DIR` gives new containers none and leaves the ones that have it alone.
+
+What microG cannot be here: Play services that apps trust. redroid's images do not spoof
+signatures (no `android.permission.FAKE_PACKAGE_SIGNATURE`), and an app's Play services library
+checks that `com.google.android.gms` is signed by Google before it uses it: it finds microG's
+key and treats Play services as unavailable, so Telegram, for one, gets no FCM push through it.
+Signature spoofing needs a patched framework (`services.jar`) or Xposed, which this repo does
+not do.
+
 ## Web screen and the device farm
 
 The **Эмуляторы** page (`/devices`, `api/v1/devices.py`) lists every mobile account's phone with its
@@ -677,5 +716,6 @@ the screen is the phone's.
 `EMULATOR__BATTERY_DIR` holds each pod's battery tree (Identity and region, Battery).
 `EMULATOR__SENSORS_HAL_DIR` (empty: off) is the sensors HAL's build output (Identity and region,
 Sensors).
+`EMULATOR__MICROG_DIR` (empty: off) holds microG's APKs (Google apps (microG)).
 `EMULATOR__NETWORK_TRANSPORT` (`cellular` or `ethernet`) is the network Android reports for eth0
 (Identity and region, Network).

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.emulator import EmulatorError, pause_pod, stop_paused_pod, stop_running_pods
-from core.emulator.assets import ensure_scrcpy_server, ensure_telegram_apk
+from core.emulator.assets import ensure_microg, ensure_scrcpy_server, ensure_telegram_apk
 from core.logging import log_event
 from services.accounts.mobile_emulator import _LOCKS, container_name
 
@@ -74,7 +74,7 @@ def prefetch_phone_files() -> None:
 
 
 async def _fetch_phone_files() -> None:
-    for fetch in (ensure_telegram_apk, ensure_scrcpy_server):
+    for fetch in (ensure_telegram_apk, ensure_scrcpy_server, ensure_microg):
         try:
             await fetch()
         except EmulatorError as exc:
