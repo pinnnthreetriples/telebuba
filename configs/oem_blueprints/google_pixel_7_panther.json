@@ -19,6 +19,8 @@
   },
   "soc": "gs201",
   "board": "panther",
+  "hardware": "panther",
+  "platform": "gs201",
   "builds": {
     "33": {
       "release": "13",

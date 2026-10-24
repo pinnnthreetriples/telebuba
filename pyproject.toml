@@ -61,10 +61,10 @@ exclude-newer = "7 days"
 # PyJWT 2.15.0 contains the CVE-2026-101918 fix but landed hours after the
 # rolling cutoff. Admit that release only; 2.15.1 remains in cooldown.
 # certifi 2026.10.19 (PYSEC-2026-4320), pillow 13.0.0 (CVE-2026-112395 and
-# seven more) and virtualenv 21.14.9 (CVE-2026-113722/113725/113726/113732/113776)
+# seven more) and virtualenv 21.14.10 (CVE-2026-113713/113722/113725/113726/113732/113776)
 # and filelock 4.2.1 (CVE-2026-112914/112940) are admitted the same way: each
 # cutoff sits just after that release's upload.
-exclude-newer-package = { pyjwt = "2026-09-24T00:00:00Z", certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-17T00:00:00Z", virtualenv = "2026-10-17T17:00:00Z", filelock = "2026-10-17T17:00:00Z" }
+exclude-newer-package = { pyjwt = "2026-09-24T00:00:00Z", certifi = "2026-10-20T03:00:00Z", pillow = "2026-10-17T00:00:00Z", virtualenv = "2026-10-17T17:40:00Z", filelock = "2026-10-17T17:00:00Z" }
 # Override transitive deps when upstream upper-pins a vulnerable version.
 # Each entry must reference a CVE / advisory and be revisited when the
 # upstream chain catches up.
@@ -73,8 +73,8 @@ override-dependencies = [
     "certifi>=2026.10.19",
     # CVE-2026-112891..112901 in pillow <13.0.0.
     "pillow>=13.0.0",
-    # CVE-2026-113722..113776 in virtualenv <21.14.9 (via pre-commit).
-    "virtualenv>=21.14.9",
+    # CVE-2026-113722..113776 in virtualenv <21.14.9, CVE-2026-113713 <21.14.10 (via pre-commit).
+    "virtualenv>=21.14.10",
     # PYSEC-2026-2132 in click <8.3.3 (pulled by uvicorn/semgrep/mutmut).
     "click>=8.3.3",
     # CVE-2026-52870 in mcp <1.27.2 and CVE-2026-59951 in mcp <1.30.0
@@ -108,9 +108,9 @@ override-dependencies = [
     "opentelemetry-instrumentation-requests>=0.66b1,<0.67",
     "opentelemetry-instrumentation-threading>=0.66b1,<0.67",
     # PYSEC-2026-4011/4012/4013/4014 in virtualenv <21.7.13 and
-    # CVE-2026-113722/113725/113726/113732/113776 below 21.14.9 (via pre-commit).
-    # Recheck when pre-commit's lower bound reaches the patched line.
-    "virtualenv>=21.14.9",
+    # CVE-2026-113722/113725/113726/113732/113776 below 21.14.9 and CVE-2026-113713
+    # below 21.14.10 (via pre-commit). Recheck when pre-commit's lower bound reaches it.
+    "virtualenv>=21.14.10",
     # PYSEC-2026-4320 in certifi <2026.10.19 (via httpx/requests).
     "certifi>=2026.10.19",
     # CVE-2026-112914/112940 in filelock <4.2.1 (via virtualenv and pip-audit's

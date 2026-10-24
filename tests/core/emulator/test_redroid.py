@@ -111,7 +111,10 @@ async def test_a_new_container_joins_its_gateway_and_presents_the_phone(
     assert "--cpuset-cpus" not in create
     assert "--volume" not in create, "the host's own CPUs show through"
     image = create.index("redroid/redroid:13.0.0_64only-latest")
+    assert create[image - 2 : image] == ["--entrypoint", "/init"], "the image's names redroid"
     assert create[image + 1 :] == [
+        "qemu=1",
+        "androidboot.hardware=panther",
         f"androidboot.redroid_width={_SPEC.screen.width}",
         f"androidboot.redroid_height={_SPEC.screen.height}",
         f"androidboot.redroid_dpi={_SPEC.screen.dpi}",
