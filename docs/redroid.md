@@ -473,6 +473,7 @@ scripts/config --enable ANDROID_BINDER_IPC --enable ANDROID_BINDERFS \
   --enable NETFILTER_XT_MATCH_ADDRTYPE --enable NFT_COMPAT --enable IP_NF_MANGLE \
   --enable IP6_NF_MANGLE --enable TUN
 make olddefconfig && make -j"$(nproc)"
+rm -rf modules modules.vhdx  # a rebuild: stale .ko files, and the script never overwrites
 make INSTALL_MOD_PATH="$PWD/modules" modules_install
 sudo ./Microsoft/scripts/gen_modules_vhdx.sh "$PWD/modules" "$(make -s kernelrelease)" modules.vhdx
 mkdir -p /mnt/c/wsl-kernel/new && cp arch/x86/boot/bzImage modules.vhdx /mnt/c/wsl-kernel/new/
@@ -489,9 +490,20 @@ kernelModules=C:\\wsl-kernel\\modules.vhdx
 
 Check: `wsl -d Ubuntu -- grep binder /proc/filesystems` prints a `binder` line. To undo, remove
 the two lines and `wsl --shutdown`. WSL updates no longer bring kernel fixes: rebuild with the
-new tag when Microsoft ships one. A running WSL holds `modules.vhdx` open, so a rebuild copies
-both files to a side folder, keeps the old pair, and swaps them in after `docker desktop stop`
-and `wsl --shutdown`; putting the old pair back is the rollback.
+new tag when Microsoft ships one. A running WSL holds `modules.vhdx` open, so a rebuild stages
+both files in `new`, keeps the old pair, and swaps them in with WSL stopped (PowerShell):
+
+```powershell
+$k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd)"
+New-Item -ItemType Directory -Force $old | Out-Null
+Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
+docker desktop stop; wsl --shutdown
+Move-Item -Force "$k\new\bzImage", "$k\new\modules.vhdx" $k
+```
+
+Start Docker Desktop from the Start menu (over SSH, `docker desktop start` runs it in the SSH
+session, which takes it down on logout). To roll back, stop Docker Desktop and WSL the same way,
+`Copy-Item -Force "$old\bzImage", "$old\modules.vhdx" $k`, and start it again.
 
 Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
 pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
