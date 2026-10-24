@@ -483,9 +483,11 @@ under it. To change a base, stop the pods, replace it, and make their Androids a
 redroid needs binder in the kernel, and Android's netd needs the legacy iptables filter tables
 its own `iptables` uses. The stock WSL2 kernel has `CONFIG_ANDROID_BINDER_IPC` unset and the
 filter tables only as modules nobody loads, so build Microsoft's kernel of the same version with
-all of them built in. (The gateway's nf_tables rules, `xt_conntrack`, `TCPMSS`, NAT and TUN work
-with that kernel as it is; it has no `xt_mark`, so the kill-switch matches addresses, not marks.)
-Inside the
+all of them built in. Build in what the gateway and Docker's `--publish` use too: DNAT,
+MASQUERADE, REDIRECT, `xt_conntrack`, `xt_addrtype`, the mangle tables, TTL/HL, `nft_compat` and
+TUN. As modules from `modules.vhdx` they load on demand, and a WSL VM where that load fails leaves
+every DNAT rule failing ("Extension DNAT revision 0 not supported"): no published port, no gateway.
+The kernel still has no `xt_mark`, so the kill-switch matches addresses, not marks. Inside the
 Ubuntu distro (as root for the packages, as the user for the build):
 
 ```bash
@@ -495,14 +497,23 @@ cd ~/WSL2-Linux-Kernel && cp Microsoft/config-wsl .config
 scripts/config --enable ANDROID_BINDER_IPC --enable ANDROID_BINDERFS \
   --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" --disable LOCALVERSION_AUTO \
   --enable IP_NF_IPTABLES --enable IP_NF_FILTER --enable IP6_NF_IPTABLES --enable IP6_NF_FILTER \
-  --enable NETFILTER_XT_TARGET_HL --enable IP_NF_TARGET_TTL
+  --enable NETFILTER_XT_TARGET_HL --enable IP_NF_TARGET_TTL \
+  --enable NETFILTER_XT_NAT --enable IP_NF_NAT --enable IP6_NF_NAT \
+  --enable NETFILTER_XT_TARGET_MASQUERADE --enable IP_NF_TARGET_MASQUERADE \
+  --enable IP6_NF_TARGET_MASQUERADE --enable NETFILTER_XT_TARGET_REDIRECT \
+  --enable IP_NF_TARGET_REDIRECT --enable NETFILTER_XT_MATCH_CONNTRACK \
+  --enable NETFILTER_XT_MATCH_ADDRTYPE --enable NFT_COMPAT --enable IP_NF_MANGLE \
+  --enable IP6_NF_MANGLE --enable TUN
 make olddefconfig && make -j"$(nproc)"
+rm -rf modules modules.vhdx  # a rebuild: stale .ko files, and the script never overwrites
 make INSTALL_MOD_PATH="$PWD/modules" modules_install
 sudo ./Microsoft/scripts/gen_modules_vhdx.sh "$PWD/modules" "$(make -s kernelrelease)" modules.vhdx
-mkdir -p /mnt/c/wsl-kernel && cp arch/x86/boot/bzImage modules.vhdx /mnt/c/wsl-kernel/
+mkdir -p /mnt/c/wsl-kernel/new && cp arch/x86/boot/bzImage modules.vhdx /mnt/c/wsl-kernel/new/
 ```
 
-Point WSL at it in `%UserProfile%\.wslconfig`, then `wsl --shutdown` and start Docker Desktop:
+The first time, with no kernel in `C:\wsl-kernel` yet: point WSL at it in
+`%UserProfile%\.wslconfig`, `wsl --shutdown`, move both files from `C:\wsl-kernel\new` up into
+`C:\wsl-kernel`, and start Docker Desktop (a rebuild swaps them as below instead):
 
 ```ini
 [wsl2]
@@ -512,7 +523,24 @@ kernelModules=C:\\wsl-kernel\\modules.vhdx
 
 Check: `wsl -d Ubuntu -- grep binder /proc/filesystems` prints a `binder` line. To undo, remove
 the two lines and `wsl --shutdown`. WSL updates no longer bring kernel fixes: rebuild with the
-new tag when Microsoft ships one.
+new tag when Microsoft ships one. A running WSL holds `modules.vhdx` open, so a rebuild stages
+both files in `new`, keeps the old pair, and swaps them in with WSL stopped (PowerShell):
+
+```powershell
+$ErrorActionPreference = 'Stop'  # a failed backup stops here, before WSL goes down
+$k = 'C:\wsl-kernel'; $old = "$k\backup-$(Get-Date -Format yyyy-MM-dd-HHmmss)"; $old
+New-Item -ItemType Directory -Force $old | Out-Null
+Copy-Item "$k\bzImage", "$k\modules.vhdx" $old
+docker desktop stop --timeout 60; if ($LASTEXITCODE) { throw 'docker desktop stop failed' }
+wsl --shutdown; if ($LASTEXITCODE) { throw 'wsl --shutdown failed' }
+Move-Item -Force "$k\new\bzImage", "$k\new\modules.vhdx" $k
+```
+
+Start Docker Desktop from the Start menu (over SSH, `docker desktop start` runs it in the SSH
+session, which takes it down on logout). To roll back, stop Docker Desktop and WSL the same way,
+copy both files back from the backup folder the swap printed (in a new PowerShell, name it:
+`$old = 'C:\wsl-kernel\backup-…'`) with `Copy-Item -Force "$old\bzImage", "$old\modules.vhdx"
+C:\wsl-kernel`, and start it again.
 
 Then `winget install Genymobile.scrcpy` (for its `adb`). The images need nothing by hand: before a
 pod's first start (`core/emulator/images.py`) a missing redroid image for the phone's SDK is pulled,
