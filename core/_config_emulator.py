@@ -43,6 +43,10 @@ class EmulatorSettings(BaseSettings):
     # through /dev/dri (refused when the host has none), ``auto`` the GPU when there is
     # one. Fixed at a container's create: a container made before keeps its mode.
     gpu_mode: Literal["guest", "host", "auto"] = "guest"
+    # The transport Android files eth0 under (``core.emulator._transport``): ``cellular``
+    # matches the phone's SIM and LTE, ``ethernet`` is AOSP's own label. Written before
+    # every cold boot, so a refresh applies a change.
+    network_transport: Literal["cellular", "ethernet"] = "cellular"
     redroid_first_adb_port: int = Field(default=5600, ge=1024, le=65000)
     # Android's /data as overlayfs (docs/redroid.md, Shared /data): ``<base>/<sdk>`` is
     # the read-only lower layer the operator prepared, ``<diff>/<container>`` the pod's
