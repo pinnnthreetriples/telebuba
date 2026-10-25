@@ -1,11 +1,13 @@
 """The device farm's phones: list them with their status, start and stop them.
 
-A phone is today one mobile account's pod, named after it (``container_name``); its
+A phone is one mobile account's pod, named after it (``container_name``), or an
+independent emulator bound to no account (``_standalone``, ``standalone_name``); its
 id is that container name, so it stays the same before the container exists and
-after. Starting only boots the phone for the operator (``boot_account_phone``): its
-Telegram is neither installed nor signed in, whatever the account's main session can
-do. It runs in the background because a boot takes minutes; the list shows
-``starting`` meanwhile.
+after. Starting an account's phone only boots it for the operator
+(``boot_account_phone``): its Telegram is neither installed nor signed in, whatever the
+account's main session can do; an independent emulator's start is its own
+(``_standalone``). A start runs in the background because a boot takes minutes; the
+list shows ``starting`` meanwhile.
 Stopping refuses a phone that a start or an activity session holds: the warming
 board owns those.
 """
@@ -16,10 +18,11 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_device_fingerprint, list_accounts
+from core.db import fetch_device_fingerprint, list_accounts, list_proxies
 from core.device_fingerprint_android import android_device_for
 from core.emulator import EmulatorError, list_instances
 from core.logging import log_event
+from core.repositories.standalone_emulators import list_standalone_emulators
 from schemas.device_farm import (
     Phone,
     PhoneActionResult,
@@ -37,6 +40,7 @@ from services.accounts.mobile_emulator import (
     phone_activity,
     stop_account_pod,
 )
+from services.device_farm import _standalone
 
 if TYPE_CHECKING:
     from core.emulator import Instance
@@ -44,6 +48,8 @@ if TYPE_CHECKING:
     from schemas.device_farm import PhoneStatus
     from schemas.device_fingerprint import DeviceFingerprint
     from schemas.emulator import EmulatorRefusalCode
+    from schemas.proxy import ProxyRead
+    from schemas.standalone_emulator import StandaloneEmulator, StandaloneEmulatorCreate
 
 _DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
 _UNKNOWN_PHONE: EmulatorRefusalCode = "emulator_not_found"
@@ -100,6 +106,7 @@ def _phone(
     maker, model_name = _names(fingerprint.device_model)
     return Phone(
         phone_id=container_name(account.account_id),
+        label=account.label,
         created=container is not None,
         status=_status(account.account_id, container),
         maker=maker,
@@ -109,6 +116,7 @@ def _phone(
         app_version=fingerprint.app_version,
         lang_code=fingerprint.system_lang_code,
         proxy=proxy,
+        proxy_id=account.proxy_id,
         apps=[
             PhoneApp(
                 platform="telegram",
@@ -120,8 +128,52 @@ def _phone(
     )
 
 
+def _phone_proxy(proxy: ProxyRead | None) -> PhoneProxy | None:
+    if proxy is None:
+        return None
+    return PhoneProxy(
+        proxy_type=proxy.proxy_type,
+        host=proxy.host,
+        port=proxy.port,
+        country_code=proxy.country_code,
+        status=proxy.status,
+    )
+
+
+def _standalone_phone(
+    emulator: StandaloneEmulator, proxy: ProxyRead | None, container: Instance | None
+) -> Phone:
+    fingerprint = emulator.fingerprint
+    running = container is not None and container.running
+    maker, model_name = _names(fingerprint.device_model)
+    return Phone(
+        phone_id=_standalone.standalone_name(emulator.id),
+        kind="standalone",
+        label=emulator.label,
+        created=container is not None,
+        status=_standalone.standalone_activity(emulator.id) or ("free" if running else "asleep"),
+        maker=maker,
+        model_name=model_name,
+        device_model=fingerprint.device_model,
+        system_version=fingerprint.system_version,
+        app_version=fingerprint.app_version,
+        lang_code=fingerprint.system_lang_code,
+        proxy=_phone_proxy(proxy),
+        proxy_id=emulator.proxy_id,
+        apps=[],
+    )
+
+
+async def _pool_proxy(proxy_id: str | None, pool: dict[str, ProxyRead] | None) -> ProxyRead | None:
+    if proxy_id is None:
+        return None
+    if pool is None:
+        pool = {p.id: p for p in (await list_proxies()).proxies}
+    return pool.get(proxy_id)
+
+
 async def list_phones() -> PhoneList:
-    """Every account with a mobile device, as a phone, plus why none can start (if so)."""
+    """Every mobile account's phone, then every independent one, and why none can start."""
     mobile = [a for a in (await list_accounts()).accounts if "mobile" in a.devices]
     fingerprints = await asyncio.gather(
         *(fetch_device_fingerprint(a.account_id, "mobile") for a in mobile)
@@ -132,7 +184,41 @@ async def list_phones() -> PhoneList:
         for account, fingerprint in zip(mobile, fingerprints, strict=True)
         if fingerprint is not None
     ]
+    standalone = await list_standalone_emulators()
+    if standalone:
+        pool = {p.id: p for p in (await list_proxies()).proxies}
+        phones += [
+            _standalone_phone(
+                emulator,
+                await _pool_proxy(emulator.proxy_id, pool),
+                containers.get(_standalone.standalone_name(emulator.id)),
+            )
+            for emulator in standalone
+        ]
     return PhoneList(enabled=problem is None, problem=problem, phones=phones)
+
+
+async def create_standalone_phone(data: StandaloneEmulatorCreate) -> Phone:
+    """A new independent emulator, as the farm lists it (asleep, no container yet)."""
+    emulator = await _standalone.create_standalone(data)
+    return _standalone_phone(emulator, await _pool_proxy(emulator.proxy_id, None), None)
+
+
+def _standalone_id(phone_id: str) -> str:
+    emulator_id = _standalone.standalone_of(phone_id)
+    if emulator_id is None:
+        raise EmulatorRefusedError(_UNKNOWN_PHONE)
+    return emulator_id
+
+
+async def delete_standalone_phone(phone_id: str) -> None:
+    """Remove an independent emulator, its pod and its ``/data``."""
+    await _standalone.delete_standalone(_standalone_id(phone_id))
+
+
+async def set_standalone_phone_proxy(phone_id: str, proxy_id: str | None) -> None:
+    """Put an independent emulator on ``proxy_id`` (``None``: on none); stops its pod."""
+    await _standalone.set_standalone_phone_proxy(_standalone_id(phone_id), proxy_id)
 
 
 async def _start_in_background(account_id: str) -> None:
@@ -151,6 +237,10 @@ async def _start_in_background(account_id: str) -> None:
 
 async def start_phone(phone_id: str) -> PhoneActionResult:
     """Boot the phone in the background, its app untouched; ``starting`` at once."""
+    emulator_id = _standalone.standalone_of(phone_id)
+    if emulator_id is not None:
+        await _standalone.start_standalone(emulator_id)
+        return PhoneActionResult(phone_id=phone_id, status="starting")
     account_id = account_of(phone_id)
     await require_account(account_id)
     if not settings.emulator.enabled:
@@ -166,6 +256,10 @@ async def start_phone(phone_id: str) -> PhoneActionResult:
 
 async def stop_phone(phone_id: str) -> PhoneActionResult:
     """Put the phone to sleep (its ``/data`` stays); refused while it starts or warms."""
+    emulator_id = _standalone.standalone_of(phone_id)
+    if emulator_id is not None:
+        await _standalone.stop_standalone(emulator_id)
+        return PhoneActionResult(phone_id=phone_id, status="asleep")
     account_id = account_of(phone_id)
     await require_account(account_id)
     if phone_activity(account_id) in {"starting", "warming"}:

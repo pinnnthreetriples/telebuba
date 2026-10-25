@@ -24,6 +24,7 @@ import {
   assignCampaignAccount,
   assignProxy,
   assignProxyByEndpoint,
+  assignStandaloneProxy,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
   cancelContactLookupJob,
@@ -51,6 +52,7 @@ import {
   createNeuroshillingCampaign,
   createOutreachPreset,
   createProxy,
+  createStandalonePhone,
   createUserParserPreset,
   deleteAccount,
   deleteAccountChannel,
@@ -63,6 +65,7 @@ import {
   deleteNeuroshillingCampaign,
   deleteOutreachPreset,
   deleteProxy,
+  deleteStandalonePhone,
   deleteUserParserBase,
   deleteUserParserPreset,
   editAccountChannelPost,
@@ -232,6 +235,7 @@ import {
   stopWarming,
   submitLoginCode,
   unassignProxy,
+  unassignStandaloneProxy,
   updateAccountChannel,
   updateAccountLimits,
   updateAccountProfile,
@@ -294,6 +298,9 @@ import type {
   AssignProxyData,
   AssignProxyError,
   AssignProxyResponse,
+  AssignStandaloneProxyData,
+  AssignStandaloneProxyError,
+  AssignStandaloneProxyResponse,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailError,
   CancelAccountTwofaEmailResponse,
@@ -375,6 +382,9 @@ import type {
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
+  CreateStandalonePhoneData,
+  CreateStandalonePhoneError,
+  CreateStandalonePhoneResponse,
   CreateUserParserPresetData,
   CreateUserParserPresetError,
   CreateUserParserPresetResponse,
@@ -411,6 +421,9 @@ import type {
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  DeleteStandalonePhoneData,
+  DeleteStandalonePhoneError,
+  DeleteStandalonePhoneResponse,
   DeleteUserParserBaseData,
   DeleteUserParserBaseError,
   DeleteUserParserBaseResponse,
@@ -913,6 +926,9 @@ import type {
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
+  UnassignStandaloneProxyData,
+  UnassignStandaloneProxyError,
+  UnassignStandaloneProxyResponse,
   UpdateAccountChannelData,
   UpdateAccountChannelError,
   UpdateAccountChannelResponse,
@@ -7710,7 +7726,7 @@ export const listPhonesQueryKey = (options?: Options<ListPhonesData>) =>
 /**
  * List Phones
  *
- * Every phone (mobile account pod) with its status; never starts one.
+ * Every phone (mobile account pod or independent emulator) with its status.
  */
 export const listPhonesOptions = (options?: Options<ListPhonesData>) =>
   queryOptions<
@@ -7771,6 +7787,124 @@ export const stopPhoneMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopPhone({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Create Standalone Phone
+ *
+ * A new independent emulator (no account) on a pool proxy; started like any phone.
+ *
+ * 404 for an unknown proxy, 409 for one at capacity (it takes a slot like an account).
+ */
+export const createStandalonePhoneMutation = (
+  options?: Partial<Options<CreateStandalonePhoneData>>,
+): UseMutationOptions<
+  CreateStandalonePhoneResponse,
+  CreateStandalonePhoneError,
+  Options<CreateStandalonePhoneData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateStandalonePhoneResponse,
+    CreateStandalonePhoneError,
+    Options<CreateStandalonePhoneData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createStandalonePhone({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Standalone Phone
+ *
+ * Remove an independent emulator with its pod and ``/data``.
+ */
+export const deleteStandalonePhoneMutation = (
+  options?: Partial<Options<DeleteStandalonePhoneData>>,
+): UseMutationOptions<
+  DeleteStandalonePhoneResponse,
+  DeleteStandalonePhoneError,
+  Options<DeleteStandalonePhoneData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteStandalonePhoneResponse,
+    DeleteStandalonePhoneError,
+    Options<DeleteStandalonePhoneData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteStandalonePhone({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Unassign Standalone Proxy
+ *
+ * Take an independent emulator off its proxy; its pod stops.
+ */
+export const unassignStandaloneProxyMutation = (
+  options?: Partial<Options<UnassignStandaloneProxyData>>,
+): UseMutationOptions<
+  UnassignStandaloneProxyResponse,
+  UnassignStandaloneProxyError,
+  Options<UnassignStandaloneProxyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UnassignStandaloneProxyResponse,
+    UnassignStandaloneProxyError,
+    Options<UnassignStandaloneProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await unassignStandaloneProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Assign Standalone Proxy
+ *
+ * Put an independent emulator on a pool proxy; its pod stops (next start uses it).
+ */
+export const assignStandaloneProxyMutation = (
+  options?: Partial<Options<AssignStandaloneProxyData>>,
+): UseMutationOptions<
+  AssignStandaloneProxyResponse,
+  AssignStandaloneProxyError,
+  Options<AssignStandaloneProxyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AssignStandaloneProxyResponse,
+    AssignStandaloneProxyError,
+    Options<AssignStandaloneProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await assignStandaloneProxy({
         ...options,
         ...fnOptions,
         throwOnError: true,

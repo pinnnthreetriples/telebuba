@@ -9,3 +9,4 @@ export {
   unassignProxyMutation,
 } from './api/proxy.mutations';
 export { proxyTypeLabel } from './model/proxy';
+export { ProxyPoolSelect } from './ui/ProxyPoolSelect';

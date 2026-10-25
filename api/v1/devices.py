@@ -26,13 +26,18 @@ from api.errors import SERVICE_ERRORS, error_responses
 from api.v1._errors import service_errors_to_http
 from schemas.device_farm import (
     PHONE_ID_PATTERN,
+    Phone,
     PhoneActionResult,
     PhoneList,
     ScreenClipboard,
     ScreenCloseCode,
     ScreenMode,
 )
-from services import accounts, device_farm
+from schemas.standalone_emulator import (  # noqa: TC001 - FastAPI reads bodies at runtime
+    StandaloneEmulatorCreate,
+    StandaloneProxyAssign,
+)
+from services import accounts, device_farm, proxies
 
 router = APIRouter(tags=["devices"])
 screen_router = APIRouter(tags=["devices"])
@@ -48,7 +53,7 @@ _MAX_COMMAND_CHARS = 400_000
 
 @router.get("/devices", response_model=PhoneList, operation_id="listPhones")
 async def list_phones() -> PhoneList:
-    """Every phone (mobile account pod) with its status; never starts one."""
+    """Every phone (mobile account pod or independent emulator) with its status."""
     return await device_farm.list_phones()
 
 
@@ -80,6 +85,75 @@ async def stop_phone(phone_id: PhoneId) -> PhoneActionResult:
             return await device_farm.stop_phone(phone_id)
         except accounts.EmulatorBusyError as exc:
             raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=exc.code) from exc
+
+
+@router.post(
+    "/devices/standalone",
+    response_model=Phone,
+    operation_id="createStandalonePhone",
+    responses=SERVICE_ERRORS | error_responses(404, 409),
+)
+async def create_standalone_phone(body: StandaloneEmulatorCreate) -> Phone:
+    """A new independent emulator (no account) on a pool proxy; started like any phone.
+
+    404 for an unknown proxy, 409 for one at capacity (it takes a slot like an account).
+    """
+    with service_errors_to_http():
+        try:
+            return await device_farm.create_standalone_phone(body)
+        except accounts.AccountActionError:
+            raise
+        except proxies.ProxyCapacityError as exc:
+            raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+
+
+@router.delete(
+    "/devices/standalone/{phone_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="deleteStandalonePhone",
+    responses=SERVICE_ERRORS,
+)
+async def delete_standalone_phone(phone_id: PhoneId) -> None:
+    """Remove an independent emulator with its pod and ``/data``."""
+    with service_errors_to_http():
+        await device_farm.delete_standalone_phone(phone_id)
+
+
+@router.put(
+    "/devices/standalone/{phone_id}/proxy",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="assignStandaloneProxy",
+    responses=SERVICE_ERRORS | error_responses(404, 409),
+)
+async def assign_standalone_proxy(phone_id: PhoneId, body: StandaloneProxyAssign) -> None:
+    """Put an independent emulator on a pool proxy; its pod stops (next start uses it)."""
+    with service_errors_to_http():
+        try:
+            await device_farm.set_standalone_phone_proxy(phone_id, body.proxy_id)
+        except accounts.AccountActionError:
+            raise
+        except proxies.ProxyCapacityError as exc:
+            raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+
+
+@router.delete(
+    "/devices/standalone/{phone_id}/proxy",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="unassignStandaloneProxy",
+    responses=SERVICE_ERRORS,
+)
+async def unassign_standalone_proxy(phone_id: PhoneId) -> None:
+    """Take an independent emulator off its proxy; its pod stops."""
+    with service_errors_to_http():
+        await device_farm.set_standalone_phone_proxy(phone_id, None)
 
 
 async def _pump_video(websocket: WebSocket, session: device_farm.ScreenSession) -> ScreenCloseCode:

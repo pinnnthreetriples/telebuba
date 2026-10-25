@@ -55,6 +55,9 @@ import type {
   AssignProxyData,
   AssignProxyErrors,
   AssignProxyResponses,
+  AssignStandaloneProxyData,
+  AssignStandaloneProxyErrors,
+  AssignStandaloneProxyResponses,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailErrors,
   CancelAccountTwofaEmailResponses,
@@ -136,6 +139,9 @@ import type {
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
+  CreateStandalonePhoneData,
+  CreateStandalonePhoneErrors,
+  CreateStandalonePhoneResponses,
   CreateUserParserPresetData,
   CreateUserParserPresetErrors,
   CreateUserParserPresetResponses,
@@ -172,6 +178,9 @@ import type {
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  DeleteStandalonePhoneData,
+  DeleteStandalonePhoneErrors,
+  DeleteStandalonePhoneResponses,
   DeleteUserParserBaseData,
   DeleteUserParserBaseErrors,
   DeleteUserParserBaseResponses,
@@ -676,6 +685,9 @@ import type {
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
+  UnassignStandaloneProxyData,
+  UnassignStandaloneProxyErrors,
+  UnassignStandaloneProxyResponses,
   UpdateAccountChannelData,
   UpdateAccountChannelErrors,
   UpdateAccountChannelResponses,
@@ -4622,7 +4634,7 @@ export const sendTestNotification = <ThrowOnError extends boolean = false>(
 /**
  * List Phones
  *
- * Every phone (mobile account pod) with its status; never starts one.
+ * Every phone (mobile account pod or independent emulator) with its status.
  */
 export const listPhones = <ThrowOnError extends boolean = false>(
   options?: Options<ListPhonesData, ThrowOnError>,
@@ -4656,6 +4668,78 @@ export const stopPhone = <ThrowOnError extends boolean = false>(
   (options.client ?? client).post<StopPhoneResponses, StopPhoneErrors, ThrowOnError>({
     url: '/api/v1/devices/{phone_id}/stop',
     ...options,
+  });
+
+/**
+ * Create Standalone Phone
+ *
+ * A new independent emulator (no account) on a pool proxy; started like any phone.
+ *
+ * 404 for an unknown proxy, 409 for one at capacity (it takes a slot like an account).
+ */
+export const createStandalonePhone = <ThrowOnError extends boolean = false>(
+  options: Options<CreateStandalonePhoneData, ThrowOnError>,
+): RequestResult<CreateStandalonePhoneResponses, CreateStandalonePhoneErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateStandalonePhoneResponses,
+    CreateStandalonePhoneErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/devices/standalone',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Standalone Phone
+ *
+ * Remove an independent emulator with its pod and ``/data``.
+ */
+export const deleteStandalonePhone = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteStandalonePhoneData, ThrowOnError>,
+): RequestResult<DeleteStandalonePhoneResponses, DeleteStandalonePhoneErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    DeleteStandalonePhoneResponses,
+    DeleteStandalonePhoneErrors,
+    ThrowOnError
+  >({ url: '/api/v1/devices/standalone/{phone_id}', ...options });
+
+/**
+ * Unassign Standalone Proxy
+ *
+ * Take an independent emulator off its proxy; its pod stops.
+ */
+export const unassignStandaloneProxy = <ThrowOnError extends boolean = false>(
+  options: Options<UnassignStandaloneProxyData, ThrowOnError>,
+): RequestResult<UnassignStandaloneProxyResponses, UnassignStandaloneProxyErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    UnassignStandaloneProxyResponses,
+    UnassignStandaloneProxyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/devices/standalone/{phone_id}/proxy', ...options });
+
+/**
+ * Assign Standalone Proxy
+ *
+ * Put an independent emulator on a pool proxy; its pod stops (next start uses it).
+ */
+export const assignStandaloneProxy = <ThrowOnError extends boolean = false>(
+  options: Options<AssignStandaloneProxyData, ThrowOnError>,
+): RequestResult<AssignStandaloneProxyResponses, AssignStandaloneProxyErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    AssignStandaloneProxyResponses,
+    AssignStandaloneProxyErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/devices/standalone/{phone_id}/proxy',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**

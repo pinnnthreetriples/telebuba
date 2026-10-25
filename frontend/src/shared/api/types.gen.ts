@@ -5947,6 +5947,14 @@ export type Phone = {
    */
   phone_id: string;
   /**
+   * Kind
+   */
+  kind?: 'account' | 'standalone';
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
    * Created
    */
   created: boolean;
@@ -5979,6 +5987,10 @@ export type Phone = {
    */
   lang_code: string;
   proxy?: PhoneProxy | null;
+  /**
+   * Proxy Id
+   */
+  proxy_id?: string | null;
   /**
    * Apps
    */
@@ -7242,6 +7254,30 @@ export type SpamStatusVerdict = {
    * Checked At
    */
   checked_at: string;
+};
+
+/**
+ * StandaloneEmulatorCreate
+ */
+export type StandaloneEmulatorCreate = {
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
+   * Proxy Id
+   */
+  proxy_id?: string | null;
+};
+
+/**
+ * StandaloneProxyAssign
+ */
+export type StandaloneProxyAssign = {
+  /**
+   * Proxy Id
+   */
+  proxy_id: string;
 };
 
 /**
@@ -19518,6 +19554,217 @@ export type StopPhoneResponses = {
 };
 
 export type StopPhoneResponse = StopPhoneResponses[keyof StopPhoneResponses];
+
+export type CreateStandalonePhoneData = {
+  body: StandaloneEmulatorCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/devices/standalone';
+};
+
+export type CreateStandalonePhoneErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CreateStandalonePhoneError =
+  CreateStandalonePhoneErrors[keyof CreateStandalonePhoneErrors];
+
+export type CreateStandalonePhoneResponses = {
+  /**
+   * Successful Response
+   */
+  200: Phone;
+};
+
+export type CreateStandalonePhoneResponse =
+  CreateStandalonePhoneResponses[keyof CreateStandalonePhoneResponses];
+
+export type DeleteStandalonePhoneData = {
+  body?: never;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/devices/standalone/{phone_id}';
+};
+
+export type DeleteStandalonePhoneErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type DeleteStandalonePhoneError =
+  DeleteStandalonePhoneErrors[keyof DeleteStandalonePhoneErrors];
+
+export type DeleteStandalonePhoneResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteStandalonePhoneResponse =
+  DeleteStandalonePhoneResponses[keyof DeleteStandalonePhoneResponses];
+
+export type UnassignStandaloneProxyData = {
+  body?: never;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/devices/standalone/{phone_id}/proxy';
+};
+
+export type UnassignStandaloneProxyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type UnassignStandaloneProxyError =
+  UnassignStandaloneProxyErrors[keyof UnassignStandaloneProxyErrors];
+
+export type UnassignStandaloneProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UnassignStandaloneProxyResponse =
+  UnassignStandaloneProxyResponses[keyof UnassignStandaloneProxyResponses];
+
+export type AssignStandaloneProxyData = {
+  body: StandaloneProxyAssign;
+  path: {
+    /**
+     * Phone Id
+     */
+    phone_id: string;
+  };
+  query?: never;
+  url: '/api/v1/devices/standalone/{phone_id}/proxy';
+};
+
+export type AssignStandaloneProxyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type AssignStandaloneProxyError =
+  AssignStandaloneProxyErrors[keyof AssignStandaloneProxyErrors];
+
+export type AssignStandaloneProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type AssignStandaloneProxyResponse =
+  AssignStandaloneProxyResponses[keyof AssignStandaloneProxyResponses];
 
 export type GetPhoneTelephonyStatusData = {
   body?: never;

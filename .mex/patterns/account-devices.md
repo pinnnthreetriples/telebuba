@@ -1,7 +1,7 @@
 ---
 name: account-devices
 description: Change an account's devices (desktop/mobile), the second sign-in or the mobile container.
-last_updated: 2026-10-24
+last_updated: 2026-10-25
 edges:
   - target: context/runtime-telegram.md
     condition: sessions, proxies or the client pool

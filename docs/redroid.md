@@ -737,8 +737,20 @@ The server's version must match the decoder's protocol exactly; `@yume-chan/scrc
 to **3.3.1** (the desktop scrcpy may be newer). A missing file is downloaded on the first screen
 (`core/emulator/assets.py`) from that version's GitHub release to `EMULATOR__SCRCPY_SERVER_PATH`,
 and kept only when its sha256 is `EMULATOR__SCRCPY_SERVER_SHA256`; a file already there is used as
-it is, never updated. Another version needs its own hash in that setting. A phone is one account's
-pod today; the API already lists a phone's apps (`platform`), so other platforms can join it later.
+it is, never updated. Another version needs its own hash in that setting. The API lists a phone's
+apps (`platform`), so other platforms can join it later.
+
+### Independent emulators
+
+**+ Добавить независимый эмулятор** on the same page makes a phone bound to no account
+(`services/device_farm/_standalone.py`, table `standalone_emulators`): a fresh Android identity and
+one pool proxy, picked from the pool (or added there in place, as on the Accounts page). It takes a
+slot on that proxy like an account does. Its container is `EMULATOR__STANDALONE_PREFIX` + its id
+(`telebuba_sa-…`, never under `EMULATOR__INSTANCE_PREFIX`, so it never reads as an account's). Start
+boots the same pod on its current SOCKS5 proxy with that proxy country's timezone and SIM, installs
+Telegram and seeds the first boot, and signs nothing in: the operator works it on the web screen.
+Changing or detaching its proxy (its Параметры), or deleting the proxy, puts it to sleep; deleting
+the phone removes its containers, its `/data` diff and its row. Warming never touches it.
 
 ## Settings
 
