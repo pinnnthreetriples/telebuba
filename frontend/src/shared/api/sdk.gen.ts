@@ -4647,7 +4647,7 @@ export const listPhones = <ThrowOnError extends boolean = false>(
 /**
  * Start Phone
  *
- * Start the phone and sign its app in, in the background (``starting`` at once).
+ * Boot the phone in the background, its app untouched (``starting`` at once).
  */
 export const startPhone = <ThrowOnError extends boolean = false>(
   options: Options<StartPhoneData, ThrowOnError>,

@@ -64,7 +64,7 @@ async def list_phones() -> PhoneList:
     responses=SERVICE_ERRORS | error_responses(409),
 )
 async def start_phone(phone_id: PhoneId) -> PhoneActionResult:
-    """Start the phone and sign its app in, in the background (``starting`` at once)."""
+    """Boot the phone in the background, its app untouched (``starting`` at once)."""
     with service_errors_to_http():
         try:
             return await device_farm.start_phone(phone_id)

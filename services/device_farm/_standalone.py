@@ -48,7 +48,7 @@ from core.repositories.standalone_emulators import (
     list_standalone_ids_for_proxy,
     set_standalone_proxy,
 )
-from services.accounts._mobile_start import _boot, _drop, _undo, set_battery
+from services.accounts._mobile_start import _drop, _undo, _wait_boot, set_battery
 from services.accounts._result import AccountActionError
 from services.accounts.mobile_emulator import EmulatorBusyError, EmulatorRefusedError
 
@@ -213,7 +213,7 @@ async def _start(emulator_id: str, spec: ContainerSpec, proxy: ProxySettings, *,
         booted = False
         try:
             serial = adb_serial(instance.index)
-            await _boot(serial, apk)
+            await _wait_boot(serial, apk)
             await assert_sdk(serial, spec.sdk)
             await apply_stealth_profile(serial)
             booted = True

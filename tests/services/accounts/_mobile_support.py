@@ -62,6 +62,7 @@ class _Container:
         self.apk_fails = False
         self.battery_now: datetime | None = None
         self.data_kept = False
+        self.app_installed = True
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -145,9 +146,13 @@ class _Container:
         self.battery_now = now
         self.on_serial(serial, "battery")
 
+    async def app_package(self, _serial: str) -> str | None:
+        return "org.telegram.messenger" if self.app_installed else None
+
     async def ensure_app(self, serial: str, *, apk_path: object = None) -> None:
         del apk_path
         self.on_serial(serial, "app")
+        self.app_installed = True
 
     async def seed_device_if_needed(self, serial: str, spec: ContainerSpec) -> bool:
         self.on_serial(serial, f"seed:{spec.serial}")
@@ -207,6 +212,7 @@ _SERVICE_FAKES = (
     "assert_sdk",
     "apply_stealth_profile",
     "apply_battery_telemetry",
+    "app_package",
     "ensure_app",
     "ensure_telegram_apk",
     "seed_device_if_needed",

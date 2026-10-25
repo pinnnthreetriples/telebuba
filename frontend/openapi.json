@@ -22092,7 +22092,7 @@
           "devices"
         ],
         "summary": "Start Phone",
-        "description": "Start the phone and sign its app in, in the background (``starting`` at once).",
+        "description": "Boot the phone in the background, its app untouched (``starting`` at once).",
         "operationId": "startPhone",
         "parameters": [
           {

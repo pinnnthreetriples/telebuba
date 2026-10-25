@@ -3,10 +3,13 @@
 A phone is one mobile account's pod, named after it (``container_name``), or an
 independent emulator bound to no account (``_standalone``, ``standalone_name``); its
 id is that container name, so it stays the same before the container exists and
-after. Starting an account's phone is the account's own open (boot, seed, sign the
-app in), run in the background because it takes minutes; the list shows ``starting``
-meanwhile. Stopping refuses a phone that a start or an activity session holds: the
-warming board owns those.
+after. Starting an account's phone only boots it for the operator
+(``boot_account_phone``): its Telegram is neither installed nor signed in, whatever the
+account's main session can do; an independent emulator's start is its own
+(``_standalone``). A start runs in the background because a boot takes minutes; the
+list shows ``starting`` meanwhile.
+Stopping refuses a phone that a start or an activity session holds: the warming
+board owns those.
 """
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ from services.accounts.lifecycle import require_account
 from services.accounts.mobile_emulator import (
     EmulatorBusyError,
     EmulatorRefusedError,
+    boot_account_phone,
     container_name,
-    open_account_mobile,
     phone_activity,
     stop_account_pod,
 )
@@ -220,7 +223,7 @@ async def set_standalone_phone_proxy(phone_id: str, proxy_id: str | None) -> Non
 
 async def _start_in_background(account_id: str) -> None:
     try:
-        await open_account_mobile(account_id)
+        await boot_account_phone(account_id)
     except AccountActionError:
         return  # logged by the open itself (``account_mobile_open_failed``)
     except Exception as exc:  # noqa: BLE001 - a background task has nobody to raise to
@@ -233,7 +236,7 @@ async def _start_in_background(account_id: str) -> None:
 
 
 async def start_phone(phone_id: str) -> PhoneActionResult:
-    """Start the phone and sign its app in, in the background; ``starting`` at once."""
+    """Boot the phone in the background, its app untouched; ``starting`` at once."""
     emulator_id = _standalone.standalone_of(phone_id)
     if emulator_id is not None:
         await _standalone.start_standalone(emulator_id)

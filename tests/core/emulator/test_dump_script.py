@@ -74,7 +74,7 @@ def _run(tmp_path: Path, *, fail: bool = False, linger: int = 20) -> _Run:
     )
     seconds = time.monotonic() - started
     pid = pidfile.read_text(encoding="utf-8").strip() if pidfile.exists() else ""
-    alive = bool(pid) and _alive(pid)
+    alive = bool(pid) and _outlives_kill(pid)
     return _Run(done.stdout.decode("utf-8"), seconds, alive)
 
 
@@ -82,6 +82,21 @@ def _alive(pid: str) -> bool:
     assert _SH is not None
     probe = subprocess.run([_SH, "-c", f"kill -0 {pid}"], check=False, capture_output=True)  # noqa: S603
     return probe.returncode == 0
+
+
+def _outlives_kill(pid: str, *, grace: float = 3.0) -> bool:
+    """Whether ``pid`` is still alive ``grace`` seconds on.
+
+    The script's ``kill`` only sends the signal and the script exits at once: the
+    orphan can still answer ``kill -0`` (dying, or a zombie its new parent has not
+    reaped yet) for a moment after.
+    """
+    deadline = time.monotonic() + grace
+    while _alive(pid):
+        if time.monotonic() > deadline:
+            return True
+        time.sleep(0.05)
+    return False
 
 
 def test_the_dump_is_served_without_waiting_for_uiautomator_to_exit(tmp_path: Path) -> None:
@@ -121,6 +136,6 @@ def test_a_script_cut_off_kills_uiautomator_and_leaves_no_files(tmp_path: Path) 
     subprocess.run([_SH, "-c", f"kill -TERM {spid.read_text().strip()}"], check=True)  # noqa: S603
     running.wait(timeout=10)
 
-    assert not _alive(pidfile.read_text(encoding="utf-8").strip())
+    assert not _outlives_kill(pidfile.read_text(encoding="utf-8").strip())
     assert not (tmp_path / "ui.xml").exists()
     assert not (tmp_path / "ui.log").exists()
