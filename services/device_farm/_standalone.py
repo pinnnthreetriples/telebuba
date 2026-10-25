@@ -4,7 +4,8 @@
   a mobile account has (``core.emulator.pod``), named ``standalone_prefix`` + its id;
 * a start refuses what cannot work before any container is touched — the feature
   switched off, no proxy or one the tunnel cannot use; it boots the pod on the
-  CURRENT proxy with that proxy country's timezone and carrier, installs Telegram and
+  CURRENT proxy with that proxy country's timezone and carrier, installs the apps the
+  operator picked for it (``install_apps``: Telegram, Госуслуги) when it lacks them and
   seeds the first boot, and signs nothing in: the operator works it on the web screen;
 * a running pod is used as it stands only while its gateway runs the current proxy;
 * a proxy change, or the proxy's deletion, stops the pod; deleting the phone removes
@@ -32,6 +33,7 @@ from core.emulator import (
     connect_device,
     container_spec,
     ensure_app,
+    ensure_gosuslugi,
     ensure_telegram_apk,
     find_instance,
     pod_runs_proxy,
@@ -57,7 +59,11 @@ if TYPE_CHECKING:
     from schemas.device_farm import PhoneStatus
     from schemas.emulator import EmulatorRefusalCode
     from schemas.proxy import ProxySettings
-    from schemas.standalone_emulator import StandaloneEmulator, StandaloneEmulatorCreate
+    from schemas.standalone_emulator import (
+        StandaloneApp,
+        StandaloneEmulator,
+        StandaloneEmulatorCreate,
+    )
 
 _DISABLED: EmulatorRefusalCode = "mobile_emulator_disabled"
 _UNKNOWN_PHONE: EmulatorRefusalCode = "emulator_not_found"
@@ -118,7 +124,9 @@ async def create_standalone(data: StandaloneEmulatorCreate) -> StandaloneEmulato
     emulator_id = uuid.uuid4().hex
     label = (data.label or "").strip() or None
     fingerprint = generate_android_fingerprint(emulator_id, None)
-    emulator = await create_standalone_emulator(emulator_id, label, data.proxy_id, fingerprint)
+    emulator = await create_standalone_emulator(
+        emulator_id, label, data.proxy_id, fingerprint, data.install_apps
+    )
     await log_event("INFO", "standalone_emulator_created", extra={"emulator_id": emulator_id})
     return emulator
 
@@ -176,7 +184,7 @@ async def open_standalone(emulator_id: str) -> str:
             emulator = await require_standalone(emulator_id)
             proxy, country = await _proxy_for(emulator)
             spec = container_spec(emulator.fingerprint, country)
-            serial = await _open(emulator_id, spec, proxy)
+            serial = await _open(emulator_id, spec, proxy, emulator.install_apps)
     except (EmulatorError, AccountActionError) as exc:
         await log_event(
             "WARNING",
@@ -190,7 +198,9 @@ async def open_standalone(emulator_id: str) -> str:
     return serial
 
 
-async def _open(emulator_id: str, spec: ContainerSpec, proxy: ProxySettings) -> str:
+async def _open(
+    emulator_id: str, spec: ContainerSpec, proxy: ProxySettings, apps: list[StandaloneApp]
+) -> str:
     name = standalone_name(emulator_id)
     instance = await find_instance(name)
     if instance is not None and instance.running:
@@ -200,14 +210,22 @@ async def _open(emulator_id: str, spec: ContainerSpec, proxy: ProxySettings) -> 
             await set_battery(serial, emulator_id, spec.region.timezone)
             return serial
         await stop_pod(name)
-    return await _start(emulator_id, spec, proxy, new=instance is None)
+    return await _start(emulator_id, spec, proxy, apps, new=instance is None)
 
 
-async def _start(emulator_id: str, spec: ContainerSpec, proxy: ProxySettings, *, new: bool) -> str:
-    """Boot the stopped (or ``new``) pod on ``proxy``, Telegram installed, first boot seeded."""
+async def _start(
+    emulator_id: str,
+    spec: ContainerSpec,
+    proxy: ProxySettings,
+    apps: list[StandaloneApp],
+    *,
+    new: bool,
+) -> str:
+    """Boot the stopped (or ``new``) pod on ``proxy``, ``apps`` installed, first boot seeded."""
     name = standalone_name(emulator_id)
     # A new container has no Telegram yet: its APK is fetched while the pod starts.
-    apk = asyncio.create_task(ensure_telegram_apk()) if new else None
+    telegram = "telegram" in apps
+    apk = asyncio.create_task(ensure_telegram_apk()) if new and telegram else None
     try:
         instance, fresh_data = await start_pod(name, spec, proxy)  # undoes itself on failure
         booted = False
@@ -218,10 +236,13 @@ async def _start(emulator_id: str, spec: ContainerSpec, proxy: ProxySettings, *,
             await apply_stealth_profile(serial)
             booted = True
             await set_battery(serial, emulator_id, spec.region.timezone)
-            await ensure_app(serial)
+            if "gosuslugi" in apps:
+                await ensure_gosuslugi(serial, proxy)
+            if telegram:
+                await ensure_app(serial)
             await _seed(emulator_id, serial, spec)
         except BaseException:
-            remove = apk is not None and fresh_data and not booted
+            remove = new and fresh_data and not booted
             await asyncio.shield(_undo(name, remove=remove))
             raise
     finally:

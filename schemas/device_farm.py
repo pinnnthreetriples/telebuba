@@ -13,6 +13,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 from schemas.emulator import EmulatorRefusalCode  # noqa: TC001
+from schemas.standalone_emulator import StandaloneApp  # noqa: TC001
 
 # ``asleep``: no container running (``created`` says whether it exists at all);
 # ``starting``: a start is booting it or signing its app in; ``free``: running, idle;
@@ -77,6 +78,8 @@ class Phone(BaseModel):
     # The pool proxy the phone is on, for the picker that changes it.
     proxy_id: str | None = None
     apps: list[PhoneApp]
+    # What a standalone phone's start installs when missing; empty for an account phone.
+    install_apps: list[StandaloneApp] = Field(default_factory=list)
 
 
 class PhoneList(BaseModel):

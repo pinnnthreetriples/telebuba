@@ -5060,7 +5060,13 @@
       "detachProxy": "Detach proxy",
       "delete": "Delete emulator",
       "deleteTitle": "Delete the emulator?",
-      "deleteBody": "Its container and all of the phone's data are removed. The proxy stays in the pool."
+      "deleteBody": "Its container and all of the phone's data are removed. The proxy stays in the pool.",
+      "apps": "Install by default",
+      "app": {
+        "telegram": "Telegram",
+        "gosuslugi": "Gosuslugi"
+      },
+      "appsHint": "Ticked apps are installed on start when the phone lacks them. Gosuslugi is downloaded from RuStore through the emulator's proxy."
     },
     "status": {
       "asleep": "Asleep",

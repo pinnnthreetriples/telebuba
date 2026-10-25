@@ -16,12 +16,19 @@ from core.config import settings
 from core.db import _get_engine, _now_iso, _optional_str, _proxies
 from core.repositories.proxies import ProxyCapacityError, count_for_proxy
 from schemas.device_fingerprint import DeviceFingerprint
-from schemas.standalone_emulator import StandaloneEmulator
+from schemas.standalone_emulator import StandaloneApp, StandaloneEmulator
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sqlalchemy.engine import Connection
+
+
+def _apps_of(stored: object) -> list[StandaloneApp]:
+    """The comma-joined column as names; one this code no longer knows is dropped."""
+    known: tuple[StandaloneApp, ...] = ("telegram", "gosuslugi")
+    names = str(stored or "").split(",")
+    return [app for app in known if app in names]
 
 
 def _row_to_emulator(row: Mapping[str, object]) -> StandaloneEmulator:
@@ -30,6 +37,7 @@ def _row_to_emulator(row: Mapping[str, object]) -> StandaloneEmulator:
         id=emulator_id,
         label=_optional_str(row.get("label")),
         proxy_id=_optional_str(row.get("proxy_id")),
+        install_apps=_apps_of(row.get("install_apps")),
         fingerprint=DeviceFingerprint(
             account_id=emulator_id,
             device_type="mobile",
@@ -57,12 +65,18 @@ def _claim_slot(connection: Connection, proxy_id: str, current: str | None) -> N
 
 
 def _create(
-    emulator_id: str, label: str | None, proxy_id: str | None, fingerprint: DeviceFingerprint
+    emulator_id: str,
+    label: str | None,
+    proxy_id: str | None,
+    fingerprint: DeviceFingerprint,
+    install_apps: list[StandaloneApp],
 ) -> StandaloneEmulator:
+    apps = _apps_of(",".join(install_apps))
     emulator = StandaloneEmulator(
         id=emulator_id,
         label=label,
         proxy_id=proxy_id,
+        install_apps=apps,
         fingerprint=fingerprint.model_copy(update={"account_id": emulator_id}),
         created_at=_now_iso(),
     )
@@ -75,6 +89,7 @@ def _create(
                 id=emulator_id,
                 label=label,
                 proxy_id=proxy_id,
+                install_apps=",".join(apps),
                 device_model=fingerprint.device_model,
                 system_version=fingerprint.system_version,
                 app_version=fingerprint.app_version,
@@ -87,10 +102,14 @@ def _create(
 
 
 async def create_standalone_emulator(
-    emulator_id: str, label: str | None, proxy_id: str | None, fingerprint: DeviceFingerprint
+    emulator_id: str,
+    label: str | None,
+    proxy_id: str | None,
+    fingerprint: DeviceFingerprint,
+    install_apps: list[StandaloneApp],
 ) -> StandaloneEmulator:
     """Store a new emulator, claiming its proxy's slot when it has one."""
-    return await asyncio.to_thread(_create, emulator_id, label, proxy_id, fingerprint)
+    return await asyncio.to_thread(_create, emulator_id, label, proxy_id, fingerprint, install_apps)
 
 
 def _list() -> list[StandaloneEmulator]:

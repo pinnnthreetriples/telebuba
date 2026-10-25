@@ -75,6 +75,23 @@ async def test_a_created_emulator_is_listed_on_its_proxy_and_takes_a_slot(app: F
     )
     assert listed.json()["phones"] == [phone]
     assert pool.json()["proxies"][0]["used"] == 1
+    assert phone["install_apps"] == ["telegram"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("stopped")
+async def test_the_apps_picked_at_creation_are_kept(app: FastAPI) -> None:
+    async with _client(app) as client:
+        created = await client.post(
+            "/api/v1/devices/standalone", json={"install_apps": ["gosuslugi", "telegram"]}
+        )
+        unknown = await client.post("/api/v1/devices/standalone", json={"install_apps": ["vk"]})
+        listed = await client.get("/api/v1/devices")
+
+    assert created.status_code == 200
+    assert created.json()["install_apps"] == ["telegram", "gosuslugi"]
+    assert unknown.status_code == 422
+    assert [p["install_apps"] for p in listed.json()["phones"]] == [["telegram", "gosuslugi"]]
 
 
 @pytest.mark.asyncio

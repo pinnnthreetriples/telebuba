@@ -33353,6 +33353,17 @@
             },
             "type": "array",
             "title": "Apps"
+          },
+          "install_apps": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "telegram",
+                "gosuslugi"
+              ]
+            },
+            "type": "array",
+            "title": "Install Apps"
           }
         },
         "type": "object",
@@ -35635,6 +35646,17 @@
               }
             ],
             "title": "Proxy Id"
+          },
+          "install_apps": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "telegram",
+                "gosuslugi"
+              ]
+            },
+            "type": "array",
+            "title": "Install Apps"
           }
         },
         "type": "object",
