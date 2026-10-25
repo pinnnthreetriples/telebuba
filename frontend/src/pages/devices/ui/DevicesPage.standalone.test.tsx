@@ -26,6 +26,7 @@ const STANDALONE: Phone = {
   proxy: { proxy_type: 'socks5', host: '1.1.1.1', port: 1080, country_code: 'DE' },
   proxy_id: 'p1',
   apps: [],
+  install_apps: ['telegram'],
 };
 
 function proxy(id: string, host: string, free: number) {
@@ -99,12 +100,38 @@ test('the add button creates an independent emulator on the picked pool proxy', 
       {
         method: 'POST',
         path: '/api/v1/devices/standalone',
-        body: { label: 'DE-1', proxy_id: 'p2' },
+        body: { label: 'DE-1', proxy_id: 'p2', install_apps: ['telegram'] },
       },
     ]);
   });
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+test('the ticked apps are the ones the new emulator installs', async () => {
+  serve([]);
+  renderPage();
+
+  await userEvent.click(screen.getByRole('button', { name: '+ Добавить независимый эмулятор' }));
+  const dialog = await screen.findByRole('dialog');
+  const telegram = within(dialog).getByRole('checkbox', { name: 'Telegram' });
+  const gosuslugi = within(dialog).getByRole('checkbox', { name: 'Госуслуги' });
+  expect(telegram).toBeChecked();
+  expect(gosuslugi).not.toBeChecked();
+  await userEvent.click(gosuslugi);
+  await userEvent.click(telegram);
+  await userEvent.click(telegram);
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Создать' }));
+
+  await waitFor(() => {
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/api/v1/devices/standalone',
+        body: { label: null, proxy_id: null, install_apps: ['telegram', 'gosuslugi'] },
+      },
+    ]);
   });
 });
 

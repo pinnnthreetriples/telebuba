@@ -116,7 +116,10 @@ from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_re
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
-from core.migration_steps_standalone_emulators import _add_standalone_emulators
+from core.migration_steps_standalone_emulators import (
+    _add_standalone_emulators,
+    _add_standalone_install_apps,
+)
 from core.migration_steps_tuning import _add_warming_settings_tuning
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
@@ -271,6 +274,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (99, "add_outreach_protection", _add_outreach_protection),
     (100, "add_account_passkeys", _add_account_passkeys),
     (101, "add_standalone_emulators", _add_standalone_emulators),
+    (102, "add_standalone_install_apps", _add_standalone_install_apps),
 )
 
 

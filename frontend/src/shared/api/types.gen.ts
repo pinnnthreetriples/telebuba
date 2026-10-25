@@ -5995,6 +5995,10 @@ export type Phone = {
    * Apps
    */
   apps: Array<PhoneApp>;
+  /**
+   * Install Apps
+   */
+  install_apps?: Array<'telegram' | 'gosuslugi'>;
 };
 
 /**
@@ -7268,6 +7272,10 @@ export type StandaloneEmulatorCreate = {
    * Proxy Id
    */
   proxy_id?: string | null;
+  /**
+   * Install Apps
+   */
+  install_apps?: Array<'telegram' | 'gosuslugi'>;
 };
 
 /**

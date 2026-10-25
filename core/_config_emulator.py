@@ -70,6 +70,10 @@ class EmulatorSettings(BaseSettings):
     # Installed into a container with no Telegram; a missing file is fetched from
     # telegram.org, kept only when Telegram signed it (``core.emulator.assets``).
     telegram_apk_path: Path = Path("emulator/telegram.apk")
+    # Installed into an independent emulator its operator picked Госуслуги for; a missing
+    # file is fetched from RuStore through that phone's proxy, kept only when the
+    # Госуслуги certificate signed it (``core.emulator._gosuslugi``).
+    gosuslugi_apk_path: Path = Path("emulator/gosuslugi.apk")
     # Directory storing versioned APKs (<store_dir>/<package>/<version>.apk).
     apk_store_dir: Path = Path("emulator/apk_store")
     # The Telegram a container already has is driven: this package first, else the APK's.
@@ -127,6 +131,8 @@ class EmulatorSettings(BaseSettings):
     )
     # One asset download from its official source, start to finish.
     download_timeout_seconds: float = Field(default=600.0, gt=0)
+    # A store app's APK (Госуслуги, over 200 MB) through a phone's proxy, start to finish.
+    app_download_timeout_seconds: float = Field(default=3600.0, gt=0)
     stream_max_size: int = Field(default=1280, ge=320, le=4096)
     stream_max_fps: int = Field(default=30, ge=5, le=60)
     stream_bit_rate: int = Field(default=4_000_000, ge=500_000, le=20_000_000)

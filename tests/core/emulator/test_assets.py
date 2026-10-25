@@ -16,6 +16,7 @@ from core.emulator import EmulatorError, assets
 from tests.core._apk_builder import V2_ID, V3_ID, build_apk
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
     from pathlib import Path
 
 _URL = "https://github.com/Genymobile/scrcpy/releases/download/v3.3.1/scrcpy-server-v3.3.1"
@@ -229,3 +230,70 @@ async def test_a_file_that_is_no_apk_cannot_be_installed(apk_target: Path) -> No
         await assets.ensure_telegram_apk()
 
     assert refused.value.code == "emulator_install_failed"
+
+
+_STALLED = "stalled"
+
+
+@pytest.fixture
+def small_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chunks no bigger than the bytes a cut stream sends, so they reach the file."""
+    monkeypatch.setattr(assets, "_CHUNK_BYTES", 1)
+
+
+class _CutStream(httpx.AsyncByteStream):
+    """Sends ``head`` and then goes silent: the connection is read as stalled."""
+
+    def __init__(self, head: bytes) -> None:
+        self._head = head
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield self._head
+        raise httpx.ReadTimeout(_STALLED)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("small_chunks")
+async def test_a_stalled_download_is_resumed_where_it_stopped(target: Path) -> None:
+    head, tail = _BODY[:7], _BODY[7:]
+    with respx.mock() as github:
+        route = github.get(_URL).mock(
+            side_effect=[
+                httpx.Response(200, stream=_CutStream(head)),
+                httpx.Response(206, content=tail),
+            ]
+        )
+        await assets.ensure_scrcpy_server()
+
+    assert route.calls[1].request.headers["Range"] == "bytes=7-"
+    assert target.read_bytes() == _BODY
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("small_chunks")
+async def test_a_server_that_will_not_resume_fails_the_download(target: Path) -> None:
+    with respx.mock() as github:
+        github.get(_URL).mock(
+            side_effect=[
+                httpx.Response(200, stream=_CutStream(b"part")),
+                httpx.Response(200, content=_BODY),
+            ]
+        )
+        with pytest.raises(EmulatorError) as refused:
+            await assets.ensure_scrcpy_server()
+
+    assert refused.value.code == "emulator_download_failed"
+    assert list(target.parent.iterdir()) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("target")
+async def test_a_download_that_keeps_stalling_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(assets, "_RESUMES", 1)
+    with respx.mock() as github:
+        route = github.get(_URL).mock(side_effect=httpx.ReadTimeout(_STALLED))
+        with pytest.raises(EmulatorError) as refused:
+            await assets.ensure_scrcpy_server()
+
+    assert refused.value.code == "emulator_download_failed"
+    assert route.call_count == 2

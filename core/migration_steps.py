@@ -29,6 +29,7 @@ _ALLOWED_TABLES = frozenset(
         "neurocomment_runtime",
         "outreach_limits",
         "proxies",
+        "standalone_emulators",
         "users",
     },
 )

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from core.emulator._errors import EmulatorError
+from core.emulator._gosuslugi import ensure_gosuslugi
 from core.emulator._input import HumanInputEngine, KeystrokeEvent, SwipeTrajectory, TapEvent
 from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
@@ -88,6 +89,7 @@ __all__ = [
     "connect_device",
     "container_spec",
     "ensure_app",
+    "ensure_gosuslugi",
     "ensure_telegram_apk",
     "enter_code",
     "enter_password",

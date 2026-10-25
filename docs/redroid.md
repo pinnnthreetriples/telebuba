@@ -748,7 +748,16 @@ one pool proxy, picked from the pool (or added there in place, as on the Account
 slot on that proxy like an account does. Its container is `EMULATOR__STANDALONE_PREFIX` + its id
 (`telebuba_sa-…`, never under `EMULATOR__INSTANCE_PREFIX`, so it never reads as an account's). Start
 boots the same pod on its current SOCKS5 proxy with that proxy country's timezone and SIM, installs
-Telegram and seeds the first boot, and signs nothing in: the operator works it on the web screen.
+the apps ticked when it was added («Установить по умолчанию»: Telegram, ticked by default, and
+Госуслуги) when the phone lacks them, seeds the first boot, and signs nothing in: the operator works
+it on the web screen. Phones added before the choice existed install Telegram.
+
+Госуслуги (`core/emulator/_gosuslugi.py`, package `ru.rostel`) publishes no APK of its own: its
+current universal build comes from RuStore's web API (`overallInfo`, then `v2/download-link`),
+looked up and downloaded through the phone's own proxy, since RuStore's CDN crawls from abroad. It
+lands in `EMULATOR__GOSUSLUGI_APK_PATH` and is kept only when signed with the pinned Госуслуги
+certificate. A download that stalls for a minute is resumed where it stopped (`Range`), a few times
+at most; `EMULATOR__APP_DOWNLOAD_TIMEOUT_SECONDS` bounds the whole file.
 Changing or detaching its proxy (its Параметры), or deleting the proxy, puts it to sleep; deleting
 the phone removes its containers, its `/data` diff and its row. Warming never touches it.
 
@@ -759,6 +768,7 @@ EMULATOR__ENABLED=true
 # The adb next to scrcpy.exe: scrcpy starts its own adb, and two versions kill each other's server.
 EMULATOR__ADB_PATH=C:/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe/scrcpy-win64-v4.1/adb.exe
 EMULATOR__TELEGRAM_APK_PATH=emulator/telegram.apk  # fetched from telegram.org when missing
+EMULATOR__GOSUSLUGI_APK_PATH=emulator/gosuslugi.apk  # fetched from RuStore when missing
 ```
 
 `EMULATOR__CPU_CORES` (phones without a chip) and `EMULATOR__MEMORY_MB` size new containers;

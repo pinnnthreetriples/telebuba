@@ -161,6 +161,7 @@ def _standalone_phone(
         proxy=_phone_proxy(proxy),
         proxy_id=emulator.proxy_id,
         apps=[],
+        install_apps=emulator.install_apps,
     )
 
 

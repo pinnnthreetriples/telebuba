@@ -30,6 +30,7 @@ from services.device_farm import (
 )
 
 if TYPE_CHECKING:
+    from schemas.proxy import ProxySettings
     from tests.services.accounts._mobile_support import _Container
 
 pytestmark = pytest.mark.usefixtures("mobile_enabled")
@@ -54,6 +55,11 @@ def pod(monkeypatch: pytest.MonkeyPatch, container: _Container) -> _Container:
     """The scripted pod on ``_standalone``'s names too (``container`` covers the rest)."""
     for name in _STANDALONE_FAKES:
         monkeypatch.setattr(_standalone, name, getattr(container, name))
+
+    async def ensure_gosuslugi(_serial: str, proxy: ProxySettings) -> None:
+        container.steps.append(f"gosuslugi:{proxy.host}")
+
+    monkeypatch.setattr(_standalone, "ensure_gosuslugi", ensure_gosuslugi)
     _standalone._LOCKS.clear()
     _standalone._MANUAL.clear()
     return container
@@ -94,6 +100,7 @@ async def test_a_new_emulator_is_an_asleep_phone_with_no_app_on_its_proxy() -> N
         "asleep",
     )
     assert phone.apps == []
+    assert phone.install_apps == ["telegram"]
     assert phone.proxy_id == proxy_id
     assert phone.proxy is not None
     assert phone.proxy.country_code == "DE"
@@ -299,3 +306,51 @@ async def test_holding_the_controls_excludes_a_start() -> None:
     finally:
         _standalone.release_standalone(emulator_id)
     assert await fetch_standalone_emulator(emulator_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_start_installs_only_the_apps_picked_for_the_phone(pod: _Container) -> None:
+    phone = await create_standalone_phone(
+        StandaloneEmulatorCreate(proxy_id=await _proxy(), install_apps=["gosuslugi"])
+    )
+
+    await _started(phone.phone_id)
+
+    assert phone.install_apps == ["gosuslugi"]
+    assert "gosuslugi:10.0.0.9" in pod.steps
+    assert not {"apk", "app"} & set(pod.steps), "no Telegram was picked"
+
+
+@pytest.mark.asyncio
+async def test_both_apps_picked_are_both_installed(pod: _Container) -> None:
+    phone = await create_standalone_phone(
+        StandaloneEmulatorCreate(proxy_id=await _proxy(), install_apps=["telegram", "gosuslugi"])
+    )
+
+    await _started(phone.phone_id)
+
+    assert {"apk", "gosuslugi:10.0.0.9", "app"} <= set(pod.steps)
+    [listed] = (await list_phones()).phones
+    assert listed.install_apps == ["telegram", "gosuslugi"]
+
+
+@pytest.mark.asyncio
+async def test_a_phone_with_no_apps_boots_bare_and_a_failed_new_boot_still_removes_it(
+    pod: _Container,
+) -> None:
+    phone = await create_standalone_phone(
+        StandaloneEmulatorCreate(proxy_id=await _proxy(), install_apps=[])
+    )
+    emulator_id = phone.phone_id.removeprefix("telebuba_sa-")
+
+    await _standalone.open_standalone(emulator_id)
+    bare = list(pod.steps)
+    pod.steps.clear()
+    pod.instance = None
+    pod.fail_at = "boot"
+    with pytest.raises(EmulatorRefusedError):
+        await _standalone.open_standalone(emulator_id)
+
+    assert {"boot", "battery"} <= set(bare)
+    assert not [s for s in bare if s in {"apk", "app"} or s.startswith("gosuslugi")]
+    assert pod.steps[-1] == f"remove:{phone.phone_id}"
