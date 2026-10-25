@@ -79,6 +79,9 @@ class EmulatorSettings(BaseSettings):
     telegram_app_version: str = Field(default="", pattern=r"^(\d+\.\d+\.\d+ \(\d+\))?$")
     # Container name = prefix + account id, so a container is found again by name.
     instance_prefix: str = Field(default="telebuba-", min_length=1)
+    # An independent emulator's container = this prefix + its id. Must not start with
+    # ``instance_prefix``, or its name would read as an account's.
+    standalone_prefix: str = Field(default="telebuba_sa-", min_length=1)
     # CPU cores and RAM of a new container (its screen is its phone's, ``configs/``).
     # A phone with a chip (``configs/soc``) gets that chip's cores instead of ``cpu_cores``,
     # and sees its topology, written under ``cpu_topology_dir`` (``core.emulator._topology``).

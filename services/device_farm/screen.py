@@ -19,7 +19,8 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from functools import partial
+from typing import TYPE_CHECKING, NamedTuple
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -35,10 +36,11 @@ from services.accounts.mobile_emulator import (
     release_manual,
     running_serial,
 )
+from services.device_farm import _standalone
 from services.device_farm._phones import account_of
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from core.emulator import ScreenStream
     from schemas.device_farm import PhoneStatus, ScreenMode
@@ -118,14 +120,44 @@ async def _take_over(phone_id: str) -> _Viewer:
     return viewer
 
 
+class _Holds(NamedTuple):
+    """The phone's own hold functions: an account's pod, or an independent emulator's."""
+
+    serial: Callable[[], Awaitable[str]]
+    activity: Callable[[], PhoneStatus | None]
+    claim: Callable[[], None]
+    release: Callable[[], None]
+    account_id: str | None
+
+
+def _holds(phone_id: str) -> _Holds:
+    emulator_id = _standalone.standalone_of(phone_id)
+    if emulator_id is not None:
+        return _Holds(
+            partial(_standalone.standalone_serial, emulator_id),
+            partial(_standalone.standalone_activity, emulator_id),
+            partial(_standalone.claim_standalone, emulator_id),
+            partial(_standalone.release_standalone, emulator_id),
+            None,
+        )
+    account_id = account_of(phone_id)
+    return _Holds(
+        partial(running_serial, account_id),
+        partial(phone_activity, account_id),
+        partial(claim_manual, account_id),
+        partial(release_manual, account_id),
+        account_id,
+    )
+
+
 @asynccontextmanager
 async def screen_session(phone_id: str, mode: ScreenMode) -> AsyncIterator[ScreenSession]:
     """Open the phone's screen for one viewer; refusals are ``EmulatorRefusedError``."""
-    account_id = account_of(phone_id)
+    holds = _holds(phone_id)
     if not settings.emulator.enabled:
         raise EmulatorRefusedError(_DISABLED)
-    serial = await running_serial(account_id)
-    if mode == "control" and phone_activity(account_id) in _NOT_HANDED_OVER:
+    serial = await holds.serial()
+    if mode == "control" and holds.activity() in _NOT_HANDED_OVER:
         # Refused before the current viewer is superseded: a refused take-over must
         # not end someone else's watching of the stint.
         raise EmulatorBusyError
@@ -136,7 +168,7 @@ async def screen_session(phone_id: str, mode: ScreenMode) -> AsyncIterator[Scree
             # A third viewer came while this one waited: it never starts a server.
             raise ScreenSupersededError
         if mode == "control":
-            claim_manual(account_id)
+            holds.claim()
             claimed = True
         try:
             async with open_screen(serial, control=mode == "control") as stream:
@@ -144,14 +176,17 @@ async def screen_session(phone_id: str, mode: ScreenMode) -> AsyncIterator[Scree
                     # Superseded while opening: closed before it is ever shown.
                     raise ScreenSupersededError
                 await log_event(
-                    "INFO", "phone_screen_opened", account_id=account_id, extra={"mode": mode}
+                    "INFO",
+                    "phone_screen_opened",
+                    account_id=holds.account_id,
+                    extra={"mode": mode, "phone_id": phone_id},
                 )
                 yield ScreenSession(stream, viewer)
         except EmulatorError as exc:
             raise EmulatorRefusedError(exc.code) from exc
     finally:
         if claimed:
-            release_manual(account_id)
+            holds.release()
         viewer.done.set()
         if _VIEWERS.get(phone_id) is viewer:
             del _VIEWERS[phone_id]

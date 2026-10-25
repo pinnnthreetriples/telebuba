@@ -16,6 +16,7 @@ from core import (
     _schema_outreach,
     _schema_passkeys,
     _schema_recipients,
+    _schema_standalone_emulators,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "_schema_outreach",
     "_schema_passkeys",
     "_schema_recipients",
+    "_schema_standalone_emulators",
 ]

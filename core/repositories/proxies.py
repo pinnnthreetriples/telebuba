@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import delete, func, insert, select, update
 
+from core._schema_standalone_emulators import _standalone_emulators
 from core.config import settings
 from core.db import _accounts, _get_engine, _now_iso, _optional_str, _proxies, _required_int
 from schemas.proxy import (
@@ -93,18 +94,23 @@ def _row_to_settings(mapping: Mapping[str, object]) -> ProxySettings:
 
 
 def _used_counts(connection: Connection) -> dict[str, int]:
-    statement = (
-        select(_accounts.c.proxy_id, func.count().label("n"))
-        .where(_accounts.c.proxy_id.is_not(None))
-        .group_by(_accounts.c.proxy_id)
+    """Slots taken on each proxy: its accounts plus its independent emulators."""
+    counts: dict[str, int] = {}
+    for column in (_accounts.c.proxy_id, _standalone_emulators.c.proxy_id):
+        statement = (
+            select(column, func.count().label("n")).where(column.is_not(None)).group_by(column)
+        )
+        for proxy_id, count in connection.execute(statement).all():
+            counts[str(proxy_id)] = counts.get(str(proxy_id), 0) + int(count)
+    return counts
+
+
+def count_for_proxy(connection: Connection, proxy_id: str) -> int:
+    """Slots taken on ``proxy_id``, inside the caller's (capacity-checking) transaction."""
+    return sum(
+        int(connection.execute(select(func.count()).where(column == proxy_id)).scalar() or 0)
+        for column in (_accounts.c.proxy_id, _standalone_emulators.c.proxy_id)
     )
-    rows = connection.execute(statement).all()
-    return {str(proxy_id): int(count) for proxy_id, count in rows}
-
-
-def _count_for_proxy(connection: Connection, proxy_id: str) -> int:
-    statement = select(func.count()).where(_accounts.c.proxy_id == proxy_id)
-    return int(connection.execute(statement).scalar() or 0)
 
 
 def _list_account_ids_for_proxy(proxy_id: str) -> list[str]:
@@ -144,7 +150,7 @@ def _fetch_proxy(proxy_id: str) -> ProxyRead | None:
         )
         if row is None:
             return None
-        used = _count_for_proxy(connection, proxy_id)
+        used = count_for_proxy(connection, proxy_id)
     return _row_to_proxy(cast("Mapping[str, object]", row), used)
 
 
@@ -305,7 +311,7 @@ def _create_and_assign_proxy(data: ProxyCreateAssignment) -> ProxyRead:
             # This operation only assigns. Pool credential rotation uses create_proxy.
             proxy_id = str(existing[0])
         already_here = account_row[0] == proxy_id
-        if not already_here and _count_for_proxy(connection, proxy_id) >= _capacity():
+        if not already_here and count_for_proxy(connection, proxy_id) >= _capacity():
             msg = f"Proxy {proxy_id} is at capacity ({_capacity()})"
             raise ProxyCapacityError(msg)
         connection.execute(
@@ -343,7 +349,7 @@ def _assign_account_to_proxy(proxy_id: str, account_id: str) -> ProxyRead:
             msg = f"Account not found: {account_id}"
             raise ValueError(msg)
         already_here = str(account_row[0]) == proxy_id if account_row[0] is not None else False
-        if not already_here and _count_for_proxy(connection, proxy_id) >= _capacity():
+        if not already_here and count_for_proxy(connection, proxy_id) >= _capacity():
             msg = f"Proxy {proxy_id} is at capacity ({_capacity()})"
             raise ProxyCapacityError(msg)
         connection.execute(
@@ -373,9 +379,14 @@ async def unassign_account_from_proxy(account_id: str) -> None:
 
 def _delete_proxy(proxy_id: str) -> None:
     with _get_engine().begin() as connection:
-        # Detach its accounts first (they become "—"), then drop the proxy.
+        # Detach its accounts and emulators first (they become "—"), then drop the proxy.
         connection.execute(
             update(_accounts).where(_accounts.c.proxy_id == proxy_id).values(proxy_id=None),
+        )
+        connection.execute(
+            update(_standalone_emulators)
+            .where(_standalone_emulators.c.proxy_id == proxy_id)
+            .values(proxy_id=None),
         )
         connection.execute(delete(_proxies).where(_proxies.c.id == proxy_id))
 

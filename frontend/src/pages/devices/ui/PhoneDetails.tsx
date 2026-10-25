@@ -17,19 +17,24 @@ import type { Phone } from '@/shared/api';
 import { Badge, Button } from '@/shared/ui';
 
 import { SmsInboxDrawer } from './SmsInboxDrawer';
+import { StandaloneSection } from './StandaloneSection';
 
 const STATUS_POLL_MS = 2000;
 
 // What the phone presents, where its traffic goes, and its cellular/SMS OTP line state.
 // The line is polled only while it can change on its own (waiting, code received,
 // typing); an idle or ended line changes when the operator acts, which refetches it.
-export function PhoneDetails({ phone }: { phone: Phone }) {
+// An independent emulator carries no account, so it has no SMS line; it shows its
+// proxy picker and removal instead.
+export function PhoneDetails({ phone, onDeleted }: { phone: Phone; onDeleted?: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [inboxOpen, setInboxOpen] = useState(false);
+  const standalone = phone.kind === 'standalone';
   const statusOptions = phoneTelephonyStatusOptions({ path: { phone_id: phone.phone_id } });
   const { data: telephonyStatus } = useQuery({
     ...statusOptions,
+    enabled: !standalone,
     refetchInterval: (query) =>
       isLiveTelephonyStatus(query.state.data?.status) ? STATUS_POLL_MS : false,
   });
@@ -119,6 +124,7 @@ export function PhoneDetails({ phone }: { phone: Phone }) {
         ))}
         <dt className="type-small">{t('devices.details.apps')}</dt>
         <dd className="m-0 type-body">
+          {phone.apps.length === 0 && '—'}
           {phone.apps.map((app) => (
             <div key={`${app.platform}:${app.account_id}`}>
               {t(`devices.platform.${app.platform}`)} · {app.label ?? app.account_id}
@@ -127,33 +133,37 @@ export function PhoneDetails({ phone }: { phone: Phone }) {
         </dd>
       </dl>
 
-      <div className="flex flex-col gap-2 border-t border-canvas pt-4">
-        <span className="type-body-medium">{t('telephony.sectionTitle')}</span>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Badge
-            tone={TELEPHONY_STATUS_TONE[lineStatus]}
-            dot={lineStatus !== 'idle'}
-            size="sm"
-            className={lineStatus === 'waiting_otp' ? 'tb-pulse' : undefined}
-          >
-            {renderStatusLabel()}
-          </Badge>
-          <div className="flex flex-wrap gap-2">
-            <Button
+      {standalone ? (
+        <StandaloneSection phone={phone} onDeleted={onDeleted ?? (() => undefined)} />
+      ) : (
+        <div className="flex flex-col gap-2 border-t border-canvas pt-4">
+          <span className="type-body-medium">{t('telephony.sectionTitle')}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Badge
+              tone={TELEPHONY_STATUS_TONE[lineStatus]}
+              dot={lineStatus !== 'idle'}
               size="sm"
-              variant="primary"
-              disabled={isLiveTelephonyStatus(lineStatus)}
-              loading={startWait.isPending}
-              onClick={waitForSms}
+              className={lineStatus === 'waiting_otp' ? 'tb-pulse' : undefined}
             >
-              {t('telephony.waitSms')}
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => setInboxOpen(true)}>
-              {t('telephony.inbox.title')}
-            </Button>
+              {renderStatusLabel()}
+            </Badge>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={isLiveTelephonyStatus(lineStatus)}
+                loading={startWait.isPending}
+                onClick={waitForSms}
+              >
+                {t('telephony.waitSms')}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setInboxOpen(true)}>
+                {t('telephony.inbox.title')}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {inboxOpen ? (
         <SmsInboxDrawer phoneId={phone.phone_id} onClose={() => setInboxOpen(false)} />

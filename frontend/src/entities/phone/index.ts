@@ -1,8 +1,12 @@
 export {
+  assignStandaloneProxyMutation,
+  createStandalonePhoneMutation,
+  deleteStandalonePhoneMutation,
   phonesQueryKey,
   phonesQueryOptions,
   startPhoneMutation,
   stopPhoneMutation,
+  unassignStandaloneProxyMutation,
 } from './api/phone.queries';
 export {
   manualInputPhoneOtpMutation,

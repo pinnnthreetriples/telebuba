@@ -32,6 +32,7 @@ from schemas.proxy import (
     ProxySettings,
 )
 from services.accounts.mobile_emulator import stop_account_pod
+from services.device_farm._standalone import standalone_ids_on_proxy, stop_standalone_pods
 
 __all__ = [
     "ProxyCapacityError",
@@ -120,10 +121,12 @@ async def remove_proxy(proxy_id: str) -> None:
     # then evict their pooled clients so they stop tunnelling through the dropped
     # endpoint (they rebuild direct on next use).
     account_ids = await list_account_ids_for_proxy(proxy_id)
+    emulator_ids = await standalone_ids_on_proxy(proxy_id)
     await delete_proxy(proxy_id)
     for account_id in account_ids:
         await evict_client(account_id)
         await stop_account_pod(account_id)
+    await stop_standalone_pods(emulator_ids)
     await log_event("INFO", "proxy_removed", extra={"proxy_id": proxy_id})
 
 

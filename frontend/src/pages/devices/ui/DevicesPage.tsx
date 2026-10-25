@@ -17,6 +17,7 @@ import type { Phone } from '@/shared/api';
 import { Badge, Button, EmptyState, Modal, ModalHeader, Notice, Spinner } from '@/shared/ui';
 
 import { PhoneDetails } from './PhoneDetails';
+import { StandaloneCreateModal } from './StandaloneCreateModal';
 
 // A phone's status changes on its own (a warming visit begins, a boot finishes):
 // the list is polled while the page is open. Nothing here starts encoding — only
@@ -36,6 +37,7 @@ export function DevicesPage() {
   const stop = useMutation(stopPhoneMutation());
   const [open, setOpen] = useState<Open | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const act = (phone: Phone, action: 'start' | 'stop') => {
     const mutation = action === 'start' ? start : stop;
@@ -53,8 +55,15 @@ export function DevicesPage() {
   const phones = data?.phones ?? [];
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-2 type-h1">{t('devices.title')}</h1>
-      <p className="mb-6 type-body text-content-muted">{t('devices.subtitle')}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="m-0 mb-2 type-h1">{t('devices.title')}</h1>
+          <p className="m-0 type-body text-content-muted">{t('devices.subtitle')}</p>
+        </div>
+        <Button variant="primary" onClick={() => setCreating(true)}>
+          {t('devices.standalone.add')}
+        </Button>
+      </div>
 
       {data && !data.enabled && data.problem && (
         <div className="mb-4">
@@ -80,6 +89,11 @@ export function DevicesPage() {
                 </Badge>
                 <span className="type-body-medium">{phone.model_name}</span>
                 <span className="type-small">{androidVersion(phone.system_version)}</span>
+                {phone.kind === 'standalone' && (
+                  <span className="type-small truncate">
+                    {phone.label ?? t('devices.standalone.badge')}
+                  </span>
+                )}
                 {app && (
                   <span className="type-small truncate">
                     {t(`devices.platform.${app.platform}`)} ·{' '}
@@ -147,13 +161,14 @@ export function DevicesPage() {
           <ModalHeader title={open.phone.model_name} subtitle={t(`devices.modal.${open.mode}`)} />
           <div className="p-6">
             {open.mode === 'details' ? (
-              <PhoneDetails phone={open.phone} />
+              <PhoneDetails phone={open.phone} onDeleted={() => setOpen(null)} />
             ) : (
               <PhoneScreen phoneId={open.phone.phone_id} mode={open.mode} />
             )}
           </div>
         </Modal>
       )}
+      {creating && <StandaloneCreateModal onClose={() => setCreating(false)} />}
     </div>
   );
 }

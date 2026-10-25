@@ -1,8 +1,9 @@
 """Contracts for the device farm: the phones, and the commands their web screen takes.
 
-A phone is the Android pod a mobile identity lives in. Today every phone carries one
-Telegram account and is named after it, but the contract already lists the phone's
-apps, so a phone that later carries other platforms keeps its shape. No behaviour, no I/O.
+A phone is the Android pod a mobile identity lives in. An ``account`` phone carries one
+Telegram account and is named after it; a ``standalone`` one (an independent emulator)
+carries none and has a pool proxy of its own. The contract lists the phone's apps, so a
+phone that later carries other platforms keeps its shape. No behaviour, no I/O.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from schemas.emulator import EmulatorRefusalCode  # noqa: TC001
 # ``warming``: an activity session drives it; ``manual``: an operator has its controls.
 PhoneStatus = Literal["asleep", "starting", "free", "warming", "manual"]
 PhonePlatform = Literal["telegram"]
+PhoneKind = Literal["account", "standalone"]
 # ``view`` streams the screen only (scrcpy runs without its control socket);
 # ``control`` adds the operator's touch, keys and clipboard.
 ScreenMode = Literal["view", "control"]
@@ -58,6 +60,9 @@ class PhoneProxy(BaseModel):
 
 class Phone(BaseModel):
     phone_id: str = Field(pattern=PHONE_ID_PATTERN)
+    kind: PhoneKind = "account"
+    # The operator's name for a standalone phone; an account phone's is its app's label.
+    label: str | None = None
     created: bool
     status: PhoneStatus
     # How the operator reads the phone ("Samsung", "Galaxy S23 Ultra"); ``device_model``
@@ -69,6 +74,8 @@ class Phone(BaseModel):
     app_version: str
     lang_code: str
     proxy: PhoneProxy | None = None
+    # The pool proxy the phone is on, for the picker that changes it.
+    proxy_id: str | None = None
     apps: list[PhoneApp]
 
 
