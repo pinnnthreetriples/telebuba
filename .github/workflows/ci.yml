@@ -395,7 +395,10 @@ jobs:
     # невозможным — требуемый чек с прежним именем не отчитывался бы никогда. Визуальный
     # гейт живёт в шагах ниже; название остаётся тем, на которое ссылается защита.
     name: frontend (lint/boundaries/tsc/vitest)
-    runs-on: ubuntu-latest
+    # Pinned, not -latest: once ubuntu-latest became 26.04, Playwright 1.56 has no
+    # chromium-headless-shell build for it, so the browser install fails. Raise this
+    # together with @playwright/test.
+    runs-on: ubuntu-24.04
     # Observed 71-102s before the screenshot gate, which adds a Chromium download
     # (~90 MB, cached by setup-node's npm cache only for the package, not the
     # browser) plus a Vite dev server and 12 Playwright checks. Fifteen minutes
