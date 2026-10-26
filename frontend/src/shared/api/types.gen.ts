@@ -656,6 +656,191 @@ export type AccountRegisteredUpdate = {
 };
 
 /**
+ * AccountSessionImportResult
+ *
+ * The imported account, plus whether the seller JSON's 2FA password was recorded.
+ *
+ * ``None`` = no password was supplied or it was not attempted; ``False`` = it was
+ * tried and NOT stored (unverified, no 2FA on Telegram, or the check could not run).
+ */
+export type AccountSessionImportResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
+   * Session Name
+   */
+  session_name?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
+  /**
+   * Second Session Name
+   */
+  second_session_name?: string | null;
+  /**
+   * Devices
+   */
+  devices?: Array<'desktop' | 'mobile'>;
+  /**
+   * Status
+   */
+  status:
+    | 'new'
+    | 'alive'
+    | 'unauthorized'
+    | 'session_error'
+    | 'account_error'
+    | 'frozen'
+    | 'flood_wait'
+    | 'network_error'
+    | 'proxy_error'
+    | 'unknown_error';
+  /**
+   * User Id
+   */
+  user_id?: number | null;
+  /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * First Name
+   */
+  first_name?: string | null;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
+  /**
+   * Premium
+   */
+  premium?: boolean | null;
+  /**
+   * Avatar Etag
+   */
+  avatar_etag?: string | null;
+  /**
+   * Last Checked At
+   */
+  last_checked_at?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Telegram Registered At
+   */
+  telegram_registered_at?: string | null;
+  /**
+   * Registered Source
+   */
+  registered_source?: 'operator' | null;
+  /**
+   * Device Platform
+   */
+  device_platform?: string | null;
+  /**
+   * Device Model
+   */
+  device_model?: string | null;
+  /**
+   * Device System Version
+   */
+  device_system_version?: string | null;
+  /**
+   * Device App Version
+   */
+  device_app_version?: string | null;
+  /**
+   * Device Lang
+   */
+  device_lang?: string | null;
+  /**
+   * Bio
+   */
+  bio?: string | null;
+  /**
+   * Proxy Id
+   */
+  proxy_id?: string | null;
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
+   * Proxy Host
+   */
+  proxy_host?: string | null;
+  /**
+   * Proxy Port
+   */
+  proxy_port?: number | null;
+  /**
+   * Proxy Status
+   */
+  proxy_status?: string | null;
+  /**
+   * Proxy Last Checked At
+   */
+  proxy_last_checked_at?: string | null;
+  /**
+   * Proxy Last Error
+   */
+  proxy_last_error?: string | null;
+  /**
+   * Proxy Exit Ip
+   */
+  proxy_exit_ip?: string | null;
+  /**
+   * Proxy Country Code
+   */
+  proxy_country_code?: string | null;
+  /**
+   * Proxy Country Name
+   */
+  proxy_country_name?: string | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Trust Band
+   */
+  trust_band?: 'excellent' | 'good' | 'watch' | 'at_risk' | 'critical' | null;
+  /**
+   * Spam Status
+   */
+  spam_status?: 'clean' | 'limited' | 'unknown' | null;
+  /**
+   * Spam Detail
+   */
+  spam_detail?: string | null;
+  /**
+   * Folder Ids
+   */
+  folder_ids?: Array<string>;
+  /**
+   * Twofa Recorded
+   */
+  twofa_recorded?: boolean | null;
+};
+
+/**
  * AccountStats
  *
  * Fleet-wide status roll-up for the Accounts page stat tiles.
@@ -824,6 +1009,21 @@ export type AccountTwoFactorEmailRequest = {
    * Email
    */
   email: string;
+};
+
+/**
+ * AccountTwoFactorRecordRequest
+ *
+ * Body of ``POST /accounts/{id}/2fa/record``: the password Telegram already has.
+ *
+ * Not a set: Telegram is asked to verify it first and nothing changes there.
+ * ``repr=False`` — the value is a secret and must not reach a stack-frame repr.
+ */
+export type AccountTwoFactorRecordRequest = {
+  /**
+   * Password
+   */
+  password: string;
 };
 
 /**
@@ -1020,6 +1220,10 @@ export type BodyImportAccountSession = {
    * Session Device
    */
   session_device?: 'desktop' | 'mobile';
+  /**
+   * Json File
+   */
+  json_file?: Blob | File | null;
 };
 
 /**
@@ -4892,7 +5096,9 @@ export type NeuroshillingBoard = {
  * ``role_id``, ``is_reserve`` and ``state`` are meaningful only when it is true.
  * ``busy_owner`` is what greys a row out in the picker, and
  * ``busy_campaign_name`` is what lets the UI say WHICH campaign holds it rather
- * than only that something does.
+ * than only that something does. ``first_name``, ``last_name``, ``phone`` and
+ * ``avatar_etag`` are the Telegram identity the picker draws next to the title,
+ * so a role's account reads as the person it is rather than as a label.
  */
 export type NeuroshillingBoardAccount = {
   /**
@@ -4903,6 +5109,22 @@ export type NeuroshillingBoardAccount = {
    * Title
    */
   title: string;
+  /**
+   * First Name
+   */
+  first_name?: string | null;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
+  /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Avatar Etag
+   */
+  avatar_etag?: string | null;
   /**
    * Assigned
    */
@@ -10290,7 +10512,7 @@ export type ImportAccountSessionResponses = {
   /**
    * Successful Response
    */
-  200: AccountRead;
+  200: AccountSessionImportResult;
 };
 
 export type ImportAccountSessionResponse =
@@ -12032,6 +12254,57 @@ export type SetAccountTwofaResponses = {
 };
 
 export type SetAccountTwofaResponse = SetAccountTwofaResponses[keyof SetAccountTwofaResponses];
+
+export type RecordAccountTwofaData = {
+  body: AccountTwoFactorRecordRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/record';
+};
+
+export type RecordAccountTwofaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RecordAccountTwofaError = RecordAccountTwofaErrors[keyof RecordAccountTwofaErrors];
+
+export type RecordAccountTwofaResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type RecordAccountTwofaResponse =
+  RecordAccountTwofaResponses[keyof RecordAccountTwofaResponses];
 
 export type CancelAccountTwofaEmailData = {
   body?: never;

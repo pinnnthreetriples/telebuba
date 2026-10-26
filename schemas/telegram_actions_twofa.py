@@ -104,6 +104,19 @@ class SetTwoFactorPassword(BaseModel):
         return self
 
 
+class VerifyTwoFactorPassword(BaseModel):
+    """Check a cloud password against Telegram without changing anything.
+
+    ``account.getPassword`` then ``account.getPasswordSettings`` with the SRP proof:
+    Telegram answers that call only for the right password. Nothing is written on
+    either side. ``password`` is a secret, so ``repr=False`` and the same rule as
+    :class:`SetTwoFactorPassword`: it never reaches a log extra or an error message.
+    """
+
+    action_type: Literal["verify_twofa_password"] = "verify_twofa_password"
+    password: str = Field(repr=False, min_length=1)
+
+
 class ManageTwoFactorEmail(BaseModel):
     """The recovery-email flow: attach, clear, confirm, resend, cancel.
 

@@ -37,7 +37,11 @@ from core.telegram_client import (
     execute,
     execute_read,
 )
-from schemas.telegram_actions_twofa import GetTwoFactorStatus, SetTwoFactorPassword
+from schemas.telegram_actions_twofa import (
+    GetTwoFactorStatus,
+    SetTwoFactorPassword,
+    VerifyTwoFactorPassword,
+)
 from schemas.twofa import AccountTwoFactorCreated, AccountTwoFactorView
 from services.accounts._result import (
     AccountActionError,
@@ -53,6 +57,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "read_account_twofa",
+    "record_account_twofa",
     "remove_account_twofa",
     "set_account_twofa",
     "twofa_lock",
@@ -288,6 +293,29 @@ async def set_account_twofa(
             confirmed=confirmed,
             previous_kept=previous_kept,
         )
+
+
+async def record_account_twofa(account_id: str, password: str) -> bool:
+    """Remember a cloud password the account ALREADY has, after Telegram accepts it.
+
+    The verify action changes nothing on Telegram: a wrong password is
+    ``twofa_current_password_invalid``, an account with no cloud password is
+    ``twofa_not_enabled``, and only a verified value reaches the column. Returns
+    whether it was stored (``False`` = the DB write failed, logged by
+    ``_remember_password``). Under :func:`twofa_lock` like every other flow that
+    writes the column. Booleans only in the log — the password never.
+    """
+    await require_account(account_id)
+    async with twofa_lock(account_id):
+        raise_for_result(await execute(account_id, VerifyTwoFactorPassword(password=password)))
+        stored = await _remember_password(account_id, password)
+        await log_event(
+            "INFO",
+            "account_twofa_recorded",
+            account_id=account_id,
+            extra={"stored": stored},
+        )
+        return stored
 
 
 def _reported_hint(

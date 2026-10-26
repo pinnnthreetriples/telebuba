@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import insert
 from sqlalchemy import update as sql_update
 
+from core._schema_tables import _accounts
 from core.config import settings
 from core.db import _get_engine, _now_iso, create_account, upsert_warming_state
 from core.repositories.neuroshilling import (
@@ -348,6 +349,38 @@ async def test_the_board_carries_the_whole_account_pool_and_the_run_state() -> N
     ]
     # The run state is the campaign row's — there is no second copy of it.
     assert (board.campaign.status, board.campaign.run_id) == ("idle", None)
+
+
+@pytest.mark.asyncio
+async def test_the_board_accounts_carry_the_telegram_identity_the_picker_draws() -> None:
+    await create_account(
+        AccountCreate(account_id="acc-1", label="Alice", session_name="acc-1", phone="+79990001"),
+    )
+    await _account("acc-2")
+
+    def _name() -> None:
+        with _get_engine().begin() as connection:
+            connection.execute(
+                sql_update(_accounts)
+                .where(_accounts.c.account_id == "acc-1")
+                .values(first_name="Alisa", last_name="Ivanova", avatar_etag="etag-1"),
+            )
+
+    await asyncio.to_thread(_name)
+    campaign = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
+
+    board = await campaigns.load_board(campaign.campaign_id)
+
+    assert board is not None
+    by_id = {item.account_id: item for item in board.available}
+    assert (
+        by_id["acc-1"].first_name,
+        by_id["acc-1"].last_name,
+        by_id["acc-1"].phone,
+        by_id["acc-1"].avatar_etag,
+    ) == ("Alisa", "Ivanova", "+79990001", "etag-1")
+    # An account the Telegram profile has not been read for stays a bare title.
+    assert (by_id["acc-2"].first_name, by_id["acc-2"].avatar_etag) == (None, None)
 
 
 @pytest.mark.asyncio

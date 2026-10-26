@@ -382,3 +382,24 @@ test('a reaction points at its target through its own select', async () => {
   await pick('Шаг 2 реагирует на', '#1');
   expect(screen.getByLabelText('Шаг 2 реагирует на')).toHaveTextContent('#1');
 });
+
+test('a role account is offered by its Telegram name with its avatar, or by title without one', () => {
+  renderCard({
+    pool: [
+      {
+        account_id: 'a1',
+        title: 'метка',
+        first_name: 'Vika',
+        last_name: 'Ix',
+        avatar_etag: 'e1',
+      },
+      { account_id: 'a2', title: 'Борис' },
+    ],
+  });
+
+  const panel = panelOf('Аккаунт роли 1');
+  // The avatar is decoration (initials included), so the option's name is the label alone.
+  expect(within(panel).getByRole('option', { name: 'Vika Ix' })).toBeInTheDocument();
+  expect(within(panel).getByRole('option', { name: 'Борис' })).toBeInTheDocument();
+  expect(panel.querySelector('img[src$="/accounts/a1/avatar?v=e1"]')).not.toBeNull();
+});

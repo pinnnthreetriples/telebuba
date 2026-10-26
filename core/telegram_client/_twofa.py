@@ -56,7 +56,11 @@ from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.password import compute_check, compute_digest
-from telethon.tl.functions.account import GetPasswordRequest, UpdatePasswordSettingsRequest
+from telethon.tl.functions.account import (
+    GetPasswordRequest,
+    GetPasswordSettingsRequest,
+    UpdatePasswordSettingsRequest,
+)
 from telethon.tl.types import InputCheckPasswordEmpty
 from telethon.tl.types.account import Password, PasswordInputSettings
 
@@ -71,6 +75,7 @@ from schemas.telegram_actions_twofa import (
     ManageTwoFactorEmail,
     SetTwoFactorPassword,
     TwoFactorStatusResult,
+    VerifyTwoFactorPassword,
 )
 
 if TYPE_CHECKING:
@@ -226,6 +231,31 @@ async def dispatch_set_twofa_password(
     return _DispatchResult(twofa_hint=hint)
 
 
+async def dispatch_verify_twofa_password(
+    client: TelegramClient,
+    action: VerifyTwoFactorPassword,
+) -> _DispatchResult:
+    """Check a cloud password: ``getPassword`` then ``getPasswordSettings`` with the proof.
+
+    Read-only on both sides. Telegram answers ``account.getPasswordSettings`` only for
+    a correct SRP proof, so a successful call IS the verification; a wrong password
+    is ``PASSWORD_HASH_INVALID`` (mapped to ``twofa_current_password_invalid``).
+    An account with no cloud password has nothing to verify against:
+    ``twofa_not_enabled``, decided from the read before any SRP work is spent.
+    """
+    pwd = await _password_state(client)
+    if not _flag(pwd, "has_password"):
+        code = "twofa_not_enabled"
+        raise TwoFactorGatewayError(code)
+    _require_current_algo(pwd)
+    proof = await _srp(compute_check, pwd, action.password)
+    try:
+        await client(GetPasswordSettingsRequest(password=proof))
+    except errors.RPCError as exc:
+        raise _gateway_error(exc) from exc
+    return _DispatchResult()
+
+
 def _require_current_algo(pwd: object) -> None:
     """Refuse a write whose proof cannot be computed, before anything is computed.
 
@@ -351,9 +381,9 @@ def _resolved_hint(pwd: object, action: SetTwoFactorPassword) -> str:
 
 async def dispatch_twofa_action(
     client: TelegramClient,
-    action: SetTwoFactorPassword | ManageTwoFactorEmail,
+    action: SetTwoFactorPassword | VerifyTwoFactorPassword | ManageTwoFactorEmail,
 ) -> _DispatchResult:
-    """The executor's single entry point for both 2FA write actions.
+    """The executor's single entry point for the 2FA actions (two writes, one check).
 
     One entry point for two actions on purpose: every match arm in
     ``_actions._dispatch_action`` costs cyclomatic complexity and that function sits
@@ -372,10 +402,14 @@ async def dispatch_twofa_action(
 
     if isinstance(action, SetTwoFactorPassword):
         return await dispatch_set_twofa_password(client, action)
+    if isinstance(action, VerifyTwoFactorPassword):
+        return await dispatch_verify_twofa_password(client, action)
     return await dispatch_manage_twofa_email(client, action)
 
 
-def twofa_log_extra(action: SetTwoFactorPassword | ManageTwoFactorEmail) -> dict[str, object]:
+def twofa_log_extra(
+    action: SetTwoFactorPassword | VerifyTwoFactorPassword | ManageTwoFactorEmail,
+) -> dict[str, object]:
     """Log fields for both 2FA writes — booleans and the mode, never a secret.
 
     Every field these two actions carry is a password, a recovery email or a mailed
@@ -384,4 +418,6 @@ def twofa_log_extra(action: SetTwoFactorPassword | ManageTwoFactorEmail) -> dict
     """
     if isinstance(action, SetTwoFactorPassword):
         return {"has_hint": bool(action.hint), "removing": action.new_password is None}
+    if isinstance(action, VerifyTwoFactorPassword):
+        return {}
     return {"mode": action.mode}

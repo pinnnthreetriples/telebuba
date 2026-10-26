@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import type { NeuroshillingBoardAccount, NeuroshillingCampaign } from '@/shared/api';
 import { FOCUS_RING } from '@/shared/design-system';
 import {
@@ -537,17 +538,31 @@ export function ScenarioSection({
                 }}
                 options={[
                   { value: '', label: t('neuroshilling.scenario.roles.accountNone') },
-                  ...pool.map((account) => ({
-                    value: account.account_id,
-                    label:
-                      account.busy_owner == null
-                        ? account.title
-                        : t('neuroshilling.scenario.roles.accountBusy', {
-                            title: account.title,
-                            owner: t(`neuroshilling.modal.accounts.busy.${account.busy_owner}`),
-                          }),
-                    disabled: account.busy_owner != null,
-                  })),
+                  ...pool.map((account) => {
+                    // Имя из Telegram, а если профиль ещё не читали — подпись оператора.
+                    const name =
+                      account.first_name || account.last_name
+                        ? accountDisplayName(account)
+                        : account.title;
+                    return {
+                      value: account.account_id,
+                      label:
+                        account.busy_owner == null
+                          ? name
+                          : t('neuroshilling.scenario.roles.accountBusy', {
+                              title: name,
+                              owner: t(`neuroshilling.modal.accounts.busy.${account.busy_owner}`),
+                            }),
+                      disabled: account.busy_owner != null,
+                      leading: (
+                        <AccountAvatar
+                          account={account}
+                          className="size-icon shrink-0 rounded-full"
+                          fallbackClassName="bg-canvas text-small font-medium text-content-muted"
+                        />
+                      ),
+                    };
+                  }),
                 ]}
                 ariaLabel={t('neuroshilling.scenario.roles.account', { position: index + 1 })}
               />

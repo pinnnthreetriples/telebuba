@@ -8,7 +8,8 @@ from pydantic import AfterValidator, BaseModel, Field
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
 from schemas.api import Page
-from schemas.device_fingerprint import DeviceType, desktop_only
+from schemas.device_fingerprint import DeviceFingerprint, DeviceType, desktop_only
+from schemas.session_json import SellerSessionMeta  # noqa: TC001
 from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
@@ -83,6 +84,9 @@ class AccountCreate(BaseModel):
     # Which device the account's own ``.session`` authorizes; mobile only by an
     # explicit operator choice.
     session_device: DeviceType = "desktop"
+    # An explicit fingerprint (the seller's Android device) inserted instead of a
+    # generated one; ``None`` keeps the generated default.
+    device: DeviceFingerprint | None = None
 
 
 class AccountSessionFileImport(BaseModel):
@@ -93,6 +97,8 @@ class AccountSessionFileImport(BaseModel):
     registered_at: RegisteredDate | None = None
     # The device the uploaded ``.session`` belongs to, as the operator declares it.
     session_device: DeviceType = "desktop"
+    # The seller's ``.json`` beside the session, already parsed; ``None`` = none given.
+    meta: SellerSessionMeta | None = None
 
 
 class AccountRegisteredUpdate(BaseModel):
@@ -156,6 +162,16 @@ class AccountRead(BaseModel):
     # The account's folders (``schemas.account_folders``) in tab order; enriched by
     # the list page only, empty elsewhere and for an account in no folder.
     folder_ids: list[str] = Field(default_factory=list)
+
+
+class AccountSessionImportResult(AccountRead):
+    """The imported account, plus whether the seller JSON's 2FA password was recorded.
+
+    ``None`` = no password was supplied or it was not attempted; ``False`` = it was
+    tried and NOT stored (unverified, no 2FA on Telegram, or the check could not run).
+    """
+
+    twofa_recorded: bool | None = None
 
 
 class AccountList(BaseModel):

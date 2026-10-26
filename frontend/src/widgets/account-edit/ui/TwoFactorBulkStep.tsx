@@ -45,12 +45,16 @@ function twofaBody(value: TwofaFormValue): AccountTwoFactorUpdateRequest {
 // through one account at a time, then read the passwords off exactly once.
 export function TwoFactorBulkStep({
   accountIds,
+  recorded = [],
   sources,
   onDone,
   onImported,
   onPhaseChange,
 }: {
   accountIds: string[];
+  // Accounts whose existing password the import already verified and stored (from the
+  // seller's JSON): nothing to set on them, so they are listed as saved and skipped.
+  recorded?: string[];
   // accountId → the thing the operator recognises it by: the imported file name,
   // or the phone number they typed. The account's own Telegram name is usually
   // not known yet at this point in the wizard.
@@ -63,7 +67,8 @@ export function TwoFactorBulkStep({
 }) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<'select' | 'running' | 'result'>('select');
-  const [selected, setSelected] = useState<string[]>(accountIds);
+  const toSet = accountIds.filter((id) => !recorded.includes(id));
+  const [selected, setSelected] = useState<string[]>(toSet);
   const [showPass, setShowPass] = useState(false);
   const accounts = useQuery(allAccountsQueryOptions());
   const bulk = useBulkTwofa();
@@ -155,11 +160,43 @@ export function TwoFactorBulkStep({
     );
   }
 
+  const savedList =
+    recorded.length > 0 ? (
+      <div className="mb-4 overflow-hidden rounded-md border border-line">
+        {recorded.map((accountId) => (
+          <div
+            key={accountId}
+            className="flex items-center gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
+          >
+            <span className="min-w-0 flex-1 truncate type-body-medium">{label(accountId)}</span>
+            <span className="shrink-0 type-small text-success-deep">
+              {t('accounts.addWizard.twofaRowRecorded')}
+            </span>
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  // Every account already carries its password: nothing left to set in this step.
+  if (toSet.length === 0) {
+    return (
+      <>
+        {savedList}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="primary" onClick={onDone}>
+            {t('accounts.edit.twofaDone')}
+          </Button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
+      {savedList}
       <div className="mb-4 type-body text-content-subtle">{t('accounts.addWizard.twofaIntro')}</div>
       <BulkAccountChecklist
-        accountIds={accountIds}
+        accountIds={toSet}
         sources={sources}
         selected={selected}
         onChange={setSelected}

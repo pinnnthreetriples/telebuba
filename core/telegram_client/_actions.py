@@ -73,6 +73,7 @@ from schemas.telegram_actions import (
     SetTwoFactorPassword,
     ToggleStoryPinned,
     UpdateProfile,
+    VerifyTwoFactorPassword,
     WatchPeerStories,
 )
 
@@ -256,7 +257,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             await _dispatch_update_profile(client, action)
         case SetPrivacySettings():
             await dispatch_set_privacy_settings(client, action)
-        case SetTwoFactorPassword() | ManageTwoFactorEmail():
+        case SetTwoFactorPassword() | VerifyTwoFactorPassword() | ManageTwoFactorEmail():
             return await dispatch_twofa_action(client, action)
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
@@ -406,7 +407,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "bio": action.bio,
                 "last_seen": action.last_seen,
             }
-        case SetTwoFactorPassword() | ManageTwoFactorEmail():
+        case SetTwoFactorPassword() | VerifyTwoFactorPassword() | ManageTwoFactorEmail():
             extra = twofa_log_extra(action)
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}

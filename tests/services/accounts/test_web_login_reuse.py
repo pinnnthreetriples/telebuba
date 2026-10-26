@@ -17,7 +17,7 @@ import pytest
 from core.web_login import browser as _browser
 from core.web_login import fingerprint as _fingerprint
 from schemas.proxy import ProxySettings
-from services.accounts import _web_drive, web_login
+from services.accounts import _web_drive, _web_errors, web_login
 from services.accounts.web_login import WebLoginLaunchError, open_account_web
 from tests.services.accounts._web_login_support import PROXY as _PROXY
 from tests.services.accounts._web_login_support import SIGNED_IN_MARKER as _MARKER
@@ -481,11 +481,11 @@ def test_every_refusal_is_a_translatable_code() -> None:
     codes = [
         web_login._NO_PROXY_REFUSAL,
         web_login._LAUNCH_REFUSAL,
-        web_login._DRIVE_REFUSAL,
+        _web_errors._DRIVE_REFUSAL,
         web_login._RELAY_REFUSAL,
         web_login._SHUTDOWN_REFUSAL,
         web_login._RELOAD_LOOP_REFUSAL,
-        web_login._PROXY_DEAD_REFUSAL,
+        _web_errors._PROXY_DEAD_REFUSAL,
     ]
     for code in codes:
         assert code == code.lower()

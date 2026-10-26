@@ -24,6 +24,10 @@ from core.config import settings
 from schemas.proxy import GeoStatus, ProxyCheckResult, ProxySettings
 
 _MAX_ERROR_LENGTH = 240
+# The one ``last_error`` a timed-out liveness fetch carries. Named so a caller that
+# wants to retry a TIMEOUT (slow, maybe alive) but not a refusal can tell them apart
+# without the result gaining a field the proxies API would then serve.
+PROXY_CHECK_TIMED_OUT = "Proxy check timed out"
 _COUNTRY_CODE_LENGTH = 2
 
 logger = logging.getLogger(__name__)
@@ -62,7 +66,7 @@ async def check_proxy_connectivity(
     try:
         exit_ip = await asyncio.wait_for(_fetch_exit_ip(proxy), exit_ip_timeout)
     except TimeoutError:
-        return ProxyCheckResult(status="failed", last_error="Proxy check timed out")
+        return ProxyCheckResult(status="failed", last_error=PROXY_CHECK_TIMED_OUT)
     except OSError as exc:
         return _failed_result(exc)
     except Exception as exc:  # noqa: BLE001 - proxy libraries expose mixed exception types.

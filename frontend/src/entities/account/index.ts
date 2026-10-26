@@ -94,6 +94,7 @@ export {
   removeAccountMusicMutation,
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
+  recordAccountTwofaMutation,
   removeAccountTwofaMutation,
   createAccountPasskeyMutation,
   loginAccountWithPasskeyMutation,
