@@ -9,11 +9,14 @@ resolve those names from their module globals at call time.
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import fetch_account, update_account_from_session_check
 from core.logging import log_event
+from core.session_json import SessionJsonError, fingerprint_from_meta, parse_seller_json
 from core.tdata_import import convert_tdata_zip
 from core.telegram_client import check_telegram_session
 from schemas.accounts import (
@@ -21,11 +24,13 @@ from schemas.accounts import (
     AccountCreate,
     AccountRead,
     AccountSessionFileImport,
+    AccountSessionImportResult,
 )
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_session import TelegramSessionCheckRequest
 from services.accounts._import_locks import import_lock
 from services.accounts._import_rollback import discard_imported_session
+from services.accounts._result import AccountActionError
 from services.accounts._tdata import (
     SessionAlreadyExistsError,
 )
@@ -35,18 +40,62 @@ from services.accounts._tdata import (
 from services.accounts._uploads import _session_filename, _write_session_file
 from services.accounts.devices import assert_device_configured
 from services.accounts.lifecycle import add_account
+from services.accounts.twofa import record_account_twofa
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import record_session_death
+
+if TYPE_CHECKING:
+    from schemas.session_json import SellerSessionMeta
 
 __all__ = [
     "SessionAlreadyExistsError",
     "check_account_session",
     "import_account_session",
     "import_account_tdata",
+    "parse_session_json",
 ]
 
+_NON_DIGITS = re.compile(r"\D")
 
-async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
+
+def parse_session_json(content: bytes) -> SellerSessionMeta:
+    """The seller JSON's fields; an unreadable file is the refusal ``session_json_invalid``."""
+    try:
+        return parse_seller_json(content)
+    except SessionJsonError as exc:
+        raise AccountActionError(str(exc)) from None
+
+
+def _assert_json_phone_matches(session_name: str, meta: SellerSessionMeta | None) -> None:
+    """The JSON must describe THIS session: its phone is the file stem's digits."""
+    if meta is None or meta.phone is None:
+        return
+    if _NON_DIGITS.sub("", session_name) != meta.phone:
+        code = "session_json_phone_mismatch"
+        raise AccountActionError(code)
+
+
+async def _record_imported_twofa(account_id: str, password: str) -> bool:
+    """Best-effort: verify the JSON's password with Telegram, then store it.
+
+    ``False`` for every way it did not end up stored — wrong password, no 2FA on the
+    account, an unreachable Telegram, a failed write. The import has already
+    succeeded and an unverified password is never kept; the operator can retry from
+    the account's 2FA card. Only the outcome is logged, never the password.
+    """
+    try:
+        return await record_account_twofa(account_id, password)
+    except Exception as exc:  # noqa: BLE001 - the import already succeeded
+        await log_event(
+            "WARNING",
+            "account_twofa_record_skipped",
+            account_id=account_id,
+            extra={"reason": exc.code if isinstance(exc, AccountActionError) else "failed"},
+        )
+        return False
+
+
+async def import_account_session(data: AccountSessionFileImport) -> AccountSessionImportResult:
     # Service-layer guardrail: ``.session`` files are effectively credentials.
     # The UI may attempt to validate size first, but a CLI / scheduler caller
     # can bypass that — re-check here.
@@ -57,9 +106,13 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     if len(data.content) > max_bytes:
         msg = f"Session file is too large (>{max_bytes} bytes)"
         raise ValueError(msg)
-    assert_device_configured(data.session_device)
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
+    meta = data.meta
+    _assert_json_phone_matches(session_name, meta)
+    # An Android seller device makes the session a mobile one, whatever the wizard said.
+    session_device = "mobile" if meta is not None and meta.is_android else data.session_device
+    assert_device_configured(session_device)
     session_path = settings.telegram.session_dir / filename
     # Serialize same-name imports across the check→write→add sequence so two
     # concurrent uploads of the same session can't both pass the existence check
@@ -96,14 +149,22 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
             label=data.label,
             session_name=session_name,
             registered_at=data.registered_at,
-            session_device=data.session_device,
+            session_device=session_device,
+            phone=meta.phone if meta is not None else None,
+            device=fingerprint_from_meta(session_name, meta) if meta is not None else None,
         )
         await asyncio.to_thread(_write_session_file, session_path, data.content)
         try:
-            return await add_account(create)
+            account = await add_account(create)
         except Exception as exc:
             await _discard_orphaned_session(session_path, session_name, exc)
             raise
+    recorded = (
+        await _record_imported_twofa(account.account_id, meta.password)
+        if meta is not None and meta.password
+        else None
+    )
+    return AccountSessionImportResult(**account.model_dump(), twofa_recorded=recorded)
 
 
 async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:

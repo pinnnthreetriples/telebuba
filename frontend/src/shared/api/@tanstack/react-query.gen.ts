@@ -169,6 +169,7 @@ import {
   promoteToNeurocomment,
   publishAccountChannelPost,
   receiveInboundSmsWebhook,
+  recordAccountTwofa,
   removeAccountMusic,
   removeAccountPasskey,
   removeAccountPhoto,
@@ -728,6 +729,9 @@ import type {
   ReceiveInboundSmsWebhookData,
   ReceiveInboundSmsWebhookError,
   ReceiveInboundSmsWebhookResponse,
+  RecordAccountTwofaData,
+  RecordAccountTwofaError,
+  RecordAccountTwofaResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -2683,6 +2687,39 @@ export const setAccountTwofaMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountTwofa({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Record Account Twofa
+ *
+ * Save the password the account ALREADY has, once Telegram verifies it.
+ *
+ * Nothing changes on Telegram. A wrong password is refused
+ * (``twofa_current_password_invalid``) and nothing is stored; an account without a
+ * cloud password is ``twofa_not_enabled``. Answers with the re-read boolean view.
+ */
+export const recordAccountTwofaMutation = (
+  options?: Partial<Options<RecordAccountTwofaData>>,
+): UseMutationOptions<
+  RecordAccountTwofaResponse,
+  RecordAccountTwofaError,
+  Options<RecordAccountTwofaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RecordAccountTwofaResponse,
+    RecordAccountTwofaError,
+    Options<RecordAccountTwofaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await recordAccountTwofa({
         ...options,
         ...fnOptions,
         throwOnError: true,

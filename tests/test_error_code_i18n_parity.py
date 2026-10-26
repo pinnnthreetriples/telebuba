@@ -54,6 +54,7 @@ from schemas.masstagging import MasstaggingRefusalCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.scheduled_posts import ScheduledPostRefusalCode
+from schemas.session_json import SessionJsonRefusalCode
 from schemas.telegram_actions import ActionStatus
 from schemas.twofa import TwoFactorRefusalCode
 from schemas.warming import WarmingRefusalCode
@@ -139,6 +140,7 @@ def _expected_codes() -> set[str]:
         | set(get_args(DeviceRefusalCode))
         | set(get_args(EmulatorRefusalCode))
         | set(get_args(TwoFactorRefusalCode))
+        | set(get_args(SessionJsonRefusalCode))
         | set(get_args(ScheduledPostRefusalCode))
         | set(get_args(StoryLimitErrorCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-13
+last_updated: 2026-10-26
 edges:
   - target: context/architecture.md
     condition: the task needs system design context first
@@ -20,3 +20,4 @@ edges:
 | [change-warming-humanlike.md](change-warming-humanlike.md) | Change visit cadence/kinds, account character, chat language or real account age |
 | [change-channel-pool.md](change-channel-pool.md) | Change the warming channel pool search, filters, refill or consent pull |
 | [account-devices.md](account-devices.md) | Change account devices or the mobile container |
+| [import-seller-session.md](import-seller-session.md) | Change the seller `.session` + `.json` import or 2FA recording |

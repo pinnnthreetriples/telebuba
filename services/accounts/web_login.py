@@ -23,12 +23,10 @@ never reach the operator's toast. Driving an open page lives in ``_web_drive``.
 from __future__ import annotations
 
 import asyncio
-import sys
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from core.db import fetch_account_proxy_country, fetch_account_proxy_settings
-from core.proxy_check import check_proxy_connectivity
+from core.db import fetch_account_proxy_settings
 from core.web_login import (
     LocalProxyRelay,
     account_profile_dir,
@@ -39,26 +37,24 @@ from core.web_login._cdp import CdpError
 from core.web_login.browser import BrowserNotFoundError, BrowserStartError, WebWindow
 from schemas.accounts import OpenWebResult
 from services.accounts._web_drive import (
-    DriveTrace,
-    drive_login,
     forget_signed_in,
-    mark_signed_in,
     profile_is_seeded,
     still_signed_in,
 )
+from services.accounts._web_drive_run import drive_and_mark
 from services.accounts._web_errors import (
-    _DRIVE_REFUSAL,
     _LAUNCH_REFUSAL,
     _NO_PROXY_REFUSAL,
-    _PROXY_DEAD_REFUSAL,
     _RELAY_REFUSAL,
     _RELOAD_LOOP_REFUSAL,
     _SHUTDOWN_REFUSAL,
     NoProxyForWebLoginError,
     WebLoginLaunchError,
     WebLoginServiceError,
+    _loop_cannot_spawn,
 )
 from services.accounts._web_identity import launch_dressed
+from services.accounts._web_proxy_probe import probe_exit_country
 from services.accounts._web_watch import cancel_watchers, watch_window
 
 if TYPE_CHECKING:
@@ -78,7 +74,6 @@ __all__ = [
 # Overall bound on driving a first-open login. The poll cadence within it, the 2FA
 # grace and the profile marker belong to ``_web_drive``.
 _DRIVE_TIMEOUT = 90.0
-_PROXY_PROBE_TIMEOUT = 5.0  # bounds the proxy probe's exit-IP fetch, never its geolocation
 
 # One relay and one window per account, created lazily and reused across clicks. Both
 # registries are guarded by their own lock so dict access stays consistent; the whole
@@ -143,7 +138,7 @@ async def open_account_web(account_id: str) -> OpenWebResult:
                 return reused
         if _closing.is_set():
             raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
-        country = await _probe_exit_country(account_id, proxy)
+        country = await probe_exit_country(account_id, proxy)
         relay_port = await _relay_port_for(account_id, proxy)
         return await _launch(account_id, relay_port, profile, proxy, country)
 
@@ -285,34 +280,6 @@ async def _relay_port_for(account_id: str, proxy: ProxySettings) -> int:
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
 
 
-def _loop_cannot_spawn() -> bool:
-    """True on the Windows SelectorEventLoop, whose subprocess transport is a stub.
-
-    Only that loop earns the "restart without --reload" wording; a NotImplementedError
-    from anywhere else would otherwise send the operator chasing a setting that is
-    already right.
-    """
-    return sys.platform == "win32" and isinstance(
-        asyncio.get_running_loop(), asyncio.SelectorEventLoop
-    )
-
-
-async def _probe_exit_country(account_id: str, proxy: ProxySettings) -> str | None:
-    """Refuse a dead proxy up front; return the country the identity is aligned to.
-
-    The relay never touches the upstream, so a dead proxy otherwise failed only at the
-    drive deadline as "not signed in". Once per new window. A stored country wins and
-    skips geolocation; a fresh proxy gets the measured one, or None (claim no place).
-    """
-    stored = await fetch_account_proxy_country(account_id)
-    result = await check_proxy_connectivity(
-        proxy, exit_ip_timeout=_PROXY_PROBE_TIMEOUT, geolocate=not stored
-    )
-    if result.status == "failed":
-        raise WebLoginLaunchError(_PROXY_DEAD_REFUSAL)
-    return stored or result.country_code
-
-
 async def _spawn(
     account_id: str,
     relay_port: int,
@@ -381,32 +348,10 @@ async def _launch(
 async def _drive_and_mark(
     account_id: str, window: WebWindow, profile: Path, *, type_password: bool
 ) -> OpenWebResult:
-    """Drive the login under a hard deadline and mark the profile only on success.
-
-    The deadline is a ``wait_for``, not a loop-entry check: each CDP command has its
-    own 30 s timeout and typing an N-character password issues 2N+8 of them, so a
-    wedged-but-connected renderer could otherwise hold the HTTP request for minutes.
-    A timeout is "did not sign in", never an error — the window is up and the operator
-    can finish by hand, and the profile stays unmarked so the next click drives again.
-    """
-    trace = DriveTrace()
-    try:
-        signed_in = await asyncio.wait_for(
-            drive_login(account_id, window, type_password=type_password, trace=trace),
-            _DRIVE_TIMEOUT,
-        )
-    except TimeoutError:
-        signed_in = False
-    except Exception as exc:
-        # Blind on purpose: the callees raise anything. ``token_bytes`` raises
-        # binascii.Error on a malformed capture, and ``accept_web_login_token`` raises
-        # Telethon errors for a dead or deauthorized session — exactly the account an
-        # operator wants to inspect. Uncaught, those are bare 500s with a traceback.
-        raise WebLoginLaunchError(_DRIVE_REFUSAL) from exc
-    if not signed_in:
-        return OpenWebResult(launched=True, signed_in=False, reason=trace.classify_failure())
-    mark_signed_in(profile)
-    return OpenWebResult(launched=True, signed_in=True)
+    """``drive_and_mark`` under this module's deadline (tests shrink ``_DRIVE_TIMEOUT``)."""
+    return await drive_and_mark(
+        account_id, window, profile, type_password=type_password, timeout=_DRIVE_TIMEOUT
+    )
 
 
 async def shutdown_web_login() -> None:

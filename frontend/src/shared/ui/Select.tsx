@@ -1,11 +1,18 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { fieldBase, surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Icon } from './Icon';
 
-export type SelectOption = { value: string; label: string; disabled?: boolean };
+// `leading` is a small mark drawn before the label (an avatar, say), in the list and on
+// the trigger alike; it is decoration, so the option's name still comes from `label`.
+export type SelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+  leading?: ReactNode;
+};
 
 // Picking one item from a list, in the canon's own clothes. A native <select> is
 // painted by the OS — its own font, border and arrow — so next to a design-system
@@ -162,8 +169,13 @@ export function Select({
         }}
         className={`${TRIGGER} ${open ? 'border-action-primary' : 'border-line'}`}
       >
-        <span className={`min-w-0 truncate ${current ? '' : 'text-content-subtle'}`}>
-          {current?.label ?? placeholder}
+        <span className={`flex min-w-0 items-center gap-2 ${current ? '' : 'text-content-subtle'}`}>
+          {current?.leading ? (
+            <span aria-hidden className="flex shrink-0">
+              {current.leading}
+            </span>
+          ) : null}
+          <span className="min-w-0 truncate">{current?.label ?? placeholder}</span>
         </span>
         <span className={`tb-ddchev flex shrink-0 text-content-subtle ${open ? 'open' : ''}`}>
           <Icon name="chevron-down" size={16} />
@@ -210,7 +222,14 @@ export function Select({
                 open && index === active ? 'bg-info-tint' : ''
               }`}
             >
-              <span className="min-w-0 truncate">{option.label}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                {option.leading ? (
+                  <span aria-hidden className="flex shrink-0">
+                    {option.leading}
+                  </span>
+                ) : null}
+                <span className="min-w-0 truncate">{option.label}</span>
+              </span>
               {option.value === value ? <Icon name="check" size={14} className="shrink-0" /> : null}
             </button>
           ))

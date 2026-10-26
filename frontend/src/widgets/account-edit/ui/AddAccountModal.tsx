@@ -450,7 +450,7 @@ export function AddAccountModal({
                     <input
                       ref={fileInput}
                       type="file"
-                      accept={method === 'tdata' ? '.zip' : '.session'}
+                      accept={method === 'tdata' ? '.zip' : '.session,.json'}
                       multiple
                       className="hidden"
                       onChange={onFile}
@@ -505,6 +505,7 @@ export function AddAccountModal({
           ) : stepKind === 'twofa' ? (
             <TwoFactorBulkStep
               accountIds={accountIds}
+              recorded={bulk.recordedIds}
               sources={sources}
               onDone={afterTwofa}
               onImported={onImported}

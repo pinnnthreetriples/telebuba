@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from schemas.proxy import ProxyCheckResult
-from services.accounts import _web_drive, web_login
+from services.accounts import _web_drive, _web_proxy_probe, web_login
 from services.accounts.web_login import (
     NoProxyForWebLoginError,
     WebLoginLaunchError,
@@ -150,15 +150,17 @@ async def test_the_probe_bounds_liveness_only_and_geolocates_only_when_needed(
         seen.append(bounds)
         return ProxyCheckResult(status="tcp_working", country_code="NL")
 
-    monkeypatch.setattr(web_login, "check_proxy_connectivity", _check)
+    monkeypatch.setattr(_web_proxy_probe, "check_proxy_connectivity", _check)
 
     await open_account_web("acct")
 
-    assert seen == [{"exit_ip_timeout": web_login._PROXY_PROBE_TIMEOUT, "geolocate": geolocate}]
+    assert seen == [
+        {"exit_ip_timeout": _web_proxy_probe.PROXY_PROBE_TIMEOUT, "geolocate": geolocate}
+    ]
 
 
 def test_the_shipped_probe_bound_is_a_few_seconds() -> None:
-    assert web_login._PROXY_PROBE_TIMEOUT <= 5.0
+    assert _web_proxy_probe.PROXY_PROBE_TIMEOUT <= 5.0
 
 
 @pytest.mark.asyncio

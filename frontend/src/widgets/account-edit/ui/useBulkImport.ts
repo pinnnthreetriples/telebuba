@@ -6,10 +6,22 @@ import {
   importAccountTdataMutation,
   type DeviceType,
 } from '@/entities/account';
-import { errorCode } from '@/shared/lib';
+import { errorCode, errorMessage } from '@/shared/lib';
 
 // Why a file failed, in the operator's terms rather than the envelope's.
-export type ImportFailure = 'duplicate' | 'name' | 'size' | 'broken' | 'offline' | 'other';
+export type ImportFailure =
+  | 'duplicate'
+  | 'name'
+  | 'size'
+  | 'broken'
+  | 'offline'
+  | 'other'
+  // The seller's .json: picked without its .session, unreadable, for another phone,
+  // or Android while the mobile keys are not configured.
+  | 'jsonAlone'
+  | 'jsonInvalid'
+  | 'jsonMismatch'
+  | 'mobileOff';
 
 // `id` is the file's slot in the raw list, stable when other rows are removed.
 export type BulkFile = {
@@ -18,7 +30,27 @@ export type BulkFile = {
   state: 'importing' | 'ok' | 'error';
   accountIds: string[];
   failure?: ImportFailure;
+  // A .session imported together with its seller .json (the "+ JSON" mark).
+  withJson?: boolean;
+  // The backend verified the JSON's 2FA password and stored it: the wizard's 2FA
+  // step then skips this account. `null`/absent = not recorded.
+  twofaRecorded?: boolean | null;
 };
+
+const FAILURE_BY_MESSAGE: Record<string, ImportFailure> = {
+  session_json_invalid: 'jsonInvalid',
+  session_json_phone_mismatch: 'jsonMismatch',
+  mobile_api_not_configured: 'mobileOff',
+};
+
+// The file name without its extension, the key a .session and its .json pair on.
+// A leading `+` is dropped like the backend does for phone-named sessions.
+const stemOf = (name: string) =>
+  name
+    .replace(/\.[^.]+$/, '')
+    .replace(/^\+/, '')
+    .toLowerCase();
+const isJson = (file: File) => file.name.toLowerCase().endsWith('.json');
 
 const FAILURE_BY_CODE: Record<string, ImportFailure> = {
   conflict: 'duplicate',
@@ -34,6 +66,9 @@ type Method = 'session' | 'tdata';
 function failureFor(method: Method, error: unknown): ImportFailure {
   const code = errorCode(error);
   if (code === undefined) return 'offline';
+  const byMessage =
+    method === 'session' ? FAILURE_BY_MESSAGE[errorMessage(error) ?? ''] : undefined;
+  if (byMessage) return byMessage;
   if (method === 'tdata' && code === 'validation_error') return 'broken';
   return FAILURE_BY_CODE[code] ?? 'other';
 }
@@ -57,6 +92,8 @@ export function useBulkImport(
 ) {
   const [files, setFiles] = useState<BulkFile[]>([]);
   const raw = useRef<(File | undefined)[]>([]);
+  // The seller .json that rides with raw[id], same slot.
+  const rawJson = useRef<(File | undefined)[]>([]);
   const queue = useRef<number[]>([]);
   const inFlight = useRef(0);
   // Bumped by reset(): a file settling afterwards must not touch the new list.
@@ -85,20 +122,24 @@ export function useBulkImport(
 
   const runOne = async (id: number, file: File, gen: number) => {
     try {
-      const body = registeredAt ? { file, registered_at: registeredAt } : { file };
-      const accountIds =
-        method === 'tdata'
-          ? ((await importTdata.mutateAsync({ body })).accounts?.map(
-              (account) => account.account_id,
-            ) ?? [])
-          : [
-              (
-                await importSession.mutateAsync({
-                  body: { ...body, session_device: sessionDevice },
-                })
-              ).account_id,
-            ];
-      patch(id, gen, { state: 'ok', accountIds });
+      const json = rawJson.current[id];
+      const body = {
+        file,
+        ...(registeredAt ? { registered_at: registeredAt } : {}),
+      };
+      let accountIds: string[];
+      let twofaRecorded: boolean | null = null;
+      if (method === 'tdata') {
+        const result = await importTdata.mutateAsync({ body });
+        accountIds = result.accounts?.map((account) => account.account_id) ?? [];
+      } else {
+        const imported = await importSession.mutateAsync({
+          body: { ...body, ...(json ? { json_file: json } : {}), session_device: sessionDevice },
+        });
+        accountIds = [imported.account_id];
+        twofaRecorded = imported.twofa_recorded ?? null;
+      }
+      patch(id, gen, { state: 'ok', accountIds, twofaRecorded });
     } catch (error) {
       patch(id, gen, {
         state: 'error',
@@ -127,24 +168,51 @@ export function useBulkImport(
   };
 
   const add = (list: FileList | File[]) => {
-    const picked = Array.from(list);
-    if (picked.length === 0) return;
+    const everything = Array.from(list);
+    if (everything.length === 0) return;
+    // A seller .json pairs with the .session of the same stem picked in the same
+    // batch and rides in its request; a .json with no partner is its own error row.
+    const jsons = method === 'session' ? everything.filter(isJson) : [];
+    const picked = everything.filter((file) => !jsons.includes(file));
+    const partner = new Map(jsons.map((file) => [stemOf(file.name), file]));
+    const paired = new Set<File>();
     const start = raw.current.length;
-    raw.current.push(...picked);
-    queue.current.push(...picked.map((_, i) => start + i));
-    setFiles((prev) => [
-      ...prev,
-      ...picked.map((file, i) => ({
+    const rows: BulkFile[] = [];
+    picked.forEach((file, i) => {
+      const json = partner.get(stemOf(file.name));
+      if (json) paired.add(json);
+      raw.current[start + i] = file;
+      rawJson.current[start + i] = json;
+      rows.push({
         id: start + i,
         name: file.name,
-        state: 'importing' as const,
+        state: 'importing',
         accountIds: [],
-      })),
-    ]);
+        ...(json ? { withJson: true } : {}),
+      });
+    });
+    jsons
+      .filter((file) => !paired.has(file))
+      .forEach((file, i) => {
+        const id = start + picked.length + i;
+        raw.current[id] = undefined;
+        rawJson.current[id] = undefined;
+        rows.push({
+          id,
+          name: file.name,
+          state: 'error',
+          accountIds: [],
+          failure: 'jsonAlone',
+        });
+      });
+    queue.current.push(...picked.map((_, i) => start + i));
+    setFiles((prev) => [...prev, ...rows]);
     pump();
   };
 
   const retry = (id: number) => {
+    // A lone .json has nothing to send again.
+    if (!raw.current[id]) return;
     patch(id, generation.current, { state: 'importing', failure: undefined });
     queue.current.push(id);
     pump();
@@ -153,12 +221,14 @@ export function useBulkImport(
   // Drops a failed row and its credential bytes; nothing exists server-side to undo.
   const remove = (id: number) => {
     raw.current[id] = undefined;
+    rawJson.current[id] = undefined;
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const reset = () => {
     generation.current += 1;
     raw.current = [];
+    rawJson.current = [];
     queue.current = [];
     inFlight.current = 0;
     setFiles([]);
@@ -171,6 +241,8 @@ export function useBulkImport(
     remove,
     reset,
     accountIds: files.flatMap((f) => f.accountIds),
+    // Accounts whose JSON password was verified and stored: step 2 leaves them alone.
+    recordedIds: files.filter((f) => f.twofaRecorded === true).flatMap((f) => f.accountIds),
     importing: files.some((f) => f.state === 'importing'),
   };
 }

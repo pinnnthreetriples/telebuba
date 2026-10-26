@@ -255,6 +255,10 @@ async def load_board(campaign_id: str) -> NeuroshillingBoard | None:
             NeuroshillingBoardAccount(
                 account_id=account.account_id,
                 title=account.label or account.account_id,
+                first_name=account.first_name,
+                last_name=account.last_name,
+                phone=account.phone,
+                avatar_etag=account.avatar_etag,
                 assigned=assigned is not None,
                 role_id=None if assigned is None else assigned.role_id,
                 is_reserve=assigned is not None and assigned.is_reserve,

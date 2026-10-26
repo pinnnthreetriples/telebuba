@@ -100,6 +100,7 @@ from schemas.telegram_actions_twofa import (
     GetTwoFactorStatus,
     ManageTwoFactorEmail,
     SetTwoFactorPassword,
+    VerifyTwoFactorPassword,
 )
 
 # The user-parser reads (members, history authors, post comments) are a sibling too.
@@ -349,6 +350,7 @@ TelegramAction = Annotated[
     | UpdateProfile
     | SetPrivacySettings
     | SetTwoFactorPassword
+    | VerifyTwoFactorPassword
     | ManageTwoFactorEmail
     | SetOnline
     | ReadChannel

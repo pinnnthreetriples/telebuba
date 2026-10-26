@@ -14,9 +14,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from core.proxy_check import PROXY_CHECK_TIMED_OUT
 from schemas.device_fingerprint import DeviceFingerprint
 from schemas.proxy import ProxyCheckResult, ProxySettings
-from services.accounts import _web_drive, _web_identity, _web_watch, web_login
+from services.accounts import _web_drive, _web_identity, _web_proxy_probe, _web_watch, web_login
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -161,12 +162,12 @@ def patch_proxy(
     async def _check(settings: ProxySettings, **_bounds: object) -> ProxyCheckResult:
         probed.append(settings)
         if not alive:
-            return ProxyCheckResult(status="failed", last_error="Proxy check timed out")
+            return ProxyCheckResult(status="failed", last_error=PROXY_CHECK_TIMED_OUT)
         return ProxyCheckResult(status="tcp_working", country_code=probed_country)
 
     monkeypatch.setattr(web_login, "fetch_account_proxy_settings", _fetch)
-    monkeypatch.setattr(web_login, "fetch_account_proxy_country", _country)
-    monkeypatch.setattr(web_login, "check_proxy_connectivity", _check)
+    monkeypatch.setattr(_web_proxy_probe, "fetch_account_proxy_country", _country)
+    monkeypatch.setattr(_web_proxy_probe, "check_proxy_connectivity", _check)
     return probed
 
 

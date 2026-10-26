@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -224,4 +224,110 @@ test('deleting a campaign confirms first, then DELETEs it', async () => {
   await waitFor(() => {
     expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'DELETE')).toHaveLength(1);
   });
+});
+
+// Several role cards each carry a full account list, so an option is looked up inside
+// the list its own trigger controls.
+async function pickAccount(label: string, name: RegExp) {
+  const trigger = await screen.findByLabelText(label);
+  await userEvent.click(trigger);
+  const list = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+  await userEvent.click(within(list).getByRole('option', { name }));
+}
+
+// A role added with «+ Добавить роль» exists only in the draft, under a `role-N` key,
+// until the dialogue is saved; the roster PUT checks role ids against STORED roles, so
+// the pick has to travel with the combined save instead.
+function routeSavedRole() {
+  routeApi();
+  const routed = vi.mocked(fetch).getMockImplementation()!;
+  const savedScenario = {
+    ...SCENARIO,
+    roles: [...SCENARIO.roles!, { role_id: 'r2', name: '', description: '', created_at: 'now' }],
+  };
+  const savedAccounts = [
+    { account_id: 'a1', role_id: null, is_reserve: false },
+    { account_id: 'a2', role_id: 'r2', is_reserve: false },
+  ];
+  let saved = false;
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/neuroshilling/campaigns/c1/settings') {
+      if (request.method === 'PUT') saved = true;
+      if (request.method === 'PUT' || saved) {
+        return Promise.resolve(
+          jsonResponse({
+            campaign: { ...CAMPAIGN, updated_at: 'v2' },
+            scenario: savedScenario,
+            accounts: savedAccounts,
+          }),
+        );
+      }
+    }
+    if (pathname.endsWith('/board') && saved) {
+      return Promise.resolve(
+        jsonResponse({
+          ...BOARD,
+          available: [
+            { account_id: 'a1', title: 'Алиса', assigned: true },
+            { account_id: 'a2', title: 'Борис', assigned: true, role_id: 'r2' },
+            { account_id: 'a3', title: 'Виктор', busy_owner: 'warming' },
+          ],
+        }),
+      );
+    }
+    return routed(input, init);
+  });
+}
+
+test('picking an account for an unsaved role saves the dialogue and the roster together', async () => {
+  routeSavedRole();
+  renderPage();
+  await openSettings();
+  await userEvent.click(await screen.findByText('+ Добавить роль'));
+  await pickAccount('Аккаунт роли 2', /Борис/);
+
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1/settings', 'PUT')).toHaveLength(1);
+  });
+  // No roster PUT: it would be refused with `unknown_role` for the draft key.
+  expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(0);
+  const body = (await callsTo('/api/v1/neuroshilling/campaigns/c1/settings', 'PUT')[0]!.json()) as {
+    campaign: { accounts: { account_id: string; role_id: string | null }[] };
+    scenario: { roles: { role_id: string | null }[] };
+  };
+  const draftKey = body.scenario.roles[1]!.role_id;
+  expect(draftKey).toMatch(/^role-\d+$/);
+  expect(body.campaign.accounts).toContainEqual({
+    account_id: 'a2',
+    role_id: draftKey,
+    is_reserve: false,
+  });
+
+  // The server id replaced the draft key, so the next pick is an ordinary roster PUT.
+  await waitFor(() => {
+    expect(screen.getByLabelText('Аккаунт роли 2')).toHaveTextContent('Борис');
+  });
+  await pickAccount('Аккаунт роли 2', /Алиса/);
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(1);
+  });
+  const roster = (await callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')[0]!.json()) as {
+    accounts: { account_id: string; role_id: string | null }[];
+  };
+  expect(roster.accounts).toEqual([{ account_id: 'a1', role_id: 'r2', is_reserve: false }]);
+  expect(callsTo('/api/v1/neuroshilling/campaigns/c1/settings', 'PUT')).toHaveLength(1);
+});
+
+test('picking an account for a stored role keeps the roster PUT and never saves the dialogue', async () => {
+  routeApi();
+  renderPage();
+  await openSettings();
+  await pickAccount('Аккаунт роли 1', /Борис/);
+
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(1);
+  });
+  expect(callsTo('/api/v1/neuroshilling/campaigns/c1/settings', 'PUT')).toHaveLength(0);
 });

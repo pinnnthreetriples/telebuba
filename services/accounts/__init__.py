@@ -135,9 +135,11 @@ from services.accounts.sessions import (
     check_account_session,
     import_account_session,
     import_account_tdata,
+    parse_session_json,
 )
 from services.accounts.twofa import (
     read_account_twofa,
+    record_account_twofa,
     remove_account_twofa,
     set_account_twofa,
 )
@@ -208,12 +210,14 @@ __all__ = [
     "open_account_mobile",
     "open_account_web",
     "open_mobile_progress",
+    "parse_session_json",
     "post_account_story",
     "publish_account_channel_post",
     "read_account_passkey",
     "read_account_privacy",
     "read_account_twofa",
     "reconcile_bulk_messages_on_startup",
+    "record_account_twofa",
     "relogin_with_passkey",
     "remove_account",
     "remove_account_passkey",

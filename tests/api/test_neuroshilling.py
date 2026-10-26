@@ -114,6 +114,26 @@ async def test_the_form_round_trips_through_update_and_the_board(app: FastAPI) -
 
 
 @pytest.mark.asyncio
+async def test_an_unknown_role_id_in_the_roster_is_refused_with_its_stable_code(
+    app: FastAPI,
+) -> None:
+    """A draft key such as ``role-1`` is not a stored role: the roster PUT says so as a 400."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        response = await client.put(
+            f"{_BASE}/{campaign_id}",
+            json=_form(
+                await _stamp(client, campaign_id),
+                accounts=[{"account_id": "acc-1", "role_id": "role-1"}],
+            ),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "unknown_role"
+
+
+@pytest.mark.asyncio
 async def test_stale_campaign_form_does_not_overwrite_saved_fields(app: FastAPI) -> None:
     async with _client(app) as client:
         campaign_id = await _create(client)

@@ -487,6 +487,9 @@ import type {
   ReceiveInboundSmsWebhookData,
   ReceiveInboundSmsWebhookErrors,
   ReceiveInboundSmsWebhookResponses,
+  RecordAccountTwofaData,
+  RecordAccountTwofaErrors,
+  RecordAccountTwofaResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -1635,6 +1638,31 @@ export const setAccountTwofa = <ThrowOnError extends boolean = false>(
 ): RequestResult<SetAccountTwofaResponses, SetAccountTwofaErrors, ThrowOnError> =>
   (options.client ?? client).post<SetAccountTwofaResponses, SetAccountTwofaErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/2fa',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Record Account Twofa
+ *
+ * Save the password the account ALREADY has, once Telegram verifies it.
+ *
+ * Nothing changes on Telegram. A wrong password is refused
+ * (``twofa_current_password_invalid``) and nothing is stored; an account without a
+ * cloud password is ``twofa_not_enabled``. Answers with the re-read boolean view.
+ */
+export const recordAccountTwofa = <ThrowOnError extends boolean = false>(
+  options: Options<RecordAccountTwofaData, ThrowOnError>,
+): RequestResult<RecordAccountTwofaResponses, RecordAccountTwofaErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RecordAccountTwofaResponses,
+    RecordAccountTwofaErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/2fa/record',
     ...options,
     headers: {
       'Content-Type': 'application/json',

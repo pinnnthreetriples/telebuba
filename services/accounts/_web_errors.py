@@ -5,6 +5,9 @@ Split out of ``web_login`` for the file-size budget; ``web_login`` re-exports th
 
 from __future__ import annotations
 
+import asyncio
+import sys
+
 # FIXED operator-facing refusals. ``str(exc)`` here would pipe arbitrary third-party
 # text — Telethon's, binascii's, an OSError carrying an absolute host path — straight
 # into a toast, so every refusal below picks one of these instead.
@@ -35,3 +38,15 @@ class NoProxyForWebLoginError(WebLoginServiceError):
 
 class WebLoginLaunchError(WebLoginServiceError):
     """The relay or browser could not be started (never carries proxy creds)."""
+
+
+def _loop_cannot_spawn() -> bool:
+    """True on the Windows SelectorEventLoop, whose subprocess transport is a stub.
+
+    Only that loop earns the "restart without --reload" wording; a NotImplementedError
+    from anywhere else would otherwise send the operator chasing a setting that is
+    already right.
+    """
+    return sys.platform == "win32" and isinstance(
+        asyncio.get_running_loop(), asyncio.SelectorEventLoop
+    )

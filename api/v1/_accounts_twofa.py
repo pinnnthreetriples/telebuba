@@ -31,6 +31,7 @@ from schemas.twofa import (
     AccountTwoFactorEmailConfirmRequest,
     AccountTwoFactorEmailPending,
     AccountTwoFactorEmailRequest,
+    AccountTwoFactorRecordRequest,
     AccountTwoFactorUpdateRequest,
     AccountTwoFactorView,
 )
@@ -76,6 +77,27 @@ async def set_account_twofa(
     response.headers["Cache-Control"] = "no-store"
     with service_errors_to_http():
         return await accounts.set_account_twofa(account_id, body)
+
+
+@twofa_router.post(
+    "/accounts/{account_id}/2fa/record",
+    response_model=AccountTwoFactorView,
+    operation_id="recordAccountTwofa",
+    responses=SERVICE_ERRORS,
+)
+async def record_account_twofa(
+    account_id: str,
+    body: AccountTwoFactorRecordRequest,
+) -> AccountTwoFactorView:
+    """Save the password the account ALREADY has, once Telegram verifies it.
+
+    Nothing changes on Telegram. A wrong password is refused
+    (``twofa_current_password_invalid``) and nothing is stored; an account without a
+    cloud password is ``twofa_not_enabled``. Answers with the re-read boolean view.
+    """
+    with service_errors_to_http():
+        await accounts.record_account_twofa(account_id, body.password)
+        return await accounts.read_account_twofa(account_id)
 
 
 @twofa_router.delete(

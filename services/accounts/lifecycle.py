@@ -10,6 +10,7 @@ from core.db import (
     delete_account,
     fetch_account,
     fetch_device_fingerprint,
+    insert_device_fingerprint,
     list_accounts,
 )
 from core.device_fingerprint import get_or_create_device_fingerprint
@@ -47,7 +48,12 @@ async def add_account(data: AccountCreate) -> AccountRead:
     # An id can come back as a different account (deleted, then re-imported as a
     # phone): whatever the pool resolved for the old one must not outlive it.
     forget_primary_device(account.account_id)
-    await get_or_create_device_fingerprint(account.account_id, data.session_device)
+    if data.device is not None:
+        # The seller's own device, stored as given; a failed add rolls it back with
+        # the row (``_accounts_delete``).
+        await insert_device_fingerprint(data.device)
+    else:
+        await get_or_create_device_fingerprint(account.account_id, data.session_device)
     saved = await list_accounts()
     persisted = next(
         (item for item in saved.accounts if item.account_id == account.account_id),

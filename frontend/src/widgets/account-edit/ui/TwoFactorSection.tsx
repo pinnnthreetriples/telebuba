@@ -14,6 +14,7 @@ import { Button, ConfirmModal, Notice, Spinner, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
+import { TwoFactorRecord } from './TwoFactorRecord';
 import { Section } from './_shared';
 
 // One live fact row inside the 2FA-on state.
@@ -371,7 +372,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-3 type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
+              <>
+                <div className="mt-3 type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
+                {/* The password already exists on Telegram: verify it there and keep a
+                    copy, instead of the set form below which would CHANGE it. */}
+                <TwoFactorRecord accountId={accountId} onRecorded={invalidate} />
+              </>
             )}
             <TwoFactorEmail
               // Keyed on the server-side email state: a write's optimistic

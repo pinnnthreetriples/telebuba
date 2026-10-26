@@ -390,27 +390,33 @@ export function NeuroshillingPage() {
     ...campaignFieldsOf(value),
   });
 
-  const save = () => {
+  // The ONE write of the form: campaign + setup + dialogue. `accounts` replaces the
+  // stored roster in the same request, which is what lets a role that exists only in
+  // the draft (key `role-N`) be given an account: the combined save is the only call
+  // that maps draft keys to server ids, so the roster is sent with it instead of in a
+  // separate PUT that would refuse the unsaved key as `unknown_role`.
+  const persistForm = (accounts?: NeuroshillingAccountAssignment[]) => {
     if (campaign === undefined || draft === null || setup === null) return;
     if (editToken?.campaignId !== campaign.campaign_id) return;
-    if ((!dirty && !setupDirty) || saveConflict || saving) return;
+    if (saveConflict) return;
     const path = { campaign_id: campaign.campaign_id };
     const body = {
-      ...campaignBody(editToken.campaign, editToken.accounts, editToken.updatedAt),
-      ...(dirty ? campaignFieldsOf(draft) : {}),
+      ...campaignBody(editToken.campaign, accounts ?? editToken.accounts, editToken.updatedAt),
+      ...(dirty || accounts !== undefined ? campaignFieldsOf(draft) : {}),
       ...(setupDirty ? setupFieldsOf(setup) : {}),
     };
     void (async () => {
-      const updated = dirty
-        ? await saveSettings.mutateAsync({
-            path,
-            body: { campaign: body, scenario: scenarioBody(draft) },
-          })
-        : {
-            campaign: await updateCampaign.mutateAsync({ path, body }),
-            scenario: null,
-            accounts: editToken.accounts,
-          };
+      const updated =
+        dirty || accounts !== undefined
+          ? await saveSettings.mutateAsync({
+              path,
+              body: { campaign: body, scenario: scenarioBody(draft) },
+            })
+          : {
+              campaign: await updateCampaign.mutateAsync({ path, body }),
+              scenario: null,
+              accounts: editToken.accounts,
+            };
       if (campaignIdRef.current !== campaign.campaign_id) return;
       setEditToken({
         campaignId: campaign.campaign_id,
@@ -427,6 +433,11 @@ export function NeuroshillingPage() {
     })()
       .catch(recordCampaignConflict)
       .finally(refresh);
+  };
+
+  const save = () => {
+    if ((!dirty && !setupDirty) || saving) return;
+    persistForm();
   };
 
   const generate = () => {
@@ -552,6 +563,14 @@ export function NeuroshillingPage() {
       })),
       ...chosen.map((account) => ({ ...account, is_reserve: false })),
     ];
+    // A role added in the editor lives under a draft key until the first save, and the
+    // roster PUT checks role ids against stored roles only. That case goes through the
+    // combined save; a stored role keeps the roster PUT, which leaves the approval alone.
+    const storedRoleIds = new Set((stored?.roles ?? []).map((role) => role.role_id));
+    if (!storedRoleIds.has(roleId)) {
+      persistForm(accounts);
+      return;
+    }
     void updateCampaign
       .mutateAsync({
         path: { campaign_id: campaign.campaign_id },

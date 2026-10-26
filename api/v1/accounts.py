@@ -41,6 +41,7 @@ from schemas.accounts import (
     AccountProfileUpdateRequest,
     AccountRead,
     AccountSessionFileImport,
+    AccountSessionImportResult,
     AccountStats,
     OpenWebResult,
     WebWindowCount,
@@ -361,7 +362,7 @@ async def import_account_tdata(
 
 @router.post(
     "/accounts/import-session",
-    response_model=AccountRead,
+    response_model=AccountSessionImportResult,
     operation_id="importAccountSession",
     responses=SERVICE_ERRORS | error_responses(409),
 )
@@ -370,19 +371,26 @@ async def import_account_session(
     label: Annotated[str | None, Form()] = None,
     registered_at: Annotated[date | None, Form()] = None,
     session_device: Annotated[DeviceType, Form()] = "desktop",
-) -> AccountRead:
+    json_file: Annotated[UploadFile | None, File()] = None,
+) -> AccountSessionImportResult:
     reject_oversized_upload(
         file,
         max_bytes=settings.profile_media.session_max_bytes,
         detail=(f"Session file is too large (>{settings.profile_media.session_max_bytes} bytes)"),
     )
     content = await file.read()
+    json_content = await json_file.read() if json_file is not None else None
+    with service_errors_to_http():
+        # The seller's ``.json`` (2FA password + Android device) is parsed in the
+        # service layer; a bad file is the ``session_json_invalid`` refusal.
+        meta = accounts.parse_session_json(json_content) if json_content is not None else None
     data = AccountSessionFileImport(
         filename=file.filename or "account.session",
         content=content,
         label=label,
         registered_at=registered_at,
         session_device=session_device,
+        meta=meta,
     )
     # ``service_errors_to_http`` owns the residual ValueError: the request model is
     # assembled here from Form/File params, so a refused ``account_id`` reaches this

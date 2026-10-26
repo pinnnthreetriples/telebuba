@@ -59,6 +59,9 @@ TwoFactorRefusalCode = Literal[
     "twofa_not_changed",
     "twofa_password_not_set",
     "twofa_password_not_stored",
+    # A password to record, verify or import for an account Telegram holds no cloud
+    # password for: there is nothing to check it against.
+    "twofa_not_enabled",
     # ``EMAIL_UNCONFIRMED`` answered a REMOVAL. On a set or a change that answer is
     # resolved by a live re-read, but a removal must never be reported as applied:
     # ``remove_account_twofa`` would clear the stored password on the strength of it
@@ -132,6 +135,18 @@ class AccountTwoFactorUpdateRequest(BaseModel):
             msg = "hint must not contain the password"
             raise ValueError(msg)
         return self
+
+
+class AccountTwoFactorRecordRequest(BaseModel):
+    """Body of ``POST /accounts/{id}/2fa/record``: the password Telegram already has.
+
+    Not a set: Telegram is asked to verify it first and nothing changes there.
+    ``repr=False`` — the value is a secret and must not reach a stack-frame repr.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(min_length=1, repr=False)
 
 
 class AccountTwoFactorCreated(BaseModel):

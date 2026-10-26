@@ -24,6 +24,10 @@ export function ImportFileList({
     if (file.state === 'importing') return t('accounts.addWizard.importing');
     if (file.state === 'error')
       return t(`accounts.addWizard.importFailure.${file.failure ?? 'other'}`);
+    if (file.withJson && file.twofaRecorded === true)
+      return t('accounts.addWizard.importedWithJson');
+    if (file.withJson && file.twofaRecorded === false)
+      return t('accounts.addWizard.importedJsonNoPassword');
     return file.accountIds.length > 1
       ? t('accounts.addWizard.importedMany', { count: file.accountIds.length })
       : t('accounts.addWizard.imported');
@@ -46,7 +50,14 @@ export function ImportFileList({
               <Icon name="file" size={18} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate type-body-medium">{file.name}</div>
+              <div className="truncate type-body-medium">
+                {file.name}
+                {file.withJson ? (
+                  <span className="ml-2 rounded-full bg-canvas px-2 py-1 text-small font-medium text-content-subtle">
+                    {t('accounts.addWizard.jsonBadge')}
+                  </span>
+                ) : null}
+              </div>
               <div
                 className={`text-small ${file.state === 'error' ? 'text-danger' : file.state === 'ok' ? 'text-success-deep' : 'text-content-subtle'}`}
               >
@@ -57,16 +68,18 @@ export function ImportFileList({
               <Spinner className="m-1" />
             ) : file.state === 'error' ? (
               <>
-                <IconButton
-                  tone="primary"
-                  aria-label={t('accounts.addWizard.retry')}
-                  title={t('accounts.addWizard.retry')}
-                  onClick={() => {
-                    onRetry(file.id);
-                  }}
-                >
-                  <Icon name="refresh" size={16} />
-                </IconButton>
+                {file.failure === 'jsonAlone' ? null : (
+                  <IconButton
+                    tone="primary"
+                    aria-label={t('accounts.addWizard.retry')}
+                    title={t('accounts.addWizard.retry')}
+                    onClick={() => {
+                      onRetry(file.id);
+                    }}
+                  >
+                    <Icon name="refresh" size={16} />
+                  </IconButton>
+                )}
                 <IconButton
                   tone="danger"
                   aria-label={t('accounts.addWizard.removeFile')}
