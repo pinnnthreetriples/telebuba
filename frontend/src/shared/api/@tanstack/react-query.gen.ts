@@ -170,6 +170,7 @@ import {
   publishAccountChannelPost,
   receiveInboundSmsWebhook,
   recordAccountTwofa,
+  recordAccountTwofaFromJson,
   removeAccountMusic,
   removeAccountPasskey,
   removeAccountPhoto,
@@ -731,6 +732,9 @@ import type {
   ReceiveInboundSmsWebhookResponse,
   RecordAccountTwofaData,
   RecordAccountTwofaError,
+  RecordAccountTwofaFromJsonData,
+  RecordAccountTwofaFromJsonError,
+  RecordAccountTwofaFromJsonResponse,
   RecordAccountTwofaResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
@@ -2720,6 +2724,39 @@ export const recordAccountTwofaMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await recordAccountTwofa({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Record Account Twofa From Json
+ *
+ * Save the password from the seller's ``.json``, once Telegram verifies it.
+ *
+ * The import wizard calls this after the proxy step: an account without a proxy is
+ * refused (``twofa_proxy_missing``) before any Telegram call. A JSON without a
+ * password is ``session_json_no_password``; the rest is as ``/2fa/record``.
+ */
+export const recordAccountTwofaFromJsonMutation = (
+  options?: Partial<Options<RecordAccountTwofaFromJsonData>>,
+): UseMutationOptions<
+  RecordAccountTwofaFromJsonResponse,
+  RecordAccountTwofaFromJsonError,
+  Options<RecordAccountTwofaFromJsonData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RecordAccountTwofaFromJsonResponse,
+    RecordAccountTwofaFromJsonError,
+    Options<RecordAccountTwofaFromJsonData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await recordAccountTwofaFromJson({
         ...options,
         ...fnOptions,
         throwOnError: true,

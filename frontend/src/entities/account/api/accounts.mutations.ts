@@ -33,6 +33,7 @@ export {
   removeAccountPasskeyMutation,
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
+  recordAccountTwofaFromJsonMutation,
   recordAccountTwofaMutation,
   removeAccountTwofaMutation,
   removeQueuedLeadMutation,

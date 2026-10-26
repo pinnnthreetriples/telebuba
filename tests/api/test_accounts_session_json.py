@@ -39,15 +39,15 @@ def _mobile_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_import_with_json_answers_with_the_recorded_flag(
+async def test_import_with_json_makes_no_telegram_call(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _record(account_id: str, password: str) -> bool:
-        assert (account_id, password) == (PHONE, FAKE_PASSWORD)
-        return True
+    async def _never(*_args: object) -> bool:
+        raise AssertionError
 
-    monkeypatch.setattr("services.accounts.sessions.record_account_twofa", _record)
+    monkeypatch.setattr("services.accounts.twofa.record_account_twofa", _never)
+    monkeypatch.setattr("services.accounts.sessions.record_account_twofa", _never)
     async with _client(app) as client:
         resp = await client.post(
             _IMPORT_URL,
@@ -60,21 +60,9 @@ async def test_import_with_json_answers_with_the_recorded_flag(
     assert resp.status_code == 200
     body = resp.json()
     assert body["account_id"] == PHONE
-    assert body["twofa_recorded"] is True
+    assert "twofa_recorded" not in body
     assert body["session_device"] == "mobile"
     assert FAKE_PASSWORD not in resp.text
-
-
-@pytest.mark.asyncio
-async def test_import_without_json_has_no_recorded_flag(app: FastAPI) -> None:
-    async with _client(app) as client:
-        resp = await client.post(
-            _IMPORT_URL,
-            files={"file": (f"{PHONE}.session", b"session-bytes", "application/octet-stream")},
-        )
-
-    assert resp.status_code == 200
-    assert resp.json()["twofa_recorded"] is None
 
 
 @pytest.mark.asyncio
@@ -152,5 +140,79 @@ async def test_record_route_refusal_is_the_stable_code(
 async def test_record_route_unknown_account_is_404(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/nope/2fa/record", json={"password": "x"})
+
+    assert resp.status_code == 404
+
+
+_RECORD_JSON_URL = "/api/v1/accounts/acc-1/2fa/record-json"
+
+
+def _json_part(content: bytes) -> dict[str, tuple[str, bytes, str]]:
+    return {"json_file": ("x.json", content, "application/json")}
+
+
+@pytest.mark.asyncio
+async def test_record_json_route_records_then_answers_with_the_boolean_view(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _record(account_id: str, content: bytes) -> bool:
+        assert (account_id, content) == ("acc-1", _json_bytes())
+        return True
+
+    async def _read(account_id: str) -> AccountTwoFactorView:  # noqa: ARG001
+        return AccountTwoFactorView(has_stored_password=True)
+
+    monkeypatch.setattr("services.accounts.record_account_twofa_from_json", _record)
+    monkeypatch.setattr("services.accounts.read_account_twofa", _read)
+    async with _client(app) as client:
+        resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
+
+    assert resp.status_code == 200
+    assert resp.json()["has_stored_password"] is True
+    assert FAKE_PASSWORD not in resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        (b"not json", "session_json_invalid"),
+        (_json_bytes(twoFA=None), "session_json_no_password"),
+    ],
+)
+async def test_record_json_route_refusals_are_stable_codes(
+    app: FastAPI,
+    content: bytes,
+    code: str,
+) -> None:
+    async with _client(app) as client:
+        await client.post(
+            _IMPORT_URL,
+            files={"file": ("acc-1.session", b"session-bytes", "application/octet-stream")},
+        )
+        resp = await client.post(_RECORD_JSON_URL, files=_json_part(content))
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == code
+
+
+@pytest.mark.asyncio
+async def test_record_json_route_without_a_proxy_is_twofa_proxy_missing(app: FastAPI) -> None:
+    async with _client(app) as client:
+        await client.post(
+            _IMPORT_URL,
+            files={"file": ("acc-1.session", b"session-bytes", "application/octet-stream")},
+        )
+        resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "twofa_proxy_missing"
+
+
+@pytest.mark.asyncio
+async def test_record_json_route_unknown_account_is_404(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
 
     assert resp.status_code == 404

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   importAccountSessionMutation,
   importAccountTdataMutation,
+  recordAccountTwofaFromJsonMutation,
   type DeviceType,
 } from '@/entities/account';
 import { errorCode, errorMessage } from '@/shared/lib';
@@ -32,9 +33,10 @@ export type BulkFile = {
   failure?: ImportFailure;
   // A .session imported together with its seller .json (the "+ JSON" mark).
   withJson?: boolean;
-  // The backend verified the JSON's 2FA password and stored it: the wizard's 2FA
-  // step then skips this account. `null`/absent = not recorded.
-  twofaRecorded?: boolean | null;
+  // The outcome of recording the JSON's password, once the proxy step assigned a
+  // proxy (the import itself never talks to Telegram): `recorded` makes the 2FA step
+  // skip the account; `failed` carries the backend's refusal code. Absent = not tried.
+  twofa?: { recorded: true } | { recorded: false; code: string | undefined };
 };
 
 const FAILURE_BY_MESSAGE: Record<string, ImportFailure> = {
@@ -103,6 +105,10 @@ export function useBulkImport(
     meta: { inlineError: true },
   });
   const importTdata = useMutation({ ...importAccountTdataMutation(), meta: { inlineError: true } });
+  const recordJson = useMutation({
+    ...recordAccountTwofaFromJsonMutation(),
+    meta: { inlineError: true },
+  });
 
   // Cancel/× mid-batch: files already in flight finish (the account exists
   // server-side either way), but the queued ones must not keep POSTing
@@ -128,7 +134,6 @@ export function useBulkImport(
         ...(registeredAt ? { registered_at: registeredAt } : {}),
       };
       let accountIds: string[];
-      let twofaRecorded: boolean | null = null;
       if (method === 'tdata') {
         const result = await importTdata.mutateAsync({ body });
         accountIds = result.accounts?.map((account) => account.account_id) ?? [];
@@ -137,9 +142,8 @@ export function useBulkImport(
           body: { ...body, ...(json ? { json_file: json } : {}), session_device: sessionDevice },
         });
         accountIds = [imported.account_id];
-        twofaRecorded = imported.twofa_recorded ?? null;
       }
-      patch(id, gen, { state: 'ok', accountIds, twofaRecorded });
+      patch(id, gen, { state: 'ok', accountIds });
     } catch (error) {
       patch(id, gen, {
         state: 'error',
@@ -225,6 +229,30 @@ export function useBulkImport(
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // Verify and store every paired JSON's password with Telegram. Run it after the
+  // proxy step: an account without a proxy would connect from the operator's own IP,
+  // so the backend refuses (`twofa_proxy_missing`) and the row says so. One request
+  // at a time, each row keeps its own outcome; never throws.
+  const recordJsonPasswords = async () => {
+    const gen = generation.current;
+    for (const row of files) {
+      const json = rawJson.current[row.id];
+      const accountId = row.accountIds[0];
+      if (!json || !accountId || row.state !== 'ok') continue;
+      try {
+        await recordJson.mutateAsync({
+          path: { account_id: accountId },
+          body: { json_file: json },
+        });
+        patch(row.id, gen, { twofa: { recorded: true } });
+      } catch (error) {
+        patch(row.id, gen, {
+          twofa: { recorded: false, code: errorMessage(error) },
+        });
+      }
+    }
+  };
+
   const reset = () => {
     generation.current += 1;
     raw.current = [];
@@ -241,8 +269,17 @@ export function useBulkImport(
     remove,
     reset,
     accountIds: files.flatMap((f) => f.accountIds),
-    // Accounts whose JSON password was verified and stored: step 2 leaves them alone.
-    recordedIds: files.filter((f) => f.twofaRecorded === true).flatMap((f) => f.accountIds),
+    recordJsonPasswords,
+    // Accounts whose JSON password was verified and stored: the 2FA step leaves them alone.
+    recordedIds: files.filter((f) => f.twofa?.recorded === true).flatMap((f) => f.accountIds),
+    // accountId → refusal code for the JSON passwords that could not be recorded.
+    recordFailures: Object.fromEntries(
+      files.flatMap((f) =>
+        f.twofa?.recorded === false && f.accountIds[0]
+          ? [[f.accountIds[0], f.twofa.code ?? ''] as [string, string]]
+          : [],
+      ),
+    ),
     importing: files.some((f) => f.state === 'importing'),
   };
 }

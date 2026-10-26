@@ -11,7 +11,7 @@ import {
 } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
-import { Button, CloseButton, Icon, Input, Modal, Stepper } from '@/shared/ui';
+import { Button, CloseButton, Icon, Input, Modal, Spinner, Stepper } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { DeviceChoicePicker } from './DeviceChoicePicker';
@@ -111,6 +111,8 @@ export function AddAccountModal({
   // title for a wizard that is already finished. The step reports the phase up
   // because the title belongs to this component, which owns the chrome.
   const [twofaResult, setTwofaResult] = useState(false);
+  // The seller JSON passwords are being verified, between the proxy and the next step.
+  const [recording, setRecording] = useState(false);
 
   // Optional: when the uploaded accounts were registered in Telegram (item 4.8).
   const [registeredAt, setRegisteredAt] = useState('');
@@ -227,7 +229,16 @@ export function AddAccountModal({
   // After proxy is assigned/skipped: step 3 either way — the code step for the
   // phone method, the cloud-password step for the file methods (which reach it
   // one step earlier, having no code to confirm).
-  const afterProxy = () => {
+  // Before leaving the proxy step, record the seller JSONs' passwords: the proxy is
+  // assigned now, so Telegram is reached through it, and the device step (which
+  // signs in with that password) comes next.
+  const afterProxy = async () => {
+    setRecording(true);
+    try {
+      await bulk.recordJsonPasswords();
+    } finally {
+      setRecording(false);
+    }
     setStep(3);
   };
 
@@ -278,7 +289,7 @@ export function AddAccountModal({
       refused = true;
     }
     if (refused) setProxyFailed(true);
-    else afterProxy();
+    else void afterProxy();
   };
 
   // Input not yet handed to the server: a number typed but not started, a proxy typed
@@ -500,12 +511,18 @@ export function AddAccountModal({
                 </Button>
               </div>
             </>
+          ) : recording ? (
+            <div role="status" className="flex items-center gap-3 py-6 type-body">
+              <Spinner />
+              {t('accounts.addWizard.recordingJson')}
+            </div>
           ) : stepKind === 'passkey' ? (
             <PasskeyBulkStep accountIds={accountIds} sources={sources} onDone={onClose} />
           ) : stepKind === 'twofa' ? (
             <TwoFactorBulkStep
               accountIds={accountIds}
               recorded={bulk.recordedIds}
+              recordFailures={bulk.recordFailures}
               sources={sources}
               onDone={afterTwofa}
               onImported={onImported}
@@ -579,7 +596,12 @@ export function AddAccountModal({
                 >
                   {t('accounts.addWizard.back')}
                 </Button>
-                <Button className="text-content-muted" onClick={afterProxy}>
+                <Button
+                  className="text-content-muted"
+                  onClick={() => {
+                    void afterProxy();
+                  }}
+                >
                   {t('accounts.addWizard.skip')}
                 </Button>
               </div>
@@ -625,7 +647,9 @@ export function AddAccountModal({
               onBack={() => {
                 setProxyStep('choice');
               }}
-              onDone={afterProxy}
+              onDone={() => {
+                void afterProxy();
+              }}
               onImported={onImported}
             />
           )}

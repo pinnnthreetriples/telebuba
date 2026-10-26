@@ -164,16 +164,6 @@ class AccountRead(BaseModel):
     folder_ids: list[str] = Field(default_factory=list)
 
 
-class AccountSessionImportResult(AccountRead):
-    """The imported account, plus whether the seller JSON's 2FA password was recorded.
-
-    ``None`` = no password was supplied or it was not attempted; ``False`` = it was
-    tried and NOT stored (unverified, no 2FA on Telegram, or the check could not run).
-    """
-
-    twofa_recorded: bool | None = None
-
-
 class AccountList(BaseModel):
     accounts: list[AccountRead]
 

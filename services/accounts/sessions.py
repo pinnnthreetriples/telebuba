@@ -24,7 +24,6 @@ from schemas.accounts import (
     AccountCreate,
     AccountRead,
     AccountSessionFileImport,
-    AccountSessionImportResult,
 )
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_session import TelegramSessionCheckRequest
@@ -53,6 +52,7 @@ __all__ = [
     "import_account_session",
     "import_account_tdata",
     "parse_session_json",
+    "record_account_twofa_from_json",
 ]
 
 _NON_DIGITS = re.compile(r"\D")
@@ -75,27 +75,22 @@ def _assert_json_phone_matches(session_name: str, meta: SellerSessionMeta | None
         raise AccountActionError(code)
 
 
-async def _record_imported_twofa(account_id: str, password: str) -> bool:
-    """Best-effort: verify the JSON's password with Telegram, then store it.
+async def record_account_twofa_from_json(account_id: str, content: bytes) -> bool:
+    """Verify and store the seller JSON's password for an account that has a proxy.
 
-    ``False`` for every way it did not end up stored — wrong password, no 2FA on the
-    account, an unreachable Telegram, a failed write. The import has already
-    succeeded and an unverified password is never kept; the operator can retry from
-    the account's 2FA card. Only the outcome is logged, never the password.
+    The import itself never talks to Telegram (the account has no proxy yet), so the
+    wizard calls this once the proxy step assigned one. ``record_account_twofa``
+    owns the proxy guard and every Telegram refusal; a JSON without a password is
+    ``session_json_no_password``.
     """
-    try:
-        return await record_account_twofa(account_id, password)
-    except Exception as exc:  # noqa: BLE001 - the import already succeeded
-        await log_event(
-            "WARNING",
-            "account_twofa_record_skipped",
-            account_id=account_id,
-            extra={"reason": exc.code if isinstance(exc, AccountActionError) else "failed"},
-        )
-        return False
+    meta = parse_session_json(content)
+    if not meta.password:
+        code = "session_json_no_password"
+        raise AccountActionError(code)
+    return await record_account_twofa(account_id, meta.password)
 
 
-async def import_account_session(data: AccountSessionFileImport) -> AccountSessionImportResult:
+async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     # Service-layer guardrail: ``.session`` files are effectively credentials.
     # The UI may attempt to validate size first, but a CLI / scheduler caller
     # can bypass that — re-check here.
@@ -159,12 +154,7 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountSessi
         except Exception as exc:
             await _discard_orphaned_session(session_path, session_name, exc)
             raise
-    recorded = (
-        await _record_imported_twofa(account.account_id, meta.password)
-        if meta is not None and meta.password
-        else None
-    )
-    return AccountSessionImportResult(**account.model_dump(), twofa_recorded=recorded)
+    return account
 
 
 async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:

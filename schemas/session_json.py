@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 SessionJsonRefusalCode = Literal[
     "session_json_invalid",
     "session_json_phone_mismatch",
+    "session_json_no_password",
 ]
 
 

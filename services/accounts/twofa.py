@@ -304,8 +304,14 @@ async def record_account_twofa(account_id: str, password: str) -> bool:
     whether it was stored (``False`` = the DB write failed, logged by
     ``_remember_password``). Under :func:`twofa_lock` like every other flow that
     writes the column. Booleans only in the log — the password never.
+
+    An account with no proxy is refused (``twofa_proxy_missing``) BEFORE any Telegram
+    call: the client connects directly then, which would leak the operator's own IP.
     """
-    await require_account(account_id)
+    account = await require_account(account_id)
+    if account.proxy_id is None:
+        code = "twofa_proxy_missing"
+        raise AccountActionError(code)
     async with twofa_lock(account_id):
         raise_for_result(await execute(account_id, VerifyTwoFactorPassword(password=password)))
         stored = await _remember_password(account_id, password)

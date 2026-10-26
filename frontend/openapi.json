@@ -2077,7 +2077,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountSessionImportResult"
+                  "$ref": "#/components/schemas/AccountRead"
                 }
               }
             }
@@ -6098,6 +6098,125 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountTwoFactorRecordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/2fa/record-json": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Record Account Twofa From Json",
+        "description": "Save the password from the seller's ``.json``, once Telegram verifies it.\n\nThe import wizard calls this after the proxy step: an account without a proxy is\nrefused (``twofa_proxy_missing``) before any Telegram call. A JSON without a\npassword is ``session_json_no_password``; the rest is as ``/2fa/record``.",
+        "operationId": "recordAccountTwofaFromJson",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_recordAccountTwofaFromJson"
               }
             }
           }
@@ -24612,464 +24731,6 @@
         "title": "AccountRegisteredUpdate",
         "description": "Body of ``PUT /accounts/{id}/registered-at``; ``None`` clears the date."
       },
-      "AccountSessionImportResult": {
-        "properties": {
-          "account_id": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Account Id"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "session_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Name"
-          },
-          "session_device": {
-            "type": "string",
-            "enum": [
-              "desktop",
-              "mobile"
-            ],
-            "title": "Session Device",
-            "default": "desktop"
-          },
-          "second_session_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Second Session Name"
-          },
-          "devices": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "desktop",
-                "mobile"
-              ]
-            },
-            "type": "array",
-            "title": "Devices"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "new",
-              "alive",
-              "unauthorized",
-              "session_error",
-              "account_error",
-              "frozen",
-              "flood_wait",
-              "network_error",
-              "proxy_error",
-              "unknown_error"
-            ],
-            "title": "Status"
-          },
-          "user_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Id"
-          },
-          "phone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Phone"
-          },
-          "username": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Username"
-          },
-          "first_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "First Name"
-          },
-          "last_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Name"
-          },
-          "premium": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Premium"
-          },
-          "avatar_etag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Etag"
-          },
-          "last_checked_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Checked At"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "title": "Updated At"
-          },
-          "telegram_registered_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Telegram Registered At"
-          },
-          "registered_source": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "operator"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Registered Source"
-          },
-          "device_platform": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device Platform"
-          },
-          "device_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device Model"
-          },
-          "device_system_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device System Version"
-          },
-          "device_app_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device App Version"
-          },
-          "device_lang": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device Lang"
-          },
-          "bio": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bio"
-          },
-          "proxy_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Id"
-          },
-          "proxy_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Type"
-          },
-          "proxy_host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Host"
-          },
-          "proxy_port": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Port"
-          },
-          "proxy_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Status"
-          },
-          "proxy_last_checked_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Last Checked At"
-          },
-          "proxy_last_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Last Error"
-          },
-          "proxy_exit_ip": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Exit Ip"
-          },
-          "proxy_country_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Country Code"
-          },
-          "proxy_country_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proxy Country Name"
-          },
-          "trust_score": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 100.0,
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trust Score"
-          },
-          "trust_band": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "excellent",
-                  "good",
-                  "watch",
-                  "at_risk",
-                  "critical"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trust Band"
-          },
-          "spam_status": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "clean",
-                  "limited",
-                  "unknown"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Spam Status"
-          },
-          "spam_detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Spam Detail"
-          },
-          "folder_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Folder Ids"
-          },
-          "twofa_recorded": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Twofa Recorded"
-          }
-        },
-        "type": "object",
-        "required": [
-          "account_id",
-          "status",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "AccountSessionImportResult",
-        "description": "The imported account, plus whether the seller JSON's 2FA password was recorded.\n\n``None`` = no password was supplied or it was not attempted; ``False`` = it was\ntried and NOT stored (unverified, no 2FA on Telegram, or the check could not run)."
-      },
       "AccountStats": {
         "properties": {
           "total": {
@@ -25811,6 +25472,20 @@
         },
         "type": "object",
         "title": "Body_publishAccountChannelPost"
+      },
+      "Body_recordAccountTwofaFromJson": {
+        "properties": {
+          "json_file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Json File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "json_file"
+        ],
+        "title": "Body_recordAccountTwofaFromJson"
       },
       "Body_sendAccountChatMessage": {
         "properties": {
