@@ -7,7 +7,9 @@ from typing import Any
 import pytest
 
 from core.db import create_account, fetch_account_twofa_password
+from core.repositories.proxies import create_and_assign_proxy
 from schemas.accounts import AccountCreate
+from schemas.proxy import ProxyCreateAssignment
 from schemas.telegram_actions import ActionResult
 from schemas.telegram_actions_twofa import VerifyTwoFactorPassword
 from services.accounts import AccountActionError, AccountNotFoundError, record_account_twofa
@@ -16,9 +18,18 @@ from tests.services.accounts._twofa_support import PASSWORD_MODULE, patch_execut
 FAKE = "fake-pass-1234567"
 
 
+async def _account_with_proxy(account_id: str = "rec") -> None:
+    await create_account(AccountCreate(account_id=account_id))
+    await create_and_assign_proxy(
+        ProxyCreateAssignment(
+            proxy_type="socks5", host="10.0.0.5", port=1080, account_id=account_id
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_a_verified_password_is_stored(monkeypatch: pytest.MonkeyPatch) -> None:
-    await create_account(AccountCreate(account_id="rec"))
+    await _account_with_proxy()
     actions = patch_execute(monkeypatch)
     events = patch_log(monkeypatch)
 
@@ -39,7 +50,7 @@ async def test_a_refused_password_is_never_stored(
     monkeypatch: pytest.MonkeyPatch,
     code: str,
 ) -> None:
-    await create_account(AccountCreate(account_id="rec"))
+    await _account_with_proxy()
 
     async def _refuse(account_id: str, action: Any) -> ActionResult:
         return ActionResult(
@@ -61,7 +72,7 @@ async def test_a_refused_password_is_never_stored(
 
 @pytest.mark.asyncio
 async def test_an_unreachable_telegram_stores_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    await create_account(AccountCreate(account_id="rec"))
+    await _account_with_proxy()
 
     async def _down(account_id: str, action: Any) -> ActionResult:
         return ActionResult(
@@ -84,3 +95,18 @@ async def test_an_unreachable_telegram_stores_nothing(monkeypatch: pytest.Monkey
 async def test_an_unknown_account_is_not_found() -> None:
     with pytest.raises(AccountNotFoundError):
         await record_account_twofa("ghost", FAKE)
+
+
+@pytest.mark.asyncio
+async def test_an_account_without_a_proxy_is_refused_before_any_telegram_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_account(AccountCreate(account_id="rec"))
+    actions = patch_execute(monkeypatch)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await record_account_twofa("rec", FAKE)
+
+    assert str(excinfo.value) == "twofa_proxy_missing"
+    assert actions == []
+    assert await fetch_account_twofa_password("rec") is None

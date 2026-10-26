@@ -136,6 +136,7 @@ from services.accounts.sessions import (
     import_account_session,
     import_account_tdata,
     parse_session_json,
+    record_account_twofa_from_json,
 )
 from services.accounts.twofa import (
     read_account_twofa,
@@ -218,6 +219,7 @@ __all__ = [
     "read_account_twofa",
     "reconcile_bulk_messages_on_startup",
     "record_account_twofa",
+    "record_account_twofa_from_json",
     "relogin_with_passkey",
     "remove_account",
     "remove_account_passkey",

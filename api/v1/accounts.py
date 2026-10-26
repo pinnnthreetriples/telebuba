@@ -41,7 +41,6 @@ from schemas.accounts import (
     AccountProfileUpdateRequest,
     AccountRead,
     AccountSessionFileImport,
-    AccountSessionImportResult,
     AccountStats,
     OpenWebResult,
     WebWindowCount,
@@ -362,7 +361,7 @@ async def import_account_tdata(
 
 @router.post(
     "/accounts/import-session",
-    response_model=AccountSessionImportResult,
+    response_model=AccountRead,
     operation_id="importAccountSession",
     responses=SERVICE_ERRORS | error_responses(409),
 )
@@ -372,7 +371,7 @@ async def import_account_session(
     registered_at: Annotated[date | None, Form()] = None,
     session_device: Annotated[DeviceType, Form()] = "desktop",
     json_file: Annotated[UploadFile | None, File()] = None,
-) -> AccountSessionImportResult:
+) -> AccountRead:
     reject_oversized_upload(
         file,
         max_bytes=settings.profile_media.session_max_bytes,

@@ -62,6 +62,9 @@ TwoFactorRefusalCode = Literal[
     # A password to record, verify or import for an account Telegram holds no cloud
     # password for: there is nothing to check it against.
     "twofa_not_enabled",
+    # Recording a password needs a Telegram connection, and an account with no proxy
+    # would connect directly from the operator's own IP, so it is refused first.
+    "twofa_proxy_missing",
     # ``EMAIL_UNCONFIRMED`` answered a REMOVAL. On a set or a change that answer is
     # resolved by a live re-read, but a removal must never be reported as applied:
     # ``remove_account_twofa`` would clear the stored password on the strength of it

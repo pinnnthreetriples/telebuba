@@ -489,6 +489,9 @@ import type {
   ReceiveInboundSmsWebhookResponses,
   RecordAccountTwofaData,
   RecordAccountTwofaErrors,
+  RecordAccountTwofaFromJsonData,
+  RecordAccountTwofaFromJsonErrors,
+  RecordAccountTwofaFromJsonResponses,
   RecordAccountTwofaResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
@@ -1666,6 +1669,36 @@ export const recordAccountTwofa = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Record Account Twofa From Json
+ *
+ * Save the password from the seller's ``.json``, once Telegram verifies it.
+ *
+ * The import wizard calls this after the proxy step: an account without a proxy is
+ * refused (``twofa_proxy_missing``) before any Telegram call. A JSON without a
+ * password is ``session_json_no_password``; the rest is as ``/2fa/record``.
+ */
+export const recordAccountTwofaFromJson = <ThrowOnError extends boolean = false>(
+  options: Options<RecordAccountTwofaFromJsonData, ThrowOnError>,
+): RequestResult<
+  RecordAccountTwofaFromJsonResponses,
+  RecordAccountTwofaFromJsonErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RecordAccountTwofaFromJsonResponses,
+    RecordAccountTwofaFromJsonErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/2fa/record-json',
+    ...options,
+    headers: {
+      'Content-Type': null,
       ...options.headers,
     },
   });

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import fetch_device_fingerprint
+from core.db import fetch_account_twofa_password, fetch_device_fingerprint
 from schemas.accounts import AccountSessionFileImport
 from services.accounts import (
     AccountActionError,
@@ -53,14 +53,20 @@ def _import(
 
 
 @pytest.fixture
-def recorded(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
-    calls: list[tuple[str, str]] = []
+def telegram_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, object]]:
+    """Every Telegram action the import may issue: it must stay empty.
 
-    async def _record(account_id: str, password: str) -> bool:
-        calls.append((account_id, password))
-        return True
+    The account has no proxy at import time, so any connection would go out from
+    the operator's own IP.
+    """
+    calls: list[tuple[str, object]] = []
 
-    monkeypatch.setattr("services.accounts.sessions.record_account_twofa", _record)
+    async def _execute(account_id: str, action: object) -> object:
+        calls.append((account_id, action))
+        raise AssertionError
+
+    monkeypatch.setattr("services.accounts.twofa.execute", _execute)
+    monkeypatch.setattr("core.telegram_client.execute", _execute)
     return calls
 
 
@@ -78,16 +84,16 @@ def test_parse_session_json_refuses_garbage_with_the_code() -> None:
 
 
 @pytest.mark.asyncio
-async def test_android_json_stores_the_seller_device_and_records_the_password(
-    recorded: list[tuple[str, str]],
+async def test_android_json_stores_the_seller_device_and_makes_no_telegram_call(
+    telegram_calls: list[tuple[str, object]],
     mobile_keys: None,  # noqa: ARG001
 ) -> None:
     account = await import_account_session(_import(_meta()))
 
     assert account.session_device == "mobile"
     assert account.phone == PHONE
-    assert account.twofa_recorded is True
-    assert recorded == [(PHONE, FAKE_PASSWORD)]
+    assert telegram_calls == []
+    assert await fetch_account_twofa_password(PHONE) is None
     fingerprint = await fetch_device_fingerprint(PHONE, "mobile")
     assert fingerprint is not None
     assert fingerprint.platform == "android"
@@ -100,38 +106,28 @@ async def test_android_json_stores_the_seller_device_and_records_the_password(
 
 
 @pytest.mark.asyncio
-async def test_without_json_the_import_is_unchanged(recorded: list[tuple[str, str]]) -> None:
+async def test_without_json_the_import_is_unchanged(
+    telegram_calls: list[tuple[str, object]],
+) -> None:
     account = await import_account_session(_import(None))
 
     assert account.session_device == "desktop"
-    assert account.twofa_recorded is None
-    assert recorded == []
+    assert telegram_calls == []
     fingerprint = await fetch_device_fingerprint(PHONE, "desktop")
     assert fingerprint is not None
     assert fingerprint.platform != "android"
 
 
 @pytest.mark.asyncio
-async def test_json_without_a_password_records_nothing(
-    recorded: list[tuple[str, str]],
-    mobile_keys: None,  # noqa: ARG001
-) -> None:
-    account = await import_account_session(_import(_meta(twoFA=None)))
-
-    assert account.twofa_recorded is None
-    assert recorded == []
-
-
-@pytest.mark.asyncio
 async def test_a_phone_that_is_not_the_file_stem_is_refused_before_anything_is_written(
-    recorded: list[tuple[str, str]],
+    telegram_calls: list[tuple[str, object]],
 ) -> None:
     with pytest.raises(AccountActionError) as excinfo:
         await import_account_session(_import(_meta(phone="79990009999")))
 
     assert str(excinfo.value) == "session_json_phone_mismatch"
     assert not (settings.telegram.session_dir / f"{PHONE}.session").exists()
-    assert recorded == []
+    assert telegram_calls == []
 
 
 @pytest.mark.asyncio
@@ -143,25 +139,3 @@ async def test_android_json_needs_the_mobile_keys(monkeypatch: pytest.MonkeyPatc
         await import_account_session(_import(_meta()))
 
     assert str(excinfo.value) == "mobile_api_not_configured"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "failure",
-    [AccountActionError("twofa_current_password_invalid"), OSError()],
-    ids=["refused", "network"],
-)
-async def test_an_unverified_password_fails_softly_and_the_import_stands(
-    monkeypatch: pytest.MonkeyPatch,
-    mobile_keys: None,  # noqa: ARG001
-    failure: Exception,
-) -> None:
-    async def _refuse(account_id: str, password: str) -> bool:  # noqa: ARG001
-        raise failure
-
-    monkeypatch.setattr("services.accounts.sessions.record_account_twofa", _refuse)
-
-    account = await import_account_session(_import(_meta()))
-
-    assert account.account_id == PHONE
-    assert account.twofa_recorded is False

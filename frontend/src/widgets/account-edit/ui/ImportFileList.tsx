@@ -24,10 +24,6 @@ export function ImportFileList({
     if (file.state === 'importing') return t('accounts.addWizard.importing');
     if (file.state === 'error')
       return t(`accounts.addWizard.importFailure.${file.failure ?? 'other'}`);
-    if (file.withJson && file.twofaRecorded === true)
-      return t('accounts.addWizard.importedWithJson');
-    if (file.withJson && file.twofaRecorded === false)
-      return t('accounts.addWizard.importedJsonNoPassword');
     return file.accountIds.length > 1
       ? t('accounts.addWizard.importedMany', { count: file.accountIds.length })
       : t('accounts.addWizard.imported');

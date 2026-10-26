@@ -22,10 +22,14 @@ alone, and the email flow is retryable on top of it.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from typing import Annotated
+
+from fastapi import APIRouter, File, Response, UploadFile
 
 from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
+from api.v1._uploads import reject_oversized_upload
+from core.config import settings
 from schemas.twofa import (
     AccountTwoFactorCreated,
     AccountTwoFactorEmailConfirmRequest,
@@ -97,6 +101,33 @@ async def record_account_twofa(
     """
     with service_errors_to_http():
         await accounts.record_account_twofa(account_id, body.password)
+        return await accounts.read_account_twofa(account_id)
+
+
+@twofa_router.post(
+    "/accounts/{account_id}/2fa/record-json",
+    response_model=AccountTwoFactorView,
+    operation_id="recordAccountTwofaFromJson",
+    responses=SERVICE_ERRORS,
+)
+async def record_account_twofa_from_json(
+    account_id: str,
+    json_file: Annotated[UploadFile, File()],
+) -> AccountTwoFactorView:
+    """Save the password from the seller's ``.json``, once Telegram verifies it.
+
+    The import wizard calls this after the proxy step: an account without a proxy is
+    refused (``twofa_proxy_missing``) before any Telegram call. A JSON without a
+    password is ``session_json_no_password``; the rest is as ``/2fa/record``.
+    """
+    reject_oversized_upload(
+        json_file,
+        max_bytes=settings.profile_media.session_max_bytes,
+        detail=f"JSON file is too large (>{settings.profile_media.session_max_bytes} bytes)",
+    )
+    content = await json_file.read()
+    with service_errors_to_http():
+        await accounts.record_account_twofa_from_json(account_id, content)
         return await accounts.read_account_twofa(account_id)
 
 

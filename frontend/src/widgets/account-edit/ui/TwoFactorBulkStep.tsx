@@ -46,6 +46,7 @@ function twofaBody(value: TwofaFormValue): AccountTwoFactorUpdateRequest {
 export function TwoFactorBulkStep({
   accountIds,
   recorded = [],
+  recordFailures = {},
   sources,
   onDone,
   onImported,
@@ -55,6 +56,9 @@ export function TwoFactorBulkStep({
   // Accounts whose existing password the import already verified and stored (from the
   // seller's JSON): nothing to set on them, so they are listed as saved and skipped.
   recorded?: string[];
+  // accountId → the refusal code of a seller-JSON password that could NOT be saved
+  // (wrong password, no proxy…): shown so the operator knows to set it by hand.
+  recordFailures?: Record<string, string>;
   // accountId → the thing the operator recognises it by: the imported file name,
   // or the phone number they typed. The account's own Telegram name is usually
   // not known yet at this point in the wizard.
@@ -160,9 +164,24 @@ export function TwoFactorBulkStep({
     );
   }
 
+  const failedIds = Object.keys(recordFailures);
   const savedList =
-    recorded.length > 0 ? (
+    recorded.length + failedIds.length > 0 ? (
       <div className="mb-4 overflow-hidden rounded-md border border-line">
+        {failedIds.map((accountId) => (
+          <div
+            key={accountId}
+            className="flex items-center gap-3 border-b border-canvas px-3 py-2 last:border-b-0"
+          >
+            <span className="min-w-0 flex-1 truncate type-body-medium">{label(accountId)}</span>
+            <span role="alert" className="shrink-0 text-right type-small text-danger-deep">
+              {t('accounts.addWizard.twofaRowRecordFailed')}:{' '}
+              {t(`shell.code.${recordFailures[accountId] ?? ''}`, {
+                defaultValue: recordFailures[accountId] ?? '',
+              })}
+            </span>
+          </div>
+        ))}
         {recorded.map((accountId) => (
           <div
             key={accountId}

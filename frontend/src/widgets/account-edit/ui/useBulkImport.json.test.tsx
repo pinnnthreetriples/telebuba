@@ -14,14 +14,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function account(id: string, twofaRecorded?: boolean | null) {
-  return {
-    account_id: id,
-    status: 'new',
-    created_at: 'n',
-    updated_at: 'n',
-    ...(twofaRecorded === undefined ? {} : { twofa_recorded: twofaRecorded }),
-  };
+function account(id: string) {
+  return { account_id: id, status: 'new', created_at: 'n', updated_at: 'n' };
+}
+
+function recordRequests(): Request[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => request.url.includes('/2fa/record-json'));
 }
 
 const file = (name: string) => new File(['x'], name, { type: 'application/octet-stream' });
@@ -42,7 +43,7 @@ function setup() {
 }
 
 test('x.session + x.json become ONE row marked +JSON and send both parts in one request', async () => {
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(account('79990001122', true)));
+  vi.mocked(fetch).mockResolvedValue(jsonResponse(account('79990001122')));
   const { result } = setup();
 
   act(() => {
@@ -59,7 +60,9 @@ test('x.session + x.json become ONE row marked +JSON and send both parts in one 
   const form = await requests[0]?.clone().formData();
   expect((form?.get('file') as File).name).toBe('79990001122.session');
   expect((form?.get('json_file') as File).name).toBe('79990001122.json');
-  expect(result.current.recordedIds).toEqual(['79990001122']);
+  // The import itself records nothing: that waits for the proxy.
+  expect(result.current.recordedIds).toEqual([]);
+  expect(recordRequests()).toHaveLength(0);
 });
 
 test('the pairing is by stem, case-insensitive, and a plain .session sends no json', async () => {
@@ -117,18 +120,40 @@ test('the backend refusals for the json get their own reasons', async () => {
   });
 });
 
-test('an unverified password leaves the account out of the recorded set', async () => {
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(account('2', false)));
+test("recordJsonPasswords sends each paired JSON and keeps each row's own outcome", async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname.endsWith('/2fa/record-json')) {
+      return pathname.includes('/2/')
+        ? jsonResponse(
+            { error: { code: 'bad_request', message: 'twofa_current_password_invalid' } },
+            400,
+          )
+        : jsonResponse({ has_stored_password: true });
+    }
+    const form = await request.formData();
+    return jsonResponse(account((form.get('file') as File).name.replace('.session', '')));
+  });
   const { result } = setup();
-
   act(() => {
-    result.current.add([file('2.session'), file('2.json')]);
+    result.current.add([file('1.session'), file('1.json'), file('2.session'), file('2.json')]);
+    result.current.add([file('3.session')]);
+  });
+  await waitFor(() => {
+    expect(result.current.files.every((f) => f.state === 'ok')).toBe(true);
   });
 
-  await waitFor(() => {
-    expect(result.current.files[0]?.state).toBe('ok');
+  await act(async () => {
+    await result.current.recordJsonPasswords();
   });
-  expect(result.current.files[0]?.twofaRecorded).toBe(false);
-  expect(result.current.recordedIds).toEqual([]);
-  expect(result.current.accountIds).toEqual(['2']);
+
+  // A session without a JSON is never sent.
+  expect(recordRequests().map((r) => new URL(r.url).pathname)).toEqual([
+    '/api/v1/accounts/1/2fa/record-json',
+    '/api/v1/accounts/2/2fa/record-json',
+  ]);
+  expect(result.current.recordedIds).toEqual(['1']);
+  expect(result.current.recordFailures).toEqual({ '2': 'twofa_current_password_invalid' });
+  expect(result.current.accountIds).toEqual(['1', '2', '3']);
 });
