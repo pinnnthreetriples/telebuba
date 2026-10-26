@@ -1,7 +1,7 @@
 ---
 name: runtime-telegram
 description: Telegram client, sessions, proxies, profile, privacy and account removal.
-last_updated: 2026-10-12
+last_updated: 2026-10-26
 edges:
   - target: patterns/account-devices.md
     condition: account devices, the second sign-in or the mobile container
@@ -9,6 +9,8 @@ edges:
     condition: layer boundaries, gateways or system design
   - target: patterns/add-telegram-task.md
     condition: adding or changing a Telegram gateway action
+  - target: patterns/import-seller-session.md
+    condition: importing a seller .session with its .json, or recording a known 2FA password
 grounds_to:
   - node: "function:813f0983baf0e31765832591c2d9c5c0"
     fingerprint: "mh:64:7b226d696e68617368223a5b39393739303337342c38353030383030312c33303636333333382c35373132303635362c35303638303138302c36323237363334322c38393831353430342c3139303432353632312c31323732353739302c3131363436373231312c31373931303839362c3132353037333139332c34323234323235342c3132323137353830362c38333638393339322c32373732313037342c3131383537303232312c3232363536353031302c35303631363336382c3133313830343636332c31333738353638352c3230303739313239372c383334323334362c3133343232353733372c3134353437393235372c3132343138343835332c3334383434343538322c3231333137393432312c39303431353236382c313634363838322c33313736313835342c36343137353738312c343431393134332c37313239353839382c38363738393535342c3132393431373436342c3131303731353836362c36303238383134312c35363936323936392c3133393435343737312c3131363238393239392c32333037353938312c3130343430343034352c37343832333037332c3333323033363332382c36393231383631362c38373439393237342c3131363631323932362c3239323130343332332c3132303632313938342c3134303032363031342c39363630383032352c3339363934353835372c3230383337353737342c3138343033393938312c37383932363934362c3131343632323437362c39333638363137342c34343930383434392c3337353130373430382c323035363330362c32393939383334352c32333032383630312c31313732363932355d2c226e65696768626f7273223a5b2266756e6374696f6e3a3133343761393930343366633165633336396438623631316138336462613366222c2266756e6374696f6e3a3362623239663561353737653162626630613337353166663433663831323636222c2266756e6374696f6e3a6532316564396266666536646333326331616566656539393439366535333130225d2c22746f6b656e436f756e74223a35367d"
@@ -31,8 +33,6 @@ grounds_to:
 - `edit_2fa` also writes an empty new-password hash whenever `new_password` is falsy, and a present-but-empty hash REMOVES the cloud password — so an email-only change must omit the password fields from the flags entirely. `EMAIL_UNCONFIRMED_<N>` there is a success signal, not a failure: the setting applied and N is the mailed code's length, which the operator types back in a second request.
 - The gateway's "was this dispatched" verdict keys off whether a client was borrowed, not off which RPC failed, so a dispatcher's FIRST call must be one it owns: a convenience method that reads before it writes turns a lost read into a reported "may have been applied", which the service then persists as an unconfirmed credential.
 - A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied — unless the live read shows no password at all, which makes the stored value stale rather than the previous one in force.
-- A `.session` may be imported with the seller's `.json` (`core/session_json.py`, pure parser; the password is excluded from `repr` and never logged). Its phone must equal the file stem's digits (`session_json_phone_mismatch`). An `sdk` starting with `Android` forces `session_device=mobile` and stores the seller's device VERBATIM as the account's fingerprint (platform `android`, `system_version` like `Android 14`, unlike the minted `SDK 34`). Known limit: the emulator refuses to sign in when the pod's real SDK differs from that fingerprint, so a seller device on another Android release will not boot there.
-- The JSON password is stored only after Telegram verifies it. `VerifyTwoFactorPassword` is `getPassword` then `account.getPasswordSettings` with the SRP proof: read-only on both sides, so a wrong password is `twofa_current_password_invalid` and an account with no cloud password is `twofa_not_enabled`. The import calls the recording best-effort, so a network failure never fails the import and an unverified password is never stored (`twofa_recorded=false`); `POST /accounts/{id}/2fa/record` does the same for an existing account, under the same per-account lock as every other password write.
 - Web-login dresses the page AND every paused worker over a held-open CDP socket — Chrome strips overrides on detach; Chrome dies with the backend or an undressable worker. Language: the primary device's; timezone: the proxy's. A relative profile dir hands the argv to a running Chrome (operator's IP).
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
