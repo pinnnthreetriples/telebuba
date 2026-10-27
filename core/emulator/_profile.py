@@ -21,7 +21,7 @@ import string
 import uuid
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
-from core.device_fingerprint_android import ANDROID_DEVICES, android_device_model
+from core.device_fingerprint_android import android_phone_for
 from core.emulator._blueprints import Camera, OemBuild, Screen, find_build, load_socs
 from core.emulator._errors import EmulatorError
 from core.emulator._geo import Region, region_for
@@ -81,16 +81,15 @@ def derive_serial(prefix: str, length: int, charset: Literal["alnum", "hex"], se
 def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> ContainerSpec:
     """The container for this mobile fingerprint, or ``emulator_device_unknown``.
 
+    The phone and SDK are the catalogue's (``android_phone_for``), however the fingerprint
+    names them; the fingerprint itself, what Telegram is told, is left as it is.
+
     ``country`` is the account's proxy country (ISO-3166 alpha-2), ``None`` when unknown.
     """
-    device = next(
-        (d for d in ANDROID_DEVICES if android_device_model(d) == fingerprint.device_model),
-        None,
-    )
-    sdk = fingerprint.system_version.removeprefix("SDK ")
-    if device is None or not sdk.isdigit() or int(sdk) not in device.sdk_levels:
+    phone = android_phone_for(fingerprint.device_model, fingerprint.system_version)
+    if phone is None:
         raise EmulatorError(_EMULATOR_DEVICE_UNKNOWN)
-    found = find_build(device.manufacturer, device.model, int(sdk))
+    found = find_build(phone.device.manufacturer, phone.device.model, phone.sdk)
     if found is None:
         raise EmulatorError(_EMULATOR_DEVICE_UNKNOWN)
     blueprint, build = found
@@ -98,7 +97,7 @@ def container_spec(fingerprint: DeviceFingerprint, country: str | None) -> Conta
     return ContainerSpec(
         manufacturer=blueprint.manufacturer,
         model=blueprint.model,
-        sdk=int(sdk),
+        sdk=phone.sdk,
         brand=blueprint.brand,
         product=blueprint.product,
         device=blueprint.device,
