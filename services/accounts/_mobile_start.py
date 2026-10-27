@@ -12,6 +12,8 @@
   it did not expect) is not a failure of the open: it is logged, and the pod is left
   up on its screen with the refusal, for the operator to finish the sign-in by hand.
   Warming's background open still fails: nobody watches its pod;
+* an app's screen is read past its prompts (``_app_screen``): only a sign-in screen is
+  signed out, and one that cannot be read is a refusal, never "signed out";
 * a phone started without its ``app`` (the device farm's) fetches no APK, and installs,
   starts and signs in nothing: it is booted, seeded and shown, and handed over as it is.
   The account's own open of it while it runs installs the app and signs it in;
@@ -24,6 +26,7 @@ import asyncio
 import logging
 from contextlib import suppress
 from datetime import datetime
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
@@ -37,23 +40,24 @@ from core.emulator import (
     bring_app_to_front,
     ensure_app,
     ensure_telegram_apk,
-    read_screen,
     remove_pod,
     seed_device_if_needed,
     show_instance,
     start_pod,
     stop_pod,
     wait_for_boot,
-    wait_screen,
 )
 from core.logging import log_event
 from schemas.emulator import OpenMobileResult
+from services.accounts._app_screen import restarted_once, settled_screen
 from services.accounts._emulator_sign_in import sign_in
 from services.accounts._mobile_holds import container_name
 from services.accounts._mobile_progress import report_stage
 from services.accounts.devices import DeviceRefusedError
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from core.android_apk import AppIdentity
     from core.emulator import ContainerSpec
     from core.emulator.ui_dump import Screen
@@ -69,8 +73,6 @@ type OpenMode = Literal["operator", "warming", "boot"]
 
 # A running app on one of these still needs signing in; anything else is left as is.
 _ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
-# A background open waits for the app to show one of these, then reads it as it is.
-_KNOWN_SCREENS: set[Screen] = {"chats", "intro", "phone", "confirm", "code", "password"}
 
 
 async def show(name: str, index: int) -> None:
@@ -162,9 +164,10 @@ async def _app_signed_in(
     """Install and start the app, then sign it in: ``(signed in, why it stopped short)``."""
     await ensure_app(serial)
     # In the background only an entry screen is signed in; in front, always.
-    screen = (await wait_screen(serial, _KNOWN_SCREENS))[0] if background else None
-    if screen is not None and screen not in _ENTRY_SCREENS:
-        return screen == "chats", None
+    if background:
+        return await _or_hand_over(
+            account, _signed_in_as_it_stands(account, serial), background=True
+        )
     return await sign_in_or_hand_over(account, serial, background=background)
 
 
@@ -179,10 +182,22 @@ async def running_app_signed_in(
     if await app_package(serial) is None:
         return await _app_signed_in(account, serial, background=background)
     await bring_app_to_front(serial)
-    screen, _nodes = await read_screen(serial)
+    return await _or_hand_over(
+        account, _signed_in_as_it_stands(account, serial), background=background
+    )
+
+
+async def _signed_in_as_it_stands(account: AccountRead, serial: str) -> bool:
+    """The app's screen read past its prompts; signed in from an entry screen only.
+
+    A frozen app is restarted once for the read, and once more by a sign-in that
+    then freezes it again: never more than that.
+    """
+    screen = await restarted_once(account.account_id, serial, partial(settled_screen, serial))
     if screen in _ENTRY_SCREENS:
-        return await sign_in_or_hand_over(account, serial, background=background)
-    return screen == "chats", None
+        await sign_in(account, serial)
+        return True
+    return screen == "chats"
 
 
 async def set_battery(serial: str, account_id: str, timezone: str) -> None:
@@ -200,15 +215,27 @@ async def set_battery(serial: str, account_id: str, timezone: str) -> None:
 async def sign_in_or_hand_over(
     account: AccountRead, serial: str, *, background: bool
 ) -> tuple[bool, str | None]:
-    """Sign the app in: ``(signed in, why it stopped short)``.
+    """Sign the app in: ``(signed in, why it stopped short)``."""
+    return await _or_hand_over(account, _signed_in(account, serial), background=background)
+
+
+async def _signed_in(account: AccountRead, serial: str) -> bool:
+    await sign_in(account, serial)
+    return True
+
+
+async def _or_hand_over(
+    account: AccountRead, signing_in: Awaitable[bool], *, background: bool
+) -> tuple[bool, str | None]:
+    """``signing_in``'s answer, and why it stopped short.
 
     The operator's refusal is logged and handed back with the pod left up, to be
     finished by hand on its screen; warming's is raised (its pod is stopped).
     """
     if background:
-        return await sign_in(account, serial), None
+        return await signing_in, None
     try:
-        return await sign_in(account, serial), None
+        return await signing_in, None
     except (EmulatorError, DeviceRefusedError) as exc:
         await log_event(
             "WARNING",

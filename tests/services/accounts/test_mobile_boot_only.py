@@ -131,13 +131,11 @@ async def test_a_failed_boot_is_refused_and_a_new_pods_fresh_data_removed(
 )
 async def test_the_accounts_own_open_of_a_booted_phone_installs_and_signs_in_its_app(
     container: _Container,
-    monkeypatch: pytest.MonkeyPatch,
     *,
     background: bool,
     screens: list[Screen],
 ) -> None:
     """A running phone with no Telegram is no screen to leave alone: it gets the app."""
-    monkeypatch.setattr(_mobile_start, "wait_screen", container.wait_screen)
     await _account()
     container.app_installed = False
     await boot_account_phone("acc")

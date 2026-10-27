@@ -401,6 +401,25 @@ tagged contacts and the photos the earlier try listed in `/data/local/tmp/.teleb
 (written before its push) first.
 Android keeps `/data` across stop/start, so only a container made again is seeded again.
 
+The seeded contacts never leave the phone: before every start of the app, Telegram's contacts
+group (`READ_CONTACTS`, `WRITE_CONTACTS`, `GET_ACCOUNTS`) is revoked and flagged
+`user-set user-fixed` ("denied, don't ask again"), so Android answers Telegram's request itself
+with no dialog. Checked on redroid 13 and 14: the flags stick, and a request then opens
+`GrantPermissionsActivity` that closes by itself within a second. Telegram's own prompt before
+that request is answered «not now»; a permission dialog that shows anyway is denied by its
+`permission_deny_button` resource-id, never by its words.
+
+## A sign-in that meets a frozen app
+
+On redroid's guest GPU, Telegram can deadlock right after «Start Messaging» (about 1 in 5 fresh
+pods): the app stays alive but every `uiautomator dump` fails ("null root node") and any key
+kills it. A dump that cannot be taken is therefore `unresponsive`, never an empty screen: the
+sign-in force-stops and relaunches the app once and starts again from its entry screen (a new
+login code only as the per-account pacing allows), and refuses with
+`emulator_app_unresponsive` when it freezes again. A screen nothing recognises after a few BACKs
+is `emulator_screen_unknown`. Both reach the operator's dialog as the reason, and warming as
+passing causes; only a sign-in screen reads as signed out.
+
 ## A phone stint prepares its phone
 
 Starting warming with device `mobile` (`services/warming/_mobile_prep.py`) first checks the host

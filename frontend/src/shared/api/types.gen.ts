@@ -6167,6 +6167,8 @@ export type PhoneList = {
     | 'emulator_preparing'
     | 'emulator_screen_timeout'
     | 'emulator_app_offline'
+    | 'emulator_app_unresponsive'
+    | 'emulator_screen_unknown'
     | null;
   /**
    * Phones

@@ -176,7 +176,7 @@ async def test_a_missing_adb_is_not_waited_out_as_a_slow_boot(console: Console) 
 async def test_a_dump_is_always_fresh_or_nothing(console: Console) -> None:
     console.answer = lambda _argv: "ERROR: could not get idle state."
 
-    assert await adb.dump_ui("emulator-5554") == ""
+    assert await adb.dump_ui("emulator-5554") is None, "no dump, never an empty screen"
     tries = console.shell_calls()
     assert len(tries) == 3, "one script a try, three tries"
     first_commands = [script[script.index(";") + 1 :] for script in tries]

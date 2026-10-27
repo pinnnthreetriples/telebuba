@@ -175,10 +175,25 @@ async def test_a_sign_in_that_must_wait_is_a_passing_cause(
     assert (record.state, record.last_error) == ("sleeping", code)
 
 
+@pytest.mark.parametrize("code", ["emulator_app_unresponsive", "emulator_screen_unknown"])
 @pytest.mark.asyncio
-async def test_an_app_still_signed_out_after_the_open_parks_the_account(
+@pytest.mark.usefixtures("telethon")
+async def test_an_app_the_open_could_not_read_is_a_passing_cause(pod: _Pod, code: str) -> None:
+    pod.open_error = _refusal(code)
+
+    await _iterate_on("mobile")
+
+    record = await _record()
+    assert (record.state, record.last_error) == ("sleeping", code)
+
+
+@pytest.mark.asyncio
+async def test_an_app_left_on_a_sign_in_screen_parks_the_account(
     pod: _Pod, telethon: list[str]
 ) -> None:
+    # A frozen app or an unknown screen no longer reads as "signed out": the open
+    # raises a passing refusal for them (above). ``signed_in=False`` is left for an app
+    # really showing a sign-in screen warming does not sign in from (code, confirm).
     pod.signed_in = False
 
     await _iterate_on("mobile")

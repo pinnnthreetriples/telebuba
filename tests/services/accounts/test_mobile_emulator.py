@@ -138,20 +138,19 @@ async def test_a_code_inside_the_cooldown_is_refused_and_the_phone_left_up(
     assert not any(step.startswith(("stop:", "remove:")) for step in container.steps)
 
 
-@pytest.mark.parametrize(("screen", "signed_in"), [("chats", True), ("unknown", False)])
 @pytest.mark.asyncio
 async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
     container: _Container,
-    screen: Screen,
-    signed_in: bool,  # noqa: FBT001 - a parametrised expectation
 ) -> None:
+    # An unknown screen no longer reads as "signed out" here: it is backed out of, then
+    # refused (``test_mobile_sign_in_recovery``).
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
-    container.screens = [screen]
+    container.screens = ["chats"]
 
     result = await open_account_mobile("acc")
 
-    assert (result.status, result.signed_in) == ("already_running", signed_in)
+    assert (result.status, result.signed_in) == ("already_running", True)
     assert container.steps == [
         "find:telebuba-acc",
         "proxy?:10.0.0.5",
@@ -159,7 +158,7 @@ async def test_a_running_container_is_left_alone_and_only_asked_what_it_shows(
         "battery",
         "show:1",
         "front",
-        "read",
+        "wait",
     ]
 
 

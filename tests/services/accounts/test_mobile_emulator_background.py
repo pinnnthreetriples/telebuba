@@ -41,11 +41,13 @@ _FULL_SIGN_IN: list[Screen] = ["intro", "intro", "phone", "confirm", "code", "pa
 
 
 @pytest.fixture
-def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
-    """The containers whose window is open; the background path's screen wait faked too."""
+def windows(
+    container: _Container,  # noqa: ARG001 - the scripted container under every test here
+    monkeypatch: pytest.MonkeyPatch,
+) -> set[str]:
+    """The containers whose window is open, over the scripted container."""
     open_windows: set[str] = set()
     monkeypatch.setattr(emulator_module, "viewer_open", lambda name: name in open_windows)
-    monkeypatch.setattr(_mobile_start, "wait_screen", container.wait_screen)
     emulator_module._OPERATOR.clear()
     emulator_module._ACTIVE.clear()
     emulator_module._MANUAL.clear()
@@ -55,7 +57,7 @@ def windows(container: _Container, monkeypatch: pytest.MonkeyPatch) -> set[str]:
 @pytest.mark.asyncio
 async def test_a_background_start_shows_no_window_and_signs_a_fresh_app_in(
     container: _Container,
-    windows: set[str],  # noqa: ARG001 - fakes the screen wait
+    windows: set[str],  # noqa: ARG001 - clears the module state
 ) -> None:
     await _account()
     container.screens = list(_FULL_SIGN_IN)
@@ -71,7 +73,7 @@ async def test_a_background_start_shows_no_window_and_signs_a_fresh_app_in(
 @pytest.mark.asyncio
 async def test_a_background_open_heals_a_running_app_that_fell_signed_out(
     container: _Container,
-    windows: set[str],  # noqa: ARG001 - fakes the screen wait
+    windows: set[str],  # noqa: ARG001 - clears the module state
 ) -> None:
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
@@ -95,7 +97,7 @@ async def test_a_background_open_heals_a_running_app_that_fell_signed_out(
 @pytest.mark.asyncio
 async def test_a_background_open_leaves_any_other_screen_as_it_is(
     container: _Container,
-    windows: set[str],  # noqa: ARG001 - fakes the screen wait
+    windows: set[str],  # noqa: ARG001 - clears the module state
     screen: Screen,
 ) -> None:
     await _account()

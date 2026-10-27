@@ -46,6 +46,8 @@ EmulatorRefusalCode = Literal[
     "emulator_preparing",
     "emulator_screen_timeout",
     "emulator_app_offline",
+    "emulator_app_unresponsive",
+    "emulator_screen_unknown",
 ]
 
 # A search query ``input text`` can type: 2-32 letters, digits and spaces.
