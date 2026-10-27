@@ -110,13 +110,32 @@ def test_an_account_keeps_its_phone_and_two_accounts_differ() -> None:
 
 @pytest.mark.parametrize(
     ("model", "sdk"),
-    [("UnknownPhone 1", "SDK 34"), ("GooglePixel 8", "SDK 33"), ("GooglePixel 7", "Android 13")],
+    [
+        ("UnknownPhone 1", "SDK 34"),
+        ("GooglePixel 8", "SDK 33"),
+        ("GooglePixel 7", "Android 12"),
+        ("Samsung Galaxy S22", "Android 14"),
+        ("Google Pixel 8", "Android 13"),
+    ],
 )
 def test_a_fingerprint_no_container_can_present_is_refused(model: str, sdk: str) -> None:
     with pytest.raises(EmulatorError) as refused:
         container_spec(_fingerprint(model, sdk), "DE")
 
     assert refused.value.code == "emulator_device_unknown"
+
+
+def test_a_sellers_marketing_names_are_the_catalogue_phone_they_mean() -> None:
+    fingerprint = _fingerprint("Samsung Galaxy S23", "Android 14")
+
+    spec = container_spec(fingerprint, "DE")
+
+    assert (spec.manufacturer, spec.model, spec.sdk) == ("samsung", "SM-S911B", 34)
+    assert aosp_boot_properties(spec)["ro.build.version.release"] == "14"
+    assert (fingerprint.device_model, fingerprint.system_version) == (
+        "Samsung Galaxy S23",
+        "Android 14",
+    ), "what Telegram is told stays the seller's"
 
 
 def test_a_catalogue_phone_without_a_blueprint_build_is_refused(

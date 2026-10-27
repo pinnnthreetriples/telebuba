@@ -213,3 +213,7 @@ async def test_stop_leaves_a_warming_phone_to_the_warming_board(farm: _Farm) -> 
 
 def test_a_phone_outside_the_catalogue_shows_its_raw_model() -> None:
     assert _phones._names("SomeVendorX1") == ("", "SomeVendorX1")
+
+
+def test_a_sellers_phone_shows_as_the_catalogue_phone_it_names() -> None:
+    assert _phones._names("Samsung Galaxy S23") == ("Samsung", "Galaxy S23")
