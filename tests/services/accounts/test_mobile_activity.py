@@ -285,7 +285,7 @@ async def test_a_warming_visit_checks_its_pod_once(
         "connect",
         "battery",
         "front",
-        "read",
+        "wait",
         "home",
     ], "the session goes on from the open's checks: no second docker ps, sha256sum or monkey"
 

@@ -103,6 +103,12 @@ class _Container:
     async def leave_app(self, serial: str) -> None:
         self.on_serial(serial, "home")
 
+    async def restart_app(self, serial: str) -> None:
+        self.on_serial(serial, "restart")
+
+    async def go_back(self, serial: str) -> None:
+        self.on_serial(serial, "back")
+
     async def wait_for_boot(self, serial: str) -> None:
         self.booting.set()
         if self.boot_gate is not None:
@@ -218,13 +224,16 @@ _SERVICE_FAKES = (
     "seed_device_if_needed",
     "bring_app_to_front",
     "leave_app",
-    "read_screen",
     "stop_pod",
     "remove_pod",
     "fetch_account_twofa_password",
 )
+# On ``_emulator_sign_in`` and ``_app_screen``, wherever each name is.
 _SIGN_IN_FAKES = (
     "wait_screen",
+    "bring_app_to_front",
+    "restart_app",
+    "go_back",
     "login_code_cutoff",
     "wait_account_login_code",
     "fetch_account_twofa_password",
@@ -235,6 +244,8 @@ _SCREEN_ACTIONS = {
     "confirm_number": "confirm",
     "enter_code": "code",
     "enter_password": "password",
+    "deny_permission": "deny",
+    "put_off_contacts": "not_now",
 }
 
 

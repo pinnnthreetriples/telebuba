@@ -289,12 +289,15 @@ async def test_the_card_shows_the_preparation_of_a_warming_phone_stint_only() ->
 class _Pod:
     """The pod side of ``prepare_pod``: the open and the park/stop after it."""
 
-    def __init__(self, *, signed_in: bool = True) -> None:
+    def __init__(self, *, signed_in: bool = True, refusal: str | None = None) -> None:
         self.calls: list[str] = []
         self.signed_in = signed_in
+        self.refusal = refusal
 
     async def open(self, account_id: str, *, background: bool = False) -> OpenMobileResult:
         self.calls.append("open:background" if background else "open")
+        if self.refusal is not None:
+            raise _refused(self.refusal)
         return OpenMobileResult(account_id=account_id, status="started", signed_in=self.signed_in)
 
     async def park(self, _account_id: str) -> bool:
@@ -332,6 +335,39 @@ async def test_the_prepared_pod_gives_its_slot_back(
 
     assert pod.calls == ["open:background", "stop"], "a TTL of 0 stops even a parked pod"
     assert not _mobile_cycle._RUNNING
+
+
+def _refused(code: str) -> EmulatorRefusedError:
+    error = EmulatorRefusedError("emulator_not_running")
+    error.code = code
+    return error
+
+
+@pytest.mark.usefixtures("pod_slots")
+@pytest.mark.parametrize(
+    ("code", "kept"), [("emulator_screen_unknown", True), ("emulator_app_unresponsive", False)]
+)
+@pytest.mark.asyncio
+async def test_a_pod_whose_screen_could_not_be_read_is_parked_not_stopped(
+    monkeypatch: pytest.MonkeyPatch, code: str, *, kept: bool
+) -> None:
+    # The 20:18 case: a running, signed-in pod on a screen the open did not know was
+    # stopped. It may well be signed in: it is parked for the first visit to read again.
+    # A frozen app is stopped: its next start relaunches it.
+    monkeypatch.setattr(settings.emulator, "pause_ttl_seconds", 3600)
+    pod = _Pod(refusal=code)
+    _use(pod, monkeypatch)
+
+    with pytest.raises(EmulatorRefusedError):
+        await _mobile_cycle.prepare_pod("acc-1")
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+    assert pod.calls == ["open:background", "park" if kept else "stop"]
+    assert ("acc-1" in _mobile_cycle._PARKED) is kept
+    for task in list(_mobile_cycle._DETACHED):
+        task.cancel()
+    await asyncio.gather(*_mobile_cycle._DETACHED, return_exceptions=True)
 
 
 @pytest.mark.usefixtures("pod_slots")

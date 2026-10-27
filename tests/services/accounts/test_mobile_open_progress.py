@@ -93,16 +93,21 @@ async def test_a_sign_in_that_stops_short_is_logged_and_ends_by_hand(
 
 
 @pytest.mark.asyncio
-async def test_a_signed_out_app_that_shows_no_entry_screen_ends_by_hand(
+async def test_an_app_on_a_screen_nobody_knows_ends_by_hand_with_its_reason(
     container: _Container,
+    events: list[tuple[str, dict[str, object]]],
 ) -> None:
+    # Was ``(False, None)`` and a bare "manual": the dialog showed no reason and warming
+    # parked the account in ``error``. A screen still unknown after a few BACKs is now
+    # its own (passing) refusal, logged like any other sign-in that stops short.
     await _account()
     container.screens = ["unknown"]
 
     result = await open_account_mobile("acc")
 
-    assert (result.signed_in, result.sign_in_refusal) == (False, None)
-    assert _stage() == ("manual", None)
+    assert (result.signed_in, result.sign_in_refusal) == (False, "emulator_screen_unknown")
+    assert _stage() == ("manual", "emulator_screen_unknown")
+    assert ("account_mobile_sign_in_failed", {"reason": "emulator_screen_unknown"}) in events
 
 
 @pytest.mark.asyncio

@@ -67,6 +67,8 @@ if TYPE_CHECKING:
 _NOT_SIGNED_IN = "emulator_not_signed_in"
 _CAPACITY: EmulatorRefusalCode = "emulator_capacity"
 _APP_OFFLINE: EmulatorRefusalCode = "emulator_app_offline"
+# The open could not read the app's screen: the pod may well be signed in.
+_SCREEN_UNKNOWN: EmulatorRefusalCode = "emulator_screen_unknown"
 # Causes a later cycle may not meet again; every other code needs the operator.
 _PASSING_CODES = frozenset(
     {
@@ -79,6 +81,8 @@ _PASSING_CODES = frozenset(
         "emulator_field_missing",
         "emulator_screen_timeout",
         _APP_OFFLINE,
+        "emulator_app_unresponsive",
+        _SCREEN_UNKNOWN,
         "device_code_cooldown",
         "device_primary_unavailable",
     }
@@ -223,8 +227,10 @@ async def prepare_pod(account_id: str) -> bool:
     Takes a warming slot like a visit, waiting ``_SLOT_WAIT_SECONDS`` between tries
     while the host is full (``emulator_capacity`` after ``_SLOT_WAIT_LIMIT_SECONDS``),
     and gives it back the same way: a signed-in pod is parked
-    for the first visit, any other is stopped. Raises the open's refusal, and
-    ``EmulatorBusyError`` while the operator holds the phone (left running: theirs).
+    for the first visit, and so is one whose screen the open could not read (it may be
+    signed in: the visit reads it again); any other is stopped. Raises the open's
+    refusal, and ``EmulatorBusyError`` while the operator holds the phone (left
+    running: theirs).
     """
     holding = _PARKED.pop(account_id, None) is not None or account_id in _RUNNING
     give_up = asyncio.get_running_loop().time() + _SLOT_WAIT_LIMIT_SECONDS
@@ -236,15 +242,18 @@ async def prepare_pod(account_id: str) -> bool:
         await asyncio.sleep(_SLOT_WAIT_SECONDS)
     _RUNNING.add(account_id)
     owned = True
-    signed_in = False
+    signed_in = kept = False
     try:
         signed_in = (await open_account_mobile(account_id, background=True)).signed_in
     except EmulatorBusyError:
         owned = False
         raise
+    except EmulatorRefusedError as exc:
+        kept = exc.code == _SCREEN_UNKNOWN
+        raise
     finally:
         if owned:
-            _detach(_park(account_id) if signed_in else _stop_and_free(account_id))
+            _detach(_park(account_id) if signed_in or kept else _stop_and_free(account_id))
         else:
             _RUNNING.discard(account_id)
     return signed_in

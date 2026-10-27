@@ -181,6 +181,24 @@ async def start_app(serial: str, package: str) -> None:
     )
 
 
+async def force_stop(serial: str, package: str) -> None:
+    await shell(serial, "am", "force-stop", package)
+
+
+async def deny_permissions(serial: str, package: str, permissions: tuple[str, ...]) -> None:
+    """Revoke ``permissions`` from ``package`` and mark them refused for good, in one shell.
+
+    ``user-set user-fixed`` is "denied, don't ask again": Android then answers the
+    app's request itself, with no dialog.
+    """
+    script: list[str] = []
+    for permission in permissions:
+        script += ["pm", "revoke", package, permission, "&&"]
+        script += ["pm", "set-permission-flags", package, permission, "user-set", "user-fixed"]
+        script.append("&&")
+    await shell(serial, *script[:-1])
+
+
 async def open_uri(serial: str, uri: str, package: str) -> None:
     """Open ``uri`` in ``package`` as a tapped link does (``tg://settings``, ``tg://resolve``)."""
     await shell(
@@ -190,8 +208,8 @@ async def open_uri(serial: str, uri: str, package: str) -> None:
     )
 
 
-async def dump_ui(serial: str) -> str:
-    """This moment's UI dump, or ``""`` when uiautomator could not take one in a few tries.
+async def dump_ui(serial: str) -> str | None:
+    """This moment's UI dump, or ``None`` when uiautomator could not take one in a few tries.
 
     One ``adb shell`` script (``_dump_script``) deletes the file, dumps and prints it:
     the file is deleted first because a failed dump ("could not get idle state",
@@ -199,7 +217,8 @@ async def dump_ui(serial: str) -> str:
     screen; the script always exits 0, and only the XML after uiautomator's "dumped
     to" line counts.
     A failed dump is taken again after a poll interval: one is no screen at all, and
-    read as one it would send a BACK press or a tap on a guess.
+    read as one it would send a BACK press or a tap on a guess. ``None`` is no screen at
+    all, as a frozen app gives ("null root node"), never an empty one.
     """
     for attempt in range(_DUMP_ATTEMPTS):
         if attempt:
@@ -210,7 +229,7 @@ async def dump_ui(serial: str) -> str:
         xml = output[marker:].partition("\n")[2].strip() if marker >= 0 else ""
         if xml:
             return xml
-    return ""
+    return None
 
 
 async def press(serial: str, *keycodes: int) -> None:

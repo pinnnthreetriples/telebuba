@@ -3,11 +3,15 @@
 Every action first finds its target in the current UI dump and fails with
 ``emulator_field_missing`` when it is not there — nothing is typed into, or tapped
 at, a place the screen did not show. Text is validated before the first keystroke.
+The contacts permission is refused for good before the app first starts: Telegram never
+syncs the phone's seeded contacts to the account.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import phonenumbers
@@ -20,6 +24,7 @@ from core.emulator._text import escape_input_text
 from core.emulator.assets import ensure_telegram_apk
 from core.emulator.ui_dump import (
     classify,
+    deny_button,
     fields,
     find,
     labels,
@@ -38,6 +43,12 @@ _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
 _WEB_PACKAGE = "org.telegram.messenger.web"
 _PACKAGE_INSTALLER = "com.android.packageinstaller"
 _PLAY_STORE_INSTALLER = "com.android.vending"
+# The contacts group Telegram asks for: refused for good, so Android answers it alone.
+_CONTACTS_PERMISSIONS = (
+    "android.permission.READ_CONTACTS",
+    "android.permission.WRITE_CONTACTS",
+    "android.permission.GET_ACCOUNTS",
+)
 # The Telegram found on each phone, by serial, so a bring-to-front or a link needs no
 # ``pm list packages``. A phone without one is never remembered, so ``ensure_app``'s
 # install is seen at the next read; forgotten whenever a container starts
@@ -47,9 +58,16 @@ _PACKAGES: dict[str, str] = {}
 # How often each serial was forgotten: a lookup a new container overtook is not remembered.
 _FORGOTTEN: dict[str, int] = {}
 
+# Stdlib sink, codes and step names only (see ``core.emulator._errors``).
+logger = logging.getLogger(__name__)
+
 
 async def read_screen(serial: str) -> tuple[Screen, list[UiNode]]:
-    nodes = parse_dump(await adb.dump_ui(serial))
+    """The screen now; ``unresponsive`` when the phone gave no dump at all."""
+    xml = await adb.dump_ui(serial)
+    if xml is None:
+        return "unresponsive", []
+    nodes = parse_dump(xml)
     return classify(nodes), nodes
 
 
@@ -99,6 +117,17 @@ async def bring_app_to_front(serial: str) -> None:
     await adb.start_app(serial, package)
 
 
+async def restart_app(serial: str) -> None:
+    """Kill the app and launch it again: a frozen one comes back on its saved screen."""
+    package = await app_package(serial) or settings.emulator.telegram_package
+    await adb.force_stop(serial, package)
+    await adb.start_app(serial, package)
+
+
+async def go_back(serial: str) -> None:
+    await adb.press(serial, adb.KEYCODE_BACK)
+
+
 async def leave_app(serial: str) -> None:
     """Send the app to the background with HOME, as a person does when done with it."""
     await adb.press(serial, adb.KEYCODE_HOME)
@@ -124,7 +153,16 @@ async def ensure_app(serial: str, *, apk_path: Path | None = None) -> None:
             package = app_identity(target_apk).package
         installer = _PACKAGE_INSTALLER if package == _WEB_PACKAGE else _PLAY_STORE_INSTALLER
         await adb.install_apk(serial, target_apk, installer_package=installer)
+    await _deny_contacts(serial, package)
     await adb.start_app(serial, package)
+
+
+async def _deny_contacts(serial: str, package: str) -> None:
+    """Refuse the contacts for good; a phone that will not is denied on screen instead."""
+    with suppress(EmulatorError):
+        await adb.deny_permissions(serial, package, _CONTACTS_PERMISSIONS)
+        return
+    logger.warning("contacts permission not preset on %s", serial)
 
 
 def split_phone(phone: str) -> tuple[str, str]:
@@ -163,6 +201,16 @@ async def enter_phone(serial: str, nodes: list[UiNode], phone: str) -> None:
         await adb.human_tap(serial, box)
         await adb.human_type(serial, value)
     await adb.press(serial, adb.KEYCODE_ENTER)
+
+
+async def deny_permission(serial: str, nodes: list[UiNode]) -> None:
+    """Tap the permission dialog's deny button, found by its resource-id."""
+    await adb.human_tap(serial, _require(deny_button(nodes)))
+
+
+async def put_off_contacts(serial: str, nodes: list[UiNode]) -> None:
+    """Answer Telegram's contacts prompt «not now»: it does not ask again."""
+    await adb.human_tap(serial, _require(find(nodes, labels().contacts_not_now)))
 
 
 async def confirm_number(serial: str, nodes: list[UiNode]) -> None:

@@ -33869,7 +33869,9 @@
                   "emulator_data_base_missing",
                   "emulator_preparing",
                   "emulator_screen_timeout",
-                  "emulator_app_offline"
+                  "emulator_app_offline",
+                  "emulator_app_unresponsive",
+                  "emulator_screen_unknown"
                 ]
               },
               {
