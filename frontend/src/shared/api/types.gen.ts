@@ -1795,7 +1795,7 @@ export type ChatBroadcastBoardAccount = {
   /**
    * State
    */
-  state: 'active' | 'halted' | 'busy';
+  state: 'active' | 'resting' | 'halted' | 'busy';
   /**
    * Halted Reason
    */
@@ -1813,6 +1813,14 @@ export type ChatBroadcastBoardAccount = {
     | 'masstagging'
     | 'bulk_messages'
     | null;
+  /**
+   * Resting Until
+   */
+  resting_until?: string | null;
+  /**
+   * Rest Reason
+   */
+  rest_reason?: string | null;
 };
 
 /**

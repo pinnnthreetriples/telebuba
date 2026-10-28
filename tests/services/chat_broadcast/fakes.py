@@ -28,11 +28,13 @@ from schemas.telegram_actions import (
     ResolveChat,
 )
 from schemas.telegram_actions_broadcast import BroadcastGroup, ChatlistResult, WritableGroupsResult
+from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
 from services import chat_broadcast as service
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+    from schemas.spam_status import SpamStatusKind
     from schemas.telegram_action_results import ActionStatus
     from schemas.telegram_actions import TelegramAction, TelegramReadAction
     from schemas.telegram_actions_chat import ChatKind
@@ -92,6 +94,11 @@ class FakeTelegram:
     folders: dict[str, ChatlistResult] = field(default_factory=dict)
     deleted: set[int] = field(default_factory=set)
     captcha: str = "no_challenge"
+    # account -> what @SpamBot answers about it; unscripted accounts are blocked.
+    spam: dict[str, SpamStatusKind] = field(default_factory=dict)
+    spam_checks: list[str] = field(default_factory=list)
+    # Accounts an admin muted alone; any other refused chat is closed to everybody.
+    muted: set[str] = field(default_factory=set)
     # Join token -> the clock time an admin approves the request at.
     approve_at: dict[str, int] = field(default_factory=dict)
     clock: Clock | None = None
@@ -172,8 +179,17 @@ class FakeTelegram:
             case ReadChatMessages():
                 missing = [m for m in action.message_ids if m in self.deleted]
                 return ReadChatMessagesResult(messages=[], missing_ids=missing)
+            case CheckWriteRights():
+                assert action.in_chat
+                return WriteRightsResult(
+                    scope="self_only" if account_id in self.muted else "everyone"
+                )
             case _:  # pragma: no cover - the engine reads nothing else
                 raise AssertionError(action)
+
+    async def spam_verdict(self, account_id: str) -> SpamStatusKind:
+        self.spam_checks.append(account_id)
+        return self.spam.get(account_id, "limited")
 
     async def solve_challenge(self, _account_id: str, _chat: str, _group_id: int) -> str:
         return self.captcha

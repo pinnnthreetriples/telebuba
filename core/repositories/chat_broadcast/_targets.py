@@ -56,12 +56,59 @@ def _update_roster(campaign_id: str, account_id: str, fields: dict[str, object])
 async def halt_account(campaign_id: str, account_id: str, reason: str) -> None:
     """Take an account out of this campaign for good (spam block, errors in a row)."""
     await asyncio.to_thread(
-        _update_roster, campaign_id, account_id, {"state": "halted", "halted_reason": reason}
+        _update_roster,
+        campaign_id,
+        account_id,
+        {
+            "state": "halted",
+            "halted_reason": reason,
+            "resting_until_unix": None,
+            "rest_reason": None,
+        },
     )
 
 
 async def set_consecutive_errors(campaign_id: str, account_id: str, count: int) -> None:
     await asyncio.to_thread(_update_roster, campaign_id, account_id, {"consecutive_errors": count})
+
+
+async def rest_account(campaign_id: str, account_id: str, until_unix: int, reason: str) -> None:
+    """Out of the rotation until ``until_unix`` (a flood, its limit, a spam block)."""
+    await asyncio.to_thread(
+        _update_roster,
+        campaign_id,
+        account_id,
+        {"resting_until_unix": until_unix, "rest_reason": reason},
+    )
+
+
+async def wake_account(campaign_id: str, account_id: str) -> None:
+    """Back in the rotation after a rest."""
+    await asyncio.to_thread(
+        _update_roster, campaign_id, account_id, {"resting_until_unix": None, "rest_reason": None}
+    )
+
+
+def _revive_accounts(campaign_id: str, keep_reasons: frozenset[str]) -> list[str]:
+    halted = _ROSTER.c.state == "halted"
+    revivable = (_ROSTER.c.halted_reason.is_(None)) | (_ROSTER.c.halted_reason.not_in(keep_reasons))
+    where = (_ROSTER.c.campaign_id == campaign_id) & halted & revivable
+    with _get_engine().begin() as connection:
+        revived = [
+            str(account_id)
+            for (account_id,) in connection.execute(select(_ROSTER.c.account_id).where(where))
+        ]
+        connection.execute(
+            update(_ROSTER)
+            .where(where)
+            .values(state="active", halted_reason=None, consecutive_errors=0),
+        )
+    return revived
+
+
+async def revive_accounts(campaign_id: str, keep_reasons: frozenset[str]) -> list[str]:
+    """Bring back accounts halted for any reason but ``keep_reasons``; return their ids."""
+    return await asyncio.to_thread(_revive_accounts, campaign_id, keep_reasons)
 
 
 def _list_targets(campaign_id: str) -> list[TargetRecord]:

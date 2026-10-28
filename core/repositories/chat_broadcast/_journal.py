@@ -155,6 +155,25 @@ async def count_account_sends_since(account_id: str, since_unix: int) -> int:
     return await asyncio.to_thread(_count_account_sends_since, account_id, since_unix)
 
 
+def _list_account_send_times_since(account_id: str, since_unix: int) -> list[int]:
+    statement = (
+        select(_MESSAGES.c.created_unix)
+        .where(
+            _MESSAGES.c.account_id == account_id,
+            _MESSAGES.c.created_unix >= since_unix,
+            _MESSAGES.c.status.in_(_CHARGED),
+        )
+        .order_by(_MESSAGES.c.created_unix.asc())
+    )
+    with _get_engine().connect() as connection:
+        return [int(value) for value in connection.execute(statement).scalars()]
+
+
+async def list_account_send_times_since(account_id: str, since_unix: int) -> list[int]:
+    """When each of one account's charged sends since ``since_unix`` went, oldest first."""
+    return await asyncio.to_thread(_list_account_send_times_since, account_id, since_unix)
+
+
 def _count_run_sent(run_id: str) -> int:
     statement = select(func.count()).where(
         _MESSAGES.c.run_id == run_id, _MESSAGES.c.status.in_(_CHARGED)

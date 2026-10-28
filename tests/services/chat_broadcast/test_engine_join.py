@@ -152,6 +152,7 @@ async def test_a_flooded_join_hands_the_chat_to_another_account(telegram: FakeTe
     assert ("a2", "alpha") in telegram.joins
     assert [s.account_id for s in telegram.sent] == ["a2"]
     roster = {r.account_id: r for r in await repository.list_roster(campaign_id)}
-    assert (roster["a1"].state, roster["a1"].halted_reason) == ("halted", "flood_wait")
+    # It rested out Telegram's wait and came back; it never left the campaign.
+    assert (roster["a1"].state, roster["a1"].resting_until_unix) == ("active", None)
     [target] = await repository.list_targets(campaign_id)
     assert target.handed_from_account_id == "a1"

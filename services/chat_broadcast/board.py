@@ -77,16 +77,20 @@ async def load_board(campaign_id: str) -> ChatBroadcastBoard | None:
 def _account(
     item: RosterAccount, busy: dict[str, ChatBroadcastBusyOwner]
 ) -> ChatBroadcastBoardAccount:
-    state: Literal["active", "halted", "busy"] = "active"
+    state: Literal["active", "resting", "halted", "busy"] = "active"
     if item.state == "halted":
         state = "halted"
     elif item.account_id in busy:
         state = "busy"
+    elif item.resting_until_unix is not None:
+        state = "resting"
     return ChatBroadcastBoardAccount(
         account_id=item.account_id,
         state=state,
         halted_reason=item.halted_reason,
         busy_owner=busy.get(item.account_id),
+        resting_until=_at(item.resting_until_unix) if state == "resting" else None,
+        rest_reason=item.rest_reason if state == "resting" else None,
     )
 
 

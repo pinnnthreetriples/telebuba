@@ -81,6 +81,10 @@ _chat_broadcast_accounts = Table(
     Column("state", String, nullable=False, server_default=text("'active'")),
     Column("halted_reason", String, nullable=True),
     Column("consecutive_errors", Integer, nullable=False, server_default=text("0")),
+    # An ``active`` account Telegram or its own limit sent to rest: out of the rotation
+    # until then, back on its own after. Added by migration 103.
+    Column("resting_until_unix", Integer, nullable=True),
+    Column("rest_reason", String, nullable=True),
     CheckConstraint("state IN ('active','halted')"),
 )
 

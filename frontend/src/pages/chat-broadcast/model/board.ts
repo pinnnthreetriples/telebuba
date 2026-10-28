@@ -9,6 +9,8 @@ import type {
 } from '@/shared/api';
 import type { BadgeTone } from '@/shared/ui';
 
+import { restLabel } from './pipeline';
+
 // `countdownTo` (epoch ms) makes the cell tick down to the next message instead of `when`.
 export type RowView = { label: string; tone: BadgeTone; when: string; countdownTo?: number };
 
@@ -60,6 +62,17 @@ export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context):
       label: t('chatBroadcast.status.paused'),
       tone: 'neutral',
       when: t('chatBroadcast.when.paused'),
+    };
+  }
+  const resting = board.accounts.find(
+    (account) => account.account_id === row.account_id && account.state === 'resting',
+  );
+  if (resting?.resting_until && (row.state === 'waiting' || row.state === 'queued')) {
+    // Not "writes in a minute" again and again: its account is out until a known time.
+    return {
+      label: t('chatBroadcast.status.accountResting', { reason: restLabel(t, resting, time) }),
+      tone: 'warning',
+      when: t('chatBroadcast.when.writesAt', { time: time(resting.resting_until) }),
     };
   }
   const next = row.next_action_at ?? null;

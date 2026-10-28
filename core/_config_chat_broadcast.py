@@ -49,8 +49,21 @@ class ChatBroadcastSettings(BaseSettings):
     rest_poll_seconds: float = Field(default=30.0, gt=0.0)
     # Back-off after the account's connection dropped mid-chat.
     reconnect_delay_seconds: float = Field(default=60.0, gt=0.0)
-    # Back-off after the account hit its own join cap or hourly/daily message limit.
+    # Back-off after the account hit its own join cap.
     limit_retry_seconds: float = Field(default=900.0, gt=0.0)
+    # An account Telegram (or its own hourly/daily limit) sends to rest sits it out and
+    # comes back on its own. A rest this short keeps every chat with the account; one up
+    # to ``handover_rest_seconds`` hands over the chats it has not entered yet; a longer
+    # one hands over everything, because waiting would cost more than a re-join.
+    keep_chats_rest_seconds: float = Field(default=60.0, ge=0.0)
+    handover_rest_seconds: float = Field(default=900.0, ge=0.0)
+    # Added on top of Telegram's own wait, which is to the second and not a promise.
+    rest_margin_seconds: float = Field(default=15.0, ge=0.0)
+    # A flood answer that names no wait.
+    default_flood_seconds: float = Field(default=300.0, gt=0.0)
+    # A spam block (PeerFlood, or a ban @SpamBot confirms) rests the account this long;
+    # @SpamBot is asked again at its end, and a block still standing takes it out.
+    spam_rest_seconds: float = Field(default=21600.0, gt=0.0)
     # "Typing…" lasts proportionally to the text, within these bounds.
     typing_chars_per_second: float = Field(default=12.0, gt=0.0)
     typing_min_seconds: float = Field(default=1.5, ge=0.0)
@@ -71,5 +84,8 @@ class ChatBroadcastSettings(BaseSettings):
     def _check_typing_bounds(self) -> ChatBroadcastSettings:
         if self.typing_min_seconds > self.typing_max_seconds:
             msg = "typing_min_seconds must not exceed typing_max_seconds"
+            raise ValueError(msg)
+        if self.keep_chats_rest_seconds > self.handover_rest_seconds:
+            msg = "keep_chats_rest_seconds must not exceed handover_rest_seconds"
             raise ValueError(msg)
         return self

@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from schemas.gemini import GeminiRequest, GeminiResult
+    from schemas.spam_status import SpamStatusKind
     from schemas.telegram_actions import ActionResult, TelegramAction, TelegramReadAction
     from services.neurocomment.challenge import ChallengeOutcome
 
@@ -123,6 +124,20 @@ async def solve_challenge(account_id: str, chat: str, group_id: int) -> Challeng
     return outcome
 
 
+async def spam_verdict(account_id: str) -> SpamStatusKind:
+    """Ask @SpamBot afresh; a probe that failed reads ``unknown``.
+
+    Never the cache: a ``clean`` from yesterday says nothing about the refusal the
+    account just got.
+    """
+    from services.spam_status import refresh_spam_status  # noqa: PLC0415 - import cycle
+
+    assert_live_run()
+    verdict = await refresh_spam_status(account_id, force=True)
+    assert_live_run()
+    return verdict.status
+
+
 def now() -> int:
     """Unix seconds — the engine's one clock, so tests can move it."""
     return int(time.time())
@@ -144,4 +159,5 @@ __all__ = [
     "run_scope",
     "sleep",
     "solve_challenge",
+    "spam_verdict",
 ]

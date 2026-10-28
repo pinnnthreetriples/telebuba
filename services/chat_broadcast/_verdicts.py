@@ -1,7 +1,8 @@
 """What one gateway answer means for the account, the chat and the step.
 
 Grouped the way ``services.neuroshilling._telegram`` groups them, because the grouping
-IS the policy: an account-wide refusal takes the account out and hands its chats to
+IS the policy: an account-wide refusal either rests the account (a flood, a spam block —
+it comes back by itself) or takes it out for good (a dead session), and its chats go to
 others; a chat-wide one skips the chat for everyone; an answer whose outcome nobody
 learnt is never repeated.
 """
@@ -18,7 +19,11 @@ if TYPE_CHECKING:
 SendVerdict = Literal[
     "sent",
     "unconfirmed",
-    # Spam block, flood, frozen, logged out: the account leaves the campaign.
+    # A flood wait: the account rests for the time Telegram named, then comes back.
+    "account_rest",
+    # A spam block, or a ban @SpamBot has to tell apart from one chat's ban.
+    "account_spam",
+    # Frozen, deactivated, logged out: the account leaves the campaign.
     "account_halt",
     # Slow mode in this chat: come back to it later.
     "chat_wait",
@@ -33,6 +38,8 @@ JoinVerdict = Literal[
     "joined",
     "already",
     "requested",
+    "account_rest",
+    "account_spam",
     "account_halt",
     "retry",
     "invalid_link",
@@ -40,7 +47,8 @@ JoinVerdict = Literal[
     "failed",
 ]
 
-_HALT_STATUSES: Final = frozenset({"flood_wait", "peer_flood", "premium_wait"})
+_REST_STATUSES: Final = frozenset({"flood_wait", "premium_wait"})
+_SPAM_STATUS: Final = "peer_flood"
 _ACCOUNT_DEAD_MESSAGES: Final = frozenset({"account_deactivated", "account_frozen", "session_dead"})
 # A gateway "this chat does not exist for this account" — a username nobody has, an
 # invite nobody can open, an id the session never cached.
@@ -48,9 +56,9 @@ _NOT_FOUND_MESSAGE: Final = "chat_not_found"
 
 _SEND_ERRORS: Final[dict[str, SendVerdict]] = {
     UNCONFIRMED_ERROR_TYPE: "unconfirmed",
-    # The one account restriction that still arrives under its own class name: the
-    # spam block that forbids writing to every group.
-    "UserBannedInChannelError": "account_halt",
+    # The spam block that forbids writing to every group arrives under this class name
+    # — and so does a ban in this one chat; @SpamBot tells the two apart.
+    "UserBannedInChannelError": "account_spam",
     "ChatWriteForbiddenError": "admin_only",
     "ChatSendPlainForbiddenError": "admin_only",
     "ChatSendMediaForbiddenError": "admin_only",
@@ -82,10 +90,20 @@ _JOIN_ERRORS: Final[dict[str, JoinVerdict]] = {
 }
 
 
+def _account_verdict(result: ActionResult) -> Literal["account_rest", "account_spam"] | None:
+    if result.status in _REST_STATUSES:
+        return "account_rest"
+    if result.status == _SPAM_STATUS:
+        return "account_spam"
+    return None
+
+
 def classify_send(result: ActionResult) -> SendVerdict:  # noqa: PLR0911 - one per family
     if result.status == "ok":
         return "sent"
-    if result.status in _HALT_STATUSES or result.error_message in _ACCOUNT_DEAD_MESSAGES:
+    if (account := _account_verdict(result)) is not None:
+        return account
+    if result.error_message in _ACCOUNT_DEAD_MESSAGES:
         return "account_halt"
     if result.status == "slow_mode_wait":
         return "chat_wait"
@@ -98,12 +116,14 @@ def classify_send(result: ActionResult) -> SendVerdict:  # noqa: PLR0911 - one p
     return _SEND_ERRORS.get(result.error_type or "", "failed")
 
 
-def classify_join(result: ActionResult) -> JoinVerdict:
+def classify_join(result: ActionResult) -> JoinVerdict:  # noqa: PLR0911 - one per family
     if result.status == "ok":
         return "joined"
     if result.status == "already_participant":
         return "already"
-    if result.status in _HALT_STATUSES or result.error_message in _ACCOUNT_DEAD_MESSAGES:
+    if (account := _account_verdict(result)) is not None:
+        return account
+    if result.error_message in _ACCOUNT_DEAD_MESSAGES:
         return "account_halt"
     if result.status in {"slow_mode_wait", "unavailable"}:
         return "retry"
@@ -113,8 +133,8 @@ def classify_join(result: ActionResult) -> JoinVerdict:
 
 
 def halt_reason(result: ActionResult) -> str:
-    """A stable code for why the account left: the limit, the dead session, or the class."""
-    if result.status in _HALT_STATUSES:
+    """A stable code for why the account rests or left: the limit, the session, the class."""
+    if result.status in _REST_STATUSES or result.status == _SPAM_STATUS:
         return result.status
     if result.error_message in _ACCOUNT_DEAD_MESSAGES:
         return result.error_message or result.status

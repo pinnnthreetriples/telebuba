@@ -340,3 +340,42 @@ test('conflict codes are read off the error envelope', () => {
   expect(conflictCode({ error: { code: 'invalid' } })).toBeNull();
   expect(conflictCode(null)).toBeNull();
 });
+
+test('a chat whose account rests says why and when it writes, not a countdown that repeats', () => {
+  const resting = board({
+    accounts: [
+      {
+        account_id: 'a1',
+        state: 'resting',
+        halted_reason: null,
+        busy_owner: null,
+        resting_until: '2026-10-06T14:32:00Z',
+        rest_reason: 'day_limit',
+      },
+      { account_id: 'a2', state: 'active', halted_reason: null, busy_owner: null },
+    ],
+  });
+  const view = rowView(t, row({ state: 'waiting', next_action_at: '2026-10-06T12:01:00Z' }), {
+    ...ctx,
+    board: resting,
+  });
+
+  expect(view).toEqual({
+    label: 'Аккаунт отдыхает: лимит в сутки до 14:32',
+    tone: 'warning',
+    when: 'пишет в 14:32',
+  });
+  const other = rowView(t, row({ state: 'waiting', account_id: 'a2' }), { ...ctx, board: resting });
+  expect(other.label).not.toContain('отдыхает');
+
+  const pipeline = pipelineView(t, {
+    board: resting,
+    settings: draftOf(SETTINGS_READ).settings,
+    missing: [],
+    time,
+    nameOf: (id) => `n-${id}`,
+  });
+  expect(pipeline.extras.map((extra) => extra.text)).toEqual([
+    expect.stringContaining('n-a1 (лимит в сутки до 14:32)'),
+  ]);
+});

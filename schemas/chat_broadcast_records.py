@@ -58,6 +58,8 @@ class RosterAccount(BaseModel):
     state: Literal["active", "halted"]
     halted_reason: str | None = None
     consecutive_errors: int = 0
+    resting_until_unix: int | None = None
+    rest_reason: str | None = None
 
 
 class TargetSeed(BaseModel):

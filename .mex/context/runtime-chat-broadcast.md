@@ -1,7 +1,7 @@
 ---
 name: runtime-chat-broadcast
 description: Chat broadcast campaigns, joins into lists, chains, rounds and the board by chat.
-last_updated: 2026-10-08
+last_updated: 2026-10-28
 edges:
   - target: context/runtime-neuroshilling.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -45,8 +45,22 @@ restart resume).
   error, or an answer that drops or invents a link or mention, uses a forbidden word or
   balloons — the operator's text goes out. Links are the offer, so the warming link filter
   is not applied to them; only its forbidden words are.
-- An account at its hourly/daily limit is checked before it joins anything, and hands only
-  chats it has not entered to accounts that still have room — never back and forth.
+- An account Telegram stops is not lost: a flood wait, its own hourly/daily limit or a
+  spam block RESTS it (`services/chat_broadcast/_rotation.py`) until a known moment — the
+  flood's own wait, the second the oldest send leaves the limit's window, or hours for a
+  spam block that @SpamBot is asked about at the end — and a waker brings it back. While
+  it rests, a short rest keeps its chats, a medium one hands over the chats it has not
+  entered, a long one hands over all, and only to accounts that still have room. The board
+  shows the reason and the moment instead of a "writes in a minute" that keeps repeating.
+- A ban arrives as the same class whether it is the spam block or one chat's ban, so
+  @SpamBot is asked at once: a clean account loses only that chat, moved once to another
+  account. Only a dead session (frozen, deactivated, logged out) leaves for good; Start and
+  Continue give every other halted account a fresh try.
+- Slow mode defers the chat. `ChatWriteForbiddenError` reads the chat's rights: a mute
+  on this account alone moves the chat once, a chat closed to all is skipped. A chat
+  refusing photos gets the text alone.
+- A round where every account rests waits for the first one back; it stalls only when
+  nobody is live and nobody rests.
 - Settings cannot be saved while a run is attached: the run reads them once. The pauses
   are the exception (the board's gear): the run reads them live, and a rest under way is
   redrawn from its start, which only this process knows — after a restart it keeps its end.

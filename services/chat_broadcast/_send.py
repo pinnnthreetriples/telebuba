@@ -3,12 +3,13 @@
 Each step is reserved in the journal (``pending``) BEFORE the send. An occupied key is a
 step already played — the resume path — and a refusal that never reached the chat
 (slow mode, a dropped connection, not a member) gives the reservation back so the step
-is played later instead of being lost.
+is played later instead of being lost. A chat that takes no photos gets the same text
+without one; a step with no text has nothing left to send there.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from core.config import settings
 from core.logging import log_event
@@ -16,8 +17,8 @@ from core.repositories import chat_broadcast as repository
 from schemas.chat_broadcast_records import JournalKey
 from schemas.telegram_actions import BroadcastForwardPost, BroadcastSendMessage
 from services import pacing
-from services.chat_broadcast import _moves, _rewrite, _seams
-from services.chat_broadcast._verdicts import classify_send, halt_reason
+from services.chat_broadcast import _moves, _rewrite, _rotation, _seams
+from services.chat_broadcast._verdicts import classify_send
 from services.chat_broadcast.links import parse_post
 
 if TYPE_CHECKING:
@@ -26,10 +27,10 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult, TelegramAction
     from services.chat_broadcast._context import RunContext
 
-Step = Literal["acted", "idle", "halted", "volume"]
+Step = Literal["acted", "idle", "halted", "resting", "volume"]
 _WRITABLE = ("queued", "waiting", "writing", "reconnecting")
 _HOUR = 3600
-_DAY = 86_400
+_NO_PHOTO_ERRORS: Final = frozenset({"ChatSendPhotosForbiddenError", "ChatSendMediaForbiddenError"})
 
 
 async def volume_reached(ctx: RunContext) -> bool:
@@ -40,15 +41,7 @@ async def volume_reached(ctx: RunContext) -> bool:
 
 
 async def at_account_limit(ctx: RunContext, account_id: str) -> bool:
-    if not ctx.settings.account_limit:
-        return False
-    now = _seams.now()
-    hour = await repository.count_account_sends_since(account_id, now - _HOUR)
-    if hour >= ctx.settings.per_hour:
-        return True
-    return (
-        await repository.count_account_sends_since(account_id, now - _DAY) >= ctx.settings.per_day
-    )
+    return await _rotation.limit_ends(ctx, account_id) is not None
 
 
 def _pause(bounds: tuple[int, int]) -> float:
@@ -160,28 +153,23 @@ async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> 
 async def limit_reached(
     ctx: RunContext, account_id: str, target: TargetRecord, *, state: str
 ) -> Step:
-    """Its limit is spent: the chats it has not entered go to accounts with room.
+    """Its limit is spent: it rests until the limit lets it write again, to the second.
 
-    The rest wait for its window to reopen; with nobody having room, everything waits.
+    While it rests its chats go to accounts with room — the ones it has not entered
+    when the wait is short, all of them when it is long; with nobody having room they
+    wait for it.
     """
+    await repository.update_target(
+        ctx.campaign_id, target.chat_key, expect_states=_moves.ACTIVE_STATES, state=state
+    )
     await log_event(
         "WARNING",
         "chat_broadcast_account_limit",
         account_id=account_id,
         extra={"campaign_id": ctx.campaign_id},
     )
-    await _moves.defer(ctx, target, settings.chat_broadcast.limit_retry_seconds, state=state)
-    roster = await repository.list_roster(ctx.campaign_id)
-    room = [
-        item.account_id
-        for item in roster
-        if item.state == "active"
-        and item.account_id != account_id
-        and not await at_account_limit(ctx, item.account_id)
-    ]
-    if room:
-        await _moves.hand_over(ctx, account_id, room, only_unjoined=True)
-    return "idle"
+    rested = await _rotation.limit(ctx, account_id, target)
+    return rested or "idle"
 
 
 async def _play_step(
@@ -208,7 +196,39 @@ async def _play_step(
         await _advance(ctx, target, step)
         return None
     result = await _seams.execute(account_id, action)
+    if _photo_refused(action, result):
+        result = await _without_photo(ctx, account_id, target, key, action)
     return await _settle(ctx, account_id, target, result, _Outgoing(key, text, rewritten))
+
+
+def _photo_refused(action: TelegramAction, result: ActionResult) -> bool:
+    return (
+        isinstance(action, BroadcastSendMessage)
+        and action.photo is not None
+        and bool(action.text.strip())
+        and result.error_type in _NO_PHOTO_ERRORS
+    )
+
+
+async def _without_photo(
+    ctx: RunContext,
+    account_id: str,
+    target: TargetRecord,
+    key: JournalKey,
+    action: TelegramAction,
+) -> ActionResult:
+    """The chat takes no photos: the same text goes alone, journalled as text."""
+    await repository.release_message(key)
+    await repository.claim_message(
+        key, campaign_id=ctx.campaign_id, account_id=account_id, kind="text", peer_id=target.peer_id
+    )
+    await log_event(
+        "INFO",
+        "chat_broadcast_photo_dropped",
+        account_id=account_id,
+        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+    )
+    return await _seams.execute(account_id, action.model_copy(update={"photo": None}))
 
 
 async def _advance(ctx: RunContext, target: TargetRecord, step: int) -> None:
@@ -263,14 +283,18 @@ async def _settle(
     if verdict in {"chat_wait", "reconnect", "not_member"}:
         await repository.release_message(key)
         return await _retry_later(ctx, account_id, target, verdict, result)
-    if verdict == "account_halt":
-        # Nothing reached the chat: the step goes back, for whoever takes the chat over.
+    if verdict == "account_rest" or verdict == "account_spam" or verdict == "account_halt":  # noqa: PLR1714 - narrows for ty
+        # Nothing reached the chat: the step goes back, for whoever writes there next.
         await repository.release_message(key)
         await repository.update_target(
             ctx.campaign_id, target.chat_key, expect_states=("writing",), state="waiting"
         )
-        await _moves.halt_account(ctx, account_id, halt_reason(result))
-        return "halted"
+        return await _rotation.account_refused(ctx, account_id, target, verdict, result)
+    if verdict == "admin_only" and await _rotation.muted_alone(account_id, target, result):
+        # Only this account is muted there: the step goes back, for the account it moves to.
+        await repository.release_message(key)
+        await _rotation.reroute(ctx, account_id, target, "admin_only")
+        return "acted"
     if verdict == "failed" and not ctx.settings.skip_errors:
         # The run stops for the operator to look; Continue must send this step again.
         await repository.release_message(key)

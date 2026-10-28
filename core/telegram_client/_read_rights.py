@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.tl.functions.channels import GetParticipantRequest
-from telethon.tl.types import ChannelParticipantBanned, InputUserSelf
+from telethon.tl.types import ChannelParticipantBanned, Chat, InputUserSelf
 
+from core.telegram_client._read_chat import peer_reference
 from core.telegram_client._read_comments import _resolve_linked_group_entity
 from schemas.telegram_actions_rights import WriteRightsResult
 
@@ -34,6 +35,16 @@ def _mute_expiry(rights: object) -> str | None:
     """
     until = getattr(rights, "until_date", None)
     return until.isoformat() if isinstance(until, datetime) else None
+
+
+async def _target_entity(client: TelegramClient, action: CheckWriteRights) -> object | None:
+    """The group whose rights answer: the chat itself, or the channel's linked group."""
+    if not action.in_chat:
+        return await _resolve_linked_group_entity(client, action.channel)
+    try:
+        return await client.get_entity(peer_reference(action.channel))
+    except ValueError:
+        return None
 
 
 async def dispatch_check_write_rights(
@@ -56,11 +67,15 @@ async def dispatch_check_write_rights(
     not in, is ``unknown`` with a content-free reason. Everything else propagates to
     ``execute_read_many``, which collapses it to ``RPC: <ClassName>``.
     """
-    entity = await _resolve_linked_group_entity(client, action.channel)
+    entity = await _target_entity(client, action)
     if entity is None:
-        return WriteRightsResult(scope="unknown", reason="no_linked_group")
-    if getattr(getattr(entity, "default_banned_rights", None), "send_messages", False):
-        return WriteRightsResult(scope="everyone")
+        return WriteRightsResult(
+            scope="unknown", reason="chat_not_found" if action.in_chat else "no_linked_group"
+        )
+    closed = getattr(getattr(entity, "default_banned_rights", None), "send_messages", False)
+    # A basic group has no per-member restrictions: nobody there can mute just us.
+    if closed or isinstance(entity, Chat):
+        return WriteRightsResult(scope="everyone" if closed else "none")
     try:
         result = await client(GetParticipantRequest(channel=entity, participant=InputUserSelf()))  # ty: ignore[invalid-argument-type]
     except errors.UserNotParticipantError:
