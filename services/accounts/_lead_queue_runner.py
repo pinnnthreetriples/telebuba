@@ -29,8 +29,8 @@ from schemas.bulk_messages import BulkMessageRequest
 from schemas.run_schedule import clock_minutes
 from services.accounts import bulk_messages
 from services.accounts._bulk_claims import BUSY_CODE
+from services.accounts._bulk_lanes import STOP_CODES
 from services.accounts._bulk_plan import next_open, next_utc_day
-from services.accounts._bulk_runner import STOP_CODES
 from services.accounts._lead_queue_lookup import run_lookup_pass
 from services.accounts._recipient_history import OWNED_BY_OTHER_ACCOUNT, RECENTLY_MESSAGED
 

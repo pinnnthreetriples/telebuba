@@ -9,7 +9,9 @@ UTC-day cap, and the recipient's window open — and starts it, up to
 moment something becomes sendable, and says why on the run row.
 
 A daily cap (half for a young account) no longer drops a recipient: the account
-waits for the next UTC day. An account that hits a stop code is done for the run:
+waits for the next UTC day. A dropped connection or a slow mode sent nothing: the
+same account tries the recipient again after a wait, and only enough of those in a
+row count as a stop. An account that hits a stop code is done for the run:
 each mode skips its remaining recipients, split mode hands them to the accounts
 still live; a limit also starts its rest, and enough of them stop the whole run.
 """
@@ -28,6 +30,14 @@ from core.repositories.outreach import add_outreach_usage, list_outreach_usage
 from schemas.bulk_messages import BulkMessageOutcome
 from schemas.outreach_limits import OutreachDailyUsage
 from schemas.outreach_protection import RUN_STOPPED_CODE
+from services.accounts._bulk_lanes import (
+    SENT_STATUSES,
+    STOP_CODES,
+    Lane,
+    WaitCandidate,
+    retry_later,
+    undo_unsent_hand_overs,
+)
 from services.accounts._bulk_plan import next_open, next_utc_day
 from services.accounts._outreach_protection import LIMIT_CODES, halve, note_limit
 from services.accounts._recipient_history import record_first_message
@@ -36,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
 
     from schemas.bulk_messages import BulkMessageRequest
-    from schemas.bulk_runs import BulkRunAccount, BulkRunItem, WaitReason
+    from schemas.bulk_runs import BulkRunItem, WaitReason
     from schemas.outreach_protection import OutreachProtection
     from schemas.run_schedule import RunSchedule
 
@@ -44,8 +54,6 @@ if TYPE_CHECKING:
     # ``(account_id, peer, protection)``: "typing…" when the protection wants it; never raises.
     ShowTyping = Callable[[str, str, OutreachProtection], Awaitable[None]]
 
-# Statuses where the message may have left the account.
-SENT_STATUSES = frozenset({"ok", "unconfirmed"})
 # A wait shorter than this is not worth a row write for the progress view.
 _REPORTED_WAIT = timedelta(seconds=1)
 
@@ -63,30 +71,6 @@ async def _sleep(wakeup: asyncio.Event, seconds: float | None) -> None:
 
 def _iso(moment: datetime) -> str:
     return moment.isoformat()
-
-
-@dataclass
-class Lane:
-    row: BulkRunAccount
-    sending: bool = False
-    on_break: bool = False
-    # First messages left in ``day``; ``None`` when the run has no daily cap.
-    left: int | None = None
-    day: str = ""
-    young: bool = False  # half of the run's daily cap
-
-    def ready_at(self) -> datetime | None:
-        return None if self.row.ready_at is None else datetime.fromisoformat(self.row.ready_at)
-
-
-@dataclass
-class _Candidate:
-    wake_at: datetime | None = None
-    reason: WaitReason | None = None
-
-    def offer(self, moment: datetime, reason: WaitReason) -> None:
-        if self.wake_at is None or moment < self.wake_at:
-            self.wake_at, self.reason = moment, reason
 
 
 @dataclass
@@ -151,33 +135,11 @@ class BulkRun:
         await self._report(None, None)
         if not self.cancel.is_set():
             return False
-        await self._undo_unsent_hand_overs()
+        await undo_unsent_hand_overs(self.items)
         return any(i.status == "pending" for i in self.items)
 
-    async def _undo_unsent_hand_overs(self) -> None:
-        """A hand-over the cancel cut off never happened: the refusal is the final word."""
-        for retry in [i for i in self.items if i.status == "pending"]:
-            if retry.id is None:
-                continue
-            refused = next(
-                (
-                    i
-                    for i in self.items
-                    if i.handed_over
-                    and i.recipient == retry.recipient
-                    and i.ordinal == retry.ordinal
-                ),
-                None,
-            )
-            if refused is None:
-                continue
-            refused.handed_over = False
-            await repo.save_bulk_run_item(refused)
-            await repo.delete_bulk_run_item(retry.id)
-            self.items.remove(retry)
-
-    def _pick(self, now: datetime) -> tuple[BulkRunItem | None, _Candidate]:
-        wait = _Candidate()
+    def _pick(self, now: datetime) -> tuple[BulkRunItem | None, WaitCandidate]:
+        wait = WaitCandidate()
         if self.start_at is not None and self.start_at > now:
             wait.offer(self.start_at, "schedule")
             return None, wait
@@ -295,6 +257,9 @@ class BulkRun:
 
     async def _record(self, item: BulkRunItem, lane: Lane, outcome: BulkMessageOutcome) -> None:
         now = _now()
+        if await retry_later(item, lane, outcome, now):
+            return
+        lane.retries = 0
         await self._finish(
             item,
             status=outcome.status,
@@ -415,20 +380,3 @@ class BulkRun:
             error_code=outcome.error_code,
             retry_after_seconds=outcome.retry_after_seconds,
         )
-
-
-# Codes where the account provably sent nothing and cannot send for the rest of the
-# run: stop using it (split hands the recipient on). "unconfirmed" never lands here.
-STOP_CODES = frozenset(
-    {
-        "flood_wait",
-        "slow_mode_wait",
-        "premium_wait",
-        "peer_flood",
-        "account_not_found",
-        "session_dead",
-        "account_deactivated",
-        "account_frozen",
-        "unavailable",
-    }
-)
