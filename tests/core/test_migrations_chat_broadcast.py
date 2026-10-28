@@ -14,6 +14,7 @@ import pytest
 import core.repositories.chat_broadcast._tables  # noqa: F401 - registers the tables
 from core.db import _metadata
 from core.migration_steps_chat_broadcast import (
+    _add_chat_broadcast_account_rest,
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
     _add_chat_broadcast_tables,
@@ -53,6 +54,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
         _add_chat_broadcast_tables(connection)
         _add_chat_broadcast_ignore_deleted(connection)
         _add_chat_broadcast_collections(connection)
+        _add_chat_broadcast_account_rest(connection)
     return engine
 
 
@@ -63,6 +65,8 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
     assert kept == [(69, "add_chat_broadcast_ignore_deleted", _add_chat_broadcast_ignore_deleted)]
     lists = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_collections]
     assert lists == [(70, "add_chat_broadcast_collections", _add_chat_broadcast_collections)]
+    rest = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_account_rest]
+    assert rest == [(103, "add_chat_broadcast_account_rest", _add_chat_broadcast_account_rest)]
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -80,6 +84,7 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
         _add_chat_broadcast_tables(connection)
         _add_chat_broadcast_ignore_deleted(connection)
         _add_chat_broadcast_collections(connection)
+        _add_chat_broadcast_account_rest(connection)
     assert {table: _shape(migrated_engine, table) for table in _TABLES} == before
 
 

@@ -52,6 +52,7 @@ from core.migration_steps_channel_activity import _add_campaign_channel_last_pos
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_channel_search import _add_warming_channel_search
 from core.migration_steps_chat_broadcast import (
+    _add_chat_broadcast_account_rest,
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
     _add_chat_broadcast_tables,
@@ -275,6 +276,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (100, "add_account_passkeys", _add_account_passkeys),
     (101, "add_standalone_emulators", _add_standalone_emulators),
     (102, "add_standalone_install_apps", _add_standalone_install_apps),
+    (103, "add_chat_broadcast_account_rest", _add_chat_broadcast_account_rest),
 )
 
 

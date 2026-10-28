@@ -22,8 +22,8 @@ from schemas.telegram_actions import BroadcastJoinChatlist, JoinChannel, Resolve
 from services import pacing
 from services._account_limits import account_join_cap
 from services._join_lock import join_lock
-from services.chat_broadcast import _moves, _seams
-from services.chat_broadcast._verdicts import JoinVerdict, classify_join, halt_reason
+from services.chat_broadcast import _moves, _rotation, _seams
+from services.chat_broadcast._verdicts import JoinVerdict, classify_join
 
 if TYPE_CHECKING:
     from schemas.chat_broadcast_records import TargetRecord
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import TelegramAction
     from services.chat_broadcast._context import RunContext
 
-Step = Literal["acted", "idle", "halted"]
+Step = Literal["acted", "idle", "halted", "resting"]
 _CAPTCHA_FAILED = frozenset({"give_up", "failed"})
 
 
@@ -139,12 +139,11 @@ async def _on_verdict(
             return await after_join(ctx, account_id, target, already=verdict == "already")
         case "requested":
             return await _requested(ctx, account_id, target)
-        case "account_halt":
+        case "account_rest" | "account_spam" | "account_halt":
             await repository.update_target(
                 ctx.campaign_id, target.chat_key, expect_states=("joining",), state="queued"
             )
-            await _moves.halt_account(ctx, account_id, halt_reason(result))
-            return "halted"
+            return await _rotation.account_refused(ctx, account_id, target, verdict, result)
         case "retry":
             await _moves.defer(
                 ctx, target, settings.chat_broadcast.reconnect_delay_seconds, state="reconnecting"

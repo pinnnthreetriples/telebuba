@@ -32,6 +32,7 @@ from core.repositories.chat_broadcast._journal import (
     claim_message,
     count_account_sends_since,
     count_run_sent,
+    list_account_send_times_since,
     list_events,
     list_journal,
     mark_deleted,
@@ -49,10 +50,13 @@ from core.repositories.chat_broadcast._targets import (
     list_targets,
     merge_targets,
     replace_targets,
+    rest_account,
+    revive_accounts,
     set_consecutive_errors,
     settle_interrupted,
     start_round,
     update_target,
+    wake_account,
 )
 
 __all__ = [
@@ -70,6 +74,7 @@ __all__ = [
     "finish_rounds",
     "halt_account",
     "keep_target",
+    "list_account_send_times_since",
     "list_campaigns",
     "list_collections",
     "list_events",
@@ -84,6 +89,8 @@ __all__ = [
     "release_message",
     "replace_collection",
     "replace_targets",
+    "rest_account",
+    "revive_accounts",
     "save_pace",
     "save_settings",
     "set_consecutive_errors",
@@ -94,5 +101,6 @@ __all__ = [
     "start_round",
     "unconfirm_pending",
     "update_target",
+    "wake_account",
     "written_before",
 ]

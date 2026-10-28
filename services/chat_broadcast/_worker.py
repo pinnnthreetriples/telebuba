@@ -2,9 +2,10 @@
 
 Accounts work in parallel, each through its own chats in order; a chat is only ever
 touched by the account it is assigned to. The loop re-reads its queue every pass, so a
-chat handed over (from a halted account, or from the board) is picked up without a
-restart, and it stays alive until the whole round is finished — not just its own part —
-so it can still take chats from an account that drops out late.
+chat handed over (from a halted or resting account, or from the board) is picked up
+without a restart, and it stays alive until the whole round is finished — not just its
+own part — so it can still take chats from an account that drops out late. A rest ends
+the loop; the coordinator starts it again when the account is back.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from schemas.chat_broadcast_records import TargetRecord
     from services.chat_broadcast._context import RunContext
 
-WorkerOutcome = Literal["round_done", "halted", "volume"]
+WorkerOutcome = Literal["round_done", "halted", "resting", "volume"]
 
 
 async def work(ctx: RunContext, account_id: str, round_number: int) -> WorkerOutcome:
@@ -47,10 +48,8 @@ async def work(ctx: RunContext, account_id: str, round_number: int) -> WorkerOut
             await _seams.sleep(_idle(mine, now))
             continue
         step = await handle(ctx, account_id, due[0])
-        if step == "halted":
-            return "halted"
-        if step == "volume":
-            return "volume"
+        if step == "halted" or step == "resting" or step == "volume":  # noqa: PLR1714 - narrows for ty
+            return step
         # "idle" moved nothing worth a pause, but must still yield: a chat whose state
         # a board action changed under it is due again at once.
         await _seams.sleep(_send.between_chats(ctx) if step == "acted" else 1)

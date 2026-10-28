@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
-from services.chat_broadcast import _coordinator, _moves, _seams
+from services.chat_broadcast import _coordinator, _moves, _rotation, _seams
 from services.chat_broadcast._context import RunContext
 from services.chat_broadcast._errors import (
     ACCOUNT_NOT_IN_CAMPAIGN,
@@ -112,8 +112,9 @@ async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -
         # Its account may have dropped out since; a live one takes the chat, as at the
         # start of every round.
         live = await _coordinator.live_accounts(ctx.campaign_id)
-        if live and target.assigned_account_id not in live:
-            await _moves.adopt_orphans(ctx, live)
+        resting = await _rotation.resting_accounts(ctx.campaign_id)
+        if live and target.assigned_account_id not in {*live, *resting}:
+            await _moves.adopt_orphans(ctx, live, keep=resting)
     await log_event(
         "INFO",
         "chat_broadcast_chat_kept",

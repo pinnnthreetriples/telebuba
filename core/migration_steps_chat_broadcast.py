@@ -1,4 +1,4 @@
-"""Migrations 68, 69 and 70 — the chat-broadcast tables, a kept chat's flag, saved chat lists.
+"""Migrations 68-70 and 103 — chat-broadcast tables, kept chats, saved lists, account rests.
 
 ``CREATE ... IF NOT EXISTS`` throughout: ``create_all`` runs BEFORE ``apply_migrations``,
 so on a fresh database the schema comes from ``core.repositories.chat_broadcast._tables``
@@ -192,3 +192,27 @@ def _add_chat_broadcast_collections(connection: Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS ux_cb_collections_name"
         " ON chat_broadcast_collections (name)",
     )
+
+
+def _add_chat_broadcast_account_rest(connection: Connection) -> None:
+    # #103: an account sent to rest (a flood, its own limit, a spam block) leaves the
+    # rotation until a moment and comes back by itself, instead of leaving for good.
+    # NULL on existing rows = not resting. Column guard: ``create_all`` built them on a
+    # fresh database.
+    columns = {
+        str(row["name"])
+        for row in connection.exec_driver_sql("PRAGMA table_info(chat_broadcast_accounts)")
+        .mappings()
+        .all()
+    }
+    if not columns:
+        # A partial schema (an older test fixture) without the table: nothing to alter.
+        return
+    if "resting_until_unix" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_accounts ADD COLUMN resting_until_unix INTEGER"
+        )
+    if "rest_reason" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_accounts ADD COLUMN rest_reason VARCHAR"
+        )

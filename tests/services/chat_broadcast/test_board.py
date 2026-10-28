@@ -139,3 +139,20 @@ async def test_actions_that_lost_the_race_answer_conflict() -> None:
     assert not await service.act_on_target(
         "missing", ChatBroadcastTargetAction(chat_key="alpha", action="skip")
     )
+
+
+@pytest.mark.asyncio
+async def test_a_resting_account_shows_why_and_until_when() -> None:
+    campaign_id = await seed(accounts=("a1", "a2"))
+    await repository.rest_account(campaign_id, "a1", 1_900_000_000, "day_limit")
+
+    board = await service.load_board(campaign_id)
+
+    assert board is not None
+    accounts = {account.account_id: account for account in board.accounts}
+    assert accounts["a1"].state == "resting"
+    assert accounts["a1"].rest_reason == "day_limit"
+    assert accounts["a1"].resting_until is not None
+    assert int(accounts["a1"].resting_until.timestamp()) == 1_900_000_000
+    assert (accounts["a2"].state, accounts["a2"].resting_until) == ("active", None)
+    assert board.counters.accounts_working == 1

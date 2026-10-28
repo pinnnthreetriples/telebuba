@@ -25,7 +25,7 @@ from core.logging import log_event
 from core.repositories import chat_broadcast as repository
 from core.repositories.neurocomment import list_active_campaign_account_names
 from services import _account_owner
-from services.chat_broadcast import _coordinator, _seams, _state
+from services.chat_broadcast import _coordinator, _rotation, _seams, _state
 from services.chat_broadcast._context import usable_chain
 from services.chat_broadcast._errors import (
     CAMPAIGN_CHANGED,
@@ -66,6 +66,7 @@ async def start_campaign(campaign_id: str, *, expected_updated_at: str | None = 
             raise ChatBroadcastConflictError(CAMPAIGN_RUNNING)
         if expected_updated_at is not None and record.updated_at != expected_updated_at:
             raise ChatBroadcastConflictError(CAMPAIGN_CHANGED)
+        await _revive(campaign_id)
         roster = await _launchable_roster(record)
         resume = record.status in _RESUMABLE and record.run_id is not None and record.round > 0
         run_id = record.run_id if resume and record.run_id else uuid4().hex
@@ -79,6 +80,23 @@ async def start_campaign(campaign_id: str, *, expected_updated_at: str | None = 
         "INFO", "chat_broadcast_run_started", extra={"campaign_id": campaign_id, "resumed": resume}
     )
     return True
+
+
+async def _revive(campaign_id: str) -> None:
+    """Start and Continue give every account a fresh chance but a dead one.
+
+    A halt for errors in a row or a spam block that was still standing is a verdict on
+    that moment; pressing Start is the operator asking to try again. A rest under way
+    is kept — it ends on its own.
+    """
+    revived = await repository.revive_accounts(campaign_id, _rotation.FINAL_HALT_REASONS)
+    for account_id in revived:
+        await log_event(
+            "INFO",
+            "chat_broadcast_account_back",
+            account_id=account_id,
+            extra={"campaign_id": campaign_id, "reason": "restart"},
+        )
 
 
 async def _launchable_roster(record: CampaignRecord) -> list[str]:

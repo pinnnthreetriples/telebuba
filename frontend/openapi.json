@@ -26627,6 +26627,7 @@
             "type": "string",
             "enum": [
               "active",
+              "resting",
               "halted",
               "busy"
             ],
@@ -26663,6 +26664,29 @@
               }
             ],
             "title": "Busy Owner"
+          },
+          "resting_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resting Until"
+          },
+          "rest_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rest Reason"
           }
         },
         "type": "object",

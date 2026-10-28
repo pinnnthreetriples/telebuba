@@ -3,7 +3,7 @@
 // clock and an account-name lookup.
 import type { TFunction } from 'i18next';
 
-import type { ChatBroadcastBoard } from '@/shared/api';
+import type { ChatBroadcastBoard, ChatBroadcastBoardAccount } from '@/shared/api';
 import type { BadgeTone, StepState } from '@/shared/ui';
 
 import type { Settings } from './draft';
@@ -245,17 +245,44 @@ function noticeOf(t: TFunction, inputs: Inputs): PipelineView['notice'] {
   }
 }
 
+// "daily limit until 14:32" — why the account rests and when it is back.
+export function restLabel(
+  t: TFunction,
+  account: ChatBroadcastBoardAccount,
+  time: (iso: string) => string,
+): string {
+  const reason = t(`chatBroadcast.restReason.${account.rest_reason ?? 'other'}`, {
+    defaultValue: t('chatBroadcast.restReason.other'),
+  });
+  const until = account.resting_until;
+  return until ? `${reason} ${t('chatBroadcast.restUntil', { time: time(until) })}` : reason;
+}
+
 export function pipelineView(t: TFunction, inputs: Inputs): PipelineView {
   const { board } = inputs;
   const counters = board.counters;
   const halted = board.accounts.filter((account) => account.state === 'halted');
   const busy = board.accounts.filter((account) => account.state === 'busy');
+  const resting = board.accounts.filter((account) => account.state === 'resting');
   const extras: PipelineView['extras'] = [];
   if (halted.length > 0 && board.phase !== 'draft') {
     extras.push({
       tone: 'warning',
       text: t('chatBroadcast.pipeline.notice.halted', {
         names: halted.map((account) => inputs.nameOf(account.account_id)).join(', '),
+      }),
+    });
+  }
+  if (resting.length > 0) {
+    extras.push({
+      tone: 'info',
+      text: t('chatBroadcast.pipeline.notice.accountsResting', {
+        names: resting
+          .map(
+            (account) =>
+              `${inputs.nameOf(account.account_id)} (${restLabel(t, account, inputs.time)})`,
+          )
+          .join(', '),
       }),
     });
   }

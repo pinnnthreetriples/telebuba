@@ -125,9 +125,13 @@ class ChatBroadcastBoardRow(BaseModel):
 
 class ChatBroadcastBoardAccount(BaseModel):
     account_id: str
-    state: Literal["active", "halted", "busy"]
+    state: Literal["active", "resting", "halted", "busy"]
     halted_reason: str | None = None
     busy_owner: ChatBroadcastBusyOwner | None = None
+    # ``resting``: back by itself at this moment; the reason is a stable code
+    # (``flood_wait``, ``peer_flood``, ``hour_limit``, ``day_limit``, …) the SPA words.
+    resting_until: datetime | None = None
+    rest_reason: str | None = None
 
 
 class ChatBroadcastCounters(BaseModel):

@@ -163,7 +163,7 @@ async def test_a_chat_refusal_skips_the_chat_not_the_account(
 
 
 @pytest.mark.asyncio
-async def test_a_spam_blocked_account_hands_its_chats_over_and_they_join_again(
+async def test_a_spam_blocked_account_rests_and_hands_its_chats_over(
     telegram: FakeTelegram,
 ) -> None:
     campaign_id = await seed(
@@ -173,6 +173,8 @@ async def test_a_spam_blocked_account_hands_its_chats_over_and_they_join_again(
 
     await run_to_end(campaign_id)
 
+    # @SpamBot confirmed the block, so this was no ban in one chat.
+    assert telegram.spam_checks == ["a1"]
     assert ("a2", "alpha") in telegram.joins
     # The refused step was not delivered, so the chat's new account sends it.
     assert sorted(s.text for s in telegram.sent if s.account_id == "a2") == [
@@ -182,24 +184,69 @@ async def test_a_spam_blocked_account_hands_its_chats_over_and_they_join_again(
         "two",
     ]
     roster = {r.account_id: r for r in await repository.list_roster(campaign_id)}
-    assert roster["a1"].halted_reason == "UserBannedInChannelError"
+    assert roster["a1"].state == "active"
+    assert roster["a1"].rest_reason == "UserBannedInChannelError"
     targets = {t.chat_key: t for t in await repository.list_targets(campaign_id)}
     assert targets["alpha"].state == "done"
     assert targets["alpha"].assigned_account_id == "a2"
 
 
 @pytest.mark.asyncio
-async def test_with_every_account_halted_the_run_stalls(telegram: FakeTelegram) -> None:
+async def test_a_ban_in_one_chat_moves_only_that_chat(telegram: FakeTelegram) -> None:
+    campaign_id = await seed(
+        accounts=("a1", "a2"), targets=("@alpha", "@beta", "@gamma"), messages=("Hi",)
+    )
+    telegram.spam["a1"] = "clean"
+    telegram.send_answers["a1"] = [refused(error_type="UserBannedInChannelError")]
+
+    await run_to_end(campaign_id)
+
+    targets = {t.chat_key: t for t in await repository.list_targets(campaign_id)}
+    assert (targets["alpha"].assigned_account_id, targets["alpha"].state) == ("a2", "done")
+    # a1 is not blocked: it kept working its other chat.
+    assert (targets["gamma"].assigned_account_id, targets["gamma"].state) == ("a1", "done")
+    roster = {r.account_id: r for r in await repository.list_roster(campaign_id)}
+    assert (roster["a1"].state, roster["a1"].resting_until_unix) == ("active", None)
+    kinds = [e.kind for e in await repository.list_events(campaign_id) if e.chat_key == "alpha"]
+    assert "handed" in kinds
+
+
+@pytest.mark.asyncio
+async def test_a_block_still_standing_after_the_rest_stalls_the_run(
+    telegram: FakeTelegram,
+) -> None:
     campaign_id = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
     telegram.send_answers["a1"] = [refused("peer_flood")]
 
     await run_to_end(campaign_id)
 
+    # Rested first, asked @SpamBot at the end, and only then gave up.
+    assert telegram.spam_checks == ["a1"]
     record = await repository.fetch_campaign(campaign_id)
     assert record is not None
     assert record.status == "stalled"
+    roster = await repository.list_roster(campaign_id)
+    assert (roster[0].state, roster[0].halted_reason) == ("halted", "spam_block")
     states = {t.state for t in await repository.list_targets(campaign_id)}
     assert states == {"waiting_account"}
+
+
+@pytest.mark.asyncio
+async def test_a_spam_block_lifted_by_the_end_of_the_rest_brings_the_account_back(
+    telegram: FakeTelegram, clock: Clock
+) -> None:
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
+    telegram.spam["a1"] = "clean"
+    telegram.send_answers["a1"] = [refused("peer_flood")]
+    started = clock.now()
+
+    await run_to_end(campaign_id)
+
+    record = await repository.fetch_campaign(campaign_id)
+    assert record is not None
+    assert record.status == "done"
+    assert len(telegram.sent) == 2
+    assert clock.now() - started >= 21_600
 
 
 @pytest.mark.asyncio

@@ -222,7 +222,8 @@ async def test_continue_after_a_stall_with_a_new_account(telegram: FakeTelegram)
 
     campaign_id = await seed(accounts=("a1", "a9"), targets=("@alpha",), messages=("Hi",))
     _account_owner.try_claim("a9", "warming", "w-1")
-    telegram.send_answers["a1"] = [refused("peer_flood")]
+    # Blocked for good: Continue gives it another try, and it is refused again.
+    telegram.send_answers["a1"] = [refused("peer_flood"), refused("peer_flood")]
     await run_to_end(campaign_id)
     assert await _status(campaign_id) == "stalled"
 

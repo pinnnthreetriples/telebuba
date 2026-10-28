@@ -1960,6 +1960,9 @@
     "chat_broadcast_account_halted": "Аккаунт выбыл из рассылки",
     "chat_broadcast_account_limit": "Аккаунт упёрся в лимит сообщений",
     "chat_broadcast_chats_handed": "Чаты переданы другим аккаунтам",
+    "chat_broadcast_account_resting": "Аккаунт отдыхает и вернётся сам",
+    "chat_broadcast_account_back": "Аккаунт вернулся в рассылку",
+    "chat_broadcast_chat_rerouted": "Чат передан другому аккаунту: этот забанен в нём",
     "chat_broadcast_folder_unavailable": "Не удалось открыть папку",
     "chat_broadcast_rewrite_fallback": "ИИ не переписал текст — ушёл исходный",
     "masstagging_run_started": "Масстегинг: кампания запущена",
@@ -2028,6 +2031,11 @@
     "passkey_removed": "Ключ доступа удалён"
   },
   "logEventReason": {
+    "restart": "снова в работе после запуска",
+    "hour_limit": "лимит сообщений в час",
+    "day_limit": "лимит сообщений в сутки",
+    "UserBannedInChannelError": "бан при отправке — проверка у @SpamBot",
+    "spam_block": "спамблок не снят",
     "retired": "аккаунт списан",
     "account_cooling": "аккаунт пережидает лимит Telegram",
     "row_kept": "запись аккаунта сохранена, файл сессии оставлен",
@@ -4096,6 +4104,7 @@
         "failed": "Рассылка прервана ошибкой ({{error}}). «Продолжить» — с того же места.",
         "stalled": "Рассылка встала: у всех аккаунтов спам-блок, ограничение или они заняты другими модулями. Добавьте аккаунты в настройках — их чаты возьмут новые, и можно продолжить.",
         "halted": "Выбыли: {{names}} — их чаты сразу взяли другие аккаунты.",
+        "accountsResting": "Отдыхают и вернутся сами: {{names}}. Чаты, которые нельзя ждать, уже пишут аккаунты с запасом.",
         "busy": "Заняты другими модулями и не участвуют: {{names}}."
       },
       "stats": {
@@ -4190,6 +4199,16 @@
       "nextIn": "через {{time}}",
       "sending": "отправляет…"
     },
+    "restReason": {
+      "flood_wait": "флуд-лимит Telegram",
+      "premium_wait": "флуд-лимит Telegram",
+      "peer_flood": "спамблок, проверим у @SpamBot",
+      "UserBannedInChannelError": "спамблок, проверим у @SpamBot",
+      "hour_limit": "лимит в час",
+      "day_limit": "лимит в сутки",
+      "other": "пауза"
+    },
+    "restUntil": "до {{time}}",
     "status": {
       "queued": "В очереди",
       "joining": "Вступает",
@@ -4199,6 +4218,7 @@
       "writing": "Пишет",
       "reconnecting": "Аккаунт переподключается",
       "waiting_account": "Ждёт аккаунт",
+      "accountResting": "Аккаунт отдыхает: {{reason}}",
       "restUntil": "Отдых до {{time}}",
       "roundDone": "Круг пройден",
       "done": "Готово",

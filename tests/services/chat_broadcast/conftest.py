@@ -55,4 +55,5 @@ def telegram(monkeypatch: pytest.MonkeyPatch, clock: Clock) -> FakeTelegram:
     monkeypatch.setattr(_seams, "execute", fake.execute)
     monkeypatch.setattr(_seams, "execute_read", fake.execute_read)
     monkeypatch.setattr(_seams, "solve_challenge", fake.solve_challenge)
+    monkeypatch.setattr(_seams, "spam_verdict", fake.spam_verdict)
     return fake

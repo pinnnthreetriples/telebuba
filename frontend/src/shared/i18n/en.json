@@ -1923,6 +1923,9 @@
     "chat_broadcast_account_halted": "Account left the broadcast",
     "chat_broadcast_account_limit": "Account hit its message limit",
     "chat_broadcast_chats_handed": "Chats handed to other accounts",
+    "chat_broadcast_account_resting": "Account resting, back by itself",
+    "chat_broadcast_account_back": "Account back in the broadcast",
+    "chat_broadcast_chat_rerouted": "Chat moved on: the account is banned there",
     "chat_broadcast_folder_unavailable": "Could not open the folder",
     "chat_broadcast_rewrite_fallback": "AI did not rewrite — the original text went out",
     "masstagging_run_started": "Mass tagging: campaign started",
@@ -1991,6 +1994,11 @@
     "passkey_removed": "Passkey removed"
   },
   "logEventReason": {
+    "restart": "back in after a start",
+    "hour_limit": "hourly message limit",
+    "day_limit": "daily message limit",
+    "UserBannedInChannelError": "banned on send — checking with @SpamBot",
+    "spam_block": "spam block still standing",
     "retired": "the account was retired",
     "account_cooling": "the account is waiting out a Telegram limit",
     "row_kept": "account row kept, session file left in place",
@@ -4024,6 +4032,7 @@
         "failed": "Broadcast stopped by an error ({{error}}). “Continue” resumes from the same place.",
         "stalled": "Broadcast stalled: every account is spam-blocked, restricted or busy with another module. Add accounts in the settings — their chats go to the new ones, then continue.",
         "halted": "Dropped out: {{names}} — their chats went to the other accounts at once.",
+        "accountsResting": "Resting, back by themselves: {{names}}. Chats that cannot wait already went to accounts with room.",
         "busy": "Busy with other modules and left out: {{names}}."
       },
       "stats": {
@@ -4118,6 +4127,16 @@
       "nextIn": "in {{time}}",
       "sending": "sending…"
     },
+    "restReason": {
+      "flood_wait": "Telegram flood limit",
+      "premium_wait": "Telegram flood limit",
+      "peer_flood": "spam block, checking with @SpamBot",
+      "UserBannedInChannelError": "spam block, checking with @SpamBot",
+      "hour_limit": "hourly limit",
+      "day_limit": "daily limit",
+      "other": "pause"
+    },
+    "restUntil": "until {{time}}",
     "status": {
       "queued": "Queued",
       "joining": "Joining",
@@ -4127,6 +4146,7 @@
       "writing": "Writing",
       "reconnecting": "Account reconnecting",
       "waiting_account": "Waiting for an account",
+      "accountResting": "Account resting: {{reason}}",
       "restUntil": "Resting until {{time}}",
       "roundDone": "Round done",
       "done": "Done",

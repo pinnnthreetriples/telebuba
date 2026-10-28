@@ -5,21 +5,22 @@ the next round re-queues the ones that finished and keeps the ones that were ski
 for good — and since every account is already inside its chats, round 2 onward has no
 joins and no pause after one, only the pauses between messages and chats.
 
-An account that drops out (spam block, flood, errors in a row) hands its open chats to
-the others at once; with nobody left the run ends ``stalled`` and the chats wait for
-an account the operator adds before pressing Continue.
+An account Telegram or its own limit stops RESTS (``_rotation``): it leaves the
+rotation for a while, a waker task sits the rest out and starts its worker again. An
+account that dies (frozen, logged out, errors in a row) hands its open chats to the
+others at once. Only with nobody live and nobody resting does the run end ``stalled``,
+the chats waiting for an account the operator adds before pressing Continue.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from core.config import settings
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
-from services import _account_owner
-from services.chat_broadcast import _moves, _seams, _send, _state, _worker, targets
+from services.chat_broadcast import _moves, _rotation, _seams, _send, _state, _worker, targets
 from services.chat_broadcast._context import load_context
 
 if TYPE_CHECKING:
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
 
 RunOutcome = Literal["done", "stalled"]
 RoundOutcome = Literal["round_done", "stalled", "volume"]
-_OWNER = "chat_broadcast"
 
 
 async def run_campaign(campaign_id: str, run_id: str, *, refresh: bool) -> RunOutcome:
@@ -71,15 +71,8 @@ async def run_campaign(campaign_id: str, run_id: str, *, refresh: bool) -> RunOu
 
 
 async def live_accounts(campaign_id: str) -> list[str]:
-    """Roster accounts still in the run AND held by it, in roster order."""
-    roster = await repository.list_roster(campaign_id)
-    return [
-        item.account_id
-        for item in roster
-        if item.state == "active"
-        and _account_owner.owner_of(item.account_id) == _OWNER
-        and _account_owner.holder_of(item.account_id) == campaign_id
-    ]
+    """Roster accounts still in the run, held by it and not resting, in roster order."""
+    return await _rotation.live_accounts(campaign_id)
 
 
 def _last_round(ctx: RunContext, round_number: int) -> bool:
@@ -97,31 +90,76 @@ async def _anything_left(campaign_id: str) -> bool:
 
 async def play_round(ctx: RunContext, round_number: int) -> RoundOutcome:
     live = await live_accounts(ctx.campaign_id)
-    if not live:
+    resting = await _rotation.resting_accounts(ctx.campaign_id)
+    if not live and not resting:
         return await _stall(ctx)
-    await _moves.adopt_orphans(ctx, live)
-    tasks = {
-        asyncio.create_task(_worker.work(ctx, account_id, round_number)): account_id
-        for account_id in live
-    }
+    await _moves.adopt_orphans(ctx, live, keep=resting)
+    await _moves.reclaim_waiting(ctx, live)
+    tasks = _Tasks(ctx, round_number)
+    for account_id in live:
+        tasks.work(account_id)
+    for account_id in resting:
+        tasks.wake(account_id)
     try:
-        while tasks:
-            done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        while tasks.workers or tasks.wakers:
+            done, _pending = await asyncio.wait(tasks.all(), return_when=asyncio.FIRST_COMPLETED)
             for task in done:
-                account_id = tasks.pop(task)
-                outcome = task.result()
-                if outcome == "volume":
+                if await tasks.settle(task) == "volume":
                     return "volume"
-                if outcome == "halted":
-                    await _moves.hand_over(ctx, account_id, list(tasks.values()))
-            if not tasks and await _round_open(ctx, round_number):
+            if tasks.workers:
+                continue
+            if not await _round_open(ctx, round_number):
+                return "round_done"
+            if not tasks.wakers:
                 return await _stall(ctx)
         return "round_done"
     finally:
-        for task in tasks:
+        await tasks.cancel()
+
+
+class _Tasks:
+    """One round's tasks: a worker per live account, a waker per resting one."""
+
+    def __init__(self, ctx: RunContext, round_number: int) -> None:
+        self.ctx = ctx
+        self.round_number = round_number
+        self.workers: dict[asyncio.Task[_worker.WorkerOutcome], str] = {}
+        self.wakers: dict[asyncio.Task[bool], str] = {}
+
+    def all(self) -> set[asyncio.Task[Any]]:
+        return set(self.workers) | set(self.wakers)
+
+    def work(self, account_id: str) -> None:
+        task = asyncio.create_task(_worker.work(self.ctx, account_id, self.round_number))
+        self.workers[task] = account_id
+
+    def wake(self, account_id: str) -> None:
+        self.wakers[asyncio.create_task(_rotation.sit_out(self.ctx, account_id))] = account_id
+
+    async def settle(self, task: asyncio.Task[Any]) -> _worker.WorkerOutcome | None:
+        """React to one finished task; the worker's outcome, ``None`` for a waker."""
+        if task in self.wakers:
+            account_id = self.wakers.pop(task)
+            if task.result():
+                await _moves.reclaim_waiting(self.ctx, await live_accounts(self.ctx.campaign_id))
+                self.work(account_id)
+            else:
+                await _moves.hand_over(self.ctx, account_id, list(self.workers.values()))
+            return None
+        account_id = self.workers.pop(task)
+        outcome: _worker.WorkerOutcome = task.result()
+        if outcome == "halted":
+            await _moves.hand_over(self.ctx, account_id, list(self.workers.values()))
+        elif outcome == "resting":
+            self.wake(account_id)
+        return outcome
+
+    async def cancel(self) -> None:
+        pending = self.all()
+        for task in pending:
             task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def _round_open(ctx: RunContext, round_number: int) -> bool:

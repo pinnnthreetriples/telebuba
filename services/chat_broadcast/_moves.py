@@ -153,15 +153,51 @@ async def assign(ctx: RunContext, target: TargetRecord, to: str) -> bool:
     return moved
 
 
-async def adopt_orphans(ctx: RunContext, live: list[str]) -> None:
-    """Chats whose account is gone or halted go to the live accounts."""
+async def adopt_orphans(ctx: RunContext, live: list[str], keep: list[str] | None = None) -> None:
+    """Chats whose account is gone or halted go to the live accounts.
+
+    ``keep`` are accounts sitting a rest out: their chats wait for them, not orphans.
+    """
+    owners = set(live) | set(keep or ())
     targets = await repository.list_targets(ctx.campaign_id)
     load = Counter(t.assigned_account_id for t in targets if t.state in ACTIVE_STATES)
     for target in targets:
-        if target.state not in _HANDABLE or target.assigned_account_id in live or not live:
+        if target.state not in _HANDABLE or target.assigned_account_id in owners or not live:
             continue
         to = min(live, key=lambda account: (load[account], live.index(account)))
         if await assign(ctx, target, to):
+            load[to] += 1
+
+
+async def reclaim_waiting(ctx: RunContext, live: list[str]) -> None:
+    """An account is back: chats left waiting for one go back to work.
+
+    A chat stays with its own account when that one is live, else goes to a live
+    account already inside it, else to the least loaded one.
+    """
+    if not live:
+        return
+    targets = await repository.list_targets(ctx.campaign_id)
+    load = Counter(t.assigned_account_id for t in targets if t.state in ACTIVE_STATES)
+    for target in targets:
+        if target.state != "waiting_account":
+            continue
+        if target.assigned_account_id in live:
+            inside = target.member_account_id == target.assigned_account_id
+            await repository.update_target(
+                ctx.campaign_id,
+                target.chat_key,
+                expect_states=("waiting_account",),
+                state="waiting" if inside else "queued",
+                next_action_unix=_seams.now() if inside else None,
+            )
+            continue
+        to = (
+            target.member_account_id
+            if target.member_account_id in live
+            else min(live, key=lambda account: (load[account], live.index(account)))
+        )
+        if to is not None and await assign(ctx, target, to):
             load[to] += 1
 
 
