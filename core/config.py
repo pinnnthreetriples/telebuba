@@ -25,6 +25,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # The larger self-contained domains live in a sibling module for the file-size
 # budget; re-exported here so ``from core.config import WarmingSettings`` etc.
 # keep working unchanged.
+from core._config_bulk_messages import BulkMessagesSettings
 from core._config_chat_broadcast import ChatBroadcastSettings
 from core._config_domains import (
     DeepseekSettings,
@@ -361,6 +362,7 @@ class Settings(BaseSettings):
     neuroshilling: NeuroshillingSettings = Field(default_factory=NeuroshillingSettings)
     scheduled_posts: ScheduledPostsSettings = Field(default_factory=ScheduledPostsSettings)
     chat_broadcast: ChatBroadcastSettings = Field(default_factory=ChatBroadcastSettings)
+    bulk_messages: BulkMessagesSettings = Field(default_factory=BulkMessagesSettings)
     user_parser: UserParserSettings = Field(default_factory=UserParserSettings)
     masstagging: MasstaggingSettings = Field(default_factory=MasstaggingSettings)
     notifications: NotificationsSettings = Field(default_factory=NotificationsSettings)

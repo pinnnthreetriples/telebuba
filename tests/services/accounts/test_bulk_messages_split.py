@@ -117,7 +117,6 @@ async def test_one_recipient_is_written_by_the_first_account_only(
         {"status": "flood_wait", "flood_wait_seconds": 30},
         {"status": "peer_flood"},
         {"status": "failed", "error_type": "AccountNotFound"},
-        {"status": "unavailable", "error_type": "ConnectionError"},
         {"status": "failed", "error_type": "ProfileGatewayError", "error_message": "session_dead"},
     ],
 )

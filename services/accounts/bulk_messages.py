@@ -50,8 +50,9 @@ from services.accounts._bulk_claims import (
     release_accounts,
     send_locked,
 )
+from services.accounts._bulk_lanes import Lane
 from services.accounts._bulk_plan import plan_items
-from services.accounts._bulk_runner import BulkRun, Lane
+from services.accounts._bulk_runner import BulkRun
 from services.accounts._outreach_protection import skipped_accounts, young_account_ids
 from services.accounts._recipient_history import screen_recipients, skip_by_history
 from services.accounts._result import AccountActionError, raise_for_result
