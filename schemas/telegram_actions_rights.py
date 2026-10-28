@@ -25,10 +25,14 @@ class CheckWriteRights(BaseModel):
     ``default_banned_rights`` and our participant record's ``banned_rights``. Comments
     live in the linked discussion group, so the gateway resolves it exactly like
     ``CheckBannedInChannel`` — a pure read, nothing is sent.
+
+    ``in_chat`` asks it of ``channel`` itself instead: the group a broadcast writes into,
+    not a channel whose comments live elsewhere.
     """
 
     action_type: Literal["check_write_rights"] = "check_write_rights"
     channel: str = Field(min_length=1)
+    in_chat: bool = False
 
 
 class WriteRightsResult(BaseModel):

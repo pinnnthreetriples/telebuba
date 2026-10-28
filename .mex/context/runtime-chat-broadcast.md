@@ -56,6 +56,10 @@ restart resume).
   @SpamBot is asked at once: a clean account loses only that chat, moved once to another
   account. Only a dead session (frozen, deactivated, logged out) leaves for good; Start and
   Continue give every other halted account a fresh try.
+- A chat's own rules: slow mode defers that chat and the account writes elsewhere
+  meanwhile. `ChatWriteForbiddenError` is asked about (`CheckWriteRights(in_chat=True)`):
+  a mute on this account alone moves the chat once to another account, a chat closed to
+  everybody is skipped. A chat that refuses photos gets the same text without the photo.
 - A round where every account rests waits for the first one back; it stalls only when
   nobody is live and nobody rests.
 - Settings cannot be saved while a run is attached: the run reads them once. The pauses

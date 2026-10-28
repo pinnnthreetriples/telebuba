@@ -1963,6 +1963,8 @@
     "chat_broadcast_account_resting": "Аккаунт отдыхает и вернётся сам",
     "chat_broadcast_account_back": "Аккаунт вернулся в рассылку",
     "chat_broadcast_chat_rerouted": "Чат передан другому аккаунту: этот забанен в нём",
+    "chat_broadcast_muted_rerouted": "Чат передан другому аккаунту: админ дал этому мут",
+    "chat_broadcast_photo_dropped": "В чате запрещены фото: отправлен только текст",
     "chat_broadcast_folder_unavailable": "Не удалось открыть папку",
     "chat_broadcast_rewrite_fallback": "ИИ не переписал текст — ушёл исходный",
     "masstagging_run_started": "Масстегинг: кампания запущена",

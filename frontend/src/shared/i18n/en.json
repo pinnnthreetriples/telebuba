@@ -1926,6 +1926,8 @@
     "chat_broadcast_account_resting": "Account resting, back by itself",
     "chat_broadcast_account_back": "Account back in the broadcast",
     "chat_broadcast_chat_rerouted": "Chat moved on: the account is banned there",
+    "chat_broadcast_muted_rerouted": "Chat moved on: an admin muted the account there",
+    "chat_broadcast_photo_dropped": "The chat takes no photos: text sent without one",
     "chat_broadcast_folder_unavailable": "Could not open the folder",
     "chat_broadcast_rewrite_fallback": "AI did not rewrite — the original text went out",
     "masstagging_run_started": "Mass tagging: campaign started",

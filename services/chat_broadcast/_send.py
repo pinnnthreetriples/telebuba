@@ -3,12 +3,13 @@
 Each step is reserved in the journal (``pending``) BEFORE the send. An occupied key is a
 step already played — the resume path — and a refusal that never reached the chat
 (slow mode, a dropped connection, not a member) gives the reservation back so the step
-is played later instead of being lost.
+is played later instead of being lost. A chat that takes no photos gets the same text
+without one; a step with no text has nothing left to send there.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from core.config import settings
 from core.logging import log_event
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 Step = Literal["acted", "idle", "halted", "resting", "volume"]
 _WRITABLE = ("queued", "waiting", "writing", "reconnecting")
 _HOUR = 3600
+_NO_PHOTO_ERRORS: Final = frozenset({"ChatSendPhotosForbiddenError", "ChatSendMediaForbiddenError"})
 
 
 async def volume_reached(ctx: RunContext) -> bool:
@@ -194,7 +196,39 @@ async def _play_step(
         await _advance(ctx, target, step)
         return None
     result = await _seams.execute(account_id, action)
+    if _photo_refused(action, result):
+        result = await _without_photo(ctx, account_id, target, key, action)
     return await _settle(ctx, account_id, target, result, _Outgoing(key, text, rewritten))
+
+
+def _photo_refused(action: TelegramAction, result: ActionResult) -> bool:
+    return (
+        isinstance(action, BroadcastSendMessage)
+        and action.photo is not None
+        and bool(action.text.strip())
+        and result.error_type in _NO_PHOTO_ERRORS
+    )
+
+
+async def _without_photo(
+    ctx: RunContext,
+    account_id: str,
+    target: TargetRecord,
+    key: JournalKey,
+    action: TelegramAction,
+) -> ActionResult:
+    """The chat takes no photos: the same text goes alone, journalled as text."""
+    await repository.release_message(key)
+    await repository.claim_message(
+        key, campaign_id=ctx.campaign_id, account_id=account_id, kind="text", peer_id=target.peer_id
+    )
+    await log_event(
+        "INFO",
+        "chat_broadcast_photo_dropped",
+        account_id=account_id,
+        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+    )
+    return await _seams.execute(account_id, action.model_copy(update={"photo": None}))
 
 
 async def _advance(ctx: RunContext, target: TargetRecord, step: int) -> None:
@@ -256,6 +290,11 @@ async def _settle(
             ctx.campaign_id, target.chat_key, expect_states=("writing",), state="waiting"
         )
         return await _rotation.account_refused(ctx, account_id, target, verdict, result)
+    if verdict == "admin_only" and await _rotation.muted_alone(account_id, target, result):
+        # Only this account is muted there: the step goes back, for the account it moves to.
+        await repository.release_message(key)
+        await _rotation.reroute(ctx, account_id, target, "admin_only")
+        return "acted"
     if verdict == "failed" and not ctx.settings.skip_errors:
         # The run stops for the operator to look; Continue must send this step again.
         await repository.release_message(key)

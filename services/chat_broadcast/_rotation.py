@@ -10,6 +10,9 @@ What stops an account, and what becomes of it:
   block still standing takes it out. A ban that arrives as ``UserBannedInChannelError``
   is either that block or a ban in this one chat, and @SpamBot is asked at once: a clean
   account only lost this chat, which goes to another account.
+* **A mute in one chat** — ``ChatWriteForbiddenError`` cannot tell a chat closed to all
+  from an admin muting just this account; the chat's rights can. A mute on this account
+  alone moves the chat to another one; a chat closed to everybody is skipped.
 * **A dead session** (frozen, deactivated, logged out) — it leaves for good, as before.
 
 While it rests its chats are not abandoned: a short rest keeps them, a medium one hands
@@ -26,11 +29,14 @@ from typing import TYPE_CHECKING, Final, Literal
 from core.config import settings
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
+from core.telegram_client import TelegramReadError
+from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
 from services import _account_owner
 from services.chat_broadcast import _moves, _seams
 from services.chat_broadcast._verdicts import halt_reason
 
 if TYPE_CHECKING:
+    from schemas.chat_broadcast_board import ChatBroadcastSkipReason
     from schemas.chat_broadcast_records import RosterAccount, TargetRecord
     from schemas.telegram_actions import ActionResult
     from services.chat_broadcast._context import RunContext
@@ -39,6 +45,8 @@ _OWNER = "chat_broadcast"
 _HOUR = 3600
 _DAY = 86_400
 _BANNED_IN_CHAT: Final = "UserBannedInChannelError"
+# How a chat refuses a muted member — and a chat closed to all members alike.
+_MUTE_ERRORS: Final = frozenset({"ChatWriteForbiddenError", "ChatRestrictedError"})
 SPAM_REASONS: Final = frozenset({"peer_flood", _BANNED_IN_CHAT})
 LIMIT_REASONS: Final = frozenset({"hour_limit", "day_limit"})
 # Halts a new Start or Continue does not undo: the account itself is gone or full. Any
@@ -189,22 +197,45 @@ async def account_refused(
         and target.handed_from_account_id is None
         and await _seams.spam_verdict(account_id) == "clean"
     ):
-        await _reroute(ctx, account_id, target)
+        await reroute(ctx, account_id, target, "banned")
         return "acted"
     return await rest_for(ctx, account_id, limits.spam_rest_seconds, reason, target)
 
 
-async def _reroute(ctx: RunContext, account_id: str, target: TargetRecord) -> None:
-    """This chat banned this account; another one writes there.
+async def muted_alone(account_id: str, target: TargetRecord, result: ActionResult) -> bool:
+    """Did an admin mute this one account, with the chat open to everybody else?
 
-    Moved once at most: a chat that bans its second account too is a chat that bans us.
+    Asked only of a chat not moved yet: a chat that mutes its second account too is a
+    chat that does not want us. A read that fails is no answer, and the chat is skipped
+    as before.
+    """
+    if result.error_type not in _MUTE_ERRORS or target.handed_from_account_id is not None:
+        return False
+    chat = str(target.peer_id) if target.peer_id else (target.username or target.raw)
+    try:
+        rights = await _seams.execute_read(account_id, CheckWriteRights(channel=chat, in_chat=True))
+    except TelegramReadError:
+        return False
+    return isinstance(rights, WriteRightsResult) and rights.scope == "self_only"
+
+
+async def reroute(
+    ctx: RunContext,
+    account_id: str,
+    target: TargetRecord,
+    reason: ChatBroadcastSkipReason,
+) -> None:
+    """This chat banned or muted this account; another one writes there.
+
+    Moved once at most: a chat that refuses its second account too is a chat that
+    refuses us, and with nobody to move it to it is skipped for ``reason``.
     """
     others = await room(ctx, account_id) or [
         account for account in await live_accounts(ctx.campaign_id) if account != account_id
     ]
     fresh = await repository.fetch_target(ctx.campaign_id, target.chat_key) or target
     if not others:
-        await _moves.skip(ctx, fresh, "banned", account_id)
+        await _moves.skip(ctx, fresh, reason, account_id)
         return
     load = Counter(
         t.assigned_account_id
@@ -215,7 +246,9 @@ async def _reroute(ctx: RunContext, account_id: str, target: TargetRecord) -> No
     if await _moves.assign(ctx, fresh, to):
         await log_event(
             "WARNING",
-            "chat_broadcast_chat_rerouted",
+            "chat_broadcast_chat_rerouted"
+            if reason == "banned"
+            else "chat_broadcast_muted_rerouted",
             account_id=account_id,
             extra={"campaign_id": ctx.campaign_id, "chat": target.raw, "to": to},
         )
