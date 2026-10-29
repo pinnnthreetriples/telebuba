@@ -270,6 +270,65 @@ async def test_the_password_goes_only_into_the_dumps_password_field(console: Con
     assert console.shell_calls()[-1] == ["input", "keyevent", "66"]
 
 
+def _password_shown(masks: int) -> str:
+    return _dump(_node("Your password"), _node("•" * masks, cls=_EDIT, password="true"))
+
+
+def _keys(console: Console) -> list[list[str]]:
+    return [call for call in console.shell_calls() if call[:2] == ["input", "keyevent"]]
+
+
+@pytest.mark.asyncio
+async def test_a_password_box_showing_every_character_is_submitted_once(console: Console) -> None:
+    _serve(console, _password_shown(7))
+
+    await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
+
+    assert _keys(console) == [["input", "keyevent", "66"]]
+
+
+@pytest.mark.asyncio
+async def test_a_password_box_dumped_empty_is_no_evidence_and_is_submitted(
+    console: Console,
+) -> None:
+    _serve(console, _password_shown(0))
+
+    await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
+
+    assert _keys(console) == [["input", "keyevent", "66"]]
+
+
+@pytest.mark.asyncio
+async def test_a_password_box_missing_characters_is_emptied_and_typed_again(
+    console: Console,
+) -> None:
+    _serve(console, _password_shown(3), _password_shown(7))
+
+    await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
+
+    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    assert len(typed) == 2 * len("s3cret!"), "typed twice"
+    # MOVE_END and three DELs clear what the box showed, then ENTER once, at the end.
+    assert _keys(console) == [
+        ["input", "keyevent", "123", "67", "67", "67"],
+        ["input", "keyevent", "66"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_password_box_still_wrong_after_the_retype_is_not_submitted(
+    console: Console,
+) -> None:
+    _serve(console, _password_shown(3), _password_shown(5))
+
+    with pytest.raises(EmulatorError) as refused:
+        await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
+
+    assert refused.value.code == "emulator_command_failed"
+    assert ["input", "keyevent", "66"] not in _keys(console)
+    assert "s3cret" not in str(refused.value)
+
+
 @pytest.mark.asyncio
 async def test_waiting_for_a_screen_returns_the_last_one_seen(console: Console) -> None:
     _serve(console, INTRO, PHONE)
