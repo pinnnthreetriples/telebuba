@@ -274,6 +274,8 @@
       "twofaRecordLabel": "The account already has a password — save it",
       "twofaRecordSubmit": "Verify and save",
       "twofaRecordNote": "Telegram checks the password and changes nothing. A wrong password is not saved.",
+      "twofaUpdateStored": "Changed the password in Telegram? Update the saved one",
+      "twofaUpdateStoredLabel": "The new cloud password from Telegram",
       "twofaResetRequested": "Password reset requested: {{date}}",
       "twofaChange": "Change password",
       "twofaDisable": "Disable 2FA",
