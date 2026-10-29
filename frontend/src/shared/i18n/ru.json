@@ -277,6 +277,8 @@
       "twofaRecordLabel": "У аккаунта уже есть пароль — сохранить",
       "twofaRecordSubmit": "Проверить и сохранить",
       "twofaRecordNote": "Telegram проверит пароль, ничего не меняя. Неверный пароль не сохраняется.",
+      "twofaUpdateStored": "Пароль сменили в Telegram? Обновить сохранённый",
+      "twofaUpdateStoredLabel": "Новый облачный пароль из Telegram",
       "twofaResetRequested": "Запрошен сброс пароля: {{date}}",
       "twofaChange": "Сменить пароль",
       "twofaDisable": "Отключить 2FA",

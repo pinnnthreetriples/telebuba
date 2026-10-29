@@ -371,7 +371,9 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             >
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
-            {hasStored ? null : (
+            {hasStored ? (
+              <TwoFactorRecord accountId={accountId} onRecorded={invalidate} update />
+            ) : (
               <>
                 <div className="mt-3 type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
                 {/* The password already exists on Telegram: verify it there and keep a
