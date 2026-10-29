@@ -414,11 +414,17 @@ that request is answered «not now»; a permission dialog that shows anyway is d
 On redroid's guest GPU, Telegram can deadlock right after «Start Messaging» (about 1 in 5 fresh
 pods): the app stays alive but every `uiautomator dump` fails ("null root node") and any key
 kills it. A dump that cannot be taken is therefore `unresponsive`, never an empty screen: the
-sign-in force-stops and relaunches the app once and starts again from its entry screen (a new
-login code only as the per-account pacing allows), and refuses with
-`emulator_app_unresponsive` when it freezes again. A screen nothing recognises after a few BACKs
-is `emulator_screen_unknown`. Both reach the operator's dialog as the reason, and warming as
-passing causes; only a sign-in screen reads as signed out.
+sign-in force-stops and relaunches the app (twice at most: a relaunch can freeze again at once)
+and starts again from its entry screen (a new login code only as the per-account pacing
+allows), and refuses with `emulator_app_unresponsive` on a third freeze. A screen nothing
+recognises after a few BACKs is `emulator_screen_unknown`. Both reach the operator's dialog as
+the reason, and warming as passing causes; only a sign-in screen reads as signed out.
+
+A sign-in that finds the app on its number confirmation or code screen (one started by hand)
+presses BACK to the phone screen and signs in from there. A cloud password still on screen
+after its submit is `emulator_password_rejected`: Telegram empties the field of a wrong one.
+It is not a passing cause, so warming parks the account instead of requesting a new login
+code at every visit. Before ENTER the masked box is read back; a short count is retyped once.
 
 ## A phone stint prepares its phone
 
