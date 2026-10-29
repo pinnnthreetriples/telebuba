@@ -6159,6 +6159,7 @@ export type PhoneList = {
     | 'emulator_phone_invalid'
     | 'emulator_code_timeout'
     | 'emulator_twofa_missing'
+    | 'emulator_password_rejected'
     | 'emulator_not_running'
     | 'emulator_not_signed_in'
     | 'emulator_capacity'
