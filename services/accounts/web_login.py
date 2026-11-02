@@ -54,6 +54,7 @@ from services.accounts._web_errors import (
     _loop_cannot_spawn,
 )
 from services.accounts._web_identity import launch_dressed
+from services.accounts._web_passkey import web_passkey_signer
 from services.accounts._web_proxy_probe import probe_exit_country
 from services.accounts._web_watch import cancel_watchers, watch_window
 
@@ -289,6 +290,8 @@ async def _spawn(
     capture: bool,
 ) -> WebWindow:
     """Launch a window wearing the account's fingerprint and register it."""
+    signer = await web_passkey_signer(account_id)
+    extra = {} if signer is None else {"passkey_signer": signer}
     try:
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
@@ -297,7 +300,11 @@ async def _spawn(
             account_id,
             country,
             lambda fingerprint: launch_account_web(
-                relay_port, profile_dir=profile, fingerprint=fingerprint, capture_tokens=capture
+                relay_port,
+                profile_dir=profile,
+                fingerprint=fingerprint,
+                capture_tokens=capture,
+                **extra,
             ),
         )
     except NotImplementedError as exc:

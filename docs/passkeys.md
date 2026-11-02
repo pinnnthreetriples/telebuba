@@ -15,6 +15,25 @@ Telegram accepts a WebAuthn credential from Telebuba's own api_id: RP ID `telegr
 - An already-authorized session is left alone; a sign-in that lands on another user is logged
   out.
 
+## Signing in to the account's web window
+
+The account's web.telegram.org window (the globe button) answers WebK's «Log in by passkey»
+from the same vault key, so a dead session can be revived there as well. The browser has no
+such credential, so a document-start hook (`core/web_login/_passkey.py`) takes over
+`navigator.credentials.get` for RP ID `telegram.org` only; every other WebAuthn call is left
+to the browser. The window polls the hook over its CDP socket, signs the challenge in the
+vault (`services/accounts/_web_passkey.py`) and resolves the promise with a synthetic
+`PublicKeyCredential`. A vault failure rejects as `NotAllowedError`, like a cancelled prompt.
+
+- Offered only when the vault is configured and the account has a passkey; it signs for that
+  window's own account and nothing else.
+- It is a page hook, not a Chrome extension: Chrome 137+ removed `--load-extension`, and the
+  window is already driven over CDP. Polled, not pushed, because `Runtime.enable` would be a
+  DevTools tell.
+- The cloud password is still asked for by WebK when the account has one; the passkey must
+  exist on Telegram's side too (`PASSKEY_CREDENTIAL_NOT_FOUND` means it was removed there).
+- The window must be opened after the passkey exists: the hook is installed at launch.
+
 ## Where the operator creates one
 
 - One account: the «Ключ доступа» card in the account editor.

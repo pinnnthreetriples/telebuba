@@ -7,6 +7,7 @@ id and user handle are what Telegram itself sends any client that asks.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 
 class StoredPasskey(BaseModel):
@@ -18,6 +19,22 @@ class StoredPasskey(BaseModel):
     user_handle: str = Field(pattern=r"^[0-9]+:[0-9]+$")
     vault_key_name: str = Field(min_length=1)
     created_at: str
+
+
+class WebPasskeyAssertion(BaseModel):
+    """A browser's WebAuthn ``get`` answer for a vault-held passkey, binaries base64url.
+
+    Serialised camelCase: it is spliced straight into the page script that resolves
+    WebK's ``navigator.credentials.get`` call.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    credential_id: str
+    client_data_json: str
+    authenticator_data: str
+    signature: str
+    user_handle: str
 
 
 class AccountPasskeyView(BaseModel):
