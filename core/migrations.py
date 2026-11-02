@@ -73,6 +73,7 @@ from core.migration_steps_discovery import (
 )
 from core.migration_steps_dm_pause import _add_warming_settings_dm_paused_until
 from core.migration_steps_flood_memory import _add_warming_flood_memory
+from core.migration_steps_foreign_closed import _allow_lifecycle_foreign_closed
 from core.migration_steps_foreign_sessions import _allow_lifecycle_foreign_sessions
 from core.migration_steps_humanlike import (
     _add_account_registered_at,
@@ -281,6 +282,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (103, "add_chat_broadcast_account_rest", _add_chat_broadcast_account_rest),
     (104, "add_account_session_audits", _add_account_session_audits),
     (105, "allow_lifecycle_foreign_sessions", _allow_lifecycle_foreign_sessions),
+    (106, "allow_lifecycle_foreign_closed", _allow_lifecycle_foreign_closed),
 )
 
 

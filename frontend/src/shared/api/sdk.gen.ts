@@ -97,6 +97,12 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
+  CloseAccountForeignSessionsData,
+  CloseAccountForeignSessionsErrors,
+  CloseAccountForeignSessionsResponses,
+  CloseAccountSessionsData,
+  CloseAccountSessionsErrors,
+  CloseAccountSessionsResponses,
   CloseAccountWebWindowsData,
   CloseAccountWebWindowsErrors,
   CloseAccountWebWindowsResponses,
@@ -1899,6 +1905,45 @@ export const auditAccountSessions = <ThrowOnError extends boolean = false>(
     AuditAccountSessionsErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/sessions/audit', ...options });
+
+/**
+ * Close Account Sessions
+ *
+ * End the named sessions that are still foreign; one outcome per session.
+ */
+export const closeAccountSessions = <ThrowOnError extends boolean = false>(
+  options: Options<CloseAccountSessionsData, ThrowOnError>,
+): RequestResult<CloseAccountSessionsResponses, CloseAccountSessionsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CloseAccountSessionsResponses,
+    CloseAccountSessionsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/sessions/close',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Close Account Foreign Sessions
+ *
+ * Read the account's sessions and end every one that is foreign right now.
+ */
+export const closeAccountForeignSessions = <ThrowOnError extends boolean = false>(
+  options: Options<CloseAccountForeignSessionsData, ThrowOnError>,
+): RequestResult<
+  CloseAccountForeignSessionsResponses,
+  CloseAccountForeignSessionsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CloseAccountForeignSessionsResponses,
+    CloseAccountForeignSessionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions/close-foreign', ...options });
 
 /**
  * Set Account Registered At

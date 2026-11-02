@@ -33,14 +33,21 @@ from services.lifecycle_journal import record_lifecycle_event
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
 
-__all__ = ["audit_account_sessions", "audit_after_first_check", "read_account_session_audit"]
+__all__ = [
+    "account_audit_lock",
+    "audit_account_sessions",
+    "audit_after_first_check",
+    "read_account_session_audit",
+    "refresh_account_audit",
+    "require_proxied_account",
+]
 
-# One lock per account, never freed (bounded by the accounts ever touched): a double click
-# or a check racing the automatic audit must read, compare and save as one step.
+# One lock per account, never freed (bounded by the accounts ever touched): a double click,
+# a check racing the automatic audit, or a close must read, compare and save as one step.
 _AUDIT_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-def _audit_lock(account_id: str) -> asyncio.Lock:
+def account_audit_lock(account_id: str) -> asyncio.Lock:
     return _AUDIT_LOCKS.setdefault(account_id, asyncio.Lock())
 
 
@@ -56,30 +63,43 @@ async def read_account_session_audit(account_id: str) -> AccountSessionAudit:
     return await fetch_session_audit(account_id) or AccountSessionAudit.empty(account_id)
 
 
-async def audit_account_sessions(account_id: str) -> AccountSessionAudit:
-    """Read the account's sessions from Telegram, save them, journal a new foreign one.
+async def require_proxied_account(account_id: str) -> AccountRead:
+    """The account row, refused (``session_audit_proxy_missing``) before any Telegram call.
 
-    The journal row is written only for a foreign session the previous audit did not list,
-    so re-checking an account that already has one does not repeat the news.
+    Every audit and every close talks to Telegram, and a proxyless client connects from the
+    operator's own IP.
     """
     account = await require_account(account_id)
     if account.proxy_id is None:
         code = "session_audit_proxy_missing"
         raise AccountActionError(code)
-    async with _audit_lock(account_id):
-        try:
-            listing = await read_account_sessions(account_id, account.devices)
-        except SessionAuditGatewayError as exc:
-            await log_event(
-                "WARNING",
-                "session_audit_failed",
-                account_id=account_id,
-                extra={"code": exc.code, "error_type": exc.error_type},
-            )
-            raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
-        previous = await fetch_session_audit(account_id)
-        audit = AccountSessionAudit.of(account_id, datetime.now(UTC).isoformat(), listing)
-        await save_session_audit(audit)
+    return account
+
+
+async def refresh_account_audit(
+    account: AccountRead, *, killed_count: int = 0
+) -> AccountSessionAudit:
+    """Read the account's sessions, save them and journal a new foreign one.
+
+    The caller holds :func:`account_audit_lock`. The journal row is written only for a
+    foreign session the previous audit did not list, so re-checking an account that
+    already has one does not repeat the news. ``killed_count`` is how many sessions a close
+    ended just before this read, kept in the audit history.
+    """
+    account_id = account.account_id
+    try:
+        listing = await read_account_sessions(account_id, account.devices)
+    except SessionAuditGatewayError as exc:
+        await log_event(
+            "WARNING",
+            "session_audit_failed",
+            account_id=account_id,
+            extra={"code": exc.code, "error_type": exc.error_type},
+        )
+        raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
+    previous = await fetch_session_audit(account_id)
+    audit = AccountSessionAudit.of(account_id, datetime.now(UTC).isoformat(), listing)
+    await save_session_audit(audit, killed_count=killed_count)
     await log_event(
         "INFO",
         "session_audit_completed",
@@ -98,6 +118,13 @@ async def audit_account_sessions(account_id: str) -> AccountSessionAudit:
         )
         await record_lifecycle_event(account_id, "foreign_sessions_found", extra)
     return audit
+
+
+async def audit_account_sessions(account_id: str) -> AccountSessionAudit:
+    """Read the account's sessions from Telegram now, save them, journal a new foreign one."""
+    account = await require_proxied_account(account_id)
+    async with account_audit_lock(account_id):
+        return await refresh_account_audit(account)
 
 
 async def audit_after_first_check(account: AccountRead) -> None:

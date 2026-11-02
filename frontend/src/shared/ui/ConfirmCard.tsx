@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Button } from './Button';
 
 // The inside of every two-button question dialog: title, body, then Cancel and the
@@ -15,7 +17,8 @@ export function ConfirmCard({
   pending = false,
 }: {
   title: string;
-  body: string;
+  // A sentence, or a sentence with the list of what the answer will touch.
+  body: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   onCancel: () => void;

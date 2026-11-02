@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from schemas.session_audit import AccountSession, AccountSessionAudit, AuthorizationList
+from schemas.session_close import SessionCloseOutcome, SessionCloseResult
 from services.accounts import AccountActionError, AccountNotFoundError
 from tests.api.accounts_helpers import client as _client
 
@@ -89,3 +90,87 @@ async def test_a_refusal_answers_its_stable_code_and_wait(
 
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "flood_wait"
+
+
+def _closed() -> SessionCloseResult:
+    return SessionCloseResult(
+        account_id="acc-1",
+        outcomes=[
+            SessionCloseOutcome(hash="9007199254740993", status="closed"),
+            SessionCloseOutcome(hash="-5", status="too_new", retry_after_seconds=3600),
+        ],
+        closed_count=1,
+        audit=_audit(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_closing_named_sessions_passes_the_hashes_and_answers_each_outcome(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[list[str]] = []
+
+    async def _close(account_id: str, hashes: list[str]) -> SessionCloseResult:
+        assert account_id == "acc-1"
+        seen.append(hashes)
+        return _closed()
+
+    monkeypatch.setattr("services.accounts.close_account_sessions", _close)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/close", json={"hashes": ["9007199254740993", "-5"]})
+
+    body = resp.json()
+    assert resp.status_code == 200
+    assert seen == [["9007199254740993", "-5"]]
+    assert [(o["hash"], o["status"]) for o in body["outcomes"]] == [
+        ("9007199254740993", "closed"),
+        ("-5", "too_new"),
+    ]
+    assert (body["closed_count"], body["audit"]["foreign_count"]) == (1, 1)
+
+
+@pytest.mark.parametrize("hashes", [[], ["not-a-number"], [str(n) for n in range(51)]])
+@pytest.mark.asyncio
+async def test_a_list_of_hashes_that_is_empty_too_long_or_not_numeric_is_a_422(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch, hashes: list[str]
+) -> None:
+    async def _never(_account_id: str, _hashes: list[str]) -> SessionCloseResult:
+        raise AssertionError
+
+    monkeypatch.setattr("services.accounts.close_account_sessions", _never)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/close", json={"hashes": hashes})
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_closing_everything_foreign_takes_no_body(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _close(account_id: str) -> SessionCloseResult:
+        assert account_id == "acc-1"
+        return _closed()
+
+    monkeypatch.setattr("services.accounts.close_account_foreign_sessions", _close)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/close-foreign")
+
+    assert resp.status_code == 200
+    assert resp.json()["closed_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_close_without_a_proxy_answers_its_stable_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _refused(_account_id: str) -> SessionCloseResult:
+        code = "session_audit_proxy_missing"
+        raise AccountActionError(code)
+
+    monkeypatch.setattr("services.accounts.close_account_foreign_sessions", _refused)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/close-foreign")
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "session_audit_proxy_missing"

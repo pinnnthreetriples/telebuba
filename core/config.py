@@ -40,6 +40,7 @@ from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
 from core._config_passkey_vault import PasskeyVaultSettings
 from core._config_scheduled import ScheduledPostsSettings
+from core._config_session_audit import SessionAuditSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_survival import SurvivalSettings
 from core._config_telephony import TelephonySettings
@@ -368,6 +369,7 @@ class Settings(BaseSettings):
     notifications: NotificationsSettings = Field(default_factory=NotificationsSettings)
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
+    session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
     passkey_vault: PasskeyVaultSettings = Field(default_factory=PasskeyVaultSettings)

@@ -13,12 +13,12 @@ import { formatLocalDateTime } from '@/shared/lib';
 import { Badge, Button, Notice, Spinner } from '@/shared/ui';
 
 import { Section } from './_shared';
+import { SessionCloseControls } from './SessionCloseControls';
 
 // The sessions Telegram lists for the account: ours (the sign-ins this app holds) and
 // everyone else's. A session that is not ours means somebody else holds the account, so
-// the card turns into a warning. Read-only: nothing here ends a session. The list is the
-// last saved audit; «Check sessions» reads Telegram again, and the accounts table's
-// badge follows the same number.
+// the card turns into a warning. The list is the last saved audit; «Check sessions» reads Telegram again, and the accounts table's
+// badge follows the same number. Ending a foreign session is SessionCloseControls.
 function SessionRow({ session }: { session: AccountSession }) {
   const { t, i18n } = useTranslation();
   const when = (iso: string) => formatLocalDateTime(Date.parse(iso), i18n.language);
@@ -157,6 +157,7 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
         <Button disabled={!hasProxy || check.isPending || saved.isPending} onClick={recheck}>
           {t('accounts.edit.sessionsCheck')}
         </Button>
+        <SessionCloseControls accountId={accountId} foreign={others} />
         {view ? (
           <span className="type-small text-content-subtle">
             {checkedAt
