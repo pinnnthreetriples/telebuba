@@ -273,6 +273,26 @@ export type AccountPage = {
 };
 
 /**
+ * AccountPasskeyCheck
+ *
+ * Whether Telegram still lists the account's stored passkey; read-only, nothing is repaired.
+ */
+export type AccountPasskeyCheck = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Telegram State
+   */
+  telegram_state: 'present' | 'missing' | 'unknown';
+  /**
+   * Reason
+   */
+  reason?: 'unavailable' | 'passkey_telegram_refused' | null;
+};
+
+/**
  * AccountPasskeyView
  *
  * Whether the account has a passkey, and whether passkeys can be used at all.
@@ -12613,6 +12633,57 @@ export type CreateAccountPasskeyResponses = {
 
 export type CreateAccountPasskeyResponse =
   CreateAccountPasskeyResponses[keyof CreateAccountPasskeyResponses];
+
+export type CheckAccountPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey/check';
+};
+
+export type CheckAccountPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CheckAccountPasskeyError = CheckAccountPasskeyErrors[keyof CheckAccountPasskeyErrors];
+
+export type CheckAccountPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyCheck;
+};
+
+export type CheckAccountPasskeyResponse =
+  CheckAccountPasskeyResponses[keyof CheckAccountPasskeyResponses];
 
 export type LoginAccountWithPasskeyData = {
   body?: never;

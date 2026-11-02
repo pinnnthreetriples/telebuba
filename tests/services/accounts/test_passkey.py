@@ -68,6 +68,12 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
             raise state["gateway_error"]  # ty: ignore[invalid-raise]
         return True
 
+    async def _is_listed(_account_id: str, credential_id: str) -> bool:
+        log.append(f"telegram_list:{credential_id}")
+        if isinstance(state.get("gateway_error"), Exception):
+            raise state["gateway_error"]  # ty: ignore[invalid-raise]
+        return bool(state.get("listed"))
+
     async def _login(passkey: StoredPasskey, session_name: str | None) -> object:
         log.append(f"login:{passkey.credential_id}:{session_name}")
         return state["login_result"]
@@ -91,6 +97,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
         "delete_signing_key": _delete_key,
         "register_passkey": _register,
         "delete_passkey": _delete_passkey,
+        "is_passkey_listed": _is_listed,
         "login_with_passkey": _login,
         "update_account_from_session_check": _update,
         "start_account_inbox": _inbox,
@@ -188,6 +195,7 @@ async def test_without_a_vault_every_write_refuses(wire: dict[str, object], call
     "call",
     [
         svc.read_account_passkey,
+        svc.check_account_passkey,
         svc.create_account_passkey,
         svc.relogin_with_passkey,
         svc.remove_account_passkey,
@@ -200,12 +208,16 @@ async def test_an_unknown_account_is_not_found(call: object) -> None:
         await call("missing")  # ty: ignore[call-non-callable]
 
 
-@pytest.mark.parametrize("call", [svc.relogin_with_passkey, svc.remove_account_passkey])
-@pytest.mark.usefixtures("wire")
+@pytest.mark.parametrize(
+    "call", [svc.check_account_passkey, svc.relogin_with_passkey, svc.remove_account_passkey]
+)
 @pytest.mark.asyncio
-async def test_without_a_passkey_login_and_removal_refuse(call: object) -> None:
+async def test_without_a_passkey_check_login_and_removal_refuse(
+    wire: dict[str, object], call: object
+) -> None:
     with pytest.raises(AccountActionError, match="passkey_missing"):
         await call("acc-1")  # ty: ignore[call-non-callable]
+    assert wire["log"] == []
 
 
 @pytest.mark.asyncio
@@ -296,3 +308,61 @@ async def test_a_vault_refusal_after_the_removal_is_reported(wire: dict[str, obj
         await svc.remove_account_passkey("acc-1")
 
     assert wire["row"] is None
+
+
+@pytest.mark.parametrize(("listed", "state"), [(True, "present"), (False, "missing")])
+@pytest.mark.asyncio
+async def test_a_successful_list_decides_present_or_missing(
+    wire: dict[str, object],
+    listed: bool,  # noqa: FBT001 - parametrized
+    state: str,
+) -> None:
+    wire["row"] = _stored()
+    wire["listed"] = listed
+
+    check = await svc.check_account_passkey("acc-1")
+
+    assert (check.account_id, check.telegram_state, check.reason) == ("acc-1", state, None)
+    assert wire["log"] == ["telegram_list:Y3JlZA"]
+    assert wire["row"] == _stored()
+    assert ("INFO", "passkey_checked", {"state": state, "reason": None}) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.parametrize("code", ["unavailable", "passkey_telegram_refused"])
+@pytest.mark.asyncio
+async def test_an_unreachable_telegram_or_dead_session_is_unknown_never_missing(
+    wire: dict[str, object], code: str
+) -> None:
+    wire["row"] = _stored()
+    wire["listed"] = False
+    wire["gateway_error"] = PasskeyGatewayError(code)  # ty: ignore[invalid-argument-type]
+
+    check = await svc.check_account_passkey("acc-1")
+
+    assert (check.telegram_state, check.reason) == ("unknown", code)
+    assert wire["row"] == _stored()
+    assert ("INFO", "passkey_checked", {"state": "unknown", "reason": code}) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_is_the_retry_after_refusal_not_missing(
+    wire: dict[str, object],
+) -> None:
+    wire["row"] = _stored()
+    wire["gateway_error"] = PasskeyGatewayError("flood_wait", retry_after_seconds=60)
+
+    with pytest.raises(AccountActionError) as caught:
+        await svc.check_account_passkey("acc-1")
+
+    assert (caught.value.code, caught.value.retry_after_seconds) == ("flood_wait", 60)
+    assert wire["row"] == _stored()
+    assert ("WARNING", "passkey_check_failed", {"code": "flood_wait"}) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.asyncio
+async def test_the_check_needs_no_vault(wire: dict[str, object]) -> None:
+    wire["configured"] = False
+    wire["row"] = _stored()
+    wire["listed"] = True
+
+    assert (await svc.check_account_passkey("acc-1")).telegram_state == "present"

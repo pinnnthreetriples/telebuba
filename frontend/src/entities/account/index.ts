@@ -97,6 +97,7 @@ export {
   recordAccountTwofaFromJsonMutation,
   recordAccountTwofaMutation,
   removeAccountTwofaMutation,
+  checkAccountPasskeyMutation,
   createAccountPasskeyMutation,
   loginAccountWithPasskeyMutation,
   removeAccountPasskeyMutation,

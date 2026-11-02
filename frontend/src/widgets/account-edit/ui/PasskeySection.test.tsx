@@ -5,7 +5,7 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { AccountPasskeyView, AccountRead } from '@/shared/api';
+import type { AccountPasskeyCheck, AccountPasskeyView, AccountRead } from '@/shared/api';
 
 import { PasskeySection } from './PasskeySection';
 
@@ -129,4 +129,64 @@ test('a removal Telegram could not reach offers to forget the passkey locally', 
   const last = passkeyWrites().at(-1);
   expect(last?.method).toBe('DELETE');
   expect(new URL(last?.url ?? '').searchParams.get('forget_only')).toBe('true');
+});
+
+// The check route answers `verdict`; every other passkey route the same stored view.
+function serveCheck(verdict: AccountPasskeyCheck, stored: AccountPasskeyView): void {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const isCheck = new URL(request.url).pathname === `${URL_PATH}/check`;
+    return Promise.resolve(
+      new Response(JSON.stringify(isCheck ? verdict : stored), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+}
+
+const STORED = view({ has_passkey: true, created_at: '2026-10-24T12:00:00+00:00' });
+
+test('only an account with a passkey can be checked in Telegram', async () => {
+  serve(view());
+  await renderSection();
+
+  expect(await screen.findByRole('button', { name: 'Создать ключ доступа' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Проверить в Telegram' })).toBeNull();
+});
+
+test.each([
+  [{ telegram_state: 'present' }, 'Telegram по-прежнему хранит этот ключ.'],
+  [
+    { telegram_state: 'missing' },
+    'Telegram больше не знает этого ключа. Удалите его и создайте новый.',
+  ],
+  [
+    { telegram_state: 'unknown', reason: 'passkey_telegram_refused' },
+    'Проверить не удалось. Telegram отклонил запрос, возможно, сессия аккаунта слетела.',
+  ],
+] as const)('the check says what Telegram answered: %j', async (answer, line) => {
+  serveCheck({ account_id: 'acc-1', ...answer }, STORED);
+  await renderSection();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Проверить в Telegram' }));
+
+  expect(await screen.findByText(line)).toBeInTheDocument();
+  const writes = passkeyWrites();
+  expect(writes.map((request) => request.method)).toEqual(['POST']);
+  expect(new URL(writes[0]?.url ?? '').pathname).toBe(`${URL_PATH}/check`);
+});
+
+test('a passkey can still be checked after the key vault went away', async () => {
+  serveCheck(
+    { account_id: 'acc-1', telegram_state: 'present' },
+    view({ ...STORED, vault_configured: false }),
+  );
+  await renderSection();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Проверить в Telegram' }));
+
+  expect(await screen.findByText('Telegram по-прежнему хранит этот ключ.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Войти по ключу' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Удалить ключ' })).toBeNull();
 });
