@@ -230,3 +230,50 @@ test('with no foreign session there is nothing to close', async () => {
   await screen.findByText('Чужих сессий нет.');
   expect(screen.queryByRole('button', { name: 'Закрыть чужие сессии' })).toBeNull();
 });
+
+// The sessions GET answers the audit, the re-key GET answers `rekey`.
+function serveWithRekey(sessions: AccountSessionAudit, rekey: { rekeyed_at?: string }): void {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const body = new URL(request.url).pathname.endsWith('/rekey')
+      ? { account_id: 'acc-1', ...rekey }
+      : sessions;
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+}
+
+test('a foreign session is red and badged «Чужая», ours is green and badged «Наша»', async () => {
+  serve(audit([OURS, STRANGER], '2026-11-02T10:00:00+00:00'));
+  await renderSection();
+
+  const foreign = (await screen.findByText('Pixel 8 · Telegram Android')).closest('li');
+  const ours = screen.getByText('Desktop PC · Telegram Desktop').closest('li');
+  expect(foreign).toHaveClass('bg-danger-tint');
+  expect(foreign).toHaveTextContent('Чужая');
+  expect(ours).toHaveClass('bg-success-tint');
+  expect(ours).toHaveTextContent('Наша');
+  expect(screen.getByText('Не наш вход: аккаунтом владеет ещё кто-то.')).toBeInTheDocument();
+  expect(screen.getByText('Входы, которыми пользуется Телебуба.')).toBeInTheDocument();
+});
+
+test('an account never re-keyed warns that its sign-in may be the seller’s', async () => {
+  serveWithRekey(audit([OURS], '2026-11-02T10:00:00+00:00'), {});
+  await renderSection();
+
+  expect(await screen.findByText(/У купленного аккаунта его мог создать продавец/)).toBeVisible();
+});
+
+test('after a re-key the seller warning is gone', async () => {
+  serveWithRekey(audit([OURS], '2026-11-02T10:00:00+00:00'), {
+    rekeyed_at: '2026-11-02T10:00:00+00:00',
+  });
+  await renderSection();
+
+  await screen.findByText('Чужих сессий нет.');
+  expect(screen.queryByText(/У купленного аккаунта его мог создать продавец/)).toBeNull();
+});

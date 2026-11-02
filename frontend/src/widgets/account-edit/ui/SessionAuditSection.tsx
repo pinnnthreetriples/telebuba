@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountRekeyQueryOptions,
   accountSessionAuditQueryKey,
   accountSessionAuditQueryOptions,
   auditAccountSessionsMutation,
   invalidateAccountViews,
 } from '@/entities/account';
 import type { AccountRead, AccountSession } from '@/shared/api';
-import { formatLocalDateTime } from '@/shared/lib';
+import { cn, formatLocalDateTime } from '@/shared/lib';
 import { Badge, Button, Notice, Spinner } from '@/shared/ui';
 
 import { Section } from './_shared';
@@ -20,6 +21,8 @@ import { SessionRekeyControls } from './SessionRekeyControls';
 // everyone else's. A session that is not ours means somebody else holds the account, so
 // the card turns into a warning. The list is the last saved audit; «Check sessions» reads Telegram again, and the accounts table's
 // badge follows the same number. Ending a foreign session is SessionCloseControls.
+// Ours and foreign must not look alike: a foreign row is red with a bar and a «Foreign»
+// badge, ours is green with «Ours», so the operator reads the verdict before the details.
 function SessionRow({ session }: { session: AccountSession }) {
   const { t, i18n } = useTranslation();
   const when = (iso: string) => formatLocalDateTime(Date.parse(iso), i18n.language);
@@ -35,9 +38,21 @@ function SessionRow({ session }: { session: AccountSession }) {
       : '',
   ].filter(Boolean);
   return (
-    <li className="flex flex-col gap-1 rounded-md border border-line px-3 py-3">
+    <li
+      className={cn(
+        'flex flex-col gap-1 rounded-md border border-l-4 px-3 py-3',
+        session.is_ours
+          ? 'border-success-line border-l-success-deep bg-success-tint'
+          : 'border-danger-line border-l-danger-deep bg-danger-tint',
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="type-body-medium">{device || '—'}</span>
+        <Badge tone={session.is_ours ? 'success' : 'danger'}>
+          {session.is_ours
+            ? t('accounts.edit.sessionsOursBadge')
+            : t('accounts.edit.sessionsForeignRowBadge')}
+        </Badge>
         {session.is_current ? (
           <Badge tone="info">{t('accounts.edit.sessionsCurrent')}</Badge>
         ) : null}
@@ -57,10 +72,24 @@ function SessionRow({ session }: { session: AccountSession }) {
   );
 }
 
-function SessionGroup({ title, sessions }: { title: string; sessions: AccountSession[] }) {
+function SessionGroup({
+  title,
+  explain,
+  sessions,
+}: {
+  title: string;
+  explain: string;
+  sessions: AccountSession[];
+}) {
   return (
     <div className="mb-3">
-      <div className="mb-2 type-small-medium">{title}</div>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="type-small-medium">{title}</span>
+        <Badge tone="neutral" size="sm">
+          {sessions.length}
+        </Badge>
+      </div>
+      <p className="mb-2 type-small text-content-subtle">{explain}</p>
       <ul className="flex flex-col gap-2">
         {sessions.map((session) => (
           <SessionRow key={session.hash} session={session} />
@@ -80,6 +109,9 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
   // A DB read only, but gated like the other cards so a closed card costs nothing.
   const saved = useQuery({ ...accountSessionAuditQueryOptions(path), enabled: open });
   const check = useMutation(auditAccountSessionsMutation());
+  // Never re-keyed: the key in use may be the one whoever sold the account made.
+  const rekey = useQuery({ ...accountRekeyQueryOptions(path), enabled: open });
+  const neverRekeyed = rekey.isSuccess && !rekey.data.rekeyed_at;
 
   const view = saved.data;
   // The header speaks before the card is opened: the list already carries the count.
@@ -140,13 +172,28 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
       {view && checkedAt ? (
         <>
           {others.length > 0 ? (
-            <SessionGroup title={t('accounts.edit.sessionsForeignTitle')} sessions={others} />
+            <SessionGroup
+              title={t('accounts.edit.sessionsForeignTitle')}
+              explain={t('accounts.edit.sessionsForeignExplain')}
+              sessions={others}
+            />
           ) : (
             <p className="mb-3 type-body text-content-subtle">
               {t('accounts.edit.sessionsNoForeign')}
             </p>
           )}
-          <SessionGroup title={t('accounts.edit.sessionsOursTitle')} sessions={ours} />
+          <SessionGroup
+            title={t('accounts.edit.sessionsOursTitle')}
+            explain={t('accounts.edit.sessionsOursExplain')}
+            sessions={ours}
+          />
+          {neverRekeyed && ours.length > 0 ? (
+            <div className="mb-3">
+              <Notice tone="info" className="py-3 text-small">
+                {t('accounts.edit.sessionsOursImported')}
+              </Notice>
+            </div>
+          ) : null}
           {view.ttl_days ? (
             <p className="mb-3 type-small text-content-subtle">
               {t('accounts.edit.sessionsTtl', { days: view.ttl_days })}
