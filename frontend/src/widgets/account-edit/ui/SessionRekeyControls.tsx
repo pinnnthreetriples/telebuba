@@ -43,21 +43,23 @@ export function SessionRekeyControls({
   const run = () => {
     setFailure(null);
     setCompleted(null);
-    return rekey
-      .mutateAsync(path)
-      .then((answer) => {
-        queryClient.setQueryData(accountRekeyQueryKey(path), answer);
-        setCompleted(answer);
-      })
-      // Answered here, so the dialog closes and the card keeps the reason.
-      .catch((error: unknown) => {
-        setFailure(mutationErrorText(error));
-      })
-      .finally(() => {
-        invalidateAccountViews(queryClient);
-        // The sessions listed now include a new key and not the old one.
-        void queryClient.invalidateQueries({ queryKey: accountSessionAuditQueryKey(path) });
-      });
+    return (
+      rekey
+        .mutateAsync(path)
+        .then((answer) => {
+          queryClient.setQueryData(accountRekeyQueryKey(path), answer);
+          setCompleted(answer);
+        })
+        // Answered here, so the dialog closes and the card keeps the reason.
+        .catch((error: unknown) => {
+          setFailure(mutationErrorText(error));
+        })
+        .finally(() => {
+          invalidateAccountViews(queryClient);
+          // The sessions listed now include a new key and not the old one.
+          void queryClient.invalidateQueries({ queryKey: accountSessionAuditQueryKey(path) });
+        })
+    );
   };
 
   return (
@@ -85,9 +87,7 @@ export function SessionRekeyControls({
         ) : null}
       </div>
       {hasProxy ? null : (
-        <p className="mt-2 type-small text-content-subtle">
-          {t('shell.code.rekey_proxy_missing')}
-        </p>
+        <p className="mt-2 type-small text-content-subtle">{t('shell.code.rekey_proxy_missing')}</p>
       )}
       {failure ? (
         <Notice tone="danger" role="alert" className="mt-3">
