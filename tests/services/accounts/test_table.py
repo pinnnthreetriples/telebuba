@@ -17,6 +17,7 @@ from core.db import (
     update_proxy_check,
     upsert_spam_status,
 )
+from core.repositories.session_audits import save_session_audit
 from core.telegram_client import TelegramClientPoolError, get_client
 from schemas.accounts import (
     AccountCheckRequest,
@@ -25,6 +26,7 @@ from schemas.accounts import (
     health_for_status,
 )
 from schemas.proxy import ProxyCheckUpdate
+from schemas.session_audit import AccountSession, AccountSessionAudit, AuthorizationList
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
@@ -320,6 +322,41 @@ async def test_list_accounts_page_enriches_trust_and_spam() -> None:
 
     # The device fingerprint's system language is surfaced for the edit card.
     assert rows["limited"].device_lang is not None
+
+
+@pytest.mark.asyncio
+async def test_list_accounts_page_carries_the_foreign_session_count() -> None:
+    """The list says how many foreign sessions the last audit found; unaudited stays ``None``."""
+    await add_account(AccountCreate(account_id="audited"))
+    await add_account(AccountCreate(account_id="clean"))
+    await add_account(AccountCreate(account_id="never"))
+    for account_id, foreign in (("audited", 2), ("clean", 0)):
+        sessions = [
+            AccountSession(
+                hash=str(n),
+                is_current=n == 0,
+                is_ours=n == 0,
+                official_app=False,
+                device_model="Model",
+                platform="Windows",
+                system_version="10",
+                app_name="Telegram Desktop",
+                ip="192.0.2.10",
+                country="Nowhere",
+            )
+            for n in range(foreign + 1)
+        ]
+        await save_session_audit(
+            AccountSessionAudit.of(
+                account_id, "2026-11-02T10:00:00+00:00", AuthorizationList(sessions=sessions)
+            )
+        )
+
+    rows = {row.account_id: row for row in (await list_accounts_page()).items}
+
+    assert rows["audited"].foreign_sessions == 2
+    assert rows["clean"].foreign_sessions == 0
+    assert rows["never"].foreign_sessions is None
 
 
 @pytest.mark.asyncio

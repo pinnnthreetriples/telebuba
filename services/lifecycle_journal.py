@@ -22,6 +22,7 @@ from core.repositories.lifecycle import (
     fetch_lifecycle_snapshot,
     list_lifecycle_events,
 )
+from core.repositories.session_audits import fetch_last_session_audit_event
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead, AccountStatus
@@ -125,6 +126,7 @@ async def record_session_death(account: AccountRead, status: AccountStatus) -> N
     codes = _FROZEN_CODES if status == "frozen" else _GONE_CODES
     extra: dict[str, object] = {"status": status}
     extra |= await death_evidence(account.account_id, codes, alive_floor(life, account.created_at))
+    extra |= await last_audit_evidence(account.account_id)
     await record_lifecycle_event(account.account_id, "session_dead", extra)
 
 
@@ -163,6 +165,27 @@ async def death_evidence(
     if row is None:
         return {}
     return {"evidence_at": row.created_at, "evidence_event": row.event}
+
+
+async def last_audit_evidence(account_id: str) -> dict[str, object]:
+    """The last session audit before a death: the newest moment it saw the account's sessions.
+
+    It brackets who ended the session: ``last_audit_total`` sessions were listed at
+    ``last_audit_at``, ``last_audit_foreign`` of them not ours. Empty when no audit ran.
+    Never raises: the journal never breaks its caller.
+    """
+    try:
+        event = await fetch_last_session_audit_event(account_id)
+    except Exception as exc:  # noqa: BLE001 - the journal must never break its caller.
+        logger.warning("session audit read failed: %s", type(exc).__name__, exc_info=exc)
+        return {}
+    if event is None:
+        return {}
+    return {
+        "last_audit_at": event.checked_at,
+        "last_audit_total": event.total,
+        "last_audit_foreign": event.foreign_count,
+    }
 
 
 class PendingDeletion(NamedTuple):

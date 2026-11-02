@@ -658,6 +658,10 @@ export type AccountRead = {
    */
   spam_detail?: string | null;
   /**
+   * Foreign Sessions
+   */
+  foreign_sessions?: number | null;
+  /**
    * Folder Ids
    */
   folder_ids?: Array<string>;
@@ -673,6 +677,98 @@ export type AccountRegisteredUpdate = {
    * Registered At
    */
   registered_at?: string | null;
+};
+
+/**
+ * AccountSession
+ *
+ * One authorization of the account, as Telegram lists it.
+ */
+export type AccountSession = {
+  /**
+   * Hash
+   */
+  hash: string;
+  /**
+   * Is Current
+   */
+  is_current: boolean;
+  /**
+   * Is Ours
+   */
+  is_ours: boolean;
+  /**
+   * Official App
+   */
+  official_app: boolean;
+  /**
+   * Device Model
+   */
+  device_model: string;
+  /**
+   * Platform
+   */
+  platform: string;
+  /**
+   * System Version
+   */
+  system_version: string;
+  /**
+   * App Name
+   */
+  app_name: string;
+  /**
+   * Ip
+   */
+  ip: string;
+  /**
+   * Country
+   */
+  country: string;
+  /**
+   * Date Created
+   */
+  date_created?: string | null;
+  /**
+   * Date Active
+   */
+  date_active?: string | null;
+  /**
+   * Unconfirmed
+   */
+  unconfirmed?: boolean;
+};
+
+/**
+ * AccountSessionAudit
+ *
+ * The account's sessions as of one audit, or an empty view when none ran yet.
+ */
+export type AccountSessionAudit = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Checked At
+   */
+  checked_at?: string | null;
+  /**
+   * Ttl Days
+   */
+  ttl_days?: number | null;
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Foreign Count
+   */
+  foreign_count: number;
+  /**
+   * Sessions
+   */
+  sessions: Array<AccountSession>;
 };
 
 /**
@@ -12736,6 +12832,110 @@ export type LoginAccountWithPasskeyResponses = {
 
 export type LoginAccountWithPasskeyResponse =
   LoginAccountWithPasskeyResponses[keyof LoginAccountWithPasskeyResponses];
+
+export type GetAccountSessionAuditData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions';
+};
+
+export type GetAccountSessionAuditErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountSessionAuditError =
+  GetAccountSessionAuditErrors[keyof GetAccountSessionAuditErrors];
+
+export type GetAccountSessionAuditResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountSessionAudit;
+};
+
+export type GetAccountSessionAuditResponse =
+  GetAccountSessionAuditResponses[keyof GetAccountSessionAuditResponses];
+
+export type AuditAccountSessionsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/audit';
+};
+
+export type AuditAccountSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type AuditAccountSessionsError =
+  AuditAccountSessionsErrors[keyof AuditAccountSessionsErrors];
+
+export type AuditAccountSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountSessionAudit;
+};
+
+export type AuditAccountSessionsResponse =
+  AuditAccountSessionsResponses[keyof AuditAccountSessionsResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

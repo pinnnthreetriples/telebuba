@@ -128,6 +128,26 @@ test('renders the real trust score and device, dashes when absent', () => {
   expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
 
+test('a row whose last session audit found foreign sessions says how many', () => {
+  render(
+    <AccountsTable
+      data={[
+        { ...ACCOUNTS[0]!, foreign_sessions: 2 },
+        { ...ACCOUNTS[1]!, foreign_sessions: 0 },
+        { account_id: 'acc-3', status: 'alive', created_at: 'now', updated_at: 'now' },
+      ]}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  // Only the audited row with a stranger; a clean audit and no audit stay quiet.
+  expect(screen.getAllByText('Чужих сессий: 2')).toHaveLength(1);
+  expect(screen.queryByText(/Чужих сессий: 0/)).toBeNull();
+});
+
 test('fires the row actions for the clicked account', async () => {
   const onCheck = vi.fn();
   const onDelete = vi.fn();

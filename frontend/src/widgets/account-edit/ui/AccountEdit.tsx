@@ -11,6 +11,7 @@ import { DeviceSection } from './DeviceSection';
 import { PasskeySection } from './PasskeySection';
 import { ProxySection } from './ProxySection';
 import { RegisteredSection } from './RegisteredSection';
+import { SessionAuditSection } from './SessionAuditSection';
 import { SessionSection } from './SessionSection';
 import { SignalsSection } from './SignalsSection';
 import { TwoFactorSection } from './TwoFactorSection';
@@ -27,8 +28,8 @@ function trustTone(t: number): string {
 }
 
 // The design's account-edit view (reached by clicking a row): an always-visible
-// hero header above six collapsible cards — session, proxy, device, signals,
-// 2FA, actions — each owning its own state/mutations. All wired to /api/v1.
+// hero header above collapsible cards — session, proxy, device, signals, passkey,
+// 2FA, sessions, actions — each owning its own state/mutations. All wired to /api/v1.
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const trust = account.trust_score ?? 0;
@@ -48,6 +49,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <RegisteredSection account={account} />
         <PasskeySection account={account} />
+      </div>
+
+      {/* Seven cards before the last pair: the sessions card, the odd one out, stands
+          alone in half a row above the security pair. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SessionAuditSection account={account} />
       </div>
 
       {/* The security cards sit together: the cloud password is the other half of

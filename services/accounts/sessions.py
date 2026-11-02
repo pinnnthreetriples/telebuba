@@ -39,6 +39,7 @@ from services.accounts._tdata import (
 from services.accounts._uploads import _session_filename, _write_session_file
 from services.accounts.devices import assert_device_configured
 from services.accounts.lifecycle import add_account
+from services.accounts.session_audit import audit_after_first_check
 from services.accounts.twofa import record_account_twofa
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 from services.lifecycle_journal import record_session_death
@@ -216,6 +217,9 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
     saved = await update_account_from_session_check(result)
     # Journal the death once (``record_session_death`` knows when it is news).
     await record_session_death(account, result.status)
+    if result.status == "alive":
+        # The first look at who else holds this account, once it is reachable behind a proxy.
+        await audit_after_first_check(saved)
     if result.status in {"alive", "frozen"}:
         await start_account_inbox(saved.account_id)
     elif result.status in {"unauthorized", "session_error", "account_error"}:

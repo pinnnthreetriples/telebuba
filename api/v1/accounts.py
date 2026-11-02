@@ -29,6 +29,7 @@ from api.v1._accounts_passkey import passkey_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_registered import registered_router
 from api.v1._accounts_scheduled import scheduled_router
+from api.v1._accounts_session_audit import session_audit_router
 from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload, staged_upload
@@ -421,6 +422,7 @@ router.include_router(privacy_router)
 router.include_router(twofa_router)
 # The account's Telegram passkey (key held in the vault).
 router.include_router(passkey_router)
+router.include_router(session_audit_router)
 router.include_router(registered_router)
 router.include_router(bulk_messages_router)
 router.include_router(contact_lookup_router)

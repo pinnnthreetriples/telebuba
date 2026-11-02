@@ -1,7 +1,7 @@
 ---
 name: runtime-telegram
 description: Telegram client, sessions, proxies, profile, privacy and account removal.
-last_updated: 2026-10-26
+last_updated: 2026-11-02
 edges:
   - target: patterns/account-devices.md
     condition: account devices, the second sign-in or the mobile container
@@ -34,7 +34,8 @@ grounds_to:
 - The gateway's "was this dispatched" verdict keys off whether a client was borrowed, not off which RPC failed, so a dispatcher's FIRST call must be one it owns: a convenience method that reads before it writes turns a lost read into a reported "may have been applied", which the service then persists as an unconfirmed credential.
 - A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied — unless the live read shows no password at all, which makes the stored value stale rather than the previous one in force.
 - Web-login dresses the page AND every paused worker over a held-open CDP socket — Chrome strips overrides on detach; Chrome dies with the backend or an undressable worker. Language: the primary device's; timezone: the proxy's. A relative profile dir hands the argv to a running Chrome (operator's IP).
-- An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
-- Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
+- An RPC success does not prove every profile field is visible/stored: confirm from a fresh read, never persist a lag-sensitive "confirmed".
+- Session audit and closing foreign sessions: `docs/session-audit.md`.
+- Sending clients set `parse_mode=None`: operator text is never transformed, only generated text is cleaned.
 
-API/frontend contain no Telegram runtime policy. Code, gateway tests and migrations are the detailed source of truth.
+API/frontend hold no Telegram runtime policy; code, gateway tests and migrations are the detail.
