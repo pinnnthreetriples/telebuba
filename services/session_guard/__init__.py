@@ -1,7 +1,7 @@
 """Session guard: the background work that keeps an account's sessions ours.
 
-Today it ends the old authorization of a re-keyed account once Telegram lets it; see
-``_loop``.
+It ends the old authorization of a re-keyed account once Telegram lets it, and re-reads
+each alive account's sessions every few hours (the watch); see ``_loop`` and ``_watch``.
 """
 
 from __future__ import annotations

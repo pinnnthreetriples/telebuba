@@ -54,3 +54,16 @@ Verified against the pages on 2026-11-02, not assumed:
 - **Unconfirmed.** `Authorization.unconfirmed` and `account.changeAuthorizationSettings(confirmed)` are documented ([api/auth](https://core.telegram.org/api/auth), login confirmation); what an unconfirmed session may not do is not.
 
 **Not exercised against Telegram.** Only fakes and a fake file system run in the tests. A live run on one throwaway account must show: the token login works through the account's proxy with its stored fingerprint, the cloud-password finish, whether the new session may end the old one at once, and that Telegram's active-sessions list then shows only the new device.
+
+## The watch: continuous, cheap, paced
+
+`services/session_guard` runs one background task (started in the lifespan beside the survival probes, stopped before the client pool; one uvicorn worker). Every pass (`SESSION_AUDIT__GUARD_INTERVAL_SECONDS`, 5 min) it ends old re-key authorizations that are due and re-audits **at most one** account.
+
+- Which accounts: alive, behind a proxy, and not held by another feature (warming, campaigns, a channel-search loan). The first pass waits after startup (`WATCH_STARTUP_DELAY_SECONDS`) so a restart does not read the fleet at once.
+- When: each account about every 6 to 12 hours (`WATCH_MIN_HOURS` / `WATCH_MAX_HOURS`). The interval is drawn afresh per account from a clipped log-normal in the service (core holds no randomness), so a fleet imported together never reads in step. An account never audited is due at once; one audited before a restart is due one drawn interval after that audit. A refused read is retried after `WATCH_RETRY_HOURS`.
+- Proxies: no two accounts behind the same proxy within `WATCH_PROXY_SPACING_SECONDS`.
+- A refusal that means the session is gone (`session_dead`, `account_deactivated`, `account_frozen`) goes through the normal session check, which records the status and journals `session_dead` together with the last audit before it, so the death is bracketed.
+- A **new** foreign session (one the previous audit did not list) is journalled (`foreign_sessions_found`), logged (`session_audit_foreign_found`), sent to the operator bot (the existing notification channel, kind `foreign_session`) and shown live: the accounts list's badge and an open Sessions card refresh from the log stream.
+- If the account has a stored passkey, the watch asks Telegram whether it still lists it (`check_account_passkey`, read-only). A passkey that is gone is logged (`session_watch_passkey_missing`) and sent to the operator bot (kind `passkey_missing`): somebody else was in the account's security settings.
+
+Switch it off with `SESSION_AUDIT__WATCH_ENABLED=false`; the old-key closing keeps running.

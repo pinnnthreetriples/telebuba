@@ -125,6 +125,9 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
         (_entry("warming_quarantine_unreadable"), "error"),
         (_entry("warming_loop_crashed"), "error"),
         (_entry("warming_target_reached"), "warmed"),
+        (_entry("session_audit_foreign_found"), "foreign_session"),
+        (_entry("session_watch_passkey_missing"), "passkey_missing"),
+        (_entry("session_audit_completed"), None),
         (_entry("warming_started"), None),
         (_entry("notifications_send_failed"), None),
     ],
@@ -139,6 +142,18 @@ def test_the_spam_block_message_says_warming_stopped_and_what_to_do() -> None:
     assert "Polina (@polina)" in text
     assert "подтвердил спамблок" in text
     assert "удалить или оставить" in text
+
+
+def test_the_foreign_session_message_names_the_account_and_where_to_look() -> None:
+    text = compose_message("foreign_session", "Polina (@polina)")
+
+    assert "Polina (@polina)" in text
+    assert "чужая сессия" in text
+    assert "Сессии" in text
+
+
+def test_the_passkey_message_names_the_account() -> None:
+    assert "Polina (@polina)" in compose_message("passkey_missing", "Polina (@polina)")
 
 
 def test_the_label_never_carries_a_phone_number() -> None:

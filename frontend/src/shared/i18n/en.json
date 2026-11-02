@@ -2097,7 +2097,8 @@
     "session_rekey_failed": "Session could not be re-keyed",
     "session_old_key_closed": "The old imported session was closed",
     "session_old_key_pending": "The old imported session is not closed yet",
-    "session_guard_failed": "A background session check failed"
+    "session_guard_failed": "A background session check failed",
+    "session_watch_passkey_missing": "Telegram no longer lists the account's passkey"
   },
   "logEventReason": {
     "restart": "back in after a start",

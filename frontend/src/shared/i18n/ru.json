@@ -2136,7 +2136,8 @@
     "session_rekey_failed": "Не удалось заменить ключ сессии",
     "session_old_key_closed": "Старая импортированная сессия закрыта",
     "session_old_key_pending": "Старая импортированная сессия ещё не закрыта",
-    "session_guard_failed": "Фоновая проверка сессий не удалась"
+    "session_guard_failed": "Фоновая проверка сессий не удалась",
+    "session_watch_passkey_missing": "Telegram больше не показывает ключ доступа аккаунта"
   },
   "logEventReason": {
     "restart": "снова в работе после запуска",

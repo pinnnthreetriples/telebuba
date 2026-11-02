@@ -15,30 +15,43 @@ def _fresh() -> None:
     _loop.reset_for_tests()
 
 
-@pytest.mark.asyncio
-async def test_a_pass_returns_how_many_old_keys_it_ended(monkeypatch: pytest.MonkeyPatch) -> None:
+def _steps(
+    monkeypatch: pytest.MonkeyPatch, *, old_keys: int | Exception, watched: str | None
+) -> None:
     async def _due() -> int:
-        return 3
+        if isinstance(old_keys, Exception):
+            raise old_keys
+        return old_keys
+
+    async def _watch() -> str | None:
+        return watched
 
     monkeypatch.setattr(_loop, "close_due_old_keys", _due)
-
-    assert await session_guard.run_guard_pass() == 3
+    monkeypatch.setattr(_loop, "run_watch_pass", _watch)
 
 
 @pytest.mark.asyncio
-async def test_a_failing_step_is_logged_and_never_raised(monkeypatch: pytest.MonkeyPatch) -> None:
-    events: list[tuple[str, str, object]] = []
+async def test_a_pass_counts_the_old_keys_ended_and_the_account_watched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _steps(monkeypatch, old_keys=3, watched="acc-1")
 
-    async def _due() -> int:
-        raise RuntimeError
+    assert await session_guard.run_guard_pass() == 4
+
+
+@pytest.mark.asyncio
+async def test_a_failing_step_is_logged_and_the_other_still_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, str, object]] = []
 
     async def _log(level: str, event: str, **kwargs: object) -> None:
         events.append((level, event, kwargs.get("extra")))
 
-    monkeypatch.setattr(_loop, "close_due_old_keys", _due)
+    _steps(monkeypatch, old_keys=RuntimeError(), watched="acc-1")
     monkeypatch.setattr(_loop, "log_event", _log)
 
-    assert await session_guard.run_guard_pass() == 0
+    assert await session_guard.run_guard_pass() == 1
     assert events == [
         ("WARNING", "session_guard_failed", {"step": "old_keys", "error_type": "RuntimeError"})
     ]
@@ -55,8 +68,9 @@ async def test_the_task_starts_once_runs_a_pass_and_stops(monkeypatch: pytest.Mo
         ran.set()
         return 0
 
+    _steps(monkeypatch, old_keys=0, watched=None)
     monkeypatch.setattr(_loop, "close_due_old_keys", _due)
-    monkeypatch.setattr(_loop.settings.session_audit, "rekey_poll_seconds", 3600.0)
+    monkeypatch.setattr(_loop.settings.session_audit, "guard_interval_seconds", 3600.0)
 
     await session_guard.start_session_guard()
     await session_guard.start_session_guard()  # already running: a no-op
