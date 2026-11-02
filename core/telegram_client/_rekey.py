@@ -11,12 +11,13 @@ Nothing is kept unless everything succeeds, in this order:
 
 1. the new session is built under a scratch name, never over a file that exists;
 2. it signs in and is checked against the imported one's user;
-3. the files are swapped (the imported one is set aside, not deleted), the new one is
-   opened once as the account's own and must answer as the same user;
-4. only then is the imported file deleted.
+3. the new session's content is copied into the imported file's place, in place (the imported
+   content is kept aside, the file itself is never renamed: see ``_copy_session``), and the
+   result is opened once as the account's own and must answer as the same user;
+4. only then is the imported content dropped.
 
-Any failure before 4 puts the imported file back and ends the new authorization, and the
-account is exactly as it was. The old AUTHORIZATION (the seller-known key) is ended by the
+Any failure before 4 copies the imported content back and ends the new authorization, and
+the account is exactly as it was. The old AUTHORIZATION (the seller-known key) is ended by the
 service afterwards, with :func:`core.telegram_client._session_close.close_sessions`: its
 hash is returned here. Every failure is a bounded code, never Telethon prose. The cloud
 password is only passed to Telegram, never logged or returned.
@@ -26,7 +27,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
+import sqlite3
+import time
 from typing import TYPE_CHECKING
 
 from anyio import Path as AsyncPath
@@ -68,6 +70,8 @@ _UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
 _DEAD: RekeyRefusalCode = "rekey_session_dead"
 # The suffix of the file the imported session is set aside as while the swap is verified.
 _ASIDE_SUFFIX = ".rekey-aside"
+# How long a write to the session file waits for another connection that holds it.
+_LOCK_WAIT_SECONDS = 10.0
 
 
 class RekeyGatewayError(Exception):
@@ -204,35 +208,70 @@ async def _require_free(session_path: str) -> None:
         raise _refusal(_CONFLICT)
 
 
+def _copy_session(source: str, target: str) -> None:
+    """Make the SQLite file ``target`` hold exactly what ``source`` holds, in place.
+
+    SQLite's backup writes the target's pages under its own lock: a client that still has the
+    target open does not stop it. A rename does, on Windows: SQLite opens its files without
+    delete sharing, so ONE leftover connection fails it (``WinError 32``). Telethon's session
+    reopens its file on any call, so a background task that kept the evicted client leaves
+    exactly that behind, and nothing here can reach it.
+
+    A connection that holds the target for writing would make ``backup`` wait for ever (it
+    retries a busy target on its own), so the wait is bounded: ``sqlite3.OperationalError``.
+    """
+    deadline = time.monotonic() + _LOCK_WAIT_SECONDS
+
+    def give_up(status: int, _remaining: int, _total: int) -> None:
+        if status in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} and time.monotonic() > deadline:
+            msg = "the session file stayed locked"
+            raise sqlite3.OperationalError(msg)
+
+    reader = sqlite3.connect(source)
+    try:
+        # No busy handler of its own: the loop below is the one wait, and it is bounded.
+        writer = sqlite3.connect(target, timeout=0)
+        try:
+            reader.backup(writer, sleep=0.05, progress=give_up)
+        finally:
+            writer.close()
+    finally:
+        reader.close()
+
+
 async def _swap(
     profile: TelegramClientProfile, scratch_path: str, user_id: int, device: DeviceType
 ) -> None:
-    """Put the scratch file in the imported file's place, or leave everything as it was.
+    """Put the new session's content in the imported file, or leave everything as it was.
 
-    The imported file is set aside, not deleted, until the new one has answered as the same
-    user from its final place; a failure moves it back.
+    The imported file's content is kept in a side copy, not dropped, until the new one has
+    answered as the same user from its final place; a failure copies it back. The final file
+    itself is never renamed or deleted, see :func:`_copy_session`.
     """
-    account_id = profile.account_id
-    final = AsyncPath(f"{profile.session_path}.session")
-    aside = AsyncPath(f"{profile.session_path}.session{_ASIDE_SUFFIX}")
-    fresh = AsyncPath(f"{scratch_path}.session")
-    async with removing_client(account_id, device):
-        await asyncio.to_thread(os.replace, str(final), str(aside))
+    final = f"{profile.session_path}.session"
+    aside = f"{final}{_ASIDE_SUFFIX}"
+    fresh = f"{scratch_path}.session"
+    async with removing_client(profile.account_id, device):
         try:
-            await asyncio.to_thread(os.replace, str(fresh), str(final))
-            check = create_telegram_client(profile)
+            await asyncio.to_thread(_copy_session, final, aside)
             try:
-                await check.connect()
-                await _require_same_user(check, user_id, _SWAP)
-            finally:
-                await check.disconnect()
-        except BaseException:
-            # Back to the imported file, and the new authorization is ended by the caller.
-            if await final.exists():
-                await asyncio.to_thread(os.replace, str(final), str(fresh))
-            await asyncio.to_thread(os.replace, str(aside), str(final))
-            raise
-        await aside.unlink()
+                await asyncio.to_thread(_copy_session, fresh, final)
+                check = create_telegram_client(profile)
+                try:
+                    await check.connect()
+                    await _require_same_user(check, user_id, _SWAP)
+                finally:
+                    await check.disconnect()
+            except BaseException:
+                # Back to the imported content, and the new authorization is ended by the caller.
+                await asyncio.to_thread(_copy_session, aside, final)
+                # Dropped only once the content is back: a restore that failed keeps it.
+                await AsyncPath(aside).unlink()
+                raise
+            await AsyncPath(aside).unlink()
+            await AsyncPath(fresh).unlink()
+        except (sqlite3.Error, OSError) as exc:
+            raise _refusal(_SWAP, type(exc).__name__) from exc
 
 
 async def _current_hash(approver: TelegramClient) -> str:

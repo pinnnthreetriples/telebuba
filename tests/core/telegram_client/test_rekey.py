@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +21,19 @@ from core.telegram_client._rekey import RekeyGatewayError, rekey_session
 _USER = 4242
 _OLD_HASH = 111
 _NEW_HASH = 222
+
+
+def _write(path: Path, marker: str) -> None:
+    """A real SQLite file, as Telethon's session is, holding ``marker``."""
+    with closing(sqlite3.connect(path)) as db, db:
+        db.execute("create table if not exists marker (v text)")
+        db.execute("delete from marker")
+        db.execute("insert into marker values (?)", (marker,))
+
+
+def _read(path: Path) -> str:
+    with closing(sqlite3.connect(path)) as db:
+        return str(db.execute("select v from marker").fetchone()[0])
 
 
 class _Approver:
@@ -110,7 +125,7 @@ class _Rig:
         self.final = tmp_path / "acc.session"
         self.scratch = tmp_path / "acc_rekey.session"
         self.aside = tmp_path / "acc.session.rekey-aside"
-        self.final.write_bytes(b"old")
+        _write(self.final, "old")
         self.approver = _Approver()
         self.new = _New()
         self.new.order = self.approver.order
@@ -134,7 +149,7 @@ def rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
     def _create(profile: object) -> object:
         path = Path(f"{getattr(profile, 'session_path', '')}.session")
         if path == state.scratch:
-            path.write_bytes(b"new")  # Telethon makes the file when the client is built
+            _write(path, "new")  # Telethon makes the file when the client is built
             return state.new
         return _Check(state.check_user)
 
@@ -148,8 +163,8 @@ async def _run(password: str | None = None) -> object:
     return await rekey_session("acc-1", "desktop", "acc_rekey", password)
 
 
-def _files(rig: _Rig) -> dict[str, bytes]:
-    return {p.name: p.read_bytes() for p in rig.dir.iterdir() if ".session" in p.name}
+def _files(rig: _Rig) -> dict[str, str]:
+    return {p.name: _read(p) for p in rig.dir.iterdir() if ".session" in p.name}
 
 
 @pytest.mark.asyncio
@@ -160,7 +175,7 @@ async def test_the_new_session_takes_the_files_place_and_the_old_hash_is_returne
 
     assert (result.old_hash, result.new_hash) == (str(_OLD_HASH), str(_NEW_HASH))  # ty: ignore[unresolved-attribute]
     # The imported file is gone, the scratch name is free, the new key sits in its place.
-    assert _files(rig) == {"acc.session": b"new"}
+    assert _files(rig) == {"acc.session": "new"}
     accepted = [r for r in rig.approver.requests if isinstance(r, AcceptLoginTokenRequest)]
     assert [r.token for r in accepted] == [b"token"]
     assert not any(isinstance(r, ChangeAuthorizationSettingsRequest) for r in rig.approver.requests)
@@ -194,7 +209,7 @@ async def test_a_cloud_password_finishes_the_login(rig: _Rig) -> None:
     await _run("hunter2-hunter2")
 
     assert rig.new.password_signed_in_with == "hunter2-hunter2"
-    assert _files(rig) == {"acc.session": b"new"}
+    assert _files(rig) == {"acc.session": "new"}
 
 
 @pytest.mark.asyncio
@@ -205,7 +220,7 @@ async def test_a_cloud_password_that_is_not_stored_changes_nothing(rig: _Rig) ->
         await _run(None)
 
     assert refused.value.code == "rekey_twofa_missing"
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
@@ -221,7 +236,7 @@ async def test_a_refused_cloud_password_changes_nothing(rig: _Rig) -> None:
         await _run("wrong-password")
 
     assert refused.value.code == "rekey_twofa_invalid"
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
@@ -234,7 +249,7 @@ async def test_a_login_that_lands_on_another_user_is_undone(rig: _Rig) -> None:
     assert refused.value.code == "rekey_user_mismatch"
     # The authorization it made is ended, the scratch file removed, the old one untouched.
     assert "log_out" in rig.new.events
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
@@ -246,18 +261,18 @@ async def test_a_new_file_that_does_not_work_in_its_place_is_swapped_back(rig: _
 
     assert refused.value.code == "rekey_swap_failed"
     assert "log_out" in rig.new.events
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
 async def test_a_file_already_at_the_scratch_name_is_never_signed_in_over(rig: _Rig) -> None:
-    rig.scratch.write_bytes(b"someone else")
+    _write(rig.scratch, "someone else")
 
     with pytest.raises(RekeyGatewayError) as refused:
         await _run()
 
     assert refused.value.code == "rekey_session_conflict"
-    assert _files(rig) == {"acc.session": b"old", "acc_rekey.session": b"someone else"}
+    assert _files(rig) == {"acc.session": "old", "acc_rekey.session": "someone else"}
     assert rig.new.events == []
 
 
@@ -282,7 +297,7 @@ async def test_a_telegram_refusal_is_a_bounded_code_and_changes_nothing(
         await _run()
 
     assert refused.value.code == code
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
@@ -294,7 +309,7 @@ async def test_an_imported_session_that_is_dead_cannot_approve(rig: _Rig) -> Non
 
     assert refused.value.code == "rekey_session_dead"
     assert rig.new.events == []
-    assert _files(rig) == {"acc.session": b"old"}
+    assert _files(rig) == {"acc.session": "old"}
 
 
 @pytest.mark.asyncio
@@ -305,3 +320,37 @@ async def test_an_approver_that_cannot_say_who_it_is_is_refused(rig: _Rig) -> No
         await _run()
 
     assert refused.value.code == "rekey_approver_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_a_connection_still_open_on_the_imported_file_does_not_stop_the_swap(
+    rig: _Rig,
+) -> None:
+    # Telethon reopens its session file on any call, so a background task that kept the
+    # evicted client leaves a connection behind. On Windows a rename then fails (WinError 32).
+    leftover = sqlite3.connect(rig.final)
+    leftover.execute("select v from marker").fetchall()
+    try:
+        await _run()
+    finally:
+        leftover.close()
+
+    assert _files(rig) == {"acc.session": "new"}
+
+
+@pytest.mark.asyncio
+async def test_a_file_that_stays_locked_is_refused_and_keeps_the_imported_session(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_rekey, "_LOCK_WAIT_SECONDS", 0.05)
+    holder = sqlite3.connect(rig.final, isolation_level=None)
+    holder.execute("begin immediate")  # a writer that never lets go
+    try:
+        with pytest.raises(RekeyGatewayError) as refused:
+            await _run()
+    finally:
+        holder.close()
+
+    assert refused.value.code == "rekey_swap_failed"
+    assert _read(rig.final) == "old"
+    assert not rig.scratch.exists()
