@@ -9,6 +9,7 @@ to keep each file small:
 - ``_second_device`` — a second, separate authorization of the other device type
 - ``_session`` — session liveness check
 - ``_session_audit`` — the account's authorizations, ours told from the rest
+- ``_session_close`` — ends named foreign authorizations, one paced call each
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
@@ -95,6 +96,7 @@ from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._second_device import authorize_second_device, remove_second_device
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
+from core.telegram_client._session_close import close_sessions
 from core.telegram_client._spam import check_spam_status
 from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import accept_web_login_token
@@ -113,6 +115,7 @@ __all__ = [
     "authorize_second_device",
     "check_spam_status",
     "check_telegram_session",
+    "close_sessions",
     "create_telegram_client",
     "delete_passkey",
     "download_post_image",

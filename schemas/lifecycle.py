@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field
 # foreign_sessions_found — a session audit found a session of the account that is not one
 #                   of ours (migration 105); ``extra`` carries the counts, never the
 #                   sessions themselves.
+# foreign_sessions_closed — the operator had foreign sessions closed (migration 106);
+#                   ``extra`` carries ``requested`` and ``closed``, never the sessions.
 # A ``session_dead`` (or a ``deleted`` as dead) row's ``created_at`` is when the death was
 # found; ``extra.evidence_at`` / ``extra.evidence_event`` name the earliest logged refusal
 # that showed it, when one is on record; ``extra.last_audit_at`` / ``extra.last_audit_total``
@@ -44,6 +46,7 @@ LifecycleEventKind = Literal[
     "warming_stopped",
     "spam_block_lifted",
     "foreign_sessions_found",
+    "foreign_sessions_closed",
 ]
 LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "warming_started",
@@ -57,6 +60,7 @@ LIFECYCLE_EVENT_KINDS: tuple[LifecycleEventKind, ...] = (
     "warming_stopped",
     "spam_block_lifted",
     "foreign_sessions_found",
+    "foreign_sessions_closed",
 )
 
 # Why an account left the fleet: ``dead`` — Telegram took it (limited, banned, the

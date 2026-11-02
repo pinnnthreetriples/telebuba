@@ -5,7 +5,12 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { AccountRead, AccountSession, AccountSessionAudit } from '@/shared/api';
+import type {
+  AccountRead,
+  AccountSession,
+  AccountSessionAudit,
+  SessionCloseResult,
+} from '@/shared/api';
 
 import { SessionAuditSection } from './SessionAuditSection';
 
@@ -155,4 +160,73 @@ test("the header carries the list's foreign count before the card is opened", ()
 
   expect(screen.getByText('Чужих: 3')).toBeInTheDocument();
   expect(fetch).not.toHaveBeenCalled();
+});
+
+// The close action: GET answers the audit, the close POST answers `closed`.
+function serveClose(current: SessionAuditAnswer, closed: SessionCloseResult): void {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const closing = new URL(request.url).pathname.endsWith('/sessions/close');
+    return Promise.resolve(
+      new Response(JSON.stringify(closing ? closed : current), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+}
+
+type SessionAuditAnswer = AccountSessionAudit;
+
+test('closing lists exactly the foreign sessions, sends only their hashes and tells the result', async () => {
+  const after = audit([OURS], '2026-11-03T10:00:00+00:00');
+  serveClose(audit([OURS, STRANGER], '2026-11-02T10:00:00+00:00'), {
+    account_id: 'acc-1',
+    outcomes: [{ hash: STRANGER.hash, status: 'closed' }],
+    closed_count: 1,
+    audit: after,
+  });
+  await renderSection();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Закрыть чужие сессии' }));
+  // The dialog names the foreign one, not ours.
+  expect(await screen.findByText('Закрыть чужие сессии?')).toBeInTheDocument();
+  expect(screen.getByText('Pixel 8 · Telegram Android · 192.0.2.10 · Nowhere')).toBeInTheDocument();
+  expect(screen.queryByText(/Desktop PC · Telegram Desktop · /)).toBeNull();
+  expect(posts()).toHaveLength(0);
+
+  const confirm = screen.getAllByRole('button', { name: 'Закрыть чужие сессии' });
+  await userEvent.click(confirm[confirm.length - 1] as HTMLElement);
+
+  expect(await screen.findByText('Закрыто: 1')).toBeInTheDocument();
+  const [request] = posts();
+  expect(new URL(request?.url ?? '').pathname).toBe(`${URL_PATH}/close`);
+  expect(await request?.clone().json()).toEqual({ hashes: [STRANGER.hash] });
+  // The card shows what Telegram lists now.
+  expect(await screen.findByText('Чужих сессий нет.')).toBeInTheDocument();
+});
+
+test('a session Telegram refused to close is told with the time left', async () => {
+  serveClose(audit([OURS, STRANGER], '2026-11-02T10:00:00+00:00'), {
+    account_id: 'acc-1',
+    outcomes: [{ hash: STRANGER.hash, status: 'too_new', retry_after_seconds: 7200 }],
+    closed_count: 0,
+    audit: audit([OURS, STRANGER], '2026-11-03T10:00:00+00:00'),
+  });
+  await renderSection();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Закрыть чужие сессии' }));
+  const confirm = screen.getAllByRole('button', { name: 'Закрыть чужие сессии' });
+  await userEvent.click(confirm[confirm.length - 1] as HTMLElement);
+
+  expect(await screen.findByText('Закрыто: 0')).toBeInTheDocument();
+  expect(screen.getByText(/повторите примерно через 2 ч/)).toBeInTheDocument();
+});
+
+test('with no foreign session there is nothing to close', async () => {
+  serve(audit([OURS], '2026-11-02T10:00:00+00:00'));
+  await renderSection();
+
+  await screen.findByText('Чужих сессий нет.');
+  expect(screen.queryByRole('button', { name: 'Закрыть чужие сессии' })).toBeNull();
 });

@@ -1,9 +1,11 @@
-"""Session audit endpoints — the sessions Telegram lists for an account, and a fresh read.
+"""Session audit endpoints — the sessions Telegram lists for an account, and ending foreign ones.
 
 Split-sibling of ``accounts.py`` (same pattern as ``_accounts_passkey.py``); mounted onto
-the accounts router via ``include_router``. Read-only towards Telegram: nothing here ends
-a session. ``GET`` answers from the saved audit and never calls Telegram; ``POST`` reads
-the list again and saves it.
+the accounts router via ``include_router``. ``GET`` answers from the saved audit and never
+calls Telegram; ``POST .../audit`` reads the list again and saves it. The two ``close``
+routes end sessions and are operator actions: one by the hashes the confirm dialog listed,
+one for whatever is foreign right now (the bulk run's step). Neither can end one of OUR
+sessions, whatever it is asked.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from fastapi import APIRouter
 from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from schemas.session_audit import AccountSessionAudit
+from schemas.session_close import SessionCloseRequest, SessionCloseResult
 from services import accounts
 
 # No tags: mounted onto the accounts router (already tagged "accounts").
@@ -41,3 +44,27 @@ async def audit_account_sessions(account_id: str) -> AccountSessionAudit:
     """Read the account's sessions from Telegram now, with ours told from the rest."""
     with service_errors_to_http():
         return await accounts.audit_account_sessions(account_id)
+
+
+@session_audit_router.post(
+    "/accounts/{account_id}/sessions/close",
+    response_model=SessionCloseResult,
+    operation_id="closeAccountSessions",
+    responses=SERVICE_ERRORS,
+)
+async def close_account_sessions(account_id: str, body: SessionCloseRequest) -> SessionCloseResult:
+    """End the named sessions that are still foreign; one outcome per session."""
+    with service_errors_to_http():
+        return await accounts.close_account_sessions(account_id, body.hashes)
+
+
+@session_audit_router.post(
+    "/accounts/{account_id}/sessions/close-foreign",
+    response_model=SessionCloseResult,
+    operation_id="closeAccountForeignSessions",
+    responses=SERVICE_ERRORS,
+)
+async def close_account_foreign_sessions(account_id: str) -> SessionCloseResult:
+    """Read the account's sessions and end every one that is foreign right now."""
+    with service_errors_to_http():
+        return await accounts.close_account_foreign_sessions(account_id)

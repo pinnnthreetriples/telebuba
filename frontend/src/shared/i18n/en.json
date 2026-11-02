@@ -362,7 +362,21 @@
       "sessionsUnconfirmed": "not confirmed",
       "sessionsActive": "active {{date}}",
       "sessionsCreated": "signed in {{date}}",
-      "sessionsTtl": "Telegram ends a session that stays idle for {{days}} days."
+      "sessionsTtl": "Telegram ends a session that stays idle for {{days}} days.",
+      "sessionsClose": "Close foreign sessions",
+      "sessionsCloseTitle": "Close the foreign sessions?",
+      "sessionsCloseBody": "These sessions are signed out of Telegram, one at a time with pauses, so it can take a minute. Our own sessions are not touched. A session that belongs to this account's phone or container app would be signed out too.",
+      "sessionsClosed": "Closed: {{count}}",
+      "sessionsOutcome": {
+        "closed": "closed",
+        "gone": "already gone",
+        "not_foreign": "one of our own sessions: not closed",
+        "too_new": "Telegram does not let a session younger than a day close others: try again later.",
+        "too_new_wait": "Telegram does not let a session younger than a day close others: try again in about {{hours}} h.",
+        "flood_wait": "Telegram asked to wait {{s}} s: the rest was not closed.",
+        "failed": "Telegram refused: the rest was not closed.",
+        "skipped": "not tried: an earlier session stopped the run."
+      }
     },
     "actions": {
       "add": "Account",
@@ -811,6 +825,10 @@
       "noteStory": "1 story",
       "noteMusic": "1 track",
       "privacyHint": "Only ticked rows are applied.",
+      "sessionsHint": "For each account the sessions that are not ours at this moment are signed out of Telegram, one at a time with pauses. This cannot be undone. A session that belongs to an account's phone or container app is signed out too.",
+      "sessionsConfirm": "Close the foreign sessions of these accounts",
+      "noteSessions_one": "{{count}} account",
+      "noteSessions_other": "{{count}} accounts",
       "privacyNote": "Current values are not shown: the selected accounts hold different ones, and collecting them would mean polling every account before you decided to change anything.",
       "channelMode": "What to do with channels",
       "channelCreate": "Create a channel",
@@ -853,7 +871,8 @@
         "stories": "Stories",
         "music": "Music",
         "channels": "Channels",
-        "privacy": "Privacy"
+        "privacy": "Privacy",
+        "sessions": "Sessions"
       },
       "firstName": "First name",
       "lastName": "Last name",
@@ -2031,7 +2050,9 @@
     "passkey_removed": "Passkey removed",
     "session_audit_completed": "Sessions checked",
     "session_audit_failed": "Sessions could not be checked",
-    "session_audit_foreign_found": "A session that is not ours is on the account"
+    "session_audit_foreign_found": "A session that is not ours is on the account",
+    "session_close_completed": "Foreign sessions closed",
+    "session_close_failed": "Foreign sessions could not be closed"
   },
   "logEventReason": {
     "restart": "back in after a start",

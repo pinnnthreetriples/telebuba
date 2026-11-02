@@ -7227,6 +7227,66 @@ export type SecondsRange = {
 };
 
 /**
+ * SessionCloseOutcome
+ *
+ * One requested session's result.
+ */
+export type SessionCloseOutcome = {
+  /**
+   * Hash
+   */
+  hash: string;
+  /**
+   * Status
+   */
+  status: 'closed' | 'gone' | 'not_foreign' | 'too_new' | 'flood_wait' | 'failed' | 'skipped';
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
+  /**
+   * Error Type
+   */
+  error_type?: string | null;
+};
+
+/**
+ * SessionCloseRequest
+ *
+ * The sessions the operator confirmed, by hash (decimal strings, as the audit lists them).
+ */
+export type SessionCloseRequest = {
+  /**
+   * Hashes
+   */
+  hashes: Array<string>;
+};
+
+/**
+ * SessionCloseResult
+ *
+ * A run's outcomes, and the account's sessions read again afterwards.
+ *
+ * ``audit`` is ``None`` only when the re-read itself failed: the closes already happened,
+ * so they are reported all the same.
+ */
+export type SessionCloseResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Outcomes
+   */
+  outcomes: Array<SessionCloseOutcome>;
+  /**
+   * Closed Count
+   */
+  closed_count: number;
+  audit?: AccountSessionAudit | null;
+};
+
+/**
  * SetAccountChannelRequest
  *
  * Set the campaign channels an account targets; an empty list = all channels.
@@ -12936,6 +12996,110 @@ export type AuditAccountSessionsResponses = {
 
 export type AuditAccountSessionsResponse =
   AuditAccountSessionsResponses[keyof AuditAccountSessionsResponses];
+
+export type CloseAccountSessionsData = {
+  body: SessionCloseRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/close';
+};
+
+export type CloseAccountSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CloseAccountSessionsError =
+  CloseAccountSessionsErrors[keyof CloseAccountSessionsErrors];
+
+export type CloseAccountSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionCloseResult;
+};
+
+export type CloseAccountSessionsResponse =
+  CloseAccountSessionsResponses[keyof CloseAccountSessionsResponses];
+
+export type CloseAccountForeignSessionsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/close-foreign';
+};
+
+export type CloseAccountForeignSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CloseAccountForeignSessionsError =
+  CloseAccountForeignSessionsErrors[keyof CloseAccountForeignSessionsErrors];
+
+export type CloseAccountForeignSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionCloseResult;
+};
+
+export type CloseAccountForeignSessionsResponse =
+  CloseAccountForeignSessionsResponses[keyof CloseAccountForeignSessionsResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

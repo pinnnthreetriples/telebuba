@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { ConfirmCard } from './ConfirmCard';
 import { Modal } from './Modal';
@@ -20,7 +20,7 @@ export function ConfirmModal({
   onConfirm,
 }: {
   title: string;
-  body: string;
+  body: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   onClose: () => void;

@@ -38,6 +38,8 @@ import {
   clearAccountTwofaEmail,
   clearLogs,
   clearNeurocommentListener,
+  closeAccountForeignSessions,
+  closeAccountSessions,
   closeAccountWebWindows,
   confirmAccountTwofaEmail,
   copyMasstaggingBase,
@@ -345,6 +347,12 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
+  CloseAccountForeignSessionsData,
+  CloseAccountForeignSessionsError,
+  CloseAccountForeignSessionsResponse,
+  CloseAccountSessionsData,
+  CloseAccountSessionsError,
+  CloseAccountSessionsResponse,
   CloseAccountWebWindowsData,
   CloseAccountWebWindowsError,
   CloseAccountWebWindowsResponse,
@@ -3121,6 +3129,64 @@ export const auditAccountSessionsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await auditAccountSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Close Account Sessions
+ *
+ * End the named sessions that are still foreign; one outcome per session.
+ */
+export const closeAccountSessionsMutation = (
+  options?: Partial<Options<CloseAccountSessionsData>>,
+): UseMutationOptions<
+  CloseAccountSessionsResponse,
+  CloseAccountSessionsError,
+  Options<CloseAccountSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountSessionsResponse,
+    CloseAccountSessionsError,
+    Options<CloseAccountSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Close Account Foreign Sessions
+ *
+ * Read the account's sessions and end every one that is foreign right now.
+ */
+export const closeAccountForeignSessionsMutation = (
+  options?: Partial<Options<CloseAccountForeignSessionsData>>,
+): UseMutationOptions<
+  CloseAccountForeignSessionsResponse,
+  CloseAccountForeignSessionsError,
+  Options<CloseAccountForeignSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountForeignSessionsResponse,
+    CloseAccountForeignSessionsError,
+    Options<CloseAccountForeignSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountForeignSessions({
         ...options,
         ...fnOptions,
         throwOnError: true,
