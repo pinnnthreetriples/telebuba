@@ -2002,6 +2002,8 @@
     "standalone_emulator_deleted": "Independent emulator deleted",
     "passkey_created": "Passkey created",
     "passkey_create_failed": "Passkey creation failed",
+    "passkey_checked": "Passkey checked in Telegram",
+    "passkey_check_failed": "Passkey check failed",
     "passkey_login_success": "Signed in with passkey",
     "passkey_login_failed": "Passkey sign-in failed",
     "passkey_removed": "Passkey removed"

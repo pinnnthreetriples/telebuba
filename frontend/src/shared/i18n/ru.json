@@ -2039,6 +2039,8 @@
     "standalone_emulator_deleted": "Независимый эмулятор удалён",
     "passkey_created": "Ключ доступа создан",
     "passkey_create_failed": "Не удалось создать ключ доступа",
+    "passkey_checked": "Ключ доступа проверен в Telegram",
+    "passkey_check_failed": "Не удалось проверить ключ доступа",
     "passkey_login_success": "Вход по ключу доступа выполнен",
     "passkey_login_failed": "Не удалось войти по ключу доступа",
     "passkey_removed": "Ключ доступа удалён"
