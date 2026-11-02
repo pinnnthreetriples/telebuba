@@ -121,6 +121,11 @@ test('row views name the state, the time and the tone', () => {
   });
   // In a finished campaign it is skipped for this run, as before.
   expect(rowView(t, { ...kept, active: false }, ctx).tone).toBe('danger');
+  // Before the round's last chat has written there is no rest yet, so no next-round time.
+  expect(rowView(t, row({ state: 'round_done', round: 8 }), ctx)).toMatchObject({
+    label: 'Круг пройден',
+    when: 'ждёт остальные чаты круга 8',
+  });
   const resting = {
     ...ctx,
     board: board({ campaign: { ...ctx.board.campaign, rest_until: '2026-10-06T16:30:00Z' } }),

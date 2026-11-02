@@ -4125,6 +4125,7 @@
       "joiningNow": "joining now",
       "queued": "queued",
       "nextRound": "round {{round}} at {{time}}",
+      "roundWaits": "waiting for the other chats of round {{round}}",
       "reconnect": "continues once connected",
       "needAccount": "needs an account",
       "done": "done",
