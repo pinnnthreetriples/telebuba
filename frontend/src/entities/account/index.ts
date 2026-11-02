@@ -47,6 +47,7 @@ export {
   getBulkMessageJobQueryOptions,
   invalidateAccountViews,
 } from './api/accounts.queries';
+export { refreshForSessionEvent, useSessionAuditEvents } from './model/sessionEvents';
 export {
   accountFilterOptionsQueryOptions,
   accountFoldersQueryOptions,

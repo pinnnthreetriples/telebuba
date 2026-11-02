@@ -13,6 +13,7 @@ from core.repositories.session_audits import (
     fetch_last_session_audit_event,
     fetch_session_audit,
     list_foreign_session_counts,
+    list_session_audit_times,
     save_session_audit,
 )
 from schemas.accounts import AccountCreate
@@ -126,3 +127,13 @@ async def test_deleting_the_account_removes_its_snapshot_and_history_only() -> N
     assert await fetch_last_session_audit_event("acc-a") is None
     assert await fetch_session_audit("acc-b") is not None
     assert await fetch_last_session_audit_event("acc-b") is not None
+
+
+@pytest.mark.asyncio
+async def test_the_audit_times_are_listed_per_audited_account() -> None:
+    for account_id in ("acc-a", "acc-b"):
+        await create_account(AccountCreate(account_id=account_id))
+    await save_session_audit(_audit("acc-a", checked_at="2026-11-02T10:00:00+00:00"))
+    await save_session_audit(_audit("acc-a", checked_at="2026-11-03T10:00:00+00:00"))
+
+    assert await list_session_audit_times() == {"acc-a": "2026-11-03T10:00:00+00:00"}

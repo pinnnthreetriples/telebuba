@@ -107,3 +107,16 @@ def _fetch_last_session_audit_event(account_id: str) -> SessionAuditEvent | None
 async def fetch_last_session_audit_event(account_id: str) -> SessionAuditEvent | None:
     """The newest history row of the account, or ``None``."""
     return await asyncio.to_thread(_fetch_last_session_audit_event, account_id)
+
+
+def _list_session_audit_times() -> dict[str, str]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(
+            select(_account_session_audits.c.account_id, _account_session_audits.c.checked_at)
+        ).all()
+    return {str(account_id): str(checked_at) for account_id, checked_at in rows}
+
+
+async def list_session_audit_times() -> dict[str, str]:
+    """When each audited account was last audited (ISO), one query."""
+    return await asyncio.to_thread(_list_session_audit_times)

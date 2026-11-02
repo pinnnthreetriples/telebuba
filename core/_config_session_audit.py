@@ -1,4 +1,4 @@
-"""Session audit settings: the pause between closes, and the re-key's old-key retries.
+"""Session audit settings: close pacing, the re-key's old-key retries and the background watch.
 
 Re-exported through ``core.config`` like ``core._config_survival``. Ending several sessions
 of one account in a burst is what an automated client does, so the service draws a
@@ -23,7 +23,20 @@ class SessionAuditSettings(BaseSettings):
     delay_lognorm_mu: float = -0.8
     delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
     # A re-keyed account's old authorization that could not be ended yet is tried again after
-    # this long (or after the wait Telegram named), and the background pass looks for such
-    # accounts this often.
+    # this long (or after the wait Telegram named).
     rekey_retry_seconds: float = Field(default=3600.0, gt=0.0)
-    rekey_poll_seconds: float = Field(default=900.0, gt=0.0)
+    # The session guard's background task makes a pass this often: it ends old keys that are
+    # due and re-audits at most ONE account (below).
+    guard_interval_seconds: float = Field(default=300.0, gt=0.0)
+    # The watch re-reads every alive account's sessions about this often; each account's own
+    # interval is drawn afresh from the range (a clipped log-normal, in the service), so the
+    # fleet never reads in step.
+    watch_enabled: bool = True
+    watch_min_hours: float = Field(default=6.0, gt=0.0)
+    watch_max_hours: float = Field(default=12.0, gt=0.0)
+    # The first pass waits this long after startup, so a restart does not read at once.
+    watch_startup_delay_seconds: float = Field(default=900.0, ge=0.0)
+    # No two accounts behind the same proxy are read within this many seconds.
+    watch_proxy_spacing_seconds: float = Field(default=1800.0, ge=0.0)
+    # An account whose read was refused is tried again after this long.
+    watch_retry_hours: float = Field(default=1.0, gt=0.0)

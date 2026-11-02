@@ -19,6 +19,7 @@ import {
   invalidateAccountViews,
   openAccountMobileMutation,
   openAccountWebMutation,
+  useSessionAuditEvents,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
 import {
@@ -83,6 +84,8 @@ const WEB_WINDOWS_WARN_AT = 8;
 export function AccountsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  // The background watch finds foreign sessions without the operator: the badge follows.
+  useSessionAuditEvents();
 
   const [search, setSearch] = useState('');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
