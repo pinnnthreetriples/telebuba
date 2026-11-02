@@ -1,8 +1,8 @@
-"""Telegram passkey endpoints — read whether one exists, create it, sign in with it, remove it.
+"""Telegram passkey endpoints — read whether one exists, create it, check it, sign in, remove it.
 
 Split-sibling of ``accounts.py`` (same pattern as ``_accounts_twofa.py``); mounted onto
 the accounts router via ``include_router``. No response carries key material: the
-private key never leaves the vault, so every route answers the boolean view.
+private key never leaves the vault, so every route answers a boolean or state view.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from fastapi import APIRouter
 
 from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
-from schemas.passkey import AccountPasskeyView
+from schemas.passkey import AccountPasskeyCheck, AccountPasskeyView
 from services import accounts
 
 # No tags: mounted onto the accounts router (already tagged "accounts").
@@ -40,6 +40,18 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
     """Add a passkey to the account; its private key is created in the key vault."""
     with service_errors_to_http():
         return await accounts.create_account_passkey(account_id)
+
+
+@passkey_router.post(
+    "/accounts/{account_id}/passkey/check",
+    response_model=AccountPasskeyCheck,
+    operation_id="checkAccountPasskey",
+    responses=SERVICE_ERRORS,
+)
+async def check_account_passkey(account_id: str) -> AccountPasskeyCheck:
+    """Ask Telegram whether it still lists the account's passkey (read-only)."""
+    with service_errors_to_http():
+        return await accounts.check_account_passkey(account_id)
 
 
 @passkey_router.post(

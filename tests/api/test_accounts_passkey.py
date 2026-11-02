@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from schemas.passkey import AccountPasskeyView
+from schemas.passkey import AccountPasskeyCheck, AccountPasskeyView
 from services.accounts import AccountActionError, AccountNotFoundError
 from tests.api.accounts_helpers import client as _client
 
@@ -103,3 +103,61 @@ async def test_a_refusal_answers_its_stable_code(
 
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "passkey_vault_disabled"
+
+
+@pytest.mark.parametrize(
+    ("state", "reason"),
+    [("present", None), ("missing", None), ("unknown", "unavailable")],
+)
+@pytest.mark.asyncio
+async def test_the_check_route_answers_the_telegram_state(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    reason: str | None,
+) -> None:
+    async def _check(account_id: str) -> AccountPasskeyCheck:
+        assert account_id == "acc-1"
+        return AccountPasskeyCheck(
+            account_id="acc-1",
+            telegram_state=state,  # ty: ignore[invalid-argument-type]
+            reason=reason,  # ty: ignore[invalid-argument-type]
+        )
+
+    monkeypatch.setattr("services.accounts.check_account_passkey", _check)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/check")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"account_id": "acc-1", "telegram_state": state, "reason": reason}
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "fields"),
+    [
+        (AccountNotFoundError("acc-1"), 404, None),
+        (AccountActionError("passkey_missing"), 400, None),
+        (
+            AccountActionError("flood_wait", retry_after_seconds=60),
+            400,
+            {"retry_after_seconds": "60"},
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_check_route_maps_refusals(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    status: int,
+    fields: dict[str, str] | None,
+) -> None:
+    async def _refused(_account_id: str) -> AccountPasskeyCheck:
+        raise error
+
+    monkeypatch.setattr("services.accounts.check_account_passkey", _refused)
+    async with _client(app) as client:
+        resp = await client.post(f"{_URL}/check")
+
+    assert resp.status_code == status
+    assert resp.json()["error"].get("fields") == fields

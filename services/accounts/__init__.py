@@ -111,6 +111,7 @@ from services.accounts.mobile_emulator import (
     open_mobile_progress,
 )
 from services.accounts.passkey import (
+    check_account_passkey,
     create_account_passkey,
     read_account_passkey,
     relogin_with_passkey,
@@ -183,6 +184,7 @@ __all__ = [
     "audit_account_sessions",
     "cancel_account_twofa_email",
     "check_account_channel_username",
+    "check_account_passkey",
     "check_account_session",
     "clear_account_twofa_email",
     "close_all_web_windows",

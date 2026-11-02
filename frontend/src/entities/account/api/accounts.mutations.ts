@@ -10,6 +10,7 @@ export {
   cancelContactLookupJobMutation,
   cancelScheduledPostMutation,
   checkAccountMutation,
+  checkAccountPasskeyMutation,
   clearAccountTwofaEmailMutation,
   closeAccountWebWindowsMutation,
   confirmAccountTwofaEmailMutation,

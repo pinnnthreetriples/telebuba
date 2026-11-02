@@ -21,6 +21,7 @@ from core.telegram_client import _passkey
 from core.telegram_client._passkey import (
     PasskeyGatewayError,
     delete_passkey,
+    is_passkey_listed,
     public_key_options,
     register_passkey,
 )
@@ -203,3 +204,55 @@ async def test_removing_a_passkey_telegram_no_longer_has_reports_it(
     _borrow(monkeypatch, client)
     assert await delete_passkey("acc-1", "mine") is False
     assert not any(isinstance(r, DeletePasskeyRequest) for r in client.requests)
+
+
+@pytest.mark.parametrize(
+    ("passkeys", "expected"),
+    [
+        ([SimpleNamespace(id="other"), SimpleNamespace(id="mine")], True),
+        ([SimpleNamespace(id="other")], False),
+        ([], False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_presence_check_reads_the_list_and_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    passkeys: list[SimpleNamespace],
+    expected: bool,  # noqa: FBT001
+) -> None:
+    client = _Client({GetPasskeysRequest: SimpleNamespace(passkeys=passkeys)})
+    _borrow(monkeypatch, client)
+
+    assert await is_passkey_listed("acc-1", "mine") is expected
+
+    assert [type(r) for r in client.requests] == [GetPasskeysRequest]
+
+
+@pytest.mark.parametrize(
+    ("raised", "code", "seconds"),
+    [
+        (errors.FloodWaitError(request=None, capture=42), "flood_wait", 42),
+        (errors.AuthKeyUnregisteredError(request=None), "passkey_telegram_refused", None),
+        (ConnectionError("socks5://user:pass@host"), "unavailable", None),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_failed_presence_check_is_a_bounded_code_never_an_answer(
+    monkeypatch: pytest.MonkeyPatch, raised: Exception, code: str, seconds: int | None
+) -> None:
+    _borrow(monkeypatch, _Client({GetPasskeysRequest: raised}))
+    with pytest.raises(PasskeyGatewayError) as caught:
+        await is_passkey_listed("acc-1", "mine")
+    assert caught.value.code == code
+    assert caught.value.retry_after_seconds == seconds
+    assert "user:pass" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_a_presence_check_on_an_unusable_pool_client_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _borrow(monkeypatch, TelegramClientPoolError("acc-1", OSError("down")))
+    with pytest.raises(PasskeyGatewayError) as caught:
+        await is_passkey_listed("acc-1", "mine")
+    assert caught.value.code == "unavailable"

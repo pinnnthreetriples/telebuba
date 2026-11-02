@@ -1,4 +1,4 @@
-"""Telegram passkeys for the accounts domain — add one, sign back in with it, remove it.
+"""Telegram passkeys for the accounts domain — add one, check it, sign back in with it, remove it.
 
 Why this exists: an account whose session Telegram revoked can otherwise only be
 re-authorized by an SMS code, and a rented number is often gone by then. A passkey
@@ -37,11 +37,17 @@ from core.repositories._accounts_passkey import (
 from core.telegram_client import (
     PasskeyGatewayError,
     delete_passkey,
+    is_passkey_listed,
     login_with_passkey,
     register_passkey,
 )
 from core.webauthn_passkey import credential_id_for
-from schemas.passkey import AccountPasskeyView, StoredPasskey
+from schemas.passkey import (
+    AccountPasskeyCheck,
+    AccountPasskeyView,
+    PasskeyCheckReason,
+    StoredPasskey,
+)
 from services.accounts._result import AccountActionError, AccountNotFoundError
 from services.inbox_runtime import start_account_inbox
 
@@ -66,6 +72,15 @@ def _view(account_id: str, passkey: StoredPasskey | None) -> AccountPasskeyView:
 def _gateway_error(exc: PasskeyGatewayError | PasskeyVaultError) -> AccountActionError:
     retry = exc.retry_after_seconds if isinstance(exc, PasskeyGatewayError) else None
     return AccountActionError(exc.code, retry_after_seconds=retry)
+
+
+def _unknown_reason(exc: PasskeyGatewayError) -> PasskeyCheckReason | None:
+    """The reason a check is merely inconclusive; ``None`` for a refusal to surface."""
+    match exc.code:
+        case "unavailable" | "passkey_telegram_refused" as reason:
+            return reason
+        case _:
+            return None
 
 
 async def _require_account(account_id: str) -> None:
@@ -115,6 +130,47 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
         await save_account_passkey(passkey)
     await log_event("INFO", "passkey_created", account_id=account_id)
     return _view(account_id, passkey)
+
+
+async def check_account_passkey(account_id: str) -> AccountPasskeyCheck:
+    """Ask Telegram whether it still lists the account's stored passkey; changes nothing.
+
+    ``missing`` only follows a successful list that lacks the credential. A session
+    Telegram will not talk to or a transport fault is ``unknown`` with its code, and a
+    flood wait is refused with its retry-after: neither says the passkey is gone.
+    """
+    await _require_account(account_id)
+    async with _passkey_lock(account_id):
+        passkey = await fetch_account_passkey(account_id)
+        if passkey is None:
+            msg = "passkey_missing"
+            raise AccountActionError(msg)
+        try:
+            listed = await is_passkey_listed(account_id, passkey.credential_id)
+        except PasskeyGatewayError as exc:
+            reason = _unknown_reason(exc)
+            if reason is None:
+                await log_event(
+                    "WARNING",
+                    "passkey_check_failed",
+                    account_id=account_id,
+                    extra={"code": exc.code},
+                )
+                raise _gateway_error(exc) from exc
+            check = AccountPasskeyCheck(
+                account_id=account_id, telegram_state="unknown", reason=reason
+            )
+        else:
+            check = AccountPasskeyCheck(
+                account_id=account_id, telegram_state="present" if listed else "missing"
+            )
+    await log_event(
+        "INFO",
+        "passkey_checked",
+        account_id=account_id,
+        extra={"state": check.telegram_state, "reason": check.reason},
+    )
+    return check
 
 
 async def relogin_with_passkey(account_id: str) -> AccountPasskeyView:

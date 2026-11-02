@@ -100,6 +100,7 @@ export {
   recordAccountTwofaMutation,
   removeAccountTwofaMutation,
   auditAccountSessionsMutation,
+  checkAccountPasskeyMutation,
   createAccountPasskeyMutation,
   loginAccountWithPasskeyMutation,
   removeAccountPasskeyMutation,

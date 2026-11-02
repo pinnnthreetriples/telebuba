@@ -78,6 +78,9 @@ import type {
   CheckAccountChannelUsernameResponses,
   CheckAccountData,
   CheckAccountErrors,
+  CheckAccountPasskeyData,
+  CheckAccountPasskeyErrors,
+  CheckAccountPasskeyResponses,
   CheckAccountResponses,
   CheckCampaignChannelBansData,
   CheckCampaignChannelBansErrors,
@@ -1840,6 +1843,20 @@ export const createAccountPasskey = <ThrowOnError extends boolean = false>(
     CreateAccountPasskeyErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/passkey', ...options });
+
+/**
+ * Check Account Passkey
+ *
+ * Ask Telegram whether it still lists the account's passkey (read-only).
+ */
+export const checkAccountPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<CheckAccountPasskeyData, ThrowOnError>,
+): RequestResult<CheckAccountPasskeyResponses, CheckAccountPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CheckAccountPasskeyResponses,
+    CheckAccountPasskeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/passkey/check', ...options });
 
 /**
  * Login Account With Passkey
