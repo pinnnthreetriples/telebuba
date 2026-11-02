@@ -28,6 +28,8 @@
   },
   "overrides": {
     "js-yaml": "^4.3.1",
+    "minimatch": ">=11.0.1 <11.0.4",
+    "glob": ">=14.0.2 <15",
     "eslint-plugin-react-hooks": {
       "zod-validation-error": "^4.0.0"
     }
