@@ -130,8 +130,14 @@ export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context):
       };
     case 'round_done': {
       const rest = board.campaign.rest_until ?? null;
+      // No rest yet: it starts only once the LAST chat of the round has written, so
+      // the next round's time is unknown — say what the row is waiting for instead.
       return rest === null
-        ? { label: t('chatBroadcast.status.roundDone'), tone: 'neutral', when: '—' }
+        ? {
+            label: t('chatBroadcast.status.roundDone'),
+            tone: 'neutral',
+            when: t('chatBroadcast.when.roundWaits', { round: row.round }),
+          }
         : {
             label: t('chatBroadcast.status.restUntil', { time: time(rest) }),
             tone: 'neutral',

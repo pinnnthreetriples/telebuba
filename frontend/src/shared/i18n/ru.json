@@ -4197,6 +4197,7 @@
       "joiningNow": "вступает сейчас",
       "queued": "в очереди",
       "nextRound": "круг {{round}} в {{time}}",
+      "roundWaits": "ждёт остальные чаты круга {{round}}",
       "reconnect": "продолжит после связи",
       "needAccount": "нужен аккаунт",
       "done": "готово",
