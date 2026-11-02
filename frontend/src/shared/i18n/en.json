@@ -380,6 +380,11 @@
       "rekeyClosed": "The old session is closed {{date}}",
       "rekeyScheduled": "The old session closes after {{date}}",
       "rekeyNever": "Not re-keyed",
+      "rekeyNoProxy": "A proxy is needed: the new sign-in must not come from your own IP.",
+      "rekeyRunning": "Signing in again… this takes up to a minute and a half, keep the window open.",
+      "rekeyFailed": "The key was not replaced, the session is as it was. {{reason}}",
+      "rekeySucceeded": "The key was replaced, the old session is closed.",
+      "rekeySucceededScheduled": "The key was replaced. Telegram will not let the old session be closed yet: it closes automatically after {{date}}.",
       "sessionsOutcome": {
         "closed": "closed",
         "gone": "already gone",
@@ -1564,6 +1569,10 @@
       "rekey_user_mismatch": "The new login landed on a different account — it was undone.",
       "rekey_session_conflict": "A leftover file is in the way in the sessions folder — remove it and try again.",
       "rekey_swap_failed": "The new session could not be put in place — the imported one was restored.",
+      "rekey_timeout": "Telegram did not confirm the new login within 75 seconds. Nothing was changed — try again in a minute.",
+      "rekey_unavailable": "No connection to Telegram: check the account's proxy and the network. Nothing was changed.",
+      "rekey_flood_wait": "Telegram asks to wait {{s}} s. Nothing was changed — try again later.",
+      "rekey_session_dead": "The imported session no longer works (Telegram ended it or the account is disabled), so there is nothing to replace. Sign the account in again.",
       "rekey_failed": "Telegram refused the new login — nothing was changed."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",

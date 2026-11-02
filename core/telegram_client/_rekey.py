@@ -41,7 +41,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
 )
 from core.telegram_client._pool import TelegramClientPoolError, get_client, removing_client
-from core.telegram_client._profile import _DEAD_SESSION_ERRORS, _dead_session_code
+from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._session_audit import _listing, _own_hash
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.session_rekey import RekeyRefusalCode, RekeyResult
@@ -62,8 +62,10 @@ _MISMATCH: RekeyRefusalCode = "rekey_user_mismatch"
 _CONFLICT: RekeyRefusalCode = "rekey_session_conflict"
 _SWAP: RekeyRefusalCode = "rekey_swap_failed"
 _FAILED: RekeyRefusalCode = "rekey_failed"
-_FLOOD = "flood_wait"
-_UNAVAILABLE = "unavailable"
+_FLOOD: RekeyRefusalCode = "rekey_flood_wait"
+_TIMEOUT: RekeyRefusalCode = "rekey_timeout"
+_UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
+_DEAD: RekeyRefusalCode = "rekey_session_dead"
 # The suffix of the file the imported session is set aside as while the swap is verified.
 _ASIDE_SUFFIX = ".rekey-aside"
 
@@ -99,7 +101,10 @@ _ERROR_CODES: tuple[tuple[tuple[type[Exception], ...], str], ...] = (
         ),
         _TOKEN,
     ),
-    ((TelegramClientPoolError, ConnectionError, TimeoutError), _UNAVAILABLE),
+    # ``TimeoutError`` is an ``OSError``: it must be told apart from a dropped connection, because
+    # the login token was accepted and Telegram's answer never came, not the network failing.
+    ((TimeoutError,), _TIMEOUT),
+    ((TelegramClientPoolError, ConnectionError), _UNAVAILABLE),
 )
 
 
@@ -111,7 +116,7 @@ def _classify(exc: Exception) -> RekeyGatewayError:
     if isinstance(exc, errors.FloodWaitError):
         return RekeyGatewayError(_FLOOD, retry_after_seconds=exc.seconds, error_type=name)
     if isinstance(exc, _DEAD_SESSION_ERRORS):
-        return _refusal(_dead_session_code(exc), name)
+        return _refusal(_DEAD, name)
     for error_types, code in _ERROR_CODES:
         if isinstance(exc, error_types):
             return _refusal(code, name)
@@ -125,7 +130,29 @@ async def _sign_in_by_token(
     """Log ``new`` in with a token ``approver`` accepts; the new authorization's hash."""
     await new.connect()
     qr = await new.qr_login()
-    accepted = await approver(AcceptLoginTokenRequest(token=qr.token))
+    # Telegram answers the acceptance with an update that ``qr.wait`` listens for only once
+    # it runs: start waiting BEFORE accepting, or the update lands unheard and the login
+    # times out with the token already accepted.
+    timeout = settings.telegram.session_check_timeout_seconds
+    waiting = asyncio.ensure_future(qr.wait(timeout=timeout))
+    await asyncio.sleep(0)
+    try:
+        new_hash = await _accept_token(approver, qr.token)
+    except BaseException:
+        waiting.cancel()
+        raise
+    try:
+        await waiting
+    except errors.SessionPasswordNeededError:
+        if not password:
+            raise _refusal(_TWOFA_MISSING) from None
+        await new.sign_in(password=password)
+    return str(new_hash)
+
+
+async def _accept_token(approver: TelegramClient, token: bytes) -> int:
+    """Have the imported session accept ``token``; the new authorization's hash."""
+    accepted = await approver(AcceptLoginTokenRequest(token=token))
     new_hash = getattr(accepted, "hash", None)
     if not isinstance(new_hash, int):
         raise _refusal(_FAILED, "AuthorizationWithoutHash")
@@ -133,13 +160,7 @@ async def _sign_in_by_token(
         # A login by a session that is old enough to approve it is the owner's own: say so,
         # as an official client does when the user recognises the new session.
         await approver(ChangeAuthorizationSettingsRequest(hash=new_hash, confirmed=True))
-    try:
-        await qr.wait(timeout=settings.telegram.session_check_timeout_seconds)
-    except errors.SessionPasswordNeededError:
-        if not password:
-            raise _refusal(_TWOFA_MISSING) from None
-        await new.sign_in(password=password)
-    return str(new_hash)
+    return new_hash
 
 
 async def _discard(new: TelegramClient, scratch_path: str, *, signed_in: bool) -> None:

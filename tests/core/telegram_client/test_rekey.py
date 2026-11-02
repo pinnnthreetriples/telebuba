@@ -28,6 +28,7 @@ class _Approver:
         self.user_id = user_id
         self.unconfirmed = unconfirmed
         self.requests: list[object] = []
+        self.order: list[str] = []
         self.failure: Exception | None = None
 
     async def __call__(self, request: object) -> object:
@@ -40,6 +41,7 @@ class _Approver:
                 authorizations=[SimpleNamespace(hash=_OLD_HASH, current=True)],
             )
         if isinstance(request, AcceptLoginTokenRequest):
+            self.order.append("accept")
             return SimpleNamespace(hash=_NEW_HASH, unconfirmed=self.unconfirmed)
         return True
 
@@ -56,6 +58,7 @@ class _New:
         self.password_signed_in_with: str | None = None
         self.wait_failure: Exception | None = None
         self.events: list[str] = []
+        self.order: list[str] = []
 
     async def connect(self) -> None:
         self.events.append("connect")
@@ -72,6 +75,7 @@ class _New:
     async def qr_login(self) -> object:
         async def wait(timeout: float) -> None:  # noqa: ASYNC109 - mirrors Telethon's QRLogin.wait
             assert timeout > 0
+            self.order.append("wait")
             if self.wait_failure is not None:
                 raise self.wait_failure
             if self.needs_password:
@@ -109,6 +113,7 @@ class _Rig:
         self.final.write_bytes(b"old")
         self.approver = _Approver()
         self.new = _New()
+        self.new.order = self.approver.order
         self.check_user = _USER
 
 
@@ -159,6 +164,15 @@ async def test_the_new_session_takes_the_files_place_and_the_old_hash_is_returne
     accepted = [r for r in rig.approver.requests if isinstance(r, AcceptLoginTokenRequest)]
     assert [r.token for r in accepted] == [b"token"]
     assert not any(isinstance(r, ChangeAuthorizationSettingsRequest) for r in rig.approver.requests)
+
+
+@pytest.mark.asyncio
+async def test_the_new_session_listens_before_the_token_is_accepted(rig: _Rig) -> None:
+    # Telegram answers the acceptance with an update; one sent before anything listens
+    # is lost and the login times out with the token already accepted.
+    await _run()
+
+    assert rig.approver.order == ["wait", "accept"]
 
 
 @pytest.mark.asyncio
@@ -252,8 +266,9 @@ async def test_a_file_already_at_the_scratch_name_is_never_signed_in_over(rig: _
     [
         (errors.AuthTokenExpiredError(request=None), "rekey_token_rejected"),
         (errors.AuthTokenAlreadyAcceptedError(request=None), "rekey_token_rejected"),
-        (errors.FloodWaitError(request=None, capture=9), "flood_wait"),
-        (TimeoutError(), "unavailable"),
+        (errors.FloodWaitError(request=None, capture=9), "rekey_flood_wait"),
+        (TimeoutError(), "rekey_timeout"),
+        (ConnectionError(), "rekey_unavailable"),
         (errors.RPCError(request=None, message="X", code=400), "rekey_failed"),
     ],
 )
@@ -277,7 +292,7 @@ async def test_an_imported_session_that_is_dead_cannot_approve(rig: _Rig) -> Non
     with pytest.raises(RekeyGatewayError) as refused:
         await _run()
 
-    assert refused.value.code == "session_dead"
+    assert refused.value.code == "rekey_session_dead"
     assert rig.new.events == []
     assert _files(rig) == {"acc.session": b"old"}
 
