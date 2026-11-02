@@ -1207,6 +1207,24 @@
         "working": "signing in…",
         "ok": "device added"
       },
+      "stepAuditLabel": "Step {{n}} · who else holds the accounts",
+      "autoClose": "Close foreign sessions automatically",
+      "autoCloseHint": "After the check, sessions of these accounts that are not ours are signed out without asking. Off by default: an account with foreign sessions then waits for your decision.",
+      "audit": {
+        "hint": "Each account is checked, then every session Telegram lists for it is read. The cloud password and the passkey come after this: an account that somebody else also holds waits here for your decision, the rest go on.",
+        "continue": "Continue anyway",
+        "held": "{{count}} accounts are held back from the next steps until you decide.",
+        "state": {
+          "pending": "waiting",
+          "working": "checking…",
+          "clean": "no foreign sessions",
+          "closed": "foreign sessions closed",
+          "foreign": "foreign sessions: {{count}} — close them or continue",
+          "unchecked": "could not be checked",
+          "continued": "continues with foreign sessions",
+          "noProxy": "no proxy, not checked"
+        }
+      },
       "stepPasskeyLabel": "Step {{n}} · passkey",
       "passkeyIntro": "A passkey signs the account back in without an SMS code if its session is lost. The private key stays in the vault on this PC.",
       "passkeyPacing": "Passkeys are created one at a time, 15–30 seconds apart. About {{minutes}} min.",
