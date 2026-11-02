@@ -157,3 +157,31 @@ test("recordJsonPasswords sends each paired JSON and keeps each row's own outcom
   expect(result.current.recordFailures).toEqual({ '2': 'twofa_current_password_invalid' });
   expect(result.current.accountIds).toEqual(['1', '2', '3']);
 });
+
+test('recordJsonPasswords can be limited to the accounts the session audit let through', async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname.endsWith('/2fa/record-json')) {
+      return jsonResponse({ has_stored_password: true });
+    }
+    const form = await request.formData();
+    return jsonResponse(account((form.get('file') as File).name.replace('.session', '')));
+  });
+  const { result } = setup();
+  act(() => {
+    result.current.add([file('1.session'), file('1.json'), file('2.session'), file('2.json')]);
+  });
+  await waitFor(() => {
+    expect(result.current.files.every((f) => f.state === 'ok')).toBe(true);
+  });
+
+  await act(async () => {
+    await result.current.recordJsonPasswords(new Set(['2']));
+  });
+
+  // The held account's password is never sent.
+  expect(recordRequests().map((r) => new URL(r.url).pathname)).toEqual([
+    '/api/v1/accounts/2/2fa/record-json',
+  ]);
+  expect(result.current.recordedIds).toEqual(['2']);
+});

@@ -7,6 +7,7 @@ import { expect, test, vi } from 'vitest';
 import '@/shared/i18n';
 
 import { AddAccountModal } from './AddAccountModal';
+import { auditRoutes, passAuditStep } from './AddAccountModal.test-helpers';
 
 function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,6 +40,8 @@ function routeApi() {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
+    const audited = auditRoutes(request, ['imp']);
+    if (audited) return Promise.resolve(audited);
     if (pathname === '/api/v1/proxies' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ proxies: [POOL_PROXY] }));
     }
@@ -191,8 +194,10 @@ test('session upload imports then a pool proxy is assigned', async () => {
     expect(assigned).toBe(true);
   });
   // The advance is the assign's own onSuccess now, so it lands after the
-  // response, not beside the request — and it lands on the cloud-password step.
-  await expectCloudPasswordStep('Шаг 3 · облачный пароль');
+  // response, not beside the request — and it lands on the session audit, then the
+  // cloud-password step.
+  await passAuditStep();
+  await expectCloudPasswordStep('Шаг 4 · облачный пароль');
 });
 
 // Routes everything the pool flow needs, with the assign under the test's control.
@@ -200,6 +205,8 @@ function routePoolAssign(assign: (request: Request) => Promise<Response>) {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
+    const audited = auditRoutes(request, ['imp']);
+    if (audited) return Promise.resolve(audited);
     if (pathname === '/api/v1/proxies' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ proxies: [POOL_PROXY] }));
     }
@@ -240,13 +247,14 @@ test('a pool assign advances only once it has RESOLVED, not while it is in fligh
   // instead, so a second press cannot fire a second assign onto the same
   // observer.
   expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
-  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
+  expect(screen.queryByText(/кто ещё держит аккаунты/)).not.toBeInTheDocument();
   await waitFor(() => {
     expect(screen.getByText('nl-1.proxyhub.net:1080').closest('button')).toBeDisabled();
   });
 
   resolveAssign(jsonResponse(POOL_PROXY));
-  await expectCloudPasswordStep('Шаг 3 · облачный пароль');
+  await passAuditStep();
+  await expectCloudPasswordStep('Шаг 4 · облачный пароль');
 });
 
 test('a FAILED pool assign keeps the wizard on the proxy step and tells the operator', async () => {
