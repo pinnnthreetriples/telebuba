@@ -15,8 +15,10 @@ import pytest
 from core.db import create_account, fetch_account, update_account_from_session_check
 from core.repositories.lifecycle import append_lifecycle_event, list_lifecycle_events
 from core.repositories.logs import insert_log_row
+from core.repositories.session_audits import save_session_audit
 from schemas.accounts import AccountCreate
 from schemas.logs import LogEventInput
+from schemas.session_audit import AccountSession, AccountSessionAudit, AuthorizationList
 from schemas.telegram_session import TelegramSessionCheckResult
 from services import lifecycle_journal
 from services.lifecycle_journal import (
@@ -148,3 +150,53 @@ async def test_a_retirement_carries_no_evidence() -> None:
 
     [deleted] = await list_lifecycle_events("a1")
     assert deleted.extra == {"reason": "retired", "reason_source": "operator"}
+
+
+def _session(hash_: str, *, ours: bool) -> AccountSession:
+    return AccountSession(
+        hash=hash_,
+        is_current=ours,
+        is_ours=ours,
+        official_app=False,
+        device_model="Model",
+        platform="Windows",
+        system_version="10",
+        app_name="Telegram Desktop",
+        ip="192.0.2.10",
+        country="Nowhere",
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_last_session_audit_brackets_the_death() -> None:
+    await _alive()
+    await save_session_audit(
+        AccountSessionAudit.of(
+            "a1",
+            "2026-11-01T10:00:00+00:00",
+            AuthorizationList(sessions=[_session("1", ours=True), _session("2", ours=False)]),
+        )
+    )
+
+    extra = await _die("unauthorized")
+
+    assert extra == {
+        "status": "unauthorized",
+        "last_audit_at": "2026-11-01T10:00:00+00:00",
+        "last_audit_total": 2,
+        "last_audit_foreign": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_failing_audit_read_never_breaks_the_death_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _alive()
+
+    async def _broken(_account_id: str) -> None:
+        raise RuntimeError
+
+    monkeypatch.setattr(lifecycle_journal, "fetch_last_session_audit_event", _broken)
+
+    assert await _die("unauthorized") == {"status": "unauthorized"}

@@ -4,6 +4,7 @@ export {
   addAccountDeviceMutation,
   addLeadsToQueueMutation,
   addAccountMusicMutation,
+  auditAccountSessionsMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,
   cancelContactLookupJobMutation,

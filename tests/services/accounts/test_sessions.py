@@ -573,6 +573,38 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "audited"),
+    [("alive", True), ("frozen", False), ("unauthorized", False), ("network_error", False)],
+)
+async def test_only_an_alive_check_offers_the_account_to_the_first_audit(
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    audited: bool,  # noqa: FBT001 - parametrized
+) -> None:
+    await add_account(AccountCreate(account_id="account-3"))
+    offered: list[str] = []
+
+    async def fake_check(_request: object) -> TelegramSessionCheckResult:
+        return TelegramSessionCheckResult(
+            account_id="account-3",
+            session_path="sessions/account-3",
+            status=status,  # ty: ignore[invalid-argument-type]
+            is_temporary=False,
+        )
+
+    async def fake_audit(account: object) -> None:
+        offered.append(account.account_id)  # ty: ignore[unresolved-attribute]
+
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
+    monkeypatch.setattr("services.accounts.sessions.audit_after_first_check", fake_audit)
+
+    await check_account_session(AccountCheckRequest(account_id="account-3"))
+
+    assert offered == (["account-3"] if audited else [])
+
+
+@pytest.mark.asyncio
 async def test_check_account_session_rejects_unknown_account() -> None:
     """A missing account_id must surface as a domain ValueError, not StopIteration."""
     with pytest.raises(ValueError, match=r"Unknown account: account-missing"):

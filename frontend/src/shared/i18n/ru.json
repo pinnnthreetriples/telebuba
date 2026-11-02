@@ -82,7 +82,8 @@
       "proxy": "Прокси",
       "device": "Устройство",
       "trust": "Trust",
-      "actions": "Действия"
+      "actions": "Действия",
+      "foreignSessions": "Чужих сессий: {{count}}"
     },
     "stats": {
       "total": "Всего",
@@ -337,7 +338,26 @@
       "passkeyForget": "Забыть ключ",
       "passkeyForgetTitle": "Забыть ключ доступа?",
       "passkeyForgetBody": "Telegram сейчас недоступен для этого аккаунта, поэтому ключ будет удалён только из Telebuba и из сейфа. В настройках Telegram он останется, но войти по нему уже никто не сможет — его можно удалить там позже в официальном приложении.",
-      "passkeyRemoveBody": "Ключ будет удалён из Telegram и из сейфа. Без него слетевшую сессию снова можно будет восстановить только по SMS-коду."
+      "passkeyRemoveBody": "Ключ будет удалён из Telegram и из сейфа. Без него слетевшую сессию снова можно будет восстановить только по SMS-коду.",
+      "sessions": "Сессии",
+      "sessionsUnknown": "—",
+      "sessionsOursOnly": "Только наши",
+      "sessionsForeignBadge": "Чужих: {{count}}",
+      "sessionsHint": "Telegram показывает все устройства, на которых открыт аккаунт. Сессия, которая не наша, значит, что аккаунтом владеет ещё кто-то: он может завершить нашу сессию или хранить копию её ключа.",
+      "sessionsLastChecked": "Проверено {{date}}",
+      "sessionsNeverChecked": "Ещё не проверяли",
+      "sessionsCheck": "Проверить сессии",
+      "sessionsNoProxy": "Сначала назначьте аккаунту прокси: без него сессии прочитать нельзя.",
+      "sessionsWarning": "Сессий, которые не наши: {{count}}. Тот, у кого она есть, в любой момент может завершить нашу сессию.",
+      "sessionsOursTitle": "Наши сессии",
+      "sessionsForeignTitle": "Чужие сессии",
+      "sessionsNoForeign": "Чужих сессий нет.",
+      "sessionsCurrent": "это соединение",
+      "sessionsOfficial": "официальное приложение",
+      "sessionsUnconfirmed": "не подтверждена",
+      "sessionsActive": "активна {{date}}",
+      "sessionsCreated": "вход {{date}}",
+      "sessionsTtl": "Telegram завершает сессию, которая простаивает {{days}} дн."
     },
     "actions": {
       "add": "Аккаунт",
@@ -1507,7 +1527,9 @@
       "passkey_twofa_missing": "Для входа нужен 2FA-пароль, а он не сохранён в Telebuba",
       "passkey_twofa_invalid": "Telegram не принял сохранённый 2FA-пароль — обновите его в карточке 2FA",
       "passkey_user_mismatch": "Ключ привёл в другой аккаунт — вход отменён",
-      "passkey_login_failed": "Не удалось войти по ключу"
+      "passkey_login_failed": "Не удалось войти по ключу",
+      "session_audit_proxy_missing": "Сначала назначьте аккаунту прокси: без него его сессии прочитать нельзя.",
+      "session_audit_failed": "Не удалось прочитать список сессий Telegram"
     },
     "sessionError": "Не удалось проверить сессию. Проверьте соединение и попробуйте снова.",
     "sessionRetry": "Повторить",
@@ -2033,7 +2055,10 @@
     "passkey_create_failed": "Не удалось создать ключ доступа",
     "passkey_login_success": "Вход по ключу доступа выполнен",
     "passkey_login_failed": "Не удалось войти по ключу доступа",
-    "passkey_removed": "Ключ доступа удалён"
+    "passkey_removed": "Ключ доступа удалён",
+    "session_audit_completed": "Сессии проверены",
+    "session_audit_failed": "Не удалось проверить сессии",
+    "session_audit_foreign_found": "На аккаунте есть сессия, которая не наша"
   },
   "logEventReason": {
     "restart": "снова в работе после запуска",

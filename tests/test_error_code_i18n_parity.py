@@ -54,6 +54,7 @@ from schemas.masstagging import MasstaggingRefusalCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.scheduled_posts import ScheduledPostRefusalCode
+from schemas.session_audit import SessionAuditRefusalCode
 from schemas.session_json import SessionJsonRefusalCode
 from schemas.telegram_actions import ActionStatus
 from schemas.twofa import TwoFactorRefusalCode
@@ -126,6 +127,9 @@ def _expected_codes() -> set[str]:
     # ``StoryLimitErrorCode`` the story quota codes ``_media`` matches by message
     # prefix (Telethon has no class for them), so neither is a ladder entry.
     #
+    # ``SessionAuditRefusalCode`` is the session audit's own two refusals; the gateway's
+    # remaining codes are shared action codes (``session_dead``, the flood family, ...).
+    #
     # ``DeviceRefusalCode`` is the account-device vocabulary: the second-device sign-in,
     # the device choice at import/login, and warming's refusal of a device the account
     # lacks all answer with it. ``EmulatorRefusalCode`` is the mobile container's own.
@@ -141,6 +145,7 @@ def _expected_codes() -> set[str]:
         | set(get_args(EmulatorRefusalCode))
         | set(get_args(TwoFactorRefusalCode))
         | set(get_args(SessionJsonRefusalCode))
+        | set(get_args(SessionAuditRefusalCode))
         | set(get_args(ScheduledPostRefusalCode))
         | set(get_args(StoryLimitErrorCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)

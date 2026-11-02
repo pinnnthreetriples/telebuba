@@ -112,6 +112,24 @@ def _delete_scheduled_posts(connection: Connection, account_id: str) -> None:
     )
 
 
+def _delete_session_audits(connection: Connection, account_id: str) -> None:
+    # The snapshot names other people's sessions (IP, device), so it must not outlive the
+    # account; the history goes with it, a re-import starting a fresh record.
+    from core._schema_session_audits import (  # noqa: PLC0415
+        _account_session_audit_events,
+        _account_session_audits,
+    )
+
+    connection.execute(
+        delete(_account_session_audits).where(_account_session_audits.c.account_id == account_id),
+    )
+    connection.execute(
+        delete(_account_session_audit_events).where(
+            _account_session_audit_events.c.account_id == account_id,
+        ),
+    )
+
+
 def _delete_account(account_id: str) -> None:
     # F4: schema declares ForeignKey on warming_account_state /
     # account_spam_status without ON DELETE CASCADE, and PRAGMA foreign_keys=ON,
@@ -195,6 +213,7 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_account_passkeys).where(_account_passkeys.c.account_id == account_id),
         )
+        _delete_session_audits(connection, account_id)
         connection.execute(
             delete(_device_fingerprints).where(
                 _device_fingerprints.c.account_id == account_id,

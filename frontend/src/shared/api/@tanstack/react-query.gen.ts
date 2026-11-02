@@ -25,6 +25,7 @@ import {
   assignProxy,
   assignProxyByEndpoint,
   assignStandaloneProxy,
+  auditAccountSessions,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
   cancelContactLookupJob,
@@ -82,6 +83,7 @@ import {
   getAccountPasskey,
   getAccountPrivacy,
   getAccountProfileSnapshot,
+  getAccountSessionAudit,
   getAccountTwofa,
   getActiveBulkMessageJob,
   getActiveContactLookupJob,
@@ -303,6 +305,9 @@ import type {
   AssignStandaloneProxyData,
   AssignStandaloneProxyError,
   AssignStandaloneProxyResponse,
+  AuditAccountSessionsData,
+  AuditAccountSessionsError,
+  AuditAccountSessionsResponse,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailError,
   CancelAccountTwofaEmailResponse,
@@ -472,6 +477,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
+  GetAccountSessionAuditData,
+  GetAccountSessionAuditError,
+  GetAccountSessionAuditResponse,
   GetAccountTwofaData,
   GetAccountTwofaError,
   GetAccountTwofaResponse,
@@ -3024,6 +3032,62 @@ export const loginAccountWithPasskeyMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await loginAccountWithPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountSessionAuditQueryKey = (options: Options<GetAccountSessionAuditData>) =>
+  createQueryKey('getAccountSessionAudit', options);
+
+/**
+ * Get Account Session Audit
+ *
+ * The account's sessions as the last audit saw them; empty before the first audit.
+ */
+export const getAccountSessionAuditOptions = (options: Options<GetAccountSessionAuditData>) =>
+  queryOptions<
+    GetAccountSessionAuditResponse,
+    GetAccountSessionAuditError,
+    GetAccountSessionAuditResponse,
+    ReturnType<typeof getAccountSessionAuditQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountSessionAudit({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountSessionAuditQueryKey(options),
+  });
+
+/**
+ * Audit Account Sessions
+ *
+ * Read the account's sessions from Telegram now, with ours told from the rest.
+ */
+export const auditAccountSessionsMutation = (
+  options?: Partial<Options<AuditAccountSessionsData>>,
+): UseMutationOptions<
+  AuditAccountSessionsResponse,
+  AuditAccountSessionsError,
+  Options<AuditAccountSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AuditAccountSessionsResponse,
+    AuditAccountSessionsError,
+    Options<AuditAccountSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await auditAccountSessions({
         ...options,
         ...fnOptions,
         throwOnError: true,

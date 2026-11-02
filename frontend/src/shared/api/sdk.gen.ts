@@ -58,6 +58,9 @@ import type {
   AssignStandaloneProxyData,
   AssignStandaloneProxyErrors,
   AssignStandaloneProxyResponses,
+  AuditAccountSessionsData,
+  AuditAccountSessionsErrors,
+  AuditAccountSessionsResponses,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailErrors,
   CancelAccountTwofaEmailResponses,
@@ -229,6 +232,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
+  GetAccountSessionAuditData,
+  GetAccountSessionAuditErrors,
+  GetAccountSessionAuditResponses,
   GetAccountTwofaData,
   GetAccountTwofaErrors,
   GetAccountTwofaResponses,
@@ -1848,6 +1854,34 @@ export const loginAccountWithPasskey = <ThrowOnError extends boolean = false>(
     LoginAccountWithPasskeyErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/passkey/login', ...options });
+
+/**
+ * Get Account Session Audit
+ *
+ * The account's sessions as the last audit saw them; empty before the first audit.
+ */
+export const getAccountSessionAudit = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountSessionAuditData, ThrowOnError>,
+): RequestResult<GetAccountSessionAuditResponses, GetAccountSessionAuditErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetAccountSessionAuditResponses,
+    GetAccountSessionAuditErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions', ...options });
+
+/**
+ * Audit Account Sessions
+ *
+ * Read the account's sessions from Telegram now, with ours told from the rest.
+ */
+export const auditAccountSessions = <ThrowOnError extends boolean = false>(
+  options: Options<AuditAccountSessionsData, ThrowOnError>,
+): RequestResult<AuditAccountSessionsResponses, AuditAccountSessionsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AuditAccountSessionsResponses,
+    AuditAccountSessionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions/audit', ...options });
 
 /**
  * Set Account Registered At

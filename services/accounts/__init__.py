@@ -12,6 +12,7 @@ The implementations live in per-concern submodules:
 - :mod:`.privacy`   — Telegram privacy keys (who may see photo / bio / last seen)
 - :mod:`.twofa`     — the account's Telegram cloud password + its recovery email
 - :mod:`.passkey`   — the account's Telegram passkey (vault-held key) and passkey sign-in
+- :mod:`.session_audit` — who else holds a session of the account (read-only)
 - :mod:`.media`     — profile photo / story / music uploads
 - :mod:`.channels`  — own-channel management (create / edit / photo / delete)
 - :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
@@ -130,6 +131,7 @@ from services.accounts.profile_read import (
     invalidate_account_profile_cache,
 )
 from services.accounts.registered import set_registered_at
+from services.accounts.session_audit import audit_account_sessions, read_account_session_audit
 from services.accounts.sessions import (
     SessionAlreadyExistsError,
     check_account_session,
@@ -178,6 +180,7 @@ __all__ = [
     "add_account_profile_music",
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",
+    "audit_account_sessions",
     "cancel_account_twofa_email",
     "check_account_channel_username",
     "check_account_session",
@@ -216,6 +219,7 @@ __all__ = [
     "publish_account_channel_post",
     "read_account_passkey",
     "read_account_privacy",
+    "read_account_session_audit",
     "read_account_twofa",
     "reconcile_bulk_messages_on_startup",
     "record_account_twofa",

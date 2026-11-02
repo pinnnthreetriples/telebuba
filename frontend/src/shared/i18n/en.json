@@ -80,7 +80,8 @@
       "proxy": "Proxy",
       "device": "Device",
       "trust": "Trust",
-      "actions": "Actions"
+      "actions": "Actions",
+      "foreignSessions": "Foreign sessions: {{count}}"
     },
     "stats": {
       "total": "Total",
@@ -334,7 +335,26 @@
       "passkeyForget": "Forget passkey",
       "passkeyForgetTitle": "Forget the passkey?",
       "passkeyForgetBody": "Telegram cannot be reached for this account, so the passkey is removed from Telebuba and the vault only. Telegram will still list it, but nobody can sign in with it any more; delete it there later in an official app.",
-      "passkeyRemoveBody": "The passkey is removed from Telegram and from the vault. A lost session can then only be restored with an SMS code again."
+      "passkeyRemoveBody": "The passkey is removed from Telegram and from the vault. A lost session can then only be restored with an SMS code again.",
+      "sessions": "Sessions",
+      "sessionsUnknown": "—",
+      "sessionsOursOnly": "Only ours",
+      "sessionsForeignBadge": "Foreign: {{count}}",
+      "sessionsHint": "Telegram lists every device the account is signed in on. A session that is not one of ours means somebody else holds the account: they can end our session or may keep a copy of its key.",
+      "sessionsLastChecked": "Checked {{date}}",
+      "sessionsNeverChecked": "Not checked yet",
+      "sessionsCheck": "Check sessions",
+      "sessionsNoProxy": "Assign a proxy first: the sessions cannot be read without one.",
+      "sessionsWarning": "Sessions that are not ours: {{count}}. Whoever holds one can end our session at any time.",
+      "sessionsOursTitle": "Our sessions",
+      "sessionsForeignTitle": "Foreign sessions",
+      "sessionsNoForeign": "No foreign sessions.",
+      "sessionsCurrent": "this connection",
+      "sessionsOfficial": "official app",
+      "sessionsUnconfirmed": "not confirmed",
+      "sessionsActive": "active {{date}}",
+      "sessionsCreated": "signed in {{date}}",
+      "sessionsTtl": "Telegram ends a session that stays idle for {{days}} days."
     },
     "actions": {
       "add": "Account",
@@ -1470,7 +1490,9 @@
       "passkey_twofa_missing": "Signing in needs the 2FA password, which Telebuba does not have",
       "passkey_twofa_invalid": "Telegram rejected the stored 2FA password — update it in the 2FA card",
       "passkey_user_mismatch": "The passkey signed in to a different account — the sign-in was undone",
-      "passkey_login_failed": "Passkey sign-in failed"
+      "passkey_login_failed": "Passkey sign-in failed",
+      "session_audit_proxy_missing": "Assign a proxy to the account first: its sessions cannot be read without one.",
+      "session_audit_failed": "Telegram's list of sessions could not be read"
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1996,7 +2018,10 @@
     "passkey_create_failed": "Passkey creation failed",
     "passkey_login_success": "Signed in with passkey",
     "passkey_login_failed": "Passkey sign-in failed",
-    "passkey_removed": "Passkey removed"
+    "passkey_removed": "Passkey removed",
+    "session_audit_completed": "Sessions checked",
+    "session_audit_failed": "Sessions could not be checked",
+    "session_audit_foreign_found": "A session that is not ours is on the account"
   },
   "logEventReason": {
     "restart": "back in after a start",
