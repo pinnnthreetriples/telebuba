@@ -125,7 +125,29 @@ async def _sign_in_by_token(
     """Log ``new`` in with a token ``approver`` accepts; the new authorization's hash."""
     await new.connect()
     qr = await new.qr_login()
-    accepted = await approver(AcceptLoginTokenRequest(token=qr.token))
+    # Telegram answers the acceptance with an update that ``qr.wait`` listens for only once
+    # it runs: start waiting BEFORE accepting, or the update lands unheard and the login
+    # times out with the token already accepted.
+    timeout = settings.telegram.session_check_timeout_seconds
+    waiting = asyncio.ensure_future(qr.wait(timeout=timeout))
+    await asyncio.sleep(0)
+    try:
+        new_hash = await _accept_token(approver, qr.token)
+    except BaseException:
+        waiting.cancel()
+        raise
+    try:
+        await waiting
+    except errors.SessionPasswordNeededError:
+        if not password:
+            raise _refusal(_TWOFA_MISSING) from None
+        await new.sign_in(password=password)
+    return str(new_hash)
+
+
+async def _accept_token(approver: TelegramClient, token: bytes) -> int:
+    """Have the imported session accept ``token``; the new authorization's hash."""
+    accepted = await approver(AcceptLoginTokenRequest(token=token))
     new_hash = getattr(accepted, "hash", None)
     if not isinstance(new_hash, int):
         raise _refusal(_FAILED, "AuthorizationWithoutHash")
@@ -133,13 +155,7 @@ async def _sign_in_by_token(
         # A login by a session that is old enough to approve it is the owner's own: say so,
         # as an official client does when the user recognises the new session.
         await approver(ChangeAuthorizationSettingsRequest(hash=new_hash, confirmed=True))
-    try:
-        await qr.wait(timeout=settings.telegram.session_check_timeout_seconds)
-    except errors.SessionPasswordNeededError:
-        if not password:
-            raise _refusal(_TWOFA_MISSING) from None
-        await new.sign_in(password=password)
-    return str(new_hash)
+    return new_hash
 
 
 async def _discard(new: TelegramClient, scratch_path: str, *, signed_in: bool) -> None:
