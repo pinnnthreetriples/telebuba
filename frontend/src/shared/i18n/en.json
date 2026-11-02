@@ -328,6 +328,14 @@
       "passkeyVaultMissing": "The key vault is not configured: set PASSKEY_VAULT__TOKEN in .env and restart Telebuba.",
       "passkeyCreatedAt": "Created {{date}}",
       "passkeyCreate": "Create passkey",
+      "passkeyCheck": "Check in Telegram",
+      "passkeyCheck_present": "Telegram still holds this passkey.",
+      "passkeyCheck_missing": "Telegram no longer knows this passkey. Delete it and create a new one.",
+      "passkeyCheck_unknown": "Could not check.",
+      "passkeyCheckReason": {
+        "unavailable": "Telegram is unreachable for this account: network, proxy or session connection.",
+        "passkey_telegram_refused": "Telegram refused the request; the account's session may be dead."
+      },
       "passkeyLogin": "Sign in with passkey",
       "passkeyRemove": "Remove passkey",
       "passkeyRemoveTitle": "Remove the passkey?",

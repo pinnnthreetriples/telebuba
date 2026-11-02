@@ -331,6 +331,14 @@
       "passkeyVaultMissing": "Сейф ключей не настроен: задайте PASSKEY_VAULT__TOKEN в .env и перезапустите Telebuba.",
       "passkeyCreatedAt": "Ключ создан {{date}}",
       "passkeyCreate": "Создать ключ доступа",
+      "passkeyCheck": "Проверить в Telegram",
+      "passkeyCheck_present": "Telegram по-прежнему хранит этот ключ.",
+      "passkeyCheck_missing": "Telegram больше не знает этого ключа. Удалите его и создайте новый.",
+      "passkeyCheck_unknown": "Проверить не удалось.",
+      "passkeyCheckReason": {
+        "unavailable": "Telegram недоступен для этого аккаунта: сеть, прокси или подключение сессии.",
+        "passkey_telegram_refused": "Telegram отклонил запрос, возможно, сессия аккаунта слетела."
+      },
       "passkeyLogin": "Войти по ключу",
       "passkeyRemove": "Удалить ключ",
       "passkeyRemoveTitle": "Удалить ключ доступа?",

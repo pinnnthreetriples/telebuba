@@ -31,6 +31,7 @@ import {
   cancelScheduledPost,
   checkAccount,
   checkAccountChannelUsername,
+  checkAccountPasskey,
   checkCampaignChannelBans,
   checkProxy,
   clearAccountTwofaEmail,
@@ -320,6 +321,9 @@ import type {
   CheckAccountChannelUsernameResponse,
   CheckAccountData,
   CheckAccountError,
+  CheckAccountPasskeyData,
+  CheckAccountPasskeyError,
+  CheckAccountPasskeyResponse,
   CheckAccountResponse,
   CheckCampaignChannelBansData,
   CheckCampaignChannelBansError,
@@ -2995,6 +2999,35 @@ export const createAccountPasskeyMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await createAccountPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Check Account Passkey
+ *
+ * Ask Telegram whether it still lists the account's passkey (read-only).
+ */
+export const checkAccountPasskeyMutation = (
+  options?: Partial<Options<CheckAccountPasskeyData>>,
+): UseMutationOptions<
+  CheckAccountPasskeyResponse,
+  CheckAccountPasskeyError,
+  Options<CheckAccountPasskeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CheckAccountPasskeyResponse,
+    CheckAccountPasskeyError,
+    Options<CheckAccountPasskeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkAccountPasskey({
         ...options,
         ...fnOptions,
         throwOnError: true,

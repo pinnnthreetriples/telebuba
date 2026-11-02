@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   accountPasskeyQueryKey,
   accountPasskeyQueryOptions,
+  checkAccountPasskeyMutation,
   createAccountPasskeyMutation,
   invalidateAccountViews,
   loginAccountWithPasskeyMutation,
@@ -18,13 +19,18 @@ import { Section } from './_shared';
 
 // Telegram passkey card. The private key lives in the key vault, so nothing here
 // is secret: the card only says whether a passkey exists and offers to create one,
-// sign the session back in with it (no SMS code), or remove it. A refusal arrives
-// as a stable code and is toasted by the shared mutation cache.
+// sign the session back in with it (no SMS code), check that Telegram still lists
+// it (read-only, works without the vault), or remove it. A refusal arrives as a
+// stable code and is toasted by the shared mutation cache.
 //
 // Removing from Telegram needs a live session, which a dead account lacks; when
 // Telegram could not be reached or refused, «Забыть ключ» removes it from Telebuba
 // and the vault only. Without the vault key the passkey Telegram lists is inert.
 const FORGETTABLE = new Set(['unavailable', 'passkey_telegram_refused']);
+
+// Only a successful Telegram list says «missing»; an unanswered check is a warning,
+// never the danger tone of a key that is really gone.
+const CHECK_TONE = { present: 'success', missing: 'danger', unknown: 'warning' } as const;
 
 export function PasskeySection({ account }: { account: AccountRead }) {
   const { t, i18n } = useTranslation();
@@ -41,8 +47,9 @@ export function PasskeySection({ account }: { account: AccountRead }) {
   });
   const create = useMutation(createAccountPasskeyMutation());
   const login = useMutation(loginAccountWithPasskeyMutation());
+  const check = useMutation(checkAccountPasskeyMutation());
   const remove = useMutation(removeAccountPasskeyMutation());
-  const busy = create.isPending || login.isPending || remove.isPending;
+  const busy = create.isPending || login.isPending || check.isPending || remove.isPending;
 
   const refresh = () => {
     void queryClient.invalidateQueries({
@@ -54,6 +61,7 @@ export function PasskeySection({ account }: { account: AccountRead }) {
   const view = passkey.data;
   const hasPasskey = view?.has_passkey === true;
   const forgettable = FORGETTABLE.has(errorMessage(remove.error) ?? '');
+  const checked = hasPasskey && !check.isPending ? check.data : undefined;
 
   return (
     <>
@@ -93,28 +101,41 @@ export function PasskeySection({ account }: { account: AccountRead }) {
             })}
           </div>
         ) : null}
-        {view?.vault_configured ? (
+        {view && (view.vault_configured || hasPasskey) ? (
           <div className="flex flex-wrap gap-2">
             {hasPasskey ? (
               <>
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    login.mutate(path, { onSettled: refresh });
-                  }}
-                >
-                  {t('accounts.edit.passkeyLogin')}
-                </Button>
+                {view.vault_configured ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      login.mutate(path, { onSettled: refresh });
+                    }}
+                  >
+                    {t('accounts.edit.passkeyLogin')}
+                  </Button>
+                ) : null}
                 <Button
                   variant="secondary"
                   disabled={busy}
                   onClick={() => {
-                    setConfirmRemove(true);
+                    check.mutate(path);
                   }}
                 >
-                  {t('accounts.edit.passkeyRemove')}
+                  {t('accounts.edit.passkeyCheck')}
                 </Button>
-                {forgettable ? (
+                {view.vault_configured ? (
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmRemove(true);
+                    }}
+                  >
+                    {t('accounts.edit.passkeyRemove')}
+                  </Button>
+                ) : null}
+                {view.vault_configured && forgettable ? (
                   <Button
                     variant="secondary"
                     disabled={busy}
@@ -136,6 +157,20 @@ export function PasskeySection({ account }: { account: AccountRead }) {
                 {t('accounts.edit.passkeyCreate')}
               </Button>
             )}
+          </div>
+        ) : null}
+        {checked ? (
+          <div className="mt-3">
+            <Notice
+              tone={CHECK_TONE[checked.telegram_state]}
+              role="status"
+              className="py-3 text-small font-medium"
+            >
+              {t(`accounts.edit.passkeyCheck_${checked.telegram_state}`)}
+              {checked.reason
+                ? ` ${t(`accounts.edit.passkeyCheckReason.${checked.reason}`)}`
+                : null}
+            </Notice>
           </div>
         ) : null}
       </Section>

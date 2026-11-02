@@ -15,6 +15,22 @@ Telegram accepts a WebAuthn credential from Telebuba's own api_id: RP ID `telegr
 - An already-authorized session is left alone; a sign-in that lands on another user is logged
   out.
 
+## Checking that Telegram still has it
+
+Telegram can drop an account's passkey without telling Telebuba; the first sign is a
+`PASSKEY_CREDENTIAL_NOT_FOUND` at sign-in, by which time the session is usually dead. The
+«Проверить в Telegram» button on the «Ключ доступа» card (`POST /accounts/{id}/passkey/check`)
+asks while the session is alive: one `account.getPasskeys` on the pooled client, looking for the
+stored credential id. It is read-only and needs no vault.
+
+- `present` / `missing`: only a successful Telegram list decides. A `missing` key is dead: delete
+  it and create a new one.
+- `unknown`: Telegram was not reached (`unavailable`) or refused the request (a dead session
+  lands here as `passkey_telegram_refused`). It never reads as `missing`.
+- A flood wait is refused with its retry-after, like the other passkey actions; an account
+  without a stored passkey is refused `passkey_missing`.
+- Nothing is changed: no status, stored row or vault key is touched, and it never runs by itself.
+
 ## Signing in to the account's web window
 
 The account's web.telegram.org window (the globe button) answers WebK's «Log in by passkey»
