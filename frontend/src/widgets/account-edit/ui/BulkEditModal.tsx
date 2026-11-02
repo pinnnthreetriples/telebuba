@@ -17,6 +17,7 @@ import {
   invalidateAccountViews,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,
+  rekeyAccountSessionMutation,
   scheduleAccountPhotoMutation,
   scheduleAccountStoryMutation,
   setAccountChannelPhotoMutation,
@@ -72,7 +73,7 @@ import {
 import { useBulkRun } from './useBulkRun';
 import { useMountedRef } from './useMountedRef';
 
-type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy' | 'sessions';
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy' | 'sessions' | 'rekey';
 const TABS = [
   'text',
   'photo',
@@ -81,6 +82,7 @@ const TABS = [
   'channels',
   'privacy',
   'sessions',
+  'rekey',
 ] as const satisfies readonly Tab[];
 
 type Audience = 'contacts' | 'close_friends' | 'public';
@@ -118,6 +120,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const addMusic = useMutation(addAccountMusicMutation());
   const setPrivacy = useMutation(setAccountPrivacyMutation());
   const closeForeign = useMutation(closeAccountForeignSessionsMutation());
+  const rekeySession = useMutation(rekeyAccountSessionMutation());
   const createChannel = useMutation(createAccountChannelMutation());
   const setChannelPhoto = useMutation(setAccountChannelPhotoMutation());
   const publishPost = useMutation(publishAccountChannelPostMutation());
@@ -148,6 +151,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const [channel, setChannel] = useState<ChannelDraft>(EMPTY_CHANNEL);
   const [post, setPost] = useState<PostDraft>({ text: '', file: null });
   const [closeConfirmed, setCloseConfirmed] = useState(false);
+  const [rekeyConfirmed, setRekeyConfirmed] = useState(false);
 
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('now');
   const [baseRunAt, setBaseRunAt] = useState<number | null>(() =>
@@ -203,6 +207,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
           post.text.length <= postTextMax(post.file),
     privacy: Object.keys(levels).length > 0,
     sessions: closeConfirmed,
+    rekey: rekeyConfirmed,
   };
   const NOTE: Record<Tab, string> = {
     text: t('accounts.bulk.fieldCount', { done: ticked.length, total: TEXT_FIELDS.length }),
@@ -220,6 +225,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       total: PRIVACY_KEYS.length,
     }),
     sessions: t('accounts.bulk.noteSessions', { count: ids.length }),
+    rekey: t('accounts.bulk.noteSessions', { count: ids.length }),
   };
 
   const step = async (accountId: string, index: number) => {
@@ -267,6 +273,11 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     }
     if (tab === 'privacy') {
       await setPrivacy.mutateAsync({ path: { account_id: accountId }, body: levels });
+      return;
+    }
+    if (tab === 'rekey') {
+      // A refusal rejects: the row keeps its code, the rest of the batch goes on.
+      await rekeySession.mutateAsync({ path: { account_id: accountId } });
       return;
     }
     if (tab === 'sessions') {
@@ -437,6 +448,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       track !== null ||
       Object.keys(levels).length > 0 ||
       closeConfirmed ||
+      rekeyConfirmed ||
       (Object.keys(EMPTY_CHANNEL) as (keyof ChannelDraft)[]).some(
         (key) => channel[key] !== EMPTY_CHANNEL[key],
       ) ||
@@ -585,6 +597,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   />
                 ) : tab === 'sessions' ? (
                   <BulkSessionsTab confirmed={closeConfirmed} onConfirmed={setCloseConfirmed} />
+                ) : tab === 'rekey' ? (
+                  <BulkSessionsTab
+                    kind="rekey"
+                    confirmed={rekeyConfirmed}
+                    onConfirmed={setRekeyConfirmed}
+                  />
                 ) : (
                   <BulkPrivacyTab
                     levels={levels}

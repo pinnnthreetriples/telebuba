@@ -14,6 +14,7 @@ import { Badge, Button, Notice, Spinner } from '@/shared/ui';
 
 import { Section } from './_shared';
 import { SessionCloseControls } from './SessionCloseControls';
+import { SessionRekeyControls } from './SessionRekeyControls';
 
 // The sessions Telegram lists for the account: ours (the sign-ins this app holds) and
 // everyone else's. A session that is not ours means somebody else holds the account, so
@@ -168,6 +169,7 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
           </span>
         ) : null}
       </div>
+      <SessionRekeyControls accountId={accountId} open={open} hasProxy={hasProxy} />
     </Section>
   );
 }

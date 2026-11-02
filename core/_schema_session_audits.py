@@ -1,9 +1,10 @@
-"""SQLAlchemy tables for the session audit: the latest snapshot and the history of audits.
+"""SQLAlchemy tables for the session audit: the latest snapshot, the history, the re-key.
 
 Its own module because ``core._schema_tables`` is near the file-size budget. Mirrors
-``core.migration_steps_session_audits``: ``create_all`` builds a fresh database from THIS
-module while an existing one gets migration 104, and
-``tests/core/test_migrations_session_audits.py`` compares the two.
+``core.migration_steps_session_audits`` (104) and ``core.migration_steps_rekeys`` (107):
+``create_all`` builds a fresh database from THIS module while an existing one gets the
+migrations, and ``tests/core/test_migrations_session_audits.py`` /
+``tests/core/test_migrations_rekeys.py`` compare the two.
 
 The snapshot holds the sessions of an account as the last audit saw them, including the
 IP and device of sessions that are not ours; it goes with the account. The history keeps
@@ -38,4 +39,17 @@ _account_session_audit_events = Table(
     Column("foreign_count", Integer, nullable=False),
     Column("killed_count", Integer, nullable=False, server_default=text("0")),
     Index("ix_account_session_audit_events_account", "account_id", "id"),
+)
+
+# One row per account: its last re-key, and the old authorization still to be ended. The
+# hash is an authorization identifier, not a credential.
+_account_rekeys = Table(
+    "account_rekeys",
+    _metadata,
+    Column("account_id", String, primary_key=True),
+    Column("old_hash", String, nullable=False),
+    Column("rekeyed_at", String, nullable=False),
+    Column("close_after", String, nullable=True),
+    Column("closed_at", String, nullable=True),
+    Index("ix_account_rekeys_due", "close_after"),
 )

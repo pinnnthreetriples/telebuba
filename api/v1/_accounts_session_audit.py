@@ -16,6 +16,7 @@ from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from schemas.session_audit import AccountSessionAudit
 from schemas.session_close import SessionCloseRequest, SessionCloseResult
+from schemas.session_rekey import AccountRekeyView
 from services import accounts
 
 # No tags: mounted onto the accounts router (already tagged "accounts").
@@ -68,3 +69,31 @@ async def close_account_foreign_sessions(account_id: str) -> SessionCloseResult:
     """Read the account's sessions and end every one that is foreign right now."""
     with service_errors_to_http():
         return await accounts.close_account_foreign_sessions(account_id)
+
+
+@session_audit_router.get(
+    "/accounts/{account_id}/rekey",
+    response_model=AccountRekeyView,
+    operation_id="getAccountRekey",
+    responses=SERVICE_ERRORS,
+)
+async def get_account_rekey(account_id: str) -> AccountRekeyView:
+    """When the account's session was last re-keyed and whether its old key is ended yet."""
+    with service_errors_to_http():
+        return await accounts.read_account_rekey(account_id)
+
+
+@session_audit_router.post(
+    "/accounts/{account_id}/rekey",
+    response_model=AccountRekeyView,
+    operation_id="rekeyAccountSession",
+    responses=SERVICE_ERRORS,
+)
+async def rekey_account_session(account_id: str) -> AccountRekeyView:
+    """Sign the account in again as a session of its own, then end the imported one's key.
+
+    Never automatic. The old key is ended at once when Telegram allows it, else at the time
+    the answer names (``close_after``).
+    """
+    with service_errors_to_http():
+        return await accounts.rekey_account_session(account_id)

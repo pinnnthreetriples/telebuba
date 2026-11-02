@@ -1,4 +1,4 @@
-"""Session audit settings: the pause between ending one foreign session and the next.
+"""Session audit settings: the pause between closes, and the re-key's old-key retries.
 
 Re-exported through ``core.config`` like ``core._config_survival``. Ending several sessions
 of one account in a burst is what an automated client does, so the service draws a
@@ -22,3 +22,8 @@ class SessionAuditSettings(BaseSettings):
     # Shape of the clipped log-normal the pause is drawn from (chat broadcast's values).
     delay_lognorm_mu: float = -0.8
     delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
+    # A re-keyed account's old authorization that could not be ended yet is tried again after
+    # this long (or after the wait Telegram named), and the background pass looks for such
+    # accounts this often.
+    rekey_retry_seconds: float = Field(default=3600.0, gt=0.0)
+    rekey_poll_seconds: float = Field(default=900.0, gt=0.0)

@@ -104,6 +104,8 @@ export {
   getAccountPasskeyQueryKey as accountPasskeyQueryKey,
   getAccountPrivacyOptions as accountPrivacyQueryOptions,
   getAccountPrivacyQueryKey as accountPrivacyQueryKey,
+  getAccountRekeyOptions as accountRekeyQueryOptions,
+  getAccountRekeyQueryKey as accountRekeyQueryKey,
   getAccountSessionAuditOptions as accountSessionAuditQueryOptions,
   getAccountSessionAuditQueryKey as accountSessionAuditQueryKey,
   getAccountProfileSnapshotOptions as accountProfileSnapshotQueryOptions,

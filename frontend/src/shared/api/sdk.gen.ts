@@ -241,6 +241,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
+  GetAccountRekeyData,
+  GetAccountRekeyErrors,
+  GetAccountRekeyResponses,
   GetAccountSessionAuditData,
   GetAccountSessionAuditErrors,
   GetAccountSessionAuditResponses,
@@ -508,6 +511,9 @@ import type {
   RecordAccountTwofaFromJsonErrors,
   RecordAccountTwofaFromJsonResponses,
   RecordAccountTwofaResponses,
+  RekeyAccountSessionData,
+  RekeyAccountSessionErrors,
+  RekeyAccountSessionResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -1944,6 +1950,36 @@ export const closeAccountForeignSessions = <ThrowOnError extends boolean = false
     CloseAccountForeignSessionsErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/sessions/close-foreign', ...options });
+
+/**
+ * Get Account Rekey
+ *
+ * When the account's session was last re-keyed and whether its old key is ended yet.
+ */
+export const getAccountRekey = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountRekeyData, ThrowOnError>,
+): RequestResult<GetAccountRekeyResponses, GetAccountRekeyErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountRekeyResponses, GetAccountRekeyErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/rekey',
+    ...options,
+  });
+
+/**
+ * Rekey Account Session
+ *
+ * Sign the account in again as a session of its own, then end the imported one's key.
+ *
+ * Never automatic. The old key is ended at once when Telegram allows it, else at the time
+ * the answer names (``close_after``).
+ */
+export const rekeyAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<RekeyAccountSessionData, ThrowOnError>,
+): RequestResult<RekeyAccountSessionResponses, RekeyAccountSessionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RekeyAccountSessionResponses,
+    RekeyAccountSessionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/rekey', ...options });
 
 /**
  * Set Account Registered At

@@ -367,6 +367,14 @@
       "sessionsCloseTitle": "Close the foreign sessions?",
       "sessionsCloseBody": "These sessions are signed out of Telegram, one at a time with pauses, so it can take a minute. Our own sessions are not touched. A session that belongs to this account's phone or container app would be signed out too.",
       "sessionsClosed": "Closed: {{count}}",
+      "rekey": "Re-key the session",
+      "rekeyHint": "The imported session shares its key with whoever kept a copy. Re-keying signs the account in again as a session of its own and ends the imported one. Never automatic.",
+      "rekeyTitle": "Re-key this session?",
+      "rekeyBody": "The account is signed in again from this PC, through its proxy and with the same device, as a new session; the imported session file is replaced and its authorization is ended. If Telegram will not end it yet (a new session cannot end others for a day) it is ended later, automatically.",
+      "rekeyDone": "Re-keyed {{date}}",
+      "rekeyClosed": "The old session is closed {{date}}",
+      "rekeyScheduled": "The old session closes after {{date}}",
+      "rekeyNever": "Not re-keyed",
       "sessionsOutcome": {
         "closed": "closed",
         "gone": "already gone",
@@ -827,6 +835,8 @@
       "privacyHint": "Only ticked rows are applied.",
       "sessionsHint": "For each account the sessions that are not ours at this moment are signed out of Telegram, one at a time with pauses. This cannot be undone. A session that belongs to an account's phone or container app is signed out too.",
       "sessionsConfirm": "Close the foreign sessions of these accounts",
+      "rekeyHint": "Each account is signed in again as a session of its own and its imported session is ended, one account at a time. This cannot be undone; an account whose imported session is too new to end others waits and is finished later.",
+      "rekeyConfirm": "Re-key the sessions of these accounts",
       "noteSessions_one": "{{count}} account",
       "noteSessions_other": "{{count}} accounts",
       "privacyNote": "Current values are not shown: the selected accounts hold different ones, and collecting them would mean polling every account before you decided to change anything.",
@@ -872,7 +882,8 @@
         "music": "Music",
         "channels": "Channels",
         "privacy": "Privacy",
-        "sessions": "Sessions"
+        "sessions": "Sessions",
+        "rekey": "Re-key"
       },
       "firstName": "First name",
       "lastName": "Last name",
@@ -1537,7 +1548,18 @@
       "passkey_user_mismatch": "The passkey signed in to a different account — the sign-in was undone",
       "passkey_login_failed": "Passkey sign-in failed",
       "session_audit_proxy_missing": "Assign a proxy to the account first: its sessions cannot be read without one.",
-      "session_audit_failed": "Telegram's list of sessions could not be read"
+      "session_audit_failed": "Telegram's list of sessions could not be read",
+      "rekey_proxy_missing": "Assign a proxy to the account first: a new login must not come from your own IP.",
+      "rekey_account_busy": "Another feature is using this account right now — try again when it is free.",
+      "rekey_pending": "The previous re-key still has its old session to close.",
+      "rekey_approver_unavailable": "The imported session could not be read, so it cannot approve a new login.",
+      "rekey_token_rejected": "Telegram refused the login token — try again.",
+      "rekey_twofa_missing": "The account has a cloud password that Telebuba does not have — record it in the 2FA card first.",
+      "rekey_twofa_invalid": "Telegram rejected the stored 2FA password — update it in the 2FA card.",
+      "rekey_user_mismatch": "The new login landed on a different account — it was undone.",
+      "rekey_session_conflict": "A leftover file is in the way in the sessions folder — remove it and try again.",
+      "rekey_swap_failed": "The new session could not be put in place — the imported one was restored.",
+      "rekey_failed": "Telegram refused the new login — nothing was changed."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -2070,7 +2092,12 @@
     "session_audit_failed": "Sessions could not be checked",
     "session_audit_foreign_found": "A session that is not ours is on the account",
     "session_close_completed": "Foreign sessions closed",
-    "session_close_failed": "Foreign sessions could not be closed"
+    "session_close_failed": "Foreign sessions could not be closed",
+    "session_rekeyed": "Session re-keyed: the account now has a login of its own",
+    "session_rekey_failed": "Session could not be re-keyed",
+    "session_old_key_closed": "The old imported session was closed",
+    "session_old_key_pending": "The old imported session is not closed yet",
+    "session_guard_failed": "A background session check failed"
   },
   "logEventReason": {
     "restart": "back in after a start",
