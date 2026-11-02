@@ -41,7 +41,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
 )
 from core.telegram_client._pool import TelegramClientPoolError, get_client, removing_client
-from core.telegram_client._profile import _DEAD_SESSION_ERRORS, _dead_session_code
+from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._session_audit import _listing, _own_hash
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.session_rekey import RekeyRefusalCode, RekeyResult
@@ -62,8 +62,10 @@ _MISMATCH: RekeyRefusalCode = "rekey_user_mismatch"
 _CONFLICT: RekeyRefusalCode = "rekey_session_conflict"
 _SWAP: RekeyRefusalCode = "rekey_swap_failed"
 _FAILED: RekeyRefusalCode = "rekey_failed"
-_FLOOD = "flood_wait"
-_UNAVAILABLE = "unavailable"
+_FLOOD: RekeyRefusalCode = "rekey_flood_wait"
+_TIMEOUT: RekeyRefusalCode = "rekey_timeout"
+_UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
+_DEAD: RekeyRefusalCode = "rekey_session_dead"
 # The suffix of the file the imported session is set aside as while the swap is verified.
 _ASIDE_SUFFIX = ".rekey-aside"
 
@@ -99,7 +101,10 @@ _ERROR_CODES: tuple[tuple[tuple[type[Exception], ...], str], ...] = (
         ),
         _TOKEN,
     ),
-    ((TelegramClientPoolError, ConnectionError, TimeoutError), _UNAVAILABLE),
+    # ``TimeoutError`` is an ``OSError``: it must be told apart from a dropped connection, because
+    # the login token was accepted and Telegram's answer never came, not the network failing.
+    ((TimeoutError,), _TIMEOUT),
+    ((TelegramClientPoolError, ConnectionError), _UNAVAILABLE),
 )
 
 
@@ -111,7 +116,7 @@ def _classify(exc: Exception) -> RekeyGatewayError:
     if isinstance(exc, errors.FloodWaitError):
         return RekeyGatewayError(_FLOOD, retry_after_seconds=exc.seconds, error_type=name)
     if isinstance(exc, _DEAD_SESSION_ERRORS):
-        return _refusal(_dead_session_code(exc), name)
+        return _refusal(_DEAD, name)
     for error_types, code in _ERROR_CODES:
         if isinstance(exc, error_types):
             return _refusal(code, name)

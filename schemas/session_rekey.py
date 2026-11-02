@@ -15,8 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# The refusals the re-key raises by hand; the shared action codes (``session_dead``, the
-# flood family, ``unavailable``) are already translated.
+# Every refusal the re-key can end with, each with its own operator text: a code shared with
+# another feature may have none here, and the operator would be shown the bare code.
 RekeyRefusalCode = Literal[
     # The account has no proxy: a proxyless client would connect from the operator's own IP.
     "rekey_proxy_missing",
@@ -38,6 +38,13 @@ RekeyRefusalCode = Literal[
     # The new session file could not be put in place, or did not work once it was; the
     # imported one was restored.
     "rekey_swap_failed",
+    # Telegram never confirmed the login in time (the token was accepted, no answer came).
+    "rekey_timeout",
+    # The connection to Telegram (proxy, network, the pooled client) was not there.
+    "rekey_unavailable",
+    "rekey_flood_wait",
+    # The imported session is dead (revoked, expired, account deactivated): nothing to replace.
+    "rekey_session_dead",
     # Anything else Telegram answered; the new session was undone.
     "rekey_failed",
 ]

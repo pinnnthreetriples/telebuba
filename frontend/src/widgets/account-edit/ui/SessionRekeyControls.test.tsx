@@ -90,14 +90,88 @@ test('an account without a proxy cannot be re-keyed', async () => {
   expect(await screen.findByRole('button', { name: 'Заменить ключ сессии' })).toBeDisabled();
 });
 
-test('a refusal keeps the dialog open and posts once', async () => {
-  serve({ account_id: 'acc-1' }, { account_id: 'acc-1' }, 'rekey_twofa_missing');
-  renderControls();
-
+async function confirmRekey(): Promise<void> {
   await userEvent.click(await screen.findByRole('button', { name: 'Заменить ключ сессии' }));
   const confirm = screen.getAllByRole('button', { name: 'Заменить ключ сессии' });
   await userEvent.click(confirm[confirm.length - 1] as HTMLElement);
+}
 
+test('a failure closes the dialog and the card says why and that nothing changed', async () => {
+  serve({ account_id: 'acc-1' }, { account_id: 'acc-1' }, 'rekey_timeout');
+  renderControls();
+
+  await confirmRekey();
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Ключ не заменён, сессия осталась прежней.');
+  expect(alert).toHaveTextContent('Telegram не подтвердил новый вход за 75 секунд');
+  expect(screen.queryByText('Заменить ключ этой сессии?')).not.toBeInTheDocument();
   expect(posts()).toHaveLength(1);
-  expect(screen.getByText('Заменить ключ этой сессии?')).toBeVisible();
+});
+
+test('a flood wait names the seconds Telegram asked for', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (request.method === 'POST') {
+      return Promise.resolve(
+        json(
+          {
+            error: {
+              code: 'bad_request',
+              message: 'rekey_flood_wait',
+              fields: { retry_after_seconds: '42' },
+            },
+          },
+          429,
+        ),
+      );
+    }
+    return Promise.resolve(json({ account_id: 'acc-1' }));
+  });
+  renderControls();
+
+  await confirmRekey();
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('подождать 42 с');
+});
+
+test('a re-key whose old session is not closed yet says when it will be', async () => {
+  serve(
+    { account_id: 'acc-1' },
+    {
+      account_id: 'acc-1',
+      rekeyed_at: '2026-11-02T10:00:00+00:00',
+      close_after: '2026-11-03T10:01:00+00:00',
+    },
+  );
+  renderControls();
+
+  await confirmRekey();
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Ключ заменён. Telegram пока не даёт закрыть старую сессию',
+  );
+});
+
+test('a completed re-key says the old session is closed', async () => {
+  serve(
+    { account_id: 'acc-1' },
+    {
+      account_id: 'acc-1',
+      rekeyed_at: '2026-11-02T10:00:00+00:00',
+      closed_at: '2026-11-02T10:00:09+00:00',
+    },
+  );
+  renderControls();
+
+  await confirmRekey();
+
+  expect(await screen.findByText('Ключ заменён, старая сессия закрыта.')).toBeVisible();
+});
+
+test('without a proxy the card says why the button is off', async () => {
+  serve({ account_id: 'acc-1' });
+  renderControls({ hasProxy: false });
+
+  expect(await screen.findByText(/Сначала назначьте аккаунту прокси/)).toBeVisible();
 });

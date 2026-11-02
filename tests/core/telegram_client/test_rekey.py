@@ -266,8 +266,9 @@ async def test_a_file_already_at_the_scratch_name_is_never_signed_in_over(rig: _
     [
         (errors.AuthTokenExpiredError(request=None), "rekey_token_rejected"),
         (errors.AuthTokenAlreadyAcceptedError(request=None), "rekey_token_rejected"),
-        (errors.FloodWaitError(request=None, capture=9), "flood_wait"),
-        (TimeoutError(), "unavailable"),
+        (errors.FloodWaitError(request=None, capture=9), "rekey_flood_wait"),
+        (TimeoutError(), "rekey_timeout"),
+        (ConnectionError(), "rekey_unavailable"),
         (errors.RPCError(request=None, message="X", code=400), "rekey_failed"),
     ],
 )
@@ -291,7 +292,7 @@ async def test_an_imported_session_that_is_dead_cannot_approve(rig: _Rig) -> Non
     with pytest.raises(RekeyGatewayError) as refused:
         await _run()
 
-    assert refused.value.code == "session_dead"
+    assert refused.value.code == "rekey_session_dead"
     assert rig.new.events == []
     assert _files(rig) == {"acc.session": b"old"}
 
