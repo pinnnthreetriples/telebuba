@@ -8,6 +8,7 @@ import pytest
 
 from schemas.session_audit import AccountSession, AccountSessionAudit, AuthorizationList
 from schemas.session_close import SessionCloseOutcome, SessionCloseResult
+from schemas.session_rekey import AccountRekeyView
 from services.accounts import AccountActionError, AccountNotFoundError
 from tests.api.accounts_helpers import client as _client
 
@@ -174,3 +175,43 @@ async def test_a_close_without_a_proxy_answers_its_stable_code(
 
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "session_audit_proxy_missing"
+
+
+@pytest.mark.parametrize(
+    ("method", "service"),
+    [("get", "read_account_rekey"), ("post", "rekey_account_session")],
+)
+@pytest.mark.asyncio
+async def test_the_rekey_routes_answer_the_service_view(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch, method: str, service: str
+) -> None:
+    async def _fake(account_id: str) -> AccountRekeyView:
+        assert account_id == "acc-1"
+        return AccountRekeyView(
+            account_id="acc-1",
+            rekeyed_at="2026-11-02T10:00:00+00:00",
+            close_after="2026-11-03T10:00:00+00:00",
+        )
+
+    monkeypatch.setattr(f"services.accounts.{service}", _fake)
+    async with _client(app) as client:
+        resp = await getattr(client, method)("/api/v1/accounts/acc-1/rekey")
+
+    assert resp.status_code == 200
+    assert resp.json()["close_after"] == "2026-11-03T10:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_rekey_answers_its_stable_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _refused(_account_id: str) -> AccountRekeyView:
+        code = "rekey_twofa_missing"
+        raise AccountActionError(code)
+
+    monkeypatch.setattr("services.accounts.rekey_account_session", _refused)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/rekey")
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "rekey_twofa_missing"

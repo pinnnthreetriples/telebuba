@@ -33,3 +33,24 @@ An explicit operator action: the card's "Close foreign sessions" (a confirm dial
 - The calls are paced: the service draws a human-like pause for every gap (`SESSION_AUDIT__CLOSE_PAUSE_*`); core holds no randomness.
 - Afterwards the account is audited again, so the screen shows what Telegram lists. The count is kept in the audit history (`killed_count`) and journalled (`foreign_sessions_closed`, counts only).
 - The Telegram app inside a mobile container is not recognised as ours, so it lists as foreign and would be closed too if the operator confirms it.
+
+## Re-key: a login the seller never had a copy of
+
+An imported `.session` shares its auth key with whoever kept a copy. "Re-key the session" (card, and a bulk tab; never automatic) signs the account in again as a session of its own:
+
+1. A new client with its own scratch session file (the account's stored device fingerprint and proxy, so Telegram sees the same device) calls `auth.exportLoginToken`; the imported session calls `auth.acceptLoginToken` with that token. If the new authorization comes back flagged `unconfirmed`, the imported session confirms it (`account.changeAuthorizationSettings`).
+2. If the account has a cloud password, the new login finishes with the stored one (`SESSION_PASSWORD_NEEDED` after the token is accepted); without it the re-key is refused (`rekey_twofa_missing`) and nothing changed. The password is only passed to Telegram.
+3. The new session must be the same Telegram user. Then the files are swapped: the imported file is set aside (not deleted), the new one is opened once from its final place and must answer as the same user, and only then is the imported file deleted. Any failure puts the imported file back and ends the new authorization.
+4. The old authorization (the seller-known key) is ended with the same single-hash call as "close foreign sessions". If Telegram refuses (a young session cannot end others), the old hash is stored with the time to try again; a background pass (`services/session_guard`) finishes it and the card says when.
+
+One device: the account's primary session. A second sign-in of its own has its own key and is left alone. The account must have a proxy and be free of other features (warming, campaigns) while its client is swapped.
+
+### What the Telegram docs say about the two open questions
+
+Verified against the pages on 2026-11-02, not assumed:
+
+- **Can the new session end the old one at once?** The docs only give the rule in the error: `FRESH_RESET_AUTHORISATION_FORBIDDEN` — "You can't logout other sessions if less than 24 hours have passed since you logged on the current session" ([account.resetAuthorization](https://core.telegram.org/method/account.resetAuthorization)). Nothing says that a session created by `auth.acceptLoginToken` ([method](https://core.telegram.org/method/auth.acceptLoginToken), [QR login](https://core.telegram.org/api/qr-login)) is exempt or confirmed ahead of that. So the implementation tries at once and, if refused, schedules the retry from the answer; both outcomes are handled and tested, and which one happens is for the first live run to show.
+- **2FA interplay.** Neither method page, nor the QR login page, nor [api/auth](https://core.telegram.org/api/auth) says what a token login does for an account with a cloud password (`Authorization.password_pending` exists but is unexplained). The implementation follows Telethon's flow: the second `auth.exportLoginToken` raises `SessionPasswordNeededError`, and `sign_in(password=...)` finishes it.
+- **Unconfirmed.** `Authorization.unconfirmed` and `account.changeAuthorizationSettings(confirmed)` are documented ([api/auth](https://core.telegram.org/api/auth), login confirmation); what an unconfirmed session may not do is not.
+
+**Not exercised against Telegram.** Only fakes and a fake file system run in the tests. A live run on one throwaway account must show: the token login works through the account's proxy with its stored fingerprint, the cloud-password finish, whether the new session may end the old one at once, and that Telegram's active-sessions list then shows only the new device.

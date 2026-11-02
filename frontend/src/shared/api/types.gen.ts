@@ -680,6 +680,30 @@ export type AccountRegisteredUpdate = {
 };
 
 /**
+ * AccountRekeyView
+ *
+ * The account's re-key state for the card: never re-keyed, pending, or done.
+ */
+export type AccountRekeyView = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Rekeyed At
+   */
+  rekeyed_at?: string | null;
+  /**
+   * Closed At
+   */
+  closed_at?: string | null;
+  /**
+   * Close After
+   */
+  close_after?: string | null;
+};
+
+/**
  * AccountSession
  *
  * One authorization of the account, as Telegram lists it.
@@ -13100,6 +13124,107 @@ export type CloseAccountForeignSessionsResponses = {
 
 export type CloseAccountForeignSessionsResponse =
   CloseAccountForeignSessionsResponses[keyof CloseAccountForeignSessionsResponses];
+
+export type GetAccountRekeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/rekey';
+};
+
+export type GetAccountRekeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountRekeyError = GetAccountRekeyErrors[keyof GetAccountRekeyErrors];
+
+export type GetAccountRekeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRekeyView;
+};
+
+export type GetAccountRekeyResponse = GetAccountRekeyResponses[keyof GetAccountRekeyResponses];
+
+export type RekeyAccountSessionData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/rekey';
+};
+
+export type RekeyAccountSessionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RekeyAccountSessionError = RekeyAccountSessionErrors[keyof RekeyAccountSessionErrors];
+
+export type RekeyAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRekeyView;
+};
+
+export type RekeyAccountSessionResponse =
+  RekeyAccountSessionResponses[keyof RekeyAccountSessionResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

@@ -33,6 +33,7 @@ export {
   openAccountWebMutation,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,
+  rekeyAccountSessionMutation,
   removeAccountMusicMutation,
   removeAccountPasskeyMutation,
   removeAccountPhotoMutation,

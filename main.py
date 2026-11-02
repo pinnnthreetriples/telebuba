@@ -71,6 +71,7 @@ from services.neuroshilling import (
 )
 from services.notifications import shutdown_notifications, start_notifications
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
+from services.session_guard import shutdown_session_guard, start_session_guard
 from services.survival import shutdown_survival_probes, start_survival_probes
 from services.user_parser import (
     reconcile_user_parser_on_startup,
@@ -190,6 +191,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await start_scheduled_posts()
     # Day-7/day-30 @SpamBot checks for the survival counter; it only reads the journal.
     await start_survival_probes()
+    # Ends the old key of a re-keyed account once Telegram lets it (and, later, watches sessions).
+    await start_session_guard()
     # The warming pool refills a short language on its own (never with a busy account).
     await start_pool_refill()
     try:
@@ -200,6 +203,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("scheduled_posts", shutdown_scheduled_posts)
         # Before the pool: a probe in flight asks @SpamBot through a pooled client.
         await _shutdown_step("survival_probes", shutdown_survival_probes)
+        # Before the pool: a close in flight talks through a pooled client.
+        await _shutdown_step("session_guard", shutdown_session_guard)
         # Before warming and the pool: a refill search reads on the pooled client.
         await _shutdown_step("pool_refill", shutdown_pool_refill)
         await _shutdown_step("warming", shutdown_warming_runtime)

@@ -7,16 +7,21 @@ import { Icon, Notice } from '@/shared/ui';
 // operator confirms with the checkbox because, unlike the profile tabs, this one cannot be
 // put back: a session that was ended stays ended.
 export function BulkSessionsTab({
+  kind = 'sessions',
   confirmed,
   onConfirmed,
 }: {
+  // The same confirm-and-run panel serves closing foreign sessions and re-keying.
+  kind?: 'sessions' | 'rekey';
   confirmed: boolean;
   onConfirmed: (next: boolean) => void;
 }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-4">
-      <Notice tone="warning">{t('accounts.bulk.sessionsHint')}</Notice>
+      <Notice tone="warning">
+        {t(`accounts.bulk.${kind === 'rekey' ? 'rekeyHint' : 'sessionsHint'}`)}
+      </Notice>
       <button
         type="button"
         role="checkbox"
@@ -31,7 +36,9 @@ export function BulkSessionsTab({
         >
           {confirmed && <Icon name="check" size={14} className="stroke-on-fill" />}
         </span>
-        <span className="type-h3">{t('accounts.bulk.sessionsConfirm')}</span>
+        <span className="type-h3">
+          {t(`accounts.bulk.${kind === 'rekey' ? 'rekeyConfirm' : 'sessionsConfirm'}`)}
+        </span>
       </button>
     </div>
   );

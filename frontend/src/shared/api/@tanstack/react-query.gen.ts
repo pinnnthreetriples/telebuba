@@ -86,6 +86,7 @@ import {
   getAccountPasskey,
   getAccountPrivacy,
   getAccountProfileSnapshot,
+  getAccountRekey,
   getAccountSessionAudit,
   getAccountTwofa,
   getActiveBulkMessageJob,
@@ -176,6 +177,7 @@ import {
   receiveInboundSmsWebhook,
   recordAccountTwofa,
   recordAccountTwofaFromJson,
+  rekeyAccountSession,
   removeAccountMusic,
   removeAccountPasskey,
   removeAccountPhoto,
@@ -489,6 +491,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
+  GetAccountRekeyData,
+  GetAccountRekeyError,
+  GetAccountRekeyResponse,
   GetAccountSessionAuditData,
   GetAccountSessionAuditError,
   GetAccountSessionAuditResponse,
@@ -756,6 +761,9 @@ import type {
   RecordAccountTwofaFromJsonError,
   RecordAccountTwofaFromJsonResponse,
   RecordAccountTwofaResponse,
+  RekeyAccountSessionData,
+  RekeyAccountSessionError,
+  RekeyAccountSessionResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -3187,6 +3195,65 @@ export const closeAccountForeignSessionsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await closeAccountForeignSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountRekeyQueryKey = (options: Options<GetAccountRekeyData>) =>
+  createQueryKey('getAccountRekey', options);
+
+/**
+ * Get Account Rekey
+ *
+ * When the account's session was last re-keyed and whether its old key is ended yet.
+ */
+export const getAccountRekeyOptions = (options: Options<GetAccountRekeyData>) =>
+  queryOptions<
+    GetAccountRekeyResponse,
+    GetAccountRekeyError,
+    GetAccountRekeyResponse,
+    ReturnType<typeof getAccountRekeyQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountRekey({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountRekeyQueryKey(options),
+  });
+
+/**
+ * Rekey Account Session
+ *
+ * Sign the account in again as a session of its own, then end the imported one's key.
+ *
+ * Never automatic. The old key is ended at once when Telegram allows it, else at the time
+ * the answer names (``close_after``).
+ */
+export const rekeyAccountSessionMutation = (
+  options?: Partial<Options<RekeyAccountSessionData>>,
+): UseMutationOptions<
+  RekeyAccountSessionResponse,
+  RekeyAccountSessionError,
+  Options<RekeyAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RekeyAccountSessionResponse,
+    RekeyAccountSessionError,
+    Options<RekeyAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await rekeyAccountSession({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -92,3 +92,49 @@ test('closing foreign sessions needs the confirmation, then runs per account and
   expect(screen.getByText(/повторите примерно через 4 ч/)).toBeInTheDocument();
   expect(screen.getByText('1 с ошибкой')).toBeInTheDocument();
 });
+
+test('re-keying needs the confirmation, then runs per account and keeps a refusal as that row', async () => {
+  const rekeyed: string[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ items: FLEET, next_cursor: null }));
+    }
+    const match = /^\/api\/v1\/accounts\/([^/]+)\/rekey$/.exec(pathname);
+    if (match?.[1] && request.method === 'POST') {
+      rekeyed.push(match[1]);
+      return Promise.resolve(
+        match[1] === 'acc-2'
+          ? jsonResponse({ error: { code: 'bad_request', message: 'rekey_twofa_missing' } }, 400)
+          : jsonResponse({ account_id: match[1], rekeyed_at: '2026-11-02T10:00:00+00:00' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const user = userEvent.setup();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <BulkEditModal account={FLEET[0]!} onClose={vi.fn()} />
+    </QueryClientProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Добавить аккаунты' }));
+  await screen.findByRole('checkbox', { name: 'Выбрать все (3)' });
+  await user.click(screen.getByRole('checkbox', { name: 'Выбрать все (3)' }));
+  await user.click(screen.getByRole('button', { name: 'Добавить (3)' }));
+  await user.click(screen.getByRole('tab', { name: 'Замена ключа' }));
+
+  const apply = screen.getByRole('button', { name: 'Применить к 3 аккаунтам' });
+  expect(apply).toBeDisabled();
+  await user.click(screen.getByRole('checkbox', { name: 'Заменить ключ сессии этих аккаунтов' }));
+  await user.click(apply);
+
+  await waitFor(() => {
+    expect(screen.getByText('Применено 3 из 3')).toBeInTheDocument();
+  });
+  // Each account in turn; the refused one does not stop the others.
+  expect(rekeyed).toEqual(['acc-1', 'acc-2', 'acc-3']);
+  expect(screen.getByText('1 с ошибкой')).toBeInTheDocument();
+});

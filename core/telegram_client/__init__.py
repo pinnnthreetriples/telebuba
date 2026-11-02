@@ -10,6 +10,7 @@ to keep each file small:
 - ``_session`` — session liveness check
 - ``_session_audit`` — the account's authorizations, ours told from the rest
 - ``_session_close`` — ends named foreign authorizations, one paced call each
+- ``_rekey`` — replaces an imported session with a login of the account's own
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
@@ -93,6 +94,7 @@ from core.telegram_client._read import (
     execute_read_many,
 )
 from core.telegram_client._read_post_image import download_post_image
+from core.telegram_client._rekey import RekeyGatewayError, rekey_session
 from core.telegram_client._second_device import authorize_second_device, remove_second_device
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
@@ -106,6 +108,7 @@ __all__ = [
     "ChatGatewayError",
     "DeviceUnavailableError",
     "PasskeyGatewayError",
+    "RekeyGatewayError",
     "SessionAuditGatewayError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
@@ -145,6 +148,7 @@ __all__ = [
     "read_history",
     "refresh_account_avatar",
     "register_passkey",
+    "rekey_session",
     "remove_account_session",
     "remove_second_device",
     "removing_client",
