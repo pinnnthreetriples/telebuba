@@ -87,19 +87,23 @@ export function SessionRekeyControls({
         ) : null}
       </div>
       {hasProxy ? null : (
-        <p className="mt-2 type-small text-content-subtle">{t('shell.code.rekey_proxy_missing')}</p>
+        <p className="mt-2 type-small text-content-subtle">{t('accounts.edit.rekeyNoProxy')}</p>
       )}
       {failure ? (
-        <Notice tone="danger" role="alert" className="mt-3">
-          {t('accounts.edit.rekeyFailed', { reason: failure })}
-        </Notice>
+        <div className="mt-3">
+          <Notice tone="danger" role="alert">
+            {t('accounts.edit.rekeyFailed', { reason: failure })}
+          </Notice>
+        </div>
       ) : null}
       {completed ? (
-        <Notice tone={completed.closed_at ? 'success' : 'warning'} role="status" className="mt-3">
-          {completed.closed_at || !completed.close_after
-            ? t('accounts.edit.rekeySucceeded')
-            : t('accounts.edit.rekeySucceededScheduled', { date: when(completed.close_after) })}
-        </Notice>
+        <div className="mt-3">
+          <Notice tone={completed.closed_at ? 'success' : 'warning'} role="status">
+            {completed.closed_at || !completed.close_after
+              ? t('accounts.edit.rekeySucceeded')
+              : t('accounts.edit.rekeySucceededScheduled', { date: when(completed.close_after) })}
+          </Notice>
+        </div>
       ) : null}
       {confirming ? (
         <ConfirmModal

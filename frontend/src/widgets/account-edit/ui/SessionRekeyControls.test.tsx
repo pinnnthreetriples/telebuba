@@ -173,5 +173,5 @@ test('without a proxy the card says why the button is off', async () => {
   serve({ account_id: 'acc-1' });
   renderControls({ hasProxy: false });
 
-  expect(await screen.findByText(/Сначала назначьте аккаунту прокси/)).toBeVisible();
+  expect(await screen.findByText(/Нужен прокси/)).toBeVisible();
 });

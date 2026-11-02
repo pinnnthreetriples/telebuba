@@ -375,6 +375,7 @@
       "rekeyClosed": "The old session is closed {{date}}",
       "rekeyScheduled": "The old session closes after {{date}}",
       "rekeyNever": "Not re-keyed",
+      "rekeyNoProxy": "A proxy is needed: the new sign-in must not come from your own IP.",
       "rekeyRunning": "Signing in again… this takes up to a minute and a half, keep the window open.",
       "rekeyFailed": "The key was not replaced, the session is as it was. {{reason}}",
       "rekeySucceeded": "The key was replaced, the old session is closed.",
