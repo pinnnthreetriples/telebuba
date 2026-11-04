@@ -18,7 +18,7 @@ export function DeviceChoicePicker({
   onChange,
   onFileDevice,
 }: {
-  method: 'session' | 'tdata' | 'phone';
+  method: 'session' | 'tdata' | 'phone' | 'qr';
   value: DeviceChoice;
   fileDevice: DeviceType;
   disabled: boolean;

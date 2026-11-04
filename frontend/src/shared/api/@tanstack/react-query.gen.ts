@@ -26,9 +26,11 @@ import {
   assignProxyByEndpoint,
   assignStandaloneProxy,
   auditAccountSessions,
+  beginQrLogin,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
   cancelContactLookupJob,
+  cancelQrLogin,
   cancelScheduledPost,
   checkAccount,
   checkAccountChannelUsername,
@@ -114,6 +116,7 @@ import {
   getOutreachLimits,
   getOutreachUsageToday,
   getPhoneTelephonyStatus,
+  getQrLogin,
   getReadiness,
   getUserParserRun,
   getWarmingBoard,
@@ -233,6 +236,7 @@ import {
   startPhone,
   startPhoneLogin,
   startPhoneOtpWait,
+  startQrLogin,
   startUserParserRun,
   startWarming,
   stopChatBroadcastCampaign,
@@ -243,6 +247,7 @@ import {
   stopUserParserRun,
   stopWarming,
   submitLoginCode,
+  submitQrLoginPassword,
   unassignProxy,
   unassignStandaloneProxy,
   updateAccountChannel,
@@ -313,6 +318,9 @@ import type {
   AuditAccountSessionsData,
   AuditAccountSessionsError,
   AuditAccountSessionsResponse,
+  BeginQrLoginData,
+  BeginQrLoginError,
+  BeginQrLoginResponse,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailError,
   CancelAccountTwofaEmailResponse,
@@ -322,6 +330,9 @@ import type {
   CancelContactLookupJobData,
   CancelContactLookupJobError,
   CancelContactLookupJobResponse,
+  CancelQrLoginData,
+  CancelQrLoginError,
+  CancelQrLoginResponse,
   CancelScheduledPostData,
   CancelScheduledPostError,
   CancelScheduledPostResponse,
@@ -575,6 +586,9 @@ import type {
   GetPhoneTelephonyStatusData,
   GetPhoneTelephonyStatusError,
   GetPhoneTelephonyStatusResponse,
+  GetQrLoginData,
+  GetQrLoginError,
+  GetQrLoginResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -929,6 +943,9 @@ import type {
   StartPhoneOtpWaitError,
   StartPhoneOtpWaitResponse,
   StartPhoneResponse,
+  StartQrLoginData,
+  StartQrLoginError,
+  StartQrLoginResponse,
   StartUserParserRunData,
   StartUserParserRunError,
   StartUserParserRunResponse,
@@ -959,6 +976,9 @@ import type {
   SubmitLoginCodeData,
   SubmitLoginCodeError,
   SubmitLoginCodeResponse,
+  SubmitQrLoginPasswordData,
+  SubmitQrLoginPasswordError,
+  SubmitQrLoginPasswordResponse,
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
@@ -3081,6 +3101,137 @@ export const loginAccountWithPasskeyMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await loginAccountWithPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Start Qr Login
+ *
+ * Create a placeholder account for a QR sign-in; nothing connects to Telegram yet.
+ */
+export const startQrLoginMutation = (
+  options?: Partial<Options<StartQrLoginData>>,
+): UseMutationOptions<StartQrLoginResponse, StartQrLoginError, Options<StartQrLoginData>> => {
+  const mutationOptions: UseMutationOptions<
+    StartQrLoginResponse,
+    StartQrLoginError,
+    Options<StartQrLoginData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startQrLogin({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Cancel Qr Login
+ *
+ * Close an open QR sign-in; a no-op when there is none.
+ */
+export const cancelQrLoginMutation = (
+  options?: Partial<Options<CancelQrLoginData>>,
+): UseMutationOptions<CancelQrLoginResponse, CancelQrLoginError, Options<CancelQrLoginData>> => {
+  const mutationOptions: UseMutationOptions<
+    CancelQrLoginResponse,
+    CancelQrLoginError,
+    Options<CancelQrLoginData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await cancelQrLogin({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getQrLoginQueryKey = (options: Options<GetQrLoginData>) =>
+  createQueryKey('getQrLogin', options);
+
+/**
+ * Get Qr Login
+ *
+ * Where the QR sign-in stands; the account is saved the first time it reads alive.
+ */
+export const getQrLoginOptions = (options: Options<GetQrLoginData>) =>
+  queryOptions<
+    GetQrLoginResponse,
+    GetQrLoginError,
+    GetQrLoginResponse,
+    ReturnType<typeof getQrLoginQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getQrLogin({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getQrLoginQueryKey(options),
+  });
+
+/**
+ * Begin Qr Login
+ *
+ * Connect the account's session and return the first QR code (restarts an open one).
+ */
+export const beginQrLoginMutation = (
+  options?: Partial<Options<BeginQrLoginData>>,
+): UseMutationOptions<BeginQrLoginResponse, BeginQrLoginError, Options<BeginQrLoginData>> => {
+  const mutationOptions: UseMutationOptions<
+    BeginQrLoginResponse,
+    BeginQrLoginError,
+    Options<BeginQrLoginData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await beginQrLogin({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Submit Qr Login Password
+ *
+ * Answer the 2FA prompt of an open QR sign-in with the account's cloud password.
+ */
+export const submitQrLoginPasswordMutation = (
+  options?: Partial<Options<SubmitQrLoginPasswordData>>,
+): UseMutationOptions<
+  SubmitQrLoginPasswordResponse,
+  SubmitQrLoginPasswordError,
+  Options<SubmitQrLoginPasswordData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SubmitQrLoginPasswordResponse,
+    SubmitQrLoginPasswordError,
+    Options<SubmitQrLoginPasswordData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await submitQrLoginPassword({
         ...options,
         ...fnOptions,
         throwOnError: true,

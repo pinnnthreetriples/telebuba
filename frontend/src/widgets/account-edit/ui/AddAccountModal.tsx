@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import {
   accountPasskeyQueryOptions,
+  cancelQrLoginMutation,
   otherDevice,
   startPhoneLoginMutation,
+  startQrLoginMutation,
   type DeviceChoice,
   type DeviceType,
 } from '@/entities/account';
@@ -20,6 +22,8 @@ import { PasskeyBulkStep } from './PasskeyBulkStep';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, isProxyFormTouched, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
+import { QrLoginStep } from './QrLoginStep';
+import { QrStartPanel } from './QrStartPanel';
 import { SecondDeviceStep } from './SecondDeviceStep';
 import { SessionAuditStep } from './SessionAuditStep';
 import { TwoFactorBulkStep } from './TwoFactorBulkStep';
@@ -27,18 +31,19 @@ import { useBulkImport } from './useBulkImport';
 
 // The design's add-account wizard. STEP 1 provisions accounts: MANY .session /
 // tdata.zip files at once, each imported by its own request (useBulkImport), or
-// a bare phone number (start-login). STEP 2 assigns proxies to the just-created
+// a bare phone number (start-login) or a QR code (start-qr-login). STEP 2 assigns proxies to the just-created
 // accounts. For the phone method a STEP 3 then requests + confirms the Telegram
 // login code — run after the proxy is assigned so the first Telegram connection
-// uses it. With "both" devices picked, a step then signs the other device in, again
+// uses it; the QR method's STEP 3 shows the QR the operator scans from a signed-in
+// phone, for the same reason. With "both" devices picked, a step then signs the other device in, again
 // behind the proxy. Then a step offers Telegram's cloud password for the whole batch,
 // and, when the key vault is configured, a LAST one a passkey for each account.
 // The created account ids thread across all steps. Once a proxy is assigned, a step checks
 // each account and audits who else holds it BEFORE the cloud password and the passkey: an
 // account with foreign sessions stops there, at a decision, while the rest go on.
-type Method = 'session' | 'tdata' | 'phone' | null;
+type Method = 'session' | 'tdata' | 'phone' | 'qr' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
-type StepKind = 'method' | 'proxy' | 'code' | 'audit' | 'device' | 'twofa' | 'passkey';
+type StepKind = 'method' | 'proxy' | 'code' | 'qr' | 'audit' | 'device' | 'twofa' | 'passkey';
 
 // The wizard's five choice rows — three method cards on step 1 and the two proxy
 // choices on step 2 — were byte-identical apart from the icon, the two strings
@@ -99,7 +104,7 @@ export function AddAccountModal({
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [proxyValid, setProxyValid] = useState(false);
   const [proxyFailed, setProxyFailed] = useState(false);
-  // The id of the account the PHONE method created in step 1; file methods keep
+  // The id of the account the PHONE / QR method created in step 1; file methods keep
   // theirs in the bulk import. `accountIds` below is what later steps act on.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
   // The committed method, readable from a mutate-level callback that resolves
@@ -129,7 +134,7 @@ export function AddAccountModal({
   const primaryDevice: DeviceType =
     method === 'session' ? (devices === 'both' ? fileDevice : devices) : 'desktop';
   const signInDevice: DeviceType =
-    method === 'phone' && devices === 'mobile' ? 'mobile' : primaryDevice;
+    (method === 'phone' || method === 'qr') && devices === 'mobile' ? 'mobile' : primaryDevice;
   const bulk = useBulkImport(
     method === 'tdata' ? 'tdata' : 'session',
     onImported,
@@ -137,11 +142,21 @@ export function AddAccountModal({
     registeredAt,
   );
   const startLogin = useMutation(startPhoneLoginMutation());
+  const startQr = useMutation(startQrLoginMutation());
+  // Fire-and-forget on close: the backend deadline is only the backstop, so a QR the
+  // operator walked away from does not keep the account's sign-in lock for minutes.
+  const cancelQr = useMutation({ ...cancelQrLoginMutation(), meta: { inlineError: true } });
+  // Set once the QR step reports the account saved, so closing afterwards cancels nothing.
+  const qrDone = useRef(false);
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
 
   const accountIds =
-    method === 'phone' ? (createdAccountId ? [createdAccountId] : []) : bulk.accountIds;
+    method === 'phone' || method === 'qr'
+      ? createdAccountId
+        ? [createdAccountId]
+        : []
+      : bulk.accountIds;
   // What the cloud password, the second device and the passkey act on: an account the
   // audit held back (foreign sessions nobody decided on) is left out.
   const activeIds = proceeding ?? accountIds;
@@ -161,11 +176,15 @@ export function AddAccountModal({
       ? createdAccountId
         ? { [createdAccountId]: phone }
         : {}
-      : Object.fromEntries(
-          bulk.files.flatMap((file) =>
-            file.accountIds.map((id): [string, string] => [id, file.name]),
-          ),
-        );
+      : method === 'qr'
+        ? createdAccountId
+          ? { [createdAccountId]: t('accounts.addWizard.qrSource') }
+          : {}
+        : Object.fromEntries(
+            bulk.files.flatMap((file) =>
+              file.accountIds.map((id): [string, string] => [id, file.name]),
+            ),
+          );
 
   // Clear a FINISHED start-login only. `reset()` detaches the observer from the
   // mutation ("there is no way to get it back" — mutationObserver.ts), so
@@ -177,6 +196,7 @@ export function AddAccountModal({
   // skipping the reset costs nothing.
   const clearFinishedStartLogin = () => {
     if (!startLogin.isPending) startLogin.reset();
+    if (!startQr.isPending) startQr.reset();
   };
 
   // The wizard's steps in order; `step` is a 1-based index into it.
@@ -184,6 +204,7 @@ export function AddAccountModal({
     'method',
     'proxy',
     ...(method === 'phone' ? (['code'] as const) : []),
+    ...(method === 'qr' ? (['qr'] as const) : []),
     ...(proxied ? (['audit'] as const) : []),
     ...(devices === 'both' ? (['device'] as const) : []),
     'twofa',
@@ -202,7 +223,8 @@ export function AddAccountModal({
     setStep(step + 1);
   };
   // Once an account exists its device is decided; the pick no longer changes anything.
-  const devicesLocked = accountIds.length > 0 || bulk.importing || startLogin.isPending;
+  const devicesLocked =
+    accountIds.length > 0 || bulk.importing || startLogin.isPending || startQr.isPending;
 
   // Picking a method un-provisions the wizard, because an account created by an
   // earlier method would keep "Next" unlocked with nothing to show for it and
@@ -237,6 +259,32 @@ export function AddAccountModal({
         onSettled: onImported,
       },
     );
+  };
+
+  // QR method, step 1: create the placeholder account; success unlocks "Next".
+  const onStartQr = () => {
+    startQr.reset();
+    setCreatedAccountId(null);
+    const forMethod = method;
+    startQr.mutate(
+      { body: { session_device: signInDevice } },
+      {
+        onSuccess: (account) => {
+          if (methodRef.current !== forMethod) return;
+          setCreatedAccountId(account.account_id);
+        },
+        onSettled: onImported,
+      },
+    );
+  };
+
+  // Closing over an open QR sign-in ends it server-side (it holds the account's
+  // sign-in lock); a finished one has nothing left to cancel.
+  const closeWizard = () => {
+    if (method === 'qr' && stepKind === 'qr' && createdAccountId && !qrDone.current) {
+      cancelQr.mutateAsync({ path: { account_id: createdAccountId } }).catch(() => undefined);
+    }
+    onClose();
   };
 
   // After proxy is assigned/skipped: step 3 either way — the code step for the
@@ -334,7 +382,7 @@ export function AddAccountModal({
     (step === 2 && proxyStep === 'form' && isProxyFormTouched(proxyValue));
 
   return (
-    <Modal onClose={onClose} dirty={dirty} size="form" label={t('accounts.addWizard.title')}>
+    <Modal onClose={closeWizard} dirty={dirty} size="form" label={t('accounts.addWizard.title')}>
       {(close) => (
         <div className="px-6 pb-6 pt-6">
           <div className="mb-4 flex items-start justify-between">
@@ -351,14 +399,16 @@ export function AddAccountModal({
                     ? t('accounts.addWizard.step2Label')
                     : stepKind === 'code'
                       ? t('accounts.addWizard.step3Label')
-                      : stepKind === 'audit'
-                        ? t('accounts.addWizard.stepAuditLabel', { n: step })
-                        : stepKind === 'device'
-                          ? t('accounts.addWizard.stepDeviceLabel', { n: step })
-                          : stepKind === 'passkey'
-                            ? t('accounts.addWizard.stepPasskeyLabel', { n: step })
-                            : // Which number the cloud password is depends on the method.
-                              t('accounts.addWizard.stepTwofaLabel', { n: step })}
+                      : stepKind === 'qr'
+                        ? t('accounts.addWizard.stepQrLabel')
+                        : stepKind === 'audit'
+                          ? t('accounts.addWizard.stepAuditLabel', { n: step })
+                          : stepKind === 'device'
+                            ? t('accounts.addWizard.stepDeviceLabel', { n: step })
+                            : stepKind === 'passkey'
+                              ? t('accounts.addWizard.stepPasskeyLabel', { n: step })
+                              : // Which number the cloud password is depends on the method.
+                                t('accounts.addWizard.stepTwofaLabel', { n: step })}
               </div>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.addWizard.close')} />
@@ -426,6 +476,26 @@ export function AddAccountModal({
                     selectMethod('phone');
                   }}
                 />
+                <ChoiceCard
+                  icon={
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      strokeWidth="1.8"
+                      className="stroke-action-primary"
+                    >
+                      <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v3M14 20h3M20 20v1" />
+                    </svg>
+                  }
+                  title={t('accounts.addWizard.qrTitle')}
+                  desc={t('accounts.addWizard.qrDesc')}
+                  selected={method === 'qr'}
+                  onClick={() => {
+                    selectMethod('qr');
+                  }}
+                />
 
                 {method && (
                   <DeviceChoicePicker
@@ -475,7 +545,16 @@ export function AddAccountModal({
                   </div>
                 )}
 
-                {method && method !== 'phone' && (
+                {method === 'qr' && (
+                  <QrStartPanel
+                    pending={startQr.isPending}
+                    created={Boolean(createdAccountId)}
+                    failed={startQr.isError}
+                    onStart={onStartQr}
+                  />
+                )}
+
+                {(method === 'session' || method === 'tdata') && (
                   <>
                     <label className="flex flex-col gap-1">
                       <span className="type-small-medium text-content-primary">
@@ -598,6 +677,15 @@ export function AddAccountModal({
               device={otherDevice(signInDevice)}
               onImported={onImported}
               onDone={() => {
+                setStep(step + 1);
+              }}
+            />
+          ) : stepKind === 'qr' ? (
+            <QrLoginStep
+              accountId={createdAccountId}
+              onDone={() => {
+                qrDone.current = true;
+                onImported();
                 setStep(step + 1);
               }}
             />

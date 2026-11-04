@@ -46,6 +46,8 @@ export {
   fetchLiveProfileSnapshot,
   getBulkMessageJobQueryOptions,
   invalidateAccountViews,
+  qrLoginQueryKey,
+  qrLoginQueryOptions,
 } from './api/accounts.queries';
 export { refreshForSessionEvent, useSessionAuditEvents } from './model/sessionEvents';
 export {
@@ -74,6 +76,8 @@ export {
 } from './api/account-chats.mutations';
 export {
   addAccountDeviceMutation,
+  beginQrLoginMutation,
+  cancelQrLoginMutation,
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,
@@ -135,7 +139,9 @@ export {
   updateLeadQueueSettingsMutation,
   createOutreachPresetMutation,
   startPhoneLoginMutation,
+  startQrLoginMutation,
   submitLoginCodeMutation,
+  submitQrLoginPasswordMutation,
   updateAccountChannelMutation,
   updateAccountProfileMutation,
   uploadScheduledMediaMutation,

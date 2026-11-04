@@ -2,6 +2,8 @@
 // options (data access only through shared/api, per the FSD ADR).
 export {
   addAccountDeviceMutation,
+  beginQrLoginMutation,
+  cancelQrLoginMutation,
   addLeadsToQueueMutation,
   addAccountMusicMutation,
   auditAccountSessionsMutation,
@@ -61,7 +63,9 @@ export {
   spamCheckAccountMutation,
   startContactLookupMutation,
   startPhoneLoginMutation,
+  startQrLoginMutation,
   submitLoginCodeMutation,
+  submitQrLoginPasswordMutation,
   updateAccountChannelMutation,
   updateAccountProfileMutation,
   updateLeadQueueSettingsMutation,

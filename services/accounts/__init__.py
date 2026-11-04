@@ -133,6 +133,14 @@ from services.accounts.profile_read import (
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
+from services.accounts.qr_login import (
+    QrLoginError,
+    begin_qr_login,
+    cancel_qr_login,
+    get_qr_login,
+    start_qr_login,
+    submit_qr_password,
+)
 from services.accounts.registered import set_registered_at
 from services.accounts.session_audit import audit_account_sessions, read_account_session_audit
 from services.accounts.session_close import close_account_foreign_sessions, close_account_sessions
@@ -177,6 +185,7 @@ __all__ = [
     "InvalidCursorError",
     "OpenWebResult",
     "PhoneLoginError",
+    "QrLoginError",
     "SessionAlreadyExistsError",
     "account_avatar_image",
     "account_filter_options",
@@ -190,7 +199,9 @@ __all__ = [
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",
     "audit_account_sessions",
+    "begin_qr_login",
     "cancel_account_twofa_email",
+    "cancel_qr_login",
     "check_account_channel_username",
     "check_account_passkey",
     "check_account_session",
@@ -212,6 +223,7 @@ __all__ = [
     "get_account_channel",
     "get_account_delete_reason",
     "get_chat_media_download",
+    "get_qr_login",
     "import_account_session",
     "import_account_tdata",
     "invalidate_account_profile_cache",
@@ -264,7 +276,9 @@ __all__ = [
     "shutdown_web_login",
     "start_lead_queue_on_startup",
     "start_phone_login",
+    "start_qr_login",
     "submit_login_code",
+    "submit_qr_password",
     "update_account_channel",
     "update_account_profile",
 ]

@@ -37,7 +37,7 @@ from core.db import run_db_maintenance_loop
 from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
-from core.telegram_client import shutdown_telegram_pool
+from core.telegram_client import shutdown_qr_logins, shutdown_telegram_pool
 from services.accounts import (
     close_orphaned_web_windows,
     reconcile_bulk_messages_on_startup,
@@ -221,6 +221,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # Before the pool: a run saves what it collected as it is cancelled.
         await _shutdown_step("user_parser", shutdown_user_parser_on_shutdown)
         await _shutdown_step("inbox", shutdown_inbox_runtime)
+        # Before the pool: an open QR sign-in owns a client and the account's auth lock.
+        await _shutdown_step("qr_login", shutdown_qr_logins)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         # After every runtime has drained, so their last events can still notify.
         await _shutdown_step("notifications", shutdown_notifications)

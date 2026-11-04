@@ -61,6 +61,9 @@ import type {
   AuditAccountSessionsData,
   AuditAccountSessionsErrors,
   AuditAccountSessionsResponses,
+  BeginQrLoginData,
+  BeginQrLoginErrors,
+  BeginQrLoginResponses,
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailErrors,
   CancelAccountTwofaEmailResponses,
@@ -70,6 +73,9 @@ import type {
   CancelContactLookupJobData,
   CancelContactLookupJobErrors,
   CancelContactLookupJobResponses,
+  CancelQrLoginData,
+  CancelQrLoginErrors,
+  CancelQrLoginResponses,
   CancelScheduledPostData,
   CancelScheduledPostErrors,
   CancelScheduledPostResponses,
@@ -325,6 +331,9 @@ import type {
   GetPhoneTelephonyStatusData,
   GetPhoneTelephonyStatusErrors,
   GetPhoneTelephonyStatusResponses,
+  GetQrLoginData,
+  GetQrLoginErrors,
+  GetQrLoginResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -679,6 +688,9 @@ import type {
   StartPhoneOtpWaitErrors,
   StartPhoneOtpWaitResponses,
   StartPhoneResponses,
+  StartQrLoginData,
+  StartQrLoginErrors,
+  StartQrLoginResponses,
   StartUserParserRunData,
   StartUserParserRunErrors,
   StartUserParserRunResponses,
@@ -709,6 +721,9 @@ import type {
   SubmitLoginCodeData,
   SubmitLoginCodeErrors,
   SubmitLoginCodeResponses,
+  SubmitQrLoginPasswordData,
+  SubmitQrLoginPasswordErrors,
+  SubmitQrLoginPasswordResponses,
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
@@ -1883,6 +1898,83 @@ export const loginAccountWithPasskey = <ThrowOnError extends boolean = false>(
     LoginAccountWithPasskeyErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/passkey/login', ...options });
+
+/**
+ * Start Qr Login
+ *
+ * Create a placeholder account for a QR sign-in; nothing connects to Telegram yet.
+ */
+export const startQrLogin = <ThrowOnError extends boolean = false>(
+  options: Options<StartQrLoginData, ThrowOnError>,
+): RequestResult<StartQrLoginResponses, StartQrLoginErrors, ThrowOnError> =>
+  (options.client ?? client).post<StartQrLoginResponses, StartQrLoginErrors, ThrowOnError>({
+    url: '/api/v1/accounts/start-qr-login',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Cancel Qr Login
+ *
+ * Close an open QR sign-in; a no-op when there is none.
+ */
+export const cancelQrLogin = <ThrowOnError extends boolean = false>(
+  options: Options<CancelQrLoginData, ThrowOnError>,
+): RequestResult<CancelQrLoginResponses, CancelQrLoginErrors, ThrowOnError> =>
+  (options.client ?? client).delete<CancelQrLoginResponses, CancelQrLoginErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/qr-login',
+    ...options,
+  });
+
+/**
+ * Get Qr Login
+ *
+ * Where the QR sign-in stands; the account is saved the first time it reads alive.
+ */
+export const getQrLogin = <ThrowOnError extends boolean = false>(
+  options: Options<GetQrLoginData, ThrowOnError>,
+): RequestResult<GetQrLoginResponses, GetQrLoginErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetQrLoginResponses, GetQrLoginErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/qr-login',
+    ...options,
+  });
+
+/**
+ * Begin Qr Login
+ *
+ * Connect the account's session and return the first QR code (restarts an open one).
+ */
+export const beginQrLogin = <ThrowOnError extends boolean = false>(
+  options: Options<BeginQrLoginData, ThrowOnError>,
+): RequestResult<BeginQrLoginResponses, BeginQrLoginErrors, ThrowOnError> =>
+  (options.client ?? client).post<BeginQrLoginResponses, BeginQrLoginErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/qr-login',
+    ...options,
+  });
+
+/**
+ * Submit Qr Login Password
+ *
+ * Answer the 2FA prompt of an open QR sign-in with the account's cloud password.
+ */
+export const submitQrLoginPassword = <ThrowOnError extends boolean = false>(
+  options: Options<SubmitQrLoginPasswordData, ThrowOnError>,
+): RequestResult<SubmitQrLoginPasswordResponses, SubmitQrLoginPasswordErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SubmitQrLoginPasswordResponses,
+    SubmitQrLoginPasswordErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/qr-login/password',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Get Account Session Audit

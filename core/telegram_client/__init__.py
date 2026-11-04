@@ -23,6 +23,7 @@ to keep each file small:
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
 - ``_privacy`` — account-privacy key read/write dispatch (avatar/bio visibility)
 - ``_passkey`` / ``_passkey_login`` — Telegram passkey add/remove/presence check and passkey sign-in
+- ``_qr_login`` — QR-code sign-in (``auth.exportLoginToken``) with its 2FA step
 
 Tests that monkeypatch internals target the submodule that owns the name
 (e.g. ``core.telegram_client._actions.get_client``), not this namespace.
@@ -86,6 +87,15 @@ from core.telegram_client._pool import (
     removing_client,
     shutdown_telegram_pool,
 )
+from core.telegram_client._qr_login import (
+    QrLoginGatewayError,
+    cancel_qr_login,
+    forget_qr_login,
+    read_qr_login,
+    shutdown_qr_logins,
+    start_qr_login,
+    submit_qr_password,
+)
 from core.telegram_client._react import invalidate_reaction_whitelist_cache
 from core.telegram_client._read import (
     TelegramAccountNotFoundError,
@@ -108,6 +118,7 @@ __all__ = [
     "ChatGatewayError",
     "DeviceUnavailableError",
     "PasskeyGatewayError",
+    "QrLoginGatewayError",
     "RekeyGatewayError",
     "SessionAuditGatewayError",
     "TelegramAccountNotFoundError",
@@ -116,6 +127,7 @@ __all__ = [
     "accept_web_login_token",
     "account_auth_lock",
     "authorize_second_device",
+    "cancel_qr_login",
     "check_spam_status",
     "check_telegram_session",
     "close_sessions",
@@ -131,6 +143,7 @@ __all__ = [
     "forget_incoming_message_listener",
     "forget_post_listener",
     "forget_primary_device",
+    "forget_qr_login",
     "get_client",
     "invalidate_reaction_whitelist_cache",
     "is_known_collage_layout",
@@ -146,6 +159,7 @@ __all__ = [
     "prepare_telegram_client_profile",
     "read_account_sessions",
     "read_history",
+    "read_qr_login",
     "refresh_account_avatar",
     "register_passkey",
     "rekey_session",
@@ -154,10 +168,13 @@ __all__ = [
     "removing_client",
     "request_phone_code",
     "send_message",
+    "shutdown_qr_logins",
     "shutdown_telegram_pool",
+    "start_qr_login",
     "stop_incoming_messages",
     "stop_post_listener",
     "submit_phone_code",
+    "submit_qr_password",
     "subscribe_incoming_messages",
     "subscribe_posts",
     "take_lost_access_channels",

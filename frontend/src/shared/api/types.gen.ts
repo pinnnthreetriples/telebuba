@@ -6926,6 +6926,48 @@ export type ProxyRead = {
 };
 
 /**
+ * QrLoginView
+ *
+ * API response: the QR sign-in's state for the SPA.
+ */
+export type QrLoginView = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'waiting' | 'password_needed' | 'alive' | 'expired' | 'failed';
+  /**
+   * Qr Image
+   */
+  qr_image?: string | null;
+  /**
+   * Expires At
+   */
+  expires_at?: string | null;
+  /**
+   * Error Code
+   */
+  error_code?:
+    | 'unknown_account'
+    | 'already_signed_in'
+    | 'no_qr_login'
+    | 'not_awaiting_password'
+    | 'account_exists'
+    | 'password_invalid'
+    | 'flood_wait'
+    | 'connection_failed'
+    | null;
+  /**
+   * Flood Wait Seconds
+   */
+  flood_wait_seconds?: number | null;
+  account?: AccountRead | null;
+};
+
+/**
  * ReadChannelFacts
  *
  * What a ``read_channel`` page says about the channel itself (no extra RPC).
@@ -7637,6 +7679,22 @@ export type StartPreviewRequest = {
 };
 
 /**
+ * StartQrLoginRequest
+ *
+ * API body for ``POST /accounts/start-qr-login`` — provision a placeholder account.
+ */
+export type StartQrLoginRequest = {
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
+   * Session Device
+   */
+  session_device?: 'desktop' | 'mobile';
+};
+
+/**
  * StartWarmingRequest
  */
 export type StartWarmingRequest = {
@@ -7718,6 +7776,18 @@ export type SubmitCodeRequest = {
    * Password
    */
   password?: string | null;
+};
+
+/**
+ * SubmitQrPasswordRequest
+ *
+ * API body for ``POST /accounts/{id}/qr-login/password`` — the 2FA password.
+ */
+export type SubmitQrPasswordRequest = {
+  /**
+   * Password
+   */
+  password: string;
 };
 
 /**
@@ -12916,6 +12986,257 @@ export type LoginAccountWithPasskeyResponses = {
 
 export type LoginAccountWithPasskeyResponse =
   LoginAccountWithPasskeyResponses[keyof LoginAccountWithPasskeyResponses];
+
+export type StartQrLoginData = {
+  body: StartQrLoginRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/start-qr-login';
+};
+
+export type StartQrLoginErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type StartQrLoginError = StartQrLoginErrors[keyof StartQrLoginErrors];
+
+export type StartQrLoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type StartQrLoginResponse = StartQrLoginResponses[keyof StartQrLoginResponses];
+
+export type CancelQrLoginData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/qr-login';
+};
+
+export type CancelQrLoginErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CancelQrLoginError = CancelQrLoginErrors[keyof CancelQrLoginErrors];
+
+export type CancelQrLoginResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type CancelQrLoginResponse = CancelQrLoginResponses[keyof CancelQrLoginResponses];
+
+export type GetQrLoginData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/qr-login';
+};
+
+export type GetQrLoginErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetQrLoginError = GetQrLoginErrors[keyof GetQrLoginErrors];
+
+export type GetQrLoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: QrLoginView;
+};
+
+export type GetQrLoginResponse = GetQrLoginResponses[keyof GetQrLoginResponses];
+
+export type BeginQrLoginData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/qr-login';
+};
+
+export type BeginQrLoginErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type BeginQrLoginError = BeginQrLoginErrors[keyof BeginQrLoginErrors];
+
+export type BeginQrLoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: QrLoginView;
+};
+
+export type BeginQrLoginResponse = BeginQrLoginResponses[keyof BeginQrLoginResponses];
+
+export type SubmitQrLoginPasswordData = {
+  body: SubmitQrPasswordRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/qr-login/password';
+};
+
+export type SubmitQrLoginPasswordErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SubmitQrLoginPasswordError =
+  SubmitQrLoginPasswordErrors[keyof SubmitQrLoginPasswordErrors];
+
+export type SubmitQrLoginPasswordResponses = {
+  /**
+   * Successful Response
+   */
+  200: QrLoginView;
+};
+
+export type SubmitQrLoginPasswordResponse =
+  SubmitQrLoginPasswordResponses[keyof SubmitQrLoginPasswordResponses];
 
 export type GetAccountSessionAuditData = {
   body?: never;
