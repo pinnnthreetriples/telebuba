@@ -88,6 +88,10 @@ class TelegramSettings(BaseSettings):
     # valid in the in-memory login cache before the operator must re-request.
     # Telegram codes themselves expire in a few minutes; 300 s mirrors that.
     phone_code_ttl_seconds: int = Field(default=300, ge=1)
+    # QR sign-in: how long one may stay open (waiting for a scan or the 2FA password)
+    # before it is dropped. The sign-in holds the account's auth lock the whole time,
+    # so a QR shown and forgotten must not block that account forever.
+    qr_login_timeout_seconds: int = Field(default=300, ge=30)
     # The app credentials every MOBILE authorization connects with. Empty = mobile
     # devices are unavailable: an Android fingerprint on the desktop app's api_id is a
     # mismatch Telegram can see, and ``lang_pack`` is accepted from official apps only.

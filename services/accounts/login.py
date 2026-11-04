@@ -20,6 +20,7 @@ from core.config import settings
 from core.db import DuplicateSessionNameError, fetch_account, update_account_from_session_check
 from core.logging import log_event
 from core.telegram_client import (
+    cancel_qr_login,
     log_out_session,
     remove_second_device,
     request_phone_code,
@@ -180,6 +181,8 @@ async def reset_account_session(account_id: str) -> AccountRead:
 
 
 async def _end_session(account_id: str, *, wipe_session: bool, event: str) -> AccountRead:
+    # An open QR sign-in holds this account's auth lock for minutes; end it first.
+    await cancel_qr_login(account_id)
     account = await fetch_account(account_id)
     if account is None:
         msg = f"Unknown account: {account_id}"

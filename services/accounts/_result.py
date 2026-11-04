@@ -79,6 +79,8 @@ _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
         # A device the account lacks or that is not set up (``schemas.devices``).
         "DeviceUnavailableError",
         "ProfileGatewayError",
+        # QR sign-in refusals (``no_qr_login`` / ``not_awaiting_password``).
+        "QrLoginGatewayError",
         "StoryCollageLayoutError",
         "StoryImageNormalisationError",
         "StoryVideoNormalisationError",

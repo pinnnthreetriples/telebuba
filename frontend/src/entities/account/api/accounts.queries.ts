@@ -108,6 +108,8 @@ export {
   getAccountProfileSnapshotQueryKey as accountProfileSnapshotQueryKey,
   getAccountTwofaOptions as accountTwofaQueryOptions,
   getAccountTwofaQueryKey as accountTwofaQueryKey,
+  getQrLoginOptions as qrLoginQueryOptions,
+  getQrLoginQueryKey as qrLoginQueryKey,
   getBulkMessageJobOptions as getBulkMessageJobQueryOptions,
   listAccountChannelPostsOptions as accountChannelPostsQueryOptions,
   listAccountChannelPostsQueryKey as accountChannelPostsQueryKey,

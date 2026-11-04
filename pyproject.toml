@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "python-multipart>=0.0.20",
     "python-socks>=2.8.1",
+    "segno>=1.6.6",
     "sentry-sdk>=2.62.0",
     "sqlalchemy>=2.0.50",
     "telethon>=1.45.0",

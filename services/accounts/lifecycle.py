@@ -18,6 +18,7 @@ from core.logging import log_event
 from core.phone_geo import evaluate_geo
 from core.telegram_client import (
     account_auth_lock,
+    cancel_qr_login,
     forget_post_listener,
     forget_primary_device,
     remove_account_session,
@@ -105,7 +106,10 @@ async def _wait_for_channel_search(account_id: str) -> None:
         await ended.wait()
 
 
-async def remove_account(account_id: str, reason: DeleteReason | None = None) -> None:
+async def remove_account(  # noqa: PLR0915 - one ordered teardown sequence
+    account_id: str,
+    reason: DeleteReason | None = None,
+) -> None:
     """Public delete: stop warming + purge DB rows under one lifecycle lock.
 
     ``reason`` is journaled with the deletion (``services.lifecycle_journal``); when
@@ -127,6 +131,8 @@ async def remove_account(account_id: str, reason: DeleteReason | None = None) ->
     keeps the bare repo call (those accounts were just created and never
     started warming, so there's no task to cancel).
     """
+    # An open QR sign-in holds the account's auth lock for minutes; end it first.
+    await cancel_qr_login(account_id)
     # Local import to avoid a services→services import cycle at module load.
     from core.db import (  # noqa: PLC0415
         get_listener_account_id,
