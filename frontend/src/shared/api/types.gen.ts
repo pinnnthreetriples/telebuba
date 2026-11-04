@@ -273,6 +273,26 @@ export type AccountPage = {
 };
 
 /**
+ * AccountPasskeyCheck
+ *
+ * Whether Telegram still lists the account's stored passkey; read-only, nothing is repaired.
+ */
+export type AccountPasskeyCheck = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Telegram State
+   */
+  telegram_state: 'present' | 'missing' | 'unknown';
+  /**
+   * Reason
+   */
+  reason?: 'unavailable' | 'passkey_telegram_refused' | null;
+};
+
+/**
  * AccountPasskeyView
  *
  * Whether the account has a passkey, and whether passkeys can be used at all.
@@ -638,6 +658,10 @@ export type AccountRead = {
    */
   spam_detail?: string | null;
   /**
+   * Foreign Sessions
+   */
+  foreign_sessions?: number | null;
+  /**
    * Folder Ids
    */
   folder_ids?: Array<string>;
@@ -653,6 +677,122 @@ export type AccountRegisteredUpdate = {
    * Registered At
    */
   registered_at?: string | null;
+};
+
+/**
+ * AccountRekeyView
+ *
+ * The account's re-key state for the card: never re-keyed, pending, or done.
+ */
+export type AccountRekeyView = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Rekeyed At
+   */
+  rekeyed_at?: string | null;
+  /**
+   * Closed At
+   */
+  closed_at?: string | null;
+  /**
+   * Close After
+   */
+  close_after?: string | null;
+};
+
+/**
+ * AccountSession
+ *
+ * One authorization of the account, as Telegram lists it.
+ */
+export type AccountSession = {
+  /**
+   * Hash
+   */
+  hash: string;
+  /**
+   * Is Current
+   */
+  is_current: boolean;
+  /**
+   * Is Ours
+   */
+  is_ours: boolean;
+  /**
+   * Official App
+   */
+  official_app: boolean;
+  /**
+   * Device Model
+   */
+  device_model: string;
+  /**
+   * Platform
+   */
+  platform: string;
+  /**
+   * System Version
+   */
+  system_version: string;
+  /**
+   * App Name
+   */
+  app_name: string;
+  /**
+   * Ip
+   */
+  ip: string;
+  /**
+   * Country
+   */
+  country: string;
+  /**
+   * Date Created
+   */
+  date_created?: string | null;
+  /**
+   * Date Active
+   */
+  date_active?: string | null;
+  /**
+   * Unconfirmed
+   */
+  unconfirmed?: boolean;
+};
+
+/**
+ * AccountSessionAudit
+ *
+ * The account's sessions as of one audit, or an empty view when none ran yet.
+ */
+export type AccountSessionAudit = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Checked At
+   */
+  checked_at?: string | null;
+  /**
+   * Ttl Days
+   */
+  ttl_days?: number | null;
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Foreign Count
+   */
+  foreign_count: number;
+  /**
+   * Sessions
+   */
+  sessions: Array<AccountSession>;
 };
 
 /**
@@ -6159,6 +6299,7 @@ export type PhoneList = {
     | 'emulator_phone_invalid'
     | 'emulator_code_timeout'
     | 'emulator_twofa_missing'
+    | 'emulator_password_rejected'
     | 'emulator_not_running'
     | 'emulator_not_signed_in'
     | 'emulator_capacity'
@@ -7149,6 +7290,66 @@ export type SecondsRange = {
    * Max
    */
   max: number;
+};
+
+/**
+ * SessionCloseOutcome
+ *
+ * One requested session's result.
+ */
+export type SessionCloseOutcome = {
+  /**
+   * Hash
+   */
+  hash: string;
+  /**
+   * Status
+   */
+  status: 'closed' | 'gone' | 'not_foreign' | 'too_new' | 'flood_wait' | 'failed' | 'skipped';
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
+  /**
+   * Error Type
+   */
+  error_type?: string | null;
+};
+
+/**
+ * SessionCloseRequest
+ *
+ * The sessions the operator confirmed, by hash (decimal strings, as the audit lists them).
+ */
+export type SessionCloseRequest = {
+  /**
+   * Hashes
+   */
+  hashes: Array<string>;
+};
+
+/**
+ * SessionCloseResult
+ *
+ * A run's outcomes, and the account's sessions read again afterwards.
+ *
+ * ``audit`` is ``None`` only when the re-read itself failed: the closes already happened,
+ * so they are reported all the same.
+ */
+export type SessionCloseResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Outcomes
+   */
+  outcomes: Array<SessionCloseOutcome>;
+  /**
+   * Closed Count
+   */
+  closed_count: number;
+  audit?: AccountSessionAudit | null;
 };
 
 /**
@@ -12683,6 +12884,57 @@ export type CreateAccountPasskeyResponses = {
 export type CreateAccountPasskeyResponse =
   CreateAccountPasskeyResponses[keyof CreateAccountPasskeyResponses];
 
+export type CheckAccountPasskeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/passkey/check';
+};
+
+export type CheckAccountPasskeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CheckAccountPasskeyError = CheckAccountPasskeyErrors[keyof CheckAccountPasskeyErrors];
+
+export type CheckAccountPasskeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPasskeyCheck;
+};
+
+export type CheckAccountPasskeyResponse =
+  CheckAccountPasskeyResponses[keyof CheckAccountPasskeyResponses];
+
 export type LoginAccountWithPasskeyData = {
   body?: never;
   path: {
@@ -12985,6 +13237,315 @@ export type SubmitQrLoginPasswordResponses = {
 
 export type SubmitQrLoginPasswordResponse =
   SubmitQrLoginPasswordResponses[keyof SubmitQrLoginPasswordResponses];
+
+export type GetAccountSessionAuditData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions';
+};
+
+export type GetAccountSessionAuditErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountSessionAuditError =
+  GetAccountSessionAuditErrors[keyof GetAccountSessionAuditErrors];
+
+export type GetAccountSessionAuditResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountSessionAudit;
+};
+
+export type GetAccountSessionAuditResponse =
+  GetAccountSessionAuditResponses[keyof GetAccountSessionAuditResponses];
+
+export type AuditAccountSessionsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/audit';
+};
+
+export type AuditAccountSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type AuditAccountSessionsError =
+  AuditAccountSessionsErrors[keyof AuditAccountSessionsErrors];
+
+export type AuditAccountSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountSessionAudit;
+};
+
+export type AuditAccountSessionsResponse =
+  AuditAccountSessionsResponses[keyof AuditAccountSessionsResponses];
+
+export type CloseAccountSessionsData = {
+  body: SessionCloseRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/close';
+};
+
+export type CloseAccountSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CloseAccountSessionsError =
+  CloseAccountSessionsErrors[keyof CloseAccountSessionsErrors];
+
+export type CloseAccountSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionCloseResult;
+};
+
+export type CloseAccountSessionsResponse =
+  CloseAccountSessionsResponses[keyof CloseAccountSessionsResponses];
+
+export type CloseAccountForeignSessionsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/close-foreign';
+};
+
+export type CloseAccountForeignSessionsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CloseAccountForeignSessionsError =
+  CloseAccountForeignSessionsErrors[keyof CloseAccountForeignSessionsErrors];
+
+export type CloseAccountForeignSessionsResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionCloseResult;
+};
+
+export type CloseAccountForeignSessionsResponse =
+  CloseAccountForeignSessionsResponses[keyof CloseAccountForeignSessionsResponses];
+
+export type GetAccountRekeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/rekey';
+};
+
+export type GetAccountRekeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountRekeyError = GetAccountRekeyErrors[keyof GetAccountRekeyErrors];
+
+export type GetAccountRekeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRekeyView;
+};
+
+export type GetAccountRekeyResponse = GetAccountRekeyResponses[keyof GetAccountRekeyResponses];
+
+export type RekeyAccountSessionData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/rekey';
+};
+
+export type RekeyAccountSessionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RekeyAccountSessionError = RekeyAccountSessionErrors[keyof RekeyAccountSessionErrors];
+
+export type RekeyAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRekeyView;
+};
+
+export type RekeyAccountSessionResponse =
+  RekeyAccountSessionResponses[keyof RekeyAccountSessionResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

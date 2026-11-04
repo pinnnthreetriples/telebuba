@@ -18,6 +18,7 @@ from core.repositories.account_folders import (
     folder_ids_by_account,
     list_filtered_accounts,
 )
+from core.repositories.session_audits import list_foreign_session_counts
 from core.repositories.warming_floods import (
     list_warming_flood_summaries,
 )
@@ -129,7 +130,7 @@ async def _attach_folders(accounts: list[AccountRead]) -> None:
 
 
 async def _attach_signals(accounts: list[AccountRead]) -> None:
-    """Enrich a page of accounts in place with Trust Score + last spam verdict.
+    """Enrich a page of accounts in place with Trust Score, last spam verdict, foreign sessions.
 
     Bulk-loads warming state, spam verdicts and device fingerprints once (mirrors
     the warming board's pattern) so the table is not an N+1; trust is then a pure
@@ -141,8 +142,10 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     spam_by_account = await list_spam_statuses()
     fingerprints = await list_device_fingerprints()
     floods = await list_warming_flood_summaries()
+    foreign = await list_foreign_session_counts()
     now = datetime.now(UTC)
     for account in accounts:
+        account.foreign_sessions = foreign.get(account.account_id)
         spam = spam_by_account.get(account.account_id)
         fingerprint = fingerprints.get(account.account_id)
         trust = account_trust_score_from(

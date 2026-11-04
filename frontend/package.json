@@ -28,6 +28,8 @@
   },
   "overrides": {
     "js-yaml": "^4.3.1",
+    "minimatch": ">=11.0.1 <11.0.4",
+    "glob": ">=14.0.2 <15",
     "eslint-plugin-react-hooks": {
       "zod-validation-error": "^4.0.0"
     }
@@ -85,7 +87,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.65.0",
-    "vite": "^6.4.4",
+    "vite": "^6.4.5",
     "vitest": "^4.1.12"
   }
 }

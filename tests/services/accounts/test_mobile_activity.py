@@ -294,7 +294,7 @@ async def test_a_warming_visit_checks_its_pod_once(
 async def test_a_signed_out_visit_hands_no_serial(container: _Container) -> None:
     await _account()
     container.instance = Instance(1, "telebuba-acc", running=True)
-    container.screens = ["confirm"]
+    container.screens = ["password"]
 
     assert await open_mobile_visit("acc") is None
 

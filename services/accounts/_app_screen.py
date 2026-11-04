@@ -7,7 +7,7 @@ times at most, the app put back in front after each. The screen it then shows is
 answer, and only a sign-in screen means signed out. A screen still unknown is
 ``emulator_screen_unknown``; an app that gives no dump at all is
 ``emulator_app_unresponsive`` (no key is sent to it: a frozen app only dies of one),
-restarted once by ``restarted_once``.
+restarted by ``restarted_if_frozen`` (twice at most).
 """
 
 from __future__ import annotations
@@ -43,6 +43,8 @@ _PROMPTS: frozenset[Screen] = frozenset({"permission", "contacts"})
 # BACK presses on an unknown screen, and screens handled in all, before it is a refusal.
 _BACKS = 3
 _STEPS = 6
+# Restarts of a frozen app before it is a refusal.
+_RESTARTS = 2
 
 
 async def settled_screen(
@@ -76,22 +78,27 @@ async def settled_screen(
     raise EmulatorError(APP_UNRESPONSIVE if screen == "unresponsive" else _SCREEN_UNKNOWN)
 
 
-async def restarted_once[T](account_id: str, serial: str, attempt: Callable[[], Awaitable[T]]) -> T:
-    """``attempt``, and once more after a restart of the app when it froze (no dump).
+async def restarted_if_frozen[T](
+    account_id: str, serial: str, attempt: Callable[[], Awaitable[T]]
+) -> T:
+    """``attempt``, and again after a restart of the app each time it froze (no dump).
 
     Telegram on redroid's guest GPU can deadlock right after «Start Messaging»: it stays
-    alive but gives no dump, and any input then kills it. A relaunch comes back.
+    alive but gives no dump, and any input then kills it. A relaunch comes back, but it
+    can freeze again at once: the app is restarted twice at most, a third freeze is the
+    refusal.
     """
-    try:
-        return await attempt()
-    except EmulatorError as exc:
-        if exc.code != APP_UNRESPONSIVE:
-            raise
-    await log_event(
-        "WARNING",
-        "account_mobile_app_restarted",
-        account_id=account_id,
-        extra={"reason": APP_UNRESPONSIVE},
-    )
-    await restart_app(serial)
+    for _ in range(_RESTARTS):
+        try:
+            return await attempt()
+        except EmulatorError as exc:
+            if exc.code != APP_UNRESPONSIVE:
+                raise
+        await log_event(
+            "WARNING",
+            "account_mobile_app_restarted",
+            account_id=account_id,
+            extra={"reason": APP_UNRESPONSIVE},
+        )
+        await restart_app(serial)
     return await attempt()

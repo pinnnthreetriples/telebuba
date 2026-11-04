@@ -7,8 +7,11 @@ one, whatever the clocks say. Code requests share the per-account pacing of the
 second-device sign-in. The result is what the screen shows at the end, nothing else:
 the chat list, past the prompts a fresh sign-in shows over it (``_app_screen``), or a
 refusal saying why not — never a silent "signed out". An app that freezes on the way
-is restarted once and signed in again from its entry screen; a second code is asked
-for only as the per-account pacing allows.
+is restarted (twice at most) and signed in again from its entry screen; a second code is
+asked for only as the per-account pacing allows. An app left on its number confirmation
+or code screen (a sign-in started by hand) is taken back to the phone screen with BACK
+and signed in from there. A cloud password Telegram does not take is a refusal of its
+own: the operator is needed, and no further code is requested for it.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from core.emulator import (
     enter_code,
     enter_password,
     enter_phone,
+    go_back,
     press_start,
     wait_screen,
 )
@@ -32,7 +36,7 @@ from core.telegram_client import (
     login_code_cutoff,
     wait_account_login_code,
 )
-from services.accounts._app_screen import APP_UNRESPONSIVE, restarted_once, settled_screen
+from services.accounts._app_screen import APP_UNRESPONSIVE, restarted_if_frozen, settled_screen
 from services.accounts._mobile_progress import report_stage
 from services.accounts.devices import DeviceRefusedError, claim_code_request
 
@@ -46,10 +50,22 @@ _DEVICE_PHONE_UNKNOWN: DeviceRefusalCode = "device_phone_unknown"
 _DEVICE_PRIMARY_UNAVAILABLE: DeviceRefusalCode = "device_primary_unavailable"
 _EMULATOR_CODE_TIMEOUT: EmulatorRefusalCode = "emulator_code_timeout"
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
+_EMULATOR_PASSWORD_REJECTED: EmulatorRefusalCode = "emulator_password_rejected"  # noqa: S105 - a refusal code
 _EMULATOR_TWOFA_MISSING: EmulatorRefusalCode = "emulator_twofa_missing"
 
 # Where a sign-in may start, the prompts over a signed-in app's chat list included.
-_ENTRY: set[Screen] = {"chats", "intro", "phone", "password", "permission", "contacts"}
+_ENTRY: set[Screen] = {
+    "chats",
+    "intro",
+    "phone",
+    "confirm",
+    "code",
+    "password",
+    "permission",
+    "contacts",
+}
+# BACK presses from a confirmation or code screen to the phone screen, at most.
+_BACKS_TO_PHONE = 3
 # What a submitted code or password leads to.
 _PAST_CODE: set[Screen] = {"chats", "password", "permission", "contacts"}
 _SIGNED_IN: set[Screen] = {"chats"}
@@ -57,11 +73,13 @@ _SIGNED_IN: set[Screen] = {"chats"}
 
 async def sign_in(account: AccountRead, serial: str) -> None:
     """Sign the app in until its chat list shows, or raise why it did not."""
-    await restarted_once(account.account_id, serial, partial(_sign_in, account, serial))
+    await restarted_if_frozen(account.account_id, serial, partial(_sign_in, account, serial))
 
 
 async def _sign_in(account: AccountRead, serial: str) -> None:
     screen, nodes = await _wait(serial, _ENTRY)
+    if screen in {"confirm", "code"}:
+        screen, nodes = await _back_to_phone(serial)
     if screen == "intro":
         await press_start(serial, nodes)
         screen, nodes = await _wait(serial, {"phone"})
@@ -79,6 +97,16 @@ async def _wait(serial: str, wanted: set[Screen]) -> tuple[Screen, list[UiNode]]
     if screen == "unresponsive":
         raise EmulatorError(APP_UNRESPONSIVE)
     return screen, nodes
+
+
+async def _back_to_phone(serial: str) -> tuple[Screen, list[UiNode]]:
+    """BACK from the confirmation or code screen until the phone (or intro) screen shows."""
+    for _ in range(_BACKS_TO_PHONE):
+        await go_back(serial)
+        screen, nodes = await _wait(serial, {"intro", "phone"})
+        if screen in {"intro", "phone"}:
+            return screen, nodes
+    raise EmulatorError(_EMULATOR_FIELD_MISSING)  # BACK did not leave it
 
 
 async def _code_cutoff(account_id: str) -> int:
@@ -131,4 +159,9 @@ async def _submit_password(
     if not password:
         raise EmulatorError(_EMULATOR_TWOFA_MISSING)
     await enter_password(serial, nodes, password)
-    return await _wait(serial, _PAST_CODE - {"password"})
+    screen, nodes = await _wait(serial, _PAST_CODE - {"password"})
+    if screen == "password":
+        # Telegram empties the field of a rejected password; waiting longer or asking for
+        # another code would not change that, and the operator has to look.
+        raise EmulatorError(_EMULATOR_PASSWORD_REJECTED)
+    return screen, nodes

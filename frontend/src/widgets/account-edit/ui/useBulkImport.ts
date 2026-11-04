@@ -233,12 +233,14 @@ export function useBulkImport(
   // proxy step: an account without a proxy would connect from the operator's own IP,
   // so the backend refuses (`twofa_proxy_missing`) and the row says so. One request
   // at a time, each row keeps its own outcome; never throws.
-  const recordJsonPasswords = async () => {
+  // `only` limits it to the accounts that go on (the session audit holds some back).
+  const recordJsonPasswords = async (only?: ReadonlySet<string>) => {
     const gen = generation.current;
     for (const row of files) {
       const json = rawJson.current[row.id];
       const accountId = row.accountIds[0];
       if (!json || !accountId || row.state !== 'ok') continue;
+      if (only && !only.has(accountId)) continue;
       try {
         await recordJson.mutateAsync({
           path: { account_id: accountId },

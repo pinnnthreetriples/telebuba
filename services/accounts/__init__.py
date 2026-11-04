@@ -12,6 +12,9 @@ The implementations live in per-concern submodules:
 - :mod:`.privacy`   — Telegram privacy keys (who may see photo / bio / last seen)
 - :mod:`.twofa`     — the account's Telegram cloud password + its recovery email
 - :mod:`.passkey`   — the account's Telegram passkey (vault-held key) and passkey sign-in
+- :mod:`.session_audit` — who else holds a session of the account (read-only)
+- :mod:`.session_close` — ending the sessions that are not ours (operator action)
+- :mod:`.session_rekey` — a login of the account's own, replacing an imported session
 - :mod:`.media`     — profile photo / story / music uploads
 - :mod:`.channels`  — own-channel management (create / edit / photo / delete)
 - :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
@@ -110,6 +113,7 @@ from services.accounts.mobile_emulator import (
     open_mobile_progress,
 )
 from services.accounts.passkey import (
+    check_account_passkey,
     create_account_passkey,
     read_account_passkey,
     relogin_with_passkey,
@@ -138,6 +142,13 @@ from services.accounts.qr_login import (
     submit_qr_password,
 )
 from services.accounts.registered import set_registered_at
+from services.accounts.session_audit import audit_account_sessions, read_account_session_audit
+from services.accounts.session_close import close_account_foreign_sessions, close_account_sessions
+from services.accounts.session_rekey import (
+    close_due_old_keys,
+    read_account_rekey,
+    rekey_account_session,
+)
 from services.accounts.sessions import (
     SessionAlreadyExistsError,
     check_account_session,
@@ -187,13 +198,18 @@ __all__ = [
     "add_account_profile_music",
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",
+    "audit_account_sessions",
     "begin_qr_login",
     "cancel_account_twofa_email",
     "cancel_qr_login",
     "check_account_channel_username",
+    "check_account_passkey",
     "check_account_session",
     "clear_account_twofa_email",
+    "close_account_foreign_sessions",
+    "close_account_sessions",
     "close_all_web_windows",
+    "close_due_old_keys",
     "close_orphaned_web_windows",
     "confirm_account_twofa_email",
     "count_open_web_windows",
@@ -228,10 +244,13 @@ __all__ = [
     "publish_account_channel_post",
     "read_account_passkey",
     "read_account_privacy",
+    "read_account_rekey",
+    "read_account_session_audit",
     "read_account_twofa",
     "reconcile_bulk_messages_on_startup",
     "record_account_twofa",
     "record_account_twofa_from_json",
+    "rekey_account_session",
     "relogin_with_passkey",
     "remove_account",
     "remove_account_passkey",

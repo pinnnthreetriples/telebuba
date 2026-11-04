@@ -58,6 +58,9 @@ import type {
   AssignStandaloneProxyData,
   AssignStandaloneProxyErrors,
   AssignStandaloneProxyResponses,
+  AuditAccountSessionsData,
+  AuditAccountSessionsErrors,
+  AuditAccountSessionsResponses,
   BeginQrLoginData,
   BeginQrLoginErrors,
   BeginQrLoginResponses,
@@ -81,6 +84,9 @@ import type {
   CheckAccountChannelUsernameResponses,
   CheckAccountData,
   CheckAccountErrors,
+  CheckAccountPasskeyData,
+  CheckAccountPasskeyErrors,
+  CheckAccountPasskeyResponses,
   CheckAccountResponses,
   CheckCampaignChannelBansData,
   CheckCampaignChannelBansErrors,
@@ -97,6 +103,12 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
+  CloseAccountForeignSessionsData,
+  CloseAccountForeignSessionsErrors,
+  CloseAccountForeignSessionsResponses,
+  CloseAccountSessionsData,
+  CloseAccountSessionsErrors,
+  CloseAccountSessionsResponses,
   CloseAccountWebWindowsData,
   CloseAccountWebWindowsErrors,
   CloseAccountWebWindowsResponses,
@@ -235,6 +247,12 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
+  GetAccountRekeyData,
+  GetAccountRekeyErrors,
+  GetAccountRekeyResponses,
+  GetAccountSessionAuditData,
+  GetAccountSessionAuditErrors,
+  GetAccountSessionAuditResponses,
   GetAccountTwofaData,
   GetAccountTwofaErrors,
   GetAccountTwofaResponses,
@@ -502,6 +520,9 @@ import type {
   RecordAccountTwofaFromJsonErrors,
   RecordAccountTwofaFromJsonResponses,
   RecordAccountTwofaResponses,
+  RekeyAccountSessionData,
+  RekeyAccountSessionErrors,
+  RekeyAccountSessionResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -1851,6 +1872,20 @@ export const createAccountPasskey = <ThrowOnError extends boolean = false>(
   >({ url: '/api/v1/accounts/{account_id}/passkey', ...options });
 
 /**
+ * Check Account Passkey
+ *
+ * Ask Telegram whether it still lists the account's passkey (read-only).
+ */
+export const checkAccountPasskey = <ThrowOnError extends boolean = false>(
+  options: Options<CheckAccountPasskeyData, ThrowOnError>,
+): RequestResult<CheckAccountPasskeyResponses, CheckAccountPasskeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CheckAccountPasskeyResponses,
+    CheckAccountPasskeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/passkey/check', ...options });
+
+/**
  * Login Account With Passkey
  *
  * Sign the account's session back in with its passkey (no SMS code).
@@ -1940,6 +1975,103 @@ export const submitQrLoginPassword = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Get Account Session Audit
+ *
+ * The account's sessions as the last audit saw them; empty before the first audit.
+ */
+export const getAccountSessionAudit = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountSessionAuditData, ThrowOnError>,
+): RequestResult<GetAccountSessionAuditResponses, GetAccountSessionAuditErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetAccountSessionAuditResponses,
+    GetAccountSessionAuditErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions', ...options });
+
+/**
+ * Audit Account Sessions
+ *
+ * Read the account's sessions from Telegram now, with ours told from the rest.
+ */
+export const auditAccountSessions = <ThrowOnError extends boolean = false>(
+  options: Options<AuditAccountSessionsData, ThrowOnError>,
+): RequestResult<AuditAccountSessionsResponses, AuditAccountSessionsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AuditAccountSessionsResponses,
+    AuditAccountSessionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions/audit', ...options });
+
+/**
+ * Close Account Sessions
+ *
+ * End the named sessions that are still foreign; one outcome per session.
+ */
+export const closeAccountSessions = <ThrowOnError extends boolean = false>(
+  options: Options<CloseAccountSessionsData, ThrowOnError>,
+): RequestResult<CloseAccountSessionsResponses, CloseAccountSessionsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CloseAccountSessionsResponses,
+    CloseAccountSessionsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/sessions/close',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Close Account Foreign Sessions
+ *
+ * Read the account's sessions and end every one that is foreign right now.
+ */
+export const closeAccountForeignSessions = <ThrowOnError extends boolean = false>(
+  options: Options<CloseAccountForeignSessionsData, ThrowOnError>,
+): RequestResult<
+  CloseAccountForeignSessionsResponses,
+  CloseAccountForeignSessionsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CloseAccountForeignSessionsResponses,
+    CloseAccountForeignSessionsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/sessions/close-foreign', ...options });
+
+/**
+ * Get Account Rekey
+ *
+ * When the account's session was last re-keyed and whether its old key is ended yet.
+ */
+export const getAccountRekey = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountRekeyData, ThrowOnError>,
+): RequestResult<GetAccountRekeyResponses, GetAccountRekeyErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountRekeyResponses, GetAccountRekeyErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/rekey',
+    ...options,
+  });
+
+/**
+ * Rekey Account Session
+ *
+ * Sign the account in again as a session of its own, then end the imported one's key.
+ *
+ * Never automatic. The old key is ended at once when Telegram allows it, else at the time
+ * the answer names (``close_after``).
+ */
+export const rekeyAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<RekeyAccountSessionData, ThrowOnError>,
+): RequestResult<RekeyAccountSessionResponses, RekeyAccountSessionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RekeyAccountSessionResponses,
+    RekeyAccountSessionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/rekey', ...options });
 
 /**
  * Set Account Registered At

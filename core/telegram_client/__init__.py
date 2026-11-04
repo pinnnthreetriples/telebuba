@@ -8,6 +8,9 @@ to keep each file small:
 - ``_pool``    — long-lived connected-client cache, one per account device
 - ``_second_device`` — a second, separate authorization of the other device type
 - ``_session`` — session liveness check
+- ``_session_audit`` — the account's authorizations, ours told from the rest
+- ``_session_close`` — ends named foreign authorizations, one paced call each
+- ``_rekey`` — replaces an imported session with a login of the account's own
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
@@ -19,7 +22,7 @@ to keep each file small:
 - ``_media``   — profile photo / story / music actions
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
 - ``_privacy`` — account-privacy key read/write dispatch (avatar/bio visibility)
-- ``_passkey`` / ``_passkey_login`` — Telegram passkey add/remove and passkey sign-in
+- ``_passkey`` / ``_passkey_login`` — Telegram passkey add/remove/presence check and passkey sign-in
 - ``_qr_login`` — QR-code sign-in (``auth.exportLoginToken``) with its 2FA step
 
 Tests that monkeypatch internals target the submodule that owns the name
@@ -69,7 +72,12 @@ from core.telegram_client._message_listener import (
     stop_incoming_messages,
     subscribe_incoming_messages,
 )
-from core.telegram_client._passkey import PasskeyGatewayError, delete_passkey, register_passkey
+from core.telegram_client._passkey import (
+    PasskeyGatewayError,
+    delete_passkey,
+    is_passkey_listed,
+    register_passkey,
+)
 from core.telegram_client._passkey_login import login_with_passkey
 from core.telegram_client._pool import (
     TelegramClientPoolError,
@@ -96,8 +104,11 @@ from core.telegram_client._read import (
     execute_read_many,
 )
 from core.telegram_client._read_post_image import download_post_image
+from core.telegram_client._rekey import RekeyGatewayError, rekey_session
 from core.telegram_client._second_device import authorize_second_device, remove_second_device
 from core.telegram_client._session import check_telegram_session
+from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
+from core.telegram_client._session_close import close_sessions
 from core.telegram_client._spam import check_spam_status
 from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import accept_web_login_token
@@ -108,6 +119,8 @@ __all__ = [
     "DeviceUnavailableError",
     "PasskeyGatewayError",
     "QrLoginGatewayError",
+    "RekeyGatewayError",
+    "SessionAuditGatewayError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
@@ -117,6 +130,7 @@ __all__ = [
     "cancel_qr_login",
     "check_spam_status",
     "check_telegram_session",
+    "close_sessions",
     "create_telegram_client",
     "delete_passkey",
     "download_post_image",
@@ -133,6 +147,7 @@ __all__ = [
     "get_client",
     "invalidate_reaction_whitelist_cache",
     "is_known_collage_layout",
+    "is_passkey_listed",
     "list_dialogs",
     "log_out_session",
     "login_code_cutoff",
@@ -142,10 +157,12 @@ __all__ = [
     "mobile_api_configured",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "read_account_sessions",
     "read_history",
     "read_qr_login",
     "refresh_account_avatar",
     "register_passkey",
+    "rekey_session",
     "remove_account_session",
     "remove_second_device",
     "removing_client",

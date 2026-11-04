@@ -10,15 +10,20 @@ import { Button, Input } from '@/shared/ui';
 // with the session) and this dashboard holds no copy. Typing it here asks Telegram to
 // verify it (nothing changes there) and only then stores it, so web and emulator
 // sign-in can enter it by themselves. A wrong password is refused and nothing is kept.
+// `update`: a copy IS stored but the password was changed on Telegram since, so the
+// copy no longer signs anything in; the same verified write replaces it, behind a link.
 export function TwoFactorRecord({
   accountId,
   onRecorded,
+  update = false,
 }: {
   accountId: string;
   onRecorded: () => void;
+  update?: boolean;
 }) {
   const { t } = useTranslation();
   const [password, setPassword] = useState('');
+  const [expanded, setExpanded] = useState(!update);
   // `gcTime: 0` + `reset()`: the typed password sits in the mutation's `variables`,
   // and reset() only schedules collection, so the 5-minute default would keep it.
   const record = useMutation({
@@ -36,16 +41,33 @@ export function TwoFactorRecord({
         onSuccess: () => {
           setPassword('');
           record.reset();
+          setExpanded(!update);
           onRecorded();
         },
       },
     );
   };
 
+  if (!expanded) {
+    return (
+      <div className="mt-3 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(true);
+          }}
+          className="bg-transparent p-0 text-body font-medium text-action-primary"
+        >
+          {t('accounts.edit.twofaUpdateStored')}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 flex flex-col gap-2">
       <label htmlFor={`twofa-record-${accountId}`} className="type-small-medium">
-        {t('accounts.edit.twofaRecordLabel')}
+        {t(update ? 'accounts.edit.twofaUpdateStoredLabel' : 'accounts.edit.twofaRecordLabel')}
       </label>
       <Input
         id={`twofa-record-${accountId}`}

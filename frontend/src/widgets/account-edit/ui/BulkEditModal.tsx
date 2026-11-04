@@ -12,10 +12,12 @@ import {
   addAccountMusicMutation,
   allAccountsQueryOptions,
   BulkAccountPicker,
+  closeAccountForeignSessionsMutation,
   createAccountChannelMutation,
   invalidateAccountViews,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,
+  rekeyAccountSessionMutation,
   scheduleAccountPhotoMutation,
   scheduleAccountStoryMutation,
   setAccountChannelPhotoMutation,
@@ -51,7 +53,9 @@ import {
 import { BulkMusicTab, BulkPhotoTab, BulkSchedulePanel, BulkStoriesTab } from './BulkMediaTabs';
 import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
+import { BulkSessionsTab } from './BulkSessionsTab';
 import { BulkTextTab } from './BulkTextTab';
+import { isRefused, sessionOutcomeText } from './_sessionOutcome';
 import {
   CHANNEL_USERNAME_RE,
   errorChannelId,
@@ -69,7 +73,7 @@ import {
 import { useBulkRun } from './useBulkRun';
 import { useMountedRef } from './useMountedRef';
 
-type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy' | 'sessions' | 'rekey';
 const TABS = [
   'text',
   'photo',
@@ -77,6 +81,8 @@ const TABS = [
   'music',
   'channels',
   'privacy',
+  'sessions',
+  'rekey',
 ] as const satisfies readonly Tab[];
 
 type Audience = 'contacts' | 'close_friends' | 'public';
@@ -113,6 +119,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const postStory = useMutation(postAccountStoryMutation());
   const addMusic = useMutation(addAccountMusicMutation());
   const setPrivacy = useMutation(setAccountPrivacyMutation());
+  const closeForeign = useMutation(closeAccountForeignSessionsMutation());
+  const rekeySession = useMutation(rekeyAccountSessionMutation());
   const createChannel = useMutation(createAccountChannelMutation());
   const setChannelPhoto = useMutation(setAccountChannelPhotoMutation());
   const publishPost = useMutation(publishAccountChannelPostMutation());
@@ -142,6 +150,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const [channelMode, setChannelMode] = useState<'create' | 'post'>('create');
   const [channel, setChannel] = useState<ChannelDraft>(EMPTY_CHANNEL);
   const [post, setPost] = useState<PostDraft>({ text: '', file: null });
+  const [closeConfirmed, setCloseConfirmed] = useState(false);
+  const [rekeyConfirmed, setRekeyConfirmed] = useState(false);
 
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('now');
   const [baseRunAt, setBaseRunAt] = useState<number | null>(() =>
@@ -196,6 +206,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         : (post.text.trim() !== '' || post.file !== null) &&
           post.text.length <= postTextMax(post.file),
     privacy: Object.keys(levels).length > 0,
+    sessions: closeConfirmed,
+    rekey: rekeyConfirmed,
   };
   const NOTE: Record<Tab, string> = {
     text: t('accounts.bulk.fieldCount', { done: ticked.length, total: TEXT_FIELDS.length }),
@@ -212,6 +224,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       done: Object.keys(levels).length,
       total: PRIVACY_KEYS.length,
     }),
+    sessions: t('accounts.bulk.noteSessions', { count: ids.length }),
+    rekey: t('accounts.bulk.noteSessions', { count: ids.length }),
   };
 
   const step = async (accountId: string, index: number) => {
@@ -259,6 +273,18 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     }
     if (tab === 'privacy') {
       await setPrivacy.mutateAsync({ path: { account_id: accountId }, body: levels });
+      return;
+    }
+    if (tab === 'rekey') {
+      // A refusal rejects: the row keeps its code, the rest of the batch goes on.
+      await rekeySession.mutateAsync({ path: { account_id: accountId } });
+      return;
+    }
+    if (tab === 'sessions') {
+      const closed = await closeForeign.mutateAsync({ path: { account_id: accountId } });
+      // A refusal is the row's reason: Telegram would not end a session, so the account is not done.
+      const refused = closed.outcomes.find(isRefused);
+      if (refused) throw new Error(sessionOutcomeText(t, refused));
       return;
     }
     if (channelMode === 'create') {
@@ -421,6 +447,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       caption.trim() !== '' ||
       track !== null ||
       Object.keys(levels).length > 0 ||
+      closeConfirmed ||
+      rekeyConfirmed ||
       (Object.keys(EMPTY_CHANNEL) as (keyof ChannelDraft)[]).some(
         (key) => channel[key] !== EMPTY_CHANNEL[key],
       ) ||
@@ -566,6 +594,14 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                     onMode={setChannelMode}
                     onChannel={setChannel}
                     onPost={setPost}
+                  />
+                ) : tab === 'sessions' ? (
+                  <BulkSessionsTab confirmed={closeConfirmed} onConfirmed={setCloseConfirmed} />
+                ) : tab === 'rekey' ? (
+                  <BulkSessionsTab
+                    kind="rekey"
+                    confirmed={rekeyConfirmed}
+                    onConfirmed={setRekeyConfirmed}
                   />
                 ) : (
                   <BulkPrivacyTab

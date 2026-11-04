@@ -93,7 +93,7 @@ async def test_a_background_open_heals_a_running_app_that_fell_signed_out(
     assert not [s for s in container.steps if s.startswith("show:")]
 
 
-@pytest.mark.parametrize("screen", ["chats", "code"])
+@pytest.mark.parametrize("screen", ["chats", "password"])
 @pytest.mark.asyncio
 async def test_a_background_open_leaves_any_other_screen_as_it_is(
     container: _Container,

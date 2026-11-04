@@ -7,6 +7,7 @@ import { expect, test, vi } from 'vitest';
 import '@/shared/i18n';
 
 import { AddAccountModal } from './AddAccountModal';
+import { auditRoutes, passAuditStep } from './AddAccountModal.test-helpers';
 
 // The wizard with MANY files picked at once: one request per file, "Next" waits
 // for the whole batch, step 2 speaks in counts, and a manual proxy is assigned
@@ -48,6 +49,8 @@ function routeApi() {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
+    const audited = auditRoutes(request, ['a', 'b', 'c']);
+    if (audited) return audited;
     if (pathname === '/api/v1/proxies' && request.method === 'GET') {
       return jsonResponse({ proxies: [POOL_PROXY] });
     }
@@ -76,11 +79,12 @@ async function requests(fragment: string): Promise<Request[]> {
     .filter((request) => request.url.includes(fragment));
 }
 
-// A file import ends on the cloud-password step (step 3 of 3), not on a closed
-// modal: the proxy step hands the whole batch over to it. What these tests used
+// A file import ends on the cloud-password step, not on a closed modal: the proxy step
+// hands the whole batch over to the session audit and then to it. What these tests used
 // to prove by waiting for `onClose` they now prove by standing on that step.
 async function expectCloudPasswordStep(): Promise<void> {
-  expect(await screen.findByText('Шаг 3 · облачный пароль')).toBeInTheDocument();
+  await passAuditStep();
+  expect(await screen.findByText('Шаг 4 · облачный пароль')).toBeInTheDocument();
   expect(screen.getByText('Выбрать все')).toBeInTheDocument();
 }
 
@@ -211,7 +215,7 @@ test('pool step distributes the batch and moves on from Done', async () => {
     expect(screen.getByText('Назначено: 2 из 2')).toBeInTheDocument();
   });
   // More than one account never auto-advances: the operator reads the tally first.
-  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
+  expect(screen.queryByText(/кто ещё держит аккаунты/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByText('Готово'));
 
   await expectCloudPasswordStep();

@@ -25,6 +25,7 @@ import { ProxyPoolStep } from './ProxyPoolStep';
 import { QrLoginStep } from './QrLoginStep';
 import { QrStartPanel } from './QrStartPanel';
 import { SecondDeviceStep } from './SecondDeviceStep';
+import { SessionAuditStep } from './SessionAuditStep';
 import { TwoFactorBulkStep } from './TwoFactorBulkStep';
 import { useBulkImport } from './useBulkImport';
 
@@ -37,10 +38,12 @@ import { useBulkImport } from './useBulkImport';
 // phone, for the same reason. With "both" devices picked, a step then signs the other device in, again
 // behind the proxy. Then a step offers Telegram's cloud password for the whole batch,
 // and, when the key vault is configured, a LAST one a passkey for each account.
-// The created account ids thread across all steps.
+// The created account ids thread across all steps. Once a proxy is assigned, a step checks
+// each account and audits who else holds it BEFORE the cloud password and the passkey: an
+// account with foreign sessions stops there, at a decision, while the rest go on.
 type Method = 'session' | 'tdata' | 'phone' | 'qr' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
-type StepKind = 'method' | 'proxy' | 'code' | 'qr' | 'device' | 'twofa' | 'passkey';
+type StepKind = 'method' | 'proxy' | 'code' | 'qr' | 'audit' | 'device' | 'twofa' | 'passkey';
 
 // The wizard's five choice rows — three method cards on step 1 and the two proxy
 // choices on step 2 — were byte-identical apart from the icon, the two strings
@@ -118,6 +121,12 @@ export function AddAccountModal({
   const [twofaResult, setTwofaResult] = useState(false);
   // The seller JSON passwords are being verified, between the proxy and the next step.
   const [recording, setRecording] = useState(false);
+  // A proxy was assigned, so the accounts can be checked and audited (Skip leaves none).
+  const [proxied, setProxied] = useState(false);
+  // Close the foreign sessions the audit finds without asking (default off).
+  const [autoClose, setAutoClose] = useState(false);
+  // The accounts the session audit let through; the later steps act on these.
+  const [proceeding, setProceeding] = useState<string[] | null>(null);
 
   // Optional: when the uploaded accounts were registered in Telegram (item 4.8).
   const [registeredAt, setRegisteredAt] = useState('');
@@ -148,6 +157,9 @@ export function AddAccountModal({
         ? [createdAccountId]
         : []
       : bulk.accountIds;
+  // What the cloud password, the second device and the passkey act on: an account the
+  // audit held back (foreign sessions nobody decided on) is left out.
+  const activeIds = proceeding ?? accountIds;
   // Whether the vault is configured, read off any one account's passkey view: the
   // passkey step is offered only when it can work.
   const passkeyView = useQuery({
@@ -193,6 +205,7 @@ export function AddAccountModal({
     'proxy',
     ...(method === 'phone' ? (['code'] as const) : []),
     ...(method === 'qr' ? (['qr'] as const) : []),
+    ...(proxied ? (['audit'] as const) : []),
     ...(devices === 'both' ? (['device'] as const) : []),
     'twofa',
     ...(offerPasskey ? (['passkey'] as const) : []),
@@ -280,7 +293,15 @@ export function AddAccountModal({
   // Before leaving the proxy step, record the seller JSONs' passwords: the proxy is
   // assigned now, so Telegram is reached through it, and the device step (which
   // signs in with that password) comes next.
-  const afterProxy = async () => {
+  //
+  // With a proxy the session audit comes first: the passwords are recorded when it lets
+  // the accounts through (`afterAudit`), never for one it held back.
+  const afterProxy = async (assigned: boolean) => {
+    setProxied(assigned);
+    if (assigned) {
+      setStep(3);
+      return;
+    }
     setRecording(true);
     try {
       await bulk.recordJsonPasswords();
@@ -288,6 +309,18 @@ export function AddAccountModal({
       setRecording(false);
     }
     setStep(3);
+  };
+
+  // The audit let `ids` through: record their seller-JSON passwords, then on to the next step.
+  const afterAudit = async (ids: string[]) => {
+    setProceeding(ids);
+    setRecording(true);
+    try {
+      await bulk.recordJsonPasswords(new Set(ids));
+    } finally {
+      setRecording(false);
+    }
+    setStep(step + 1);
   };
 
   // Every picked file becomes its own import request; the hook ignores results
@@ -337,7 +370,7 @@ export function AddAccountModal({
       refused = true;
     }
     if (refused) setProxyFailed(true);
-    else void afterProxy();
+    else void afterProxy(true);
   };
 
   // Input not yet handed to the server: a number typed but not started, a proxy typed
@@ -368,12 +401,14 @@ export function AddAccountModal({
                       ? t('accounts.addWizard.step3Label')
                       : stepKind === 'qr'
                         ? t('accounts.addWizard.stepQrLabel')
-                        : stepKind === 'device'
-                          ? t('accounts.addWizard.stepDeviceLabel', { n: step })
-                          : stepKind === 'passkey'
-                            ? t('accounts.addWizard.stepPasskeyLabel', { n: step })
-                            : // Which number the cloud password is depends on the method.
-                              t('accounts.addWizard.stepTwofaLabel', { n: step })}
+                        : stepKind === 'audit'
+                          ? t('accounts.addWizard.stepAuditLabel', { n: step })
+                          : stepKind === 'device'
+                            ? t('accounts.addWizard.stepDeviceLabel', { n: step })
+                            : stepKind === 'passkey'
+                              ? t('accounts.addWizard.stepPasskeyLabel', { n: step })
+                              : // Which number the cloud password is depends on the method.
+                                t('accounts.addWizard.stepTwofaLabel', { n: step })}
               </div>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.addWizard.close')} />
@@ -537,6 +572,24 @@ export function AddAccountModal({
                         {t('accounts.addWizard.registeredAtHint')}
                       </span>
                     </label>
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={autoClose}
+                        onChange={(event) => {
+                          setAutoClose(event.target.checked);
+                        }}
+                      />
+                      <span className="flex flex-col gap-1">
+                        <span className="type-small-medium text-content-primary">
+                          {t('accounts.addWizard.autoClose')}
+                        </span>
+                        <span className="type-small text-content-subtle">
+                          {t('accounts.addWizard.autoCloseHint')}
+                        </span>
+                      </span>
+                    </label>
                     <input
                       ref={fileInput}
                       type="file"
@@ -596,10 +649,10 @@ export function AddAccountModal({
               {t('accounts.addWizard.recordingJson')}
             </div>
           ) : stepKind === 'passkey' ? (
-            <PasskeyBulkStep accountIds={accountIds} sources={sources} onDone={onClose} />
+            <PasskeyBulkStep accountIds={activeIds} sources={sources} onDone={onClose} />
           ) : stepKind === 'twofa' ? (
             <TwoFactorBulkStep
-              accountIds={accountIds}
+              accountIds={activeIds}
               recorded={bulk.recordedIds}
               recordFailures={bulk.recordFailures}
               sources={sources}
@@ -607,9 +660,19 @@ export function AddAccountModal({
               onImported={onImported}
               onPhaseChange={setTwofaResult}
             />
+          ) : stepKind === 'audit' ? (
+            <SessionAuditStep
+              accountIds={accountIds}
+              sources={sources}
+              autoClose={autoClose}
+              onDone={(ids) => {
+                void afterAudit(ids);
+              }}
+              onImported={onImported}
+            />
           ) : stepKind === 'device' ? (
             <SecondDeviceStep
-              accountIds={accountIds}
+              accountIds={activeIds}
               sources={sources}
               device={otherDevice(signInDevice)}
               onImported={onImported}
@@ -687,7 +750,7 @@ export function AddAccountModal({
                 <Button
                   className="text-content-muted"
                   onClick={() => {
-                    void afterProxy();
+                    void afterProxy(false);
                   }}
                 >
                   {t('accounts.addWizard.skip')}
@@ -736,7 +799,7 @@ export function AddAccountModal({
                 setProxyStep('choice');
               }}
               onDone={() => {
-                void afterProxy();
+                void afterProxy(true);
               }}
               onImported={onImported}
             />

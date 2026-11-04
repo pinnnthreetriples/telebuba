@@ -13,6 +13,7 @@ import type { AccountRead } from '@/shared/api';
 import { verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
 import {
+  Badge,
   Card,
   DataTable,
   Icon,
@@ -160,7 +161,20 @@ export function AccountsTable({
       id: 'status',
       header: () => t('accounts.table.status'),
       meta: LEFT_META,
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => {
+        const foreign = row.original.foreign_sessions ?? 0;
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <StatusBadge status={row.original.status} />
+            {/* Somebody else holds a session of this account (the last session audit). */}
+            {foreign > 0 ? (
+              <Badge tone="warning" size="sm">
+                {t('accounts.table.foreignSessions', { count: foreign })}
+              </Badge>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       id: 'proxy',

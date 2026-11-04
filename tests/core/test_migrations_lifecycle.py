@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import _metadata
+from core.migration_steps_foreign_closed import _allow_lifecycle_foreign_closed
+from core.migration_steps_foreign_sessions import _allow_lifecycle_foreign_sessions
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_waves import _allow_lifecycle_warming_stopped
@@ -84,10 +86,13 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
 def test_created_and_migrated_schemas_match(
     created_engine: Engine, migrated_engine: Engine
 ) -> None:
-    # 95 and 96 widened the kind CHECK by rebuilding the table; 74 + 95 + 96 is today's.
+    # 95, 96, 105 and 106 widened the kind CHECK by rebuilding the table; 74 plus all four
+    # is today's.
     with migrated_engine.begin() as connection:
         _allow_lifecycle_warming_stopped(connection)
         _allow_lifecycle_spam_block_lifted(connection)
+        _allow_lifecycle_foreign_sessions(connection)
+        _allow_lifecycle_foreign_closed(connection)
     assert _shape(created_engine, _TABLE) == _shape(migrated_engine, _TABLE)
     assert any("'session_dead'" in check for check in _checks(created_engine, _TABLE))
 

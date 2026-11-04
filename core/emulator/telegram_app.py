@@ -38,8 +38,11 @@ if TYPE_CHECKING:
     from core.emulator.ui_dump import Screen, UiNode
     from schemas.emulator import EmulatorRefusalCode
 
+_EMULATOR_COMMAND_FAILED: EmulatorRefusalCode = "emulator_command_failed"
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PHONE_INVALID: EmulatorRefusalCode = "emulator_phone_invalid"
+# Typings of the cloud password, the second after clearing a box that showed a wrong count.
+_PASSWORD_TRIES = 2
 _WEB_PACKAGE = "org.telegram.messenger.web"
 _PACKAGE_INSTALLER = "com.android.packageinstaller"
 _PLAY_STORE_INSTALLER = "com.android.vending"
@@ -225,8 +228,39 @@ async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:
 
 
 async def enter_password(serial: str, nodes: list[UiNode], password: str) -> None:
-    """Type the cloud password into the field the dump marks ``password``, then submit."""
+    """Type the cloud password into the field the dump marks ``password``, then submit.
+
+    Android dumps a password box as one mask character per typed one, so a dump taken
+    after typing shows whether every character landed. A box that shows another count is
+    emptied and typed once more; one still wrong is ``emulator_command_failed``, and
+    nothing is submitted. A dump that does not show the box (or shows its hint) is no
+    evidence: the password is submitted as typed. The password is never logged.
+    """
     escape_input_text(password)  # refuse an untypeable password before touching the screen
-    await adb.human_tap(serial, _require(password_field(nodes)))
-    await adb.human_type(serial, password, typo_probability=0.0)
-    await adb.press(serial, adb.KEYCODE_ENTER)
+    field = _require(password_field(nodes))
+    shown: int | None = len(field.text) if _masked(field.text) else 0
+    for _ in range(_PASSWORD_TRIES):
+        await adb.human_tap(serial, field)
+        if shown:
+            await adb.press(serial, adb.KEYCODE_MOVE_END, *([adb.KEYCODE_DEL] * shown))
+        await adb.human_type(serial, password, typo_probability=0.0)
+        shown = await _password_length(serial)
+        if shown in (None, len(password)):
+            await adb.press(serial, adb.KEYCODE_ENTER)
+            return
+    raise EmulatorError(_EMULATOR_COMMAND_FAILED)
+
+
+def _masked(text: str) -> bool:
+    """Whether ``text`` is what a password box dumps: mask characters only (or nothing)."""
+    return not any(char.isalnum() for char in text)
+
+
+async def _password_length(serial: str) -> int | None:
+    """How many characters the password box shows now; ``None`` when the dump cannot say."""
+    xml = await adb.dump_ui(serial)
+    field = password_field(parse_dump(xml)) if xml is not None else None
+    # An empty box may be how this Android dumps a password at all: no evidence either.
+    if field is None or not field.text or not _masked(field.text):
+        return None
+    return len(field.text)

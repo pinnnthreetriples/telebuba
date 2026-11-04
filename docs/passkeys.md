@@ -15,6 +15,41 @@ Telegram accepts a WebAuthn credential from Telebuba's own api_id: RP ID `telegr
 - An already-authorized session is left alone; a sign-in that lands on another user is logged
   out.
 
+## Checking that Telegram still has it
+
+Telegram can drop an account's passkey without telling Telebuba; the first sign is a
+`PASSKEY_CREDENTIAL_NOT_FOUND` at sign-in, by which time the session is usually dead. The
+«Проверить в Telegram» button on the «Ключ доступа» card (`POST /accounts/{id}/passkey/check`)
+asks while the session is alive: one `account.getPasskeys` on the pooled client, looking for the
+stored credential id. It is read-only and needs no vault.
+
+- `present` / `missing`: only a successful Telegram list decides. A `missing` key is dead: delete
+  it and create a new one.
+- `unknown`: Telegram was not reached (`unavailable`) or refused the request (a dead session
+  lands here as `passkey_telegram_refused`). It never reads as `missing`.
+- A flood wait is refused with its retry-after, like the other passkey actions; an account
+  without a stored passkey is refused `passkey_missing`.
+- Nothing is changed: no status, stored row or vault key is touched, and it never runs by itself.
+
+## Signing in to the account's web window
+
+The account's web.telegram.org window (the globe button) answers WebK's «Log in by passkey»
+from the same vault key, so a dead session can be revived there as well. The browser has no
+such credential, so a document-start hook (`core/web_login/_passkey.py`) takes over
+`navigator.credentials.get` for RP ID `telegram.org` only; every other WebAuthn call is left
+to the browser. The window polls the hook over its CDP socket, signs the challenge in the
+vault (`services/accounts/_web_passkey.py`) and resolves the promise with a synthetic
+`PublicKeyCredential`. A vault failure rejects as `NotAllowedError`, like a cancelled prompt.
+
+- Offered only when the vault is configured and the account has a passkey; it signs for that
+  window's own account and nothing else.
+- It is a page hook, not a Chrome extension: Chrome 137+ removed `--load-extension`, and the
+  window is already driven over CDP. Polled, not pushed, because `Runtime.enable` would be a
+  DevTools tell.
+- The cloud password is still asked for by WebK when the account has one; the passkey must
+  exist on Telegram's side too (`PASSKEY_CREDENTIAL_NOT_FOUND` means it was removed there).
+- The window must be opened after the passkey exists: the hook is installed at launch.
+
 ## Where the operator creates one
 
 - One account: the «Ключ доступа» card in the account editor.

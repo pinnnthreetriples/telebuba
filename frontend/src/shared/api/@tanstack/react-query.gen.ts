@@ -25,6 +25,7 @@ import {
   assignProxy,
   assignProxyByEndpoint,
   assignStandaloneProxy,
+  auditAccountSessions,
   beginQrLogin,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
@@ -33,11 +34,14 @@ import {
   cancelScheduledPost,
   checkAccount,
   checkAccountChannelUsername,
+  checkAccountPasskey,
   checkCampaignChannelBans,
   checkProxy,
   clearAccountTwofaEmail,
   clearLogs,
   clearNeurocommentListener,
+  closeAccountForeignSessions,
+  closeAccountSessions,
   closeAccountWebWindows,
   confirmAccountTwofaEmail,
   copyMasstaggingBase,
@@ -84,6 +88,8 @@ import {
   getAccountPasskey,
   getAccountPrivacy,
   getAccountProfileSnapshot,
+  getAccountRekey,
+  getAccountSessionAudit,
   getAccountTwofa,
   getActiveBulkMessageJob,
   getActiveContactLookupJob,
@@ -174,6 +180,7 @@ import {
   receiveInboundSmsWebhook,
   recordAccountTwofa,
   recordAccountTwofaFromJson,
+  rekeyAccountSession,
   removeAccountMusic,
   removeAccountPasskey,
   removeAccountPhoto,
@@ -308,6 +315,9 @@ import type {
   AssignStandaloneProxyData,
   AssignStandaloneProxyError,
   AssignStandaloneProxyResponse,
+  AuditAccountSessionsData,
+  AuditAccountSessionsError,
+  AuditAccountSessionsResponse,
   BeginQrLoginData,
   BeginQrLoginError,
   BeginQrLoginResponse,
@@ -331,6 +341,9 @@ import type {
   CheckAccountChannelUsernameResponse,
   CheckAccountData,
   CheckAccountError,
+  CheckAccountPasskeyData,
+  CheckAccountPasskeyError,
+  CheckAccountPasskeyResponse,
   CheckAccountResponse,
   CheckCampaignChannelBansData,
   CheckCampaignChannelBansError,
@@ -347,6 +360,12 @@ import type {
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
+  CloseAccountForeignSessionsData,
+  CloseAccountForeignSessionsError,
+  CloseAccountForeignSessionsResponse,
+  CloseAccountSessionsData,
+  CloseAccountSessionsError,
+  CloseAccountSessionsResponse,
   CloseAccountWebWindowsData,
   CloseAccountWebWindowsError,
   CloseAccountWebWindowsResponse,
@@ -483,6 +502,12 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
+  GetAccountRekeyData,
+  GetAccountRekeyError,
+  GetAccountRekeyResponse,
+  GetAccountSessionAuditData,
+  GetAccountSessionAuditError,
+  GetAccountSessionAuditResponse,
   GetAccountTwofaData,
   GetAccountTwofaError,
   GetAccountTwofaResponse,
@@ -750,6 +775,9 @@ import type {
   RecordAccountTwofaFromJsonError,
   RecordAccountTwofaFromJsonResponse,
   RecordAccountTwofaResponse,
+  RekeyAccountSessionData,
+  RekeyAccountSessionError,
+  RekeyAccountSessionResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -3026,6 +3054,35 @@ export const createAccountPasskeyMutation = (
 };
 
 /**
+ * Check Account Passkey
+ *
+ * Ask Telegram whether it still lists the account's passkey (read-only).
+ */
+export const checkAccountPasskeyMutation = (
+  options?: Partial<Options<CheckAccountPasskeyData>>,
+): UseMutationOptions<
+  CheckAccountPasskeyResponse,
+  CheckAccountPasskeyError,
+  Options<CheckAccountPasskeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CheckAccountPasskeyResponse,
+    CheckAccountPasskeyError,
+    Options<CheckAccountPasskeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkAccountPasskey({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Login Account With Passkey
  *
  * Sign the account's session back in with its passkey (no SMS code).
@@ -3175,6 +3232,179 @@ export const submitQrLoginPasswordMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await submitQrLoginPassword({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountSessionAuditQueryKey = (options: Options<GetAccountSessionAuditData>) =>
+  createQueryKey('getAccountSessionAudit', options);
+
+/**
+ * Get Account Session Audit
+ *
+ * The account's sessions as the last audit saw them; empty before the first audit.
+ */
+export const getAccountSessionAuditOptions = (options: Options<GetAccountSessionAuditData>) =>
+  queryOptions<
+    GetAccountSessionAuditResponse,
+    GetAccountSessionAuditError,
+    GetAccountSessionAuditResponse,
+    ReturnType<typeof getAccountSessionAuditQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountSessionAudit({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountSessionAuditQueryKey(options),
+  });
+
+/**
+ * Audit Account Sessions
+ *
+ * Read the account's sessions from Telegram now, with ours told from the rest.
+ */
+export const auditAccountSessionsMutation = (
+  options?: Partial<Options<AuditAccountSessionsData>>,
+): UseMutationOptions<
+  AuditAccountSessionsResponse,
+  AuditAccountSessionsError,
+  Options<AuditAccountSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AuditAccountSessionsResponse,
+    AuditAccountSessionsError,
+    Options<AuditAccountSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await auditAccountSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Close Account Sessions
+ *
+ * End the named sessions that are still foreign; one outcome per session.
+ */
+export const closeAccountSessionsMutation = (
+  options?: Partial<Options<CloseAccountSessionsData>>,
+): UseMutationOptions<
+  CloseAccountSessionsResponse,
+  CloseAccountSessionsError,
+  Options<CloseAccountSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountSessionsResponse,
+    CloseAccountSessionsError,
+    Options<CloseAccountSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Close Account Foreign Sessions
+ *
+ * Read the account's sessions and end every one that is foreign right now.
+ */
+export const closeAccountForeignSessionsMutation = (
+  options?: Partial<Options<CloseAccountForeignSessionsData>>,
+): UseMutationOptions<
+  CloseAccountForeignSessionsResponse,
+  CloseAccountForeignSessionsError,
+  Options<CloseAccountForeignSessionsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountForeignSessionsResponse,
+    CloseAccountForeignSessionsError,
+    Options<CloseAccountForeignSessionsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountForeignSessions({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountRekeyQueryKey = (options: Options<GetAccountRekeyData>) =>
+  createQueryKey('getAccountRekey', options);
+
+/**
+ * Get Account Rekey
+ *
+ * When the account's session was last re-keyed and whether its old key is ended yet.
+ */
+export const getAccountRekeyOptions = (options: Options<GetAccountRekeyData>) =>
+  queryOptions<
+    GetAccountRekeyResponse,
+    GetAccountRekeyError,
+    GetAccountRekeyResponse,
+    ReturnType<typeof getAccountRekeyQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountRekey({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountRekeyQueryKey(options),
+  });
+
+/**
+ * Rekey Account Session
+ *
+ * Sign the account in again as a session of its own, then end the imported one's key.
+ *
+ * Never automatic. The old key is ended at once when Telegram allows it, else at the time
+ * the answer names (``close_after``).
+ */
+export const rekeyAccountSessionMutation = (
+  options?: Partial<Options<RekeyAccountSessionData>>,
+): UseMutationOptions<
+  RekeyAccountSessionResponse,
+  RekeyAccountSessionError,
+  Options<RekeyAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RekeyAccountSessionResponse,
+    RekeyAccountSessionError,
+    Options<RekeyAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await rekeyAccountSession({
         ...options,
         ...fnOptions,
         throwOnError: true,

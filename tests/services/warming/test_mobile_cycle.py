@@ -133,6 +133,7 @@ async def test_a_passing_cause_fails_the_cycle_and_the_loop_retries(
         "emulator_proxy_missing",
         "emulator_proxy_unsupported",
         "emulator_twofa_missing",
+        "emulator_password_rejected",
         "emulator_sdk_mismatch",
     ],
 )

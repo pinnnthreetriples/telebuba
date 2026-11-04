@@ -34,11 +34,13 @@ from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
 from core.web_login._lifetime import browser_env, tie_to_backend
+from core.web_login._passkey import PASSKEY_HOOK, PasskeyBridge
 from core.web_login._scripts import QR_CAPTURE_HOOK
 from core.web_login._targets import TargetDriver
 from core.web_login.fingerprint import note_browser_version
 
 if TYPE_CHECKING:
+    from core.web_login._passkey import PasskeySigner
     from core.web_login.fingerprint import Fingerprint
 
 _WEBK_URL = "https://web.telegram.org/k/"
@@ -99,6 +101,7 @@ class WebWindow:
     driver: TargetDriver
     page: str
     process: asyncio.subprocess.Process
+    passkey: PasskeyBridge | None = None
 
     @property
     def alive(self) -> bool:
@@ -111,6 +114,8 @@ class WebWindow:
         return self.process.returncode is None
 
     async def aclose(self) -> None:
+        if self.passkey is not None:
+            await self.passkey.aclose()
         await self.driver.aclose()
         await self.session.aclose()
 
@@ -334,6 +339,7 @@ async def launch_account_web(
     profile_dir: Path,
     fingerprint: Fingerprint,
     capture_tokens: bool,
+    passkey_signer: PasskeySigner | None = None,
 ) -> WebWindow:
     """Launch WebK through the relay, dressed in ``fingerprint``, and return the window.
 
@@ -341,6 +347,7 @@ async def launch_account_web(
     the :class:`TargetDriver` dress the first page (and every later page/worker) while
     each is still paused, then navigates to ``/k/``. ``capture_tokens`` adds the QR
     login hook — first open only, since a repeat accept would spawn a second device.
+    ``passkey_signer`` makes WebK's «Log in by passkey» answer from the vault.
 
     The caller owns the window and MUST keep it: closing the session undresses the
     browser. Every failure after the spawn kills the browser instead of orphaning it:
@@ -390,7 +397,9 @@ async def launch_account_web(
         # Chrome owns the port from here (or the browser is gone), so the reservation
         # that kept a concurrent launch off it has done its job.
         _ports_in_flight.discard(debug_port)
-    return await _attach(proc, ws_url, fingerprint, capture_tokens=capture_tokens)
+    return await _attach(
+        proc, ws_url, fingerprint, capture_tokens=capture_tokens, passkey_signer=passkey_signer
+    )
 
 
 async def _attach(
@@ -399,17 +408,17 @@ async def _attach(
     fingerprint: Fingerprint,
     *,
     capture_tokens: bool,
+    passkey_signer: PasskeySigner | None,
 ) -> WebWindow:
     """Dress the spawned browser over CDP and navigate it; kill it if any step fails."""
     session: CdpSession | None = None
     driver: TargetDriver | None = None
+    scripts = [QR_CAPTURE_HOOK] if capture_tokens else []
+    if passkey_signer is not None:
+        scripts.append(PASSKEY_HOOK)
     try:
         session = await CdpSession.connect(ws_url)
-        driver = TargetDriver(
-            session,
-            fingerprint,
-            page_scripts=(QR_CAPTURE_HOOK,) if capture_tokens else (),
-        )
+        driver = TargetDriver(session, fingerprint, page_scripts=tuple(scripts))
         page = await driver.first_page_session()
         driver.start()
         await session.send_command("Page.navigate", {"url": _WEBK_URL}, session_id=page)
@@ -420,7 +429,10 @@ async def _attach(
                     await closer.aclose()
         await _end_process(proc)
         raise
-    return WebWindow(session=session, driver=driver, page=page, process=proc)
+    bridge = PasskeyBridge(session, page, passkey_signer) if passkey_signer else None
+    if bridge is not None:
+        bridge.start()
+    return WebWindow(session=session, driver=driver, page=page, process=proc, passkey=bridge)
 
 
 async def focus_window(window: WebWindow) -> None:

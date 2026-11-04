@@ -49,7 +49,7 @@ from core.emulator import (
 )
 from core.logging import log_event
 from schemas.emulator import OpenMobileResult
-from services.accounts._app_screen import restarted_once, settled_screen
+from services.accounts._app_screen import restarted_if_frozen, settled_screen
 from services.accounts._emulator_sign_in import sign_in
 from services.accounts._mobile_holds import container_name
 from services.accounts._mobile_progress import report_stage
@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 type OpenMode = Literal["operator", "warming", "boot"]
 
 # A running app on one of these still needs signing in; anything else is left as is.
-_ENTRY_SCREENS: set[Screen] = {"intro", "phone"}
+_ENTRY_SCREENS: set[Screen] = {"intro", "phone", "confirm", "code"}
 
 
 async def show(name: str, index: int) -> None:
@@ -190,10 +190,11 @@ async def running_app_signed_in(
 async def _signed_in_as_it_stands(account: AccountRead, serial: str) -> bool:
     """The app's screen read past its prompts; signed in from an entry screen only.
 
-    A frozen app is restarted once for the read, and once more by a sign-in that
-    then freezes it again: never more than that.
+    A frozen app is restarted (twice at most) for the read, and again, as often, by a
+    sign-in that then freezes it: never more than that. A sign-in left on its number
+    confirmation or code screen is started over from the phone screen.
     """
-    screen = await restarted_once(account.account_id, serial, partial(settled_screen, serial))
+    screen = await restarted_if_frozen(account.account_id, serial, partial(settled_screen, serial))
     if screen in _ENTRY_SCREENS:
         await sign_in(account, serial)
         return True

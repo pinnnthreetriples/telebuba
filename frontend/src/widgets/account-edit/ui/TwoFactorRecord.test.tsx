@@ -1,6 +1,7 @@
 // The "account already has a password — save it" field of the 2FA card: it posts to
 // /2fa/record (Telegram verifies, nothing changes), refuses a wrong password inline
-// and keeps the typed value. Harness: TwoFactorSection.test-helpers.tsx.
+// and keeps the typed value; with a stored copy it replaces it, behind a link.
+// Harness: TwoFactorSection.test-helpers.tsx.
 
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -102,4 +103,37 @@ test('an empty field cannot be submitted', async () => {
 
   await screen.findByLabelText(LABEL);
   expect(screen.getByRole('button', { name: SUBMIT })).toBeDisabled();
+});
+
+test('a stored copy can be replaced after the password changed on Telegram', async () => {
+  stubTwofa(
+    { has_password: true },
+    {
+      stored: true,
+      routes: {
+        [`POST ${RECORD}`]: () => jsonResponse({ status: null, has_stored_password: true }),
+      },
+    },
+  );
+  renderSection();
+  await openCard();
+
+  const NEW_LABEL = 'Новый облачный пароль из Telegram';
+  expect(screen.queryByLabelText(NEW_LABEL)).not.toBeInTheDocument();
+  await userEvent.click(
+    await screen.findByRole('button', { name: 'Пароль сменили в Telegram? Обновить сохранённый' }),
+  );
+  await userEvent.type(screen.getByLabelText(NEW_LABEL), 'fake-new-pass-123');
+  await userEvent.click(screen.getByRole('button', { name: SUBMIT }));
+
+  await waitFor(() => {
+    expect(requests(RECORD, 'POST')).toHaveLength(1);
+  });
+  expect(await requests(RECORD, 'POST')[0]?.clone().json()).toEqual({
+    password: 'fake-new-pass-123',
+  });
+  // Saved: the field folds back behind its link.
+  await waitFor(() => {
+    expect(screen.queryByLabelText(NEW_LABEL)).not.toBeInTheDocument();
+  });
 });

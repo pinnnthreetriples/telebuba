@@ -73,6 +73,8 @@ from core.migration_steps_discovery import (
 )
 from core.migration_steps_dm_pause import _add_warming_settings_dm_paused_until
 from core.migration_steps_flood_memory import _add_warming_flood_memory
+from core.migration_steps_foreign_closed import _allow_lifecycle_foreign_closed
+from core.migration_steps_foreign_sessions import _allow_lifecycle_foreign_sessions
 from core.migration_steps_humanlike import (
     _add_account_registered_at,
     _add_warming_account_character,
@@ -114,7 +116,9 @@ from core.migration_steps_pool import (
 from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_recipients import _add_recipient_history
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
+from core.migration_steps_rekeys import _add_account_rekeys
 from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
+from core.migration_steps_session_audits import _add_account_session_audits
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
 from core.migration_steps_standalone_emulators import (
@@ -277,6 +281,10 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (101, "add_standalone_emulators", _add_standalone_emulators),
     (102, "add_standalone_install_apps", _add_standalone_install_apps),
     (103, "add_chat_broadcast_account_rest", _add_chat_broadcast_account_rest),
+    (104, "add_account_session_audits", _add_account_session_audits),
+    (105, "allow_lifecycle_foreign_sessions", _allow_lifecycle_foreign_sessions),
+    (106, "allow_lifecycle_foreign_closed", _allow_lifecycle_foreign_closed),
+    (107, "add_account_rekeys", _add_account_rekeys),
 )
 
 

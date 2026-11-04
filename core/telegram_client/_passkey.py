@@ -1,11 +1,11 @@
-"""Telegram passkey registration and removal on an account's live session.
+"""Telegram passkey registration, removal and presence check on an account's live session.
 
 Telegram's passkey API (``core.telegram.org/api/passkeys``) is WebAuthn: the server
 hands out a challenge, the client answers with an authenticator's response. Here the
 "authenticator" is a non-exportable key in the vault (``core.passkey_vault``) and the
 WebAuthn bytes come from ``core.webauthn_passkey``.
 
-Both calls borrow the pooled client, like ``_second_device`` reads the primary
+Every call borrows the pooled client, like ``_second_device`` reads the primary
 session, rather than joining ``TelegramAction``: registration needs the vault's
 public key in the middle of the exchange and returns Telegram's user handle, which
 the action union has no shape for. Every failure becomes :class:`PasskeyGatewayError`
@@ -142,6 +142,20 @@ async def register_passkey(account_id: str, *, public_key_pem: str, credential_i
         return handle
 
     return await _borrowed(account_id, _register)
+
+
+async def is_passkey_listed(account_id: str, credential_id: str) -> bool:
+    """Whether Telegram's passkey list for the account holds ``credential_id``.
+
+    Read-only: one ``account.getPasskeys`` on the pooled client. ``True``/``False`` are
+    answers of a successful list only; any failure raises :class:`PasskeyGatewayError`.
+    """
+
+    async def _listed(client: TelegramClient) -> bool:
+        listed = await client(GetPasskeysRequest())
+        return any(p.id == credential_id for p in listed.passkeys)
+
+    return await _borrowed(account_id, _listed)
 
 
 async def delete_passkey(account_id: str, credential_id: str) -> bool:

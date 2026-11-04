@@ -31,6 +31,10 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     "warming_quarantine_unreadable": "error",
     "warming_loop_crashed": "error",
     "warming_target_reached": "warmed",
+    # A session audit (the background watch or the operator's) found a session that is not ours.
+    "session_audit_foreign_found": "foreign_session",
+    # The watch found that Telegram no longer lists the account's stored passkey.
+    "session_watch_passkey_missing": "passkey_missing",
 }
 
 _PREFIX = "Telebuba · "
@@ -44,6 +48,14 @@ _TEMPLATES: dict[NotificationKind, str] = {
     ),
     "error": "{label}: прогрев остановлен с ошибкой — нужна проверка.",
     "warmed": "{label}: прогрев завершён, аккаунт готов к передаче.",
+    "foreign_session": (
+        "{label}: на аккаунте появилась чужая сессия. "
+        "Откройте карточку аккаунта, раздел «Сессии»: кто-то ещё держит этот аккаунт."
+    ),
+    "passkey_missing": (
+        "{label}: ключ доступа аккаунта пропал из Telegram — "
+        "в настройках безопасности аккаунта был кто-то ещё."
+    ),
 }
 TEST_MESSAGE = f"{_PREFIX}тестовое уведомление: бот настроен и пишет в этот чат."
 UNNAMED_ACCOUNT = "аккаунт без имени"

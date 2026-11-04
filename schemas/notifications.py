@@ -19,7 +19,14 @@ BOT_CREDENTIAL_SHAPE = r"^\d{1,20}:[A-Za-z0-9_-]{20,100}$"
 CHAT_ID_PATTERN = r"^(-?\d{1,20}|@[A-Za-z][A-Za-z0-9_]{3,31})$"
 
 NotificationKind = Literal[
-    "quarantine", "fleet_dm_paused", "spam_limited", "spam_blocked", "error", "warmed"
+    "quarantine",
+    "fleet_dm_paused",
+    "spam_limited",
+    "spam_blocked",
+    "error",
+    "warmed",
+    "foreign_session",
+    "passkey_missing",
 ]
 BotSendStatus = Literal["sent", "rejected", "unreachable"]
 
