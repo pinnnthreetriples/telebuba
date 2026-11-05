@@ -173,6 +173,17 @@ async def _confirm_same_user(client: TelegramClient, user_id: int) -> None:
         raise _SignInRefusedError(_USER_MISMATCH)
 
 
+async def _authorized_after_timeout(client: TelegramClient) -> bool:
+    """Whether the server holds a sign-in on ``client``; bounded, ``False`` when unknown."""
+    try:
+        async with asyncio.timeout(settings.telegram.signin_probe_timeout_seconds):
+            await client.connect()
+            return bool(await client.is_user_authorized())
+    except Exception as exc:  # noqa: BLE001 - an unanswerable probe leaves the old behaviour.
+        logger.warning("second-device authorization probe failed (%s)", type(exc).__name__)
+        return False
+
+
 async def _discard(client: TelegramClient, session_path: str, *, signed_in: bool) -> None:
     """Undo a failed attempt: revoke a sign-in that happened, disconnect, remove the file.
 
@@ -182,7 +193,8 @@ async def _discard(client: TelegramClient, session_path: str, *, signed_in: bool
     steps = (("logout", client.log_out),) if signed_in else ()
     for step, call in (*steps, ("disconnect", client.disconnect)):
         try:
-            await call()
+            async with asyncio.timeout(settings.telegram.signin_probe_timeout_seconds):
+                await call()
         except Exception as exc:  # noqa: BLE001 - best effort; the file still goes below.
             logger.warning("second-device %s failed (%s)", step, type(exc).__name__)
     try:
@@ -297,6 +309,10 @@ async def _attempt(  # noqa: PLR0913 - one sign-in's whole context
             await asyncio.shield(_discard(client, session_path, signed_in=signed_in))
         raise
     except Exception as exc:  # noqa: BLE001 - every failure is classified and undone.
+        if isinstance(exc, TimeoutError) and not signed_in:
+            # The deadline may have fired AFTER Telegram accepted the sign-in: that
+            # authorization must be revoked, not leaked with the discarded file.
+            signed_in = await _authorized_after_timeout(client)
         await _discard(client, session_path, signed_in=signed_in)
         return _classify(request, exc)
     await _close(client, request.account_id)

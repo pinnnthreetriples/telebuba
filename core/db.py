@@ -218,6 +218,7 @@ from core.repositories._accounts_twofa import (  # noqa: E402, F401
     fetch_account_twofa_pair,
     fetch_account_twofa_password,
     promote_account_twofa_pending,
+    set_account_twofa_current_only,
     set_account_twofa_password,
     set_account_twofa_pending,
     twofa_password_candidates,

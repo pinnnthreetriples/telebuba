@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 from anyio import Path
 from telethon import TelegramClient, errors
 
+from core.config import settings
 from core.telegram_client._auth_bounds import (
     UNREACHABLE_ERRORS,
     auth_deadline,
@@ -152,8 +153,10 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
         try:
             async with asyncio.timeout(auth_deadline()):
                 await client.connect()
-                await _sign_in(client, request)
-                return _alive_result(profile, await client.get_me())
+                typed_accepted = await _sign_in(client, request)
+                return _alive_result(
+                    profile, await client.get_me(), typed_password_accepted=typed_accepted
+                )
         except (errors.SessionPasswordNeededError, *_SIGN_IN_ERRORS) as exc:
             return _error_result(profile, exc, status="unauthorized")
         except errors.FloodWaitError as exc:
@@ -166,7 +169,12 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             )
         except UNREACHABLE_ERRORS as exc:
             # Deadline expiry (``TimeoutError``), a dead proxy or a dropped socket:
-            # nothing was learned about the account, so it is a temporary fault.
+            # nothing was learned about the account, so it is a temporary fault, unless
+            # the deadline fired AFTER Telegram accepted the sign-in.
+            if isinstance(exc, TimeoutError) and (
+                alive := await _probe_authorized(client, profile)
+            ):
+                return alive
             return _error_result(profile, exc, status="network_error", is_temporary=True)
         except Exception as exc:  # noqa: BLE001 - classify any other SDK/network failure for the UI.
             # PhoneNumberBanned / AuthRestart / connect() ConnectionError etc. would
@@ -176,7 +184,27 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             await safe_disconnect(client)
 
 
-async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> None:
+async def _probe_authorized(
+    client: TelegramClient, profile: TelegramClientProfile
+) -> TelegramSessionCheckResult | None:
+    """Alive verdict when a sign-in the deadline cut short had in fact been accepted.
+
+    The deadline can fire after ``sign_in`` landed and before ``get_me`` answered: the
+    ``.session`` is then authorized while the verdict would say ``network_error``. A short,
+    separately bounded probe tells the two apart; any failure of the probe is ``None``.
+    """
+    try:
+        async with asyncio.timeout(settings.telegram.signin_probe_timeout_seconds):
+            await client.connect()
+            if not await client.is_user_authorized():
+                return None
+            return _alive_result(profile, await client.get_me())
+    except Exception:  # noqa: BLE001 - a probe that fails proves nothing; keep the original verdict.
+        return None
+
+
+async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> bool:
+    """Sign in; ``True`` when Telegram accepted the password the operator TYPED."""
     try:
         await client.sign_in(
             phone=request.phone,
@@ -187,7 +215,9 @@ async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> None:
         passwords = [*([request.password] if request.password else []), *request.fallback_passwords]
         if not passwords:
             raise
-        await sign_in_with_passwords(client, request.account_id, passwords)
+        accepted = await sign_in_with_passwords(client, request.account_id, passwords)
+        return request.password is not None and accepted == request.password
+    return False
 
 
 async def log_out_session(
@@ -336,7 +366,9 @@ def _error_result(
     )
 
 
-def _alive_result(profile: TelegramClientProfile, me: object) -> TelegramSessionCheckResult:
+def _alive_result(
+    profile: TelegramClientProfile, me: object, *, typed_password_accepted: bool = False
+) -> TelegramSessionCheckResult:
     user_id = getattr(me, "id", None)
     return TelegramSessionCheckResult(
         account_id=profile.account_id,
@@ -349,4 +381,5 @@ def _alive_result(profile: TelegramClientProfile, me: object) -> TelegramSession
         first_name=optional_str(getattr(me, "first_name", None)),
         last_name=optional_str(getattr(me, "last_name", None)),
         premium=optional_bool(getattr(me, "premium", None)),
+        typed_password_accepted=typed_password_accepted,
     )

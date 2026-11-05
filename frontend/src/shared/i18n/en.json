@@ -1489,6 +1489,7 @@
       "twofa_not_changed": "The password was not changed: Telegram ran no request.",
       "twofa_password_not_stored": "The current password is not stored in the dashboard, so it cannot be changed or removed from here.",
       "twofa_pending_store_failed": "The new password could not be saved first, so nothing was sent to Telegram. Try again.",
+      "twofa_pending_unsettled": "An earlier password change is still unconfirmed: Telegram has not said which password is in force. Nothing was sent. Try again in a few minutes, or forget the stored password.",
       "twofa_store_failed": "Telegram accepted the password, but the dashboard could not save it. Do not rely on it: save it elsewhere and try again.",
       "twofa_hint_contains_password": "The hint Telegram shows contains the new password. Change the hint and try again.",
       "twofa_email_code_invalid": "That code from the letter is wrong. Check it and enter it again.",

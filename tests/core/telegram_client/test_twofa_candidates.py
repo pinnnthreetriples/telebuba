@@ -40,8 +40,9 @@ async def test_a_pending_candidate_that_is_in_force_is_promoted() -> None:
     await _staged()
     client = _Client("new")
 
-    await sign_in_with_passwords(client, "a", ["old", "new"])  # ty: ignore[invalid-argument-type]
+    accepted = await sign_in_with_passwords(client, "a", ["old", "new"])  # ty: ignore[invalid-argument-type]
 
+    assert accepted == "new"
     assert client.tried == ["old", "new"]
     assert await fetch_account_twofa_pair("a") == ("new", None)
 

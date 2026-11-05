@@ -10,6 +10,7 @@ import pytest
 from core.config import settings
 from core.db import (
     configure_database,
+    fetch_account_twofa_pair,
     fetch_account_twofa_password,
     set_account_twofa_password,
     set_account_twofa_pending,
@@ -85,6 +86,7 @@ def _fake_submit(  # noqa: PLR0913 - one knob per gateway field
     error_type: str | None = None,
     flood_wait_seconds: int | None = None,
     captured: list[PhoneCodeSubmit] | None = None,
+    typed_password_accepted: bool = False,
 ) -> None:
     async def _submit(request: PhoneCodeSubmit) -> TelegramSessionCheckResult:
         if captured is not None:
@@ -98,6 +100,7 @@ def _fake_submit(  # noqa: PLR0913 - one knob per gateway field
             error_message=error,
             error_type=error_type,
             flood_wait_seconds=flood_wait_seconds,
+            typed_password_accepted=typed_password_accepted,
         )
 
     monkeypatch.setattr(login_service, "submit_phone_code", _submit)
@@ -340,12 +343,61 @@ async def test_a_verified_password_is_stored_for_the_second_device(
 ) -> None:
     await _account_with_phone("acc")
     _fake_request(monkeypatch, hash_value="HASH", error=None)
-    _fake_submit(monkeypatch, status="alive")
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
     await login_service.request_login_code("acc")
 
     await login_service.submit_login_code("acc", "11111", password="cloud-pw ")
 
     assert await fetch_account_twofa_password("acc") == "cloud-pw "
+
+
+@pytest.mark.asyncio
+async def test_a_typed_string_telegram_never_asked_for_overwrites_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The password field is always visible: a wrong string on a code-only login is noise."""
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "right-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=False)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="wrong-string")
+
+    assert await fetch_account_twofa_pair("acc") == ("right-pw", "maybe-pw")
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_typed_password_keeps_the_pending_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="typed-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("typed-pw", "maybe-pw")
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_typed_password_equal_to_the_pending_one_is_promoted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="maybe-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("maybe-pw", None)
 
 
 @pytest.mark.asyncio

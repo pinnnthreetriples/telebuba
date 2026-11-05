@@ -74,6 +74,11 @@ TwoFactorRefusalCode = Literal[
     # The candidate password could not be staged durably BEFORE the RPC, so nothing was
     # sent: sending it would have put a password on Telegram that exists nowhere here.
     "twofa_pending_store_failed",
+    # An earlier write left a pending candidate that Telegram has neither confirmed nor
+    # refused (the live read or the password check did not answer, or both candidates
+    # were refused): staging a new one over it could leave Telegram holding a password
+    # that is in neither column, so nothing was sent. Retry later, or forget the stored one.
+    "twofa_pending_unsettled",
     # Telegram accepted a password the operator asked to record, but the row write
     # failed: the response must not say "saved".
     "twofa_store_failed",

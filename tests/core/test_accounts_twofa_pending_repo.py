@@ -10,6 +10,7 @@ from core.db import (
     fetch_account_twofa_pair,
     fetch_account_twofa_password,
     promote_account_twofa_pending,
+    set_account_twofa_current_only,
     set_account_twofa_password,
     set_account_twofa_pending,
     twofa_password_candidates,
@@ -56,10 +57,34 @@ async def test_promotion_moves_pending_to_current_atomically() -> None:
     await set_account_twofa_password("a", "old")
     await set_account_twofa_pending("a", "new")
 
-    assert await promote_account_twofa_pending("a") is True
+    assert await promote_account_twofa_pending("a", "new") is True
 
     assert await fetch_account_twofa_pair("a") == ("new", None)
-    assert await promote_account_twofa_pending("a") is False
+    assert await promote_account_twofa_pending("a", "new") is False
+
+
+@pytest.mark.asyncio
+async def test_promotion_is_a_compare_and_swap_on_the_pending_value() -> None:
+    """A pending value that is not the one being promoted is never promoted in its place."""
+    await _account("a")
+    await set_account_twofa_password("a", "old")
+    await set_account_twofa_pending("a", "newer")
+
+    assert await promote_account_twofa_pending("a", "stale-read") is False
+    assert await confirm_twofa_password_used("a", "stale-read") is False
+
+    assert await fetch_account_twofa_pair("a") == ("old", "newer")
+
+
+@pytest.mark.asyncio
+async def test_setting_the_current_one_only_keeps_the_pending_candidate() -> None:
+    await _account("a")
+    await set_account_twofa_pending("a", "maybe")
+
+    assert await set_account_twofa_current_only("a", "typed") is True
+
+    assert await fetch_account_twofa_pair("a") == ("typed", "maybe")
+    assert await set_account_twofa_current_only("ghost", "x") is False
 
 
 @pytest.mark.asyncio

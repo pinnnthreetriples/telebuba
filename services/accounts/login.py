@@ -21,7 +21,9 @@ from core.config import settings
 from core.db import (
     DuplicateSessionNameError,
     fetch_account,
-    set_account_twofa_password,
+    fetch_account_twofa_pair,
+    promote_account_twofa_pending,
+    set_account_twofa_current_only,
     twofa_password_candidates,
     update_account_from_session_check,
 )
@@ -42,6 +44,7 @@ from services.accounts._result import AccountActionError
 from services.accounts.devices import assert_device_configured
 from services.accounts.lifecycle import add_account
 from services.accounts.sessions import SessionAlreadyExistsError
+from services.accounts.twofa import twofa_lock
 from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 if TYPE_CHECKING:
@@ -105,9 +108,20 @@ async def _start_inbox_in_background(account_id: str) -> None:
 
 
 async def _remember_verified_password(account_id: str, password: str) -> None:
-    """Keep a 2FA password Telegram just accepted: the second device and the app need it."""
+    """Keep a 2FA password Telegram just accepted: the second device and the app need it.
+
+    Under ``twofa_lock`` and never clearing a pending candidate: only the current column is
+    set, and a typed password equal to the pending one is promoted by compare-and-swap.
+    """
     try:
-        stored = await set_account_twofa_password(account_id, password)
+        async with twofa_lock(account_id):
+            current, pending = await fetch_account_twofa_pair(account_id)
+            if pending == password:
+                stored = await promote_account_twofa_pending(account_id, password)
+            else:
+                stored = current == password or await set_account_twofa_current_only(
+                    account_id, password
+                )
     except Exception:  # noqa: BLE001 - the sign-in succeeded; never log what failed to write.
         stored = False
     if not stored:
@@ -232,7 +246,9 @@ async def submit_login_code(
         raise _submit_refusal(result)
     forget_code(account_id)
     saved = await update_account_from_session_check(result)
-    if password:
+    # Only a password Telegram actually asked for and accepted: the field is always
+    # visible, and a wrong string must never replace the stored one.
+    if password and result.typed_password_accepted:
         await _remember_verified_password(account_id, password)
     task = asyncio.create_task(_start_inbox_in_background(saved.account_id))
     _INBOX_STARTS.add(task)

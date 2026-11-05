@@ -50,6 +50,7 @@ from services.accounts._result import (
     result_code,
 )
 from services.accounts._twofa_pending import (
+    Settled,
     promote_pending,
     resolve_current,
     stage_pending,
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "authorising_twofa_password",
+    "authorising_twofa_password_unlocked",
     "read_account_twofa",
     "record_account_twofa",
     "remove_account_twofa",
@@ -153,25 +155,41 @@ async def _verify(account_id: str, password: str) -> bool | None:
     return False if result_code(result) == "twofa_current_password_invalid" else None
 
 
-async def _settled_current(account_id: str, status: TwoFactorStatusResult | None) -> str | None:
+async def _settled_current(account_id: str, status: TwoFactorStatusResult | None) -> Settled:
     async def _ask(password: str) -> bool | None:
         return await _verify(account_id, password)
 
     return await resolve_current(account_id, status, _ask)
 
 
+async def authorising_twofa_password_unlocked(account_id: str) -> str | None:
+    """:func:`authorising_twofa_password` for a caller ALREADY holding :func:`twofa_lock`.
+
+    The lock is not re-entrant, so the email flows (which take it around the whole
+    read-then-write) call this one. With a candidate left unsettled the answer is the best
+    guess; it only authorises, it never writes a column, so a wrong guess is a refusal
+    from Telegram and nothing more.
+    """
+    _current, pending = await fetch_account_twofa_pair(account_id)
+    if pending is None:
+        return _current
+    status, _error = await _live_status(account_id)
+    return (await _settled_current(account_id, status)).password
+
+
 async def authorising_twofa_password(account_id: str) -> str | None:
     """The stored password that authorises a write, after settling a pending candidate.
 
-    The email flows call this instead of reading the column: with nothing pending it is
-    the stored current password and costs no Telegram call; with a candidate pending it
-    asks Telegram which one is in force first (see :mod:`._twofa_pending`).
+    For callers that do NOT hold :func:`twofa_lock` (the emulator and web sign-in): with
+    nothing pending it is the stored current password and costs neither a Telegram call
+    nor the lock; with a candidate pending it settles under the lock, because a settlement
+    that clears a candidate must not interleave with a write that has just staged one.
     """
     current, pending = await fetch_account_twofa_pair(account_id)
     if pending is None:
         return current
-    status, _error = await _live_status(account_id)
-    return await _settled_current(account_id, status)
+    async with twofa_lock(account_id):
+        return await authorising_twofa_password_unlocked(account_id)
 
 
 async def read_account_twofa(account_id: str) -> AccountTwoFactorView:
@@ -225,7 +243,15 @@ async def set_account_twofa(
     async with twofa_lock(account_id):
         password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
         status, _error = await _live_status(account_id)
-        current = await _settled_current(account_id, status)
+        settled = await _settled_current(account_id, status)
+        if settled.unsettled:
+            # A pending candidate Telegram has neither confirmed nor refused may be the
+            # password in force: staging over it could leave Telegram holding a value in
+            # neither column. Refuse; a later attempt settles it.
+            code = "twofa_pending_unsettled"
+            raise AccountActionError(code)
+        # Settled, so this is the real stored current password, not a guess.
+        current = settled.password
         if status is not None and status.has_password and current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
@@ -266,7 +292,7 @@ async def set_account_twofa(
         previous_kept = None if kept and status is None else kept
         # Confirmed, or nothing live to lose: the candidate becomes the stored password.
         # Kept (an unknown outcome over a live one): BOTH stay, pending is the new one.
-        stored = True if kept else await promote_pending(account_id)
+        stored = True if kept else await promote_pending(account_id, password)
         # ponytail: INFO/success even on the lost-answer branch, where ``confirmed`` is
         # ``False``. Correct — Telegram may well hold the password, and the row carries
         # the flag — but an operator skimming the log sees a success row for an outcome
@@ -422,7 +448,18 @@ async def remove_account_twofa(
     await require_account(account_id)
     async with twofa_lock(account_id):
         status, _error = await _live_status(account_id)
-        current = await _settled_current(account_id, status)
+        if forget_only:
+            # Clear-only spends no RPC, so it never asks Telegram which candidate is in
+            # force: that would burn checkPassword attempts on the very state this verb
+            # exists to escape.
+            current_stored, pending_stored = await fetch_account_twofa_pair(account_id)
+            current = current_stored or pending_stored
+        else:
+            settled = await _settled_current(account_id, status)
+            if settled.unsettled:
+                code = "twofa_pending_unsettled"
+                raise AccountActionError(code)
+            current = settled.password
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)

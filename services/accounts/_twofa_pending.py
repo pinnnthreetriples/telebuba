@@ -11,8 +11,11 @@ No value here may reach a log extra or an error message.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import hashlib
+import time
+from typing import TYPE_CHECKING, NamedTuple
 
+from core.config import settings
 from core.db import (
     fetch_account_twofa_pair,
     promote_account_twofa_pending,
@@ -30,6 +33,7 @@ if TYPE_CHECKING:
     PasswordVerifier = Callable[[str], Awaitable[bool | None]]
 
 __all__ = [
+    "Settled",
     "promote_pending",
     "resolve_current",
     "stage_pending",
@@ -53,10 +57,10 @@ async def stage_pending(account_id: str, password: str | None) -> bool:
     return staged
 
 
-async def promote_pending(account_id: str) -> bool:
-    """Pending becomes current; ``False`` (logged) when it could not be stored."""
+async def promote_pending(account_id: str, password: str) -> bool:
+    """``password`` (the pending one) becomes current; ``False`` (logged) when it could not."""
     try:
-        promoted = await promote_account_twofa_pending(account_id)
+        promoted = await promote_account_twofa_pending(account_id, password)
     except Exception:  # noqa: BLE001 - the RPC already succeeded; the pending copy stays
         promoted = False
     if not promoted:
@@ -69,47 +73,90 @@ async def promote_pending(account_id: str) -> bool:
     return promoted
 
 
+class Settled(NamedTuple):
+    """What a settlement left in the REAL columns.
+
+    ``password`` is the stored current password, or, while ``unsettled``, the best guess
+    (``current or pending``) for a caller that only AUTHORISES with it. ``unsettled``
+    means a pending candidate is still in the row that is neither proven applied nor
+    proven not applied: a caller that writes the columns must not stage over it.
+    """
+
+    password: str | None
+    unsettled: bool
+
+
+# (account_id) -> (digest of the pair last left unsettled, monotonic time). A digest, never
+# the passwords: it only has to recognise "the same pair again". Cleared with the process.
+_UNSETTLED_AT: dict[str, tuple[bytes, float]] = {}
+
+
+def _pair_digest(current: str | None, pending: str) -> bytes:
+    return hashlib.sha256(f"{len(current or '')}:{current or ''}{pending}".encode()).digest()
+
+
+def _recently_unsettled(account_id: str, digest: bytes) -> bool:
+    seen = _UNSETTLED_AT.get(account_id)
+    interval = settings.telegram.settle_recheck_seconds
+    return seen is not None and seen[0] == digest and time.monotonic() - seen[1] < interval
+
+
 async def _settle_against_live_password(
     account_id: str,
     current: str | None,
     pending: str,
     verify: PasswordVerifier,
-) -> str | None:
-    """Telegram holds a password: keep whichever of ``current`` / ``pending`` it accepts."""
+) -> None:
+    """Telegram holds a password: keep whichever of ``current`` / ``pending`` it accepts.
+
+    Writes only what a PROOF supports; anything unproven leaves both columns as they are.
+    """
     if current is not None:
         accepted = await verify(current)
         if accepted is not False:
             if accepted:
                 await stage_pending(account_id, None)
-            return current
+            return
     accepted = await verify(pending)
     if accepted:
-        await promote_pending(account_id)
-        return pending
-    if accepted is False and current is None:
+        await promote_pending(account_id, pending)
+    elif accepted is False and current is None:
         await stage_pending(account_id, None)
-        return None
-    return current or pending
 
 
 async def resolve_current(
     account_id: str,
     status: TwoFactorStatusResult | None,
     verify: PasswordVerifier,
-) -> str | None:
+) -> Settled:
     """The password to authorise a write with, settling an unresolved pending candidate.
 
     No pending candidate: just the stored current one (no Telegram call). Otherwise the
     live state decides. Telegram holds no password: the candidate was never applied,
     drop it. Holds one: ask Telegram which of ``current`` / ``pending`` it accepts and
-    keep that one as current. Anything unknown keeps both, and the best guess is returned.
+    keep that one as current. Anything unknown keeps both and reports ``unsettled``; the
+    verdict is read back from the columns, never from what this function intended.
+
+    The same unsettled pair is not put to Telegram again within
+    ``settle_recheck_seconds``: every ask spends ``checkPassword`` attempts.
+    Call it under :func:`services.accounts.twofa.twofa_lock`.
     """
     current, pending = await fetch_account_twofa_pair(account_id)
     if pending is None or pending == current:
-        return current
+        return Settled(password=current, unsettled=False)
     if status is None:
-        return current or pending
+        return Settled(password=current or pending, unsettled=True)
+    digest = _pair_digest(current, pending)
+    if status.has_password and _recently_unsettled(account_id, digest):
+        return Settled(password=current or pending, unsettled=True)
     if not status.has_password:
         await stage_pending(account_id, None)
-        return current
-    return await _settle_against_live_password(account_id, current, pending, verify)
+    else:
+        await _settle_against_live_password(account_id, current, pending, verify)
+    current, pending = await fetch_account_twofa_pair(account_id)
+    unsettled = pending is not None and pending != current
+    if unsettled and pending is not None:
+        _UNSETTLED_AT[account_id] = (_pair_digest(current, pending), time.monotonic())
+    else:
+        _UNSETTLED_AT.pop(account_id, None)
+    return Settled(password=current or pending, unsettled=unsettled)
