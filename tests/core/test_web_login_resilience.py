@@ -145,7 +145,7 @@ async def test_the_field_is_clicked_only_once_it_stopped_moving(
                 return {"result": {"result": {"type": "string", "value": value}}}
             return await super().send_command(method, params, **kw)
 
-    session = Sliding()
+    session = Sliding({_page._FIELD_LENGTH_EXPR: 2})
 
     assert await _page.type_2fa_password(window_for(session), "pw") is True
 

@@ -30,7 +30,6 @@ from services.accounts import (
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
-    from datetime import datetime
     from pathlib import Path
 
 PROXY = ProxySettings(
@@ -261,6 +260,7 @@ def wire(  # noqa: PLR0913
     token: str | None = "dG9rZW4x",  # base64url for b"token1"
     twofa: str | None = None,
     outcome: str = "idle",
+    accepted_hash: str | None = "777",
 ) -> FakeWindow:
     """Wire the launch + drive collaborators; return the window the FIRST launch hands back.
 
@@ -294,9 +294,9 @@ def wire(  # noqa: PLR0913
     async def _latest(_window: object) -> str | None:
         return token
 
-    async def _accept(account_id: str, token_bytes: bytes) -> bool:  # noqa: ARG001
+    async def _accept(account_id: str, token_bytes: bytes) -> str | None:  # noqa: ARG001
         calls.setdefault("accepted", []).append(token_bytes)
-        return True
+        return accepted_hash
 
     async def _release(_window: object) -> None:
         calls["released"] = calls.get("released", 0) + 1
@@ -342,11 +342,10 @@ def _baseline(calls: dict[str, Any]) -> Callable[[str, object], Awaitable[None]]
 
 def _recorder(
     calls: dict[str, Any],
-) -> Callable[[str, object, datetime, datetime], Awaitable[int]]:
-    async def _record(account_id: str, window: object, since: datetime, seen_at: datetime) -> int:
-        calls.setdefault("recorded", []).append((account_id, since))
+) -> Callable[[str, object, str | None], Awaitable[int]]:
+    async def _record(account_id: str, window: object, accepted_hash: str | None) -> int:
+        calls.setdefault("recorded", []).append((account_id, accepted_hash))
         calls.setdefault("recorded_windows", []).append(window)
-        calls.setdefault("seen_at", []).append(seen_at)
         return 1
 
     return _record

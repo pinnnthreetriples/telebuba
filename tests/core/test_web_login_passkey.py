@@ -173,6 +173,8 @@ async def test_a_dropped_probe_is_retried_not_fatal() -> None:
 
 def test_the_hook_takes_over_only_telegram_requests_and_keeps_the_native_shape() -> None:
     assert "rpId === 'telegram.org'" in PASSKEY_HOOK
+    # ...and only on Telegram Web's own origin: any other page gets the browser's own.
+    assert "location.origin === 'https://web.telegram.org'" in PASSKEY_HOOK
     # Everything else falls through to the browser's own implementation.
     assert "real.apply(this, arguments)" in PASSKEY_HOOK
     # Disguised like the other hooks: it reports itself native and is named ``get``.

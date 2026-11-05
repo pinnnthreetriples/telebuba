@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 import pytest_asyncio
 
-from core.config import settings
 from core.db import create_account
 from core.repositories.account_own_authorizations import (
     fetch_own_authorizations,
@@ -109,10 +109,8 @@ def _window() -> Any:
     return _Window()
 
 
-async def _record(window: Any, **kw: Any) -> int:
-    return await svc.record_own_web_login(
-        "acc-1", window, since=kw.get("since", _LOGIN), seen_at=kw.get("seen_at", _LOGIN)
-    )
+async def _record(window: Any, accepted_hash: str | None = None) -> int:
+    return await svc.record_own_web_login("acc-1", window, accepted_hash=accepted_hash)
 
 
 @pytest.mark.asyncio
@@ -157,36 +155,56 @@ async def test_a_desktop_or_mobile_app_in_the_same_window_is_never_ours(wire: _W
 
 
 @pytest.mark.asyncio
-async def test_without_a_baseline_the_time_window_still_needs_exactly_one(wire: _Wire) -> None:
-    window: Any = _Window()  # no baseline taken
-
-    # "2" is inside the window, "3" is two days older: one candidate.
-    assert await _record(window) == 1
-    assert set(await fetch_own_authorizations("acc-1")) == {"2"}
-
-    wire.sessions.append(_session("7", created=_LOGIN + timedelta(seconds=9)))
-    wire.sessions[1] = _session("8", created=_LOGIN + timedelta(seconds=4))
-    assert await _record(_Window()) == 0  # "7" and "8" both fit: ambiguous
-
-
-@pytest.mark.asyncio
-async def test_the_time_window_is_bounded_above_by_the_moment_logged_in_was_seen(
+async def test_a_seller_web_login_near_a_redrive_is_not_recorded_without_baseline_or_hash(
     wire: _Wire,
 ) -> None:
-    skew = settings.session_audit.own_login_skew_seconds
-    wire.sessions[1] = _session("2", created=_LOGIN + timedelta(seconds=skew + 60))
+    """With no baseline and no accepted hash, the only candidate by the clock may be a seller's.
 
-    assert await _record(_Window()) == 0
+    (The baseline read timed out and the login was finished by hand.) Nothing is recorded.
+    """
+    wire.sessions = wire.sessions[:1]
+    wire.sessions.append(_session("9", created=datetime.now(UTC)))  # a seller's, right now
+
+    assert await _record(_window()) == 0
+
+    assert await fetch_own_authorizations("acc-1") == {}
 
 
 @pytest.mark.asyncio
-async def test_the_skew_lets_a_slightly_earlier_authorization_in(wire: _Wire) -> None:
-    skew = settings.session_audit.own_login_skew_seconds
+async def test_the_accepted_qr_hash_is_recorded_even_when_another_web_login_appeared(
+    wire: _Wire,
+) -> None:
+    window: Any = _Window()
     wire.sessions = wire.sessions[:1]
-    wire.sessions.append(_session("3", created=_LOGIN - timedelta(seconds=skew - 1)))
+    await svc.remember_login_baseline("acc-1", window)
+    wire.sessions.append(_session("2", created=_LOGIN))
+    wire.sessions.append(_session("9", created=_LOGIN + timedelta(seconds=1)))  # a stranger's
 
-    assert await _record(_Window()) == 1
-    assert set(await fetch_own_authorizations("acc-1")) == {"3"}
+    assert await _record(window, accepted_hash="2") == 1
+
+    assert await fetch_own_authorizations("acc-1") == {"2": "web"}
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_hash_that_is_not_a_listed_web_authorization_records_nothing(
+    wire: _Wire,
+) -> None:
+    wire.sessions = [wire.sessions[0], _session("4", created=_LOGIN, app="Telegram Desktop")]
+
+    assert await _record(_window(), accepted_hash="4") == 0
+    assert await _record(_window(), accepted_hash="404") == 0
+
+    assert await fetch_own_authorizations("acc-1") == {}
+
+
+@pytest.mark.asyncio
+async def test_the_baseline_is_read_while_a_session_close_holds_the_audit_lock(
+    wire: _Wire,
+) -> None:
+    window: Any = _Window()
+    wire.sessions = wire.sessions[:1]
+    async with audit_svc.account_audit_lock("acc-1"):
+        assert await asyncio.wait_for(svc.remember_login_baseline("acc-1", window), 5) is True
 
 
 @pytest.mark.asyncio

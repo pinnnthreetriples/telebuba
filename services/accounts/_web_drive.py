@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import weakref
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DriveTrace",
+    "accepted_login_hash",
     "drive_login",
     "forget_signed_in",
     "mark_signed_in",
@@ -63,6 +65,15 @@ _SIGNED_IN_MARKER = ".telebuba-signed-in"
 # loop: the password step and the state reads keep their own pace), up to this cap.
 _ACCEPT_BACKOFF_BASE = 1.0
 _ACCEPT_BACKOFF_MAX = 20.0
+# The authorization hash Telegram returned for the QR accepted in each window. Kept with the
+# window (not the drive) so a re-drive of the same window, after a hand-finished login, still
+# knows which authorization is ours.
+_accepted_hashes: weakref.WeakKeyDictionary[WebWindow, str] = weakref.WeakKeyDictionary()
+
+
+def accepted_login_hash(window: WebWindow) -> str | None:
+    """The hash of the authorization our accept created in ``window``, when one was seen."""
+    return _accepted_hashes.get(window)
 
 
 def profile_is_seeded(profile: Path) -> bool:
@@ -98,9 +109,7 @@ class DriveTrace:
     as it goes and the caller classifies afterwards. The counters are what an
     investigation reads from the log: none of them is a secret.
 
-    ``started_at`` / ``logged_in_at`` are the wall-clock moments the drive began and the
-    logged-in screen was read: the bounds of the fallback "which authorization did THIS web
-    login create" when no baseline of the account's authorizations was taken.
+    ``started_at`` is the wall-clock moment the drive began (for the log).
     """
 
     state: str | None = None
@@ -115,7 +124,6 @@ class DriveTrace:
     accept_hold_until: float = 0.0
     cdp_errors: int = 0
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    logged_in_at: datetime | None = None
     _started_clock: float = field(default_factory=time.monotonic)
 
     @property
@@ -225,7 +233,6 @@ async def drive_login(
         state = await _read_state(window, trace)
         trace.state = state
         if state == "logged_in":
-            trace.logged_in_at = datetime.now(UTC)
             # The one moment at which the capture hook is provably finished with. It
             # holds live login tokens, and nothing inside the page can tell this moment
             # apart from the QR screen (WebK's shell markers are in the document, merely
@@ -297,9 +304,12 @@ async def _accept_fresh_token(
     accepted.add(token)
     trace.tokens_seen += 1
     try:
-        # A rotated/stale token returns False; the loop just tries the next capture.
-        if await accept_web_login_token(account_id, token_bytes(token)):
+        # A rotated/stale token returns None; the loop just tries the next capture.
+        new_hash = await accept_web_login_token(account_id, token_bytes(token))
+        if new_hash is not None:
             trace.tokens_accepted += 1
+            if new_hash:
+                _accepted_hashes[window] = new_hash
     except WebLoginTransientError as exc:
         accepted.discard(token)
         trace.tokens_seen -= 1
