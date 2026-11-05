@@ -26,7 +26,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
 from core.web_login._cdp import CdpError
-from core.web_login._scripts import fill
+from core.web_login._scripts import fill, once
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -149,7 +149,7 @@ __NATIVE__
 })();
 """
 
-PASSKEY_HOOK = fill(_HOOK_TEMPLATE)
+PASSKEY_HOOK = once("__tbPkInstalled", fill(_HOOK_TEMPLATE))
 
 
 def _request(value: object) -> tuple[int, str] | None:

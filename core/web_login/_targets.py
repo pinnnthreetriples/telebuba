@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, cast
 from core.web_login._cdp import CdpError
 from core.web_login.fingerprint import (
     LocaleRejectedError,
-    apply_page_fingerprint,
+    page_fingerprint_steps,
     worker_init_script,
 )
 
@@ -239,9 +239,12 @@ class TargetDriver:
     async def _dress_page(self, session_id: str) -> None:
         # Cascade first: a page's own dedicated workers attach through ITS session, so
         # auto-attach has to be armed there before the page runs and spawns them.
+        # Every CDP command is its own step, so a retry resumes after the last one that was
+        # acknowledged. One whose answer was merely late is sent again; the document-start
+        # scripts are guarded in the page (``_scripts.once``) so that cannot install twice.
         steps = [
             self._arm_workers,
-            self._apply_fingerprint,
+            *(lambda _sid, step=step: step() for step in self._fingerprint_steps(session_id)),
             *(self._page_script(script) for script in self._page_scripts),
         ]
         for index, step in enumerate(steps):
@@ -255,8 +258,8 @@ class TargetDriver:
             "Target.setAutoAttach", _AUTO_ATTACH, session_id=session_id
         )
 
-    async def _apply_fingerprint(self, session_id: str) -> None:
-        await apply_page_fingerprint(self._session, self._fingerprint, session_id=session_id)
+    def _fingerprint_steps(self, session_id: str) -> list[Callable[[], Awaitable[object]]]:
+        return page_fingerprint_steps(self._session, self._fingerprint, session_id=session_id)
 
     def _page_script(self, script: str) -> Callable[[str], Awaitable[None]]:
         async def install(session_id: str) -> None:

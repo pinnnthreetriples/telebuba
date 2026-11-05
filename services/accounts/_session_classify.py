@@ -51,15 +51,23 @@ def _with_predates(session: AccountSession, *, predates: bool) -> AccountSession
 def flag_seller_keys(
     sessions: list[AccountSession], imported_at: str, rekey: StoredRekey | None
 ) -> list[AccountSession]:
-    """Flag our Telethon sessions whose key predates the account's import into Telebuba."""
+    """Flag our Telethon sessions whose key predates the account's import into Telebuba.
+
+    After a re-key the key must also predate the re-key itself: a seller key that is still
+    listed (the old authorization is waiting to be ended) is older than both, while the key
+    the re-key made is newer than the import and is never flagged.
+    """
     imported = parse_moment(imported_at)
-    if imported is None or rekey is not None:
+    if imported is None:
         return sessions
+    rekeyed = parse_moment(rekey.rekeyed_at) if rekey is not None else None
     flagged: list[AccountSession] = []
     for session in sessions:
         created = parse_moment(session.date_created)
         sellers = session.is_ours and session.kind is None
-        older = created is not None and created < imported
+        older = (
+            created is not None and created < imported and (rekeyed is None or created < rekeyed)
+        )
         flagged.append(_with_predates(session, predates=sellers and older))
     return flagged
 

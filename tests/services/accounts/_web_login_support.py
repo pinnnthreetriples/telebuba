@@ -253,13 +253,14 @@ def scripted_states(seq: Sequence[str]) -> Callable[[object], Any]:
     return _state
 
 
-def wire(
+def wire(  # noqa: PLR0913
     monkeypatch: pytest.MonkeyPatch,
     calls: dict[str, Any],
     *,
     states: Sequence[str],
     token: str | None = "dG9rZW4x",  # base64url for b"token1"
     twofa: str | None = None,
+    outcome: str = "idle",
 ) -> FakeWindow:
     """Wire the launch + drive collaborators; return the window the FIRST launch hands back.
 
@@ -300,14 +301,14 @@ def wire(
     async def _release(_window: object) -> None:
         calls["released"] = calls.get("released", 0) + 1
 
-    async def _type(_window: object, password: str) -> bool:
+    async def _type(_window: object, password: str, **_kw: object) -> bool:
         # A LIST, never a scalar: assigning would overwrite, so "typed exactly once"
         # — the whole point of the 2FA re-submit guard — could not be asserted at all.
         calls.setdefault("typed", []).append(password)
         return True  # the field was there and the password was submitted
 
     async def _idle(_window: object) -> str:
-        return "idle"
+        return outcome
 
     async def _twofa(_account_id: str) -> str | None:
         return twofa
@@ -327,13 +328,25 @@ def wire(
     monkeypatch.setattr(_web_drive_password, "type_2fa_password", _type)
     monkeypatch.setattr(_web_drive_password, "_authorising_password", _twofa)
     monkeypatch.setattr(_web_drive_run, "_record_own_authorizations", _recorder(calls))
+    monkeypatch.setattr(web_login, "take_login_baseline", _baseline(calls))
     monkeypatch.setattr(_web_drive_password, "password_outcome", _idle)
     return window
 
 
-def _recorder(calls: dict[str, Any]) -> Callable[[str, datetime], Awaitable[int]]:
-    async def _record(account_id: str, since: datetime) -> int:
+def _baseline(calls: dict[str, Any]) -> Callable[[str, object], Awaitable[None]]:
+    async def _take(account_id: str, window: object) -> None:
+        calls.setdefault("baselines", []).append((account_id, window))
+
+    return _take
+
+
+def _recorder(
+    calls: dict[str, Any],
+) -> Callable[[str, object, datetime, datetime], Awaitable[int]]:
+    async def _record(account_id: str, window: object, since: datetime, seen_at: datetime) -> int:
         calls.setdefault("recorded", []).append((account_id, since))
+        calls.setdefault("recorded_windows", []).append(window)
+        calls.setdefault("seen_at", []).append(seen_at)
         return 1
 
     return _record

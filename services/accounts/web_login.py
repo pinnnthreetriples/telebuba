@@ -41,7 +41,7 @@ from services.accounts._web_drive import (
     profile_is_seeded,
     still_signed_in,
 )
-from services.accounts._web_drive_run import drive_and_mark
+from services.accounts._web_drive_run import cancel_recorders, drive_and_mark, take_login_baseline
 from services.accounts._web_errors import (
     _LAUNCH_REFUSAL,
     _NO_PROXY_REFUSAL,
@@ -323,7 +323,15 @@ async def _spawn(
         if not _closing.is_set():
             _windows[account_id] = window
             watch_window(window, lambda: _window_closed(account_id, window))
-            return window
+            registered = True
+        else:
+            registered = False
+    if registered:
+        if capture:
+            # Before any login can happen in it: what the account lists NOW is what a login
+            # made through this window is judged against.
+            await take_login_baseline(account_id, window)
+        return window
     with suppress(Exception):
         await window.kill()
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
@@ -373,6 +381,7 @@ async def shutdown_web_login() -> None:
     """
     _closing.set()
     await cancel_watchers()
+    await cancel_recorders()
     async with _windows_lock:
         windows = list(_windows.values())
         _windows.clear()

@@ -281,7 +281,7 @@ async def test_first_open_types_stored_password_on_the_password_screen(
     calls: dict[str, Any] = {}
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2")
+    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2", outcome="error")
 
     result = await open_account_web("acct")
 
@@ -311,7 +311,7 @@ async def test_a_password_that_never_reached_the_field_is_not_called_rejected(
     _patch_profile(monkeypatch, tmp_path / "acct")
     _wire(monkeypatch, calls, states=["password"], twofa="hunter2")
 
-    async def _no_field(_window: object, password: str) -> bool:
+    async def _no_field(_window: object, password: str, **_kw: object) -> bool:
         calls.setdefault("typed", []).append(password)
         return False
 

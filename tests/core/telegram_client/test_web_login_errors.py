@@ -70,3 +70,15 @@ async def test_a_long_flood_wait_is_a_real_failure(monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(errors.FloodWaitError):
         await accept_web_login_token("acc-1", b"t")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [FileNotFoundError(), PermissionError(), IsADirectoryError()])
+async def test_a_file_system_error_is_a_real_failure_not_a_retry(
+    monkeypatch: pytest.MonkeyPatch, error: OSError
+) -> None:
+    """A missing or locked session file is not repaired by asking again."""
+    _failing(monkeypatch, error)
+
+    with pytest.raises(type(error)):
+        await accept_web_login_token("acc-1", b"t")

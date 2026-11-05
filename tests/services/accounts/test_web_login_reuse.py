@@ -125,7 +125,7 @@ async def test_a_raised_window_that_already_sent_its_password_types_nothing(
     calls: dict[str, Any] = {}
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2")
+    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2", outcome="error")
 
     first = await open_account_web("acct")
     assert first.signed_in is False

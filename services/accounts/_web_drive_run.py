@@ -7,6 +7,7 @@ caller owns (and tests can shrink) it.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -15,7 +16,6 @@ from services.accounts._web_drive import DriveTrace, drive_login, mark_signed_in
 from services.accounts._web_errors import _DRIVE_REFUSAL, WebLoginLaunchError
 
 if TYPE_CHECKING:
-    from datetime import datetime
     from pathlib import Path
 
     from core.web_login.browser import WebWindow
@@ -63,7 +63,7 @@ async def drive_and_mark(
         return OpenWebResult(launched=True, signed_in=False, reason=trace.classify_failure())
     mark_signed_in(profile)
     await _log_outcome(account_id, trace, "web_login_success")
-    _record_in_background(account_id, trace.started_at)
+    _record_in_background(account_id, window, trace)
     return OpenWebResult(launched=True, signed_in=True)
 
 
@@ -89,16 +89,19 @@ async def _log_outcome(
     await log_event(level, event, account_id=account_id, extra=extra)
 
 
-def _record_in_background(account_id: str, since: datetime) -> None:
+def _record_in_background(account_id: str, window: WebWindow, trace: DriveTrace) -> None:
     """Record this login's authorization as ours without ever delaying or failing the login."""
-    task = asyncio.create_task(_record_own(account_id, since))
+    seen_at = trace.logged_in_at or datetime.now(UTC)
+    task = asyncio.create_task(_record_own(account_id, window, trace.started_at, seen_at))
     _recorders.add(task)
     task.add_done_callback(_recorders.discard)
 
 
-async def _record_own(account_id: str, since: datetime) -> None:
+async def _record_own(
+    account_id: str, window: WebWindow, since: datetime, seen_at: datetime
+) -> None:
     try:
-        await _record_own_authorizations(account_id, since)
+        await _record_own_authorizations(account_id, window, since, seen_at)
     except Exception as exc:  # noqa: BLE001
         # Blind on purpose: the login already succeeded and nothing here may undo it. The
         # worst case is the audit showing our own web login as foreign until the next audit.
@@ -110,9 +113,40 @@ async def _record_own(account_id: str, since: datetime) -> None:
         )
 
 
-async def _record_own_authorizations(account_id: str, since: datetime) -> int:
+async def _record_own_authorizations(
+    account_id: str, window: WebWindow, since: datetime, seen_at: datetime
+) -> int:
     from services.accounts.own_authorizations import (  # noqa: PLC0415 - import cycle
-        record_own_web_authorizations,
+        record_own_web_login,
     )
 
-    return await record_own_web_authorizations(account_id, since)
+    return await record_own_web_login(account_id, window, since=since, seen_at=seen_at)
+
+
+async def take_login_baseline(account_id: str, window: WebWindow) -> None:
+    """Keep the account's authorization hashes with a window launched for an unsigned profile.
+
+    Best effort and never a failure of the launch: without a baseline the recording falls back
+    to its bounded time window.
+    """
+    from services.accounts.own_authorizations import (  # noqa: PLC0415 - import cycle
+        remember_login_baseline,
+    )
+
+    try:
+        await remember_login_baseline(account_id, window)
+    except Exception as exc:  # noqa: BLE001 - the login must go on without it
+        await log_event(
+            "WARNING",
+            "own_web_baseline_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+
+
+async def cancel_recorders() -> None:
+    """Cancel the recordings still running (shutdown): none may outlive the process's loop."""
+    tasks = list(_recorders)
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)

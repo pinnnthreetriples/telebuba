@@ -23,7 +23,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
-from core.repositories.account_own_authorizations import fetch_own_authorizations
+from core.repositories.account_own_authorizations import (
+    fetch_own_authorizations,
+    prune_own_authorizations,
+)
 from core.repositories.account_rekeys import fetch_rekey
 from core.repositories.session_audits import fetch_session_audit, save_session_audit
 from core.telegram_client import SessionAuditGatewayError, read_account_sessions
@@ -106,6 +109,10 @@ async def refresh_account_audit(
             extra={"code": exc.code, "error_type": exc.error_type},
         )
         raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
+    if listing.sessions:
+        # A recorded row whose authorization is gone (ended, or expired) must not linger: a
+        # hash is never reused, but the table would only ever grow.
+        await prune_own_authorizations(account_id, [s.hash for s in listing.sessions])
     previous = await fetch_session_audit(account_id)
     listing = listing.model_copy(
         update={

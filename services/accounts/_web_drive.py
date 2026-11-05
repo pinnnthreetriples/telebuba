@@ -59,6 +59,10 @@ _LOGIN_SCREENS = ("qr", "password")
 # Written into a profile only once a login there reached the logged-in screen. Chrome
 # ignores files it does not know, and the leading dot keeps it out of its way.
 _SIGNED_IN_MARKER = ".telebuba-signed-in"
+# After a transient accept failure the accept is held off for a growing time (never the
+# loop: the password step and the state reads keep their own pace), up to this cap.
+_ACCEPT_BACKOFF_BASE = 1.0
+_ACCEPT_BACKOFF_MAX = 20.0
 
 
 def profile_is_seeded(profile: Path) -> bool:
@@ -94,8 +98,9 @@ class DriveTrace:
     as it goes and the caller classifies afterwards. The counters are what an
     investigation reads from the log: none of them is a secret.
 
-    ``started_at`` is the wall-clock moment the drive began — the lower bound for "which
-    authorizations did THIS web login create" once it succeeds.
+    ``started_at`` / ``logged_in_at`` are the wall-clock moments the drive began and the
+    logged-in screen was read: the bounds of the fallback "which authorization did THIS web
+    login create" when no baseline of the account's authorizations was taken.
     """
 
     state: str | None = None
@@ -103,11 +108,14 @@ class DriveTrace:
     has_stored_password: bool | None = None
     password_attempts: int = 0
     password_checking: bool = False
+    password_rejected: bool = False
     tokens_seen: int = 0
     tokens_accepted: int = 0
     transient_retries: int = 0
+    accept_hold_until: float = 0.0
     cdp_errors: int = 0
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    logged_in_at: datetime | None = None
     _started_clock: float = field(default_factory=time.monotonic)
 
     @property
@@ -119,10 +127,14 @@ class DriveTrace:
         """The fine-grained outcome of a drive that ended without logging in (for the log)."""
         if self.state == "password":
             if self.typed_password:
+                # "Rejected" only on WebK's own wrong-password state; a deadline that hit
+                # mid-check (or a screen that merely went quiet) is not a verdict.
+                if self.password_rejected:
+                    return "web_login_2fa_rejected"
                 return (
                     "web_login_2fa_check_timeout"
                     if self.password_checking
-                    else ("web_login_2fa_rejected")
+                    else "web_login_2fa_unconfirmed"
                 )
             if self.has_stored_password is False:
                 return "web_login_2fa_required"
@@ -141,6 +153,7 @@ class DriveTrace:
             "web_login_2fa_required",
             "web_login_2fa_not_typed",
             "web_login_2fa_check_timeout",
+            "web_login_2fa_unconfirmed",
         ):
             # Nothing typed (none stored, no field found), or Telegram was still checking
             # when time ran out: only a hand can finish it.
@@ -212,6 +225,7 @@ async def drive_login(
         state = await _read_state(window, trace)
         trace.state = state
         if state == "logged_in":
+            trace.logged_in_at = datetime.now(UTC)
             # The one moment at which the capture hook is provably finished with. It
             # holds live login tokens, and nothing inside the page can tell this moment
             # apart from the QR screen (WebK's shell markers are in the document, merely
@@ -267,8 +281,12 @@ async def _accept_fresh_token(
 
     A transient fault of the pooled client (connection, timeout, a short flood wait) is
     NOT a verdict on the token: it is forgotten so the next poll offers it again, inside
-    the caller's deadline, instead of aborting a login that was about to work.
+    the caller's deadline, instead of aborting a login that was about to work. The retry
+    waits out a capped, growing hold (``trace.accept_hold_until``) that only this accept
+    honours: sleeping here would stall the password step of the same poll.
     """
+    if asyncio.get_running_loop().time() < trace.accept_hold_until:
+        return
     try:
         token = await latest_login_token(window)
     except (CdpError, OSError):
@@ -286,4 +304,8 @@ async def _accept_fresh_token(
         accepted.discard(token)
         trace.tokens_seen -= 1
         trace.transient_retries += 1
-        await asyncio.sleep(exc.retry_after)
+        delay = min(
+            max(exc.retry_after, _ACCEPT_BACKOFF_BASE * 2 ** (trace.transient_retries - 1)),
+            _ACCEPT_BACKOFF_MAX,
+        )
+        trace.accept_hold_until = asyncio.get_running_loop().time() + delay

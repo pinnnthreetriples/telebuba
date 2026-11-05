@@ -41,6 +41,9 @@ _ROTATION_ERRORS = (
 # enough to fit inside the drive's deadline.
 _TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError, ServerError, TimedOutError)
 _MAX_FLOOD_WAIT_SECONDS = 15
+# A locked, missing or unreadable session file surfaces as an OSError subclass, but no retry
+# repairs it: it is a real failure of the account, not a hiccup of the connection.
+_FILE_ERRORS = (FileNotFoundError, PermissionError, IsADirectoryError)
 
 
 class WebLoginTransientError(Exception):
@@ -61,13 +64,16 @@ async def accept_web_login_token(account_id: str, token: bytes) -> bool:
     (expired / already-accepted / invalidated) so the caller retries the next captured
     token. A connection fault, timeout or short flood wait raises
     :class:`WebLoginTransientError` so the caller retries the SAME token within its own
-    deadline. Any other Telethon error propagates as a genuine failure.
+    deadline. A file-system error (missing, locked or unreadable session file) and any other
+    Telethon error propagate as a genuine failure.
     """
     try:
         confirmer = await get_client(account_id)
         await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
     except _ROTATION_ERRORS:
         return False
+    except _FILE_ERRORS:
+        raise
     except FloodWaitError as exc:
         if exc.seconds > _MAX_FLOOD_WAIT_SECONDS:
             raise
