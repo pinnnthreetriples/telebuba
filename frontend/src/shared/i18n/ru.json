@@ -2217,6 +2217,8 @@
     "own_authorizations_failed": "Не удалось записать собственный веб-вход Telebuba",
     "own_web_authorizations_recorded": "Собственный веб-вход Telebuba записан как наш",
     "own_web_authorizations_unrecorded": "Не удалось записать собственный веб-вход Telebuba",
+    "own_web_baseline_failed": "Не удалось снять список сессий перед веб-входом Telebuba",
+    "own_web_login_not_recorded": "Веб-вход Telebuba не записан как наш: новая веб-сессия не найдена или их несколько",
     "web_login_no_token_captured": "Telegram Web не показал QR для входа",
     "web_login_refused": "Вход в Telegram Web отклонён",
     "web_login_success": "Вход в Telegram Web выполнен",

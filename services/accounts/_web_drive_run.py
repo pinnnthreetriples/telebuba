@@ -10,6 +10,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.logging import log_event
 from schemas.accounts import OpenWebResult
 from services.accounts._web_drive import DriveTrace, drive_login, mark_signed_in
@@ -134,7 +135,8 @@ async def take_login_baseline(account_id: str, window: WebWindow) -> None:
     )
 
     try:
-        await remember_login_baseline(account_id, window)
+        async with asyncio.timeout(settings.session_audit.own_login_baseline_timeout_seconds):
+            await remember_login_baseline(account_id, window)
     except Exception as exc:  # noqa: BLE001 - the login must go on without it
         await log_event(
             "WARNING",

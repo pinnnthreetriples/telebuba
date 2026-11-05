@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from services.accounts import _web_drive_run, web_login
+from core.config import settings
+from services.accounts import _web_drive_run, own_authorizations, web_login
 from services.accounts.web_login import open_account_web
 from tests.services.accounts._web_login_support import PROXY as _PROXY
 from tests.services.accounts._web_login_support import fresh_registry, relay
@@ -149,3 +150,25 @@ async def test_shutdown_cancels_a_recording_still_running(
     await web_login.shutdown_web_login()
 
     assert not _web_drive_run._recorders
+
+
+@pytest.mark.asyncio
+async def test_a_hung_baseline_listing_never_holds_the_window_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    async def _hang(_account_id: str, _window: object) -> bool:
+        await asyncio.Event().wait()
+        return True
+
+    async def _log(_level: str, event: str, **_kwargs: object) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(own_authorizations, "remember_login_baseline", _hang)
+    monkeypatch.setattr(_web_drive_run, "log_event", _log)
+    monkeypatch.setattr(settings.session_audit, "own_login_baseline_timeout_seconds", 0.05)
+
+    await asyncio.wait_for(_web_drive_run.take_login_baseline("acct", cast("Any", object())), 5)
+
+    assert events == ["own_web_baseline_failed"]

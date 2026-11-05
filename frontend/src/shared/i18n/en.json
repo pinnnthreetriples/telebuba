@@ -2178,6 +2178,8 @@
     "own_authorizations_failed": "Telebuba's own web login could not be recorded",
     "own_web_authorizations_recorded": "Telebuba's own web login recorded as ours",
     "own_web_authorizations_unrecorded": "Telebuba's own web login could not be recorded",
+    "own_web_baseline_failed": "Could not list sessions before Telebuba's web login",
+    "own_web_login_not_recorded": "Telebuba's web login not recorded as ours: no single new web session found",
     "web_login_no_token_captured": "Telegram Web showed no login QR to accept",
     "web_login_refused": "Telegram Web login was refused",
     "web_login_success": "Signed in to Telegram Web",

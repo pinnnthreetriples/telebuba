@@ -94,14 +94,14 @@ def _redact_deep(value: object) -> object:
         return redact_secrets(value)
     if isinstance(value, dict):
         return {k: _redact_deep(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_redact_deep(v) for v in value]
-    if isinstance(value, tuple):
-        return tuple(_redact_deep(v) for v in value)
+    if isinstance(value, (list, tuple)):
+        items = [_redact_deep(v) for v in value]
+        return items if isinstance(value, list) else tuple(items)
     return value
 
 
 _EVENT_TEXT_KEYS = ("message", "logentry", "exception", "breadcrumbs", "extra")
+_BREADCRUMB_TEXT_KEYS = ("message", "data")
 
 
 def _sentry_before_send(event: Any, _hint: Any) -> Any:  # noqa: ANN401 - sentry's untyped dicts
@@ -112,8 +112,12 @@ def _sentry_before_send(event: Any, _hint: Any) -> Any:  # noqa: ANN401 - sentry
     return event
 
 
-def _sentry_before_breadcrumb(crumb: Any, _hint: Any) -> Any:  # noqa: ANN401
-    return _redact_deep(crumb)
+def _sentry_before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+    """Redact proxy credentials from a breadcrumb's message and data."""
+    for key in _BREADCRUMB_TEXT_KEYS:
+        if key in crumb:
+            crumb[key] = _redact_deep(crumb[key])
+    return crumb
 
 
 class _RedactConsole(logging.Filter):
