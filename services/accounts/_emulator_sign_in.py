@@ -20,7 +20,6 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account_twofa_password
 from core.emulator import (
     EmulatorError,
     confirm_number,
@@ -39,6 +38,7 @@ from core.telegram_client import (
 from services.accounts._app_screen import APP_UNRESPONSIVE, restarted_if_frozen, settled_screen
 from services.accounts._mobile_progress import report_stage
 from services.accounts.devices import DeviceRefusedError, claim_code_request
+from services.accounts.twofa import authorising_twofa_password
 
 if TYPE_CHECKING:
     from core.emulator.ui_dump import Screen, UiNode
@@ -155,7 +155,7 @@ async def _submit_password(
     nodes: list[UiNode],
 ) -> tuple[Screen, list[UiNode]]:
     report_stage(account.account_id, "password")
-    password = await fetch_account_twofa_password(account.account_id)
+    password = await authorising_twofa_password(account.account_id)
     if not password:
         raise EmulatorError(_EMULATOR_TWOFA_MISSING)
     await enter_password(serial, nodes, password)

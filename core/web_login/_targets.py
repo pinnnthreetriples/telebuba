@@ -206,8 +206,11 @@ class TargetDriver:
                 self._session.send_command("Target.closeTarget", {"targetId": target_id}),
                 _DRESS_TIMEOUT,
             )
-        except (CdpError, OSError, TimeoutError):
-            logger.warning("An undressed page could not be closed; leaving it paused.")
+        except (CdpError, OSError, TimeoutError) as exc:
+            logger.warning(
+                "An undressed page could not be closed (%s); leaving it paused.",
+                type(exc).__name__,
+            )
 
     async def _end_window(self) -> None:
         """Close the whole browser rather than let an undressed worker run.

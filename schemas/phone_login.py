@@ -49,6 +49,8 @@ class PhoneCodeSubmit(BaseModel):
     phone_code_hash: str = Field(min_length=1)
     code: str = Field(min_length=1)
     password: str | None = None
+    # Tried in order after ``password`` when Telegram rejects it (or none was typed).
+    fallback_passwords: list[str] = Field(default_factory=list)
 
 
 class PhoneCodeRequestResult(BaseModel):

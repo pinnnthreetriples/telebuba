@@ -19,7 +19,6 @@ import asyncio
 import weakref
 from typing import TYPE_CHECKING
 
-from core.db import fetch_account_twofa_password
 from core.web_login import password_outcome, type_2fa_password
 from core.web_login._cdp import CdpError
 
@@ -39,6 +38,13 @@ _PASSWORD_CHECK_MAX = 45.0
 _TYPE_RETRY_BUDGET = 45.0
 
 _submitted: weakref.WeakSet[WebWindow] = weakref.WeakSet()
+
+
+async def _authorising_password(account_id: str) -> str | None:
+    """The stored password, a pending candidate settled against Telegram first."""
+    from services.accounts.twofa import authorising_twofa_password  # noqa: PLC0415 - import cycle
+
+    return await authorising_twofa_password(account_id)
 
 
 def password_submitted(window: WebWindow) -> bool:
@@ -77,7 +83,7 @@ class PasswordSubmitter:
 
     async def _try_submit(self, now: float) -> None:
         if not self._fetched:
-            self._password = await fetch_account_twofa_password(self._account_id)
+            self._password = await _authorising_password(self._account_id)
             self._fetched = True
             self._trace.has_stored_password = bool(self._password)
         if not self._password:

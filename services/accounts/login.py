@@ -21,8 +21,8 @@ from core.config import settings
 from core.db import (
     DuplicateSessionNameError,
     fetch_account,
-    fetch_account_twofa_password,
     set_account_twofa_password,
+    twofa_password_candidates,
     update_account_from_session_check,
 )
 from core.logging import log_event
@@ -213,7 +213,8 @@ async def submit_login_code(
         raise AccountActionError(code_gone)
     assert_device_configured(account.session_device)
     # 2FA the operator did not retype: the stored password covers Telegram asking for it.
-    effective_password = password or await fetch_account_twofa_password(account_id)
+    # The first candidate rides as ``password``; core tries the rest when Telegram refuses it.
+    candidates = [password] if password else await twofa_password_candidates(account_id)
     result = await submit_phone_code(
         PhoneCodeSubmit(
             account_id=account_id,
@@ -221,7 +222,8 @@ async def submit_login_code(
             phone=pending.phone,
             phone_code_hash=pending.phone_code_hash,
             code=code,
-            password=effective_password,
+            password=candidates[0] if candidates else None,
+            fallback_passwords=candidates[1:],
         ),
     )
     if result.status != "alive":

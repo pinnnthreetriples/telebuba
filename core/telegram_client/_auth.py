@@ -48,6 +48,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
 )
 from core.telegram_client._pool import removing_client
+from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from core.telegram_client._util import optional_bool, optional_str
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
@@ -183,9 +184,10 @@ async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> None:
             phone_code_hash=request.phone_code_hash,
         )
     except errors.SessionPasswordNeededError:
-        if not request.password:
+        passwords = [*([request.password] if request.password else []), *request.fallback_passwords]
+        if not passwords:
             raise
-        await client.sign_in(password=request.password)
+        await sign_in_with_passwords(client, request.account_id, passwords)
 
 
 async def log_out_session(

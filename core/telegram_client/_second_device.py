@@ -26,7 +26,7 @@ from core.config import settings
 from core.db import fetch_account
 from core.device_fingerprint import generate_random_device_fingerprint
 from core.device_fingerprint_android import generate_android_fingerprint
-from core.repositories._accounts_twofa import fetch_account_twofa_password
+from core.repositories._accounts_twofa import twofa_password_candidates
 from core.repositories.device_fingerprint import (
     SecondDeviceConflictError,
     forget_second_device,
@@ -56,6 +56,7 @@ from core.telegram_client._pool import (
     get_client,
     removing_client,
 )
+from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.devices import SecondDeviceResult
 
@@ -142,11 +143,11 @@ async def _sign_in(
                 phone_code_hash=sent.phone_code_hash,
             )
     except errors.SessionPasswordNeededError:
-        password = await fetch_account_twofa_password(request.account_id)
-        if not password:
+        passwords = await twofa_password_candidates(request.account_id)
+        if not passwords:
             raise _SignInRefusedError(_TWOFA_MISSING) from None
         async with asyncio.timeout(auth_deadline()):
-            await client.sign_in(password=password)
+            await sign_in_with_passwords(client, request.account_id, passwords)
 
 
 def _classify(request: SecondDeviceSignIn, exc: Exception) -> SecondDeviceResult:

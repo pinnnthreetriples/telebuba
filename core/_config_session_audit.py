@@ -24,7 +24,7 @@ class SessionAuditSettings(BaseSettings):
     delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
     # An authorization counts as made by Telebuba's own web login when it was created no
     # earlier than the login's start minus this skew (Telegram's clock against ours).
-    own_authorization_skew_seconds: float = Field(default=120.0, ge=0.0)
+    own_login_skew_seconds: float = Field(default=120.0, ge=0.0)
     # A re-keyed account's old authorization that could not be ended yet is tried again after
     # this long (or after the wait Telegram named).
     rekey_retry_seconds: float = Field(default=3600.0, gt=0.0)

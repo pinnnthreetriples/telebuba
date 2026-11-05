@@ -10234,6 +10234,10 @@ export type RequestLoginCodeErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -10279,6 +10283,10 @@ export type SubmitLoginCodeErrors = {
    * Not authenticated
    */
   401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
   /**
    * Request validation failed
    */

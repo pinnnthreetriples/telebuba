@@ -194,6 +194,7 @@ async def test_first_open_accepts_the_token_once_and_holds_the_window(
 
 
 @pytest.mark.usefixtures("relay")
+@pytest.mark.usefixtures("relay")
 @pytest.mark.asyncio
 async def test_a_captured_token_is_accepted_before_the_qr_is_painted(
     monkeypatch: pytest.MonkeyPatch,

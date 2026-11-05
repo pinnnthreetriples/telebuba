@@ -39,7 +39,12 @@ def _account() -> AccountRead:
 
 
 def _session(
-    hash_: str, *, created: datetime | None, ours: bool = False, current: bool = False
+    hash_: str,
+    *,
+    created: datetime | None,
+    ours: bool = False,
+    current: bool = False,
+    app: str = "Telegram Web",
 ) -> AccountSession:
     return AccountSession(
         hash=hash_,
@@ -49,7 +54,7 @@ def _session(
         device_model="Model",
         platform="Windows",
         system_version="10",
-        app_name="Telegram Desktop",
+        app_name=app,
         ip="192.0.2.10",
         country="Nowhere",
         date_created=created.isoformat() if created else None,
@@ -101,8 +106,21 @@ async def test_only_the_authorization_created_by_the_login_is_recorded() -> None
 
 
 @pytest.mark.asyncio
+async def test_a_desktop_or_mobile_app_in_the_same_window_is_never_ours(wire: _Wire) -> None:
+    wire.sessions.append(
+        _session("4", created=_LOGIN + timedelta(seconds=6), app="Telegram Desktop")
+    )
+    wire.sessions.append(_session("5", created=_LOGIN + timedelta(seconds=7), app="Telegram iOS"))
+    wire.sessions.append(_session("6", created=_LOGIN + timedelta(seconds=8), app="TELEGRAM WEBK"))
+
+    assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 2
+
+    assert await fetch_own_authorizations("acc-1") == {"2": "web", "6": "web"}
+
+
+@pytest.mark.asyncio
 async def test_the_skew_lets_a_slightly_earlier_authorization_in(wire: _Wire) -> None:
-    skew = settings.session_audit.own_authorization_skew_seconds
+    skew = settings.session_audit.own_login_skew_seconds
     wire.sessions[2] = _session("3", created=_LOGIN - timedelta(seconds=skew - 1))
 
     assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 2

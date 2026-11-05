@@ -198,7 +198,7 @@ class _Container:
             raise TelegramClientPoolError(_account_id, ConnectionError())
         return self.code
 
-    async def fetch_account_twofa_password(self, _account_id: str) -> str | None:
+    async def authorising_twofa_password(self, _account_id: str) -> str | None:
         return self.password
 
     def ui(self, name: str):
@@ -226,7 +226,7 @@ _SERVICE_FAKES = (
     "leave_app",
     "stop_pod",
     "remove_pod",
-    "fetch_account_twofa_password",
+    "authorising_twofa_password",
 )
 # On ``_emulator_sign_in`` and ``_app_screen``, wherever each name is.
 _SIGN_IN_FAKES = (
@@ -236,7 +236,7 @@ _SIGN_IN_FAKES = (
     "go_back",
     "login_code_cutoff",
     "wait_account_login_code",
-    "fetch_account_twofa_password",
+    "authorising_twofa_password",
 )
 _SCREEN_ACTIONS = {
     "press_start": "start",

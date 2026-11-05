@@ -55,7 +55,6 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     fetch_account_proxy_settings,
-    fetch_account_twofa_password,
     fetch_device_fingerprint,
 )
 from core.emulator import (
@@ -100,6 +99,7 @@ from services.accounts._mobile_start import (
 from services.accounts._result import AccountActionError
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
+from services.accounts.twofa import authorising_twofa_password
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -173,7 +173,7 @@ async def _refuse_what_cannot_work(
     fingerprint = await fetch_device_fingerprint(account.account_id, "mobile")
     if fingerprint is None:
         raise DeviceRefusedError(_DEVICE_MISSING)
-    password = await fetch_account_twofa_password(account.account_id) if app else None
+    password = await authorising_twofa_password(account.account_id) if app else None
     if password:
         try:
             escape_input_text(password)

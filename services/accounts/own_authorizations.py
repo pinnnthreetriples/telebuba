@@ -32,19 +32,21 @@ from services.accounts.session_audit import account_audit_lock, require_proxied_
 __all__ = ["record_own_web_authorizations"]
 
 _KIND = "web"
+# A seller on a desktop/mobile app in the same window must never become ours.
+_KIND_MARK = "web"
 
 
 async def record_own_web_authorizations(account_id: str, since: datetime) -> int:
     """Record the web login made since ``since`` as ours; how many authorizations were new.
 
-    Considers every listed authorization that is not the asking session, not already ours
-    (a device of the account or one recorded earlier) and was created no earlier than
-    ``since`` minus the configured skew. A naive ``since`` is read as UTC. Raises
-    :class:`AccountActionError` when the list cannot be read (the gateway's code).
+    Considers every listed authorization whose app name says "Web", that is not the asking
+    session, not already ours (a device of the account or one recorded earlier) and was
+    created no earlier than ``since`` minus the configured skew. A naive ``since`` is read as
+    UTC. Raises :class:`AccountActionError` when the list cannot be read (the gateway's code).
     """
     account = await require_proxied_account(account_id)
     since = since if since.tzinfo is not None else since.replace(tzinfo=UTC)
-    threshold = since - timedelta(seconds=settings.session_audit.own_authorization_skew_seconds)
+    threshold = since - timedelta(seconds=settings.session_audit.own_login_skew_seconds)
     async with account_audit_lock(account_id):
         known = await fetch_own_authorizations(account_id)
         try:
@@ -62,6 +64,7 @@ async def record_own_web_authorizations(account_id: str, since: datetime) -> int
             for session in listing.sessions
             if not session.is_current
             and not session.is_ours
+            and _KIND_MARK in session.app_name.casefold()
             and (created := parse_moment(session.date_created)) is not None
             and created >= threshold
         ]

@@ -60,13 +60,13 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     async def _fetch_account(_account_id: str) -> AccountRead | None:
         return state.account
 
-    async def _password(_account_id: str) -> str | None:
-        return state.password
+    async def _password(_account_id: str) -> list[str]:
+        return [state.password] if state.password else []
 
     async def _rekey(
-        account_id: str, device: str, scratch: str, password: str | None
+        account_id: str, device: str, scratch: str, passwords: list[str]
     ) -> RekeyResult:
-        state.rekeys.append((account_id, device, scratch, password))
+        state.rekeys.append((account_id, device, scratch, passwords[0] if passwords else None))
         if state.rekey_failure is not None:
             raise state.rekey_failure
         return RekeyResult(old_hash="111", new_hash="222")
@@ -84,7 +84,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
 
     monkeypatch.setattr(svc, "require_account", _require)
     monkeypatch.setattr(svc, "fetch_account", _fetch_account)
-    monkeypatch.setattr(svc, "fetch_account_twofa_password", _password)
+    monkeypatch.setattr(svc, "twofa_password_candidates", _password)
     monkeypatch.setattr(svc, "rekey_session", _rekey)
     monkeypatch.setattr(svc, "close_sessions", _close)
     monkeypatch.setattr(svc, "refresh_account_audit", _audit)

@@ -42,6 +42,12 @@ def mark_own(sessions: list[AccountSession], own: Mapping[str, str]) -> list[Acc
     return marked
 
 
+def _with_predates(session: AccountSession, *, predates: bool) -> AccountSession:
+    flagged = session.model_copy()
+    flagged.key_predates_import = predates
+    return flagged
+
+
 def flag_seller_keys(
     sessions: list[AccountSession], imported_at: str, rekey: StoredRekey | None
 ) -> list[AccountSession]:
@@ -52,10 +58,9 @@ def flag_seller_keys(
     flagged: list[AccountSession] = []
     for session in sessions:
         created = parse_moment(session.date_created)
-        predates = (
-            session.is_ours and session.kind is None and created is not None and created < imported
-        )
-        flagged.append(session.model_copy(update={"key_predates_import": predates}))
+        sellers = session.is_ours and session.kind is None
+        older = created is not None and created < imported
+        flagged.append(_with_predates(session, predates=sellers and older))
     return flagged
 
 

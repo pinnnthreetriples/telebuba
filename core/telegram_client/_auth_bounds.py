@@ -50,14 +50,17 @@ async def safe_disconnect(client: TelegramClient) -> None:
         logger.warning("auth client disconnect failed (%s)", type(exc).__name__)
 
 
+_REQUEST_FAILURE_CODES: tuple[tuple[tuple[type[BaseException], ...], str], ...] = (
+    ((errors.FloodWaitError,), "flood_wait"),
+    ((errors.PhoneNumberInvalidError,), "phone_invalid"),
+    ((errors.PhoneNumberBannedError,), "phone_banned"),
+    (UNREACHABLE_ERRORS, "unavailable"),
+)
+
+
 def request_failure_code(exc: Exception) -> str:
     """Stable, locale-neutral code for a failed SendCode (the SPA translates it)."""
-    if isinstance(exc, errors.FloodWaitError):
-        return "flood_wait"
-    if isinstance(exc, errors.PhoneNumberInvalidError):
-        return "phone_invalid"
-    if isinstance(exc, errors.PhoneNumberBannedError):
-        return "phone_banned"
-    if isinstance(exc, UNREACHABLE_ERRORS):
-        return "unavailable"
+    for error_types, code in _REQUEST_FAILURE_CODES:
+        if isinstance(exc, error_types):
+            return code
     return "failed"

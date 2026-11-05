@@ -12,6 +12,7 @@ from core.db import (
     configure_database,
     fetch_account_twofa_password,
     set_account_twofa_password,
+    set_account_twofa_pending,
     update_account_from_session_check,
 )
 from schemas.accounts import AccountCreate
@@ -172,6 +173,7 @@ async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatc
             "phone_code_hash": "HASH",
             "code": "01234",
             "password": "2fa",
+            "fallback_passwords": [],
         },
     ]
 
@@ -361,6 +363,25 @@ async def test_no_typed_password_stores_nothing_and_falls_back_to_the_stored_one
 
     assert [s.password for s in submitted] == ["stored-pw"]
     assert await fetch_account_twofa_password("acc") == "stored-pw"
+
+
+@pytest.mark.asyncio
+async def test_a_pending_candidate_rides_along_as_the_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "stored-pw")
+    await set_account_twofa_pending("acc", "pending-pw")
+    submitted: list[PhoneCodeSubmit] = []
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", captured=submitted)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111")
+
+    assert [(s.password, s.fallback_passwords) for s in submitted] == [
+        ("stored-pw", ["pending-pw"])
+    ]
 
 
 @pytest.mark.asyncio

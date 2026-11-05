@@ -21,6 +21,7 @@ from schemas.proxy import ProxyCheckResult, ProxySettings
 from services.accounts import (
     _web_drive,
     _web_drive_password,
+    _web_drive_run,
     _web_identity,
     _web_proxy_probe,
     _web_watch,
@@ -28,7 +29,8 @@ from services.accounts import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Awaitable, Callable, Sequence
+    from datetime import datetime
     from pathlib import Path
 
 PROXY = ProxySettings(
@@ -323,6 +325,20 @@ def wire(
     monkeypatch.setattr(_web_drive, "accept_web_login_token", _accept)
     monkeypatch.setattr(_web_drive, "release_capture", _release)
     monkeypatch.setattr(_web_drive_password, "type_2fa_password", _type)
-    monkeypatch.setattr(_web_drive_password, "fetch_account_twofa_password", _twofa)
+    monkeypatch.setattr(_web_drive_password, "_authorising_password", _twofa)
+    monkeypatch.setattr(_web_drive_run, "_record_own_authorizations", _recorder(calls))
     monkeypatch.setattr(_web_drive_password, "password_outcome", _idle)
     return window
+
+
+def _recorder(calls: dict[str, Any]) -> Callable[[str, datetime], Awaitable[int]]:
+    async def _record(account_id: str, since: datetime) -> int:
+        calls.setdefault("recorded", []).append((account_id, since))
+        return 1
+
+    return _record
+
+
+async def settle_recorders() -> None:
+    """Let the background own-authorization recordings a login scheduled finish."""
+    await asyncio.gather(*list(_web_drive_run._recorders), return_exceptions=True)
