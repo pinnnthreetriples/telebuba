@@ -23,10 +23,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
+from core.repositories.account_own_authorizations import fetch_own_authorizations
+from core.repositories.account_rekeys import fetch_rekey
 from core.repositories.session_audits import fetch_session_audit, save_session_audit
 from core.telegram_client import SessionAuditGatewayError, read_account_sessions
 from schemas.session_audit import AccountSessionAudit
 from services.accounts._result import AccountActionError, AccountNotFoundError
+from services.accounts._session_classify import flag_seller_keys, with_own
 from services.accounts.lifecycle import require_account
 from services.lifecycle_journal import record_lifecycle_event
 
@@ -60,7 +63,11 @@ def _foreign_hashes(audit: AccountSessionAudit | None) -> set[str]:
 async def read_account_session_audit(account_id: str) -> AccountSessionAudit:
     """The account's latest saved audit; an empty view (no ``checked_at``) before the first."""
     await require_account(account_id)
-    return await fetch_session_audit(account_id) or AccountSessionAudit.empty(account_id)
+    saved = await fetch_session_audit(account_id)
+    if saved is None:
+        return AccountSessionAudit.empty(account_id)
+    # An own web login recorded after the audit was read is ours now, not foreign.
+    return with_own(saved, await fetch_own_authorizations(account_id))
 
 
 async def require_proxied_account(account_id: str) -> AccountRead:
@@ -88,7 +95,9 @@ async def refresh_account_audit(
     """
     account_id = account.account_id
     try:
-        listing = await read_account_sessions(account_id, account.devices)
+        listing = await read_account_sessions(
+            account_id, account.devices, await fetch_own_authorizations(account_id)
+        )
     except SessionAuditGatewayError as exc:
         await log_event(
             "WARNING",
@@ -98,6 +107,13 @@ async def refresh_account_audit(
         )
         raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
     previous = await fetch_session_audit(account_id)
+    listing = listing.model_copy(
+        update={
+            "sessions": flag_seller_keys(
+                listing.sessions, account.created_at, await fetch_rekey(account_id)
+            )
+        }
+    )
     audit = AccountSessionAudit.of(account_id, datetime.now(UTC).isoformat(), listing)
     await save_session_audit(audit, killed_count=killed_count)
     await log_event(

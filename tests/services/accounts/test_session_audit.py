@@ -59,7 +59,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> _Wire:
             raise AccountNotFoundError(account_id)
         return state.account
 
-    async def _read(account_id: str, devices: list[str]) -> AuthorizationList:
+    async def _read(account_id: str, devices: list[str], _own: object = None) -> AuthorizationList:
         state.reads.append((account_id, list(devices)))
         if state.failure is not None:
             raise state.failure

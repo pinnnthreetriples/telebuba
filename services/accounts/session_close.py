@@ -24,11 +24,13 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
+from core.repositories.account_own_authorizations import fetch_own_authorizations
 from core.repositories.session_audits import fetch_session_audit
 from core.telegram_client import SessionAuditGatewayError, close_sessions
 from schemas.session_close import SessionCloseOutcome, SessionCloseResult
 from services import pacing
 from services.accounts._result import AccountActionError
+from services.accounts._session_classify import with_own
 from services.accounts.session_audit import (
     account_audit_lock,
     refresh_account_audit,
@@ -75,7 +77,11 @@ async def _close(account_id: str, hashes: list[str] | None) -> SessionCloseResul
         if hashes:
             try:
                 outcomes = await close_sessions(
-                    account_id, account.devices, hashes, _pauses(len(hashes))
+                    account_id,
+                    account.devices,
+                    hashes,
+                    _pauses(len(hashes)),
+                    await fetch_own_authorizations(account_id),
                 )
             except SessionAuditGatewayError as exc:
                 await log_event(
@@ -100,7 +106,10 @@ async def _reread(
 ) -> AccountSessionAudit | None:
     """The account's sessions after the run; the saved ones when nothing was tried."""
     if not outcomes:
-        return await fetch_session_audit(account.account_id)
+        saved = await fetch_session_audit(account.account_id)
+        if saved is None:
+            return None
+        return with_own(saved, await fetch_own_authorizations(account.account_id))
     try:
         return await refresh_account_audit(account, killed_count=closed)
     except AccountActionError:

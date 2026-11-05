@@ -115,6 +115,7 @@ def _delete_scheduled_posts(connection: Connection, account_id: str) -> None:
 def _delete_session_audits(connection: Connection, account_id: str) -> None:
     # The snapshot names other people's sessions (IP, device), so it must not outlive the
     # account; the history goes with it, a re-import starting a fresh record.
+    from core._schema_own_authorizations import _account_own_authorizations  # noqa: PLC0415
     from core._schema_session_audits import (  # noqa: PLC0415
         _account_rekeys,
         _account_session_audit_events,
@@ -125,6 +126,11 @@ def _delete_session_audits(connection: Connection, account_id: str) -> None:
         delete(_account_session_audits).where(_account_session_audits.c.account_id == account_id),
     )
     connection.execute(delete(_account_rekeys).where(_account_rekeys.c.account_id == account_id))
+    connection.execute(
+        delete(_account_own_authorizations).where(
+            _account_own_authorizations.c.account_id == account_id,
+        ),
+    )
     connection.execute(
         delete(_account_session_audit_events).where(
             _account_session_audit_events.c.account_id == account_id,

@@ -229,3 +229,16 @@ async def test_a_dead_session_before_the_first_call_is_a_gateway_error(
         await close_sessions("acc-1", ["desktop"], ["2"], [])
 
     assert raised.value.code == "session_dead"
+
+
+@pytest.mark.asyncio
+async def test_a_recorded_own_web_login_is_never_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _Client([_auth(1, current=True), _auth(2), _auth(3)])
+    _borrow(monkeypatch, client)
+
+    outcomes = await close_sessions("acc-1", ["desktop"], ["2", "3"], [1.0], {"2": "web"})
+
+    assert _statuses(outcomes) == [("2", "not_foreign"), ("3", "closed")]
+    assert client.reset_hashes == [3]

@@ -722,6 +722,14 @@ export type AccountSession = {
    */
   is_ours: boolean;
   /**
+   * Kind
+   */
+  kind?: 'web' | null;
+  /**
+   * Key Predates Import
+   */
+  key_predates_import?: boolean;
+  /**
    * Official App
    */
   official_app: boolean;

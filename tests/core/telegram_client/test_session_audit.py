@@ -192,3 +192,19 @@ async def test_a_pool_refusal_is_unavailable(monkeypatch: pytest.MonkeyPatch) ->
         "unavailable",
         "TelegramClientPoolError",
     )
+
+
+@pytest.mark.asyncio
+async def test_a_recorded_own_authorization_is_ours_with_its_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _Client(_reply(_auth(11, current=True), _auth(22), _auth(33)))
+    _borrow(monkeypatch, {"desktop": client})
+
+    listing = await read_account_sessions("acc-1", ["desktop"], {"22": "web"})
+
+    assert [(s.hash, s.is_ours, s.kind) for s in listing.sessions] == [
+        ("11", True, None),
+        ("22", True, "web"),
+        ("33", False, None),
+    ]
