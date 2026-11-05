@@ -209,15 +209,15 @@ async def _settled_input_point(window: WebWindow) -> dict[str, float] | None:
 
 
 async def _field_holds(window: WebWindow, password: str) -> bool:
-    """True unless the field PROVABLY holds a different number of characters.
+    """True only when the visible field PROVABLY holds the typed number of characters.
 
-    Only the length crosses back, never the value. An unreadable answer is not a failure:
-    refusing to submit on a probe that merely returned nothing would trade a possible blank
-    submit for a certain non-submit.
+    Only the length crosses back, never the value. An unreadable answer (no visible password
+    field: WebK re-rendered) is "not held": Enter would go nowhere, and counting that as a
+    submission would stop the window from ever typing again.
     """
     value = await _evaluate(window, _FIELD_LENGTH_EXPR)
     if not isinstance(value, int) or isinstance(value, bool):
-        return True
+        return False
     return value == len(password.encode("utf-16-le")) // 2
 
 

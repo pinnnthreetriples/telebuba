@@ -102,7 +102,8 @@ __NATIVE__
         getClientExtensionResults: () => ({}), toJSON: json,
       });
   };
-  const wanted = (o) => !!(o && o.publicKey && o.publicKey.rpId === 'telegram.org'
+  const wanted = (o) => !!(location.origin === 'https://web.telegram.org'
+    && o && o.publicKey && o.publicKey.rpId === 'telegram.org'
     && o.publicKey.challenge);
   container.get = F({ f(options) {
     if (!wanted(options)) return real.apply(this, arguments);

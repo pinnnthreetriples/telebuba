@@ -41,7 +41,7 @@ class RecordingSession:
 
     def __init__(
         self,
-        evaluate_values: dict[str, str] | None = None,
+        evaluate_values: dict[str, Any] | None = None,
         events: list[dict[str, Any]] | None = None,
         *,
         fail_on: str | None = None,
@@ -70,7 +70,8 @@ class RecordingSession:
         if method == "Runtime.evaluate" and isinstance(expr, str):
             value = self._evaluate_values.get(expr)
             if value is not None:
-                return {"result": {"result": {"type": "string", "value": value}}}
+                kind = "number" if isinstance(value, int) else "string"
+                return {"result": {"result": {"type": kind, "value": value}}}
         return {"result": {}}
 
     async def next_target_event(self, wait_seconds: float) -> dict[str, Any] | None:

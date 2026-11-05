@@ -26,7 +26,6 @@ class SessionAuditSettings(BaseSettings):
     # launched: a Web authorization counts as made by Telebuba's own login when it was
     # created within [the drive's start - skew, the moment logged-in was seen + skew]
     # (Telegram's clock against ours).
-    own_login_skew_seconds: float = Field(default=30.0, ge=0.0)
     # How long a web window's launch waits for the pre-login listing of authorizations; on
     # expiry the login goes on and the recording falls back to the time window above.
     own_login_baseline_timeout_seconds: float = Field(default=10.0, gt=0.0)

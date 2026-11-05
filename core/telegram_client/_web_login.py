@@ -57,10 +57,11 @@ class WebLoginTransientError(Exception):
         self.retry_after = retry_after
 
 
-async def accept_web_login_token(account_id: str, token: bytes) -> bool:
+async def accept_web_login_token(account_id: str, token: bytes) -> str | None:
     """Accept ``token`` (WebK's exported login token) with the account's pooled client.
 
-    Returns ``True`` when the token was accepted, ``False`` when it had already rotated
+    Returns the hash of the authorization Telegram created for the browser when the token was
+    accepted (``""`` if the answer carried none), ``None`` when it had already rotated
     (expired / already-accepted / invalidated) so the caller retries the next captured
     token. A connection fault, timeout or short flood wait raises
     :class:`WebLoginTransientError` so the caller retries the SAME token within its own
@@ -69,9 +70,9 @@ async def accept_web_login_token(account_id: str, token: bytes) -> bool:
     """
     try:
         confirmer = await get_client(account_id)
-        await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
+        accepted = await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
     except _ROTATION_ERRORS:
-        return False
+        return None
     except _FILE_ERRORS:
         raise
     except FloodWaitError as exc:
@@ -80,4 +81,5 @@ async def accept_web_login_token(account_id: str, token: bytes) -> bool:
         raise WebLoginTransientError(float(exc.seconds)) from exc
     except _TRANSIENT_ERRORS as exc:
         raise WebLoginTransientError from exc
-    return True
+    new_hash = getattr(accepted, "hash", None)
+    return str(new_hash) if isinstance(new_hash, int) and not isinstance(new_hash, bool) else ""

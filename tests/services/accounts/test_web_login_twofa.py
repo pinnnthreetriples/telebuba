@@ -178,11 +178,11 @@ async def test_a_transient_accept_failure_retries_the_same_token(
     monkeypatch.setattr(_web_drive, "_ACCEPT_BACKOFF_BASE", 0.0)
     failures = [WebLoginTransientError(0.0)]
 
-    async def _accept(_account_id: str, token_bytes: bytes) -> bool:
+    async def _accept(_account_id: str, token_bytes: bytes) -> str | None:
         if failures:
             raise failures.pop()
         calls.setdefault("accepted", []).append(token_bytes)
-        return True
+        return ""
 
     monkeypatch.setattr(_web_drive, "accept_web_login_token", _accept)
 
@@ -292,7 +292,7 @@ async def test_a_drive_that_raises_is_logged_as_a_refusal(
     events = _capture_events(monkeypatch)
     _wire(monkeypatch, calls, states=["qr"])
 
-    async def _boom(_account_id: str, _token: bytes) -> bool:
+    async def _boom(_account_id: str, _token: bytes) -> str | None:
         raise RuntimeError
 
     monkeypatch.setattr(_web_drive, "accept_web_login_token", _boom)
@@ -385,7 +385,7 @@ async def test_a_transient_accept_failure_does_not_stall_the_password_step(
     monkeypatch.setattr(_web_drive_password, "_PASSWORD_GRACE", 1000.0)
     _wire(monkeypatch, calls, states=["qr", "password", "password", "logged_in"], twofa="hunter2")
 
-    async def _accept(_account_id: str, _token: bytes) -> bool:
+    async def _accept(_account_id: str, _token: bytes) -> str | None:
         calls["accept_calls"] = calls.get("accept_calls", 0) + 1
         raise WebLoginTransientError(1000.0)
 
@@ -416,7 +416,7 @@ async def test_the_accept_hold_grows_and_is_capped(
     async def _token(_window: object) -> str:
         return "dG9rZW4x"
 
-    async def _accept(_account_id: str, _token: bytes) -> bool:
+    async def _accept(_account_id: str, _token: bytes) -> str | None:
         raise WebLoginTransientError(0.0)
 
     monkeypatch.setattr(_web_drive, "latest_login_token", _token)

@@ -27,7 +27,7 @@ __all__ = ["fresh_registry", "relay"]
 
 @pytest.mark.usefixtures("relay")
 @pytest.mark.asyncio
-async def test_a_successful_login_is_recorded_as_ours_since_the_drive_began(
+async def test_a_successful_login_is_recorded_with_the_hash_its_qr_accept_returned(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: dict[str, Any] = {}
@@ -39,8 +39,7 @@ async def test_a_successful_login_is_recorded_as_ours_since_the_drive_began(
     await _settle_recorders()
 
     assert result.signed_in is True
-    assert [account for account, _since in calls["recorded"]] == ["acct"]
-    assert calls["recorded"][0][1].tzinfo is not None
+    assert calls["recorded"] == [("acct", "777")]  # the hash Telegram gave for the QR accept
 
 
 @pytest.mark.usefixtures("relay")
@@ -97,7 +96,6 @@ async def test_the_baseline_is_taken_for_the_unsigned_window_and_handed_to_the_r
 
     assert calls["baselines"] == [("acct", window)]
     assert calls["recorded_windows"] == [window]  # judged against THAT window's baseline
-    assert calls["seen_at"][0] >= calls["recorded"][0][1]
 
 
 @pytest.mark.usefixtures("relay")
@@ -122,6 +120,7 @@ async def test_a_login_finished_by_hand_after_a_timeout_is_recorded_by_the_redri
 
     assert second.signed_in is True
     assert calls["recorded_windows"] == [window]  # the raised window, with its launch baseline
+    assert calls["recorded"] == [("acct", "777")]  # the first drive's accepted hash survives
     assert len(calls["baselines"]) == 1
 
 

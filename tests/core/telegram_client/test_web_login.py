@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from telethon.tl.functions.auth import AcceptLoginTokenRequest
 
@@ -20,14 +22,15 @@ async def test_accept_web_login_token_calls_accept_with_the_given_bytes(
     async def fake_get_client(account_id: str, _device_type: str | None = None) -> object:
         assert account_id == "acc-1"
 
-        async def confirmer(request: object) -> None:
+        async def confirmer(request: object) -> object:
             captured.append(request)
+            return SimpleNamespace(hash=1234567890123)
 
         return confirmer
 
     monkeypatch.setattr(f"{_MODULE}.get_client", fake_get_client)
 
-    await accept_web_login_token("acc-1", _TOKEN)
+    assert await accept_web_login_token("acc-1", _TOKEN) == "1234567890123"
 
     (request,) = captured
     assert isinstance(request, AcceptLoginTokenRequest)

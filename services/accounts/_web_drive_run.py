@@ -7,13 +7,17 @@ caller owns (and tests can shrink) it.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
 from schemas.accounts import OpenWebResult
-from services.accounts._web_drive import DriveTrace, drive_login, mark_signed_in
+from services.accounts._web_drive import (
+    DriveTrace,
+    accepted_login_hash,
+    drive_login,
+    mark_signed_in,
+)
 from services.accounts._web_errors import _DRIVE_REFUSAL, WebLoginLaunchError
 
 if TYPE_CHECKING:
@@ -41,8 +45,6 @@ async def drive_and_mark(
     can finish by hand, and the profile stays unmarked so the next click drives again.
 
     Every outcome is logged as one ``web_login_*`` event with non-secret fields only.
-    ``trace.started_at`` is the wall-clock start of the drive: on success it is the lower
-    bound for "authorizations created by this web login".
     """
     trace = DriveTrace()
     try:
@@ -64,7 +66,7 @@ async def drive_and_mark(
         return OpenWebResult(launched=True, signed_in=False, reason=trace.classify_failure())
     mark_signed_in(profile)
     await _log_outcome(account_id, trace, "web_login_success")
-    _record_in_background(account_id, window, trace)
+    _record_in_background(account_id, window)
     return OpenWebResult(launched=True, signed_in=True)
 
 
@@ -90,19 +92,16 @@ async def _log_outcome(
     await log_event(level, event, account_id=account_id, extra=extra)
 
 
-def _record_in_background(account_id: str, window: WebWindow, trace: DriveTrace) -> None:
+def _record_in_background(account_id: str, window: WebWindow) -> None:
     """Record this login's authorization as ours without ever delaying or failing the login."""
-    seen_at = trace.logged_in_at or datetime.now(UTC)
-    task = asyncio.create_task(_record_own(account_id, window, trace.started_at, seen_at))
+    task = asyncio.create_task(_record_own(account_id, window, accepted_login_hash(window)))
     _recorders.add(task)
     task.add_done_callback(_recorders.discard)
 
 
-async def _record_own(
-    account_id: str, window: WebWindow, since: datetime, seen_at: datetime
-) -> None:
+async def _record_own(account_id: str, window: WebWindow, accepted_hash: str | None) -> None:
     try:
-        await _record_own_authorizations(account_id, window, since, seen_at)
+        await _record_own_authorizations(account_id, window, accepted_hash)
     except Exception as exc:  # noqa: BLE001
         # Blind on purpose: the login already succeeded and nothing here may undo it. The
         # worst case is the audit showing our own web login as foreign until the next audit.
@@ -115,20 +114,20 @@ async def _record_own(
 
 
 async def _record_own_authorizations(
-    account_id: str, window: WebWindow, since: datetime, seen_at: datetime
+    account_id: str, window: WebWindow, accepted_hash: str | None
 ) -> int:
     from services.accounts.own_authorizations import (  # noqa: PLC0415 - import cycle
         record_own_web_login,
     )
 
-    return await record_own_web_login(account_id, window, since=since, seen_at=seen_at)
+    return await record_own_web_login(account_id, window, accepted_hash=accepted_hash)
 
 
 async def take_login_baseline(account_id: str, window: WebWindow) -> None:
     """Keep the account's authorization hashes with a window launched for an unsigned profile.
 
-    Best effort and never a failure of the launch: without a baseline the recording falls back
-    to its bounded time window.
+    Best effort and never a failure of the launch: without a baseline (and without an accepted
+    QR hash) nothing is recorded as ours.
     """
     from services.accounts.own_authorizations import (  # noqa: PLC0415 - import cycle
         remember_login_baseline,

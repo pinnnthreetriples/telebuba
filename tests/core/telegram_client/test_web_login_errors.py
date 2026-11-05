@@ -37,7 +37,7 @@ async def test_every_token_rotation_error_is_a_refusal_not_a_failure(
 ) -> None:
     _failing(monkeypatch, error_type(request=None))  # ty: ignore[missing-argument]
 
-    assert await accept_web_login_token("acc-1", b"t") is False
+    assert await accept_web_login_token("acc-1", b"t") is None
 
 
 @pytest.mark.asyncio
