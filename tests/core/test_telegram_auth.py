@@ -249,7 +249,7 @@ async def test_submit_phone_code_classifies_unexpected_error(tmp_path: Path, mon
         PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
     )
 
-    assert result.status == "unknown_error"
+    assert result.status == "network_error"
     assert result.is_temporary is True
     assert result.error_type == "ConnectionError"
     assert client.disconnected is True
@@ -472,7 +472,7 @@ async def test_submit_phone_code_error_hides_the_proxy_endpoint(
         PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
     )
 
-    assert result.status == "unknown_error"
+    assert result.status == "network_error"
     assert result.error_type == "OSError"
     assert result.error_message == "OSError"
     for secret in _PROXY_SECRETS:

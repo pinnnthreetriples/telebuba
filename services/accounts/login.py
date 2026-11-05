@@ -13,11 +13,18 @@ from module globals at call time (same convention as :mod:`.sessions`).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import DuplicateSessionNameError, fetch_account, update_account_from_session_check
+from core.db import (
+    DuplicateSessionNameError,
+    fetch_account,
+    fetch_account_twofa_password,
+    set_account_twofa_password,
+    update_account_from_session_check,
+)
 from core.logging import log_event
 from core.telegram_client import (
     cancel_qr_login,
@@ -31,6 +38,7 @@ from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeRequestResult, PhoneCodeSubmit
 from services.accounts._import_locks import import_lock
 from services.accounts._login_state import forget_code, peek_code, remember_code
+from services.accounts._result import AccountActionError
 from services.accounts.devices import assert_device_configured
 from services.accounts.lifecycle import add_account
 from services.accounts.sessions import SessionAlreadyExistsError
@@ -39,6 +47,7 @@ from services.inbox_runtime import start_account_inbox, stop_account_inbox
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceType
+    from schemas.telegram_session import TelegramSessionCheckResult
 
 __all__ = [
     "PhoneLoginError",
@@ -51,7 +60,58 @@ __all__ = [
 
 
 class PhoneLoginError(ValueError):
-    """A phone-login step the operator can act on (no phone, bad code, expired)."""
+    """A phone-login step the operator can act on (no phone, unknown account)."""
+
+
+# Telegram's answer to a submit -> the stable code the SPA translates
+# (``accounts.addWizard.code.*``); anything unlisted is ``failed``.
+_SUBMIT_CODES = {
+    "SessionPasswordNeededError": "password_needed",
+    "PhoneCodeInvalidError": "code_invalid",
+    "PhoneCodeEmptyError": "code_invalid",
+    "PhoneCodeExpiredError": "code_expired",
+    "PhoneNumberInvalidError": "phone_invalid",
+    "PasswordHashInvalidError": "password_invalid",
+}
+
+# Strong references: the loop keeps only weak ones to a fire-and-forget task.
+_INBOX_STARTS: set[asyncio.Task[None]] = set()
+
+
+def _submit_refusal(result: TelegramSessionCheckResult) -> AccountActionError:
+    """The locale-neutral refusal for a sign-in that did not come back alive."""
+    if result.status == "flood_wait":
+        return AccountActionError("flood_wait", retry_after_seconds=result.flood_wait_seconds)
+    if result.status in {"network_error", "proxy_error"}:
+        return AccountActionError("unavailable")
+    return AccountActionError(_SUBMIT_CODES.get(result.error_type or "", "failed"))
+
+
+async def _start_inbox_in_background(account_id: str) -> None:
+    """Start the listener after Telegram already accepted the login, off the response path.
+
+    ``start_account_inbox`` can queue on a start semaphore; the operator's request must
+    not wait on it. It logs its own failures; the guard covers anything it does not.
+    """
+    try:
+        await start_account_inbox(account_id)
+    except Exception as exc:  # noqa: BLE001 - the login succeeded; the listener retries itself.
+        await log_event(
+            "WARNING",
+            "inbox_listener_start_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+
+
+async def _remember_verified_password(account_id: str, password: str) -> None:
+    """Keep a 2FA password Telegram just accepted: the second device and the app need it."""
+    try:
+        stored = await set_account_twofa_password(account_id, password)
+    except Exception:  # noqa: BLE001 - the sign-in succeeded; never log what failed to write.
+        stored = False
+    if not stored:
+        await log_event("ERROR", "account_twofa_store_failed", account_id=account_id)
 
 
 async def start_phone_login(
@@ -124,7 +184,8 @@ async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
         ),
     )
     if not challenge.phone_code_hash:
-        raise PhoneLoginError(challenge.error or "Could not request a login code")
+        code = challenge.error_code or "failed"
+        raise AccountActionError(code, retry_after_seconds=challenge.flood_wait_seconds)
     remember_code(
         account_id,
         account.phone,
@@ -148,9 +209,11 @@ async def submit_login_code(
         raise PhoneLoginError(msg)
     pending = peek_code(account_id, now=time.monotonic())
     if pending is None:
-        msg = "No pending login code — request a new one."
-        raise PhoneLoginError(msg)
+        code_gone = "no_pending_code"
+        raise AccountActionError(code_gone)
     assert_device_configured(account.session_device)
+    # 2FA the operator did not retype: the stored password covers Telegram asking for it.
+    effective_password = password or await fetch_account_twofa_password(account_id)
     result = await submit_phone_code(
         PhoneCodeSubmit(
             account_id=account_id,
@@ -158,14 +221,20 @@ async def submit_login_code(
             phone=pending.phone,
             phone_code_hash=pending.phone_code_hash,
             code=code,
-            password=password,
+            password=effective_password,
         ),
     )
     if result.status != "alive":
-        raise PhoneLoginError(result.error_message or "Sign-in failed")
+        if result.error_type == "PhoneCodeExpiredError":
+            forget_code(account_id)
+        raise _submit_refusal(result)
     forget_code(account_id)
     saved = await update_account_from_session_check(result)
-    await start_account_inbox(saved.account_id)
+    if password:
+        await _remember_verified_password(account_id, password)
+    task = asyncio.create_task(_start_inbox_in_background(saved.account_id))
+    _INBOX_STARTS.add(task)
+    task.add_done_callback(_INBOX_STARTS.discard)
     await log_event("INFO", "phone_login_success", account_id=account_id)
     return saved
 

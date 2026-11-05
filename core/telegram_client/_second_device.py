@@ -38,6 +38,7 @@ from core.telegram_client._auth import (
     log_out_session,
     remove_account_session,
 )
+from core.telegram_client._auth_bounds import UNREACHABLE_ERRORS, auth_deadline
 from core.telegram_client._client import (
     DeviceUnavailableError,
     create_telegram_client,
@@ -80,6 +81,7 @@ class _Identity(NamedTuple):
 
 
 _CODE_TIMEOUT: DeviceRefusalCode = "device_code_timeout"
+_UNREACHABLE: DeviceRefusalCode = "device_unreachable"
 _PRIMARY_UNAVAILABLE: DeviceRefusalCode = "device_primary_unavailable"
 _TWOFA_MISSING: DeviceRefusalCode = "device_twofa_missing"
 _USER_MISMATCH: DeviceRefusalCode = "device_user_mismatch"
@@ -121,7 +123,8 @@ async def _sign_in(
 ) -> None:
     # Taken immediately before the request: any code already in 777000 is older.
     cutoff = await last_service_message_id(primary)
-    sent = await client.send_code_request(identity.phone)
+    async with asyncio.timeout(auth_deadline()):
+        sent = await client.send_code_request(identity.phone)
     code = await wait_for_login_code(
         primary,
         after_id=cutoff,
@@ -132,16 +135,18 @@ async def _sign_in(
     if code is None:
         raise _SignInRefusedError(_CODE_TIMEOUT)
     try:
-        await client.sign_in(
-            phone=identity.phone,
-            code=code,
-            phone_code_hash=sent.phone_code_hash,
-        )
+        async with asyncio.timeout(auth_deadline()):
+            await client.sign_in(
+                phone=identity.phone,
+                code=code,
+                phone_code_hash=sent.phone_code_hash,
+            )
     except errors.SessionPasswordNeededError:
         password = await fetch_account_twofa_password(request.account_id)
         if not password:
             raise _SignInRefusedError(_TWOFA_MISSING) from None
-        await client.sign_in(password=password)
+        async with asyncio.timeout(auth_deadline()):
+            await client.sign_in(password=password)
 
 
 def _classify(request: SecondDeviceSignIn, exc: Exception) -> SecondDeviceResult:
@@ -153,6 +158,9 @@ def _classify(request: SecondDeviceSignIn, exc: Exception) -> SecondDeviceResult
     for error_types, code in _ERROR_CODES:
         if isinstance(exc, error_types):
             return _refusal(request, code)
+    if isinstance(exc, UNREACHABLE_ERRORS):
+        # Deadline expiry, a dead proxy or a dropped socket: retryable, not a refusal.
+        return _refusal(request, _UNREACHABLE, error_type=type(exc).__name__)
     logger.warning("second-device sign-in failed for %s", request.account_id, exc_info=exc)
     return _refusal(request, "device_auth_failed", error_type=type(exc).__name__)
 
@@ -271,7 +279,8 @@ async def _attempt(  # noqa: PLR0913 - one sign-in's whole context
     signed_in = False
     recording: asyncio.Future[None] | None = None
     try:
-        await client.connect()
+        async with asyncio.timeout(auth_deadline()):
+            await client.connect()
         await _sign_in(client, primary, request, identity)
         signed_in = True
         await _confirm_same_user(client, identity.user_id)

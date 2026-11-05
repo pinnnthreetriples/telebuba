@@ -10241,6 +10241,10 @@ export type RequestLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
@@ -10283,6 +10287,10 @@ export type SubmitLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
