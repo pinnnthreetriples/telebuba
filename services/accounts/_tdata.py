@@ -18,7 +18,7 @@ from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.secure_paths import make_private_dir
-from schemas.accounts import AccountCheckRequest, AccountCreate
+from schemas.accounts import AccountCreate
 from services.accounts._import_locks import import_lock
 from services.accounts._import_rollback import discard_imported_session
 
@@ -109,7 +109,6 @@ async def import_account_tdata(
     *,
     convert: Any,  # noqa: ANN401 - DI seam; richer protocol would just duplicate convert_tdata_zip's signature.
     add_account: Any,  # noqa: ANN401
-    check_account_session: Any,  # noqa: ANN401
 ) -> list[AccountRead]:
     """Atomic conversion of a tdata.zip into ``.session`` files + DB rows.
 
@@ -120,9 +119,12 @@ async def import_account_tdata(
     any mid-batch failure, every change made so far is rolled back so the
     caller never observes a partial import.
 
-    ``convert``, ``add_account``, and ``check_account_session`` are injected
-    by the package ``__init__`` so tests can monkeypatch them at the public
-    service boundary.
+    ``convert`` and ``add_account`` are injected by the package ``__init__`` so tests
+    can monkeypatch them at the public service boundary.
+
+    No session check runs here: the account has no proxy yet, so a check would be the
+    account's first Telegram contact from the host IP. The rows stay "unchecked" until
+    the operator assigns a proxy, and the add wizard checks them then.
 
     Conversion targets a private staging dir (never the live sessions dir), so a
     re-import that collides with an existing credential can't overwrite it before
@@ -138,7 +140,6 @@ async def import_account_tdata(
             staging_dir,
             convert=convert,
             add_account=add_account,
-            check_account_session=check_account_session,
         )
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)
@@ -150,7 +151,6 @@ async def _run_tdata_import(
     *,
     convert: Any,  # noqa: ANN401 - DI seam mirrors import_account_tdata.
     add_account: Any,  # noqa: ANN401
-    check_account_session: Any,  # noqa: ANN401
 ) -> list[AccountRead]:
     result = await convert(data, staging_dir)
     if result.status != "ok":
@@ -189,7 +189,7 @@ async def _run_tdata_import(
     keys = sorted({plan.account_id for plan in plans})
     placed: list[_TdataAccountPlan] = []
     added_account_ids: list[str] = []
-    checked: list[AccountRead] = []
+    added: list[AccountRead] = []
     async with AsyncExitStack() as locks:
         for key in keys:
             await locks.enter_async_context(import_lock(key))
@@ -202,7 +202,7 @@ async def _run_tdata_import(
                     make_private_dir(plan.final_path.parent)
                     shutil.move(str(plan.staging_path), str(plan.final_path))
                 placed.append(plan)
-                await add_account(
+                created = await add_account(
                     AccountCreate(
                         account_id=plan.account_id,
                         label=data.label or plan.account_id,
@@ -211,11 +211,7 @@ async def _run_tdata_import(
                     ),
                 )
                 added_account_ids.append(plan.account_id)
-                checked.append(
-                    await check_account_session(
-                        AccountCheckRequest(account_id=plan.account_id),
-                    ),
-                )
+                added.append(created)
         except Exception:
             await _rollback_tdata_import(added_account_ids, placed)
             raise
@@ -223,6 +219,6 @@ async def _run_tdata_import(
     await log_event(
         "INFO",
         "tdata_import_completed",
-        extra={"imported": len(checked)},
+        extra={"imported": len(added)},
     )
-    return checked
+    return added

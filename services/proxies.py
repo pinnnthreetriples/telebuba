@@ -67,10 +67,12 @@ async def probe_proxy(data: ProxyCreate) -> ProxyCheckResult:
 async def add_proxy(data: ProxyCreate) -> ProxyRead:
     proxy = await create_proxy(data)
     # Re-adding an existing endpoint rotates its credentials on the same id; evict
-    # any pooled clients so they rebuild with the new creds. A fresh insert has no
-    # accounts assigned yet, so this list is empty and no eviction happens.
+    # any pooled clients so they rebuild with the new creds, and stop the mobile pods
+    # still tunnelling through the old ones. A fresh insert has no accounts assigned
+    # yet, so this list is empty and nothing is stopped.
     for account_id in await list_account_ids_for_proxy(proxy.id):
         await evict_client(account_id)
+        await stop_account_pod(account_id)
     await log_event(
         "INFO",
         "proxy_added",

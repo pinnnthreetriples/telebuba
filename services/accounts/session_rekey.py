@@ -129,14 +129,16 @@ async def rekey_account_session(account_id: str) -> AccountRekeyView:
     if owner_of(account_id) is not None or is_lent(account_id):
         code = "rekey_account_busy"
         raise AccountActionError(code)
-    previous = await fetch_rekey(account_id)
-    if previous is not None and previous.closed_at is None:
-        code = "rekey_pending"
-        raise AccountActionError(code)
     device = account.devices[0]
     scratch = f"{account.session_name or account_id}_rekey"
     password = await fetch_account_twofa_password(account_id)
     async with account_audit_lock(account_id):
+        # Inside the lock: a concurrent rekey that finished while this one waited has
+        # left its pending row, and a second rekey must not start over it.
+        previous = await fetch_rekey(account_id)
+        if previous is not None and previous.closed_at is None:
+            code = "rekey_pending"
+            raise AccountActionError(code)
         try:
             result = await rekey_session(account_id, device, scratch, password)
         except RekeyGatewayError as exc:

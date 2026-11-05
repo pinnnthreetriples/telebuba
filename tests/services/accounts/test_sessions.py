@@ -224,7 +224,7 @@ async def test_import_account_session_refuses_to_overwrite_existing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_import_account_tdata_registers_each_account_and_checks(
+async def test_import_account_tdata_registers_each_account_without_contacting_telegram(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
@@ -242,19 +242,12 @@ async def test_import_account_tdata_registers_each_account_and_checks(
             ],
         )
 
-    async def fake_check(_request: object) -> TelegramSessionCheckResult:
-        request_account_id = getattr(_request, "account_id", "?")
-        return TelegramSessionCheckResult(
-            account_id=request_account_id,
-            session_path=f"sessions/{request_account_id}",
-            status="alive",
-            is_temporary=False,
-            user_id=int(request_account_id),
-            username=f"user{request_account_id}",
-        )
+    async def forbidden_check(_request: object) -> TelegramSessionCheckResult:
+        msg = "no proxy is assigned yet: the import must not contact Telegram"
+        raise AssertionError(msg)
 
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
-    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", forbidden_check)
 
     result = await asyncio.wait_for(
         import_account_tdata(
@@ -264,7 +257,7 @@ async def test_import_account_tdata_registers_each_account_and_checks(
     )
 
     assert [a.account_id for a in result.accounts] == ["111", "222"]
-    assert all(a.status == "alive" for a in result.accounts)
+    assert all(a.status == "new" for a in result.accounts)
 
 
 @pytest.mark.asyncio
@@ -298,17 +291,15 @@ async def test_distinct_tdata_imports_make_progress_independently(
             ],
         )
 
-    async def rendezvous_add(account: AccountCreate) -> None:
+    async def rendezvous_add(account: AccountCreate) -> AccountRead:
         entered[account.account_id].set()
         other_id = "222" if account.account_id == "111" else "111"
         await entered[other_id].wait()
-
-    async def fake_check(request: AccountCheckRequest) -> AccountRead:
         return AccountRead(
-            account_id=request.account_id,
-            session_name=request.account_id,
-            status="alive",
-            user_id=int(request.account_id),
+            account_id=account.account_id,
+            session_name=account.account_id,
+            status="new",
+            user_id=int(account.account_id),
             created_at="2026-01-01T00:00:00+00:00",
             updated_at="2026-01-01T00:00:00+00:00",
         )
@@ -318,7 +309,6 @@ async def test_distinct_tdata_imports_make_progress_independently(
 
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
     monkeypatch.setattr("services.accounts.sessions.add_account", rendezvous_add)
-    monkeypatch.setattr("services.accounts.sessions.check_account_session", fake_check)
     monkeypatch.setattr("services.accounts._tdata.fetch_account", missing_account)
 
     first, second = await asyncio.wait_for(

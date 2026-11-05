@@ -167,12 +167,22 @@ async def _accept_token(approver: TelegramClient, token: bytes) -> int:
     return new_hash
 
 
+_RECONNECT_TIMEOUT_S = 20.0
+
+
 async def _discard(new: TelegramClient, scratch_path: str, *, signed_in: bool) -> None:
     """Undo a failed attempt: end the new authorization, disconnect, remove its file.
 
     Each step runs whatever the one before did: a logout or disconnect that raises must not
     leave the half-made ``.session`` behind to refuse every retry.
     """
+    if signed_in and not new.is_connected():
+        # The swap stage disconnects ``new`` first; ``log_out`` on a closed client would
+        # fail and leave the new authorization standing, orphaned with no session file.
+        try:
+            await asyncio.wait_for(new.connect(), _RECONNECT_TIMEOUT_S)
+        except Exception as exc:  # noqa: BLE001 - the logout below then fails too; logged.
+            logger.warning("re-key reconnect failed (%s)", type(exc).__name__)
     steps = (("logout", new.log_out),) if signed_in else ()
     for step, call in (*steps, ("disconnect", new.disconnect)):
         try:

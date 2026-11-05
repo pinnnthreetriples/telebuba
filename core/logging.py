@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
+import traceback
 from typing import TYPE_CHECKING
 
 import sentry_sdk
@@ -45,6 +47,30 @@ class _State:
 
 
 _state = _State()
+
+
+# Third-party exception text (python-socks, Telethon) can carry the proxy URL or its
+# credentials; the stdlib bridge persists that text to ``debug.log``. Two layers: any
+# ``user:pass@`` authority is masked by shape, and every proxy password the process has
+# handed to a client is masked by value (a password with odd characters can defeat the
+# shape).
+_CREDENTIALS_IN_URL = re.compile(r"(?<![\w])[^\s/@:'\"<>]+:[^\s/@'\"<>]+@")
+_MASK = "***@"
+_SECRETS: set[str] = set()
+
+
+def register_log_secret(value: str | None) -> None:
+    """Mask ``value`` (e.g. a proxy password) wherever it appears in a bridged stdlib log line."""
+    if value and len(value) >= 4:  # noqa: PLR2004 - shorter would mangle ordinary text
+        _SECRETS.add(value)
+
+
+def redact_secrets(text: str) -> str:
+    """``text`` with ``user:pass@`` authorities and registered secrets masked."""
+    text = _CREDENTIALS_IN_URL.sub(_MASK, text)
+    for secret in _SECRETS:
+        text = text.replace(secret, "***")
+    return text
 
 
 class _StdlibToLoguru(logging.Handler):
@@ -68,7 +94,11 @@ class _StdlibToLoguru(logging.Handler):
         while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
             frame = frame.f_back
             depth += 1
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        message = record.getMessage()
+        if record.exc_info:
+            # Rendered here (not passed to loguru) so the exception text is redacted too.
+            message += "\n" + "".join(traceback.format_exception(*record.exc_info))
+        logger.opt(depth=depth).log(level, redact_secrets(message))
 
 
 _bridge = _StdlibToLoguru()

@@ -116,7 +116,16 @@ async def _take_over(phone_id: str) -> _Viewer:
         # No cap of its own: the previous viewer's open and cleanup are bounded by
         # their own timeouts, and going ahead before it is gone would mean two servers
         # on one phone or a control claim it still holds.
-        await previous.done.wait()
+        try:
+            await previous.done.wait()
+        except BaseException:
+            # Cancelled while waiting: ``screen_session``'s try/finally never runs for
+            # this viewer, so nobody else would ever set its ``done`` and the next
+            # viewer would wait on it forever.
+            viewer.done.set()
+            if _VIEWERS.get(phone_id) is viewer:
+                del _VIEWERS[phone_id]
+            raise
     return viewer
 
 

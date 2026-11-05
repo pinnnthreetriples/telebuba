@@ -119,7 +119,13 @@ async def test_add_proxy_credential_rotation_evicts_clients(
     async def fake_evict(account_id: str, _device_type: str | None = None) -> None:
         evicted.append(account_id)
 
+    stopped: list[str] = []
+
+    async def fake_stop_pod(account_id: str) -> None:
+        stopped.append(account_id)
+
     monkeypatch.setattr("services.proxies.evict_client", fake_evict)
+    monkeypatch.setattr("services.proxies.stop_account_pod", fake_stop_pod)
 
     rotated = await proxies.add_proxy(
         ProxyCreate(proxy_type="socks5", host="h", port=1080, password="new"),
@@ -127,6 +133,7 @@ async def test_add_proxy_credential_rotation_evicts_clients(
 
     assert rotated.id == proxy.id
     assert evicted == ["acc-1"]
+    assert stopped == ["acc-1"], "the pod tunnelling through the old credentials must stop"
 
 
 @pytest.mark.asyncio

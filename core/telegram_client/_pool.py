@@ -45,6 +45,7 @@ twin and refuses rebuilds for the duration.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, get_args
@@ -368,6 +369,9 @@ async def _build_and_connect(account_id: str, device: DeviceType) -> TelegramCli
     return client
 
 
+_DISCONNECT_TIMEOUT_S = 15.0
+
+
 async def _safe_disconnect(client: TelegramClient) -> None:
     """Disconnect ignoring already-disconnected and shutdown-race errors.
 
@@ -377,8 +381,10 @@ async def _safe_disconnect(client: TelegramClient) -> None:
     """
     try:
         result = client.disconnect()
-        if asyncio.iscoroutine(result):
-            await result
+        # Telethon returns an ``asyncio.Future`` here (not a coroutine); an unawaited
+        # one leaves the ``.session`` SQLite handle open (WinError 32 on unlink/copy).
+        if inspect.isawaitable(result):
+            await asyncio.wait_for(result, _DISCONNECT_TIMEOUT_S)
     except Exception as exc:  # disconnect-on-error path
         # Don't crash shutdown on a half-dead client; just record it.
         logger.exception("pool disconnect failed")

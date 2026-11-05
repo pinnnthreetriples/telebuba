@@ -552,3 +552,35 @@ async def test_rebuild_fires_registered_hook_with_new_client(
         assert seen[-1] == ("acc-hook", second), "the hook must see the rebuilt client"
     finally:
         _REBUILD_HOOKS.remove(hook)
+
+
+class _FutureDisconnectClient(_FakeClient):
+    """Telethon's real shape: ``disconnect()`` returns an ``asyncio.Future``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.session_closed = False
+
+    def disconnect(self):
+        self.disconnect_calls += 1
+        self._connected = False
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[None] = loop.create_future()
+
+        def close_session() -> None:
+            self.session_closed = True
+            future.set_result(None)
+
+        loop.call_later(0.01, close_session)
+        return future
+
+
+@pytest.mark.asyncio
+async def test_evict_awaits_a_future_returning_disconnect() -> None:
+    """The session handle must be closed by the time ``evict_client`` returns."""
+    client = _FutureDisconnectClient()
+    _CLIENTS[("acc-future", "desktop")] = client  # ty: ignore[invalid-assignment]
+
+    await evict_client("acc-future")
+
+    assert client.session_closed, "evict returned before the disconnect future resolved"

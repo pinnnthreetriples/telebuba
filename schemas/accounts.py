@@ -32,6 +32,19 @@ from schemas.trust import TrustBand  # noqa: TC001
 # has no lookaround and fails at schema-build time.
 _ACCOUNT_ID_PATTERN = r"^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
 
+# Substrings that disqualify a session name outright. ONE rule for the import schema
+# and ``_client._session_dir_child`` (the sink): the pattern alone let "a..b" in, which
+# the sink then refused, leaving an account that could be neither opened nor deleted.
+FORBIDDEN_SESSION_NAME_PARTS = ("..", "/", "\\")
+
+
+def _reject_forbidden_name_parts(value: str | None) -> str | None:
+    if value is not None and any(part in value for part in FORBIDDEN_SESSION_NAME_PARTS):
+        msg = "name must not contain '..' or a path separator"
+        raise ValueError(msg)
+    return value
+
+
 # Telegram protocol limits for account.updateProfile / account.updateUsername:
 # first/last name ≤ 64 chars, about (bio) ≤ 70 chars; usernames are 5-32 chars,
 # letter-first, [A-Za-z0-9_]. Field contract: "" clears, None leaves unchanged —
@@ -70,13 +83,21 @@ RegisteredDate = Annotated[date, AfterValidator(_registered_in_range)]
 
 
 class AccountCreate(BaseModel):
-    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
+    account_id: Annotated[
+        str,
+        Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN),
+        AfterValidator(_reject_forbidden_name_parts),
+    ]
     label: str | None = Field(default=None, min_length=1)
     # Same charset as ``account_id``: ``_client._session_path`` gives a stored
     # ``session_name`` PRIORITY over the id when composing the ``.session`` path,
     # so leaving this unconstrained rested the traversal guard on the unenforced
     # invariant that every generator derives one from the other.
-    session_name: str | None = Field(default=None, min_length=1, pattern=_ACCOUNT_ID_PATTERN)
+    session_name: Annotated[
+        str | None,
+        Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN),
+        AfterValidator(_reject_forbidden_name_parts),
+    ] = None
     phone: str | None = Field(default=None, min_length=1)
     # The operator's registration date given at upload (item 4.8), written in the same
     # insert so an import never lands half-done.
