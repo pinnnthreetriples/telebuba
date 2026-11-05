@@ -68,13 +68,19 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> _Wire:
             raise AccountNotFoundError(account_id)
         return state.account
 
-    async def _read(_account_id: str, _devices: list[str]) -> AuthorizationList:
+    async def _read(
+        _account_id: str, _devices: list[str], _own: object = None
+    ) -> AuthorizationList:
         listing = state.listings[min(state.reads, len(state.listings) - 1)]
         state.reads += 1
         return listing
 
     async def _close(
-        _account_id: str, _devices: list[str], hashes: list[str], pauses: list[float]
+        _account_id: str,
+        _devices: list[str],
+        hashes: list[str],
+        pauses: list[float],
+        _own: object = None,
     ) -> list[SessionCloseOutcome]:
         if state.failure is not None:
             raise state.failure
@@ -142,7 +148,7 @@ async def test_the_pauses_are_drawn_within_the_configured_range(
     drawn: list[float] = []
 
     async def _close(
-        _a: str, _d: list[str], hashes: list[str], pauses: list[float]
+        _a: str, _d: list[str], hashes: list[str], pauses: list[float], _own: object = None
     ) -> list[SessionCloseOutcome]:
         drawn.extend(pauses)
         return [SessionCloseOutcome(hash=h, status="closed") for h in hashes]
@@ -210,7 +216,7 @@ async def test_a_gateway_refusal_before_the_first_call_is_its_code(wire: _Wire) 
 async def test_a_failed_reread_still_reports_what_was_closed(
     wire: _Wire, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _read(_a: str, _d: list[str]) -> AuthorizationList:
+    async def _read(_a: str, _d: list[str], _own: object = None) -> AuthorizationList:
         wire.reads += 1
         if wire.reads > 1:
             code = "unavailable"

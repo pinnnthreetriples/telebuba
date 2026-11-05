@@ -37,7 +37,7 @@ from core.telegram_client._session_audit import (
 from schemas.session_close import SessionCloseOutcome
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from schemas.device_fingerprint import DeviceType
     from schemas.session_audit import AccountSession
@@ -103,6 +103,7 @@ async def close_sessions(
     devices: Sequence[DeviceType],
     hashes: Sequence[str],
     pauses: Sequence[float],
+    own: Mapping[str, str] | None = None,
 ) -> list[SessionCloseOutcome]:
     """End the listed ``hashes`` that are still foreign; one outcome per hash, in order.
 
@@ -110,10 +111,11 @@ async def close_sessions(
     (:class:`SessionAuditGatewayError`): once a session has been ended the outcomes so far
     are the answer, so a later refusal stops the run and marks the rest ``skipped``.
     ``pauses[i]`` is waited before the ``i + 2``-nd call; fewer pauses than gaps means no
-    wait for the extra ones. The asking client is the account's primary: the imported
+    wait for the extra ones. ``own`` are the recorded own authorizations (Telebuba's web
+    login), refused like a device of ours. The asking client is the account's primary: the imported
     session, and the oldest one we hold.
     """
-    listing = await read_account_sessions(account_id, devices)
+    listing = await read_account_sessions(account_id, devices, own)
     by_hash = {session.hash: session for session in listing.sessions}
     asking = next((session for session in listing.sessions if session.is_current), None)
     try:

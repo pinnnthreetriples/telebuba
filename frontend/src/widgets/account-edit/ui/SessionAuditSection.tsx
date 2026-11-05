@@ -26,7 +26,10 @@ import { SessionRekeyControls } from './SessionRekeyControls';
 function SessionRow({ session }: { session: AccountSession }) {
   const { t, i18n } = useTranslation();
   const when = (iso: string) => formatLocalDateTime(Date.parse(iso), i18n.language);
-  const device = [session.device_model, session.app_name].filter(Boolean).join(' · ');
+  const isWeb = session.kind === 'web';
+  const device = isWeb
+    ? t('accounts.edit.sessionsWebTelebuba')
+    : [session.device_model, session.app_name].filter(Boolean).join(' · ');
   const system = [session.platform, session.system_version].filter(Boolean).join(' ');
   const place = [session.ip, session.country].filter(Boolean).join(' · ');
   const times = [
@@ -53,6 +56,9 @@ function SessionRow({ session }: { session: AccountSession }) {
             ? t('accounts.edit.sessionsOursBadge')
             : t('accounts.edit.sessionsForeignRowBadge')}
         </Badge>
+        {session.is_ours && !isWeb ? (
+          <Badge tone="neutral">{t('accounts.edit.sessionsFingerprint')}</Badge>
+        ) : null}
         {session.is_current ? (
           <Badge tone="info">{t('accounts.edit.sessionsCurrent')}</Badge>
         ) : null}
@@ -67,6 +73,9 @@ function SessionRow({ session }: { session: AccountSession }) {
       {place ? <div className="type-small text-content-subtle">{place}</div> : null}
       {times.length > 0 ? (
         <div className="type-small text-content-subtle">{times.join(' · ')}</div>
+      ) : null}
+      {session.key_predates_import ? (
+        <div className="type-small text-warning-deep">{t('accounts.edit.sessionsKeyPredates')}</div>
       ) : null}
     </li>
   );
@@ -120,6 +129,8 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
   const others = view?.sessions.filter((session) => !session.is_ours) ?? [];
   const checkedAt = view?.checked_at ?? null;
   const hasProxy = Boolean(account.proxy_id);
+  const addedAt = Date.parse(account.created_at);
+  const sellerKey = ours.some((session) => session.key_predates_import);
 
   const recheck = () => {
     check.mutate(path, {
@@ -187,12 +198,19 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
             explain={t('accounts.edit.sessionsOursExplain')}
             sessions={ours}
           />
-          {neverRekeyed && ours.length > 0 ? (
+          {neverRekeyed && ours.length > 0 && !sellerKey ? (
             <div className="mb-3">
               <Notice tone="info" className="py-3 text-small">
                 {t('accounts.edit.sessionsOursImported')}
               </Notice>
             </div>
+          ) : null}
+          {Number.isFinite(addedAt) ? (
+            <p className="mb-3 type-small text-content-subtle">
+              {t('accounts.edit.sessionsAddedToTelebuba', {
+                date: formatLocalDateTime(addedAt, i18n.language),
+              })}
+            </p>
           ) : null}
           {view.ttl_days ? (
             <p className="mb-3 type-small text-content-subtle">

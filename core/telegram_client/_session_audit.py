@@ -24,7 +24,7 @@ codes the action gateway does.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from telethon import errors
 from telethon.tl.functions.account import GetAuthorizationsRequest
@@ -35,7 +35,7 @@ from core.telegram_client._profile import _DEAD_SESSION_ERRORS, _dead_session_co
 from schemas.session_audit import AccountSession, AuthorizationList
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from telethon import TelegramClient
@@ -100,14 +100,19 @@ def _own_hash(authorizations: Sequence[object]) -> int:
     raise _refusal(_FAILED, error_type="OwnSessionNotListed")
 
 
-def _session(authorization: object, *, current: int, ours: frozenset[int]) -> AccountSession:
+def _session(
+    authorization: object, *, current: int, ours: frozenset[int], own: Mapping[str, str]
+) -> AccountSession:
     hash_ = getattr(authorization, "hash", None)
     if not isinstance(hash_, int):
         raise _refusal(_FAILED, error_type="HashMissing")
+    # A recorded own authorization (Telebuba's web login) is ours too, with its kind.
+    kind = own.get(str(hash_)) if hash_ not in ours else None
     return AccountSession(
         hash=str(hash_),
         is_current=hash_ == current,
-        is_ours=hash_ in ours,
+        is_ours=hash_ in ours or kind is not None,
+        kind=cast("Literal['web'] | None", kind),
         official_app=bool(getattr(authorization, "official_app", None)),
         device_model=str(getattr(authorization, "device_model", "") or ""),
         platform=str(getattr(authorization, "platform", "") or ""),
@@ -127,7 +132,9 @@ async def _listing(client: TelegramClient) -> tuple[list[object], int | None]:
     return list(getattr(reply, "authorizations", ())), ttl if isinstance(ttl, int) else None
 
 
-async def _read(account_id: str, devices: Sequence[DeviceType]) -> AuthorizationList:
+async def _read(
+    account_id: str, devices: Sequence[DeviceType], own: Mapping[str, str]
+) -> AuthorizationList:
     # The deadline the session check uses: nothing below bounds itself, and an expiry is
     # the transport fault ``TimeoutError`` already means to the ladder in the caller.
     async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
@@ -140,21 +147,26 @@ async def _read(account_id: str, devices: Sequence[DeviceType]) -> Authorization
             ours.add(_own_hash(other))
     frozen_ours = frozenset(ours)
     return AuthorizationList(
-        sessions=[_session(a, current=current, ours=frozen_ours) for a in authorizations],
+        sessions=[_session(a, current=current, ours=frozen_ours, own=own) for a in authorizations],
         ttl_days=ttl,
     )
 
 
 async def read_account_sessions(
-    account_id: str, devices: Sequence[DeviceType]
+    account_id: str,
+    devices: Sequence[DeviceType],
+    own: Mapping[str, str] | None = None,
 ) -> AuthorizationList:
     """Every session of ``account_id`` with ours marked; ``devices`` is primary first.
+
+    ``own`` maps the hashes Telebuba recorded as its own authorizations (its web login) to
+    their kind; they are ours although no Telethon client of the account is them.
 
     Asks each device's pooled client, so an account with two sign-ins answers from both.
     Raises :class:`SessionAuditGatewayError` and never a Telethon error.
     """
     try:
-        return await _read(account_id, devices)
+        return await _read(account_id, devices, own or {})
     except SessionAuditGatewayError:
         raise
     # Frozen errors subclass FloodError / BadRequestError: classify them above the flood
