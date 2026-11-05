@@ -18,6 +18,7 @@ export type { InboxMessageEvent, SseStatus } from './log/useLogEventStream';
 export {
   errorCode,
   errorMessage,
+  errorRetryAfterSeconds,
   isUnauthorized,
   mutationErrorText,
   queryClient,

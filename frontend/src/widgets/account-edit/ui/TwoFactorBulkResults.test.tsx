@@ -7,6 +7,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { Modal } from '@/shared/ui';
+
 import '@/shared/i18n';
 
 import type { AccountTwoFactorCreated } from '@/shared/api';
@@ -192,7 +194,9 @@ test('the .csv carries every password, quoted, and its url outlives the click', 
     fireEvent.click(screen.getByRole('button', { name: 'Скачать .csv' }));
 
     expect(await blobs[0]!.text()).toBe(
-      '"Аня","test-password-acc-1"\n"Вера","test-password-acc-3"',
+      'account,password,apostrophe_added\n' +
+        '"Аня","test-password-acc-1","0"\n' +
+        '"Вера","test-password-acc-3","0"',
     );
     expect(create).toHaveBeenCalledTimes(1);
     // `click()` only STARTS the download: a url torn down in the same frame can
@@ -205,4 +209,80 @@ test('the .csv carries every password, quoted, and its url outlives the click', 
     create.mockRestore();
     revoke.mockRestore();
   }
+});
+
+// A spreadsheet runs a cell that starts with = + - @ TAB or CR as a formula, and the
+// password column is text somebody typed. The apostrophe is ours only when the third
+// column says so, which is what lets the file give every password back exactly.
+test.each([
+  ['=cmd|calc', `"'=cmd|calc","1"`],
+  ['+1234567', `"'+1234567","1"`],
+  ['-secret-1', `"'-secret-1","1"`],
+  ['@home-pass', `"'@home-pass","1"`],
+  ['\tTabbed-pw', `"'\tTabbed-pw","1"`],
+  ["'already-quoted", `"'already-quoted","0"`],
+  ['say "hi", ok', `"say ""hi"", ok","0"`],
+])(
+  'the .csv neutralises formula starts without losing the password: %j',
+  async (password, cells) => {
+    const blobs: Blob[] = [];
+    const create = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockImplementation((blob: Blob | MediaSource) => {
+        blobs.push(blob as Blob);
+        return 'blob:test-csv';
+      });
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    try {
+      renderResults([ok('acc-1', { password })]);
+      fireEvent.click(screen.getByRole('button', { name: 'Скачать .csv' }));
+
+      const [, row] = (await blobs[0]!.text()).split('\n');
+      expect(row).toBe(`"Аня",${cells}`);
+    } finally {
+      create.mockRestore();
+      revoke.mockRestore();
+    }
+  },
+);
+
+test('closing the dialog asks while the passwords are neither copied nor downloaded', async () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose} label="Пароли">
+      <TwoFactorBulkResults rows={[ok('acc-1')]} label={label} onDone={vi.fn()} />
+    </Modal>,
+  );
+
+  await userEvent.keyboard('{Escape}');
+
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Остаться' })).toBeInTheDocument();
+});
+
+test('once the passwords are copied the dialog closes without asking', async () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose} label="Пароли">
+      <TwoFactorBulkResults rows={[ok('acc-1')]} label={label} onDone={vi.fn()} />
+    </Modal>,
+  );
+
+  await userEvent.click(screen.getByRole('button', { name: 'Скопировать все' }));
+  await userEvent.keyboard('{Escape}');
+
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('a result with no created password has nothing to lose, so closing is not guarded', async () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose} label="Пароли">
+      <TwoFactorBulkResults rows={[failed('acc-1')]} label={label} onDone={vi.fn()} />
+    </Modal>,
+  );
+
+  await userEvent.keyboard('{Escape}');
+
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

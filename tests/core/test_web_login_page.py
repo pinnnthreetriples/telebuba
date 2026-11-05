@@ -9,10 +9,12 @@ submitted with Enter.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
 from core.web_login import _page
+from core.web_login._cdp import CdpError
 from core.web_login._page import (
     latest_login_token,
     page_state,
@@ -124,7 +126,9 @@ async def test_page_primitives_address_the_page_session() -> None:
 
 @pytest.mark.asyncio
 async def test_type_2fa_password_clicks_field_types_and_submits_with_enter() -> None:
-    session = RecordingSession({_page._INPUT_RECT_EXPR: '{"x":100,"y":200}'})
+    session = RecordingSession(
+        {_page._INPUT_RECT_EXPR: '{"x":100,"y":200}', _page._FIELD_LENGTH_EXPR: 3}
+    )
 
     assert await type_2fa_password(window_for(session), "pw1") is True
 
@@ -149,7 +153,9 @@ async def test_type_2fa_password_clicks_field_types_and_submits_with_enter() -> 
         for method, params, _s in session.commands
         if method == "Runtime.evaluate"
     ]
-    assert evals == [_page._INPUT_RECT_EXPR]
+    # Read twice (the second read proves the field stopped sliding in), then the length
+    # check before Enter is pressed.
+    assert evals == [_page._INPUT_RECT_EXPR] * 2 + [_page._FIELD_LENGTH_EXPR]
 
 
 @pytest.mark.asyncio
@@ -167,13 +173,38 @@ async def test_a_password_field_that_is_not_there_types_nothing_and_says_so() ->
 
 
 @pytest.mark.asyncio
+async def test_a_vanished_password_field_is_not_a_submission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WebK re-rendered: no visible field to read back, so Enter would go nowhere.
+
+    Counting it as submitted would stop the window from ever typing again.
+    """
+    monkeypatch.setattr(_page, "_SETTLE_READ_GAP_SECONDS", 0)
+    monkeypatch.setattr(_page, "_CLICK_SETTLE_SECONDS", 0)
+    submitted: list[bool] = []
+    session = RecordingSession({_page._INPUT_RECT_EXPR: '{"x":100,"y":200}'})  # length: null
+
+    result = await type_2fa_password(
+        window_for(session), "pw1", on_submit=lambda: submitted.append(True)
+    )
+
+    assert result is False
+    assert submitted == []
+    keys = [p for m, p, _s in session.commands if m == "Input.dispatchKeyEvent"]
+    assert not [k for k in keys if k.get("key") == "Enter"]
+
+
+@pytest.mark.asyncio
 async def test_the_password_is_submitted_with_enter_not_a_translated_button() -> None:
     """A German 2FA screen says "Weiter", so a /next|log in/ button hunt finds nothing.
 
     The password would then be typed and never submitted, and the login stalls in
     silence. Enter is the same key in every language.
     """
-    session = RecordingSession({_page._INPUT_RECT_EXPR: '{"x":100,"y":200}'})
+    session = RecordingSession(
+        {_page._INPUT_RECT_EXPR: '{"x":100,"y":200}', _page._FIELD_LENGTH_EXPR: 3}
+    )
 
     await type_2fa_password(window_for(session), "pw1")
 
@@ -199,3 +230,35 @@ def test_the_password_field_probe_targets_a_visible_password_input() -> None:
     assert "input[type=password]" in probe
     assert "querySelectorAll('input')" not in probe
     assert "height>0" in probe  # the hidden decoy input has zero height
+
+
+@pytest.mark.asyncio
+async def test_the_submit_callback_runs_before_enter_even_when_enter_fails() -> None:
+    """The caller must count the window as submitted BEFORE the real submit leaves."""
+    session = RecordingSession(
+        {_page._INPUT_RECT_EXPR: '{"x":100,"y":200}', _page._FIELD_LENGTH_EXPR: 3}
+    )
+    enters_when_marked: list[int] = []
+
+    def _enters() -> int:
+        return sum(
+            1
+            for m, p, _s in session.commands
+            if m == "Input.dispatchKeyEvent" and p.get("key") == "Enter"
+        )
+
+    real_send = session.send_command
+
+    async def _failing(method: str, params: Any = None, **kwargs: Any) -> dict:
+        if method == "Input.dispatchKeyEvent" and (params or {}).get("key") == "Enter":
+            msg = "socket closed"
+            raise CdpError(msg)
+        return await real_send(method, params, **kwargs)
+
+    session.send_command = _failing  # ty: ignore[invalid-assignment]
+    with pytest.raises(CdpError):
+        await type_2fa_password(
+            window_for(session), "pw1", on_submit=lambda: enters_when_marked.append(_enters())
+        )
+
+    assert enters_when_marked == [0]

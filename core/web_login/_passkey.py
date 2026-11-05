@@ -26,7 +26,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
 from core.web_login._cdp import CdpError
-from core.web_login._scripts import fill
+from core.web_login._scripts import fill, once
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -102,11 +102,18 @@ __NATIVE__
         getClientExtensionResults: () => ({}), toJSON: json,
       });
   };
-  const wanted = (o) => !!(o && o.publicKey && o.publicKey.rpId === 'telegram.org'
+  const wanted = (o) => !!(location.origin === 'https://web.telegram.org'
+    && o && o.publicKey && o.publicKey.rpId === 'telegram.org'
     && o.publicKey.challenge);
   container.get = F({ f(options) {
     if (!wanted(options)) return real.apply(this, arguments);
     return new Promise((resolve, reject) => {
+      // Already aborted before it was asked: nothing to sign for, and no listener would
+      // ever fire for it (the event has come and gone).
+      if (options.signal && options.signal.aborted) {
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+        return;
+      }
       const id = ++seq;
       waiting.set(id, { resolve, reject });
       queue.push({ id, challenge: toText(options.publicKey.challenge) });
@@ -121,7 +128,12 @@ __NATIVE__
     });
   } }, 'get', 0);
   Object.defineProperty(window, '__tbPk', { value: {
-    take: () => queue.shift() || null,
+    // Only requests still waiting: an aborted one is never handed to the signer.
+    take: () => {
+      let next;
+      while ((next = queue.shift())) { if (waiting.has(next.id)) return next; }
+      return null;
+    },
     done: (id, r) => {
       const w = waiting.get(id);
       if (w) { waiting.delete(id); w.resolve(build(r)); }
@@ -138,7 +150,7 @@ __NATIVE__
 })();
 """
 
-PASSKEY_HOOK = fill(_HOOK_TEMPLATE)
+PASSKEY_HOOK = once("__tbPkInstalled", fill(_HOOK_TEMPLATE))
 
 
 def _request(value: object) -> tuple[int, str] | None:

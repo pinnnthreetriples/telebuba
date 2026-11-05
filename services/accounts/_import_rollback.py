@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Literal
 
 from core.db import delete_account, fetch_account
 from core.telegram_client import removing_client
+from services.inbox_runtime import stop_account_inbox
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -89,6 +90,9 @@ async def discard_imported_session(account_id: str, session_path: Path) -> Rollb
     discovery) can reach ``get_client`` between these awaits and re-open — or with
     Telethon's ``SQLiteSession``, re-create — the very file being removed.
     """
+    # The import may already have started the account's inbox listener (a first check
+    # that came back alive); it would reopen the client the tombstone below evicts.
+    await stop_account_inbox(account_id, forget=True)
     async with removing_client(account_id):
         # A second device the import signed in has its own ``.session`` beside the
         # imported one; both leave with the row.

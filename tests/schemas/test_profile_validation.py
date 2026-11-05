@@ -166,7 +166,7 @@ def test_account_create_refuses_a_leading_dot_id(account_id: str) -> None:
         AccountCreate(account_id=account_id)
 
 
-@pytest.mark.parametrize("session_name", [".", "..", "../evil", "..\\evil"])
+@pytest.mark.parametrize("session_name", [".", "..", "../evil", "..\\evil", "a..b"])
 def test_account_create_refuses_a_traversal_session_name(session_name: str) -> None:
     """``session_name`` outranks ``account_id`` when the ``.session`` path is composed.
 
@@ -176,6 +176,12 @@ def test_account_create_refuses_a_traversal_session_name(session_name: str) -> N
     """
     with pytest.raises(ValidationError):
         AccountCreate(account_id="acc-1", session_name=session_name)
+
+
+def test_account_create_refuses_an_embedded_double_dot_id() -> None:
+    """The sink refuses ``..`` anywhere, so the import must not mint such an account."""
+    with pytest.raises(ValidationError):
+        AccountCreate(account_id="a..b")
 
 
 @pytest.mark.parametrize(

@@ -216,3 +216,38 @@ async def test_record_json_route_unknown_account_is_404(app: FastAPI) -> None:
         resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
 
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_record_route_refuses_to_say_saved_when_the_row_was_not_written(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _not_stored(account_id: str, password: str) -> bool:  # noqa: ARG001
+        return False
+
+    monkeypatch.setattr("services.accounts.record_account_twofa", _not_stored)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/2fa/record", json={"password": FAKE_PASSWORD}
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "twofa_store_failed"
+    assert FAKE_PASSWORD not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_record_json_route_refuses_to_say_saved_when_the_row_was_not_written(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _not_stored(account_id: str, content: bytes) -> bool:  # noqa: ARG001
+        return False
+
+    monkeypatch.setattr("services.accounts.record_account_twofa_from_json", _not_stored)
+    async with _client(app) as client:
+        resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "twofa_store_failed"

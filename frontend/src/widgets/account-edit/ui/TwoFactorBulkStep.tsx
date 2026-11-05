@@ -34,7 +34,8 @@ import { useBulkTwofa } from './useBulkTwofa';
 // ago), so an empty hint stays omitted.
 function twofaBody(value: TwofaFormValue): AccountTwoFactorUpdateRequest {
   const body: AccountTwoFactorUpdateRequest = {};
-  if (value.mode === 'custom') body.password = value.password.trim();
+  // Never trimmed: a password may legitimately start or end with a space.
+  if (value.mode === 'custom') body.password = value.password;
   const hint = value.hint.trim();
   if (hint) body.hint = hint;
   return body;
@@ -103,7 +104,9 @@ export function TwoFactorBulkStep({
   const canSubmit = useStore(form.store, (state) => state.canSubmit);
   const typed = useStore(form.store, (state) => state.isDirty);
   // Inside the add wizard a typed password must not vanish with a stray click on the veil.
-  useModalDirty(phase === 'select' && typed);
+  // A running batch holds passwords that exist only in this step until the result
+  // phase shows them: leaving mid-batch would drop what Telegram already applied.
+  useModalDirty((phase === 'select' && typed) || phase === 'running');
 
   if (phase === 'result') {
     return <TwoFactorBulkResults rows={bulk.rows} label={label} onDone={onDone} />;

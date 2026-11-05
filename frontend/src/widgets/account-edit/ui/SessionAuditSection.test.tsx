@@ -122,6 +122,27 @@ test('an account with only its own sessions says so and raises no warning', asyn
   expect(screen.getByText('Только наши')).toBeInTheDocument();
 });
 
+test("Telebuba's own web login is listed as ours, not foreign, and is never offered for closing", async () => {
+  const web = session({ hash: '5', is_ours: true, kind: 'web', device_model: 'Chrome' });
+  serve(audit([OURS, web], '2026-11-02T10:00:00+00:00'));
+  await renderSection();
+
+  expect(await screen.findByText('Telegram Web Телебубы')).toBeInTheDocument();
+  expect(screen.getByText('Чужих сессий нет.')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Закрыть чужие сессии' })).toBeNull();
+});
+
+test('a key made before the account was added is flagged as the seller key, with the date added', async () => {
+  const sellers = { ...OURS, key_predates_import: true };
+  serve(audit([sellers], '2026-11-02T10:00:00+00:00'));
+  await renderSection({ ...ACCOUNT, created_at: '2026-11-01T12:00:00+00:00' });
+
+  expect(await screen.findByText(/Ключ создан до добавления в Телебубу/)).toBeInTheDocument();
+  expect(screen.getByText('отпечаток Телебубы')).toBeInTheDocument();
+  expect(screen.getByText(/Добавлен в Телебубу/)).toBeInTheDocument();
+});
+
 test('before the first audit the card says so', async () => {
   serve(audit([], null));
   await renderSection();
@@ -258,7 +279,11 @@ test('a foreign session is red and badged «Чужая», ours is green and badg
   expect(ours).toHaveClass('bg-success-tint');
   expect(ours).toHaveTextContent('Наша');
   expect(screen.getByText('Не наш вход: аккаунтом владеет ещё кто-то.')).toBeInTheDocument();
-  expect(screen.getByText('Входы, которыми пользуется Телебуба.')).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      'Входы, которыми пользуется Телебуба: устройства аккаунта и свой вход в Telegram Web.',
+    ),
+  ).toBeInTheDocument();
 });
 
 test('an account never re-keyed warns that its sign-in may be the seller’s', async () => {

@@ -42,14 +42,16 @@ async def get_current_user(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="not authenticated",
         )
-    user = await auth_service.resolve_user(session)
-    if user is None:
+    resolved = await auth_service.resolve_and_refresh(session)
+    if resolved is None:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="invalid session",
         )
-    # Sliding TTL: re-issue the cookie on every authenticated request.
-    set_session_cookie(response, await auth_service.issue_session_token(user.id))
+    user, refreshed = resolved
+    # Sliding TTL: re-issue the cookie on every authenticated request, stamped with the
+    # token version validated above (no second read that a logout could slip between).
+    set_session_cookie(response, refreshed)
     return user
 
 

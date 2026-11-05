@@ -45,10 +45,13 @@ from core.telegram_client._client import (
 from core.telegram_client._pool import TelegramClientPoolError, get_client, removing_client
 from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._session_audit import _listing, _own_hash
+from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.session_rekey import RekeyRefusalCode, RekeyResult
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from telethon import TelegramClient
 
     from schemas.device_fingerprint import DeviceType, TelegramClientProfile
@@ -129,7 +132,7 @@ def _classify(exc: Exception) -> RekeyGatewayError:
 
 
 async def _sign_in_by_token(
-    new: TelegramClient, approver: TelegramClient, password: str | None
+    new: TelegramClient, approver: TelegramClient, account_id: str, passwords: Sequence[str]
 ) -> str:
     """Log ``new`` in with a token ``approver`` accepts; the new authorization's hash."""
     await new.connect()
@@ -148,9 +151,9 @@ async def _sign_in_by_token(
     try:
         await waiting
     except errors.SessionPasswordNeededError:
-        if not password:
+        if not passwords:
             raise _refusal(_TWOFA_MISSING) from None
-        await new.sign_in(password=password)
+        await sign_in_with_passwords(new, account_id, passwords)
     return str(new_hash)
 
 
@@ -167,12 +170,22 @@ async def _accept_token(approver: TelegramClient, token: bytes) -> int:
     return new_hash
 
 
+_RECONNECT_TIMEOUT_S = 20.0
+
+
 async def _discard(new: TelegramClient, scratch_path: str, *, signed_in: bool) -> None:
     """Undo a failed attempt: end the new authorization, disconnect, remove its file.
 
     Each step runs whatever the one before did: a logout or disconnect that raises must not
     leave the half-made ``.session`` behind to refuse every retry.
     """
+    if signed_in and not new.is_connected():
+        # The swap stage disconnects ``new`` first; ``log_out`` on a closed client would
+        # fail and leave the new authorization standing, orphaned with no session file.
+        try:
+            await asyncio.wait_for(new.connect(), _RECONNECT_TIMEOUT_S)
+        except Exception as exc:  # noqa: BLE001 - the logout below then fails too; logged.
+            logger.warning("re-key reconnect failed (%s)", type(exc).__name__)
     steps = (("logout", new.log_out),) if signed_in else ()
     for step, call in (*steps, ("disconnect", new.disconnect)):
         try:
@@ -280,12 +293,13 @@ async def _current_hash(approver: TelegramClient) -> str:
 
 
 async def rekey_session(
-    account_id: str, device: DeviceType, scratch_name: str, password: str | None
+    account_id: str, device: DeviceType, scratch_name: str, passwords: Sequence[str]
 ) -> RekeyResult:
     """Replace ``device``'s session of the account with a login of its own; see the module doc.
 
-    Raises :class:`RekeyGatewayError` and never a Telethon error. On success the imported
-    authorization is still standing: its hash is ``old_hash``, to be ended by the caller.
+    ``passwords`` are the 2FA candidates, current first. Raises :class:`RekeyGatewayError`,
+    never a Telethon error. On success the imported authorization is still standing: its hash
+    is ``old_hash``, to be ended by the caller.
     """
     async with _auth_lock(account_id):
         try:
@@ -304,7 +318,7 @@ async def rekey_session(
             new = create_telegram_client(scratch)
             signed_in = False
             try:
-                new_hash = await _sign_in_by_token(new, approver, password)
+                new_hash = await _sign_in_by_token(new, approver, account_id, passwords)
                 signed_in = True
                 await _require_same_user(new, user_id, _MISMATCH)
                 await new.disconnect()

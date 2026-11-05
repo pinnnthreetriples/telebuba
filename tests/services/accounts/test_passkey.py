@@ -33,7 +33,9 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
     log: list[object] = state["log"]
 
     async def _fetch_account(account_id: str) -> object:
-        return None if account_id == "missing" else SimpleNamespace(session_name="sess-1")
+        if account_id == "missing" or state.get("account_gone"):
+            return None
+        return SimpleNamespace(session_name="sess-1")
 
     async def _fetch_row(_account_id: str) -> StoredPasskey | None:
         return state["row"]  # ty: ignore[invalid-return-type]
@@ -60,6 +62,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
         if isinstance(state.get("gateway_error"), Exception):
             raise state["gateway_error"]  # ty: ignore[invalid-raise]
         state["credential_id"] = credential_id
+        state["account_gone"] = bool(state.get("gone_after_register"))
         return _HANDLE
 
     async def _delete_passkey(_account_id: str, credential_id: str) -> bool:
@@ -73,6 +76,12 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
         if isinstance(state.get("gateway_error"), Exception):
             raise state["gateway_error"]  # ty: ignore[invalid-raise]
         return bool(state.get("listed"))
+
+    async def _key_exists(name: str) -> bool:
+        log.append(f"vault_exists:{name}")
+        if isinstance(state.get("exists_error"), Exception):
+            raise state["exists_error"]  # ty: ignore[invalid-raise]
+        return bool(state.get("key_exists", True))
 
     async def _login(passkey: StoredPasskey, session_name: str | None) -> object:
         log.append(f"login:{passkey.credential_id}:{session_name}")
@@ -95,6 +104,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
         "delete_account_passkey": _delete_row,
         "create_signing_key": _create_key,
         "delete_signing_key": _delete_key,
+        "signing_key_exists": _key_exists,
         "register_passkey": _register,
         "delete_passkey": _delete_passkey,
         "is_passkey_listed": _is_listed,
@@ -263,7 +273,7 @@ async def test_a_failed_passkey_login_changes_nothing(
 
 
 @pytest.mark.asyncio
-async def test_removal_asks_telegram_first_and_deletes_the_vault_key_last(
+async def test_removal_asks_telegram_first_then_the_vault_key_then_the_row(
     wire: dict[str, object],
 ) -> None:
     wire["row"] = _stored()
@@ -271,11 +281,11 @@ async def test_removal_asks_telegram_first_and_deletes_the_vault_key_last(
     view = await svc.remove_account_passkey("acc-1")
 
     assert view.has_passkey is False
-    assert wire["log"] == ["telegram_delete:Y3JlZA", "forget", "vault_delete:tb-acc-1"]
+    assert wire["log"] == ["telegram_delete:Y3JlZA", "vault_delete:tb-acc-1", "forget"]
 
 
 @pytest.mark.asyncio
-async def test_forgetting_leaves_telegram_alone_and_still_kills_the_vault_key(
+async def test_forgetting_leaves_telegram_alone_and_still_kills_the_vault_key_first(
     wire: dict[str, object],
 ) -> None:
     wire["row"] = _stored()
@@ -283,7 +293,7 @@ async def test_forgetting_leaves_telegram_alone_and_still_kills_the_vault_key(
     view = await svc.remove_account_passkey("acc-1", forget_only=True)
 
     assert view.has_passkey is False
-    assert wire["log"] == ["forget", "vault_delete:tb-acc-1"]
+    assert wire["log"] == ["vault_delete:tb-acc-1", "forget"]
     assert ("INFO", "passkey_removed", {"forget_only": True}) in wire["events"]  # ty: ignore[unsupported-operator]
 
 
@@ -300,14 +310,17 @@ async def test_a_telegram_refusal_keeps_the_passkey(wire: dict[str, object]) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_vault_refusal_after_the_removal_is_reported(wire: dict[str, object]) -> None:
+async def test_a_vault_refusal_keeps_the_row_so_a_retry_converges(
+    wire: dict[str, object],
+) -> None:
     wire["row"] = _stored()
-    wire["vault_error"] = PasskeyVaultError("passkey_vault_rejected", "http_403")
+    wire["vault_error"] = PasskeyVaultError("passkey_vault_sealed", "http_503")
 
-    with pytest.raises(AccountActionError, match="passkey_vault_rejected"):
+    with pytest.raises(AccountActionError, match="passkey_vault_sealed"):
         await svc.remove_account_passkey("acc-1")
 
-    assert wire["row"] is None
+    assert wire["row"] == _stored()
+    assert "forget" not in wire["log"]  # ty: ignore[unsupported-operator]
 
 
 @pytest.mark.parametrize(("listed", "state"), [(True, "present"), (False, "missing")])
@@ -366,3 +379,118 @@ async def test_the_check_needs_no_vault(wire: dict[str, object]) -> None:
     wire["listed"] = True
 
     assert (await svc.check_account_passkey("acc-1")).telegram_state == "present"
+
+
+@pytest.mark.asyncio
+async def test_an_account_removed_during_creation_gets_no_row_but_keeps_the_vault_key(
+    wire: dict[str, object],
+) -> None:
+    wire["gone_after_register"] = True
+
+    with pytest.raises(AccountNotFoundError):
+        await svc.create_account_passkey("acc-1")
+
+    assert wire["row"] is None
+    assert wire["log"] == [
+        "vault_create:tb-acc-1",
+        "register:acc-1:PEM",
+    ]  # Telegram may already list the passkey: the key is the only way to ever use it
+
+
+@pytest.mark.asyncio
+async def test_a_failed_creation_journals_the_non_secret_vault_detail(
+    wire: dict[str, object],
+) -> None:
+    wire["gateway_error"] = PasskeyGatewayError("passkey_vault_sealed", error_type="http_503")
+
+    with pytest.raises(AccountActionError, match="passkey_vault_sealed"):
+        await svc.create_account_passkey("acc-1")
+
+    assert (
+        "WARNING",
+        "passkey_create_failed",
+        {"code": "passkey_vault_sealed", "detail": "http_503"},
+    ) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_relogin_journals_the_vault_detail(wire: dict[str, object]) -> None:
+    wire["row"] = _stored()
+    wire["login_result"] = _result(
+        "unauthorized", error_message="passkey_vault_sealed", error_type="http_503"
+    )
+
+    with pytest.raises(AccountActionError, match="passkey_vault_sealed"):
+        await svc.relogin_with_passkey("acc-1")
+
+    assert (
+        "WARNING",
+        "passkey_login_failed",
+        {"code": "passkey_vault_sealed", "detail": "http_503"},
+    ) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.asyncio
+async def test_the_vault_check_reports_a_present_key_as_ok(wire: dict[str, object]) -> None:
+    wire["row"] = _stored()
+
+    assert await svc.check_passkey_vault("acc-1") == "ok"
+    assert svc.passkey_vault_state("acc-1") == "ok"
+    assert wire["events"] == []
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (PasskeyVaultError("passkey_vault_sealed", "http_503"), "sealed"),
+        (PasskeyVaultError("passkey_vault_forbidden", "http_403"), "forbidden"),
+        (PasskeyVaultError("passkey_vault_unreachable", "ConnectError"), "unreachable"),
+        (PasskeyVaultError("passkey_vault_rejected", "key_rotated"), "rejected"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_vault_that_cannot_answer_is_reported_before_the_operator_needs_it(
+    wire: dict[str, object], error: Exception, expected: str
+) -> None:
+    wire["row"] = _stored()
+    wire["exists_error"] = error
+
+    assert await svc.check_passkey_vault("acc-1") == expected
+    assert svc.passkey_vault_state("acc-1") == expected
+    ((level, event, extra),) = wire["events"]  # ty: ignore[not-iterable]
+    assert (level, event) == ("WARNING", "passkey_vault_unhealthy")
+    assert extra["state"] == expected
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_vault_key_is_reported_as_missing(wire: dict[str, object]) -> None:
+    wire["row"] = _stored()
+    wire["key_exists"] = False
+
+    assert await svc.check_passkey_vault("acc-1") == "key_missing"
+    assert ("WARNING", "passkey_vault_unhealthy", {"state": "key_missing"}) in wire["events"]  # ty: ignore[unsupported-operator]
+
+
+@pytest.mark.asyncio
+async def test_the_vault_check_has_nothing_to_do_without_a_passkey_or_a_vault(
+    wire: dict[str, object],
+) -> None:
+    assert await svc.check_passkey_vault("acc-1") is None
+    wire["row"] = _stored()
+    wire["configured"] = False
+    assert await svc.check_passkey_vault("acc-1") is None
+    assert wire["log"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_view_carries_the_last_vault_check_only_for_an_account_with_a_passkey(
+    wire: dict[str, object],
+) -> None:
+    wire["row"] = _stored()
+    wire["exists_error"] = PasskeyVaultError("passkey_vault_sealed", "http_503")
+    await svc.check_passkey_vault("acc-1")
+
+    assert (await svc.read_account_passkey("acc-1")).vault_state == "sealed"
+
+    wire["row"] = None
+    assert (await svc.read_account_passkey("acc-1")).vault_state is None

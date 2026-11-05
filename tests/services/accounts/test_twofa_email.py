@@ -495,6 +495,34 @@ async def test_a_lost_confirm_answer_still_fails_when_no_recovery_email_appeared
 
 
 @pytest.mark.asyncio
+async def test_has_recovery_alone_does_not_prove_the_new_address_was_confirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An account that already had a confirmed recovery email keeps ``has_recovery``.
+
+    While a NEW address waits for its code Telegram still reports ``has_recovery`` for
+    the old one and names the pending one in ``email_unconfirmed_pattern``, so after a
+    lost confirm answer that flag proves nothing about the new address.
+    """
+    await _account_with_password("acc-confirm-lost-old")
+    patch_lost_answer(monkeypatch, module=EMAIL_MODULE)
+    patch_read(
+        monkeypatch,
+        status(has_password=True, has_recovery=True, email_unconfirmed_pattern="n***@example.com"),
+    )
+    events = patch_log(monkeypatch, module=EMAIL_MODULE)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await confirm_account_twofa_email(
+            "acc-confirm-lost-old",
+            AccountTwoFactorEmailConfirmRequest(code=_CODE),
+        )
+
+    assert excinfo.value.code == "unavailable"
+    assert events == []
+
+
+@pytest.mark.asyncio
 async def test_a_pool_failure_on_confirm_is_still_a_plain_503(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

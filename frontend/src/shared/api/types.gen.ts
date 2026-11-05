@@ -314,6 +314,10 @@ export type AccountPasskeyView = {
    * Vault Configured
    */
   vault_configured: boolean;
+  /**
+   * Vault State
+   */
+  vault_state?: 'ok' | 'key_missing' | 'sealed' | 'forbidden' | 'unreachable' | 'rejected' | null;
 };
 
 /**
@@ -721,6 +725,14 @@ export type AccountSession = {
    * Is Ours
    */
   is_ours: boolean;
+  /**
+   * Kind
+   */
+  kind?: 'web' | null;
+  /**
+   * Key Predates Import
+   */
+  key_predates_import?: boolean;
   /**
    * Official App
    */
@@ -10222,6 +10234,10 @@ export type RequestLoginCodeErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -10229,6 +10245,10 @@ export type RequestLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
@@ -10264,6 +10284,10 @@ export type SubmitLoginCodeErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -10271,6 +10295,10 @@ export type SubmitLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
@@ -10547,6 +10575,10 @@ export type ImportAccountTdataErrors = {
    * Not found
    */
   404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
   /**
    * Request validation failed
    */

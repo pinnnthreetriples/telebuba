@@ -13,11 +13,13 @@ import pytest
 
 from core.config import settings
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
-from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import import_account_tdata, list_accounts
+from services.accounts import sessions as sessions_module
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from schemas.accounts import AccountCreate, AccountRead
 
 
 @pytest.mark.asyncio
@@ -41,24 +43,18 @@ async def test_import_account_tdata_rolls_back_on_mid_batch_failure(
         )
 
     call_count = {"n": 0}
+    real_add_account = sessions_module.add_account
 
-    async def flaky_check(request: object) -> TelegramSessionCheckResult:
+    async def flaky_add(data: AccountCreate) -> AccountRead:
         call_count["n"] += 1
+        created = await real_add_account(data)
         if call_count["n"] == 2:
             msg = "boom on second account"
             raise RuntimeError(msg)
-        account_id = getattr(request, "account_id", "?")
-        return TelegramSessionCheckResult(
-            account_id=account_id,
-            session_path=f"sessions/{account_id}",
-            status="alive",
-            is_temporary=False,
-            user_id=int(account_id),
-            username=f"u{account_id}",
-        )
+        return created
 
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
-    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", flaky_check)
+    monkeypatch.setattr("services.accounts.sessions.add_account", flaky_add)
 
     with pytest.raises(RuntimeError, match=r"boom"):
         await import_account_tdata(
@@ -73,7 +69,7 @@ async def test_import_account_tdata_rolls_back_on_mid_batch_failure(
 
 
 def _stage_failing_import(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Two staged tdata accounts where the second account's check explodes.
+    """Two staged tdata accounts where the second account's add explodes.
 
     Same shape as ``test_import_account_tdata_rolls_back_on_mid_batch_failure``,
     reused by the two rollback-mechanics tests below.
@@ -93,22 +89,18 @@ def _stage_failing_import(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
         )
 
     calls = {"n": 0}
+    real_add_account = sessions_module.add_account
 
-    async def flaky_check(request: object) -> TelegramSessionCheckResult:
+    async def flaky_add(data: AccountCreate) -> AccountRead:
         calls["n"] += 1
+        created = await real_add_account(data)
         if calls["n"] == 2:
             msg = "boom on second account"
             raise RuntimeError(msg)
-        account_id = getattr(request, "account_id", "?")
-        return TelegramSessionCheckResult(
-            account_id=account_id,
-            session_path=f"sessions/{account_id}",
-            status="alive",
-            is_temporary=False,
-        )
+        return created
 
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
-    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", flaky_check)
+    monkeypatch.setattr("services.accounts.sessions.add_account", flaky_add)
 
 
 @pytest.mark.asyncio
@@ -118,7 +110,7 @@ async def test_tdata_rollback_evicts_the_pooled_client_per_placed_account(
 ) -> None:
     """The rollback runs under the pool tombstone, like ``lifecycle.remove_account``.
 
-    ``check_account_session`` has already pooled a client for every placed
+    a client has already been pooled for every placed
     account, and on Windows that live ``.session`` handle is what makes the
     rollback's unlink raise — leaving an orphan file with no DB row, which
     preflight then refuses to re-import forever.

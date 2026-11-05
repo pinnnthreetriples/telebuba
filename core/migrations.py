@@ -106,6 +106,7 @@ from core.migration_steps_neuroshilling_chat import _add_neuroshilling_chat_log
 from core.migration_steps_notifications import _add_notification_settings
 from core.migration_steps_outreach import _add_outreach_presets, _add_outreach_tables
 from core.migration_steps_outreach_protection import _add_outreach_protection
+from core.migration_steps_own_authorizations import _add_account_own_authorizations
 from core.migration_steps_passkeys import _add_account_passkeys
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
@@ -126,6 +127,7 @@ from core.migration_steps_standalone_emulators import (
     _add_standalone_install_apps,
 )
 from core.migration_steps_tuning import _add_warming_settings_tuning
+from core.migration_steps_twofa_pending import _add_account_twofa_pending
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warmed_days import _add_warming_warmed_days
@@ -285,6 +287,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (105, "allow_lifecycle_foreign_sessions", _allow_lifecycle_foreign_sessions),
     (106, "allow_lifecycle_foreign_closed", _allow_lifecycle_foreign_closed),
     (107, "add_account_rekeys", _add_account_rekeys),
+    (108, "add_account_own_authorizations", _add_account_own_authorizations),
+    (109, "add_account_twofa_pending", _add_account_twofa_pending),
 )
 
 

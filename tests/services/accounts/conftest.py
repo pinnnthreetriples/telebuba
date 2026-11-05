@@ -20,6 +20,7 @@ from services.accounts import (
     _bulk_runner,
     _emulator_sign_in,
     _mobile_start,
+    _twofa_pending,
     bulk_messages,
 )
 from services.accounts import devices as devices_module
@@ -104,6 +105,7 @@ def _isolate_runtime(
     # The 2FA writes serialise per account through the same module-level, loop-bound
     # shape, so it needs the same reset.
     twofa_module._TWOFA_LOCKS.clear()
+    _twofa_pending._UNSETTLED_AT.clear()
     _clear_mobile_state()
     reset_logging_for_tests()
     setup_logging()
@@ -112,6 +114,7 @@ def _isolate_runtime(
     _IMPORT_LOCKS.clear()
     warming._ACCOUNT_LOCKS.clear()
     twofa_module._TWOFA_LOCKS.clear()
+    _twofa_pending._UNSETTLED_AT.clear()
     _clear_mobile_state()
     reset_logging_for_tests()
     # Isolation is not self-evident: ``monkeypatch`` is function-scoped and SHARED with

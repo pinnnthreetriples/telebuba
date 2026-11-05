@@ -318,4 +318,20 @@ def fill(template: str, config: dict[str, object] | None = None) -> str:
     return filled if config is None else filled.replace("__FP__", json.dumps(config))
 
 
-QR_CAPTURE_HOOK = fill(_HOOK_TEMPLATE)
+def once(key: str, script: str) -> str:
+    """``script`` guarded so a second install in the same document does nothing.
+
+    A document-start script can be registered twice when the CDP command that registered it
+    was applied but its answer arrived late and the dressing step was retried. The hooks
+    patch prototypes and define non-configurable properties, so a second copy would double
+    the patches or throw halfway: the guard makes the install idempotent. ``key`` names the
+    non-enumerable marker left on the global object.
+    """
+    return (
+        f"(() => {{\nif (globalThis.{key}) return;\n"
+        f"Object.defineProperty(globalThis, '{key}', {{ value: true }});\n"
+        f"{script}}})();\n"
+    )
+
+
+QR_CAPTURE_HOOK = once("__tbCapInstalled", fill(_HOOK_TEMPLATE))

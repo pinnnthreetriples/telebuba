@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import inspect
 import logging
-from typing import TYPE_CHECKING
+import re
+import traceback
+from typing import TYPE_CHECKING, Any
 
 import sentry_sdk
 from loguru import logger
@@ -45,6 +47,95 @@ class _State:
 
 
 _state = _State()
+
+
+# Third-party exception text (python-socks, Telethon) can carry the proxy URL or its
+# credentials; the stdlib bridge persists that text to ``debug.log``. Two layers: any
+# ``user:pass@`` authority is masked by shape, and every proxy password the process has
+# handed to a client is masked by value (a password with odd characters can defeat the
+# shape).
+# Segment lengths are capped so a long colon-heavy line with no ``@`` stays linear.
+_CREDENTIALS_IN_URL = re.compile(r"(?<![\w])[^\s/@:'\"<>]{1,256}:[^\s/@'\"<>]{1,256}@")
+_MASK = "***@"
+_MIN_SECRET_LEN = 6  # shorter values would mangle ordinary text
+# The values themselves, never evicted: a value still in use must stay masked, and memory
+# is bounded by the distinct proxy credentials (proxies, not accounts). A rotated-away
+# value stays masked too, which is harmless.
+_SECRETS: set[str] = set()
+
+
+def register_log_secrets(*values: str | None) -> None:
+    """Mask ``values`` (proxy username/password) in logs; short ones rely on URL-shape masking."""
+    _SECRETS.update(v for v in values if v and len(v) >= _MIN_SECRET_LEN)
+
+
+def register_log_secret(value: str | None) -> None:
+    """Mask ``value`` (e.g. a proxy password) wherever it appears in a bridged stdlib log line."""
+    register_log_secrets(value)
+
+
+def redact_secrets(text: str) -> str:
+    """``text`` with ``user:pass@`` authorities and registered secrets masked."""
+    text = _CREDENTIALS_IN_URL.sub(_MASK, text)
+    for secret in tuple(_SECRETS):
+        text = text.replace(secret, "***")
+    return text
+
+
+def _redact_deep(value: object) -> object:
+    if isinstance(value, str):
+        return redact_secrets(value)
+    if isinstance(value, dict):
+        return {k: _redact_deep(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        items = [_redact_deep(v) for v in value]
+        return items if isinstance(value, list) else tuple(items)
+    return value
+
+
+_EVENT_TEXT_KEYS = (
+    "message",
+    "logentry",
+    "exception",
+    "breadcrumbs",
+    "extra",
+    "request",
+    "contexts",
+    "tags",
+)
+_BREADCRUMB_TEXT_KEYS = ("message", "data")
+
+
+def _sentry_before_send(event: Any, _hint: Any) -> Any:  # noqa: ANN401 - sentry's untyped dicts
+    """Redact proxy credentials from message, log entry, exception text and breadcrumbs."""
+    for key in _EVENT_TEXT_KEYS:
+        if key in event:
+            event[key] = _redact_deep(event[key])
+    return event
+
+
+def _sentry_before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+    """Redact proxy credentials from a breadcrumb's message and data."""
+    for key in _BREADCRUMB_TEXT_KEYS:
+        if key in crumb:
+            crumb[key] = _redact_deep(crumb[key])
+    return crumb
+
+
+class _RedactConsole(logging.Filter):
+    """Redacts a record's text before the stderr handler formats it."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = redact_secrets(record.getMessage())
+        record.args = None
+        if record.exc_info:
+            record.exc_text = redact_secrets(
+                "".join(traceback.format_exception(*record.exc_info)).rstrip("\n"),
+            )
+        return True
+
+
+_console_filter = _RedactConsole()
 
 
 class _StdlibToLoguru(logging.Handler):
@@ -68,7 +159,11 @@ class _StdlibToLoguru(logging.Handler):
         while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
             frame = frame.f_back
             depth += 1
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        message = record.getMessage()
+        if record.exc_info:
+            # Rendered here (not passed to loguru) so the exception text is redacted too.
+            message += "\n" + "".join(traceback.format_exception(*record.exc_info))
+        logger.opt(depth=depth).log(level, redact_secrets(message))
 
 
 _bridge = _StdlibToLoguru()
@@ -108,6 +203,7 @@ def setup_logging() -> None:
     # is untouched and they are not echoed here.
     root = logging.getLogger()
     if logging.lastResort is not None:  # typed optional — ``None`` only if disabled.
+        logging.lastResort.addFilter(_console_filter)
         root.addHandler(logging.lastResort)
     root.addHandler(_bridge)
 
@@ -126,6 +222,8 @@ def setup_logging() -> None:
             # bare string locals, which no field-level ``repr=False`` can reach. This
             # is the only switch that covers third-party frames.
             include_local_variables=False,
+            before_send=_sentry_before_send,
+            before_breadcrumb=_sentry_before_breadcrumb,
         )
         _state.sentry_active = True
     else:
@@ -140,6 +238,7 @@ def reset_logging_for_tests() -> None:
     # Paired with ``setup_logging``: the fixtures reset-then-setup per test, so leaving
     # these attached would stack a duplicate pair on every one of them.
     if logging.lastResort is not None:
+        logging.lastResort.removeFilter(_console_filter)
         root.removeHandler(logging.lastResort)
     root.removeHandler(_bridge)
     logger.remove()

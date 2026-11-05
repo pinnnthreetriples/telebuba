@@ -40,6 +40,14 @@ class AccountSession(BaseModel):
     # decided by what the session looks like, only by asking each of our clients which
     # authorization it is.
     is_ours: bool
+    # What made an own authorization that is not a Telethon device: ``web`` is Telebuba's
+    # own Telegram Web login (recorded when it ended). ``None`` for a device of ours and
+    # for every foreign session.
+    kind: Literal["web"] | None = None
+    # One of ours whose key was created BEFORE the account was added to Telebuba: the
+    # seller made it and very likely still holds a copy. The device name shown is the
+    # fingerprint Telebuba presents, the date is the key's; the remedy is the re-key.
+    key_predates_import: bool = False
     official_app: bool
     device_model: str
     platform: str

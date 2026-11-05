@@ -74,11 +74,17 @@ class _New:
         self.wait_failure: Exception | None = None
         self.events: list[str] = []
         self.order: list[str] = []
+        self.connected = True
+
+    def is_connected(self) -> bool:
+        return self.connected
 
     async def connect(self) -> None:
+        self.connected = True
         self.events.append("connect")
 
     async def disconnect(self) -> None:
+        self.connected = False
         self.events.append("disconnect")
 
     async def log_out(self) -> None:
@@ -159,8 +165,8 @@ def rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
     return state
 
 
-async def _run(password: str | None = None) -> object:
-    return await rekey_session("acc-1", "desktop", "acc_rekey", password)
+async def _run(*passwords: str) -> object:
+    return await rekey_session("acc-1", "desktop", "acc_rekey", list(passwords))
 
 
 def _files(rig: _Rig) -> dict[str, str]:
@@ -213,11 +219,29 @@ async def test_a_cloud_password_finishes_the_login(rig: _Rig) -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_rejected_candidate_moves_on_to_the_next(rig: _Rig) -> None:
+    rig.new.needs_password = True
+    tried: list[str] = []
+
+    async def _sign_in(*, password: str) -> None:
+        tried.append(password)
+        if password == "old-password":
+            raise errors.PasswordHashInvalidError(request=None)
+
+    rig.new.sign_in = _sign_in  # ty: ignore[invalid-assignment]
+
+    await _run("old-password", "new-password")
+
+    assert tried == ["old-password", "new-password"]
+    assert _files(rig) == {"acc.session": "new"}
+
+
+@pytest.mark.asyncio
 async def test_a_cloud_password_that_is_not_stored_changes_nothing(rig: _Rig) -> None:
     rig.new.needs_password = True
 
     with pytest.raises(RekeyGatewayError) as refused:
-        await _run(None)
+        await _run()
 
     assert refused.value.code == "rekey_twofa_missing"
     assert _files(rig) == {"acc.session": "old"}
@@ -261,6 +285,9 @@ async def test_a_new_file_that_does_not_work_in_its_place_is_swapped_back(rig: _
 
     assert refused.value.code == "rekey_swap_failed"
     assert "log_out" in rig.new.events
+    # ``new`` was disconnected before the swap: the logout needs a live connection, so it
+    # reconnects first or the new authorization would be left standing.
+    assert rig.new.events.index("connect") < rig.new.events.index("log_out")
     assert _files(rig) == {"acc.session": "old"}
 
 

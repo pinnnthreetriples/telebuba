@@ -93,6 +93,13 @@ export function PasskeySection({ account }: { account: AccountRead }) {
             </Notice>
           </div>
         ) : null}
+        {hasPasskey && view?.vault_state && view.vault_state !== 'ok' ? (
+          <div className="mb-3">
+            <Notice tone="danger" role="alert" className="py-3 text-small font-medium">
+              {t(`accounts.edit.passkeyVaultState.${view.vault_state}`)}
+            </Notice>
+          </div>
+        ) : null}
         <p className="mb-3 type-body text-content-subtle">{t('accounts.edit.passkeyHint')}</p>
         {hasPasskey && view?.created_at ? (
           <div className="mb-3 type-body text-content-subtle">

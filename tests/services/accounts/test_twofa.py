@@ -16,9 +16,9 @@ import pytest
 
 from core.db import (
     create_account,
-    delete_account,
     fetch_account_twofa_password,
     set_account_twofa_password,
+    twofa_password_candidates,
 )
 from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.accounts import AccountCreate
@@ -255,38 +255,6 @@ async def test_a_change_that_clears_the_hint_says_so_explicitly(
 
 
 @pytest.mark.asyncio
-async def test_set_reports_not_stored_when_the_row_vanished_before_the_persist(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A write that touched zero rows is not a write.
-
-    The persist is an ``UPDATE ... WHERE``, so an account deleted between
-    ``require_account`` and here changes nothing and raises nothing — and
-    ``stored=True`` would then promise the operator that the only copy of a live
-    cloud password is safe in a row that does not exist.
-    """
-    await create_account(AccountCreate(account_id="acc-vanished"))
-    _patch_read(monkeypatch, _status())
-    _patch_execute(monkeypatch)
-    events = _patch_log(monkeypatch)
-
-    async def _delete_the_row(account_id: str, password: str | None) -> bool:
-        await delete_account(account_id)
-        return await set_account_twofa_password(account_id, password)
-
-    monkeypatch.setattr("services.accounts.twofa.set_account_twofa_password", _delete_the_row)
-
-    created = await set_account_twofa("acc-vanished", AccountTwoFactorUpdateRequest())
-
-    assert created.stored is False
-    assert created.password
-    assert [(level, event) for level, event, _extra in events] == [
-        ("ERROR", "account_twofa_store_failed"),
-        ("INFO", "account_twofa_set"),
-    ]
-
-
-@pytest.mark.asyncio
 async def test_two_concurrent_writes_for_one_account_do_not_interleave(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -383,38 +351,6 @@ async def test_set_proceeds_when_the_live_read_itself_failed(
 
 
 @pytest.mark.asyncio
-async def test_set_still_returns_the_password_when_the_db_write_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Telegram already accepted it, so this response is the operator's only copy."""
-    await create_account(AccountCreate(account_id="acc-nostore"))
-    _patch_read(monkeypatch, _status())
-    _patch_execute(monkeypatch)
-    events = _patch_log(monkeypatch)
-
-    async def _fail(account_id: str, password: str | None) -> None:  # noqa: ARG001
-        msg = "database is locked"
-        raise RuntimeError(msg)
-
-    monkeypatch.setattr("services.accounts.twofa.set_account_twofa_password", _fail)
-
-    created = await set_account_twofa(
-        "acc-nostore",
-        AccountTwoFactorUpdateRequest(hint="a hint"),
-    )
-
-    assert created.stored is False
-    assert created.password
-    assert [(level, event) for level, event, _extra in events] == [
-        ("ERROR", "account_twofa_store_failed"),
-        ("INFO", "account_twofa_set"),
-    ]
-    # Neither the password nor the DB error prose may ride in a log extra.
-    assert events[0][2] == {"has_hint": True, "clearing": False}
-    assert all(created.password not in str(extra) for _l, _e, extra in events)
-
-
-@pytest.mark.asyncio
 async def test_set_keeps_the_password_when_only_the_answer_was_lost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -467,7 +403,9 @@ async def test_an_unconfirmed_change_keeps_the_password_that_is_known_to_work(
     # Still handed out: if Telegram DID apply it, this response is the only copy.
     assert created.password != _STORED
     assert created.confirmed is False
-    assert created.stored is False
+    # Durable as the pending candidate (the old one stays current).
+    assert created.stored is True
+    assert await twofa_password_candidates("acc-lost-change") == [_STORED, created.password]
     assert created.previous_kept is True
     assert events[0][2] == {
         "has_hint": False,

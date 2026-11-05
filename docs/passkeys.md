@@ -12,8 +12,13 @@ Telegram accepts a WebAuthn credential from Telebuba's own api_id: RP ID `telegr
 - Sign-in (`core/telegram_client/_passkey_login.py`) runs on the account's own `.session` under
   the auth lock and tombstone, like the phone-code login. It finishes on the DC the user handle
   names (`from_dc_id`/`from_auth_key_id` when that differs), then needs the stored 2FA password.
-- An already-authorized session is left alone; a sign-in that lands on another user is logged
-  out.
+- An already-authorized session is left alone when it is the passkey's user (another user's
+  session is reported as `passkey_user_mismatch` and not touched); a sign-in that lands on
+  another user is logged out.
+- The 2FA step tries every stored candidate (the current password, then one a write left
+  pending). A transient failure (vault unreachable, network, timeout) is retried twice with a
+  short backoff; a definitive refusal is never retried. The vault's HTTP status or exception
+  class rides in the journal (`passkey_login_failed`, `passkey_create_failed`) as `detail`.
 
 ## Checking that Telegram still has it
 
@@ -30,6 +35,15 @@ stored credential id. It is read-only and needs no vault.
 - A flood wait is refused with its retry-after, like the other passkey actions; an account
   without a stored passkey is refused `passkey_missing`.
 - Nothing is changed: no status, stored row or vault key is touched, and it never runs by itself.
+
+## Vault health
+
+The session watch (`services/session_guard/_watch.py`) also asks the vault, once per account
+per pass, whether the passkey's key is reachable and still there (`check_passkey_vault`). A
+problem is journalled as `passkey_vault_unhealthy` and shown on the «Ключ доступа» card:
+`sealed` (HTTP 503), `forbidden` (401/403, token or policy), `key_missing` (404),
+`unreachable`, `rejected` (a rotated or malformed key). Removal deletes the vault key first
+(already gone counts as deleted), then the row.
 
 ## Signing in to the account's web window
 

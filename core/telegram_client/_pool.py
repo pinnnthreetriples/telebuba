@@ -45,12 +45,15 @@ twin and refuses rebuilds for the duration.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import inspect
 import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, get_args
 
 from core.db import fetch_account
 from core.logging import log_event
+from core.telegram_client._bounded import await_bounded
 from core.telegram_client._client import (
     DeviceUnavailableError,
     create_telegram_client,
@@ -368,6 +371,10 @@ async def _build_and_connect(account_id: str, device: DeviceType) -> TelegramCli
     return client
 
 
+_DISCONNECT_TIMEOUT_S = 15.0
+_CANCEL_GRACE_S = 2.0  # a cancelled disconnect unwinds this long before its session is closed
+
+
 async def _safe_disconnect(client: TelegramClient) -> None:
     """Disconnect ignoring already-disconnected and shutdown-race errors.
 
@@ -377,9 +384,15 @@ async def _safe_disconnect(client: TelegramClient) -> None:
     """
     try:
         result = client.disconnect()
-        if asyncio.iscoroutine(result):
-            await result
+        # Telethon returns an ``asyncio.Future`` here (not a coroutine); an unawaited
+        # one leaves the ``.session`` SQLite handle open (WinError 32 on unlink/copy).
+        if inspect.isawaitable(result):
+            await await_bounded(result, _DISCONNECT_TIMEOUT_S, _CANCEL_GRACE_S)
     except Exception as exc:  # disconnect-on-error path
+        # A timed-out disconnect leaves the SQLite handle open: close it ourselves.
+        with contextlib.suppress(Exception):
+            if client.session is not None:
+                client.session.close()
         # Don't crash shutdown on a half-dead client; just record it.
         logger.exception("pool disconnect failed")
         await log_event(

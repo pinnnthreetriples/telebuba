@@ -17,6 +17,11 @@ worker; after a restart the saved audit time and a fresh draw decide, and the fi
 An account that has a stored passkey is asked whether Telegram still lists it
 (``check_account_passkey``, read-only): a passkey that is gone means somebody else was in the
 account's security settings.
+
+The same pass also asks the key vault whether the account's passkey key is reachable and
+still there (``check_passkey_vault``): a sealed vault, a revoked token or a deleted key
+is journalled (``passkey_vault_unhealthy``) before the operator needs the passkey, not
+when a login fails.
 """
 
 from __future__ import annotations
@@ -41,6 +46,7 @@ from services.accounts import (
     audit_account_sessions,
     check_account_passkey,
     check_account_session,
+    check_passkey_vault,
 )
 
 if TYPE_CHECKING:
@@ -165,6 +171,8 @@ async def run_watch_pass(*, now: datetime | None = None) -> str | None:
     _state.due[account.account_id] = moment + (
         _interval() if answered else timedelta(hours=limits.watch_retry_hours)
     )
+    # The vault check needs no Telegram answer, so it runs whatever the audit said.
+    await check_passkey_vault(account.account_id)
     if answered:
         await _check_passkey(account.account_id)
     return account.account_id

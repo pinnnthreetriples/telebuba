@@ -25,14 +25,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import fetch_account_twofa_password
 from core.logging import log_event
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute
 from schemas.telegram_actions_twofa import ManageTwoFactorEmail
 from schemas.twofa import AccountTwoFactorEmailPending
 from services.accounts._result import AccountActionError, raise_for_result
 from services.accounts.lifecycle import require_account
-from services.accounts.twofa import read_account_twofa, twofa_lock
+from services.accounts.twofa import (
+    authorising_twofa_password_unlocked,
+    read_account_twofa,
+    twofa_lock,
+)
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -101,7 +104,7 @@ async def set_account_twofa_email(
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
-        current = await fetch_account_twofa_password(account_id)
+        current = await authorising_twofa_password_unlocked(account_id)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
@@ -138,8 +141,11 @@ async def confirm_account_twofa_email(
     ``twofa_email_code_invalid`` or ``twofa_email_hash_expired`` for an address that
     is already confirmed — an error that is a lie, and the code is single-use so no
     retry can ever succeed. So that ONE status re-reads the live state and reports
-    success when ``has_recovery`` flipped. A read that failed, or one that still says
-    no recovery email, keeps the 503: neither is proof of success.
+    success only when ``has_recovery`` is set AND no address is still pending
+    (``email_unconfirmed_pattern`` empty): an account that already had a confirmed
+    recovery email keeps ``has_recovery`` while the NEW one waits for its code, so that
+    flag alone proves nothing. A read that failed, or one that still shows a pending
+    address, keeps the 503.
     """
     await require_account(account_id)
     result = await execute(account_id, ManageTwoFactorEmail(mode="confirm", code=request.code))
@@ -147,7 +153,7 @@ async def confirm_account_twofa_email(
     if not lost:
         raise_for_result(result)
     view = await read_account_twofa(account_id)
-    if lost and not (view.status is not None and view.status.has_recovery):
+    if lost and not _recovery_confirmed(view):
         raise_for_result(result)
     await log_event(
         "INFO",
@@ -156,6 +162,11 @@ async def confirm_account_twofa_email(
         extra={"mode": "confirm"},
     )
     return view
+
+
+def _recovery_confirmed(view: AccountTwoFactorView) -> bool:
+    status = view.status
+    return status is not None and status.has_recovery and not status.email_unconfirmed_pattern
 
 
 async def resend_account_twofa_email(account_id: str) -> AccountTwoFactorEmailPending:
@@ -188,7 +199,7 @@ async def clear_account_twofa_email(account_id: str) -> AccountTwoFactorView:
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
-        current = await fetch_account_twofa_password(account_id)
+        current = await authorising_twofa_password_unlocked(account_id)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)

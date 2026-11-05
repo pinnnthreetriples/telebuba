@@ -48,6 +48,9 @@ PasskeyGatewayCode = Literal[
     "passkey_user_mismatch",
     "passkey_vault_disabled",
     "passkey_vault_unreachable",
+    "passkey_vault_sealed",
+    "passkey_vault_forbidden",
+    "passkey_vault_key_missing",
     "passkey_vault_rejected",
 ]
 

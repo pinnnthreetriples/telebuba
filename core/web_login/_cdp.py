@@ -25,7 +25,7 @@ import contextlib
 import json
 import os
 import struct
-from typing import Self
+from typing import Self, cast
 from urllib.parse import urlsplit
 
 _FIN = 0x80
@@ -53,6 +53,11 @@ _MAX_FRAME_BYTES = 8 * 1024 * 1024
 # bounds the pathological case so a caller cannot wait on a dead browser forever.
 _COMMAND_TIMEOUT = 30.0
 _EVENT_PREFIX = "Target."
+# Bounds on reaching a browser we just launched: a loopback TCP connect and the HTTP
+# upgrade answer in milliseconds, so this only ends a port nobody serves or a browser that
+# accepted the socket and went silent, instead of hanging the launch (and the click) forever.
+_CONNECT_TIMEOUT = 10.0
+_HANDSHAKE_TIMEOUT = 10.0
 
 
 class CdpError(RuntimeError):
@@ -64,6 +69,14 @@ async def _abort(writer: asyncio.StreamWriter) -> None:
     writer.close()
     with contextlib.suppress(Exception):
         await writer.wait_closed()
+
+
+def _describe_error(error: object) -> str:
+    """A CDP ``error`` envelope as one line: its code and message, nothing else."""
+    if isinstance(error, dict):
+        fields = cast("dict[str, object]", error)
+        return f"CDP command failed ({fields.get('code')}): {fields.get('message')}"
+    return "CDP command failed"
 
 
 class CdpSession:
@@ -92,7 +105,13 @@ class CdpSession:
         parts = urlsplit(ws_url)
         host = parts.hostname or "127.0.0.1"
         port = parts.port or _DEFAULT_WS_PORT
-        reader, writer = await asyncio.open_connection(host, port)
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), _CONNECT_TIMEOUT
+            )
+        except TimeoutError as exc:
+            msg = "DevTools WebSocket connect timed out"
+            raise CdpError(msg) from exc
         path = parts.path or "/"
         if parts.query:
             path = f"{path}?{parts.query}"
@@ -108,7 +127,8 @@ class CdpSession:
         try:
             writer.write(handshake.encode("ascii"))
             await writer.drain()
-            status = (await reader.readuntil(b"\r\n\r\n")).split(b"\r\n", 1)[0]
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), _HANDSHAKE_TIMEOUT)
+            status = head.split(b"\r\n", 1)[0]
         except Exception as exc:
             await _abort(writer)
             msg = "DevTools WebSocket handshake failed before the upgrade"
@@ -160,6 +180,12 @@ class CdpSession:
         """True once the pump has stopped — the browser is gone or we closed the socket."""
         return self._pump is None or self._pump.done()
 
+    async def wait_closed(self) -> None:
+        """Return once the pump has stopped — the browser dropped the socket, or we closed it."""
+        pump = self._pump
+        if pump is not None:
+            await asyncio.wait({pump})
+
     async def aclose(self) -> None:
         """Stop routing, send a close frame, and drop the socket."""
         pump = self._pump
@@ -184,7 +210,11 @@ class CdpSession:
                 if message_id is not None:
                     future = self._pending.pop(message_id, None)
                     if future is not None and not future.done():
-                        future.set_result(message)
+                        error = message.get("error")
+                        if error is None:
+                            future.set_result(message)
+                        else:
+                            future.set_exception(CdpError(_describe_error(error)))
                 elif str(message.get("method", "")).startswith(_EVENT_PREFIX):
                     self._events.put_nowait(message)
         except (OSError, CdpError, ValueError, asyncio.IncompleteReadError) as exc:

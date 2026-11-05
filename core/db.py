@@ -214,8 +214,14 @@ from core.db_maintenance import (  # noqa: E402, F401
 # on why the plaintext has exactly one exit); re-exported so callers keep taking
 # every account persistence function from ``core.db``.
 from core.repositories._accounts_twofa import (  # noqa: E402, F401
+    confirm_twofa_password_used,
+    fetch_account_twofa_pair,
     fetch_account_twofa_password,
+    promote_account_twofa_pending,
+    set_account_twofa_current_only,
     set_account_twofa_password,
+    set_account_twofa_pending,
+    twofa_password_candidates,
 )
 from core.repositories._warming_spam_streak import (  # noqa: E402, F401
     record_spam_check_outcome,

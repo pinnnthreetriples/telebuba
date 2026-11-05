@@ -183,6 +183,23 @@ async def test_revoke_sessions_invalidates_outstanding_tokens() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_refreshed_token_does_not_outlive_a_logout() -> None:
+    """The refresh carries the version validated with the user, so a later logout kills it."""
+    await _seed_user()
+    token = await auth_service.issue_session_token("u1")
+    resolved = await auth_service.resolve_and_refresh(token)
+    assert resolved is not None
+    user, refreshed = resolved
+    assert user.id == "u1"
+    assert await auth_service.resolve_user(refreshed) is not None
+
+    await auth_service.revoke_sessions("u1")
+
+    assert await auth_service.resolve_user(refreshed) is None
+    assert await auth_service.resolve_and_refresh(token) is None
+
+
+@pytest.mark.asyncio
 async def test_seed_admin_creates_the_first_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.auth, "admin_username", "root")
     monkeypatch.setattr(settings.auth, "admin_password", "rootpw")

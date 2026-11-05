@@ -22,6 +22,13 @@ class SessionAuditSettings(BaseSettings):
     # Shape of the clipped log-normal the pause is drawn from (chat broadcast's values).
     delay_lognorm_mu: float = -0.8
     delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
+    # Only when the account's authorizations could not be listed before its web window was
+    # launched: a Web authorization counts as made by Telebuba's own login when it was
+    # created within [the drive's start - skew, the moment logged-in was seen + skew]
+    # (Telegram's clock against ours).
+    # How long a web window's launch waits for the pre-login listing of authorizations; on
+    # expiry the login goes on and the recording falls back to the time window above.
+    own_login_baseline_timeout_seconds: float = Field(default=10.0, gt=0.0)
     # A re-keyed account's old authorization that could not be ended yet is tried again after
     # this long (or after the wait Telegram named).
     rekey_retry_seconds: float = Field(default=3600.0, gt=0.0)

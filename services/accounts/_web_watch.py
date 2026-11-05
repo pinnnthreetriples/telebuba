@@ -26,7 +26,20 @@ def watch_window(window: WebWindow, on_closed: Callable[[], Awaitable[None]]) ->
 
 
 async def _watch(window: WebWindow, on_closed: Callable[[], Awaitable[None]]) -> None:
-    await window.wait_closed()
+    """Wait for the browser to exit OR its DevTools socket to end, then run the cleanup.
+
+    The second trigger matters: Chrome strips every fingerprint override the moment the
+    socket drops, so a browser that outlives its socket is a window the operator keeps
+    using while it shows Telegram their real machine. ``on_closed`` kills the browser, so
+    "socket gone, Chrome alive" ends the same way "Chrome gone" does.
+    """
+    exited = asyncio.ensure_future(window.wait_closed())
+    detached = asyncio.ensure_future(window.session.wait_closed())
+    try:
+        await asyncio.wait({exited, detached}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in (exited, detached):
+            task.cancel()
     await on_closed()
 
 

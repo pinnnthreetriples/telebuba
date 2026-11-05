@@ -277,8 +277,8 @@ async def test_a_change_against_an_account_with_no_password_degrades_to_a_set(
     ("error", "code"),
     [
         (errors.rpcerrorlist.PasswordHashInvalidError(None), "twofa_current_password_invalid"),
-        (errors.rpcerrorlist.SrpIdInvalidError(None), "twofa_current_password_invalid"),
-        (errors.rpcerrorlist.SrpPasswordChangedError(None), "twofa_current_password_invalid"),
+        (errors.rpcerrorlist.SrpIdInvalidError(None), "twofa_srp_stale"),
+        (errors.rpcerrorlist.SrpPasswordChangedError(None), "twofa_srp_stale"),
         (errors.rpcerrorlist.NewSettingsInvalidError(None), "twofa_settings_invalid"),
         (errors.rpcerrorlist.NewSaltInvalidError(None), "twofa_settings_invalid"),
         (errors.rpcerrorlist.PasswordMissingError(None), "twofa_password_not_set"),

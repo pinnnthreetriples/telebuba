@@ -33,7 +33,8 @@ export function TwoFactorRecord({
   });
 
   const submit = () => {
-    const value = password.trim();
+    // Never trimmed: a password may legitimately start or end with a space.
+    const value = password;
     if (!value) return;
     record.mutate(
       { path: { account_id: accountId }, body: { password: value } },
@@ -88,7 +89,7 @@ export function TwoFactorRecord({
         fullWidth
         className="font-medium"
         loading={record.isPending}
-        disabled={!password.trim()}
+        disabled={!password}
         onClick={submit}
       >
         {t('accounts.edit.twofaRecordSubmit')}

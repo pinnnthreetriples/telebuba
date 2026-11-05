@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.config import settings
-from core.db import configure_database, update_account_from_session_check
+from core.db import (
+    configure_database,
+    fetch_account_twofa_pair,
+    fetch_account_twofa_password,
+    set_account_twofa_password,
+    set_account_twofa_pending,
+    update_account_from_session_check,
+)
 from schemas.accounts import AccountCreate
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
 from schemas.telegram_session import SessionCheckStatus, TelegramSessionCheckResult
 from services.accounts import add_account
 from services.accounts import login as login_service
 from services.accounts._login_state import _PENDING
+from services.accounts._result import AccountActionError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -45,11 +54,13 @@ async def _account_with_phone(account_id: str, phone: str | None = "79990001122"
         )
 
 
-def _fake_request(
+def _fake_request(  # noqa: PLR0913 - one knob per gateway field
     monkeypatch: pytest.MonkeyPatch,
     *,
     hash_value: str,
     error: str | None,
+    error_code: str | None = None,
+    flood_wait_seconds: int | None = None,
     captured: list[PhoneCodeRequest] | None = None,
 ) -> None:
     async def _request(request: PhoneCodeRequest) -> PhoneCodeChallenge:
@@ -60,17 +71,22 @@ def _fake_request(
             phone=request.phone,
             phone_code_hash=hash_value,
             error=error,
+            error_code=error_code,
+            flood_wait_seconds=flood_wait_seconds,
         )
 
     monkeypatch.setattr(login_service, "request_phone_code", _request)
 
 
-def _fake_submit(
+def _fake_submit(  # noqa: PLR0913 - one knob per gateway field
     monkeypatch: pytest.MonkeyPatch,
     *,
     status: SessionCheckStatus,
     error: str | None = None,
+    error_type: str | None = None,
+    flood_wait_seconds: int | None = None,
     captured: list[PhoneCodeSubmit] | None = None,
+    typed_password_accepted: bool = False,
 ) -> None:
     async def _submit(request: PhoneCodeSubmit) -> TelegramSessionCheckResult:
         if captured is not None:
@@ -82,6 +98,9 @@ def _fake_submit(
             is_temporary=False,
             phone="79990001122",
             error_message=error,
+            error_type=error_type,
+            flood_wait_seconds=flood_wait_seconds,
+            typed_password_accepted=typed_password_accepted,
         )
 
     monkeypatch.setattr(login_service, "submit_phone_code", _submit)
@@ -157,6 +176,7 @@ async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatc
             "phone_code_hash": "HASH",
             "code": "01234",
             "password": "2fa",
+            "fallback_passwords": [],
         },
     ]
 
@@ -180,11 +200,29 @@ async def test_request_login_code_unknown_account_errors(monkeypatch: pytest.Mon
 @pytest.mark.asyncio
 async def test_request_login_code_surfaces_gateway_error(monkeypatch: pytest.MonkeyPatch) -> None:
     await _account_with_phone("acc")
-    _fake_request(monkeypatch, hash_value="", error="flood wait 30s")
+    _fake_request(
+        monkeypatch,
+        hash_value="",
+        error="flood wait 30s",
+        error_code="flood_wait",
+        flood_wait_seconds=30,
+    )
 
-    with pytest.raises(login_service.PhoneLoginError) as excinfo:
+    with pytest.raises(AccountActionError) as excinfo:
         await login_service.request_login_code("acc")
-    assert str(excinfo.value) == "flood wait 30s"
+    assert (str(excinfo.value), excinfo.value.retry_after_seconds) == ("flood_wait", 30)
+
+
+@pytest.mark.asyncio
+async def test_request_login_code_timeout_is_the_stable_unavailable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    _fake_request(monkeypatch, hash_value="", error="TimeoutError", error_code="unavailable")
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await login_service.request_login_code("acc")
+    assert str(excinfo.value) == "unavailable"
 
 
 @pytest.mark.asyncio
@@ -192,7 +230,7 @@ async def test_submit_without_pending_code_errors(monkeypatch: pytest.MonkeyPatc
     await _account_with_phone("acc")
     _fake_submit(monkeypatch, status="alive")
 
-    with pytest.raises(login_service.PhoneLoginError, match="request a new one"):
+    with pytest.raises(AccountActionError, match="no_pending_code"):
         await login_service.submit_login_code("acc", "11111")
 
 
@@ -206,7 +244,7 @@ async def test_submit_login_code_signs_in_and_clears(monkeypatch: pytest.MonkeyP
     account = await login_service.submit_login_code("acc", "11111")
 
     assert account.status == "alive"
-    with pytest.raises(login_service.PhoneLoginError, match="request a new one"):
+    with pytest.raises(AccountActionError, match="no_pending_code"):
         await login_service.submit_login_code("acc", "11111")
 
 
@@ -214,10 +252,15 @@ async def test_submit_login_code_signs_in_and_clears(monkeypatch: pytest.MonkeyP
 async def test_submit_login_code_bad_code_keeps_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     await _account_with_phone("acc")
     _fake_request(monkeypatch, hash_value="HASH", error=None)
-    _fake_submit(monkeypatch, status="unauthorized", error="phone code invalid")
+    _fake_submit(
+        monkeypatch,
+        status="unauthorized",
+        error="PhoneCodeInvalidError",
+        error_type="PhoneCodeInvalidError",
+    )
     await login_service.request_login_code("acc")
 
-    with pytest.raises(login_service.PhoneLoginError, match="phone code invalid"):
+    with pytest.raises(AccountActionError, match="code_invalid"):
         await login_service.submit_login_code("acc", "00000")
     _fake_submit(monkeypatch, status="alive")
     account = await login_service.submit_login_code("acc", "11111")
@@ -236,8 +279,187 @@ async def test_pending_code_expires_at_exact_ttl_boundary(
 
     await login_service.request_login_code("acc")
 
-    with pytest.raises(login_service.PhoneLoginError, match="request a new one"):
+    with pytest.raises(AccountActionError, match="no_pending_code"):
         await login_service.submit_login_code("acc", "11111")
+
+
+async def _refusal_code(
+    monkeypatch: pytest.MonkeyPatch,
+    status: SessionCheckStatus,
+    error_type: str | None = None,
+    flood_wait_seconds: int | None = None,
+) -> AccountActionError:
+    await _account_with_phone("acc")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(
+        monkeypatch,
+        status=status,
+        error_type=error_type,
+        flood_wait_seconds=flood_wait_seconds,
+    )
+    await login_service.request_login_code("acc")
+    with pytest.raises(AccountActionError) as excinfo:
+        await login_service.submit_login_code("acc", "11111")
+    return excinfo.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "error_type", "code"),
+    [
+        ("unauthorized", "SessionPasswordNeededError", "password_needed"),
+        ("unauthorized", "PasswordHashInvalidError", "password_invalid"),
+        ("unauthorized", "PhoneCodeExpiredError", "code_expired"),
+        ("network_error", "TimeoutError", "unavailable"),
+        ("proxy_error", "ProxyError", "unavailable"),
+        ("unknown_error", "PhoneNumberBannedError", "failed"),
+    ],
+)
+async def test_submit_refusals_are_stable_codes(
+    monkeypatch: pytest.MonkeyPatch,
+    status: SessionCheckStatus,
+    error_type: str,
+    code: str,
+) -> None:
+    exc = await _refusal_code(monkeypatch, status, error_type)
+    assert str(exc) == code
+
+
+@pytest.mark.asyncio
+async def test_submit_flood_wait_carries_the_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    exc = await _refusal_code(monkeypatch, "flood_wait", flood_wait_seconds=42)
+    assert (str(exc), exc.retry_after_seconds) == ("flood_wait", 42)
+
+
+@pytest.mark.asyncio
+async def test_an_expired_code_drops_the_pending_challenge(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _refusal_code(monkeypatch, "unauthorized", "PhoneCodeExpiredError")
+    assert "acc" not in _PENDING
+
+
+@pytest.mark.asyncio
+async def test_a_verified_password_is_stored_for_the_second_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="cloud-pw ")
+
+    assert await fetch_account_twofa_password("acc") == "cloud-pw "
+
+
+@pytest.mark.asyncio
+async def test_a_typed_string_telegram_never_asked_for_overwrites_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The password field is always visible: a wrong string on a code-only login is noise."""
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "right-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=False)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="wrong-string")
+
+    assert await fetch_account_twofa_pair("acc") == ("right-pw", "maybe-pw")
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_typed_password_keeps_the_pending_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="typed-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("typed-pw", "maybe-pw")
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_typed_password_equal_to_the_pending_one_is_promoted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    await set_account_twofa_pending("acc", "maybe-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="maybe-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("maybe-pw", None)
+
+
+@pytest.mark.asyncio
+async def test_no_typed_password_stores_nothing_and_falls_back_to_the_stored_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "stored-pw")
+    submitted: list[PhoneCodeSubmit] = []
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", captured=submitted)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111")
+
+    assert [s.password for s in submitted] == ["stored-pw"]
+    assert await fetch_account_twofa_password("acc") == "stored-pw"
+
+
+@pytest.mark.asyncio
+async def test_a_pending_candidate_rides_along_as_the_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "stored-pw")
+    await set_account_twofa_pending("acc", "pending-pw")
+    submitted: list[PhoneCodeSubmit] = []
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", captured=submitted)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111")
+
+    assert [(s.password, s.fallback_passwords) for s in submitted] == [
+        ("stored-pw", ["pending-pw"])
+    ]
+
+
+@pytest.mark.asyncio
+async def test_the_response_does_not_wait_for_the_inbox_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive")
+    release = asyncio.Event()
+    started: list[str] = []
+
+    async def _blocked_start(account_id: str) -> None:
+        started.append(account_id)
+        await release.wait()
+
+    monkeypatch.setattr(login_service, "start_account_inbox", _blocked_start)
+    await login_service.request_login_code("acc")
+
+    account = await asyncio.wait_for(login_service.submit_login_code("acc", "11111"), timeout=2)
+
+    assert account.status == "alive"
+    await asyncio.sleep(0)
+    assert started == ["acc"]
+    release.set()
+    await asyncio.gather(*login_service._INBOX_STARTS)
 
 
 @pytest.mark.asyncio
@@ -292,3 +514,27 @@ async def test_reset_session_wipes_session(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert account.status == "unauthorized"
     assert captured["wipe"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_typed_password_is_not_written_over_a_2fa_change_made_during_the_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A change that applied between the read and the write makes the typed one stale."""
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    inner = login_service.submit_phone_code
+
+    async def _submit_then_change(request: PhoneCodeSubmit) -> TelegramSessionCheckResult:
+        result = await inner(request)
+        await set_account_twofa_pending("acc", "changed-meanwhile")
+        return result
+
+    monkeypatch.setattr(login_service, "submit_phone_code", _submit_then_change)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="typed-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("old-pw", "changed-meanwhile")

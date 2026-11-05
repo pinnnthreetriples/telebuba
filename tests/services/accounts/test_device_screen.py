@@ -336,3 +336,24 @@ async def test_a_viewer_superseded_while_opening_is_never_shown(
 async def _open_and_leave() -> bool:
     async with open_session(_PHONE, "control") as session:
         return session.controllable
+
+
+@pytest.mark.asyncio
+async def test_a_take_over_cancelled_while_waiting_releases_its_viewer() -> None:
+    """A viewer cancelled behind the previous one must not leave its ``done`` unset."""
+    screen._VIEWERS.clear()
+    previous = screen._Viewer()
+    screen._VIEWERS[_PHONE] = previous
+
+    waiting = asyncio.create_task(screen._take_over(_PHONE))
+    await asyncio.sleep(0)
+    queued = screen._VIEWERS[_PHONE]
+    assert queued is not previous
+
+    waiting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+
+    assert queued.done.is_set(), "the next viewer would wait on this one forever"
+    assert _PHONE not in screen._VIEWERS
+    screen._VIEWERS.clear()

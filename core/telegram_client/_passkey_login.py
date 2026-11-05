@@ -6,13 +6,20 @@ stored 2FA password when Telegram asks for one. It runs on the account's OWN
 ``.session`` file, exactly like ``_auth.submit_phone_code``, under the same per-account
 auth lock and pool tombstone, so it can repair a session Telegram revoked.
 
-An already-authorized session is left alone and reported alive: Telegram refuses a
-passkey login for the user a client is already signed in as. A sign-in that lands on
-a different user is logged out again before anything is reported.
+An already-authorized session is left alone and reported alive when it belongs to the
+passkey's Telegram user (Telegram refuses a passkey login for the user a client is
+already signed in as); another user's session is reported as a mismatch and not touched.
+A sign-in that lands on a different user is logged out again before anything is reported.
+
+The 2FA step tries every stored candidate (the current password, then one a write left
+pending), and a transient failure (vault unreachable, network, timeout) is retried a few
+times with a short backoff. A definitive refusal (Telegram's, a sealed vault, a wrong
+password) is never retried.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -21,24 +28,30 @@ from telethon.tl.functions.auth import FinishPasskeyLoginRequest, InitPasskeyLog
 from telethon.tl.types import DataJSON, InputPasskeyCredentialPublicKey, InputPasskeyResponseLogin
 
 from core.passkey_vault import PasskeyVaultError, sign_with_key
-from core.repositories._accounts_twofa import fetch_account_twofa_password
+from core.repositories._accounts_twofa import twofa_password_candidates
 from core.telegram_client._auth import _alive_result, _auth_lock, _error_result, _status_result
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
 from core.telegram_client._passkey import PasskeyGatewayError, public_key_options
 from core.telegram_client._pool import removing_client
+from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from core.webauthn_passkey import build_assertion
 from schemas.device_fingerprint import TelegramClientRequest
+from schemas.telegram_session import TelegramSessionCheckResult
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
+    from core.telegram_client._client import TelegramClientProfile
     from schemas.passkey import StoredPasskey
-    from schemas.telegram_session import TelegramSessionCheckResult
 
 # Stdlib sink: a transport failure stringifies with the proxy URL (see ``_pool``).
 logger = logging.getLogger(__name__)
 _INT64_SPAN = 1 << 64
 _INT64_MAX = 1 << 63
+# Transient faults get ``len(_RETRY_DELAYS) + 1`` attempts, sleeping the listed seconds
+# between them; everything else is a definitive answer and ends the sign-in at once.
+_RETRY_DELAYS = (2.0, 6.0)
+_TRANSIENT_CODES = frozenset({"passkey_vault_unreachable", "unavailable"})
 
 
 def _signed64(value: int) -> int:
@@ -101,15 +114,40 @@ async def _passkey_steps(client: TelegramClient, passkey: StoredPasskey) -> None
     try:
         await client(request)
     except errors.SessionPasswordNeededError:
-        password = await fetch_account_twofa_password(passkey.account_id)
-        if not password:
-            msg = "passkey_twofa_missing"
-            raise PasskeyGatewayError(msg) from None
+        await _second_factor(client, passkey)
+
+
+async def _second_factor(client: TelegramClient, passkey: StoredPasskey) -> None:
+    """Finish with the first stored candidate Telegram accepts; promote a pending one."""
+    candidates = await twofa_password_candidates(passkey.account_id)
+    if not candidates:
+        msg = "passkey_twofa_missing"
+        raise PasskeyGatewayError(msg)
+    try:
+        await sign_in_with_passwords(client, passkey.account_id, candidates)
+    except errors.PasswordHashInvalidError as exc:
+        msg = "passkey_twofa_invalid"
+        raise PasskeyGatewayError(msg) from exc
+
+
+async def _backoff(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+async def _finish_with_retry(client: TelegramClient, passkey: StoredPasskey) -> None:
+    """:func:`_finish_login`, retried while the failure is transient and attempts remain."""
+    for delay in (*_RETRY_DELAYS, None):
         try:
-            await client.sign_in(password=password)
-        except errors.PasswordHashInvalidError:
-            msg = "passkey_twofa_invalid"
-            raise PasskeyGatewayError(msg) from None
+            await _finish_login(client, passkey)
+        except PasskeyGatewayError as exc:
+            if delay is None or exc.code not in _TRANSIENT_CODES:
+                raise
+        except OSError:  # ConnectionError and TimeoutError are OSErrors
+            if delay is None:
+                raise
+        else:
+            return
+        await _backoff(delay)
 
 
 async def _log_out_quietly(client: TelegramClient) -> None:
@@ -117,6 +155,28 @@ async def _log_out_quietly(client: TelegramClient) -> None:
         await client.log_out()
     except Exception as exc:  # noqa: BLE001 - best effort; the refusal is reported anyway.
         logger.warning("passkey sign-in logout failed (%s)", type(exc).__name__)
+
+
+async def _sign_in_verdict(
+    client: TelegramClient,
+    passkey: StoredPasskey,
+    profile: TelegramClientProfile,
+    user_id: int,
+) -> TelegramSessionCheckResult:
+    """Sign in unless the session already is, then check WHO is signed in.
+
+    A fresh sign-in that landed on another user is logged out again. An already
+    authorized session of another user is not ours to end: it is reported and left.
+    """
+    already = await client.is_user_authorized()
+    if not already:
+        await _finish_with_retry(client, passkey)
+    me = await client.get_me()
+    if getattr(me, "id", None) != user_id:
+        if not already:
+            await _log_out_quietly(client)
+        return _status_result(profile, status="unauthorized", error_message="passkey_user_mismatch")
+    return _alive_result(profile, me)
 
 
 async def login_with_passkey(
@@ -136,18 +196,17 @@ async def login_with_passkey(
         client = create_telegram_client(profile)
         try:
             await client.connect()
-            if await client.is_user_authorized():
-                return _alive_result(profile, await client.get_me())
-            await _finish_login(client, passkey)
-            me = await client.get_me()
-            if getattr(me, "id", None) != user_id:
-                await _log_out_quietly(client)
-                return _status_result(
-                    profile, status="unauthorized", error_message="passkey_user_mismatch"
-                )
-            return _alive_result(profile, me)
+            return await _sign_in_verdict(client, passkey, profile, user_id)
         except PasskeyGatewayError as exc:
-            return _status_result(profile, status="unauthorized", error_message=exc.code)
+            # ``error_type`` carries the non-secret detail (``http_503``, a class name).
+            return TelegramSessionCheckResult(
+                account_id=profile.account_id,
+                session_path=profile.session_path,
+                status="unauthorized",
+                is_temporary=False,
+                error_type=exc.error_type,
+                error_message=exc.code,
+            )
         except errors.FloodWaitError as exc:
             return _error_result(
                 profile,

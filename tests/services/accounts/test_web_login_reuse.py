@@ -109,7 +109,7 @@ async def test_the_token_capture_is_released_only_once_the_login_has_completed(
 
 @pytest.mark.usefixtures("relay")
 @pytest.mark.asyncio
-async def test_a_raised_window_on_the_password_screen_types_nothing(
+async def test_a_raised_window_that_already_sent_its_password_types_nothing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -120,12 +120,12 @@ async def test_a_raised_window_on_the_password_screen_types_nothing(
     sees the failure toast and clicks again — and every click would be another
     ``auth.checkPassword`` failure against a live account, walking it into a FLOOD_WAIT
     or a temporary lock with nothing on screen to say so. Only the QR half of the
-    re-drive is safe to repeat.
+    re-drive is safe to repeat once the window has SENT the password.
     """
     calls: dict[str, Any] = {}
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2")
+    _wire(monkeypatch, calls, states=["qr", "password"], twofa="hunter2", outcome="error")
 
     first = await open_account_web("acct")
     assert first.signed_in is False
@@ -141,8 +141,8 @@ async def test_a_raised_window_on_the_password_screen_types_nothing(
     assert second.signed_in is False
     assert calls["focused"] == 1  # it really was the raised-window path
     assert calls["typed"] == []  # ...and it typed NOTHING
-    # So it cannot claim the password was rejected again: the operator types it by hand.
-    assert second.reason == "web_login_2fa_required"
+    # This window did send it and the screen is still standing: still "rejected".
+    assert second.reason == "web_login_2fa_rejected"
 
 
 @pytest.mark.usefixtures("relay")

@@ -1287,6 +1287,26 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -1381,6 +1401,26 @@
           },
           "400": {
             "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -2025,6 +2065,16 @@
           },
           "503": {
             "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
             "content": {
               "application/json": {
                 "schema": {
@@ -25337,6 +25387,25 @@
           "vault_configured": {
             "type": "boolean",
             "title": "Vault Configured"
+          },
+          "vault_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "key_missing",
+                  "sealed",
+                  "forbidden",
+                  "unreachable",
+                  "rejected"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vault State"
           }
         },
         "additionalProperties": false,
@@ -26178,6 +26247,23 @@
           "is_ours": {
             "type": "boolean",
             "title": "Is Ours"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "web"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "key_predates_import": {
+            "type": "boolean",
+            "title": "Key Predates Import",
+            "default": false
           },
           "official_app": {
             "type": "boolean",

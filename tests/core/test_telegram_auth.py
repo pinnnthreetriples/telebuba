@@ -201,7 +201,28 @@ async def test_submit_phone_code_handles_2fa(tmp_path: Path, monkeypatch) -> Non
     )
 
     assert result.status == "alive"
+    assert result.typed_password_accepted is True
     assert client.password_used is True
+
+
+@pytest.mark.asyncio
+async def test_a_typed_password_telegram_never_asked_for_is_not_reported_accepted(
+    tmp_path: Path, monkeypatch
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    _patch_client(monkeypatch, tmp_path, FakeAuthClient(needs_2fa=False))
+
+    result = await submit_phone_code(
+        PhoneCodeSubmit(
+            account_id="acc",
+            phone="79990001122",
+            phone_code_hash="H",
+            code="11111",
+            password="just-typed",
+        ),
+    )
+
+    assert (result.status, result.typed_password_accepted) == ("alive", False)
 
 
 @pytest.mark.asyncio
@@ -249,7 +270,7 @@ async def test_submit_phone_code_classifies_unexpected_error(tmp_path: Path, mon
         PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
     )
 
-    assert result.status == "unknown_error"
+    assert result.status == "network_error"
     assert result.is_temporary is True
     assert result.error_type == "ConnectionError"
     assert client.disconnected is True
@@ -472,7 +493,7 @@ async def test_submit_phone_code_error_hides_the_proxy_endpoint(
         PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
     )
 
-    assert result.status == "unknown_error"
+    assert result.status == "network_error"
     assert result.error_type == "OSError"
     assert result.error_message == "OSError"
     for secret in _PROXY_SECRETS:
