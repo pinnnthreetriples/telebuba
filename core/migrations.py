@@ -126,6 +126,7 @@ from core.migration_steps_standalone_emulators import (
     _add_standalone_install_apps,
 )
 from core.migration_steps_tuning import _add_warming_settings_tuning
+from core.migration_steps_twofa_pending import _add_account_twofa_pending
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warmed_days import _add_warming_warmed_days
@@ -285,6 +286,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (105, "allow_lifecycle_foreign_sessions", _allow_lifecycle_foreign_sessions),
     (106, "allow_lifecycle_foreign_closed", _allow_lifecycle_foreign_closed),
     (107, "add_account_rekeys", _add_account_rekeys),
+    (109, "add_account_twofa_pending", _add_account_twofa_pending),
 )
 
 

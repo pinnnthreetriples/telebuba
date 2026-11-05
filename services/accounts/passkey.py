@@ -8,8 +8,9 @@ The private key is a non-exportable key in the vault (``core.passkey_vault``); t
 ``account_passkeys`` row only says which vault key signs for which Telegram
 credential. Order matters on both ends: the vault key exists before Telegram is asked
 to trust it, and the row is written only after Telegram did; removal asks Telegram
-first and deletes the vault key last, so a half-done removal never leaves Telegram
-trusting a key that no longer exists.
+first, then deletes the vault key (already gone counts as deleted) and the row last, so
+a half-done removal never leaves Telegram trusting a key that no longer exists and a
+retry always converges.
 
 The gateway functions are imported at module scope so tests monkeypatch them at
 ``services.accounts.passkey.<name>`` (the convention :mod:`.login` documents).
@@ -27,6 +28,7 @@ from core.passkey_vault import (
     create_signing_key,
     delete_signing_key,
     passkey_vault_configured,
+    signing_key_exists,
     vault_key_name,
 )
 from core.repositories._accounts_passkey import (
@@ -46,6 +48,7 @@ from schemas.passkey import (
     AccountPasskeyCheck,
     AccountPasskeyView,
     PasskeyCheckReason,
+    PasskeyVaultState,
     StoredPasskey,
 )
 from services.accounts._result import AccountActionError, AccountNotFoundError
@@ -54,6 +57,16 @@ from services.inbox_runtime import start_account_inbox
 # One lock per account, never freed (bounded by the accounts ever touched): a
 # double click must not register two passkeys or race a removal.
 _PASSKEY_LOCKS: dict[str, asyncio.Lock] = {}
+
+# What the last vault health check of an account's key found; absent = not checked in
+# this process. In memory only: the journal row (``passkey_vault_unhealthy``) is the record.
+_VAULT_STATES: dict[str, PasskeyVaultState] = {}
+_VAULT_STATE_BY_CODE: dict[str, PasskeyVaultState] = {
+    "passkey_vault_key_missing": "key_missing",
+    "passkey_vault_sealed": "sealed",
+    "passkey_vault_forbidden": "forbidden",
+    "passkey_vault_unreachable": "unreachable",
+}
 
 
 def _passkey_lock(account_id: str) -> asyncio.Lock:
@@ -66,7 +79,18 @@ def _view(account_id: str, passkey: StoredPasskey | None) -> AccountPasskeyView:
         has_passkey=passkey is not None,
         created_at=passkey.created_at if passkey else None,
         vault_configured=passkey_vault_configured(),
+        vault_state=_VAULT_STATES.get(account_id) if passkey else None,
     )
+
+
+def _detail(exc: PasskeyGatewayError | PasskeyVaultError) -> str | None:
+    """The non-secret detail (``http_503``, an exception class name) of a failure."""
+    return exc.error_type if isinstance(exc, PasskeyGatewayError) else exc.detail
+
+
+def _failure_extra(exc: PasskeyGatewayError | PasskeyVaultError) -> dict[str, object]:
+    detail = _detail(exc)
+    return {"code": exc.code} if detail is None else {"code": exc.code, "detail": detail}
 
 
 def _gateway_error(exc: PasskeyGatewayError | PasskeyVaultError) -> AccountActionError:
@@ -117,7 +141,10 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
             )
         except (PasskeyGatewayError, PasskeyVaultError) as exc:
             await log_event(
-                "WARNING", "passkey_create_failed", account_id=account_id, extra={"code": exc.code}
+                "WARNING",
+                "passkey_create_failed",
+                account_id=account_id,
+                extra=_failure_extra(exc),
             )
             raise _gateway_error(exc) from exc
         passkey = StoredPasskey(
@@ -127,9 +154,21 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
             vault_key_name=key_name,
             created_at=datetime.now(UTC).isoformat(),
         )
+        # Telegram took a while; the account may have been removed meanwhile, and a row
+        # for it would be an orphan nothing ever cleans.
+        if await fetch_account(account_id) is None:
+            await _forget_orphan_key(key_name)
+            raise AccountNotFoundError(account_id)
         await save_account_passkey(passkey)
     await log_event("INFO", "passkey_created", account_id=account_id)
     return _view(account_id, passkey)
+
+
+async def _forget_orphan_key(key_name: str) -> None:
+    try:
+        await delete_signing_key(key_name)
+    except PasskeyVaultError:
+        return  # best effort: the account is gone either way
 
 
 async def check_account_passkey(account_id: str) -> AccountPasskeyCheck:
@@ -154,7 +193,7 @@ async def check_account_passkey(account_id: str) -> AccountPasskeyCheck:
                     "WARNING",
                     "passkey_check_failed",
                     account_id=account_id,
-                    extra={"code": exc.code},
+                    extra=_failure_extra(exc),
                 )
                 raise _gateway_error(exc) from exc
             check = AccountPasskeyCheck(
@@ -186,9 +225,10 @@ async def relogin_with_passkey(account_id: str) -> AccountPasskeyView:
     result = await login_with_passkey(passkey, account.session_name)
     if result.status != "alive":
         code = result.error_message if result.status == "unauthorized" else result.status
-        await log_event(
-            "WARNING", "passkey_login_failed", account_id=account_id, extra={"code": code}
-        )
+        extra: dict[str, object] = {"code": code}
+        if result.status == "unauthorized" and result.error_type:
+            extra["detail"] = result.error_type
+        await log_event("WARNING", "passkey_login_failed", account_id=account_id, extra=extra)
         raise AccountActionError(
             code or "passkey_login_failed", retry_after_seconds=result.flood_wait_seconds
         )
@@ -217,11 +257,47 @@ async def remove_account_passkey(
         try:
             if not forget_only:
                 await delete_passkey(account_id, passkey.credential_id)
-            await delete_account_passkey(account_id)
+            # The vault key first: if it cannot be deleted the row stays and a retry
+            # converges (a key that is already gone counts as deleted).
             await delete_signing_key(passkey.vault_key_name)
+            await delete_account_passkey(account_id)
         except (PasskeyGatewayError, PasskeyVaultError) as exc:
             raise _gateway_error(exc) from exc
     await log_event(
         "INFO", "passkey_removed", account_id=account_id, extra={"forget_only": forget_only}
     )
     return _view(account_id, None)
+
+
+def passkey_vault_state(account_id: str) -> PasskeyVaultState | None:
+    """The vault state the last health check recorded for the account's key, if any."""
+    return _VAULT_STATES.get(account_id)
+
+
+async def check_passkey_vault(account_id: str) -> PasskeyVaultState | None:
+    """Is the account's vault key reachable and present? ``None``: nothing to check.
+
+    Run periodically so a sealed vault, a revoked token or a deleted key is found BEFORE
+    the operator needs the passkey. Read-only and independent of Telegram. A problem is
+    journalled (``passkey_vault_unhealthy``) with the bounded code and the HTTP status.
+    """
+    passkey = await fetch_account_passkey(account_id)
+    if passkey is None or not passkey_vault_configured():
+        _VAULT_STATES.pop(account_id, None)
+        return None
+    state: PasskeyVaultState
+    extra: dict[str, object] = {}
+    try:
+        state = "ok" if await signing_key_exists(passkey.vault_key_name) else "key_missing"
+    except PasskeyVaultError as exc:
+        state = _VAULT_STATE_BY_CODE.get(exc.code, "rejected")
+        extra = _failure_extra(exc)
+    _VAULT_STATES[account_id] = state
+    if state != "ok":
+        await log_event(
+            "WARNING",
+            "passkey_vault_unhealthy",
+            account_id=account_id,
+            extra={"state": state, **extra},
+        )
+    return state

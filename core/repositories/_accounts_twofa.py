@@ -62,7 +62,14 @@ def _set_account_twofa_password(account_id: str, password: str | None) -> bool:
         result = connection.execute(
             update(_accounts)
             .where(_accounts.c.account_id == account_id)
-            .values(twofa_password=password, updated_at=_now_iso()),
+            .values(
+                twofa_password=password,
+                # A password that was verified, recorded or forgotten supersedes any
+                # candidate staged for an earlier write.
+                twofa_password_pending=None,
+                twofa_pending_at=None,
+                updated_at=_now_iso(),
+            ),
         )
     return result.rowcount > 0
 
@@ -74,6 +81,8 @@ async def set_account_twofa_password(account_id: str, password: str | None) -> b
     be a stored secret guarding nothing. A missing account is a silent no-op, the
     same contract ``update_account_status`` has.
 
+    Also drops the pending candidate (see :func:`set_account_twofa_pending`).
+
     Answers whether a row was actually written, because for this column silence is
     not good enough: the caller reports ``stored`` to the operator, and an
     ``UPDATE ... WHERE`` against an account deleted a moment earlier changes nothing
@@ -81,3 +90,90 @@ async def set_account_twofa_password(account_id: str, password: str | None) -> b
     only copy of a cloud password is safe in a row that does not exist.
     """
     return await asyncio.to_thread(_set_account_twofa_password, account_id, password)
+
+
+def _fetch_twofa_pair(account_id: str) -> tuple[str | None, str | None]:
+    with _get_engine().connect() as connection:
+        row = connection.execute(
+            select(_accounts.c.twofa_password, _accounts.c.twofa_password_pending).where(
+                _accounts.c.account_id == account_id,
+            ),
+        ).first()
+    if row is None:
+        return None, None
+    return (str(row[0]) if row[0] else None, str(row[1]) if row[1] else None)
+
+
+async def fetch_account_twofa_pair(account_id: str) -> tuple[str | None, str | None]:
+    """``(current, pending)`` in ONE read; either is ``None`` when absent."""
+    return await asyncio.to_thread(_fetch_twofa_pair, account_id)
+
+
+async def twofa_password_candidates(account_id: str) -> list[str]:
+    """Every cloud password that may be in force, the current one first.
+
+    The login paths try these in order: the pending candidate is the one a write
+    whose outcome is unknown (crash, lost reply) may have put on Telegram. An
+    unknown account or no password gives ``[]``. Never log or return the values.
+    """
+    current, pending = await fetch_account_twofa_pair(account_id)
+    return [value for value in (current, pending) if value]
+
+
+def _set_twofa_pending(account_id: str, password: str | None) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(
+                twofa_password_pending=password,
+                twofa_pending_at=_now_iso() if password else None,
+                updated_at=_now_iso(),
+            ),
+        )
+    return result.rowcount > 0
+
+
+async def set_account_twofa_pending(account_id: str, password: str | None) -> bool:
+    """Stage (or clear, on ``None``) the candidate a write is about to send.
+
+    Must be durable BEFORE the RPC: callers refuse to send when this answers ``False``
+    (an unknown account counts, like a failed write).
+    """
+    return await asyncio.to_thread(_set_twofa_pending, account_id, password)
+
+
+def _promote_twofa_pending(account_id: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(
+                _accounts.c.account_id == account_id,
+                _accounts.c.twofa_password_pending.is_not(None),
+            )
+            .values(
+                twofa_password=_accounts.c.twofa_password_pending,
+                twofa_password_pending=None,
+                twofa_pending_at=None,
+                updated_at=_now_iso(),
+            ),
+        )
+    return result.rowcount > 0
+
+
+async def promote_account_twofa_pending(account_id: str) -> bool:
+    """The pending candidate becomes the current password, atomically; ``False`` = none."""
+    return await asyncio.to_thread(_promote_twofa_pending, account_id)
+
+
+async def confirm_twofa_password_used(account_id: str, password: str) -> bool:
+    """A login or verify succeeded with ``password``: promote it if it was the pending one.
+
+    Call after a successful 2FA sign-in so a candidate that turned out to be in force
+    stops being "pending". A no-op (``False``) when ``password`` is the current one or
+    matches nothing.
+    """
+    current, pending = await fetch_account_twofa_pair(account_id)
+    if pending is None or pending != password or current == password:
+        return False
+    return await promote_account_twofa_pending(account_id)

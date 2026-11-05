@@ -207,12 +207,13 @@ async def dispatch_set_twofa_password(
     # keyed by a salt it alone controls. Dropping this silently weakens every
     # password this dashboard sets; ``NEW_SALT_INVALID`` is its refusal.
     algo.salt1 += os.urandom(32)
+    # Resolved (and checked) before any SRP work: a refusal here costs nothing.
+    hint = _resolved_hint(pwd, action)
     proof = (
         await _srp(compute_check, pwd, current_password)
         if current_password is not None
         else InputCheckPasswordEmpty()
     )
-    hint = _resolved_hint(pwd, action)
     try:
         await client(
             UpdatePasswordSettingsRequest(
@@ -374,9 +375,13 @@ def _resolved_hint(pwd: object, action: SetTwoFactorPassword) -> str:
     """
     if action.new_password is None:
         return ""
-    if action.hint is not None:
-        return action.hint
-    return _text(pwd, "hint") or ""
+    hint = action.hint if action.hint is not None else _text(pwd, "hint") or ""
+    # Telegram shows the hint to anyone at the login prompt. The request model already
+    # refuses a typed hint that holds the password; this covers the KEPT live hint too.
+    if action.new_password and hint and action.new_password.lower() in hint.lower():
+        code = "twofa_hint_contains_password"
+        raise TwoFactorGatewayError(code)
+    return hint
 
 
 async def dispatch_twofa_action(

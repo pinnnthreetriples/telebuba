@@ -25,7 +25,8 @@ import {} from './_shared';
 // empty hint stays omitted there and a fresh set still posts `{}`.
 function twofaBody(value: TwofaFormValue, initialHint: string): AccountTwoFactorUpdateRequest {
   const body: AccountTwoFactorUpdateRequest = {};
-  if (value.mode === 'custom') body.password = value.password.trim();
+  // Never trimmed: a password may legitimately start or end with a space.
+  if (value.mode === 'custom') body.password = value.password;
   const hint = value.hint.trim();
   if (hint || initialHint) body.hint = hint;
   return body;

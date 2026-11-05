@@ -3,13 +3,33 @@ import { useTranslation } from 'react-i18next';
 
 import type { AccountTwoFactorCreated } from '@/shared/api';
 import { mutationErrorText, useClearedTimeouts } from '@/shared/lib';
-import { Button, Icon, IconButton, Notice } from '@/shared/ui';
+import { Button, Icon, IconButton, Notice, useModalDirty } from '@/shared/ui';
 
 import type { BulkTwofaRow } from './useBulkTwofa';
 
+// A spreadsheet runs a cell that starts with one of these as a formula, and the
+// password column holds text an operator typed or a generator made.
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 // A CSV cell: quote everything and double the quotes inside, so a display name
-// carrying a comma cannot split the row the password sits in.
-const cell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+// carrying a comma cannot split the row the password sits in. A cell that would
+// start a formula gets a leading apostrophe; `prefixed` says whether that happened.
+function csvCell(value: string): { text: string; prefixed: boolean } {
+  const prefixed = FORMULA_START.test(value);
+  const safe = prefixed ? `'${value}` : value;
+  return { text: `"${safe.replace(/"/g, '""')}"`, prefixed };
+}
+
+// The file is the only durable copy of these passwords, so it must give them back
+// EXACTLY: the third column says whether the apostrophe in front of a password is
+// ours (strip it) or part of the password (keep it).
+const CSV_HEADER = 'account,password,apostrophe_added';
+
+function csvRow(account: string, password: string): string {
+  const name = csvCell(account);
+  const secret = csvCell(password);
+  return `${name.text},${secret.text},${secret.prefixed ? '"1"' : '"0"'}`;
+}
 
 // The RESULT phase of the wizard's cloud-password step, split out of
 // TwoFactorBulkStep: the plaintext table is the whole reason the step exists and
@@ -33,6 +53,9 @@ export function TwoFactorBulkResults({
   const { t } = useTranslation();
   const later = useClearedTimeouts();
   const [copyState, setCopyState] = useState<Record<string, 'done' | 'failed'>>({});
+  // These passwords exist nowhere else: closing the dialog before the operator copied
+  // them all or saved the file asks first (the add wizard's own close guard).
+  const [saved, setSaved] = useState(false);
   const clipboard: Clipboard | undefined = navigator.clipboard;
   // A predicate, not a plain `!== null`: without it every read below needs a
   // `?? ''` fallback that can never run, and unreachable branches in the one
@@ -41,10 +64,13 @@ export function TwoFactorBulkResults({
     return row.created !== null;
   });
 
+  useModalDirty(created.length > 0 && !saved);
+
   const copy = (key: string, text: string) => {
     if (!clipboard) return;
     void clipboard.writeText(text).then(
       () => {
+        if (key === 'all') setSaved(true);
         setCopyState((prev) => ({ ...prev, [key]: 'done' }));
         later(() => {
           // Only clears the state it was scheduled for: a successful copy's
@@ -69,9 +95,12 @@ export function TwoFactorBulkResults({
     .join('\n');
 
   const download = () => {
-    const csv = created
-      .map((row) => `${cell(label(row.accountId))},${cell(row.created.password)}`)
-      .join('\n');
+    const csv = [
+      CSV_HEADER,
+      ...created.map((row) => csvRow(label(row.accountId), row.created.password)),
+    ].join('\n');
+    // The file is on disk now: the close warning has nothing left to protect.
+    setSaved(true);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a');
     anchor.href = url;

@@ -61,6 +61,12 @@ _accounts = Table(
     # in no SELECT the account read model uses, the same arrangement
     # ``proxies.password`` has (``_row_to_proxy`` maps it to ``has_password``).
     Column("twofa_password", String, nullable=True),
+    # The candidate cloud password staged BEFORE ``account.updatePasswordSettings``: a
+    # crash or lost reply after Telegram applied it must not leave only the old one.
+    # Promoted to ``twofa_password`` on a confirmed write; every login path falls back
+    # to it (``twofa_password_candidates``). NULL = nothing pending.
+    Column("twofa_password_pending", String, nullable=True),
+    Column("twofa_pending_at", String, nullable=True),
     # Telegram Premium as ``get_me`` last reported it; NULL until a check answered.
     Column("premium", Boolean, nullable=True),
     # Small (~160px) profile photo captured on the session check, served by the

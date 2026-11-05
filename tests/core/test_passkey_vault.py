@@ -16,6 +16,7 @@ from core.passkey_vault import (
     delete_signing_key,
     passkey_vault_configured,
     sign_with_key,
+    signing_key_exists,
     vault_key_name,
 )
 
@@ -146,9 +147,64 @@ async def test_a_refusal_keeps_only_the_status_never_the_token() -> None:
         )
         with pytest.raises(PasskeyVaultError) as caught:
             await sign_with_key("tb-acc", b"payload")
-    assert caught.value.code == "passkey_vault_rejected"
+    assert caught.value.code == "passkey_vault_forbidden"
     assert caught.value.detail == "http_403"
     assert _TOKEN not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (503, "passkey_vault_sealed"),
+        (401, "passkey_vault_forbidden"),
+        (404, "passkey_vault_key_missing"),
+        (400, "passkey_vault_rejected"),
+        (500, "passkey_vault_rejected"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_refusal_status_maps_to_an_actionable_code(status: int, code: str) -> None:
+    with respx.mock:
+        respx.post(f"{_BASE}/sign/tb-acc/sha2-256").mock(return_value=httpx.Response(status))
+        with pytest.raises(PasskeyVaultError) as caught:
+            await sign_with_key("tb-acc", b"payload")
+    assert (caught.value.code, caught.value.detail) == (code, f"http_{status}")
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_key_that_is_already_gone_counts_as_deleted() -> None:
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(404))
+        await delete_signing_key("tb-acc")
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(200))
+        respx.delete(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(404))
+        await delete_signing_key("tb-acc")
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_key_still_raises_a_sealed_vault() -> None:
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(503))
+        with pytest.raises(PasskeyVaultError) as caught:
+            await delete_signing_key("tb-acc")
+    assert caught.value.code == "passkey_vault_sealed"
+
+
+@pytest.mark.asyncio
+async def test_key_existence_tells_gone_from_cannot_ask() -> None:
+    good = {"data": {"keys": {"1": {"public_key": _PEM_V1}}}}
+    with respx.mock:
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(200, json=good))
+        assert await signing_key_exists("tb-acc") is True
+    with respx.mock:
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(404))
+        assert await signing_key_exists("tb-acc") is False
+    with respx.mock:
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(503))
+        with pytest.raises(PasskeyVaultError) as caught:
+            await signing_key_exists("tb-acc")
+    assert caught.value.code == "passkey_vault_sealed"
 
 
 @pytest.mark.asyncio

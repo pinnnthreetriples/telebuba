@@ -71,11 +71,15 @@ TwoFactorRefusalCode = Literal[
     # and leave a live cloud password with no copy anywhere. Its own code because the
     # operator's next step is different — re-read the state, do not retry blindly.
     "twofa_removal_unconfirmed",
-    # An answered refusal proved Telegram did not apply a fresh set, and the UPDATE
-    # that should have rolled the pre-write back ALSO failed. The column now holds a
-    # password Telegram rejected, which blocks the not-stored guard for good, so the
-    # operator has to hear that rather than a plain refusal.
-    "twofa_rollback_failed",
+    # The candidate password could not be staged durably BEFORE the RPC, so nothing was
+    # sent: sending it would have put a password on Telegram that exists nowhere here.
+    "twofa_pending_store_failed",
+    # Telegram accepted a password the operator asked to record, but the row write
+    # failed: the response must not say "saved".
+    "twofa_store_failed",
+    # The hint Telegram shows at the login prompt (typed, or the live one that is kept)
+    # contains the new password.
+    "twofa_hint_contains_password",
     # The pre-flight ``account.getPassword`` never answered, so NOTHING was written —
     # the one refusal that exists to keep a dead read leg from being reported as a
     # write that may have landed.

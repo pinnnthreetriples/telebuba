@@ -25337,6 +25337,25 @@
           "vault_configured": {
             "type": "boolean",
             "title": "Vault Configured"
+          },
+          "vault_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "key_missing",
+                  "sealed",
+                  "forbidden",
+                  "unreachable",
+                  "rejected"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vault State"
           }
         },
         "additionalProperties": false,

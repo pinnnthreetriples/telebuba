@@ -122,6 +122,8 @@ def patch_log(
         events.append((level, event, extra or {}))
 
     monkeypatch.setattr(f"{module}.log_event", _capture)
+    # The pending-candidate helpers log from their own module.
+    monkeypatch.setattr("services.accounts._twofa_pending.log_event", _capture)
     return events
 
 

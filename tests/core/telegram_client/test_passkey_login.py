@@ -37,7 +37,7 @@ def _passkey(dc_id: int = 2) -> StoredPasskey:
 class _Client:
     """A Telethon client double: one session on DC 2, scripted answers."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one switch per scripted behaviour
         self,
         *,
         authorized: bool = False,
@@ -45,6 +45,7 @@ class _Client:
         me_id: int = _USER_ID,
         connect_error: Exception | None = None,
         session: object = "default",
+        finish_once: Exception | None = None,
     ) -> None:
         self.session = (
             SimpleNamespace(dc_id=2, auth_key=SimpleNamespace(key_id=(1 << 64) - 5))
@@ -55,6 +56,7 @@ class _Client:
         self.api_hash = "hash"
         self.authorized = authorized
         self.finish = finish
+        self.finish_once = finish_once
         self.me_id = me_id
         self.connect_error = connect_error
         self.requests: list[object] = []
@@ -72,6 +74,9 @@ class _Client:
         if isinstance(request, InitPasskeyLoginRequest):
             payload = {"publicKey": {"challenge": "bG9naW4"}}
             return SimpleNamespace(options=SimpleNamespace(data=json.dumps(payload)))
+        if isinstance(request, FinishPasskeyLoginRequest) and self.finish_once is not None:
+            error, self.finish_once = self.finish_once, None
+            raise error
         if self.finish is not None:
             raise self.finish
         return SimpleNamespace(user=SimpleNamespace(id=self.me_id))
@@ -113,15 +118,29 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
             raise error
         return _SIGNATURE
 
-    async def _password(account_id: str) -> str | None:
+    async def _candidates(account_id: str) -> list[str]:
         assert account_id == "acc-1"
-        return state["password"]  # ty: ignore[invalid-return-type]
+        passwords = state["password"]
+        if passwords is None:
+            return []
+        if isinstance(passwords, str):
+            return [passwords]
+        return [str(item) for item in passwords]  # ty: ignore[not-iterable]
+
+    async def _confirm(account_id: str, password: str) -> bool:
+        state.setdefault("confirmed", []).append((account_id, password))  # ty: ignore[unresolved-attribute]
+        return True
+
+    async def _backoff(seconds: float) -> None:
+        state.setdefault("slept", []).append(seconds)  # ty: ignore[unresolved-attribute]
 
     monkeypatch.setattr(_passkey_login, "prepare_telegram_client_profile", _profile)
     monkeypatch.setattr(_passkey_login, "create_telegram_client", lambda _profile: state["client"])
     monkeypatch.setattr(_passkey_login, "removing_client", _removing)
     monkeypatch.setattr(_passkey_login, "sign_with_key", _sign)
-    monkeypatch.setattr(_passkey_login, "fetch_account_twofa_password", _password)
+    monkeypatch.setattr(_passkey_login, "twofa_password_candidates", _candidates)
+    monkeypatch.setattr(_passkey_login, "confirm_twofa_password_used", _confirm)
+    monkeypatch.setattr(_passkey_login, "_backoff", _backoff)
     return state
 
 
@@ -241,6 +260,21 @@ async def test_an_authorized_session_is_reported_alive_without_a_login(
 
 
 @pytest.mark.asyncio
+async def test_an_authorized_session_of_another_user_is_a_mismatch_and_left_alone(
+    wire: dict[str, object],
+) -> None:
+    client = _Client(authorized=True, me_id=999)
+    wire["client"] = client
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "unauthorized"
+    assert result.error_message == "passkey_user_mismatch"
+    assert client.requests == []
+    assert "log_out" not in client.calls
+
+
+@pytest.mark.asyncio
 async def test_a_login_that_lands_on_another_user_is_logged_out(wire: dict[str, object]) -> None:
     client = _Client(me_id=999)
     wire["client"] = client
@@ -277,6 +311,11 @@ async def test_a_vault_refusal_is_reported_by_its_code(wire: dict[str, object]) 
 
     assert result.status == "unauthorized"
     assert result.error_message == "passkey_vault_unreachable"
+    # The non-secret detail rides on the verdict for the journal.
+    assert result.error_type == "ConnectError"
+    # Transient: three attempts with a bounded backoff between them.
+    assert len(wire["signed"]) == 3  # ty: ignore[invalid-argument-type]
+    assert wire["slept"] == list(_passkey_login._RETRY_DELAYS)
 
 
 @pytest.mark.asyncio
@@ -309,3 +348,121 @@ async def test_any_other_failure_keeps_only_the_class_name(wire: dict[str, objec
     assert result.status == "unknown_error"
     assert result.error_message == "ConnectionError"
     assert "user:pass" not in result.model_dump_json()
+
+
+class _FlakyVault:
+    """A ``sign_with_key`` double failing ``failures`` times, then signing."""
+
+    def __init__(self, error: Exception, failures: int) -> None:
+        self.error = error
+        self.failures = failures
+        self.calls = 0
+
+    async def __call__(self, name: str, data: bytes) -> bytes:  # noqa: ARG002
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error
+        return _SIGNATURE
+
+
+@pytest.mark.asyncio
+async def test_a_transient_vault_failure_is_retried_and_then_succeeds(
+    wire: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _FlakyVault(PasskeyVaultError("passkey_vault_unreachable", "ConnectError"), 2)
+    monkeypatch.setattr(_passkey_login, "sign_with_key", vault)
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "alive"
+    assert vault.calls == 3
+    assert wire["slept"] == list(_passkey_login._RETRY_DELAYS)
+
+
+@pytest.mark.parametrize(
+    ("code", "detail"),
+    [
+        ("passkey_vault_sealed", "http_503"),
+        ("passkey_vault_forbidden", "http_403"),
+        ("passkey_vault_key_missing", "http_404"),
+        ("passkey_vault_rejected", "http_400"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_definitive_vault_refusal_is_never_retried(
+    wire: dict[str, object], monkeypatch: pytest.MonkeyPatch, code: str, detail: str
+) -> None:
+    vault = _FlakyVault(PasskeyVaultError(code, detail), 99)  # ty: ignore[invalid-argument-type]
+    monkeypatch.setattr(_passkey_login, "sign_with_key", vault)
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert (result.error_message, result.error_type) == (code, detail)
+    assert vault.calls == 1
+    assert "slept" not in wire
+
+
+@pytest.mark.asyncio
+async def test_a_network_failure_during_the_finish_is_retried(wire: dict[str, object]) -> None:
+    client = _Client(finish_once=TimeoutError())
+    wire["client"] = client
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "alive"
+    assert len([r for r in client.requests if isinstance(r, FinishPasskeyLoginRequest)]) == 2
+    assert wire["slept"] == [_passkey_login._RETRY_DELAYS[0]]
+
+
+@pytest.mark.asyncio
+async def test_a_telegram_refusal_is_never_retried(wire: dict[str, object]) -> None:
+    client = _Client(finish=errors.RPCError(request=None, message="PASSKEY_INVALID"))
+    wire["client"] = client
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.error_message == "passkey_telegram_refused"
+    assert len([r for r in client.requests if isinstance(r, FinishPasskeyLoginRequest)]) == 1
+    assert "slept" not in wire
+
+
+@pytest.mark.asyncio
+async def test_the_pending_candidate_signs_in_when_the_current_password_is_rejected(
+    wire: dict[str, object],
+) -> None:
+    client = _Client(finish=errors.SessionPasswordNeededError(request=None))
+
+    async def _sign_in(*, password: str) -> None:
+        client.calls.append(f"sign_in:{password}")
+        if password == "old-pass":
+            raise errors.PasswordHashInvalidError(request=None)
+
+    client.sign_in = _sign_in  # ty: ignore[invalid-assignment]
+    wire["client"] = client
+    wire["password"] = ["old-pass", "new-pass"]
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status == "alive"
+    assert [c for c in client.calls if c.startswith("sign_in")] == [
+        "sign_in:old-pass",
+        "sign_in:new-pass",
+    ]
+    assert wire["confirmed"] == [("acc-1", "new-pass")]
+
+
+@pytest.mark.asyncio
+async def test_every_candidate_rejected_is_reported_as_invalid(wire: dict[str, object]) -> None:
+    client = _Client(finish=errors.SessionPasswordNeededError(request=None))
+
+    async def _rejected(*, password: str) -> None:  # noqa: ARG001
+        raise errors.PasswordHashInvalidError(request=None)
+
+    client.sign_in = _rejected  # ty: ignore[invalid-assignment]
+    wire["client"] = client
+    wire["password"] = ["a", "b"]
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.error_message == "passkey_twofa_invalid"
+    assert "confirmed" not in wire

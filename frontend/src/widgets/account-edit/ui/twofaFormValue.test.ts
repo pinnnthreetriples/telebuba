@@ -13,9 +13,11 @@ test.each<[TwofaFormValue, string[][]]>([
   [{ mode: 'generate', password: '', hint: '' }, []],
   [{ mode: 'custom', password: 'longenough', hint: 'my pet' }, []],
   [
-    { mode: 'custom', password: '  short  ', hint: '' },
+    { mode: 'custom', password: '  abc  ', hint: '' },
     [['password', 'accounts.edit.twofaErrShort']],
   ],
+  // Never trimmed: the spaces are part of the password and count toward its length.
+  [{ mode: 'custom', password: '  short  ', hint: '' }, []],
   [
     { mode: 'custom', password: 'longenough', hint: 'it is LongEnough' },
     [['hint', 'accounts.edit.twofaErrHintLeaks']],

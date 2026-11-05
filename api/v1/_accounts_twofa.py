@@ -48,6 +48,13 @@ from services import accounts
 twofa_router = APIRouter()
 
 
+def _require_stored(stored: bool) -> None:  # noqa: FBT001 - the service's own boolean answer
+    """Telegram accepted the password but the row write failed: say so, never "saved"."""
+    if not stored:
+        code = "twofa_store_failed"
+        raise accounts.AccountActionError(code)
+
+
 @twofa_router.get(
     "/accounts/{account_id}/2fa",
     response_model=AccountTwoFactorView,
@@ -100,7 +107,7 @@ async def record_account_twofa(
     cloud password is ``twofa_not_enabled``. Answers with the re-read boolean view.
     """
     with service_errors_to_http():
-        await accounts.record_account_twofa(account_id, body.password)
+        _require_stored(await accounts.record_account_twofa(account_id, body.password))
         return await accounts.read_account_twofa(account_id)
 
 
@@ -127,7 +134,7 @@ async def record_account_twofa_from_json(
     )
     content = await json_file.read()
     with service_errors_to_http():
-        await accounts.record_account_twofa_from_json(account_id, content)
+        _require_stored(await accounts.record_account_twofa_from_json(account_id, content))
         return await accounts.read_account_twofa(account_id)
 
 
