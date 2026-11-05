@@ -82,17 +82,18 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
 # Telethon refusal family → stable, locale-neutral code (mirrors
-# ``_profile._PROFILE_ERROR_CODES``). The three SRP members all mean one
-# operator-visible thing: the current password we sent did not authorise the change —
-# it is wrong, or the challenge we computed against went stale mid-call. Nothing
+# ``_profile._PROFILE_ERROR_CODES``). ``PASSWORD_HASH_INVALID`` alone means the
+# password we sent is wrong; the two SRP members mean the challenge went stale. Nothing
 # carrying ``.seconds`` may be mapped here, because a bare code flattens the
 # duration: that is why the flood family and ``SESSION_TOO_FRESH`` /
 # ``PASSWORD_TOO_FRESH`` are absent and handled by ``execute``'s wait ladder, even
 # though the last two are ``BadRequestError`` rather than floods.
 _TWOFA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.PasswordHashInvalidError, "twofa_current_password_invalid"),
-    (errors.SrpIdInvalidError, "twofa_current_password_invalid"),
-    (errors.SrpPasswordChangedError, "twofa_current_password_invalid"),
+    # A stale SRP challenge says nothing about the password itself, so it must never read
+    # as "the password is wrong": the service would drop a candidate on that verdict.
+    (errors.SrpIdInvalidError, "twofa_srp_stale"),
+    (errors.SrpPasswordChangedError, "twofa_srp_stale"),
     (errors.NewSettingsInvalidError, "twofa_settings_invalid"),
     # ``NEW_SALT_INVALID`` is the same refusal one field over: the salt is ours to
     # build (``pwd.new_algo.salt1 += os.urandom(32)``), so there is nothing for the

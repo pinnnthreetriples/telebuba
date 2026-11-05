@@ -1485,6 +1485,7 @@
       "listener_busy_warming": "This account is warming up. Stop warming or pick another listener account.",
       "listener_busy_neuroshilling": "A neuroshilling campaign is running with this account. Stop the campaign, or pick a different account for the listener.",
       "twofa_current_password_invalid": "Telegram rejected the current password. It was changed outside the dashboard.",
+      "twofa_srp_stale": "Telegram's password check went stale mid-request. Nothing was decided about the password; try again.",
       "twofa_settings_invalid": "Telegram rejected the new password settings.",
       "twofa_not_changed": "The password was not changed: Telegram ran no request.",
       "twofa_password_not_stored": "The current password is not stored in the dashboard, so it cannot be changed or removed from here.",

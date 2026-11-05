@@ -186,9 +186,33 @@ async def test_deleting_a_key_that_is_already_gone_counts_as_deleted() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deleting_a_key_whose_config_step_answers_400_is_done_when_the_key_is_gone() -> None:
+    """Vault Transit answers the config POST of a missing key with 400, not 404."""
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(
+            return_value=httpx.Response(400, json={"errors": ["could not find key"]})
+        )
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=_GONE)
+        await delete_signing_key("tb-acc")
+
+
+@pytest.mark.asyncio
+async def test_a_refused_delete_of_a_key_that_still_exists_raises() -> None:
+    good = {"data": {"keys": {"1": {"public_key": _PEM_V1}}}}
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(
+            return_value=httpx.Response(400, json={"errors": ["nope"]})
+        )
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(200, json=good))
+        with pytest.raises(PasskeyVaultError):
+            await delete_signing_key("tb-acc")
+
+
+@pytest.mark.asyncio
 async def test_deleting_a_key_still_raises_a_sealed_vault() -> None:
     with respx.mock:
         respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(503))
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(503))
         with pytest.raises(PasskeyVaultError) as caught:
             await delete_signing_key("tb-acc")
     assert caught.value.code == "passkey_vault_sealed"
@@ -240,6 +264,7 @@ async def test_a_404_from_a_wrong_mount_or_address_is_not_a_missing_key(
     assert caught.value.code == "passkey_vault_rejected"
     with respx.mock:
         respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=response)
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=response)
         with pytest.raises(PasskeyVaultError) as caught:
             await delete_signing_key("tb-acc")
     assert caught.value.code == "passkey_vault_rejected"

@@ -141,11 +141,11 @@ async def test_an_unsettled_pair_is_not_put_to_telegram_again_within_the_interva
     patch_log(monkeypatch)
     calls = _verify_answers(monkeypatch, "refused")
 
-    assert await authorising_twofa_password("acc-burn") == STORED
+    assert await authorising_twofa_password("acc-burn") is None
     asked = len(calls)
     assert asked >= 1
     for _ in range(3):
-        assert await authorising_twofa_password("acc-burn") == STORED
+        assert await authorising_twofa_password("acc-burn") is None
     assert len(calls) == asked
 
     # A different pair is a new question, and a zero interval turns the limit off.

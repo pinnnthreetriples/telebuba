@@ -24,15 +24,22 @@ __all__ = ["sign_in_with_passwords"]
 
 
 async def sign_in_with_passwords(
-    client: TelegramClient, account_id: str, passwords: Sequence[str]
+    client: TelegramClient,
+    account_id: str,
+    passwords: Sequence[str],
+    attempted: list[str] | None = None,
 ) -> str:
     """Finish a 2FA sign-in with the first of ``passwords`` Telegram accepts; return it.
 
     Raises the last ``PasswordHashInvalidError`` when every one is rejected, and any other
-    error at once. ``passwords`` must not be empty.
+    error at once. ``passwords`` must not be empty. Each password is appended to
+    ``attempted`` BEFORE it is sent, so a caller cut off by a deadline knows which one
+    was in flight.
     """
     rejected: errors.PasswordHashInvalidError | None = None
     for password in dict.fromkeys(passwords):
+        if attempted is not None:
+            attempted.append(password)
         try:
             await client.sign_in(password=password)
         except errors.PasswordHashInvalidError as exc:

@@ -202,7 +202,7 @@ async def prepare_telegram_client_profile(
         request = request.model_copy(update={"device_type": device_type})
     proxy = await fetch_account_proxy_settings(request.account_id)
     if proxy is not None:
-        register_log_secrets(request.account_id, proxy.username, proxy.password)
+        register_log_secrets(proxy.username, proxy.password)
     return TelegramClientProfile(
         account_id=request.account_id,
         device_type=device.device_type,

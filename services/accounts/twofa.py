@@ -57,6 +57,7 @@ from services.accounts._twofa_pending import (
 )
 from services.accounts._twofa_support import (
     _TWOFA_LOCKS,
+    answered_refusal,
     generated_password,
     locked_authorising,
     reported_hint,
@@ -92,10 +93,8 @@ async def _live_status(account_id: str) -> tuple[TwoFactorStatusResult | None, s
     which the gateway reports with its own error type; without translating it the
     route would answer 500.
 
-    ponytail: a refused read logs NOTHING, by design — the envelope is the report and
-    ``execute_read`` does not log. The cost is that "why did the card show an error at
-    14:32" cannot be answered from the log afterwards. Recorded, not fixed: a log line
-    per refused read would fire on every poll of an unreachable account.
+    ponytail: a refused read logs NOTHING, by design: the envelope is the report, and a
+    log line per refused read would fire on every poll of an unreachable account.
     """
     try:
         # Same deadline as the session probe (see ``core.telegram_client._session``).
@@ -125,24 +124,34 @@ async def _settled_current(account_id: str, status: TwoFactorStatusResult | None
     return await resolve_current(account_id, status, _ask)
 
 
-async def authorising_twofa_password_unlocked(account_id: str) -> str | None:
+async def authorising_twofa_password_unlocked(
+    account_id: str, *, best_guess: bool = True
+) -> str | None:
     """:func:`authorising_twofa_password` for a caller ALREADY holding :func:`twofa_lock`.
 
     The lock is not re-entrant, so the email flows (which take it around the whole
     read-then-write) call this one. With a candidate left unsettled the answer is the best
-    guess; it only authorises, it never writes a column, so a wrong guess is a refusal
-    from Telegram and nothing more.
+    guess (it only authorises, a wrong one is a Telegram refusal), or ``None`` without it.
     """
     _current, pending = await fetch_account_twofa_pair(account_id)
     if pending is None:
         return _current
     status, _error = await _live_status(account_id)
-    return (await _settled_current(account_id, status)).password
+    settled = await _settled_current(account_id, status)
+    return None if settled.unsettled and not best_guess else settled.password
+
+
+async def _settled_password(account_id: str) -> str | None:
+    return await authorising_twofa_password_unlocked(account_id, best_guess=False)
 
 
 async def authorising_twofa_password(account_id: str) -> str | None:
-    """The stored password that authorises a write, settling a pending candidate under the lock."""
-    return await locked_authorising(account_id, authorising_twofa_password_unlocked)
+    """The password to TYPE at a sign-in, or ``None`` while a candidate is unsettled.
+
+    Settles a pending candidate under the lock. A sign-in submits once, so a guess is
+    never typed: the operator takes the screen over instead.
+    """
+    return await locked_authorising(account_id, _settled_password)
 
 
 async def read_account_twofa(account_id: str) -> AccountTwoFactorView:
@@ -226,10 +235,9 @@ async def set_account_twofa(
         )
         lost = result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE
         if not lost:
-            if result.status != "ok":
-                # An answered refusal proves nothing was applied: put back whatever was
-                # pending before. A failed restore is harmless (the next write or login
-                # settles a stale candidate), so it is not an error here.
+            if answered_refusal(result):
+                # Only an ANSWER proves nothing was applied: put back the previous pending.
+                # Any other failure keeps the candidate for a later settlement.
                 await stage_pending(account_id, previous_pending)
             raise_for_result(result)
         confirmed, kept, previous_kept = set_outcome(
@@ -238,11 +246,8 @@ async def set_account_twofa(
         # Confirmed, or nothing live to lose: the candidate becomes the stored password.
         # Kept (an unknown outcome over a live one): BOTH stay, pending is the new one.
         stored = True if kept else await promote_pending(account_id, password)
-        # ponytail: INFO/success even on the lost-answer branch, where ``confirmed`` is
-        # ``False``. Correct — Telegram may well hold the password, and the row carries
-        # the flag — but an operator skimming the log sees a success row for an outcome
-        # that needs their attention. Recorded rather than promoted to WARNING, because
-        # the event name is what the i18n table and the log filters key off.
+        # ponytail: INFO even when ``confirmed`` is False (the event name keys the i18n
+        # table and log filters); the extra carries the flag.
         await log_event(
             "INFO",
             "account_twofa_set",
@@ -344,20 +349,15 @@ async def remove_account_twofa(
     The ``twofa_password_not_stored`` refusal names the real situation — the password
     was set outside this dashboard, so it has to be removed there too.
 
-    The column is cleared only after Telegram confirmed: a stored password whose
-    2FA is gone guards nothing, but clearing it first would destroy the one copy
-    that could authorise a retry.
+    The column is cleared only after Telegram confirmed: clearing it first would
+    destroy the one copy that could authorise a retry.
 
-    ``forget_only`` is the CLEAR-ONLY verb, and it spends no RPC. It is what makes
-    every "the column holds a password Telegram does not accept" state recoverable,
-    and there are several: a rollback whose UPDATE failed, a process death between a
-    fresh set's pre-write and its RPC, a lost answer over a live read that itself
-    failed. All of them are otherwise terminal — ``has_stored_password`` stays
-    ``True`` so the not-stored guard can never fire, every verb authorises itself
-    with the bogus value, and the ``stale`` branch below cannot help because the live
-    read says ``has_password=True``. Only the operator can distinguish "this stored
-    value is worthless" from "this is my working password", so it is an explicit
-    request rather than an inference.
+    ``forget_only`` is the CLEAR-ONLY verb, and it spends no RPC. It makes every "the
+    column holds a password Telegram does not accept" state recoverable (a failed
+    rollback, a death between a fresh set's pre-write and its RPC, a lost answer over a
+    failed live read), all otherwise terminal because every verb authorises itself with
+    the bogus value. Only the operator can tell "worthless" from "my working password",
+    so it is an explicit request rather than an inference.
 
     The ``stale`` branch is the same clear, taken automatically: the live read
     already says 2FA is OFF, so the stored value is stale by definition and there is

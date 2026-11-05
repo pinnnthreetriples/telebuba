@@ -58,34 +58,27 @@ _state = _State()
 _CREDENTIALS_IN_URL = re.compile(r"(?<![\w])[^\s/@:'\"<>]{1,256}:[^\s/@'\"<>]{1,256}@")
 _MASK = "***@"
 _MIN_SECRET_LEN = 6  # shorter values would mangle ordinary text
-_MAX_SECRET_OWNERS = 256
-# owner -> the values it registered; re-registering an owner (proxy rotation) replaces
-# its old values, and the oldest owner is dropped past the cap.
-_SECRETS: dict[str, tuple[str, ...]] = {}
+# The values themselves, never evicted: a value still in use must stay masked, and memory
+# is bounded by the distinct proxy credentials (proxies, not accounts). A rotated-away
+# value stays masked too, which is harmless.
+_SECRETS: set[str] = set()
 
 
-def register_log_secrets(owner: str, *values: str | None) -> None:
-    """Mask ``owner``'s ``values`` (proxy username/password) in logs, replacing its earlier ones."""
-    kept = tuple(v for v in values if v and len(v) >= _MIN_SECRET_LEN)
-    _SECRETS.pop(owner, None)
-    if kept:
-        _SECRETS[owner] = kept
-    while len(_SECRETS) > _MAX_SECRET_OWNERS:
-        del _SECRETS[next(iter(_SECRETS))]
+def register_log_secrets(*values: str | None) -> None:
+    """Mask ``values`` (proxy username/password) in logs; short ones rely on URL-shape masking."""
+    _SECRETS.update(v for v in values if v and len(v) >= _MIN_SECRET_LEN)
 
 
 def register_log_secret(value: str | None) -> None:
     """Mask ``value`` (e.g. a proxy password) wherever it appears in a bridged stdlib log line."""
-    if value:
-        register_log_secrets(value, value)
+    register_log_secrets(value)
 
 
 def redact_secrets(text: str) -> str:
     """``text`` with ``user:pass@`` authorities and registered secrets masked."""
     text = _CREDENTIALS_IN_URL.sub(_MASK, text)
-    for values in list(_SECRETS.values()):
-        for secret in values:
-            text = text.replace(secret, "***")
+    for secret in tuple(_SECRETS):
+        text = text.replace(secret, "***")
     return text
 
 
@@ -100,7 +93,16 @@ def _redact_deep(value: object) -> object:
     return value
 
 
-_EVENT_TEXT_KEYS = ("message", "logentry", "exception", "breadcrumbs", "extra")
+_EVENT_TEXT_KEYS = (
+    "message",
+    "logentry",
+    "exception",
+    "breadcrumbs",
+    "extra",
+    "request",
+    "contexts",
+    "tags",
+)
 _BREADCRUMB_TEXT_KEYS = ("message", "data")
 
 

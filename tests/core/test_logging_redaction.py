@@ -63,14 +63,35 @@ def test_console_sink_redacts_credentials(capsys: pytest.CaptureFixture[str]) ->
     assert "connect failed" in err
 
 
-def test_register_log_secrets_ignores_short_values_and_replaces_on_rotation() -> None:
-    logging_module.register_log_secrets("acc", "short", "longuser1", "oldpass123")
+def test_register_log_secrets_ignores_short_values() -> None:
+    logging_module.register_log_secrets("short", "longuser1", "oldpass123")
     assert logging_module.redact_secrets("short longuser1 oldpass123") == "short *** ***"
-    logging_module.register_log_secrets("acc", "newuser12", "newpass123")
-    assert logging_module.redact_secrets("oldpass123 newpass123") == "oldpass123 ***"
-    for i in range(logging_module._MAX_SECRET_OWNERS + 20):
-        logging_module.register_log_secrets(f"o{i}", f"secret-{i:04d}")
-    assert len(logging_module._SECRETS) == logging_module._MAX_SECRET_OWNERS
+
+
+def test_a_live_secret_is_never_evicted_however_many_accounts_register() -> None:
+    """The old per-account 256-owner cap dropped the oldest proxy passwords."""
+    for i in range(1000):
+        logging_module.register_log_secrets(f"user-{i:05d}", f"secret-{i:05d}")
+    assert logging_module.redact_secrets("secret-00000 user-00000 secret-00999") == "*** *** ***"
+
+
+def test_a_short_proxy_password_is_still_masked_by_url_shape() -> None:
+    assert (
+        logging_module.redact_secrets("socks5://bob:pw1@10.0.0.1:1080")
+        == "socks5://***@10.0.0.1:1080"
+    )
+
+
+def test_sentry_before_send_redacts_request_contexts_and_tags() -> None:
+    logging_module.register_log_secrets("sneakypass99")
+    event = {
+        "request": {"url": "http://x/?p=sneakypass99", "headers": {"h": "sneakypass99"}},
+        "contexts": {"proxy": {"url": _URL}},
+        "tags": {"proxy": _URL},
+    }
+    dumped = json.dumps(logging_module._sentry_before_send(event, {}))
+    assert "sneakypass99" not in dumped
+    assert "LEAKPASS123" not in dumped
 
 
 def test_redact_secrets_is_linear_on_colon_heavy_lines() -> None:

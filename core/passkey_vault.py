@@ -169,14 +169,22 @@ async def sign_with_key(name: str, data: bytes) -> bytes:
 async def delete_signing_key(name: str) -> None:
     """Delete key ``name``; Transit refuses a delete until the key allows one.
 
-    A key that is already gone (404) counts as deleted, so a retry after a half-done
-    removal converges instead of failing forever.
+    A key that is already gone counts as deleted, so a retry after a half-done removal
+    converges instead of failing forever. Vault does not answer every step for a missing
+    key with a 404 (the config POST can be a 400), so any refusal is followed by a read:
+    only a key that provably does not exist makes the removal done.
     """
     try:
         await _request("POST", f"keys/{name}/config", {"deletion_allowed": True})
         await _request("DELETE", f"keys/{name}")
     except PasskeyVaultError as exc:
-        if exc.code != "passkey_vault_key_missing":
+        if exc.code == "passkey_vault_key_missing":
+            return
+        try:
+            gone = not await signing_key_exists(name)
+        except PasskeyVaultError:
+            gone = False  # cannot be asked: the original refusal is the honest answer
+        if not gone:
             raise
 
 

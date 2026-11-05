@@ -150,10 +150,11 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
         removing_client(request.account_id, profile.device_type),
     ):
         client = create_telegram_client(profile)
+        attempted: list[str] = []
         try:
             async with asyncio.timeout(auth_deadline()):
                 await client.connect()
-                typed_accepted = await _sign_in(client, request)
+                typed_accepted = await _sign_in(client, request, attempted)
                 return _alive_result(
                     profile, await client.get_me(), typed_password_accepted=typed_accepted
                 )
@@ -171,8 +172,11 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             # Deadline expiry (``TimeoutError``), a dead proxy or a dropped socket:
             # nothing was learned about the account, so it is a temporary fault, unless
             # the deadline fired AFTER Telegram accepted the sign-in.
+            # Alive after a password step with ONLY the typed password sent can only mean
+            # that one was accepted; once a fallback was tried it could be either.
+            typed_only = request.password is not None and attempted == [request.password]
             if isinstance(exc, TimeoutError) and (
-                alive := await _probe_authorized(client, profile)
+                alive := await _probe_authorized(client, profile, typed_accepted=typed_only)
             ):
                 return alive
             return _error_result(profile, exc, status="network_error", is_temporary=True)
@@ -185,7 +189,7 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
 
 
 async def _probe_authorized(
-    client: TelegramClient, profile: TelegramClientProfile
+    client: TelegramClient, profile: TelegramClientProfile, *, typed_accepted: bool = False
 ) -> TelegramSessionCheckResult | None:
     """Alive verdict when a sign-in the deadline cut short had in fact been accepted.
 
@@ -198,12 +202,16 @@ async def _probe_authorized(
             await client.connect()
             if not await client.is_user_authorized():
                 return None
-            return _alive_result(profile, await client.get_me())
+            return _alive_result(
+                profile, await client.get_me(), typed_password_accepted=typed_accepted
+            )
     except Exception:  # noqa: BLE001 - a probe that fails proves nothing; keep the original verdict.
         return None
 
 
-async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> bool:
+async def _sign_in(
+    client: TelegramClient, request: PhoneCodeSubmit, attempted: list[str] | None = None
+) -> bool:
     """Sign in; ``True`` when Telegram accepted the password the operator TYPED."""
     try:
         await client.sign_in(
@@ -215,7 +223,7 @@ async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> bool:
         passwords = [*([request.password] if request.password else []), *request.fallback_passwords]
         if not passwords:
             raise
-        accepted = await sign_in_with_passwords(client, request.account_id, passwords)
+        accepted = await sign_in_with_passwords(client, request.account_id, passwords, attempted)
         return request.password is not None and accepted == request.password
     return False
 
