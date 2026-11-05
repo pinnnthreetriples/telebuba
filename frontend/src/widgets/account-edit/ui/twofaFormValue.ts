@@ -28,7 +28,7 @@ export const twofaFormSchema = z
     hint: z.string().max(TWOFA_HINT_MAX_LENGTH),
   })
   .superRefine((value, ctx) => {
-    if (value.mode === 'custom' && value.password.trim().length < TWOFA_MIN_LENGTH) {
+    if (value.mode === 'custom' && value.password.length < TWOFA_MIN_LENGTH) {
       ctx.addIssue({
         code: 'custom',
         path: ['password'],
@@ -38,7 +38,7 @@ export const twofaFormSchema = z
     // Telegram shows the hint to whoever is at the password prompt, so a hint
     // that quotes the password publishes it. Blocked rather than warned about:
     // the whole point of the password is that the prompt cannot answer itself.
-    const password = value.password.trim();
+    const password = value.password;
     if (password && value.hint.toLowerCase().includes(password.toLowerCase())) {
       ctx.addIssue({
         code: 'custom',

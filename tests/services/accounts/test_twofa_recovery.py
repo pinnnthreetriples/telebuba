@@ -18,8 +18,9 @@ import pytest
 
 from core.db import (
     create_account,
+    fetch_account_twofa_pair,
     fetch_account_twofa_password,
-    set_account_twofa_password,
+    set_account_twofa_pending,
 )
 from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
@@ -79,12 +80,14 @@ async def test_a_lost_answer_over_a_stale_stored_password_keeps_the_new_one(
     assert events[0][2]["confirmed"] is False
 
 
-def _patch_execute_watching_the_column(monkeypatch: pytest.MonkeyPatch) -> list[str | None]:
-    """Answer ``ok``, recording what the column held AT THE MOMENT of the RPC."""
-    seen: list[str | None] = []
+def _patch_execute_watching_the_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str | None, str | None]]:
+    """Answer ``ok``, recording ``(current, pending)`` AT THE MOMENT of the RPC."""
+    seen: list[tuple[str | None, str | None]] = []
 
     async def _capture(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
-        seen.append(await fetch_account_twofa_password(account_id))
+        seen.append(await fetch_account_twofa_pair(account_id))
         return ok_result(account_id)
 
     monkeypatch.setattr("services.accounts.twofa.execute", _capture)
@@ -113,9 +116,10 @@ async def test_a_fresh_set_persists_the_candidate_before_the_rpc(
 
     created = await set_account_twofa("acc-order", AccountTwoFactorUpdateRequest())
 
-    assert seen == [created.password]
+    # Staged as PENDING before the RPC; promoted to current once Telegram confirmed.
+    assert seen == [(None, created.password)]
     assert created.stored is True
-    assert await fetch_account_twofa_password("acc-order") == created.password
+    assert await fetch_account_twofa_pair("acc-order") == (created.password, None)
 
 
 @pytest.mark.asyncio
@@ -138,9 +142,10 @@ async def test_a_change_still_persists_only_after_telegram_confirmed(
         AccountTwoFactorUpdateRequest(password="the-new-one"),
     )
 
-    assert seen == [STORED]
+    # The old password stays current and the new one is already durable (pending).
+    assert seen == [(STORED, "the-new-one")]
     assert created.stored is True
-    assert await fetch_account_twofa_password("acc-order-change") == "the-new-one"
+    assert await fetch_account_twofa_pair("acc-order-change") == ("the-new-one", None)
 
 
 @pytest.mark.asyncio
@@ -174,7 +179,7 @@ async def test_a_refused_fresh_set_leaves_no_password_behind(
         await set_account_twofa("acc-refused", AccountTwoFactorUpdateRequest())
 
     assert excinfo.value.code == "twofa_current_password_invalid"
-    assert await fetch_account_twofa_password("acc-refused") is None
+    assert await fetch_account_twofa_pair("acc-refused") == (None, None)
 
 
 @pytest.mark.asyncio
@@ -210,7 +215,9 @@ async def test_an_email_unconfirmed_change_keeps_the_password_known_to_work(
     # The load-bearing pair: the known-good value survives and the new one is not
     # persisted over it, exactly as on a lost answer.
     assert await fetch_account_twofa_password("acc-unconfirmed-change") == STORED
-    assert created.stored is False
+    # The candidate is durable as pending, so every login path can still use it.
+    assert await fetch_account_twofa_pair("acc-unconfirmed-change") == (STORED, "the-new-one")
+    assert created.stored is True
     assert created.previous_kept is True
     assert created.password == "the-new-one"
     assert events[0][2]["confirmed"] is False
@@ -247,23 +254,25 @@ async def test_a_lost_answer_over_a_failed_live_read_reports_unknown_not_kept(
 
 
 @pytest.mark.asyncio
-async def test_a_rollback_that_failed_says_so_instead_of_a_plain_refusal(
+async def test_a_refused_change_restores_the_pending_candidate_an_earlier_write_left(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """H2: the poisoned column has to be reported, or the state is silently terminal.
+    """The refusal proves THIS candidate was not applied, not that the older one was not.
 
-    A fresh set writes the candidate BEFORE the RPC and rolls it back on an answered
-    refusal. ``_remember_password`` swallows every exception and answers ``False``,
-    and the rollback caller ignored that — so a locked database (likely exactly then)
-    left a password Telegram had just rejected in the column while the operator read
-    an ordinary "wrong password". From there nothing recovers: ``has_stored_password``
-    is ``True`` so the not-stored guard cannot fire, every verb sends the bogus value,
-    and the stale branch cannot help because the live read says ``has_password=True``.
+    An earlier unresolved write may have put its candidate on Telegram; a refused
+    follow-up must put that pending value back instead of clearing it, or the one
+    password that may be in force is gone.
     """
-    await create_account(AccountCreate(account_id="acc-poisoned"))
-    patch_read(monkeypatch, status())
+    await account_with_password("acc-restore")
+    await set_account_twofa_pending("acc-restore", "older-candidate")
+
+    # A failed live read leaves the earlier candidate unresolved.
+    async def _boom(account_id: str, action: object) -> TwoFactorStatusResult:  # noqa: ARG001
+        reason = "unavailable: TelegramClientPoolError"
+        raise TelegramReadError(reason, kind="unavailable")
+
+    monkeypatch.setattr("services.accounts.twofa.execute_read", _boom)
     patch_log(monkeypatch)
-    written: list[str | None] = []
 
     async def _refuse(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
         return ActionResult(
@@ -274,28 +283,12 @@ async def test_a_rollback_that_failed_says_so_instead_of_a_plain_refusal(
             error_message="twofa_current_password_invalid",
         )
 
-    async def _write_once_then_fail(account_id: str, password: str | None) -> bool:
-        written.append(password)
-        if password is None:
-            msg = "database is locked"
-            raise RuntimeError(msg)
-        return await set_account_twofa_password(account_id, password)
-
     monkeypatch.setattr("services.accounts.twofa.execute", _refuse)
-    monkeypatch.setattr(
-        "services.accounts.twofa.set_account_twofa_password",
-        _write_once_then_fail,
-    )
 
-    with pytest.raises(AccountActionError) as excinfo:
-        await set_account_twofa("acc-poisoned", AccountTwoFactorUpdateRequest())
+    with pytest.raises(AccountActionError, match="twofa_current_password_invalid"):
+        await set_account_twofa("acc-restore", AccountTwoFactorUpdateRequest())
 
-    # NOT ``twofa_current_password_invalid``: the operator has to learn the column is
-    # poisoned, because the fix is "forget the stored password", not "try again".
-    assert excinfo.value.code == "twofa_rollback_failed"
-    # The rollback was attempted, and it is the failure that is being reported.
-    assert written[-1] is None
-    assert await fetch_account_twofa_password("acc-poisoned") is not None
+    assert await fetch_account_twofa_pair("acc-restore") == (STORED, "older-candidate")
 
 
 @pytest.mark.asyncio

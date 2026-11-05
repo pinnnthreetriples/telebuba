@@ -42,6 +42,7 @@ class _Wire:
         self.checked: list[str] = []
         self.passkeys: set[str] = set()
         self.passkey_state = "present"
+        self.vault_checked: list[str] = []
         self.events: list[tuple[str, str, str | None]] = []
 
 
@@ -73,6 +74,9 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     async def _passkey(account_id: str) -> AccountPasskeyCheck:
         return AccountPasskeyCheck(account_id=account_id, telegram_state=state.passkey_state)  # ty: ignore[invalid-argument-type]
 
+    async def _vault(account_id: str) -> None:
+        state.vault_checked.append(account_id)
+
     async def _log(level: str, event: str, **kwargs: object) -> None:
         state.events.append((level, event, str(kwargs.get("account_id"))))
 
@@ -82,6 +86,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     monkeypatch.setattr(_watch, "check_account_session", _check)
     monkeypatch.setattr(_watch, "fetch_account_passkey", _has_passkey)
     monkeypatch.setattr(_watch, "check_account_passkey", _passkey)
+    monkeypatch.setattr(_watch, "check_passkey_vault", _vault)
     monkeypatch.setattr(_watch, "log_event", _log)
     yield state
     _account_owner.reset_for_tests()
@@ -230,3 +235,17 @@ async def test_an_account_without_a_passkey_is_not_asked(wire: _Wire) -> None:
     await _watch.run_watch_pass(now=NOW)
 
     assert wire.events == []
+
+
+@pytest.mark.parametrize("refusal", [None, "unavailable"])
+@pytest.mark.asyncio
+async def test_the_vault_is_checked_each_pass_whether_or_not_the_audit_answered(
+    wire: _Wire, refusal: str | None
+) -> None:
+    wire.accounts = [_account("a")]
+    if refusal:
+        wire.refusal = {"a": refusal}
+
+    await _watch.run_watch_pass(now=NOW)
+
+    assert wire.vault_checked == ["a"]

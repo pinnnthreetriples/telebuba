@@ -314,6 +314,10 @@ export type AccountPasskeyView = {
    * Vault Configured
    */
   vault_configured: boolean;
+  /**
+   * Vault State
+   */
+  vault_state?: 'ok' | 'key_missing' | 'sealed' | 'forbidden' | 'unreachable' | 'rejected' | null;
 };
 
 /**

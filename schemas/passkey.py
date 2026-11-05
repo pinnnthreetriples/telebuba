@@ -39,6 +39,9 @@ class WebPasskeyAssertion(BaseModel):
     user_handle: str
 
 
+PasskeyVaultState = Literal["ok", "key_missing", "sealed", "forbidden", "unreachable", "rejected"]
+
+
 class AccountPasskeyView(BaseModel):
     """Whether the account has a passkey, and whether passkeys can be used at all."""
 
@@ -49,6 +52,9 @@ class AccountPasskeyView(BaseModel):
     created_at: str | None = None
     # False when no vault token is configured: every passkey action then refuses.
     vault_configured: bool
+    # What the periodic health check last found about the passkey's vault key; ``None``
+    # until one ran in this process. Anything but ``ok`` needs the operator.
+    vault_state: PasskeyVaultState | None = None
 
 
 # What Telegram's own passkey list says about the stored credential. ``unknown`` is

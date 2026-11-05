@@ -28,7 +28,7 @@ import secrets
 from typing import TYPE_CHECKING, cast
 
 from core.config import settings
-from core.db import fetch_account_twofa_password, set_account_twofa_password
+from core.db import fetch_account_twofa_pair, set_account_twofa_password
 from core.logging import log_event
 from core.telegram_client import (
     UNCONFIRMED_ERROR_TYPE,
@@ -47,6 +47,13 @@ from services.accounts._result import (
     AccountActionError,
     AccountNotFoundError,
     raise_for_result,
+    result_code,
+)
+from services.accounts._twofa_pending import (
+    promote_pending,
+    resolve_current,
+    stage_pending,
+    twofa_password_candidates,
 )
 from services.accounts.lifecycle import require_account
 
@@ -56,11 +63,13 @@ if TYPE_CHECKING:
     from schemas.twofa import AccountTwoFactorUpdateRequest
 
 __all__ = [
+    "authorising_twofa_password",
     "read_account_twofa",
     "record_account_twofa",
     "remove_account_twofa",
     "set_account_twofa",
     "twofa_lock",
+    "twofa_password_candidates",
 ]
 
 # ``secrets.token_urlsafe(16)`` → 22 URL-safe characters over 128 bits of
@@ -136,6 +145,35 @@ async def _live_status(account_id: str) -> tuple[TwoFactorStatusResult | None, s
     return cast("TwoFactorStatusResult", result), None
 
 
+async def _verify(account_id: str, password: str) -> bool | None:
+    """Ask Telegram whether it accepts ``password``: yes, no, or unknown (nothing proven)."""
+    result = await execute(account_id, VerifyTwoFactorPassword(password=password))
+    if result.status == "ok":
+        return True
+    return False if result_code(result) == "twofa_current_password_invalid" else None
+
+
+async def _settled_current(account_id: str, status: TwoFactorStatusResult | None) -> str | None:
+    async def _ask(password: str) -> bool | None:
+        return await _verify(account_id, password)
+
+    return await resolve_current(account_id, status, _ask)
+
+
+async def authorising_twofa_password(account_id: str) -> str | None:
+    """The stored password that authorises a write, after settling a pending candidate.
+
+    The email flows call this instead of reading the column: with nothing pending it is
+    the stored current password and costs no Telegram call; with a candidate pending it
+    asks Telegram which one is in force first (see :mod:`._twofa_pending`).
+    """
+    current, pending = await fetch_account_twofa_pair(account_id)
+    if pending is None:
+        return current
+    status, _error = await _live_status(account_id)
+    return await _settled_current(account_id, status)
+
+
 async def read_account_twofa(account_id: str) -> AccountTwoFactorView:
     """The account's live 2FA state, plus whether this dashboard holds its password.
 
@@ -144,7 +182,7 @@ async def read_account_twofa(account_id: str) -> AccountTwoFactorView:
     authorised at all.
     """
     await require_account(account_id)
-    stored = bool(await fetch_account_twofa_password(account_id))
+    stored = bool(await twofa_password_candidates(account_id))
     status, error = await _live_status(account_id)
     return AccountTwoFactorView(status=status, has_stored_password=stored, error=error)
 
@@ -155,78 +193,48 @@ async def set_account_twofa(
 ) -> AccountTwoFactorCreated:
     """Set a new cloud password, or change the existing one, and return it once.
 
-    The precondition on a CHANGE is the part worth reading. Telethon sends
-    ``InputCheckPasswordEmpty`` when it has no current password to check, and
-    Telegram answers that with a bare invalid-password error — accurate but
-    useless, because the real problem is that this dashboard never held the
-    password (the account was set up elsewhere, or the column was cleared). So
-    when Telegram reports a password is already set and nothing is stored, the
-    refusal is ``twofa_password_not_stored`` before any RPC is spent. A live read
-    that itself failed does NOT block the write: ``edit_2fa`` rejects a wrong or
-    missing current password by itself, so this check is a better message, not the
-    safety net.
+    On a CHANGE, a stored password is required: Telethon sends ``InputCheckPasswordEmpty``
+    without one and Telegram answers a bare invalid-password error, so when Telegram
+    reports a password and nothing is stored the refusal is ``twofa_password_not_stored``
+    before any RPC. A live read that itself failed does NOT block the write.
 
-    A persistence failure does NOT fail the request. Telegram has already accepted
-    the password by then, so this response is the operator's only copy; dropping it
-    would strand the account behind a password nobody holds. The response says
-    ``stored=False`` instead, and the failure is logged.
+    The candidate is staged in ``twofa_password_pending`` BEFORE the RPC, for a fresh set
+    and a change alike, and a failed stage sends NOTHING (``twofa_pending_store_failed``):
+    between "Telegram applied it" and any later persist there are awaits (``execute``
+    awaits ``log_event`` itself), and dying in that window used to leave the password
+    live on Telegram and only the old one (or none) in the row. An ANSWERED refusal
+    proves Telegram did not apply it, so the previous pending value is restored. A
+    confirmed write promotes pending to current. A pending candidate left by an earlier
+    crash is settled first (``resolve_current``).
 
-    On a FRESH SET the persist happens BEFORE the RPC, and that ordering is the only
-    thing standing between a process death and an unrecoverable account. Between
-    "Telegram applied it" and a post-RPC persist there are several awaits —
-    ``execute`` itself awaits ``log_event``, a threaded SQLite insert plus an SSE
-    fan-out — and dying in that window leaves the password live on Telegram, nothing
-    in the row and no log line: the plaintext existed only in a response nobody
-    received. Writing first inverts it into a recoverable state, stored-but-never-
-    applied, which reads as ``has_stored_password=True`` with ``has_password=False``
-    and is exactly what the stale branch below and the card's "forget the stale
-    password" row are for. An ANSWERED refusal rolls that write back, because the
-    answer is proof Telegram did not apply it; only the two ambiguous outcomes (a
-    lost answer, a killed process) leave it in place.
+    A LOST ANSWER (``status="unavailable"`` with ``UNCONFIRMED_ERROR_TYPE``) means the
+    request was on the wire, so Telegram may hold the password: it is returned like a
+    success, flagged ``confirmed=False``, never discarded (the account would sit behind a
+    password nobody saw). On a CHANGE over a live, known-good stored password BOTH stay
+    (current + pending, every login path tries both) and ``previous_kept=True`` sends the
+    operator to the phone — unless the live read says Telegram has no password, which
+    makes the stored one stale; then the candidate is promoted. A fresh set promotes it.
 
-    A LOST ANSWER is handled the same way, for a stronger version of the same
-    reason. ``status="unavailable"`` with ``error_type == UNCONFIRMED_ERROR_TYPE``
-    means the request was already on the wire, so Telegram may have applied this
-    password. Letting that reach ``raise_for_result`` would answer 503 and discard
-    the value — and if Telegram DID apply it, the account is then behind a password
-    no human ever saw, which nothing can undo: the retry reads ``has_password=True``
-    with nothing stored and refuses ``twofa_password_not_stored`` forever, so no set,
-    no change, no remove, and ``submit_phone_code`` can never complete after a
-    session reset. So that one status persists and returns the password like a
-    success, flagged ``confirmed=False``. Every other non-ok status still raises.
+    ``confirmed`` is also ``False`` when Telegram answered ``EMAIL_UNCONFIRMED`` and the
+    gateway's confirming ``account.getPassword`` did not report a password.
 
-    That persist is asymmetric, and the asymmetry is the point: it happens only when
-    there was NOTHING LIVE to lose. On a CHANGE the stored value is a credential
-    Telegram is known to accept, so overwriting it with one that may never have been
-    applied would trade a recoverable ambiguity for exactly the unrecoverable loss
-    above. A change therefore keeps the old value, still returns the new one (Telegram
-    may hold it) and says ``previous_kept=True``, so the card can send the operator to
-    the phone — UNLESS the live read says Telegram has no password at all, in which
-    case the stored value is stale by definition, cannot be "the previous one in
-    force", and keeping it would persist nothing at all.
-
-    ``confirmed`` can also be ``False`` when Telegram answered ``EMAIL_UNCONFIRMED``,
-    but that is now the gateway's call rather than an assumption: it issues one
-    confirming ``account.getPassword`` and reports the flag only when that read did
-    not come back saying a password is set. See ``_twofa._email_unconfirmed_result``
-    for why the previous round's TDLib citation was fabricated.
+    A promotion that fails still leaves the value in pending (usable for login) but the
+    response says ``stored=False`` so the operator copies it.
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
         password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
-        current = await fetch_account_twofa_password(account_id)
         status, _error = await _live_status(account_id)
+        current = await _settled_current(account_id, status)
         if status is not None and status.has_password and current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
-        # FRESH SET ONLY: nothing live to lose, so the candidate is written first and
-        # the silent-loss window closes (see the docstring).
-        fresh = current is None
-        stored = fresh and await _remember_password(
-            account_id,
-            password,
-            has_hint=bool(request.hint),
-        )
+        # The candidate is staged durably BEFORE the RPC, for a fresh set and a change
+        # alike, and a failed stage sends nothing (see the docstring).
+        previous_pending = (await fetch_account_twofa_pair(account_id))[1]
+        if not await stage_pending(account_id, password):
+            code = "twofa_pending_store_failed"
+            raise AccountActionError(code)
         result = await execute(
             account_id,
             # ``hint=None`` means KEEP whatever Telegram shows; the gateway resolves it
@@ -239,15 +247,11 @@ async def set_account_twofa(
         )
         lost = result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE
         if not lost:
-            if result.status != "ok" and stored and not await _remember_password(account_id, None):
-                # The ROLLBACK itself failed, and that is not a plain refusal any
-                # more: the column keeps a password Telegram provably rejected, so
-                # ``has_stored_password`` stays ``True``, the not-stored guard can
-                # never fire again and every later verb authorises itself with a
-                # value Telegram will reject. Its own code, so the operator is told
-                # to forget the stored password rather than just "try again".
-                code = "twofa_rollback_failed"
-                raise AccountActionError(code)
+            if result.status != "ok":
+                # An answered refusal proves nothing was applied: put back whatever was
+                # pending before. A failed restore is harmless (the next write or login
+                # settles a stale candidate), so it is not an error here.
+                await stage_pending(account_id, previous_pending)
             raise_for_result(result)
         # A stored password the live read contradicts is stale BY DEFINITION, so it is
         # not the "known to work" credential this branch exists to protect — keeping it
@@ -260,12 +264,9 @@ async def set_account_twofa(
         # a password at all, so "the previous one or this one is in force" would be an
         # assertion drawn from a read that answered nothing.
         previous_kept = None if kept and status is None else kept
-        if not fresh and not kept:
-            stored = await _remember_password(
-                account_id,
-                password,
-                has_hint=bool(request.hint),
-            )
+        # Confirmed, or nothing live to lose: the candidate becomes the stored password.
+        # Kept (an unknown outcome over a live one): BOTH stay, pending is the new one.
+        stored = True if kept else await promote_pending(account_id)
         # ponytail: INFO/success even on the lost-answer branch, where ``confirmed`` is
         # ``False``. Correct — Telegram may well hold the password, and the row carries
         # the flag — but an operator skimming the log sees a success row for an outcome
@@ -420,11 +421,11 @@ async def remove_account_twofa(
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
-        current = await fetch_account_twofa_password(account_id)
+        status, _error = await _live_status(account_id)
+        current = await _settled_current(account_id, status)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
-        status, _error = await _live_status(account_id)
         stale = status is not None and not status.has_password
         if not stale and not forget_only:
             remove = SetTwoFactorPassword(current_password=current)

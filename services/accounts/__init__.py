@@ -114,7 +114,9 @@ from services.accounts.mobile_emulator import (
 )
 from services.accounts.passkey import (
     check_account_passkey,
+    check_passkey_vault,
     create_account_passkey,
+    passkey_vault_state,
     read_account_passkey,
     relogin_with_passkey,
     remove_account_passkey,
@@ -162,6 +164,7 @@ from services.accounts.twofa import (
     record_account_twofa,
     remove_account_twofa,
     set_account_twofa,
+    twofa_password_candidates,
 )
 from services.accounts.web_login import (
     OpenWebResult,
@@ -205,6 +208,7 @@ __all__ = [
     "check_account_channel_username",
     "check_account_passkey",
     "check_account_session",
+    "check_passkey_vault",
     "clear_account_twofa_email",
     "close_account_foreign_sessions",
     "close_account_sessions",
@@ -240,6 +244,7 @@ __all__ = [
     "open_account_web",
     "open_mobile_progress",
     "parse_session_json",
+    "passkey_vault_state",
     "post_account_story",
     "publish_account_channel_post",
     "read_account_passkey",
@@ -279,6 +284,7 @@ __all__ = [
     "start_qr_login",
     "submit_login_code",
     "submit_qr_password",
+    "twofa_password_candidates",
     "update_account_channel",
     "update_account_profile",
 ]
