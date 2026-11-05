@@ -14,6 +14,8 @@ import json
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from core.web_login._cdp import CdpError
+
 if TYPE_CHECKING:
     from core.web_login.browser import WebWindow
 
@@ -52,7 +54,31 @@ _INPUT_RECT_EXPR = (
     "if(!i)return '';const r=i.getBoundingClientRect();"
     "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2});})()"
 )
+# The visible password field's character count: only a length ever leaves the page.
+_FIELD_LENGTH_EXPR = (
+    "(()=>{const i=[...document.querySelectorAll('input[type=password]')]"
+    ".find(i=>{const r=i.getBoundingClientRect();return r.width>200&&r.height>0;});"
+    "return i?i.value.length:null;})()"
+)
+# What WebK shows after a password submit, from STRUCTURE like everything here: an error
+# class on the field's wrapper (the wrong-password state), or a busy control (a disabled
+# button / a preloader) while ``auth.checkPassword`` is still running. The selectors
+# follow WebK's class names, not its words, so they hold in every locale.
+_SUBMIT_OUTCOME_EXPR = (
+    "(()=>{const vis=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0;};"
+    "const any=s=>[...document.querySelectorAll('#auth-pages '+s)].some(vis);"
+    "if(any('.input-field.error')||any('.input-field-error')||any('.is-error'))return 'error';"
+    "if(any('button[disabled]')||any('.preloader')||any('.btn-primary.is-loading')"
+    "||any('.btn-primary.disabled'))return 'checking';"
+    "return 'idle';})()"
+)
 _CLICK_SETTLE_SECONDS = 0.2
+# Reads of the field's position before it is trusted to have stopped sliding in, and the
+# gap between them.
+_SETTLE_READS = 8
+_SETTLE_READ_GAP_SECONDS = 0.15
+# Typing the password again when the field did not take it, before giving up on a submit.
+_TYPE_ATTEMPTS = 2
 # CDP real-key typing gap between characters, so WebK's field handlers keep up.
 _KEY_GAP_SECONDS = 0.02
 _CTRL_MODIFIER = 2
@@ -132,12 +158,7 @@ async def _dispatch_key(window: WebWindow, event: dict[str, object]) -> None:
     await window.session.send_command("Input.dispatchKeyEvent", event, session_id=window.page)
 
 
-async def _click_center(window: WebWindow, rect_expr: str) -> bool:
-    """Real-mouse-click the centre of the element ``rect_expr`` locates; False if none."""
-    value = await _evaluate(window, rect_expr)
-    if not isinstance(value, str) or not value:
-        return False
-    point = json.loads(value)
+async def _click_point(window: WebWindow, point: dict[str, float]) -> None:
     for kind in ("mousePressed", "mouseReleased"):
         await window.session.send_command(
             "Input.dispatchMouseEvent",
@@ -151,19 +172,63 @@ async def _click_center(window: WebWindow, rect_expr: str) -> bool:
             },
             session_id=window.page,
         )
-    return True
 
 
-async def type_2fa_password(window: WebWindow, password: str) -> bool:
-    """Type the account's 2FA password into WebK's field and submit. Never logged.
+async def _locate(window: WebWindow, rect_expr: str) -> dict[str, float] | None:
+    """The centre point ``rect_expr`` reports, or ``None`` when the element is not there."""
+    value = await _evaluate(window, rect_expr)
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        point = json.loads(value)
+    except ValueError:
+        return None
+    return point if isinstance(point, dict) else None
 
-    Real-mouse-clicks the visible password input to focus it (a JS focus leaves WebK's
-    controlled input empty), clears it (Ctrl+A, Delete), types each character with real
-    CDP key events, then submits with Enter. False when there was no field to click, so
-    nothing was submitted.
+
+async def _settled_input_point(window: WebWindow) -> dict[str, float] | None:
+    """The password field's centre once two reads agree; ``None`` when there is no field.
+
+    WebK slides the password page in, and a click aimed at the first width-passing rect
+    lands where the field WAS: the click misses, the keys go nowhere, and Enter submits a
+    blank. Two consecutive equal readings mean the animation has finished. Bounded, and
+    the last reading wins: a field that never holds still is still better clicked than not.
     """
-    if not await _click_center(window, _INPUT_RECT_EXPR):
-        return False
+    previous: dict[str, float] | None = None
+    for _ in range(_SETTLE_READS):
+        point = await _locate(window, _INPUT_RECT_EXPR)
+        if point is None:
+            return None
+        if point == previous:
+            return point
+        previous = point
+        await asyncio.sleep(_SETTLE_READ_GAP_SECONDS)
+    return previous
+
+
+async def _field_holds(window: WebWindow, password: str) -> bool:
+    """True unless the field PROVABLY holds a different number of characters.
+
+    Only the length crosses back, never the value. An unreadable answer is not a failure:
+    refusing to submit on a probe that merely returned nothing would trade a possible blank
+    submit for a certain non-submit.
+    """
+    value = await _evaluate(window, _FIELD_LENGTH_EXPR)
+    if not isinstance(value, int) or isinstance(value, bool):
+        return True
+    return value == len(password.encode("utf-16-le")) // 2
+
+
+async def password_outcome(window: WebWindow) -> str:
+    """After a submit: ``error`` (WebK shows the wrong-password state), ``checking`` or ``idle``."""
+    value = await _evaluate(window, _SUBMIT_OUTCOME_EXPR)
+    if value == "error":
+        return "error"
+    return "checking" if value == "checking" else "idle"
+
+
+async def _type_into_field(window: WebWindow, point: dict[str, float], password: str) -> None:
+    await _click_point(window, point)
     await asyncio.sleep(_CLICK_SETTLE_SECONDS)
     for kind in ("keyDown", "keyUp"):
         await _dispatch_key(
@@ -175,6 +240,29 @@ async def type_2fa_password(window: WebWindow, password: str) -> bool:
         await _dispatch_key(window, {"type": "keyDown", "text": char, "key": char})
         await _dispatch_key(window, {"type": "keyUp", "key": char})
         await asyncio.sleep(_KEY_GAP_SECONDS)
-    for kind in ("keyDown", "keyUp"):
-        await _dispatch_key(window, {"type": kind, **_ENTER_KEY})
+
+
+async def type_2fa_password(window: WebWindow, password: str) -> bool:
+    """Type the account's 2FA password into WebK's field and submit. Never logged.
+
+    Waits for the field to hold still, real-mouse-clicks it to focus it (a JS focus leaves
+    WebK's controlled input empty), clears it (Ctrl+A, Delete) and types each character
+    with real CDP key events. Enter is pressed only once the field holds the right number
+    of characters — a dropped keystroke would otherwise send Telegram a wrong password, and
+    a wrong submit is the one thing that costs an attempt. False when nothing was submitted
+    (no field yet, or it never took the value), so the caller may simply try again.
+    """
+    point = await _settled_input_point(window)
+    if point is None:
+        return False
+    for _ in range(_TYPE_ATTEMPTS):
+        await _type_into_field(window, point, password)
+        if await _field_holds(window, password):
+            break
+    else:
+        return False
+    await _dispatch_key(window, {"type": "keyDown", **_ENTER_KEY})
+    # The keyDown is the submit; a socket that drops before the keyUp changes nothing.
+    with suppress(CdpError, OSError):
+        await _dispatch_key(window, {"type": "keyUp", **_ENTER_KEY})
     return True

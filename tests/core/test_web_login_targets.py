@@ -101,7 +101,8 @@ async def test_a_refused_locale_ends_the_wait_at_once_and_says_so() -> None:
     """Every page of the window would be refused alike; the caller retries elsewhere.
 
     Reported as ``LocaleRejectedError``, not the generic "never attached a page"
-    after the whole first-page timeout, and the paused page is still resumed.
+    after the whole first-page timeout. The page is not resumed (it would run undressed):
+    it is closed.
     """
     session = _Session(
         events=[attached("P1", "page")],
@@ -113,7 +114,8 @@ async def test_a_refused_locale_ends_the_wait_at_once_and_says_so() -> None:
         await _driver(session).first_page_session()
 
     assert time.monotonic() - started < _targets._FIRST_PAGE_TIMEOUT / 4
-    assert session.sent(_RESUME)[0][1] == "P1"
+    assert session.sent(_RESUME) == []
+    assert session.sent("Target.closeTarget") == [({"targetId": "P1"}, None)]
 
 
 @pytest.mark.asyncio

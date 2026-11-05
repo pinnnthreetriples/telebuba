@@ -12,6 +12,7 @@ from core.web_login._lifetime import close_orphaned_browsers, remove_profile_dir
 from core.web_login._page import (
     latest_login_token,
     page_state,
+    password_outcome,
     release_capture,
     type_2fa_password,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "latest_login_token",
     "launch_account_web",
     "page_state",
+    "password_outcome",
     "release_capture",
     "remove_profile_dir",
     "token_bytes",

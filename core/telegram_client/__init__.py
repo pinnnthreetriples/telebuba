@@ -111,7 +111,7 @@ from core.telegram_client._session_audit import SessionAuditGatewayError, read_a
 from core.telegram_client._session_close import close_sessions
 from core.telegram_client._spam import check_spam_status
 from core.telegram_client._story_image import is_known_collage_layout
-from core.telegram_client._web_login import accept_web_login_token
+from core.telegram_client._web_login import WebLoginTransientError, accept_web_login_token
 
 __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
@@ -124,6 +124,7 @@ __all__ = [
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
+    "WebLoginTransientError",
     "accept_web_login_token",
     "account_auth_lock",
     "authorize_second_device",

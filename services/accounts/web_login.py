@@ -154,15 +154,16 @@ async def _reuse_raised_window(
     Raising a window whose login never completed and calling that a success strands
     the operator: every later click focuses the same QR screen and returns "launched"
     without driving login again. Driving again is safe precisely because no login
-    completed — it cannot spawn a second 'Active Sessions' device — but the stored 2FA
-    password is NOT retyped (see :func:`services.accounts._web_drive.drive_login`).
+    completed — it cannot spawn a second 'Active Sessions' device — and the stored 2FA
+    password is typed unless THIS window already sent it (see
+    :func:`services.accounts._web_drive.drive_login`).
 
     The marker cuts the other way too: it is a one-way on-disk latch nothing deletes,
     so a web session that dies later — revoked from Active Sessions, logged out inside
     the window, profile data cleared — would report signed-in on every click for good.
     """
     if not profile_is_seeded(profile):
-        return await _drive_and_mark(account_id, window, profile, type_password=False)
+        return await _drive_and_mark(account_id, window, profile)
     if await still_signed_in(window):
         return OpenWebResult(launched=True, signed_in=True)
     # The stored session is gone. This window was launched WITHOUT the QR capture hook
@@ -342,23 +343,19 @@ async def _launch(
     seeded = profile_is_seeded(profile)
     window = await _spawn(account_id, relay_port, profile, country, capture=not seeded)
     if not seeded:
-        return await _drive_and_mark(account_id, window, profile, type_password=True)
+        return await _drive_and_mark(account_id, window, profile)
     if await still_signed_in(window):
         return OpenWebResult(launched=True, signed_in=True)
     forget_signed_in(profile)
     await _drop_window(account_id, window)  # its relay went with it
     relay_port = await _relay_port_for(account_id, proxy)
     window = await _spawn(account_id, relay_port, profile, country, capture=True)
-    return await _drive_and_mark(account_id, window, profile, type_password=True)
+    return await _drive_and_mark(account_id, window, profile)
 
 
-async def _drive_and_mark(
-    account_id: str, window: WebWindow, profile: Path, *, type_password: bool
-) -> OpenWebResult:
+async def _drive_and_mark(account_id: str, window: WebWindow, profile: Path) -> OpenWebResult:
     """``drive_and_mark`` under this module's deadline (tests shrink ``_DRIVE_TIMEOUT``)."""
-    return await drive_and_mark(
-        account_id, window, profile, type_password=type_password, timeout=_DRIVE_TIMEOUT
-    )
+    return await drive_and_mark(account_id, window, profile, timeout=_DRIVE_TIMEOUT)
 
 
 async def shutdown_web_login() -> None:

@@ -10,6 +10,7 @@ Kept here rather than as two drifting copies.
 from __future__ import annotations
 
 import asyncio
+import weakref
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -17,7 +18,14 @@ import pytest
 from core.proxy_check import PROXY_CHECK_TIMED_OUT
 from schemas.device_fingerprint import DeviceFingerprint
 from schemas.proxy import ProxyCheckResult, ProxySettings
-from services.accounts import _web_drive, _web_identity, _web_proxy_probe, _web_watch, web_login
+from services.accounts import (
+    _web_drive,
+    _web_drive_password,
+    _web_identity,
+    _web_proxy_probe,
+    _web_watch,
+    web_login,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -50,7 +58,9 @@ def fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web_login, "_closing", asyncio.Event())
     monkeypatch.setattr(_web_watch, "_watchers", set())
     monkeypatch.setattr(_web_drive, "_POLL_INTERVAL", 0)
-    monkeypatch.setattr(_web_drive, "_PASSWORD_GRACE", 0)
+    monkeypatch.setattr(_web_drive_password, "_PASSWORD_GRACE", 0)
+    monkeypatch.setattr(_web_drive_password, "_TYPE_RETRY_BUDGET", 0.05)
+    monkeypatch.setattr(_web_drive_password, "_submitted", weakref.WeakSet())
     patch_device_language(monkeypatch, None)
 
 
@@ -99,6 +109,17 @@ class FakeRelay:
         self._port = None
 
 
+class FakeSession:
+    """The window's DevTools socket: its ``wait_closed`` ends with the browser."""
+
+    def __init__(self, window: FakeWindow) -> None:
+        self._window = window
+        self.dropped = asyncio.Event()
+
+    async def wait_closed(self) -> None:
+        await self.dropped.wait()
+
+
 class FakeWindow:
     """The window a launch returns: alive until the operator (or shutdown) closes it."""
 
@@ -107,6 +128,7 @@ class FakeWindow:
         self.closed = False
         self.killed = False
         self._exited = asyncio.Event()
+        self.session = FakeSession(self)
 
     @property
     def running(self) -> bool:
@@ -115,6 +137,7 @@ class FakeWindow:
     async def aclose(self) -> None:
         self.closed = True
         self.alive = False
+        self.session.dropped.set()
 
     async def kill(self) -> None:
         await self.aclose()
@@ -268,8 +291,9 @@ def wire(
     async def _latest(_window: object) -> str | None:
         return token
 
-    async def _accept(account_id: str, token_bytes: bytes) -> None:  # noqa: ARG001
+    async def _accept(account_id: str, token_bytes: bytes) -> bool:  # noqa: ARG001
         calls.setdefault("accepted", []).append(token_bytes)
+        return True
 
     async def _release(_window: object) -> None:
         calls["released"] = calls.get("released", 0) + 1
@@ -280,9 +304,16 @@ def wire(
         calls.setdefault("typed", []).append(password)
         return True  # the field was there and the password was submitted
 
+    async def _idle(_window: object) -> str:
+        return "idle"
+
     async def _twofa(_account_id: str) -> str | None:
         return twofa
 
+    async def _no_signer(_account_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(web_login, "web_passkey_signer", _no_signer)
     monkeypatch.setattr(web_login, "launch_account_web", _launch)
     monkeypatch.setattr(web_login, "focus_window", _focus)
     # The page-facing collaborators live in ``_web_drive``; patching them on
@@ -291,6 +322,7 @@ def wire(
     monkeypatch.setattr(_web_drive, "latest_login_token", _latest)
     monkeypatch.setattr(_web_drive, "accept_web_login_token", _accept)
     monkeypatch.setattr(_web_drive, "release_capture", _release)
-    monkeypatch.setattr(_web_drive, "type_2fa_password", _type)
-    monkeypatch.setattr(_web_drive, "fetch_account_twofa_password", _twofa)
+    monkeypatch.setattr(_web_drive_password, "type_2fa_password", _type)
+    monkeypatch.setattr(_web_drive_password, "fetch_account_twofa_password", _twofa)
+    monkeypatch.setattr(_web_drive_password, "password_outcome", _idle)
     return window

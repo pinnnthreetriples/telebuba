@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from schemas.proxy import ProxyCheckResult
-from services.accounts import _web_drive, _web_proxy_probe, web_login
+from services.accounts import _web_drive_password, _web_proxy_probe, web_login
 from services.accounts.web_login import (
     NoProxyForWebLoginError,
     WebLoginLaunchError,
@@ -314,12 +314,12 @@ async def test_a_password_that_never_reached_the_field_is_not_called_rejected(
         calls.setdefault("typed", []).append(password)
         return False
 
-    monkeypatch.setattr(_web_drive, "type_2fa_password", _no_field)
+    monkeypatch.setattr(_web_drive_password, "type_2fa_password", _no_field)
 
     result = await open_account_web("acct")
 
-    assert calls["typed"] == ["hunter2"]  # it was attempted, once...
-    assert result.reason == "web_login_2fa_required"  # ...but never submitted
+    assert len(calls["typed"]) > 1  # it keeps being attempted until a field is there...
+    assert result.reason == "web_login_2fa_required"  # ...but was never submitted
 
 
 @pytest.mark.usefixtures("relay")

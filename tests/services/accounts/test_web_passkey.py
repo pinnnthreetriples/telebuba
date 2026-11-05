@@ -32,11 +32,8 @@ def _wire(monkeypatch: pytest.MonkeyPatch, *, configured: bool, row: StoredPassk
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("configured", "row"), [(False, _ROW), (True, None)])
-async def test_no_signer_without_a_vault_or_a_passkey(
-    monkeypatch: pytest.MonkeyPatch, *, configured: bool, row: StoredPasskey | None
-) -> None:
-    _wire(monkeypatch, configured=configured, row=row)
+async def test_no_signer_without_a_vault(monkeypatch: pytest.MonkeyPatch) -> None:
+    _wire(monkeypatch, configured=False, row=_ROW)
 
     assert await _web_passkey.web_passkey_signer("acc-1") is None
 

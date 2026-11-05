@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from core.web_login._cdp import CdpError
 from core.web_login.fingerprint import (
@@ -39,6 +39,8 @@ from core.web_login.fingerprint import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from core.web_login._cdp import CdpSession
     from core.web_login.fingerprint import Fingerprint
 
@@ -71,6 +73,12 @@ _EVENT_POLL = 1.0
 # what it bounds (a dead browser); this path needs its own, three orders of magnitude
 # above a real round trip and still far below anything the operator would notice.
 _DRESS_TIMEOUT = 3.0
+# A PAGE that could not be dressed in that bound gets one more try with a longer one before
+# it is given up on: the first command after an attach is the one most often late (the
+# renderer is still starting), and a login that dies on a slow start loses the account's
+# window for nothing. Workers get no retry: they are frozen one at a time on the path of
+# every page load and the whole browser is closed over them.
+_DRESS_RETRY_TIMEOUT = 10.0
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +97,9 @@ class TargetDriver:
         self._fingerprint = fingerprint
         self._page_scripts = page_scripts
         self._worker_script = worker_init_script(fingerprint)
+        # Steps of a page's dressing already done, so a retry resumes instead of installing
+        # the document-start scripts a second time.
+        self._dressed_steps: dict[str, int] = {}
         self._task: asyncio.Task[None] | None = None
         self._locale_rejected: LocaleRejectedError | None = None
 
@@ -151,7 +162,7 @@ class TargetDriver:
         resume = bool(params.get("waitingForDebugger"))
         try:
             if kind == _PAGE:
-                await asyncio.wait_for(self._dress_page(session_id), _DRESS_TIMEOUT)
+                await self._dress_page_with_retry(session_id)
                 page = session_id
             elif kind in _WORKER_TYPES:
                 await asyncio.wait_for(self._dress_worker(session_id), _DRESS_TIMEOUT)
@@ -163,23 +174,40 @@ class TargetDriver:
                 self._locale_rejected = exc
             if kind in _WORKER_TYPES:
                 # Fail CLOSED, and harder than for a page: this may be the worker that
-                # sends initConnection, so it is never resumed — the browser goes.
+                # sends initConnection, so it is never resumed: the browser goes.
                 resume = False
                 await self._end_window()
                 msg = f"An undressed {kind} target closed the browser."
                 raise CdpError(msg) from exc
-            # Fail CLOSED: an undressed page is NOT handed back, so the launch waits
-            # and then refuses rather than navigating to Telegram wearing the
-            # operator's real machine. It is still resumed below — a paused target is
-            # a frozen tab — it just never becomes the window's page. Nothing to unset:
-            # ``page`` only becomes non-None after the awaited call has returned.
+            # Fail CLOSED for a page too: an undressed page is never resumed, because
+            # running it would show Telegram the operator's real machine. It is closed
+            # instead, and stays paused (running nothing) if even that fails. The launch
+            # then waits and refuses; a later tab simply disappears.
+            resume = False
+            await self._close_target(target_info)
         finally:
+            self._dressed_steps.pop(session_id, None)
             if resume:
                 with suppress(CdpError, OSError):
                     await self._session.send_command(
                         "Runtime.runIfWaitingForDebugger", session_id=session_id
                     )
         return page
+
+    async def _close_target(self, target_info: object) -> None:
+        """Close a page that could not be dressed; leave it paused if that fails too."""
+        info = cast("dict[str, object]", target_info) if isinstance(target_info, dict) else {}
+        target_id = info.get("targetId")
+        if not isinstance(target_id, str):
+            logger.warning("An undressed page has no target id; leaving it paused.")
+            return
+        try:
+            await asyncio.wait_for(
+                self._session.send_command("Target.closeTarget", {"targetId": target_id}),
+                _DRESS_TIMEOUT,
+            )
+        except (CdpError, OSError, TimeoutError):
+            logger.warning("An undressed page could not be closed; leaving it paused.")
 
     async def _end_window(self) -> None:
         """Close the whole browser rather than let an undressed worker run.
@@ -195,17 +223,45 @@ class TargetDriver:
         with suppress(CdpError, OSError, TimeoutError):
             await asyncio.wait_for(self._session.send_command("Browser.close"), _DRESS_TIMEOUT)
 
+    async def _dress_page_with_retry(self, session_id: str) -> None:
+        """Dress a page; on a failure that is not the locale's, once more with more time."""
+        try:
+            await asyncio.wait_for(self._dress_page(session_id), _DRESS_TIMEOUT)
+        except (CdpError, OSError, TimeoutError) as exc:
+            if isinstance(exc, LocaleRejectedError):
+                raise
+            logger.warning("Dressing a page target failed (%r); retrying once.", exc)
+            await asyncio.wait_for(self._dress_page(session_id), _DRESS_RETRY_TIMEOUT)
+
     async def _dress_page(self, session_id: str) -> None:
         # Cascade first: a page's own dedicated workers attach through ITS session, so
         # auto-attach has to be armed there before the page runs and spawns them.
+        steps = [
+            self._arm_workers,
+            self._apply_fingerprint,
+            *(self._page_script(script) for script in self._page_scripts),
+        ]
+        for index, step in enumerate(steps):
+            if index < self._dressed_steps.get(session_id, 0):
+                continue
+            await step(session_id)
+            self._dressed_steps[session_id] = index + 1
+
+    async def _arm_workers(self, session_id: str) -> None:
         await self._session.send_command(
             "Target.setAutoAttach", _AUTO_ATTACH, session_id=session_id
         )
+
+    async def _apply_fingerprint(self, session_id: str) -> None:
         await apply_page_fingerprint(self._session, self._fingerprint, session_id=session_id)
-        for script in self._page_scripts:
+
+    def _page_script(self, script: str) -> Callable[[str], Awaitable[None]]:
+        async def install(session_id: str) -> None:
             await self._session.send_command(
                 "Page.addScriptToEvaluateOnNewDocument", {"source": script}, session_id=session_id
             )
+
+        return install
 
     async def _dress_worker(self, session_id: str) -> None:
         """Give a worker the SAME identity the page has, client hints included.
@@ -216,8 +272,14 @@ class TargetDriver:
         measured it burning the whole command timeout per worker while that worker sat
         paused on start, which cost the login its budget and the account its session.
         """
-        await self._session.send_command(
+        response = await self._session.send_command(
             "Runtime.evaluate",
             {"expression": self._worker_script, "returnByValue": True},
             session_id=session_id,
         )
+        # A script that threw is a worker that was NOT dressed, however politely the
+        # command itself was answered.
+        result = response.get("result")
+        if isinstance(result, dict) and result.get("exceptionDetails"):
+            msg = "The worker's identity script threw."
+            raise CdpError(msg)
