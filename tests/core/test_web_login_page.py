@@ -149,7 +149,9 @@ async def test_type_2fa_password_clicks_field_types_and_submits_with_enter() -> 
         for method, params, _s in session.commands
         if method == "Runtime.evaluate"
     ]
-    assert evals == [_page._INPUT_RECT_EXPR]
+    # Read twice (the second read proves the field stopped sliding in), then the length
+    # check before Enter is pressed.
+    assert evals == [_page._INPUT_RECT_EXPR] * 2 + [_page._FIELD_LENGTH_EXPR]
 
 
 @pytest.mark.asyncio

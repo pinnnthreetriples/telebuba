@@ -107,6 +107,12 @@ __NATIVE__
   container.get = F({ f(options) {
     if (!wanted(options)) return real.apply(this, arguments);
     return new Promise((resolve, reject) => {
+      // Already aborted before it was asked: nothing to sign for, and no listener would
+      // ever fire for it (the event has come and gone).
+      if (options.signal && options.signal.aborted) {
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+        return;
+      }
       const id = ++seq;
       waiting.set(id, { resolve, reject });
       queue.push({ id, challenge: toText(options.publicKey.challenge) });
@@ -121,7 +127,12 @@ __NATIVE__
     });
   } }, 'get', 0);
   Object.defineProperty(window, '__tbPk', { value: {
-    take: () => queue.shift() || null,
+    // Only requests still waiting: an aborted one is never handed to the signer.
+    take: () => {
+      let next;
+      while ((next = queue.shift())) { if (waiting.has(next.id)) return next; }
+      return null;
+    },
     done: (id, r) => {
       const w = waiting.get(id);
       if (w) { waiting.delete(id); w.resolve(build(r)); }

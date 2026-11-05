@@ -12,8 +12,14 @@ from __future__ import annotations
 
 from telethon.errors import (
     AuthTokenAlreadyAcceptedError,
+    AuthTokenExceptionError,
     AuthTokenExpiredError,
+    AuthTokenInvalid2Error,
+    AuthTokenInvalidError,
     AuthTokenInvalidxError,
+    FloodWaitError,
+    ServerError,
+    TimedOutError,
 )
 from telethon.tl import functions
 
@@ -25,7 +31,27 @@ _ROTATION_ERRORS = (
     AuthTokenExpiredError,
     AuthTokenAlreadyAcceptedError,
     AuthTokenInvalidxError,
+    AuthTokenInvalidError,
+    AuthTokenInvalid2Error,
+    AuthTokenExceptionError,
 )
+# A hiccup of the pooled connection, not a verdict on the token: the very same token is
+# worth offering again. Telethon already sleeps through FLOOD_WAITs up to its own
+# threshold, so one reaching us is longer than that — retried only while it is short
+# enough to fit inside the drive's deadline.
+_TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError, ServerError, TimedOutError)
+_MAX_FLOOD_WAIT_SECONDS = 15
+
+
+class WebLoginTransientError(Exception):
+    """The accept did not get a verdict (connection, timeout, short flood wait): retry it.
+
+    ``retry_after`` is how long to hold off, in seconds, when Telegram said so.
+    """
+
+    def __init__(self, retry_after: float = 0.0) -> None:
+        super().__init__("transient failure accepting the web login token")
+        self.retry_after = retry_after
 
 
 async def accept_web_login_token(account_id: str, token: bytes) -> bool:
@@ -33,11 +59,19 @@ async def accept_web_login_token(account_id: str, token: bytes) -> bool:
 
     Returns ``True`` when the token was accepted, ``False`` when it had already rotated
     (expired / already-accepted / invalidated) so the caller retries the next captured
-    token. Any other Telethon error propagates as a genuine failure.
+    token. A connection fault, timeout or short flood wait raises
+    :class:`WebLoginTransientError` so the caller retries the SAME token within its own
+    deadline. Any other Telethon error propagates as a genuine failure.
     """
-    confirmer = await get_client(account_id)
     try:
+        confirmer = await get_client(account_id)
         await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
     except _ROTATION_ERRORS:
         return False
+    except FloodWaitError as exc:
+        if exc.seconds > _MAX_FLOOD_WAIT_SECONDS:
+            raise
+        raise WebLoginTransientError(float(exc.seconds)) from exc
+    except _TRANSIENT_ERRORS as exc:
+        raise WebLoginTransientError from exc
     return True
