@@ -514,3 +514,27 @@ async def test_reset_session_wipes_session(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert account.status == "unauthorized"
     assert captured["wipe"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_typed_password_is_not_written_over_a_2fa_change_made_during_the_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A change that applied between the read and the write makes the typed one stale."""
+    await _account_with_phone("acc")
+    await set_account_twofa_password("acc", "old-pw")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive", typed_password_accepted=True)
+    inner = login_service.submit_phone_code
+
+    async def _submit_then_change(request: PhoneCodeSubmit) -> TelegramSessionCheckResult:
+        result = await inner(request)
+        await set_account_twofa_pending("acc", "changed-meanwhile")
+        return result
+
+    monkeypatch.setattr(login_service, "submit_phone_code", _submit_then_change)
+    await login_service.request_login_code("acc")
+
+    await login_service.submit_login_code("acc", "11111", password="typed-pw")
+
+    assert await fetch_account_twofa_pair("acc") == ("old-pw", "changed-meanwhile")

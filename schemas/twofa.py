@@ -50,6 +50,7 @@ _MAX_EMAIL_CODE_LENGTH = 32
 TwoFactorRefusalCode = Literal[
     # Raised by the gateway's Telethon-error ladder (``_twofa._TWOFA_ERROR_CODES``).
     "twofa_current_password_invalid",
+    "twofa_srp_stale",
     "twofa_settings_invalid",
     "twofa_email_code_invalid",
     "twofa_email_hash_expired",

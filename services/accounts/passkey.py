@@ -155,20 +155,13 @@ async def create_account_passkey(account_id: str) -> AccountPasskeyView:
             created_at=datetime.now(UTC).isoformat(),
         )
         # Telegram took a while; the account may have been removed meanwhile, and a row
-        # for it would be an orphan nothing ever cleans.
+        # for it would be an orphan nothing ever cleans. The vault key is KEPT: Telegram may
+        # already list the passkey, and account deletion keeps the key too.
         if await fetch_account(account_id) is None:
-            await _forget_orphan_key(key_name)
             raise AccountNotFoundError(account_id)
         await save_account_passkey(passkey)
     await log_event("INFO", "passkey_created", account_id=account_id)
     return _view(account_id, passkey)
-
-
-async def _forget_orphan_key(key_name: str) -> None:
-    try:
-        await delete_signing_key(key_name)
-    except PasskeyVaultError:
-        return  # best effort: the account is gone either way
 
 
 async def check_account_passkey(account_id: str) -> AccountPasskeyCheck:

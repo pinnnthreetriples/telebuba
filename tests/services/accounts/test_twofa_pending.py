@@ -197,7 +197,9 @@ async def test_a_candidate_nothing_can_verify_stays_until_the_state_is_known(
 
     monkeypatch.setattr("services.accounts.twofa.execute", _unavailable)
 
-    assert await authorising_twofa_password("acc-unknown") == STORED
+    assert (
+        await authorising_twofa_password("acc-unknown") is None
+    )  # no guess is typed while unsettled
     assert await fetch_account_twofa_pair("acc-unknown") == (STORED, "maybe")
 
 

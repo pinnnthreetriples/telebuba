@@ -28,14 +28,12 @@ from telethon.tl.functions.auth import FinishPasskeyLoginRequest, InitPasskeyLog
 from telethon.tl.types import DataJSON, InputPasskeyCredentialPublicKey, InputPasskeyResponseLogin
 
 from core.passkey_vault import PasskeyVaultError, sign_with_key
-from core.repositories._accounts_twofa import (
-    confirm_twofa_password_used,
-    twofa_password_candidates,
-)
+from core.repositories._accounts_twofa import twofa_password_candidates
 from core.telegram_client._auth import _alive_result, _auth_lock, _error_result, _status_result
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
 from core.telegram_client._passkey import PasskeyGatewayError, public_key_options
 from core.telegram_client._pool import removing_client
+from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from core.webauthn_passkey import build_assertion
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -125,15 +123,11 @@ async def _second_factor(client: TelegramClient, passkey: StoredPasskey) -> None
     if not candidates:
         msg = "passkey_twofa_missing"
         raise PasskeyGatewayError(msg)
-    for password in candidates:
-        try:
-            await client.sign_in(password=password)
-        except errors.PasswordHashInvalidError:
-            continue
-        await confirm_twofa_password_used(passkey.account_id, password)
-        return
-    msg = "passkey_twofa_invalid"
-    raise PasskeyGatewayError(msg)
+    try:
+        await sign_in_with_passwords(client, passkey.account_id, candidates)
+    except errors.PasswordHashInvalidError as exc:
+        msg = "passkey_twofa_invalid"
+        raise PasskeyGatewayError(msg) from exc
 
 
 async def _backoff(seconds: float) -> None:

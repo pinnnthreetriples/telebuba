@@ -207,3 +207,46 @@ async def test_a_deadline_with_no_authorization_stays_a_network_error(
     result = await asyncio.wait_for(submit_phone_code(_SUBMIT), timeout=5)
 
     assert result.status == "network_error"
+
+
+class _PasswordLandsThenSlow(HangingClient):
+    """2FA account: the code asks for a password, ``reject`` ones are refused, the next hangs.
+
+    The hang is after Telegram applied the sign-in: ``authorized`` says so to the probe.
+    """
+
+    def __init__(self, *, reject: tuple[str, ...]) -> None:
+        super().__init__(hang="none", authorized=True)
+        self.needs_2fa = True
+        self.reject = reject
+
+    async def sign_in(self, **kwargs: object):
+        password = kwargs.get("password")
+        if password in self.reject:
+            raise auth_module.errors.PasswordHashInvalidError(request=None)
+        if password is not None:
+            await asyncio.Event().wait()
+        return await super().sign_in(**kwargs)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reject", "expected"),
+    [
+        pytest.param((), True, id="only-the-typed-one-was-tried"),
+        pytest.param(("typed",), False, id="a-fallback-was-being-tried"),
+    ],
+)
+async def test_a_deadline_during_the_password_step_reports_which_password_was_in_flight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reject: tuple[str, ...],
+    expected: bool,  # noqa: FBT001
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    _patch_client(monkeypatch, tmp_path, _PasswordLandsThenSlow(reject=reject))
+    submit = _SUBMIT.model_copy(update={"password": "typed", "fallback_passwords": ["fallback"]})
+
+    result = await asyncio.wait_for(submit_phone_code(submit), timeout=5)
+
+    assert (result.status, result.typed_password_accepted) == ("alive", expected)

@@ -117,11 +117,10 @@ async def _settle_against_live_password(
             if accepted:
                 await stage_pending(account_id, None)
             return
-    accepted = await verify(pending)
-    if accepted:
+    if await verify(pending):
         await promote_pending(account_id, pending)
-    elif accepted is False and current is None:
-        await stage_pending(account_id, None)
+    # A refusal is never a reason to drop ``pending``: with no ``current`` it is the only
+    # copy of whatever Telegram holds, and a verdict can be wrong (a stale challenge).
 
 
 async def resolve_current(

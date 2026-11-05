@@ -382,7 +382,7 @@ async def test_the_check_needs_no_vault(wire: dict[str, object]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_account_removed_during_creation_gets_no_row_and_loses_the_vault_key(
+async def test_an_account_removed_during_creation_gets_no_row_but_keeps_the_vault_key(
     wire: dict[str, object],
 ) -> None:
     wire["gone_after_register"] = True
@@ -394,8 +394,7 @@ async def test_an_account_removed_during_creation_gets_no_row_and_loses_the_vaul
     assert wire["log"] == [
         "vault_create:tb-acc-1",
         "register:acc-1:PEM",
-        "vault_delete:tb-acc-1",
-    ]
+    ]  # Telegram may already list the passkey: the key is the only way to ever use it
 
 
 @pytest.mark.asyncio

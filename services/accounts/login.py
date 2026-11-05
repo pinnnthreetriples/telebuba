@@ -107,15 +107,27 @@ async def _start_inbox_in_background(account_id: str) -> None:
         )
 
 
-async def _remember_verified_password(account_id: str, password: str) -> None:
+async def _remember_verified_password(
+    account_id: str, password: str, before: tuple[str | None, str | None]
+) -> None:
     """Keep a 2FA password Telegram just accepted: the second device and the app need it.
 
     Under ``twofa_lock`` and never clearing a pending candidate: only the current column is
     set, and a typed password equal to the pending one is promoted by compare-and-swap.
+    ``before`` is the pair read before the sign-in: a 2FA change that applied in between
+    makes the typed password possibly stale, so nothing is written (logged, skipped).
     """
     try:
         async with twofa_lock(account_id):
             current, pending = await fetch_account_twofa_pair(account_id)
+            if (current, pending) != before:
+                await log_event(
+                    "WARNING",
+                    "account_twofa_store_failed",
+                    account_id=account_id,
+                    extra={"skipped": "columns_changed"},
+                )
+                return
             if pending == password:
                 stored = await promote_account_twofa_pending(account_id, password)
             else:
@@ -229,6 +241,7 @@ async def submit_login_code(
     # 2FA the operator did not retype: the stored password covers Telegram asking for it.
     # The first candidate rides as ``password``; core tries the rest when Telegram refuses it.
     candidates = [password] if password else await twofa_password_candidates(account_id)
+    before = await fetch_account_twofa_pair(account_id)
     result = await submit_phone_code(
         PhoneCodeSubmit(
             account_id=account_id,
@@ -249,7 +262,7 @@ async def submit_login_code(
     # Only a password Telegram actually asked for and accepted: the field is always
     # visible, and a wrong string must never replace the stored one.
     if password and result.typed_password_accepted:
-        await _remember_verified_password(account_id, password)
+        await _remember_verified_password(account_id, password, before)
     task = asyncio.create_task(_start_inbox_in_background(saved.account_id))
     _INBOX_STARTS.add(task)
     task.add_done_callback(_INBOX_STARTS.discard)

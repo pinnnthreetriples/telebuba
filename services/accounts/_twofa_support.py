@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from core.db import fetch_account_twofa_pair
-from services.accounts._result import AccountActionError
+from schemas.twofa import TwoFactorRefusalCode
+from services.accounts._result import AccountActionError, result_code
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -129,6 +130,18 @@ async def locked_authorising(
         return current
     async with twofa_lock(account_id):
         return await unlocked(account_id)
+
+
+_ANSWERED_REFUSALS = frozenset(get_args(TwoFactorRefusalCode))
+
+
+def answered_refusal(result: ActionResult) -> bool:
+    """Telegram ANSWERED the write with a refusal, so it provably applied nothing.
+
+    Any other failure (proxy error, lost auth key, generic ``failed``) may have broken a
+    request Telegram already applied, so the caller must keep its candidate.
+    """
+    return result.status != "ok" and result_code(result) in _ANSWERED_REFUSALS
 
 
 def require_proxy(account: AccountRead) -> None:

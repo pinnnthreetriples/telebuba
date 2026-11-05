@@ -13,7 +13,7 @@ from telethon.tl.functions.auth import FinishPasskeyLoginRequest, InitPasskeyLog
 from telethon.tl.types import InputPasskeyCredentialPublicKey, InputPasskeyResponseLogin
 
 from core.passkey_vault import PasskeyVaultError
-from core.telegram_client import _passkey_login
+from core.telegram_client import _passkey_login, _twofa_candidates
 from core.telegram_client._passkey_login import login_with_passkey
 from schemas.passkey import StoredPasskey
 
@@ -139,7 +139,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     monkeypatch.setattr(_passkey_login, "removing_client", _removing)
     monkeypatch.setattr(_passkey_login, "sign_with_key", _sign)
     monkeypatch.setattr(_passkey_login, "twofa_password_candidates", _candidates)
-    monkeypatch.setattr(_passkey_login, "confirm_twofa_password_used", _confirm)
+    monkeypatch.setattr(_twofa_candidates, "confirm_twofa_password_used", _confirm)
     monkeypatch.setattr(_passkey_login, "_backoff", _backoff)
     return state
 
