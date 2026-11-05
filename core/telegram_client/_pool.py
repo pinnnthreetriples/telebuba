@@ -45,6 +45,7 @@ twin and refuses rebuilds for the duration.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 from contextlib import asynccontextmanager
@@ -386,6 +387,10 @@ async def _safe_disconnect(client: TelegramClient) -> None:
         if inspect.isawaitable(result):
             await asyncio.wait_for(result, _DISCONNECT_TIMEOUT_S)
     except Exception as exc:  # disconnect-on-error path
+        # A timed-out disconnect leaves the SQLite handle open: close it ourselves.
+        with contextlib.suppress(Exception):
+            if client.session is not None:
+                client.session.close()
         # Don't crash shutdown on a half-dead client; just record it.
         logger.exception("pool disconnect failed")
         await log_event(

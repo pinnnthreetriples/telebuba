@@ -27,7 +27,7 @@ import inspect
 import logging
 import re
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sentry_sdk
 from loguru import logger
@@ -54,23 +54,82 @@ _state = _State()
 # ``user:pass@`` authority is masked by shape, and every proxy password the process has
 # handed to a client is masked by value (a password with odd characters can defeat the
 # shape).
-_CREDENTIALS_IN_URL = re.compile(r"(?<![\w])[^\s/@:'\"<>]+:[^\s/@'\"<>]+@")
+# Segment lengths are capped so a long colon-heavy line with no ``@`` stays linear.
+_CREDENTIALS_IN_URL = re.compile(r"(?<![\w])[^\s/@:'\"<>]{1,256}:[^\s/@'\"<>]{1,256}@")
 _MASK = "***@"
-_SECRETS: set[str] = set()
+_MIN_SECRET_LEN = 6  # shorter values would mangle ordinary text
+_MAX_SECRET_OWNERS = 256
+# owner -> the values it registered; re-registering an owner (proxy rotation) replaces
+# its old values, and the oldest owner is dropped past the cap.
+_SECRETS: dict[str, tuple[str, ...]] = {}
+
+
+def register_log_secrets(owner: str, *values: str | None) -> None:
+    """Mask ``owner``'s ``values`` (proxy username/password) in logs, replacing its earlier ones."""
+    kept = tuple(v for v in values if v and len(v) >= _MIN_SECRET_LEN)
+    _SECRETS.pop(owner, None)
+    if kept:
+        _SECRETS[owner] = kept
+    while len(_SECRETS) > _MAX_SECRET_OWNERS:
+        del _SECRETS[next(iter(_SECRETS))]
 
 
 def register_log_secret(value: str | None) -> None:
     """Mask ``value`` (e.g. a proxy password) wherever it appears in a bridged stdlib log line."""
-    if value and len(value) >= 4:  # noqa: PLR2004 - shorter would mangle ordinary text
-        _SECRETS.add(value)
+    if value:
+        register_log_secrets(value, value)
 
 
 def redact_secrets(text: str) -> str:
     """``text`` with ``user:pass@`` authorities and registered secrets masked."""
     text = _CREDENTIALS_IN_URL.sub(_MASK, text)
-    for secret in _SECRETS:
-        text = text.replace(secret, "***")
+    for values in list(_SECRETS.values()):
+        for secret in values:
+            text = text.replace(secret, "***")
     return text
+
+
+def _redact_deep(value: object) -> object:
+    if isinstance(value, str):
+        return redact_secrets(value)
+    if isinstance(value, dict):
+        return {k: _redact_deep(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_deep(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_deep(v) for v in value)
+    return value
+
+
+_EVENT_TEXT_KEYS = ("message", "logentry", "exception", "breadcrumbs", "extra")
+
+
+def _sentry_before_send(event: Any, _hint: Any) -> Any:  # noqa: ANN401 - sentry's untyped dicts
+    """Redact proxy credentials from message, log entry, exception text and breadcrumbs."""
+    for key in _EVENT_TEXT_KEYS:
+        if key in event:
+            event[key] = _redact_deep(event[key])
+    return event
+
+
+def _sentry_before_breadcrumb(crumb: Any, _hint: Any) -> Any:  # noqa: ANN401
+    return _redact_deep(crumb)
+
+
+class _RedactConsole(logging.Filter):
+    """Redacts a record's text before the stderr handler formats it."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = redact_secrets(record.getMessage())
+        record.args = None
+        if record.exc_info:
+            record.exc_text = redact_secrets(
+                "".join(traceback.format_exception(*record.exc_info)).rstrip("\n"),
+            )
+        return True
+
+
+_console_filter = _RedactConsole()
 
 
 class _StdlibToLoguru(logging.Handler):
@@ -138,6 +197,7 @@ def setup_logging() -> None:
     # is untouched and they are not echoed here.
     root = logging.getLogger()
     if logging.lastResort is not None:  # typed optional — ``None`` only if disabled.
+        logging.lastResort.addFilter(_console_filter)
         root.addHandler(logging.lastResort)
     root.addHandler(_bridge)
 
@@ -156,6 +216,8 @@ def setup_logging() -> None:
             # bare string locals, which no field-level ``repr=False`` can reach. This
             # is the only switch that covers third-party frames.
             include_local_variables=False,
+            before_send=_sentry_before_send,
+            before_breadcrumb=_sentry_before_breadcrumb,
         )
         _state.sentry_active = True
     else:
@@ -170,6 +232,7 @@ def reset_logging_for_tests() -> None:
     # Paired with ``setup_logging``: the fixtures reset-then-setup per test, so leaving
     # these attached would stack a duplicate pair on every one of them.
     if logging.lastResort is not None:
+        logging.lastResort.removeFilter(_console_filter)
         root.removeHandler(logging.lastResort)
     root.removeHandler(_bridge)
     logger.remove()
