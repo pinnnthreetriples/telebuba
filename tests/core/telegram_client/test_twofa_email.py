@@ -536,6 +536,7 @@ def test_every_refusal_code_is_a_member_of_the_enumerated_vocabulary() -> None:
             "core/telegram_client/_twofa_email.py",
             "core/telegram_client/_twofa_srp.py",
             "services/accounts/twofa.py",
+            "services/accounts/_twofa_support.py",
             "services/accounts/_twofa_email.py",
             "api/v1/_accounts_twofa.py",
         )
