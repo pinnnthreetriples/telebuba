@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core._schema_own_authorizations import _account_own_authorizations
@@ -40,6 +40,18 @@ async def save_own_authorizations(
     await asyncio.to_thread(
         _save_own_authorizations, account_id, list(dict.fromkeys(hashes)), kind, recorded_at
     )
+
+
+def _prune_own_authorizations(account_id: str, listed: list[str]) -> None:
+    table = _account_own_authorizations
+    statement = delete(table).where(table.c.account_id == account_id, table.c.hash.not_in(listed))
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def prune_own_authorizations(account_id: str, listed: Iterable[str]) -> None:
+    """Forget recorded rows whose authorization is no longer in ``listed`` (it was ended)."""
+    await asyncio.to_thread(_prune_own_authorizations, account_id, list(dict.fromkeys(listed)))
 
 
 def _fetch_own_authorizations(account_id: str) -> dict[str, str]:

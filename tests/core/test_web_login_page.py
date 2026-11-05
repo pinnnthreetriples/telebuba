@@ -9,10 +9,12 @@ submitted with Enter.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
 from core.web_login import _page
+from core.web_login._cdp import CdpError
 from core.web_login._page import (
     latest_login_token,
     page_state,
@@ -201,3 +203,33 @@ def test_the_password_field_probe_targets_a_visible_password_input() -> None:
     assert "input[type=password]" in probe
     assert "querySelectorAll('input')" not in probe
     assert "height>0" in probe  # the hidden decoy input has zero height
+
+
+@pytest.mark.asyncio
+async def test_the_submit_callback_runs_before_enter_even_when_enter_fails() -> None:
+    """The caller must count the window as submitted BEFORE the real submit leaves."""
+    session = RecordingSession({_page._INPUT_RECT_EXPR: '{"x":100,"y":200}'})
+    enters_when_marked: list[int] = []
+
+    def _enters() -> int:
+        return sum(
+            1
+            for m, p, _s in session.commands
+            if m == "Input.dispatchKeyEvent" and p.get("key") == "Enter"
+        )
+
+    real_send = session.send_command
+
+    async def _failing(method: str, params: Any = None, **kwargs: Any) -> dict:
+        if method == "Input.dispatchKeyEvent" and (params or {}).get("key") == "Enter":
+            msg = "socket closed"
+            raise CdpError(msg)
+        return await real_send(method, params, **kwargs)
+
+    session.send_command = _failing  # ty: ignore[invalid-assignment]
+    with pytest.raises(CdpError):
+        await type_2fa_password(
+            window_for(session), "pw1", on_submit=lambda: enters_when_marked.append(_enters())
+        )
+
+    assert enters_when_marked == [0]

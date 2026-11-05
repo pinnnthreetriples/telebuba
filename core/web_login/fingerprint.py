@@ -40,9 +40,10 @@ from typing import TYPE_CHECKING
 from core.web_login._cdp import CdpError
 from core.web_login._countries import COUNTRY
 from core.web_login._devices import BY_NAME, CATALOGUE, _Device
-from core.web_login._scripts import PAGE_TEMPLATE, WORKER_TEMPLATE, fill
+from core.web_login._scripts import PAGE_TEMPLATE, WORKER_TEMPLATE, fill, once
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from core.web_login._cdp import CdpSession
@@ -304,20 +305,23 @@ def ua_override_params(fp: Fingerprint) -> dict[str, object]:
 
 def _page_init_script(fp: Fingerprint) -> str:
     device = fp.device
-    return fill(
-        PAGE_TEMPLATE,
-        {
-            "hardwareConcurrency": device.hardware_concurrency,
-            "deviceMemory": device.device_memory,
-            "screenW": device.screen_w,
-            "screenH": device.screen_h,
-            "availW": device.screen_w,
-            "availH": device.avail_height,
-            "availTop": device.avail_top,
-            "dpr": device.device_pixel_ratio,
-            "webglVendor": device.webgl_vendor,
-            "webglRenderer": device.webgl_renderer,
-        },
+    return once(
+        "__tbFpInstalled",
+        fill(
+            PAGE_TEMPLATE,
+            {
+                "hardwareConcurrency": device.hardware_concurrency,
+                "deviceMemory": device.device_memory,
+                "screenW": device.screen_w,
+                "screenH": device.screen_h,
+                "availW": device.screen_w,
+                "availH": device.avail_height,
+                "availTop": device.avail_top,
+                "dpr": device.device_pixel_ratio,
+                "webglVendor": device.webgl_vendor,
+                "webglRenderer": device.webgl_renderer,
+            },
+        ),
     )
 
 
@@ -343,6 +347,42 @@ def worker_init_script(fp: Fingerprint) -> str:
     )
 
 
+def page_fingerprint_steps(
+    session: CdpSession, fp: Fingerprint, *, session_id: str
+) -> list[Callable[[], Awaitable[object]]]:
+    """The commands that dress one page, in order, each one a separate retryable step.
+
+    Kept apart so a caller that retries a timed-out dressing can resume after the last
+    step that was acknowledged instead of replaying the whole list. Every step but the
+    document-start script is idempotent as a CDP command; the script is guarded in the
+    page itself (:func:`core.web_login._scripts.once`).
+    """
+
+    async def _locale() -> None:
+        try:
+            await session.send_command(
+                "Emulation.setLocaleOverride", {"locale": fp.locale}, session_id=session_id
+            )
+        except CdpError as exc:
+            raise LocaleRejectedError(fp.locale) from exc
+
+    def _send(
+        method: str, params: dict[str, object] | None = None
+    ) -> Callable[[], Awaitable[object]]:
+        async def _step() -> object:
+            return await session.send_command(method, params, session_id=session_id)
+
+        return _step
+
+    return [
+        _send("Emulation.setUserAgentOverride", ua_override_params(fp)),
+        _send("Emulation.setTimezoneOverride", {"timezoneId": fp.timezone}),
+        _locale,
+        _send("Page.enable"),
+        _send("Page.addScriptToEvaluateOnNewDocument", {"source": _page_init_script(fp)}),
+    ]
+
+
 async def apply_page_fingerprint(
     session: CdpSession,
     fp: Fingerprint,
@@ -355,21 +395,5 @@ async def apply_page_fingerprint(
     document-start script hardening the rest of the page surface. ``Page.enable``
     first: without the domain enabled the document-start script is never installed.
     """
-    await session.send_command(
-        "Emulation.setUserAgentOverride", ua_override_params(fp), session_id=session_id
-    )
-    await session.send_command(
-        "Emulation.setTimezoneOverride", {"timezoneId": fp.timezone}, session_id=session_id
-    )
-    try:
-        await session.send_command(
-            "Emulation.setLocaleOverride", {"locale": fp.locale}, session_id=session_id
-        )
-    except CdpError as exc:
-        raise LocaleRejectedError(fp.locale) from exc
-    await session.send_command("Page.enable", session_id=session_id)
-    await session.send_command(
-        "Page.addScriptToEvaluateOnNewDocument",
-        {"source": _page_init_script(fp)},
-        session_id=session_id,
-    )
+    for step in page_fingerprint_steps(session, fp, session_id=session_id):
+        await step()

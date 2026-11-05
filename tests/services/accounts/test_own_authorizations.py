@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import pytest_asyncio
 
 from core.config import settings
 from core.db import create_account
-from core.repositories.account_own_authorizations import fetch_own_authorizations
+from core.repositories.account_own_authorizations import (
+    fetch_own_authorizations,
+    save_own_authorizations,
+)
 from core.repositories.account_rekeys import save_rekey
 from core.repositories.session_audits import fetch_session_audit
 from core.telegram_client import SessionAuditGatewayError
@@ -97,53 +101,126 @@ async def wire(monkeypatch: pytest.MonkeyPatch) -> _Wire:
     return state
 
 
+class _Window:
+    """Weak-referenceable stand-in for a ``WebWindow`` (the baseline is keyed by it)."""
+
+
+def _window() -> Any:
+    return _Window()
+
+
+async def _record(window: Any, **kw: Any) -> int:
+    return await svc.record_own_web_login(
+        "acc-1", window, since=kw.get("since", _LOGIN), seen_at=kw.get("seen_at", _LOGIN)
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("wire")
-async def test_only_the_authorization_created_by_the_login_is_recorded() -> None:
-    assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 1
+async def test_only_the_authorization_new_since_the_baseline_is_recorded(wire: _Wire) -> None:
+    window: Any = _Window()
+    wire.sessions = wire.sessions[:1] + wire.sessions[2:]  # "3" listed at launch
+    assert await svc.remember_login_baseline("acc-1", window) is True
+    wire.sessions.append(_session("2", created=_LOGIN + timedelta(seconds=5)))
+
+    assert await _record(window) == 1
 
     assert await fetch_own_authorizations("acc-1") == {"2": "web"}
 
 
 @pytest.mark.asyncio
+async def test_a_second_web_login_in_the_window_records_nothing(wire: _Wire) -> None:
+    """A seller/thief signing in to Web at the same time must never become ours."""
+    window: Any = _Window()
+    wire.sessions = wire.sessions[:1]
+    await svc.remember_login_baseline("acc-1", window)
+    wire.sessions.append(_session("2", created=_LOGIN + timedelta(seconds=5)))
+    wire.sessions.append(_session("9", created=_LOGIN + timedelta(seconds=6)))
+
+    assert await _record(window) == 0
+
+    assert await fetch_own_authorizations("acc-1") == {}
+
+
+@pytest.mark.asyncio
 async def test_a_desktop_or_mobile_app_in_the_same_window_is_never_ours(wire: _Wire) -> None:
-    wire.sessions.append(
-        _session("4", created=_LOGIN + timedelta(seconds=6), app="Telegram Desktop")
-    )
-    wire.sessions.append(_session("5", created=_LOGIN + timedelta(seconds=7), app="Telegram iOS"))
-    wire.sessions.append(_session("6", created=_LOGIN + timedelta(seconds=8), app="TELEGRAM WEBK"))
+    window: Any = _Window()
+    wire.sessions = wire.sessions[:1]
+    await svc.remember_login_baseline("acc-1", window)
+    wire.sessions.append(_session("2", created=_LOGIN, app="Telegram Web"))
+    wire.sessions.append(_session("4", created=_LOGIN, app="Telegram Desktop"))
+    wire.sessions.append(_session("5", created=_LOGIN, app="Telegram iOS"))
 
-    assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 2
+    assert await _record(window) == 1
 
-    assert await fetch_own_authorizations("acc-1") == {"2": "web", "6": "web"}
+    assert await fetch_own_authorizations("acc-1") == {"2": "web"}
+
+
+@pytest.mark.asyncio
+async def test_without_a_baseline_the_time_window_still_needs_exactly_one(wire: _Wire) -> None:
+    window: Any = _Window()  # no baseline taken
+
+    # "2" is inside the window, "3" is two days older: one candidate.
+    assert await _record(window) == 1
+    assert set(await fetch_own_authorizations("acc-1")) == {"2"}
+
+    wire.sessions.append(_session("7", created=_LOGIN + timedelta(seconds=9)))
+    wire.sessions[1] = _session("8", created=_LOGIN + timedelta(seconds=4))
+    assert await _record(_Window()) == 0  # "7" and "8" both fit: ambiguous
+
+
+@pytest.mark.asyncio
+async def test_the_time_window_is_bounded_above_by_the_moment_logged_in_was_seen(
+    wire: _Wire,
+) -> None:
+    skew = settings.session_audit.own_login_skew_seconds
+    wire.sessions[1] = _session("2", created=_LOGIN + timedelta(seconds=skew + 60))
+
+    assert await _record(_Window()) == 0
 
 
 @pytest.mark.asyncio
 async def test_the_skew_lets_a_slightly_earlier_authorization_in(wire: _Wire) -> None:
     skew = settings.session_audit.own_login_skew_seconds
-    wire.sessions[2] = _session("3", created=_LOGIN - timedelta(seconds=skew - 1))
+    wire.sessions = wire.sessions[:1]
+    wire.sessions.append(_session("3", created=_LOGIN - timedelta(seconds=skew - 1)))
 
-    assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 2
-    assert set(await fetch_own_authorizations("acc-1")) == {"2", "3"}
+    assert await _record(_Window()) == 1
+    assert set(await fetch_own_authorizations("acc-1")) == {"3"}
 
 
 @pytest.mark.asyncio
-async def test_recording_twice_counts_only_what_is_new(wire: _Wire) -> None:
-    await svc.record_own_web_authorizations("acc-1", _LOGIN)
+async def test_a_login_that_showed_nothing_new_keeps_its_baseline(wire: _Wire) -> None:
+    window: Any = _Window()
+    await svc.remember_login_baseline("acc-1", window)
 
-    assert await svc.record_own_web_authorizations("acc-1", _LOGIN) == 0
-    assert wire.seen_own[-1] == {"2": "web"}
+    assert await _record(window) == 0
+    wire.sessions.append(_session("9", created=_LOGIN))
+    assert await _record(window) == 1  # the next drive of the same window still has it
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_baseline_is_not_fatal(wire: _Wire) -> None:
+    wire.failure = SessionAuditGatewayError("session_dead")
+
+    assert await svc.remember_login_baseline("acc-1", _window()) is False
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("wire")
-async def test_the_saved_snapshot_stops_counting_the_recorded_login_as_foreign() -> None:
+async def test_the_saved_snapshot_stops_counting_the_recorded_login_as_foreign(
+    wire: _Wire,
+) -> None:
+    window: Any = _Window()
+    wire.sessions = [wire.sessions[0], wire.sessions[2]]
+    await svc.remember_login_baseline("acc-1", window)
+    wire.sessions.insert(1, _session("2", created=_LOGIN + timedelta(seconds=5)))
     await audit_svc.audit_account_sessions("acc-1")
     before = await fetch_session_audit("acc-1")
     assert before is not None
     assert before.foreign_count == 2
 
-    await svc.record_own_web_authorizations("acc-1", _LOGIN)
+    await _record(window)
 
     after = await fetch_session_audit("acc-1")
     assert after is not None
@@ -154,11 +231,21 @@ async def test_the_saved_snapshot_stops_counting_the_recorded_login_as_foreign()
 
 
 @pytest.mark.asyncio
+async def test_an_audit_read_forgets_own_rows_that_are_no_longer_listed(wire: _Wire) -> None:
+    await save_own_authorizations("acc-1", ["2", "gone"], kind="web", recorded_at="t")
+
+    await audit_svc.audit_account_sessions("acc-1")
+
+    assert await fetch_own_authorizations("acc-1") == {"2": "web"}
+    assert wire.sessions  # the listing was not empty
+
+
+@pytest.mark.asyncio
 async def test_an_unreadable_list_is_the_gateways_code(wire: _Wire) -> None:
     wire.failure = SessionAuditGatewayError("session_dead")
 
     with pytest.raises(AccountActionError) as refused:
-        await svc.record_own_web_authorizations("acc-1", _LOGIN)
+        await _record(_Window())
 
     assert refused.value.code == "session_dead"
     assert await fetch_own_authorizations("acc-1") == {}
@@ -174,11 +261,18 @@ def test_a_key_older_than_the_import_is_flagged_as_the_sellers() -> None:
     assert [s.key_predates_import for s in flagged] == [False, True, False]
 
 
-def test_a_rekeyed_account_is_not_flagged() -> None:
+def test_a_seller_key_older_than_the_rekey_is_still_flagged_after_it() -> None:
     sellers = _session("2", created=_IMPORTED - timedelta(days=30), ours=True)
     rekey = StoredRekey(account_id="acc-1", old_hash="9", rekeyed_at=_LOGIN.isoformat())
 
-    assert flag_seller_keys([sellers], _IMPORTED.isoformat(), rekey)[0].key_predates_import is False
+    assert flag_seller_keys([sellers], _IMPORTED.isoformat(), rekey)[0].key_predates_import is True
+
+
+def test_the_key_a_rekey_made_is_not_flagged() -> None:
+    made = _session("2", created=_IMPORTED + timedelta(days=2), ours=True)
+    rekey = StoredRekey(account_id="acc-1", old_hash="9", rekeyed_at=_LOGIN.isoformat())
+
+    assert flag_seller_keys([made], _IMPORTED.isoformat(), rekey)[0].key_predates_import is False
 
 
 @pytest.mark.asyncio
@@ -190,4 +284,8 @@ async def test_the_audit_saves_the_seller_key_flag() -> None:
 
     await save_rekey(StoredRekey(account_id="acc-1", old_hash="9", rekeyed_at=_LOGIN.isoformat()))
     again = await audit_svc.audit_account_sessions("acc-1")
-    assert [s.key_predates_import for s in again.sessions] == [False, False, False]
+    assert [s.key_predates_import for s in again.sessions] == [
+        True,
+        False,
+        False,
+    ]  # still older than both

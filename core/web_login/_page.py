@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 from core.web_login._cdp import CdpError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from core.web_login.browser import WebWindow
 
 # In-page probes: read the captured tokens, and classify the visible page.
@@ -242,7 +244,9 @@ async def _type_into_field(window: WebWindow, point: dict[str, float], password:
         await asyncio.sleep(_KEY_GAP_SECONDS)
 
 
-async def type_2fa_password(window: WebWindow, password: str) -> bool:
+async def type_2fa_password(
+    window: WebWindow, password: str, *, on_submit: Callable[[], None] | None = None
+) -> bool:
     """Type the account's 2FA password into WebK's field and submit. Never logged.
 
     Waits for the field to hold still, real-mouse-clicks it to focus it (a JS focus leaves
@@ -251,6 +255,10 @@ async def type_2fa_password(window: WebWindow, password: str) -> bool:
     of characters — a dropped keystroke would otherwise send Telegram a wrong password, and
     a wrong submit is the one thing that costs an attempt. False when nothing was submitted
     (no field yet, or it never took the value), so the caller may simply try again.
+
+    ``on_submit`` runs synchronously right BEFORE Enter is dispatched: once it has run the
+    password may have reached Telegram however this call ends (a dropped socket, a
+    cancellation), so the caller counts the window as submitted and never types again.
     """
     point = await _settled_input_point(window)
     if point is None:
@@ -261,6 +269,8 @@ async def type_2fa_password(window: WebWindow, password: str) -> bool:
             break
     else:
         return False
+    if on_submit is not None:
+        on_submit()
     await _dispatch_key(window, {"type": "keyDown", **_ENTER_KEY})
     # The keyDown is the submit; a socket that drops before the keyUp changes nothing.
     with suppress(CdpError, OSError):

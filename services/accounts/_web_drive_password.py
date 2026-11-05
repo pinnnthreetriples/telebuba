@@ -90,16 +90,23 @@ class PasswordSubmitter:
             return
         self._trace.password_attempts += 1
         try:
-            sent = await type_2fa_password(self._window, self._password)
+            sent = await type_2fa_password(
+                self._window, self._password, on_submit=self._mark_submitted
+            )
         except (CdpError, OSError):
             # Dropped mid-typing: the field still holds a partial value, which the next
-            # attempt clears first. Enter is the last key, so nothing was submitted.
+            # attempt clears first. A drop AFTER Enter was dispatched has already marked
+            # the window (``_mark_submitted``), so it is never typed a second time.
             sent = False
-        if sent:
-            _submitted.add(self._window)
-            self._trace.typed_password = True
+        if sent or password_submitted(self._window):
+            self._mark_submitted()
             self._grace_ends = now + _PASSWORD_GRACE
             self._check_ends = now + _PASSWORD_CHECK_MAX
+
+    def _mark_submitted(self) -> None:
+        """Called before Enter goes out: from here on the password may be at Telegram."""
+        _submitted.add(self._window)
+        self._trace.typed_password = True
 
     async def _verdict(self, now: float) -> bool:
         """After a submission: leave on a visible wrong-password state, or when time is up."""
@@ -113,5 +120,6 @@ class PasswordSubmitter:
             outcome = "idle"
         self._trace.password_checking = outcome == "checking"
         if outcome == "error":
+            self._trace.password_rejected = True
             return True
         return now >= (self._check_ends if outcome == "checking" else self._grace_ends)
