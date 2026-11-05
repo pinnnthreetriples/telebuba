@@ -31,7 +31,11 @@ from schemas.telegram_actions_twofa import ManageTwoFactorEmail
 from schemas.twofa import AccountTwoFactorEmailPending
 from services.accounts._result import AccountActionError, raise_for_result
 from services.accounts.lifecycle import require_account
-from services.accounts.twofa import authorising_twofa_password, read_account_twofa, twofa_lock
+from services.accounts.twofa import (
+    authorising_twofa_password_unlocked,
+    read_account_twofa,
+    twofa_lock,
+)
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -100,7 +104,7 @@ async def set_account_twofa_email(
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
-        current = await authorising_twofa_password(account_id)
+        current = await authorising_twofa_password_unlocked(account_id)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
@@ -195,7 +199,7 @@ async def clear_account_twofa_email(account_id: str) -> AccountTwoFactorView:
     """
     await require_account(account_id)
     async with twofa_lock(account_id):
-        current = await authorising_twofa_password(account_id)
+        current = await authorising_twofa_password_unlocked(account_id)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 def _fast_deadline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
     monkeypatch.setattr(settings.telegram, "timeout_seconds", 0.05)
+    monkeypatch.setattr(settings.telegram, "signin_probe_timeout_seconds", 0.05)
     auth_module._AUTH_LOCKS.clear()
     yield
     auth_module._AUTH_LOCKS.clear()
@@ -32,9 +33,12 @@ def _fast_deadline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 class HangingClient(FakeAuthClient):
     """Telethon's ``_call`` awaits the response with no timeout: the RPC never returns."""
 
-    def __init__(self, *, hang: str, hang_disconnect: bool = False) -> None:
+    def __init__(
+        self, *, hang: str, hang_disconnect: bool = False, authorized: bool = False
+    ) -> None:
         super().__init__()
         self.hang = hang
+        self.authorized = authorized
         self.hang_disconnect = hang_disconnect
 
     async def connect(self) -> None:
@@ -55,6 +59,9 @@ class HangingClient(FakeAuthClient):
         if self.hang == "log_out":
             await asyncio.Event().wait()
         return await super().log_out()
+
+    async def is_user_authorized(self) -> bool:
+        return self.authorized
 
     async def disconnect(self) -> None:
         await super().disconnect()
@@ -160,3 +167,43 @@ async def test_logout_that_never_answers_still_ends_unauthorized(
     assert result.error_message == "TimeoutError"
     assert client.disconnected is True
     assert not auth_module._auth_lock("acc").locked()
+
+
+class _AcceptedThenSlow(HangingClient):
+    """Telegram accepted ``sign_in``; the answer to ``get_me`` outruns the deadline."""
+
+    def __init__(self) -> None:
+        super().__init__(hang="none", authorized=True)
+        self.slow = True
+
+    async def get_me(self):
+        if self.slow:
+            self.slow = False
+            await asyncio.Event().wait()
+        return await super().get_me()
+
+
+@pytest.mark.asyncio
+async def test_a_deadline_after_the_server_accepted_the_sign_in_is_still_alive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    _patch_client(monkeypatch, tmp_path, _AcceptedThenSlow())
+
+    result = await asyncio.wait_for(submit_phone_code(_SUBMIT), timeout=5)
+
+    assert (result.status, result.typed_password_accepted) == ("alive", False)
+
+
+@pytest.mark.asyncio
+async def test_a_deadline_with_no_authorization_stays_a_network_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    _patch_client(monkeypatch, tmp_path, HangingClient(hang="sign_in", authorized=False))
+
+    result = await asyncio.wait_for(submit_phone_code(_SUBMIT), timeout=5)
+
+    assert result.status == "network_error"

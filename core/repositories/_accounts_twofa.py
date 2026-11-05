@@ -143,16 +143,18 @@ async def set_account_twofa_pending(account_id: str, password: str | None) -> bo
     return await asyncio.to_thread(_set_twofa_pending, account_id, password)
 
 
-def _promote_twofa_pending(account_id: str) -> bool:
+def _promote_twofa_pending(account_id: str, password: str) -> bool:
+    # Compare-and-swap: the single UPDATE names the value being promoted, so a pending
+    # candidate that changed between the caller's read and this write is left alone.
     with _get_engine().begin() as connection:
         result = connection.execute(
             update(_accounts)
             .where(
                 _accounts.c.account_id == account_id,
-                _accounts.c.twofa_password_pending.is_not(None),
+                _accounts.c.twofa_password_pending == password,
             )
             .values(
-                twofa_password=_accounts.c.twofa_password_pending,
+                twofa_password=password,
                 twofa_password_pending=None,
                 twofa_pending_at=None,
                 updated_at=_now_iso(),
@@ -161,9 +163,33 @@ def _promote_twofa_pending(account_id: str) -> bool:
     return result.rowcount > 0
 
 
-async def promote_account_twofa_pending(account_id: str) -> bool:
-    """The pending candidate becomes the current password, atomically; ``False`` = none."""
-    return await asyncio.to_thread(_promote_twofa_pending, account_id)
+async def promote_account_twofa_pending(account_id: str, password: str) -> bool:
+    """``password`` becomes the current one IF it is still the pending one, atomically.
+
+    One conditional ``UPDATE ... WHERE twofa_password_pending = :password``; ``False``
+    when the pending candidate is absent or a different value.
+    """
+    return await asyncio.to_thread(_promote_twofa_pending, account_id, password)
+
+
+def _set_twofa_current_only(account_id: str, password: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(twofa_password=password, updated_at=_now_iso()),
+        )
+    return result.rowcount > 0
+
+
+async def set_account_twofa_current_only(account_id: str, password: str) -> bool:
+    """Store ``password`` as the current one WITHOUT touching a pending candidate.
+
+    For a password Telegram just accepted at sign-in: unlike
+    :func:`set_account_twofa_password` it never clears the staged candidate, which may
+    be the one in force.
+    """
+    return await asyncio.to_thread(_set_twofa_current_only, account_id, password)
 
 
 async def confirm_twofa_password_used(account_id: str, password: str) -> bool:
@@ -171,9 +197,7 @@ async def confirm_twofa_password_used(account_id: str, password: str) -> bool:
 
     Call after a successful 2FA sign-in so a candidate that turned out to be in force
     stops being "pending". A no-op (``False``) when ``password`` is the current one or
-    matches nothing.
+    matches nothing. The promotion is one compare-and-swap, so a pending value that
+    changed since the read is never promoted in its place.
     """
-    current, pending = await fetch_account_twofa_pair(account_id)
-    if pending is None or pending != password or current == password:
-        return False
-    return await promote_account_twofa_pending(account_id)
+    return await asyncio.to_thread(_promote_twofa_pending, account_id, password)

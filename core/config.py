@@ -76,6 +76,13 @@ class TelegramSettings(BaseSettings):
     # longer repeats the ladder on a transport failure, so a black-holing proxy
     # costs one ladder and this deadline ends the probe right after it.
     session_check_timeout_seconds: float = Field(default=75.0, gt=0)
+    # How long an unsettled 2FA candidate pair is left alone before Telegram is asked again
+    # which password is in force: each ask spends checkPassword attempts, and a pair that
+    # both candidates are refused on would otherwise burn them on every write or login.
+    settle_recheck_seconds: float = Field(default=120.0, ge=0)
+    # After a sign-in the server accepted but the deadline cut short, how long the
+    # authorization probe and the revoking logout each get.
+    signin_probe_timeout_seconds: float = Field(default=10.0, gt=0)
     # Telethon auto-sleeps and retries on a flood wait whose duration is at or
     # below this threshold; longer waits raise so we can handle them ourselves.
     # Default 0 = surface every flood event to our own state machine (no silent

@@ -40,3 +40,7 @@ class TelegramSessionCheckResult(BaseModel):
     error_type: str | None = None
     error_message: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)
+    # A phone-code sign-in only: Telegram asked for 2FA and accepted the password the
+    # operator TYPED (not a stored candidate). Non-secret; it is what lets the caller
+    # remember a typed password only when it is proven to be the account's.
+    typed_password_accepted: bool = False

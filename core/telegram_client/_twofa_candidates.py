@@ -25,8 +25,8 @@ __all__ = ["sign_in_with_passwords"]
 
 async def sign_in_with_passwords(
     client: TelegramClient, account_id: str, passwords: Sequence[str]
-) -> None:
-    """Finish a 2FA sign-in with the first of ``passwords`` Telegram accepts.
+) -> str:
+    """Finish a 2FA sign-in with the first of ``passwords`` Telegram accepts; return it.
 
     Raises the last ``PasswordHashInvalidError`` when every one is rejected, and any other
     error at once. ``passwords`` must not be empty.
@@ -39,7 +39,7 @@ async def sign_in_with_passwords(
             rejected = exc
             continue
         await confirm_twofa_password_used(account_id, password)
-        return
+        return password
     if rejected is None:
         msg = "no 2FA password to try"
         raise ValueError(msg)

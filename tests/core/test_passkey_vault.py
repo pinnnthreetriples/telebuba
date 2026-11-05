@@ -24,6 +24,7 @@ _TOKEN = "s.app-token-value"
 _BASE = "http://vault.test:8200/v1/transit"
 _PEM_V1 = "-----BEGIN PUBLIC KEY-----\nv1\n-----END PUBLIC KEY-----\n"
 _PEM_V2 = "-----BEGIN PUBLIC KEY-----\nv2\n-----END PUBLIC KEY-----\n"
+_GONE = httpx.Response(404, json={"errors": []})
 
 
 @pytest.fixture(autouse=True)
@@ -165,7 +166,9 @@ async def test_a_refusal_keeps_only_the_status_never_the_token() -> None:
 @pytest.mark.asyncio
 async def test_a_refusal_status_maps_to_an_actionable_code(status: int, code: str) -> None:
     with respx.mock:
-        respx.post(f"{_BASE}/sign/tb-acc/sha2-256").mock(return_value=httpx.Response(status))
+        respx.post(f"{_BASE}/sign/tb-acc/sha2-256").mock(
+            return_value=httpx.Response(status, json={"errors": []})
+        )
         with pytest.raises(PasskeyVaultError) as caught:
             await sign_with_key("tb-acc", b"payload")
     assert (caught.value.code, caught.value.detail) == (code, f"http_{status}")
@@ -174,11 +177,11 @@ async def test_a_refusal_status_maps_to_an_actionable_code(status: int, code: st
 @pytest.mark.asyncio
 async def test_deleting_a_key_that_is_already_gone_counts_as_deleted() -> None:
     with respx.mock:
-        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(404))
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=_GONE)
         await delete_signing_key("tb-acc")
     with respx.mock:
         respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=httpx.Response(200))
-        respx.delete(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(404))
+        respx.delete(f"{_BASE}/keys/tb-acc").mock(return_value=_GONE)
         await delete_signing_key("tb-acc")
 
 
@@ -198,7 +201,7 @@ async def test_key_existence_tells_gone_from_cannot_ask() -> None:
         respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(200, json=good))
         assert await signing_key_exists("tb-acc") is True
     with respx.mock:
-        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(404))
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=_GONE)
         assert await signing_key_exists("tb-acc") is False
     with respx.mock:
         respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=httpx.Response(503))
@@ -215,3 +218,46 @@ async def test_an_unreachable_vault_keeps_only_the_class_name() -> None:
             await sign_with_key("tb-acc", b"payload")
     assert caught.value.code == "passkey_vault_unreachable"
     assert caught.value.detail == "ConnectError"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(404, json={"errors": ["no handler for route 'transit/keys/tb-acc'"]}),
+        httpx.Response(404, text="<html>not here</html>"),
+        httpx.Response(404),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_404_from_a_wrong_mount_or_address_is_not_a_missing_key(
+    response: httpx.Response,
+) -> None:
+    """Only Vault's own missing-key answer means "gone": a wrong mount must not look like it."""
+    with respx.mock:
+        respx.get(f"{_BASE}/keys/tb-acc").mock(return_value=response)
+        with pytest.raises(PasskeyVaultError) as caught:
+            await signing_key_exists("tb-acc")
+    assert caught.value.code == "passkey_vault_rejected"
+    with respx.mock:
+        respx.post(f"{_BASE}/keys/tb-acc/config").mock(return_value=response)
+        with pytest.raises(PasskeyVaultError) as caught:
+            await delete_signing_key("tb-acc")
+    assert caught.value.code == "passkey_vault_rejected"
+
+
+@pytest.mark.asyncio
+async def test_a_non_json_200_is_a_vault_refusal_not_a_value_error() -> None:
+    with respx.mock:
+        respx.get(f"{_BASE}/keys/tb-acc").mock(
+            return_value=httpx.Response(200, text="<html>proxy login</html>")
+        )
+        with pytest.raises(PasskeyVaultError) as caught:
+            await signing_key_exists("tb-acc")
+    assert (caught.value.code, caught.value.detail) == ("passkey_vault_rejected", "not_json")
+    with respx.mock:
+        respx.post(f"{_BASE}/sign/tb-acc/sha2-256").mock(
+            return_value=httpx.Response(200, text="not json")
+        )
+        with pytest.raises(PasskeyVaultError) as caught:
+            await sign_with_key("tb-acc", b"payload")
+    assert caught.value.code == "passkey_vault_rejected"

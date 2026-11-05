@@ -254,14 +254,13 @@ async def test_a_lost_answer_over_a_failed_live_read_reports_unknown_not_kept(
 
 
 @pytest.mark.asyncio
-async def test_a_refused_change_restores_the_pending_candidate_an_earlier_write_left(
+async def test_a_change_over_an_unresolved_earlier_candidate_is_refused_and_keeps_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The refusal proves THIS candidate was not applied, not that the older one was not.
+    """An earlier unresolved write may have put its candidate on Telegram.
 
-    An earlier unresolved write may have put its candidate on Telegram; a refused
-    follow-up must put that pending value back instead of clearing it, or the one
-    password that may be in force is gone.
+    Staging a follow-up over it would lose that password the moment the follow-up's own
+    answer is lost, so the change is refused BEFORE anything is staged or sent.
     """
     await account_with_password("acc-restore")
     await set_account_twofa_pending("acc-restore", "older-candidate")
@@ -274,18 +273,12 @@ async def test_a_refused_change_restores_the_pending_candidate_an_earlier_write_
     monkeypatch.setattr("services.accounts.twofa.execute_read", _boom)
     patch_log(monkeypatch)
 
-    async def _refuse(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
-        return ActionResult(
-            status="failed",
-            action_type="set_twofa_password",
-            account_id=account_id,
-            error_type="TwoFactorGatewayError",
-            error_message="twofa_current_password_invalid",
-        )
+    async def _never(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        pytest.fail("nothing may be sent over an unsettled candidate")
 
-    monkeypatch.setattr("services.accounts.twofa.execute", _refuse)
+    monkeypatch.setattr("services.accounts.twofa.execute", _never)
 
-    with pytest.raises(AccountActionError, match="twofa_current_password_invalid"):
+    with pytest.raises(AccountActionError, match="twofa_pending_unsettled"):
         await set_account_twofa("acc-restore", AccountTwoFactorUpdateRequest())
 
     assert await fetch_account_twofa_pair("acc-restore") == (STORED, "older-candidate")
