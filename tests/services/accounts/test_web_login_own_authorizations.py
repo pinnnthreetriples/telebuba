@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 __all__ = ["fresh_registry", "relay"]
 
 
+@pytest.mark.usefixtures("relay")
 @pytest.mark.asyncio
 async def test_a_successful_login_is_recorded_as_ours_since_the_drive_began(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
