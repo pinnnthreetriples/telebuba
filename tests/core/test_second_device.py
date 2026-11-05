@@ -114,6 +114,8 @@ class _NewDevice:
         self.needs_password = behaviour.get("needs_password", False)
         self.me_id = behaviour.get("me_id", _USER_ID)
         self.disconnect_error = behaviour.get("disconnect_error")
+        # A dead proxy: SendCode is written and no answer ever comes back.
+        self.hang_send_code = behaviour.get("hang_send_code", False)
         # A code that reaches 777000 while the new client is still connecting.
         self.stale_on_connect = behaviour.get("stale_on_connect", False)
         self.calls: list[str] = []
@@ -133,6 +135,8 @@ class _NewDevice:
 
     async def send_code_request(self, phone: str) -> SimpleNamespace:
         self.calls.append(f"send_code:{phone}")
+        if self.hang_send_code:
+            await asyncio.Event().wait()
         if self.code_text is not None:
             self.primary.pending = self.code_text
         return SimpleNamespace(phone_code_hash="hash-1", type=SimpleNamespace(length=5))
@@ -261,6 +265,20 @@ async def test_no_new_code_times_out_and_keeps_nothing(monkeypatch: pytest.Monke
 
     assert result.code == "device_code_timeout"
     assert "log_out" not in made[0].calls, "nothing signed in, nothing to revoke"
+    await _nothing_kept(made[0])
+
+
+@pytest.mark.asyncio
+async def test_a_send_code_that_never_answers_is_bounded_and_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _desktop_account()
+    monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
+    made = _wire(monkeypatch, _Primary([(1, "hi")]), hang_send_code=True)
+
+    result = await asyncio.wait_for(authorize_second_device(_request()), timeout=5)
+
+    assert (result.code, result.error_type) == ("device_unreachable", "TimeoutError")
     await _nothing_kept(made[0])
 
 

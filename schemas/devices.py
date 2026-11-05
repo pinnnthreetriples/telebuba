@@ -32,6 +32,7 @@ DeviceRefusalCode = Literal[
     "device_lang_pack_invalid",
     "device_primary_unavailable",
     "device_auth_failed",
+    "device_unreachable",
 ]
 
 # What the operator picks when adding an account: the device the imported or

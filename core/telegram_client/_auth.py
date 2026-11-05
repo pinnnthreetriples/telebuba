@@ -36,6 +36,12 @@ from typing import TYPE_CHECKING
 from anyio import Path
 from telethon import TelegramClient, errors
 
+from core.telegram_client._auth_bounds import (
+    UNREACHABLE_ERRORS,
+    auth_deadline,
+    request_failure_code,
+    safe_disconnect,
+)
 from core.telegram_client._client import (
     _session_path,
     create_telegram_client,
@@ -101,18 +107,25 @@ async def request_phone_code(request: PhoneCodeRequest) -> PhoneCodeChallenge:
     ):
         client = create_telegram_client(profile)
         try:
-            await client.connect()
-            sent = await client.send_code_request(request.phone)
+            # One deadline over connect + SendCode: nothing inside bounds itself.
+            async with asyncio.timeout(auth_deadline()):
+                await client.connect()
+                sent = await client.send_code_request(request.phone)
         except errors.FloodWaitError as exc:
-            return _challenge_error(request, f"flood wait {exc.seconds}s")
+            return _challenge_error(
+                request,
+                f"flood wait {exc.seconds}s",
+                code="flood_wait",
+                flood_wait_seconds=exc.seconds,
+            )
         except Exception as exc:  # noqa: BLE001 - classify any SDK/network failure for the UI.
             # Class name only, never ``str(exc)``: this arm catches transport
             # failures, and a proxy error stringifies with the proxy
             # ``user:pass@host:port``, which the API renders verbatim in the
             # operator's browser (non-negotiable #12, same call ``_read`` makes).
-            return _challenge_error(request, type(exc).__name__)
+            return _challenge_error(request, type(exc).__name__, code=request_failure_code(exc))
         finally:
-            await client.disconnect()
+            await safe_disconnect(client)
     return PhoneCodeChallenge(
         account_id=request.account_id,
         phone=request.phone,
@@ -136,9 +149,10 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
     ):
         client = create_telegram_client(profile)
         try:
-            await client.connect()
-            await _sign_in(client, request)
-            return _alive_result(profile, await client.get_me())
+            async with asyncio.timeout(auth_deadline()):
+                await client.connect()
+                await _sign_in(client, request)
+                return _alive_result(profile, await client.get_me())
         except (errors.SessionPasswordNeededError, *_SIGN_IN_ERRORS) as exc:
             return _error_result(profile, exc, status="unauthorized")
         except errors.FloodWaitError as exc:
@@ -149,12 +163,16 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
                 is_temporary=True,
                 flood_wait_seconds=exc.seconds,
             )
+        except UNREACHABLE_ERRORS as exc:
+            # Deadline expiry (``TimeoutError``), a dead proxy or a dropped socket:
+            # nothing was learned about the account, so it is a temporary fault.
+            return _error_result(profile, exc, status="network_error", is_temporary=True)
         except Exception as exc:  # noqa: BLE001 - classify any other SDK/network failure for the UI.
             # PhoneNumberBanned / AuthRestart / connect() ConnectionError etc. would
             # otherwise escape raw; its siblings all classify, so match that contract.
             return _error_result(profile, exc, status="unknown_error", is_temporary=True)
         finally:
-            await client.disconnect()
+            await safe_disconnect(client)
 
 
 async def _sign_in(client: TelegramClient, request: PhoneCodeSubmit) -> None:
@@ -204,8 +222,9 @@ async def log_out_session(
     ):
         client = create_telegram_client(profile)
         try:
-            await client.connect()
-            await client.log_out()
+            async with asyncio.timeout(auth_deadline()):
+                await client.connect()
+                await client.log_out()
         except Exception as exc:  # noqa: BLE001 - best-effort logout; record the class only.
             # Class name, not ``str(exc)`` — the same contract ``_error_result``
             # states two functions down, and for the same reason: this arm catches
@@ -221,7 +240,7 @@ async def log_out_session(
             # value a future reader picks up must already be bounded.
             error_message = type(exc).__name__
         finally:
-            await client.disconnect()
+            await safe_disconnect(client)
         if wipe_session:
             await _remove_session_file(profile.session_path)
     return _status_result(profile, status="unauthorized", error_message=error_message)
@@ -236,8 +255,20 @@ _SIGN_IN_ERRORS = (
 )
 
 
-def _challenge_error(request: PhoneCodeRequest, message: str) -> PhoneCodeChallenge:
-    return PhoneCodeChallenge(account_id=request.account_id, phone=request.phone, error=message)
+def _challenge_error(
+    request: PhoneCodeRequest,
+    message: str,
+    *,
+    code: str,
+    flood_wait_seconds: int | None = None,
+) -> PhoneCodeChallenge:
+    return PhoneCodeChallenge(
+        account_id=request.account_id,
+        phone=request.phone,
+        error=message,
+        error_code=code,
+        flood_wait_seconds=flood_wait_seconds,
+    )
 
 
 async def _remove_session_file(session_path: str) -> None:

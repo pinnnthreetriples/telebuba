@@ -34,6 +34,13 @@ export function errorMessage(error: unknown): string | undefined {
   return asEnvelope(error)?.message;
 }
 
+// The server-mandated wait a flood-family refusal carries in `fields` (serialised as a
+// string), or undefined when the envelope has none.
+export function errorRetryAfterSeconds(error: unknown): number | undefined {
+  const seconds = Number(asEnvelope(error)?.fields?.retry_after_seconds ?? NaN);
+  return Number.isFinite(seconds) ? seconds : undefined;
+}
+
 // A dead session sends the user to /login — from either cache, guarding against
 // a redirect loop when we're already on the login page.
 function redirectToLogin(): void {

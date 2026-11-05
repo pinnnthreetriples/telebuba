@@ -27,13 +27,17 @@ class PhoneCodeChallenge(BaseModel):
 
     ``phone_code_hash`` is empty and ``error`` is set when the request failed
     (the gateway classifies the Telethon failure so ``services`` need not import
-    ``telethon`` to interpret it).
+    ``telethon`` to interpret it). ``error_code`` is the stable, locale-neutral
+    classification (``flood_wait`` / ``unavailable`` / ``phone_invalid`` /
+    ``phone_banned`` / ``failed``) and ``flood_wait_seconds`` the mandated wait.
     """
 
     account_id: str = Field(min_length=1)
     phone: str = Field(min_length=1)
     phone_code_hash: str = ""
     error: str | None = None
+    error_code: str | None = None
+    flood_wait_seconds: int | None = Field(default=None, ge=0)
 
 
 class PhoneCodeSubmit(BaseModel):

@@ -223,28 +223,24 @@ async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     "/accounts/{account_id}/request-code",
     response_model=PhoneCodeRequestResult,
     operation_id="requestLoginCode",
-    responses=error_responses(400),
+    responses=SERVICE_ERRORS,
 )
 async def request_login_code(account_id: AccountIdPath) -> PhoneCodeRequestResult:
     """Send a Telegram login code to the account's phone (re-auth by code)."""
-    try:
+    with service_errors_to_http():
         return await accounts.request_login_code(account_id)
-    except accounts.PhoneLoginError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post(
     "/accounts/{account_id}/submit-code",
     response_model=AccountRead,
     operation_id="submitLoginCode",
-    responses=error_responses(400),
+    responses=SERVICE_ERRORS,
 )
 async def submit_login_code(account_id: AccountIdPath, body: SubmitCodeRequest) -> AccountRead:
     """Complete sign-in with the SMS code (+ optional 2FA password)."""
-    try:
+    with service_errors_to_http():
         return await accounts.submit_login_code(account_id, body.code, body.password)
-    except accounts.PhoneLoginError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post(
