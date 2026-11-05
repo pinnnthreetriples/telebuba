@@ -10548,6 +10548,10 @@ export type ImportAccountTdataErrors = {
    */
   404: ErrorEnvelope;
   /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;

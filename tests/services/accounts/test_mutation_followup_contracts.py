@@ -8,13 +8,13 @@ import pytest
 
 from core.config import settings
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
-from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import import_account_tdata
+from services.accounts import sessions as sessions_module
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from schemas.accounts import AccountCheckRequest
+    from schemas.accounts import AccountCreate, AccountRead
 
 
 def _configure_failing_two_account_import(
@@ -41,24 +41,19 @@ def _configure_failing_two_account_import(
         return TdataConvertResult(status="ok", accounts=summaries)
 
     calls = 0
+    real_add_account = sessions_module.add_account
 
-    async def check(request: AccountCheckRequest) -> TelegramSessionCheckResult:
+    async def add(data: AccountCreate) -> AccountRead:
         nonlocal calls
         calls += 1
+        created = await real_add_account(data)
         if calls == 2:
             msg = "second account check failed"
             raise RuntimeError(msg)
-        account_id = request.account_id
-        return TelegramSessionCheckResult(
-            account_id=account_id,
-            session_path=f"sessions/{account_id}",
-            status="alive",
-            is_temporary=False,
-            user_id=int(account_id),
-        )
+        return created
 
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", convert)
-    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", check)
+    monkeypatch.setattr("services.accounts.sessions.add_account", add)
 
 
 @pytest.mark.asyncio

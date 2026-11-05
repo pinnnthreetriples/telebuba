@@ -106,11 +106,38 @@ async def test_stdlib_logger_text_is_retained_in_the_loguru_file() -> None:
 
     await logging_module.logger.complete()
     contents = settings.logging.path.read_text(encoding="utf-8")
-    assert "LEAKPASS123" in contents
+    # The failure text stays, the proxy credentials do not.
+    assert "LEAKPASS123" not in contents
+    assert "leakuser" not in contents
     assert "pool connect failed" in contents
+    assert "refused" in contents
     # The retention fix must not have opened a second route: nothing was persisted to
     # the ``logs`` table, which is what ``GET /logs`` and ``GET /events`` serve.
     assert await list_recent_logs(limit=5) == []
+
+
+@pytest.mark.asyncio
+async def test_registered_proxy_password_is_masked_in_stdlib_logs() -> None:
+    """A password the URL shape cannot catch is masked by value, message and traceback."""
+    logging_module.register_log_secret("p/w:odd#1")
+    msg = "handshake failed with p/w:odd#1"
+    try:
+        raise OSError(msg)  # noqa: TRY301
+    except OSError:
+        logging.getLogger("core.telegram_client._pool").exception("connect p/w:odd#1 failed")
+
+    await logging_module.logger.complete()
+    contents = settings.logging.path.read_text(encoding="utf-8")
+    logging_module._SECRETS.clear()
+    assert "p/w:odd#1" not in contents
+    assert "handshake failed" in contents
+
+
+def test_redact_secrets_masks_user_and_password_in_urls() -> None:
+    redacted = logging_module.redact_secrets("via socks5://u:pw@h:1 and http://a:b@c")
+    assert "u:pw" not in redacted
+    assert "a:b" not in redacted
+    assert "h:1" in redacted
 
 
 def test_stdlib_bridge_keeps_the_console_and_prints_once(

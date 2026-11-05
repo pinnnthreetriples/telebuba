@@ -233,6 +233,5 @@ async def import_account_tdata(data: TdataConvertRequest) -> TdataImportResult:
         data,
         convert=convert_tdata_zip,
         add_account=add_account,
-        check_account_session=check_account_session,
     )
     return TdataImportResult(accounts=accounts)

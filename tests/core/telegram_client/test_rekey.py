@@ -74,11 +74,17 @@ class _New:
         self.wait_failure: Exception | None = None
         self.events: list[str] = []
         self.order: list[str] = []
+        self.connected = True
+
+    def is_connected(self) -> bool:
+        return self.connected
 
     async def connect(self) -> None:
+        self.connected = True
         self.events.append("connect")
 
     async def disconnect(self) -> None:
+        self.connected = False
         self.events.append("disconnect")
 
     async def log_out(self) -> None:
@@ -261,6 +267,9 @@ async def test_a_new_file_that_does_not_work_in_its_place_is_swapped_back(rig: _
 
     assert refused.value.code == "rekey_swap_failed"
     assert "log_out" in rig.new.events
+    # ``new`` was disconnected before the swap: the logout needs a live connection, so it
+    # reconnects first or the new authorization would be left standing.
+    assert rig.new.events.index("connect") < rig.new.events.index("log_out")
     assert _files(rig) == {"acc.session": "old"}
 
 

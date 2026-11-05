@@ -47,6 +47,22 @@ async def resolve_user(token: str) -> UserRead | None:
     return record.to_read()
 
 
+async def resolve_and_refresh(token: str) -> tuple[UserRead, str] | None:
+    """The token's user and a sliding-TTL replacement stamped with the version just checked.
+
+    Compare-and-issue: the new token carries the ``ver`` read together with the user, not
+    a second read, so a logout between "resolve" and "issue" cannot yield a fresh token
+    valid after the revocation (it is stale on arrival).
+    """
+    claims = core_auth.decode_session_claims(token)
+    if claims is None:
+        return None
+    record = await get_user_by_id(claims.sub)
+    if record is None or record.token_version != claims.ver:
+        return None
+    return record.to_read(), core_auth.encode_session_token(record.id, record.token_version)
+
+
 async def issue_session_token(user_id: str) -> str:
     """Mint a session token stamped with the user's current revocation version."""
     record = await get_user_by_id(user_id)

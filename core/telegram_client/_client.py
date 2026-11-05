@@ -12,7 +12,9 @@ from core.config import settings
 from core.db import fetch_account, fetch_account_proxy_settings, fetch_device_fingerprint
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.device_fingerprint_android import ANDROID_LANG_PACK
+from core.logging import register_log_secret
 from core.secure_paths import make_private_dir
+from schemas.accounts import FORBIDDEN_SESSION_NAME_PARTS
 from schemas.device_fingerprint import (
     TelegramClientProfile,
     TelegramClientRequest,
@@ -99,7 +101,7 @@ async def _session_path(request: TelegramClientRequest) -> str:
 # ``resolve()``: traversal plus either separator. The two literals cover ``os.sep``
 # and ``os.altsep`` on both platforms, so the verdict is the same on each. A
 # leading "." is checked separately in the guard below.
-_FORBIDDEN_NAME_PARTS = ("..", "/", "\\")
+_FORBIDDEN_NAME_PARTS = FORBIDDEN_SESSION_NAME_PARTS
 
 
 def _session_dir_child(name: str) -> str:
@@ -199,6 +201,8 @@ async def prepare_telegram_client_profile(
         device = await _device_fingerprint(request.account_id, device_type)
         request = request.model_copy(update={"device_type": device_type})
     proxy = await fetch_account_proxy_settings(request.account_id)
+    if proxy is not None:
+        register_log_secret(proxy.password)
     return TelegramClientProfile(
         account_id=request.account_id,
         device_type=device.device_type,

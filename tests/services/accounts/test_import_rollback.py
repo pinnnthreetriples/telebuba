@@ -565,3 +565,23 @@ async def test_a_clean_tdata_batch_is_unaffected(
     assert [a.account_id for a in result.accounts] == ["111"]
     assert await fetch_account("111") is not None
     assert (settings.telegram.session_dir / "111.session").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_rollback_stops_the_inbox_it_may_have_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed import must not leave a listener running for the removed account."""
+    stopped: list[tuple[str, bool]] = []
+
+    async def fake_stop(account_id: str, *, forget: bool = False) -> None:
+        stopped.append((account_id, forget))
+
+    monkeypatch.setattr("services.accounts._import_rollback.stop_account_inbox", fake_stop)
+    _break_after_commit(monkeypatch)
+    data = AccountSessionFileImport(filename="live.session", content=_CREDENTIAL)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(data)
+
+    assert stopped == [("live", True)]

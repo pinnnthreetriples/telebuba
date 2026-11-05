@@ -335,7 +335,7 @@ async def delete_account(
     "/accounts/import-tdata",
     response_model=TdataImportResult,
     operation_id="importAccountTdata",
-    responses=SERVICE_ERRORS,
+    responses=SERVICE_ERRORS | error_responses(409),
 )
 async def import_account_tdata(
     file: Annotated[UploadFile, File()],
@@ -358,7 +358,13 @@ async def import_account_tdata(
                 label=label,
                 registered_at=registered_at,
             )
-            return await accounts.import_account_tdata(request)
+            try:
+                return await accounts.import_account_tdata(request)
+            except accounts.SessionAlreadyExistsError as exc:
+                raise HTTPException(
+                    status_code=http_status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                ) from exc
 
 
 @router.post(
