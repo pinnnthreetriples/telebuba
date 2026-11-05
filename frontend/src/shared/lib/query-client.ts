@@ -37,8 +37,10 @@ export function errorMessage(error: unknown): string | undefined {
 // The server-mandated wait a flood-family refusal carries in `fields` (serialised as a
 // string), or undefined when the envelope has none.
 export function errorRetryAfterSeconds(error: unknown): number | undefined {
-  const seconds = Number(asEnvelope(error)?.fields?.retry_after_seconds ?? NaN);
-  return Number.isFinite(seconds) ? seconds : undefined;
+  const raw = asEnvelope(error)?.fields?.retry_after_seconds;
+  // `Number('')` is 0, so an empty or blank value must be refused before the cast.
+  const seconds = raw === undefined || String(raw).trim() === '' ? NaN : Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 // A dead session sends the user to /login — from either cache, guarding against

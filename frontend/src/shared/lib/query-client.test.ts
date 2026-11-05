@@ -7,7 +7,19 @@ import { expect, test, vi } from 'vitest';
 
 import { toastError } from '@/shared/ui';
 
-import { mutationErrorText, queryClient } from './query-client';
+import { errorRetryAfterSeconds, mutationErrorText, queryClient } from './query-client';
+
+test('errorRetryAfterSeconds reads positive values and refuses empty, zero or junk', () => {
+  const env = (value: unknown) => ({
+    error: { code: 'bad_request', message: 'flood_wait', fields: { retry_after_seconds: value } },
+  });
+  expect(errorRetryAfterSeconds(env('345'))).toBe(345);
+  expect(errorRetryAfterSeconds(env(12))).toBe(12);
+  for (const value of ['', '  ', '0', '-5', 'abc', undefined]) {
+    expect(errorRetryAfterSeconds(env(value))).toBeUndefined();
+  }
+  expect(errorRetryAfterSeconds(new Error('x'))).toBeUndefined();
+});
 
 vi.mock('@/shared/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/ui')>()),

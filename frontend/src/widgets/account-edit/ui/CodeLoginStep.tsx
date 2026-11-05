@@ -47,7 +47,16 @@ export function CodeLoginStep({
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
-  const [waitSeconds, setWaitSeconds] = useState(0);
+  // The cooldown is a deadline, not a counter: a background tab throttles timers, and a
+  // per-tick decrement would drift. The remaining seconds are derived from the clock.
+  const [deadline, setDeadline] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const waitSeconds = Math.max(0, Math.ceil((deadline - now) / 1000));
+  const setWaitSeconds = (seconds: number) => {
+    const current = Date.now();
+    setNow(current);
+    setDeadline(current + seconds * 1000);
+  };
   const passwordRef = useRef<HTMLInputElement>(null);
   // A typed code is the one thing this step cannot get back: closing asks first.
   useModalDirty(code.trim() !== '' || password !== '');
@@ -56,15 +65,16 @@ export function CodeLoginStep({
   const requestCode = useMutation({ ...requestLoginCodeMutation(), meta: { inlineError: true } });
   const submitCode = useMutation({ ...submitLoginCodeMutation(), meta: { inlineError: true } });
 
+  const cooling = waitSeconds > 0;
   useEffect(() => {
-    if (waitSeconds <= 0) return;
-    const timer = setTimeout(() => {
-      setWaitSeconds((seconds) => seconds - 1);
+    if (!cooling) return;
+    const timer = setInterval(() => {
+      setNow(Date.now());
     }, 1000);
     return () => {
-      clearTimeout(timer);
+      clearInterval(timer);
     };
-  }, [waitSeconds]);
+  }, [cooling]);
 
   const errorText = (error: unknown): string => {
     const message = errorMessage(error);
