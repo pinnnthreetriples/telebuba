@@ -51,14 +51,20 @@ async function lastStoryBody(): Promise<FormData> {
   return (call[0] as Request).clone().formData();
 }
 
+// The period and audience are dropdowns: open the trigger, then pick a row.
+async function pickOption(trigger: string, option: string) {
+  await userEvent.click(screen.getByRole('combobox', { name: trigger }));
+  await userEvent.click(screen.getByRole('option', { name: option }));
+}
+
 test('audience, caption and no-forward interact and the modal closes', async () => {
   const onClose = vi.fn();
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={onClose} onPosted={vi.fn()} />);
   expect(screen.getByText('Новая сторис')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByText('Близкие друзья'));
-  await userEvent.click(screen.getByText('Все'));
-  await userEvent.click(screen.getByText('Контакты'));
+  await pickOption('Кто увидит', 'Близкие друзья');
+  await pickOption('Кто увидит', 'Все');
+  await pickOption('Кто увидит', 'Контакты');
 
   await userEvent.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
 
@@ -183,10 +189,10 @@ test('the story goes out as one design: caption, audience, protection, period an
 
   fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
   typeCaption('привет');
-  await userEvent.click(screen.getByText('Близкие друзья'));
+  await pickOption('Кто увидит', 'Близкие друзья');
   await userEvent.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
   await userEvent.click(screen.getByRole('switch', { name: 'Закрепить в профиле' }));
-  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await pickOption('Срок показа', '48 ч');
   await userEvent.click(screen.getByText('Опубликовать'));
 
   await waitFor(() => {
@@ -215,7 +221,7 @@ test('an account without Premium is told what will be left out', async () => {
   );
   expect(screen.queryByText(/Без Premium будет опубликовано/)).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await pickOption('Срок показа', '48 ч · Premium');
   expect(
     screen.getByText('Без Premium будет опубликовано без: выбранного срока'),
   ).toBeInTheDocument();
@@ -225,7 +231,7 @@ test('a Premium account gets no warning for the same choice', async () => {
   renderWithClient(
     <AddStoryModal accountId="acc-1" premium onClose={vi.fn()} onPosted={vi.fn()} />,
   );
-  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await pickOption('Срок показа', '48 ч');
   expect(screen.queryByText(/Без Premium будет опубликовано/)).not.toBeInTheDocument();
 });
 

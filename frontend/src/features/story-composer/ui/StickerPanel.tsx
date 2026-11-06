@@ -145,6 +145,7 @@ export function StickerPanel({
             </div>
             <SegmentedControl
               variant="outline"
+              className="grid grid-cols-2"
               value={sticker.style}
               disabled={disabled}
               ariaLabel={`${name}: ${t('storyComposer.stickers.style')}`}
