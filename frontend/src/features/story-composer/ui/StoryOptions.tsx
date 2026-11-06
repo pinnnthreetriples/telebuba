@@ -28,7 +28,7 @@ export function StoryOptions({
   return (
     <div className="flex flex-col gap-3">
       <SettingRow label={t('storyComposer.options.period')} first>
-        <div className="w-menu max-w-full">
+        <div className="w-col max-w-full">
           <Select
             value={String(design.period_hours)}
             disabled={disabled}
@@ -70,7 +70,7 @@ export function StoryOptions({
         />
       </SettingRow>
       <SettingRow label={t('storyComposer.options.audience')}>
-        <div className="w-menu max-w-full">
+        <div className="w-col max-w-full">
           <Select
             value={design.privacy_preset}
             disabled={disabled}

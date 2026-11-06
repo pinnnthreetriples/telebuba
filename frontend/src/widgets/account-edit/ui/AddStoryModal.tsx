@@ -322,7 +322,7 @@ export function AddStoryModal({
       onClose={onClose}
       dirty={dirty}
       locked={busy}
-      size="form"
+      size="panel"
       label={t('accounts.addStory.title')}
     >
       {(close) => (
