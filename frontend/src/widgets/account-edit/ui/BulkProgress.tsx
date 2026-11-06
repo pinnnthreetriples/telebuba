@@ -16,16 +16,22 @@ export function BulkProgress({
   rows,
   label,
   okLabel,
+  warning,
 }: {
   rows: BulkRow[];
   label: (accountId: string) => string;
   // What a finished row says when "done" is not the whole story (a scheduled
   // post: WHEN it will go out).
   okLabel?: (accountId: string) => string;
+  // A finished row that went through with something missing (a story posted without
+  // Premium features): its notice, in the warning tone, instead of the plain label.
+  warning?: (accountId: string) => string | null;
 }) {
   const { t } = useTranslation();
   const done = rows.filter((row) => row.state === 'ok' || row.state === 'error').length;
   const failed = rows.filter((row) => row.state === 'error').length;
+  const warned = (row: BulkRow) => (row.state === 'ok' ? (warning?.(row.accountId) ?? null) : null);
+  const downgraded = rows.filter((row) => warned(row) !== null).length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -33,11 +39,18 @@ export function BulkProgress({
         <span className="type-body-medium text-content-secondary">
           {t('accounts.bulk.progress', { done, total: rows.length })}
         </span>
-        {failed > 0 && (
-          <span className="type-small text-danger-deep">
-            {t('accounts.bulk.failedCount', { n: failed })}
-          </span>
-        )}
+        <span className="flex items-center gap-3">
+          {downgraded > 0 && (
+            <span className="type-small text-warning-deep">
+              {t('accounts.bulk.downgradedCount', { n: downgraded })}
+            </span>
+          )}
+          {failed > 0 && (
+            <span className="type-small text-danger-deep">
+              {t('accounts.bulk.failedCount', { n: failed })}
+            </span>
+          )}
+        </span>
       </div>
       <div className="overflow-hidden rounded-md border border-line">
         {rows.map((row) => (
@@ -57,7 +70,9 @@ export function BulkProgress({
               )}
             </span>
             <span className="min-w-0 flex-1 truncate type-body-medium">{label(row.accountId)}</span>
-            <span className="shrink-0 truncate type-small">
+            <span
+              className={`shrink-0 truncate type-small ${warned(row) === null ? '' : 'text-warning-deep'}`}
+            >
               {row.state === 'error'
                 ? // A rejected request is the error ENVELOPE, never an Error, so an
                   // `Error` here is one the batch raised itself (an account with no
@@ -66,7 +81,9 @@ export function BulkProgress({
                   ? row.error.message
                   : mutationErrorText(row.error)
                 : row.state === 'ok'
-                  ? (okLabel?.(row.accountId) ?? t('accounts.bulk.rowOk'))
+                  ? [okLabel?.(row.accountId) ?? t('accounts.bulk.rowOk'), warned(row)]
+                      .filter(Boolean)
+                      .join(' · ')
                   : row.state === 'running'
                     ? t('accounts.bulk.rowRunning')
                     : row.state === 'skipped'

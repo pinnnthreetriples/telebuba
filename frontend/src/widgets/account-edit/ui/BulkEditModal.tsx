@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import {
   accountChannelsQueryOptions,
   accountDisplayName,
-  AccountAvatar,
   accountPrivacyQueryKey,
   accountProfileSnapshotQueryKey,
   accountScheduledPostsQueryKey,
@@ -39,10 +38,11 @@ import {
   useNow,
   type ScheduleMode,
 } from '@/features/schedule-post';
+import { designIsValid, toWireDesign } from '@/features/story-composer';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
 import { formatLocalDateTime } from '@/shared/lib';
-import { Button, CloseButton, Icon, IconButton, Modal, ModalFooter, TabList } from '@/shared/ui';
+import { Button, CloseButton, Icon, Modal, ModalFooter, TabList } from '@/shared/ui';
 
 import {
   BulkChannelsTab,
@@ -50,18 +50,14 @@ import {
   type ChannelDraft,
   type PostDraft,
 } from './BulkChannelsTab';
+import { BulkAccountStrip } from './BulkAccountStrip';
 import { BulkMusicTab, BulkPhotoTab, BulkSchedulePanel, BulkStoriesTab } from './BulkMediaTabs';
 import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
 import { BulkSessionsTab } from './BulkSessionsTab';
 import { BulkTextTab } from './BulkTextTab';
 import { isRefused, sessionOutcomeText } from './_sessionOutcome';
-import {
-  CHANNEL_USERNAME_RE,
-  errorChannelId,
-  postTextMax,
-  VIDEO_SUFFIXES,
-} from './_channelsShared';
+import { CHANNEL_USERNAME_RE, errorChannelId, postTextMax } from './_channelsShared';
 import {
   PRIVACY_KEYS,
   TEXT_FIELDS,
@@ -70,7 +66,9 @@ import {
   type PrivacyLevel,
   type TextFieldKey,
 } from './_profileShared';
+import { downgradedList } from './_storyShared';
 import { useBulkRun } from './useBulkRun';
+import { useBulkStory } from './useBulkStory';
 import { useMountedRef } from './useMountedRef';
 
 type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy' | 'sessions' | 'rekey';
@@ -84,8 +82,6 @@ const TABS = [
   'sessions',
   'rekey',
 ] as const satisfies readonly Tab[];
-
-type Audience = 'contacts' | 'close_friends' | 'public';
 
 // Photos and stories may wait for a time; the other tabs always apply on the click.
 const SCHEDULABLE: ReadonlySet<Tab> = new Set(['photo', 'stories']);
@@ -142,9 +138,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   });
   const [photos, setPhotos] = useState<File[]>([]);
   const [perAccount, setPerAccount] = useState(false);
-  const [storyFiles, setStoryFiles] = useState<File[]>([]);
-  const [caption, setCaption] = useState('');
-  const [audience, setAudience] = useState<Audience>('contacts');
+  const story = useBulkStory();
   const [track, setTrack] = useState<File | null>(null);
   const [levels, setLevels] = useState<Partial<Record<PrivacyKey, PrivacyLevel>>>({});
   const [channelMode, setChannelMode] = useState<'create' | 'post'>('create');
@@ -161,6 +155,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const [preparing, setPreparing] = useState(false);
   // When each account's post will go out, for its row once it is scheduled.
   const scheduledAt = useRef<Record<string, number>>({});
+  // What each account's story lost for want of Premium, for its row.
+  const downgradedBy = useRef<Record<string, string[]>>({});
   // A close during the upload must not let the batch start afterwards with no UI.
   const alive = useMountedRef();
 
@@ -175,6 +171,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     return row ? accountDisplayName(row) : accountId;
   };
   const picked = ids.map((accountId) => byId.get(accountId) ?? { account_id: accountId });
+  // The opened account is known even before the fleet is: its Premium flag counts.
+  const nonPremiumCount = ids.filter(
+    (accountId) =>
+      (byId.get(accountId) ?? (accountId === account.account_id ? account : null))?.premium ===
+      false,
+  ).length;
 
   const ticked = TEXT_FIELDS.filter((key) => on[key]);
   const textReady =
@@ -198,7 +200,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const READY: Record<Tab, boolean> = {
     text: textReady,
     photo: photos.length > 0,
-    stories: storyFiles.length > 0,
+    stories: story.files.length > 0 && designIsValid(story.design),
     music: track !== null,
     channels:
       channelMode === 'create'
@@ -250,20 +252,11 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       return;
     }
     if (tab === 'stories') {
-      const video = storyFiles.some((file) =>
-        VIDEO_SUFFIXES.some((suffix) => file.name.toLowerCase().endsWith(suffix)),
-      );
-      await postStory.mutateAsync({
+      const result = await postStory.mutateAsync({
         path: { account_id: accountId },
-        body: {
-          files: storyFiles,
-          media_kind: video ? 'video' : 'image',
-          caption: caption.trim(),
-          privacy_preset: audience,
-          protect_content: false,
-          collage_layout: null,
-        },
+        body: story.formBody(),
       });
+      downgradedBy.current[accountId] = result.downgraded ?? [];
       return;
     }
     if (tab === 'music') {
@@ -370,8 +363,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   // naming them — a batch of fifty is fifty tiny calls, not fifty uploads.
   const applyScheduled = async () => {
     if (baseRunAt === null) return;
-    const files =
-      tab === 'photo' ? (perAccount ? photos : photos.slice(0, 1)) : storyFiles.slice(0, 1);
+    // A story goes out whole (a collage is every file); a photo is one file per account.
+    const files = tab === 'photo' ? (perAccount ? photos : photos.slice(0, 1)) : story.files;
     if (files.length === 0) return;
     setPreparing(true);
     const mediaIds: string[] = [];
@@ -389,6 +382,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     const plan = bulkRunAts(baseRunAt, ids.length, spreadMinutes, Math.random);
     const batchId = newBatchId();
     scheduledAt.current = {};
+    downgradedBy.current = {};
     setStarted(true);
     void bulk
       .run(ids, async (accountId, index) => {
@@ -408,15 +402,16 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             body: { ...shared, media_id: mediaIds[pick] ?? '' },
           });
         } else {
+          // What a free account loses is decided when the story goes out, not now:
+          // the scheduled list shows it then.
           await scheduleStory.mutateAsync({
             path,
             body: {
               ...shared,
-              media_ids: mediaIds.slice(0, 1),
-              caption: caption.trim() || null,
-              privacy_preset: audience,
-              protect_content: false,
-              collage_layout: null,
+              filename: files[0]?.name ?? null,
+              media_ids: mediaIds,
+              design: toWireDesign(story.design),
+              collage_layout: story.layout,
             },
           });
         }
@@ -430,6 +425,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       void applyScheduled();
       return;
     }
+    downgradedBy.current = {};
     setStarted(true);
     void bulk.run(ids, step).finally(invalidateBatch);
   };
@@ -443,8 +439,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       Object.values(on).some(Boolean) ||
       Object.values(value).some((text) => text.trim() !== '') ||
       photos.length > 0 ||
-      storyFiles.length > 0 ||
-      caption.trim() !== '' ||
+      story.dirty ||
       track !== null ||
       Object.keys(levels).length > 0 ||
       closeConfirmed ||
@@ -484,42 +479,17 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               />
             </div>
 
-            <div className="flex items-center gap-3 border-b border-canvas px-6 py-3">
-              <IconButton
-                size="sm"
-                disabled={locked}
-                onClick={() => {
-                  setPickerOpen(true);
-                }}
-                aria-label={t('accounts.bulk.add')}
-              >
-                <Icon name="plus" size={16} />
-              </IconButton>
-              <div className="tb-scroll flex flex-1 items-center gap-2 overflow-x-auto py-1">
-                {picked.map((row) => (
-                  <span key={row.account_id} className="group relative shrink-0">
-                    <AccountAvatar
-                      account={row}
-                      className="size-tile rounded-full"
-                      fallbackClassName="bg-canvas text-content-muted type-body-medium"
-                    />
-                    {!locked && ids.length > 1 && (
-                      <IconButton
-                        size="sm"
-                        shape="circle"
-                        aria-label={t('accounts.bulk.remove', { name: label(row.account_id) })}
-                        onClick={() => {
-                          setIds((prev) => prev.filter((id) => id !== row.account_id));
-                        }}
-                        className="absolute -right-1 -top-1 bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                      >
-                        <Icon name="close" size={16} />
-                      </IconButton>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <BulkAccountStrip
+              picked={picked}
+              locked={locked}
+              label={label}
+              onAdd={() => {
+                setPickerOpen(true);
+              }}
+              onRemove={(accountId) => {
+                setIds((prev) => prev.filter((id) => id !== accountId));
+              }}
+            />
 
             {/* Disabled while the batch's files upload: the batch has already read
               the tab, the files and the time, so a change here would be ignored. */}
@@ -548,6 +518,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   <BulkProgress
                     rows={bulk.rows}
                     label={label}
+                    warning={(accountId) => {
+                      const lost = downgradedBy.current[accountId] ?? [];
+                      return lost.length > 0
+                        ? t('accounts.bulk.rowDowngraded', { list: downgradedList(t, lost) })
+                        : null;
+                    }}
                     okLabel={(accountId) => {
                       const at = scheduledAt.current[accountId];
                       return at === undefined
@@ -577,12 +553,14 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                   />
                 ) : tab === 'stories' ? (
                   <BulkStoriesTab
-                    files={storyFiles}
-                    caption={caption}
-                    audience={audience}
-                    onFiles={setStoryFiles}
-                    onCaption={setCaption}
-                    onAudience={setAudience}
+                    files={story.files}
+                    design={story.design}
+                    layout={story.layout}
+                    isCollage={story.isCollage}
+                    nonPremiumCount={nonPremiumCount}
+                    onFiles={story.setFiles}
+                    onDesign={story.setDesign}
+                    onLayout={story.setLayout}
                   />
                 ) : tab === 'music' ? (
                   <BulkMusicTab file={track} onFile={setTrack} />

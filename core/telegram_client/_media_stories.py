@@ -27,8 +27,6 @@ from telethon.tl.types import (
     InputPrivacyValueAllowAll,
     InputPrivacyValueAllowCloseFriends,
     InputPrivacyValueAllowContacts,
-    MediaAreaCoordinates,
-    MediaAreaUrl,
 )
 
 from core.telegram_client._io import _named_bytes
@@ -37,8 +35,19 @@ from core.telegram_client._story_image import (
     _default_collage_layout,
     _normalize_story_image_for_telegram,
 )
-from core.telegram_client._story_link import LINK_AREA, caption_with_mentions, draw_link_plate
+from core.telegram_client._story_link import (
+    LINK_STICKER_CENTRE,
+    caption_entities,
+    caption_with_mentions,
+)
+from core.telegram_client._story_stickers import (
+    can_render_label,
+    sticker_overlay_png,
+    stickers_on_photo,
+)
 from core.telegram_client._video import normalize_story_video_for_telegram
+from core.telegram_client._video_args import STORY_VIDEO_SIZE
+from schemas.story_design import STORY_LABEL_MAX, StoryLinkSticker
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
@@ -50,21 +59,29 @@ if TYPE_CHECKING:
     )
 
     from schemas.telegram_actions import PostStory, RemoveStory, ToggleStoryPinned
+    from schemas.telegram_actions_media import StoryLink
+
+
+_FALLBACK_LINK_LABEL = "LINK"
 
 
 async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
     peer = await client.get_input_entity("me")
     await client(CanSendStoryRequest(peer=peer))
-    media = await _story_media(client, action)
+    media, areas = await _story_media(client, action)
     caption, spans = caption_with_mentions(action.caption, action.mentions)
-    entities: list[TypeMessageEntity] = [
-        InputMessageEntityMentionName(
-            offset=span.offset,
-            length=span.length,
-            user_id=utils.get_input_user(await client.get_input_entity(span.user_id)),
-        )
-        for span in spans
-    ]
+    # Caption formatting first, mentions after it: the formatting offsets stay valid.
+    entities: list[TypeMessageEntity] = caption_entities(action.entities, action.caption)
+    entities.extend(
+        [
+            InputMessageEntityMentionName(
+                offset=span.offset,
+                length=span.length,
+                user_id=utils.get_input_user(await client.get_input_entity(span.user_id)),
+            )
+            for span in spans
+        ]
+    )
     result = await client(
         SendStoryRequest(
             peer=peer,
@@ -72,27 +89,33 @@ async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
             privacy_rules=_story_privacy_rules(action.privacy_preset),
             caption=caption,
             entities=entities or None,
-            media_areas=_link_areas(action),
+            media_areas=areas or None,
             period=action.period_seconds,
             noforwards=action.protect_content,
+            pinned=action.pinned or None,
         ),
     )
     return _story_id_from_updates(result)
 
 
-def _link_areas(action: PostStory) -> list[TypeMediaArea] | None:
-    if action.link is None:
-        return None
-    x, y, w, h = LINK_AREA
-    coordinates = MediaAreaCoordinates(x=x, y=y, w=w, h=h, rotation=0.0)
-    return [MediaAreaUrl(coordinates=coordinates, url=action.link.url)]
+def _link_sticker(link: StoryLink) -> StoryLinkSticker:
+    """The masstagging link as one white sticker, where its plate has always been."""
+    # The operator's words, else the host, else a plain ASCII word every font can draw
+    # (an IDN host may need glyphs no installed font has).
+    host = urlsplit(link.url).hostname or link.url
+    label = next(
+        (text for text in (link.text.strip(), host) if text and can_render_label(text)),
+        _FALLBACK_LINK_LABEL,
+    )
+    x, y = LINK_STICKER_CENTRE
+    return StoryLinkSticker(url=link.url, label=label[:STORY_LABEL_MAX], x=x, y=y)
 
 
-def _plate_text(action: PostStory) -> str | None:
-    """What the link plate says: the operator's words, else the link's host."""
-    if action.link is None:
-        return None
-    return action.link.text.strip() or urlsplit(action.link.url).hostname or action.link.url
+def _stickers_of(action: PostStory) -> list[StoryLinkSticker]:
+    stickers = list(action.link_stickers)
+    if action.link is not None:
+        stickers.append(_link_sticker(action.link))
+    return stickers
 
 
 def _story_id_from_updates(result: object) -> int | None:
@@ -116,7 +139,10 @@ def _story_id_from_updates(result: object) -> int | None:
 async def _story_media(
     client: TelegramClient,
     action: PostStory,
-) -> TypeInputMedia:
+) -> tuple[TypeInputMedia, list[TypeMediaArea]]:
+    """The uploaded media and the tap areas of the stickers drawn into it."""
+    stickers = _stickers_of(action)
+    areas: list[TypeMediaArea] = []
     if action.media_kind == "image":
         # Telegram rejects story photos that don't match its narrow aspect
         # window with PHOTO_INVALID_DIMENSIONS. Telethon's send_file resize
@@ -131,20 +157,25 @@ async def _story_media(
             content = await asyncio.to_thread(_compose_story_collage, images, layout)
         else:
             content = await asyncio.to_thread(_normalize_story_image_for_telegram, action.content)
-        if (plate := _plate_text(action)) is not None:
-            content = await asyncio.to_thread(draw_link_plate, content, plate)
+        if stickers:
+            content, drawn = await asyncio.to_thread(stickers_on_photo, content, stickers)
+            areas.extend(drawn)
         uploaded = await client.upload_file(
             _named_bytes(action.filename, content),
             file_name=action.filename,
         )
-        return InputMediaUploadedPhoto(file=uploaded)
+        return InputMediaUploadedPhoto(file=uploaded), areas
     # Video story — re-encode through ffmpeg to H.264/AAC MP4 at 720x1280
     # (matches the Android client) and pass an explicit JPEG thumbnail so
     # inline previews don't render as a black frame. The mime_type and
     # supports_streaming flag are both mandatory for stories: missing either
     # makes Telegram treat the upload as a generic document, not a video.
+    overlay: bytes | None = None
+    if stickers:
+        overlay, drawn = await asyncio.to_thread(sticker_overlay_png, stickers, STORY_VIDEO_SIZE)
+        areas.extend(drawn)
     video_bytes, thumb_bytes, duration, width, height = await normalize_story_video_for_telegram(
-        action.content
+        action.content, overlay_png=overlay
     )
     uploaded_video = await client.upload_file(
         _named_bytes("story.mp4", video_bytes),
@@ -154,7 +185,7 @@ async def _story_media(
         _named_bytes("thumb.jpg", thumb_bytes),
         file_name="thumb.jpg",
     )
-    return InputMediaUploadedDocument(
+    media = InputMediaUploadedDocument(
         file=uploaded_video,
         thumb=uploaded_thumb,
         mime_type="video/mp4",
@@ -167,6 +198,7 @@ async def _story_media(
             ),
         ],
     )
+    return media, areas
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:

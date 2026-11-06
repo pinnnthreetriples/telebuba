@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field
 # Same charset guard as every other account_id entry point (see the
 # rationale next to the pattern's definition in schemas.accounts).
 from schemas.accounts import _ACCOUNT_ID_PATTERN
+from schemas.story_design import (  # noqa: TC001 - pydantic resolves the annotations
+    PremiumFeature,
+    StoryDesign,
+    StoryPrivacyPreset,
+)
+from schemas.telegram_action_results import ActionResult
 
 # Telegram photo_id / file_id / access_hash are int64 (~19 digits), past JS's
 # 2^53 safe-integer limit — as JSON numbers the SPA would silently round them,
@@ -16,7 +22,6 @@ from schemas.accounts import _ACCOUNT_ID_PATTERN
 _Int64Str = Annotated[str, Field(pattern=r"^-?\d+$")]
 
 StoryMediaKind = Literal["image", "video"]
-StoryPrivacyPreset = Literal["contacts", "close_friends", "public"]
 
 
 class AccountProfilePhotoUpload(BaseModel):
@@ -30,15 +35,23 @@ class AccountStoryUpload(BaseModel):
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     media_kind: StoryMediaKind
-    caption: str | None = Field(default=None, max_length=1024)
+    # The flat fields below are the pre-design spelling; a ``design`` wins over them.
+    caption: str | None = Field(default=None, max_length=2048)
     privacy_preset: StoryPrivacyPreset = "contacts"
-    period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
+    period_seconds: int = Field(default=86_400, ge=21_600, le=172_800)
     protect_content: bool = False
+    design: StoryDesign | None = None
     # Collage images 2..N (``content``/``filename`` is image #1). Empty = the
     # existing single-photo/video path; non-empty = a multi-photo collage. The
     # count cap + per-image validation are enforced in the service.
     extra_images: list[bytes] = Field(default_factory=list)
     collage_layout: str | None = None
+
+
+class StoryPostResult(ActionResult):
+    """A posted story's outcome plus what a free account lost on the way."""
+
+    downgraded: list[PremiumFeature] = Field(default_factory=list)
 
 
 class AccountProfileMusicUpload(BaseModel):

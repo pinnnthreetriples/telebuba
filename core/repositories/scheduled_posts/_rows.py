@@ -49,6 +49,13 @@ def operator_editable() -> ColumnElement[bool]:
     return or_(posts.c.state.in_(_OPERATOR_EDITABLE), queued())
 
 
+def _downgraded(stored: object) -> list[str]:
+    if stored is None:
+        return []
+    parsed = json.loads(str(stored))
+    return [str(item) for item in parsed] if isinstance(parsed, list) else []
+
+
 def _to_post(row: RowMapping, media_names: list[str]) -> ScheduledPost:
     story_json = row["story_json"]
     return ScheduledPost(
@@ -71,6 +78,7 @@ def _to_post(row: RowMapping, media_names: list[str]) -> ScheduledPost:
         client_key=cast("str | None", row["client_key"]),
         error_code=cast("str | None", row["error_code"]),
         story_id=cast("int | None", row["story_id"]),
+        downgraded=_downgraded(row["downgraded"]),
         created_at=str(row["created_at"]),
         updated_unix=int(cast("int", row["updated_unix"])),
         finished_unix=cast("int | None", row["finished_unix"]),

@@ -118,7 +118,10 @@ from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_recipients import _add_recipient_history
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_rekeys import _add_account_rekeys
-from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
+from core.migration_steps_scheduled_posts import (
+    _add_scheduled_posts_downgraded,
+    _add_scheduled_posts_tables,
+)
 from core.migration_steps_session_audits import _add_account_session_audits
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
@@ -289,6 +292,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (107, "add_account_rekeys", _add_account_rekeys),
     (108, "add_account_own_authorizations", _add_account_own_authorizations),
     (109, "add_account_twofa_pending", _add_account_twofa_pending),
+    (110, "add_scheduled_posts_downgraded", _add_scheduled_posts_downgraded),
 )
 
 

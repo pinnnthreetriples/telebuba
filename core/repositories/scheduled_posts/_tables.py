@@ -39,6 +39,8 @@ _scheduled_profile_posts = Table(
     # A stable code, never ``str(exc)``: this row is served back by the API.
     Column("error_code", String, nullable=True),
     Column("story_id", Integer, nullable=True),
+    # JSON list of the Premium features a free account lost; NULL when none.
+    Column("downgraded", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_unix", Integer, nullable=False),
     Column("finished_unix", Integer, nullable=True),

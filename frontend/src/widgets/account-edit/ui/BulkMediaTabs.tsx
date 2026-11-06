@@ -7,6 +7,7 @@ import {
   ScheduleTimeField,
   type ScheduleMode,
 } from '@/features/schedule-post';
+import { StoryComposer, type StoryDesign } from '@/features/story-composer';
 import { Icon, IconButton, Input, SegmentedControl, toastError } from '@/shared/ui';
 
 import {
@@ -21,6 +22,9 @@ import {
   VIDEO_SUFFIXES,
 } from './_channelsShared';
 import { DashedAdd, FilePicker } from './_shared';
+import { isVideoFile, mergeStoryPick, storyMediaOf } from './_storyShared';
+import { StoryCollageLayoutPicker } from './StoryCollageLayoutPicker';
+import { MAX_COLLAGE_IMAGES } from './storyCollageLayouts';
 
 // The bulk editor's three media tabs. One file rather than three: they are the
 // same tab — a picker, a grid of what was picked, one line of consequence — and
@@ -173,24 +177,32 @@ export function BulkPhotoTab({
   );
 }
 
-// Сторис: one story published from every selected account.
+// Сторис: one story published from every selected account. One video OR up to six
+// photos (a collage), and ONE design: caption, links, period and audience are the same
+// for the whole batch.
 export function BulkStoriesTab({
   files,
-  caption,
-  audience,
+  design,
+  layout,
+  isCollage,
+  nonPremiumCount,
   onFiles,
-  onCaption,
-  onAudience,
+  onDesign,
+  onLayout,
 }: {
   files: File[];
-  caption: string;
-  audience: 'contacts' | 'close_friends' | 'public';
+  design: StoryDesign;
+  layout: string | null;
+  isCollage: boolean;
+  nonPremiumCount: number;
   onFiles: (files: File[]) => void;
-  onCaption: (caption: string) => void;
-  onAudience: (audience: 'contacts' | 'close_friends' | 'public') => void;
+  onDesign: (design: StoryDesign) => void;
+  onLayout: (layout: string) => void;
 }) {
   const { t } = useTranslation();
   const urls = usePreviews(files);
+  const hasVideo = files.some(isVideoFile);
+  const full = !hasVideo && files.length >= MAX_COLLAGE_IMAGES;
   return (
     <div className="flex flex-col gap-4">
       <div className="type-body text-content-subtle">{t('accounts.bulk.storyHint')}</div>
@@ -200,14 +212,14 @@ export function BulkStoriesTab({
           urls={urls}
           ratio="9 / 16"
           removeLabel={t('accounts.bulk.removeFile')}
-          onRemove={() => {
-            onFiles([]);
+          onRemove={(index) => {
+            onFiles(files.filter((_, i) => i !== index));
           }}
         />
-        {files.length === 0 && (
+        {!full && (
           <FilePicker
             accept={[...PHOTO_SUFFIXES, ...VIDEO_SUFFIXES].join(',')}
-            multiple={false}
+            multiple
             onPick={(picked) => {
               // A story takes either kind, so the cap depends on the file: the
               // video ceiling is ten times the image one.
@@ -218,7 +230,7 @@ export function BulkStoriesTab({
                 VIDEO_MAX_BYTES,
                 t,
               );
-              if (ok.length > 0) onFiles(ok.slice(0, 1));
+              if (ok.length > 0) onFiles(mergeStoryPick(files, ok, MAX_COLLAGE_IMAGES));
             }}
           >
             {(open) => (
@@ -227,36 +239,16 @@ export function BulkStoriesTab({
           </FilePicker>
         )}
       </div>
-      <label className="flex flex-col gap-2">
-        <span className="type-body-medium text-content-secondary">
-          {t('accounts.addStory.caption')}
-        </span>
-        <Input
-          value={caption}
-          placeholder={t('accounts.addStory.captionPlaceholder')}
-          onChange={(event) => {
-            onCaption(event.target.value);
-          }}
-        />
-      </label>
-      <div className="flex flex-col gap-2">
-        <span className="type-body-medium text-content-secondary">
-          {t('accounts.addStory.audience')}
-        </span>
-        <SegmentedControl
-          variant="outline"
-          value={audience}
-          ariaLabel={t('accounts.addStory.audience')}
-          options={[
-            { value: 'contacts', label: t('accounts.addStory.contacts') },
-            { value: 'close_friends', label: t('accounts.addStory.closeFriends') },
-            { value: 'public', label: t('accounts.addStory.public') },
-          ]}
-          onChange={(value) => {
-            onAudience(value as 'contacts' | 'close_friends' | 'public');
-          }}
-        />
-      </div>
+      {isCollage && (
+        <StoryCollageLayoutPicker count={files.length} value={layout} onChange={onLayout} />
+      )}
+      <StoryComposer
+        media={storyMediaOf(files, urls, layout)}
+        design={design}
+        onChange={onDesign}
+        premium={null}
+        nonPremiumCount={nonPremiumCount}
+      />
       <div className="type-small">{t('accounts.bulk.storyNote')}</div>
     </div>
   );

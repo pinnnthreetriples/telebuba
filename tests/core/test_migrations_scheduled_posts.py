@@ -14,7 +14,10 @@ import pytest
 
 import core.repositories.scheduled_posts._tables  # noqa: F401 - registers the tables
 from core.db import _metadata
-from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
+from core.migration_steps_scheduled_posts import (
+    _add_scheduled_posts_downgraded,
+    _add_scheduled_posts_tables,
+)
 from core.migrations import MIGRATIONS
 
 if TYPE_CHECKING:
@@ -80,12 +83,36 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
     _metadata.tables["accounts"].create(engine)
     with engine.begin() as connection:
         _add_scheduled_posts_tables(connection)
+        _add_scheduled_posts_downgraded(connection)
     return engine
 
 
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_scheduled_posts_tables]
     assert entries == [(67, "add_scheduled_posts_tables", _add_scheduled_posts_tables)]
+
+
+def test_the_registry_carries_the_downgraded_column_migration_once() -> None:
+    entries = [entry for entry in MIGRATIONS if entry[2] is _add_scheduled_posts_downgraded]
+    assert entries == [(110, "add_scheduled_posts_downgraded", _add_scheduled_posts_downgraded)]
+
+
+def test_the_downgraded_migration_leaves_existing_rows_null(legacy_engine: _EngineFactory) -> None:
+    engine = legacy_engine("rows.db")
+    _metadata.tables["accounts"].create(engine)
+    with engine.begin() as connection:
+        _add_scheduled_posts_tables(connection)
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.exec_driver_sql(
+            "INSERT INTO scheduled_profile_posts (post_id, account_id, kind, scheduled_for_unix,"
+            " next_attempt_unix, created_at, updated_unix)"
+            " VALUES ('p', 'a', 'photo', 1, 1, 'x', 1)",
+        )
+        _add_scheduled_posts_downgraded(connection)
+        value = connection.exec_driver_sql(
+            "SELECT downgraded FROM scheduled_profile_posts WHERE post_id = 'p'",
+        ).scalar_one()
+    assert value is None
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -101,6 +128,7 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
     before = {table: _shape(migrated_engine, table) for table in _TABLES}
     with migrated_engine.begin() as connection:
         _add_scheduled_posts_tables(connection)
+        _add_scheduled_posts_downgraded(connection)
     assert {table: _shape(migrated_engine, table) for table in _TABLES} == before
 
 

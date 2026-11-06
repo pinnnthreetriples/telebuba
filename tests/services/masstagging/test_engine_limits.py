@@ -55,7 +55,7 @@ async def test_telegrams_own_story_cap_rests_the_account(
 ) -> None:
     campaign_id = await seed(targets=("@alpha",))
     telegram.story_answers["a1"] = [
-        answer("failed", error_type="BadRequestError", error_message="STORIES_TOO_MUCH")
+        answer("failed", error_type="ProfileGatewayError", error_message="stories_too_much")
     ]
     tomorrow = next_day_start(clock.now())
 

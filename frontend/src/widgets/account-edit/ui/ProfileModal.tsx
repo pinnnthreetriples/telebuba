@@ -1039,6 +1039,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       {storyOpen && (
         <AddStoryModal
           accountId={account.account_id}
+          premium={account.premium ?? null}
           onClose={() => {
             setStoryOpen(false);
           }}

@@ -88,7 +88,7 @@ def _try_insert(post: ScheduledPost) -> tuple[ScheduledPost, bool] | None:
         try:
             connection.execute(
                 insert(posts).values(
-                    **post.model_dump(exclude={"media_names", "story"}),
+                    **post.model_dump(exclude={"media_names", "story", "downgraded"}),
                     story_json=None if post.story is None else post.story.model_dump_json(),
                 ),
             )

@@ -518,6 +518,16 @@
       "removePhoto": "Убрать фото {{n}}",
       "moveLeft": "Переместить фото {{n}} влево",
       "moveRight": "Переместить фото {{n}} вправо",
+      "downgraded": {
+        "posted": "Опубликовано без Premium: {{list}}",
+        "scheduled": "Запланировано без Premium: {{list}}",
+        "feature": {
+          "period": "срок показа (стал 24 ч)",
+          "link_stickers": "ссылки",
+          "long_caption": "длинная подпись",
+          "formatting": "форматирование"
+        }
+      },
       "code": {
         "story_image_invalid": "Изображение не удалось прочитать — выберите JPG/PNG/WebP",
         "story_video_invalid": "Видео не удалось обработать — выберите MP4/MOV",
@@ -528,6 +538,8 @@
         "story_collage_requires_image": "Коллаж может содержать только фото, не видео",
         "story_collage_too_many_images": "Слишком много фото для одного коллажа",
         "story_collage_unknown_layout": "Эта раскладка коллажа недоступна для такого числа фото",
+        "story_design_invalid": "Оформление сторис некорректно — проверьте подпись, ссылки и срок",
+        "story_link_label_unrenderable": "Подпись ссылки не удаётся нарисовать на сторис — сократите её или уберите необычные символы",
         "failed": "Telegram отклонил публикацию — попробуйте другой файл"
       }
     },
@@ -905,6 +917,8 @@
       "apply_few": "Применить к {{count}} аккаунтам",
       "apply_many": "Применить к {{count}} аккаунтам",
       "progress": "Применено {{done}} из {{total}}",
+      "rowDowngraded": "без Premium: {{list}}",
+      "downgradedCount": "{{n}} без Premium",
       "failedCount": "{{n}} с ошибкой",
       "rowQueued": "Ждёт",
       "rowRunning": "Применяем",
@@ -1357,6 +1371,10 @@
       "now": "Сейчас",
       "later": "По расписанию",
       "echo": "Не раньше {{when}} · {{rel}}",
+      "period": "{{n}} ч",
+      "pinned": "Закреплено",
+      "linkStickers": "Ссылки: {{n}}",
+      "downgradedNote": "Без Premium: {{list}}",
       "problem": {
         "empty": "Выберите дату и время",
         "past": "Слишком рано — выберите время хотя бы через {{n}} мин",
@@ -5523,6 +5541,92 @@
       "close": "Закрыть входящие",
       "manualType": "Напечатать в телефон",
       "manualInputPlaceholder": "Введите код вручную"
+    }
+  },
+  "storyComposer": {
+    "caption": {
+      "label": "Подпись",
+      "placeholder": "Текст под историей",
+      "counter": "{{count}} / {{max}}",
+      "overFree": "Свыше {{free}} символов — только с Premium",
+      "toolbar": "Форматирование",
+      "bold": "Жирный",
+      "italic": "Курсив",
+      "underline": "Подчёркнутый",
+      "strike": "Зачёркнутый",
+      "spoiler": "Спойлер",
+      "code": "Моноширинный",
+      "link": "Ссылка",
+      "linkUrl": "Адрес ссылки",
+      "linkApply": "Применить",
+      "linkRemove": "Убрать ссылку",
+      "linkCancel": "Отмена",
+      "linkInvalid": "Нужен адрес http, https или tg",
+      "linkNeedsSelection": "Сначала выделите текст"
+    },
+    "canvas": {
+      "label": "Предпросмотр истории",
+      "empty": "Нет медиа",
+      "sticker": "Ссылка: {{label}}",
+      "stickerFallback": "Ссылка без названия",
+      "scaleHandle": "Изменить размер",
+      "rotateHandle": "Повернуть",
+      "editLabel": "Название ссылки",
+      "hint": "Перетащите ссылку, стрелки двигают, +/- меняют размер, [ ] поворачивают, Delete удаляет"
+    },
+    "stickers": {
+      "title": "Ссылки на истории",
+      "add": "Добавить ссылку",
+      "limit": "Не больше {{count}} ссылок",
+      "item": "Ссылка {{index}}",
+      "url": "Адрес",
+      "urlPlaceholder": "example.com",
+      "urlInvalid": "Нужен адрес http, https или tg",
+      "label": "Название",
+      "labelPlaceholder": "Подробнее",
+      "labelCounter": "{{count}} / {{max}}",
+      "labelEmpty": "Введите название",
+      "labelEmoji": "Эмодзи в названии не поддерживаются",
+      "labelTooLong": "Слишком длинное название",
+      "style": "Оформление",
+      "styles": {
+        "white": "Белый",
+        "dark": "Тёмный",
+        "glass": "Стекло",
+        "accent": "Акцент"
+      },
+      "remove": "Удалить ссылку",
+      "premium": "Premium"
+    },
+    "options": {
+      "period": "Срок показа",
+      "periodHours": "{{count}} ч",
+      "premium": "Premium",
+      "pinned": "Закрепить в профиле",
+      "protect": "Запретить пересылку",
+      "audience": "Кто увидит",
+      "audiences": {
+        "contacts": "Контакты",
+        "close_friends": "Близкие друзья",
+        "public": "Все"
+      }
+    },
+    "hint": {
+      "loss": {
+        "period": "выбранного срока",
+        "link_stickers": "ссылок",
+        "long_caption": "текста длиннее {{free}} символов",
+        "formatting": "форматирования"
+      },
+      "free": "Без Premium будет опубликовано без: {{list}}",
+      "unknown": "Если у аккаунта нет Premium, будет опубликовано без: {{list}}",
+      "bulk_one": "{{count}} аккаунт без Premium опубликует без: {{list}}",
+      "bulk_few": "{{count}} аккаунта без Premium опубликуют без: {{list}}",
+      "bulk_many": "{{count}} аккаунтов без Premium опубликуют без: {{list}}",
+      "bulk_other": "{{count}} аккаунтов без Premium опубликуют без: {{list}}"
+    },
+    "composer": {
+      "label": "Оформление истории"
     }
   }
 }

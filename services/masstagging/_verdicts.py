@@ -40,8 +40,13 @@ Verdict = Literal[
 
 _WAIT_STATUSES: Final = frozenset({"flood_wait", "premium_wait", "slow_mode_wait"})
 _DEAD_MESSAGES: Final = frozenset({"account_deactivated", "account_frozen", "session_dead"})
-# Telethon has no class for it; it arrives as a bare bad-request carrying the RPC name.
-_STORIES_TOO_MUCH: Final = "STORIES_TOO_MUCH"
+# The gateway turns a refused story into ``ProfileGatewayError`` carrying a lowercase stable
+# code (``core.telegram_client._media``): Premium-only, and the day's story quota.
+_GATEWAY_ERROR: Final = "ProfileGatewayError"
+_GATEWAY_CODES: Final[dict[str, Verdict]] = {
+    "premium_required": "premium",
+    "stories_too_much": "too_much",
+}
 _ERRORS: Final[dict[str, Verdict]] = {
     "UserPrivacyRestrictedError": "privacy",
     "UserNotMutualContactError": "privacy",
@@ -68,6 +73,6 @@ def classify(result: ActionResult) -> Verdict:  # noqa: PLR0911 - one return per
         return "unconfirmed"
     if result.status == "unavailable":
         return "reconnect"
-    if _STORIES_TOO_MUCH in (result.error_message or ""):
-        return "too_much"
+    if result.error_type == _GATEWAY_ERROR and result.error_message in _GATEWAY_CODES:
+        return _GATEWAY_CODES[result.error_message]
     return _ERRORS.get(result.error_type or "", "error")

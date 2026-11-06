@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.config import settings
+from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client import execute, refresh_account_avatar
+from schemas.profile_media import StoryPostResult
 from schemas.telegram_actions import (
     AddProfileMusic,
-    PostStory,
     RemoveProfileMusic,
     RemoveProfilePhoto,
     RemoveStory,
@@ -22,6 +23,13 @@ from schemas.telegram_actions import (
     ToggleStoryPinned,
 )
 from services.accounts._result import AccountActionError, raise_for_result
+from services.accounts._story_premium import (
+    StoryMedia,
+    check_design_limits,
+    flat_design,
+    send_story_for_account,
+    story_action,
+)
 from services.accounts._uploads import (
     _PROFILE_MUSIC_SUFFIXES,
     _PROFILE_PHOTO_SUFFIXES,
@@ -45,7 +53,7 @@ if TYPE_CHECKING:
         AccountStoryRemove,
         AccountStoryUpload,
     )
-    from schemas.telegram_actions import ActionResult
+    from schemas.telegram_actions import ActionResult, PostStory
 
 __all__ = [
     "add_account_profile_music",
@@ -109,7 +117,7 @@ async def resync_account_avatar(account_id: str) -> AccountRead:
     return await require_account(account_id)
 
 
-async def post_account_story(data: AccountStoryUpload) -> ActionResult:
+async def post_account_story(data: AccountStoryUpload) -> StoryPostResult:
     max_bytes = (
         settings.profile_media.story_image_max_bytes
         if data.media_kind == "image"
@@ -143,19 +151,26 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
         if 1 + len(data.extra_images) > settings.profile_media.story_collage_max_images:
             code = "story_collage_too_many_images"
             raise AccountActionError(code)
-    result = await execute(
-        data.account_id,
-        PostStory(
-            filename=data.filename,
-            content=data.content,
-            media_kind=data.media_kind,
-            caption=data.caption,
-            privacy_preset=data.privacy_preset,
-            period_seconds=data.period_seconds,
-            protect_content=data.protect_content,
-            extra_images=data.extra_images,
-            collage_layout=data.collage_layout,
-        ),
+    design = data.design or flat_design(
+        caption=data.caption,
+        privacy_preset=data.privacy_preset,
+        protect_content=data.protect_content,
+        period_seconds=data.period_seconds,
+    )
+    check_design_limits(design)
+    account = await fetch_account(data.account_id)
+
+    async def send(action: PostStory) -> ActionResult:
+        return await execute(data.account_id, action)
+
+    media = StoryMedia(
+        data.filename, data.content, data.media_kind, data.extra_images, data.collage_layout
+    )
+    result, downgraded = await send_story_for_account(
+        send,
+        premium=None if account is None else account.premium,
+        design=design,
+        make_action=lambda sent: story_action(media, sent),
     )
     invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
@@ -166,11 +181,12 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
         extra={
             "filename": data.filename,
             "media_kind": data.media_kind,
-            "privacy_preset": data.privacy_preset,
+            "privacy_preset": design.privacy_preset,
             "image_count": 1 + len(data.extra_images),
+            "downgraded": downgraded,
         },
     )
-    return result
+    return StoryPostResult(**result.model_dump(), downgraded=downgraded)
 
 
 async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionResult:

@@ -102,7 +102,7 @@ async def test_a_premium_refusal_posts_again_without_link_and_lifetime(
 ) -> None:
     campaign_id = await seed(link="https://t.me/school")
     telegram.story_answers["a1"] = [
-        answer("failed", error_type="PremiumAccountRequiredError"),
+        answer("failed", error_type="ProfileGatewayError", error_message="premium_required"),
     ]
 
     await run_to_end(campaign_id)

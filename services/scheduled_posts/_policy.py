@@ -27,7 +27,8 @@ from schemas.scheduled_posts import (
     ScheduledPostRead,
     ScheduledStoryOptions,
 )
-from services.accounts._result import AccountNotFoundError
+from services.accounts._result import AccountActionError, AccountNotFoundError
+from services.accounts._story_premium import check_design_limits, flat_design
 from services.accounts.lifecycle import require_account
 from services.scheduled_posts import _runtime
 
@@ -49,6 +50,7 @@ _MEDIA_MISSING: ScheduledPostRefusalCode = "scheduled_media_missing"
 _KIND_MISMATCH: ScheduledPostRefusalCode = "scheduled_media_kind_mismatch"
 _TOO_MANY_IMAGES: ScheduledPostRefusalCode = "scheduled_too_many_images"
 _BAD_LAYOUT: ScheduledPostRefusalCode = "scheduled_collage_layout_invalid"
+_BAD_DESIGN: ScheduledPostRefusalCode = "scheduled_post_invalid"
 
 
 class ScheduledPostRefusedError(ValueError):
@@ -236,13 +238,20 @@ async def schedule_story(account_id: str, request: ScheduleStoryRequest) -> Sche
             size = await scheduled_media.size_of(name)
             if size is not None and size > settings.profile_media.story_image_max_bytes:
                 raise ScheduledPostRefusedError(_MEDIA_INVALID)
-    story = ScheduledStoryOptions(
-        media_kind="video" if is_video else "image",
+    design = request.design or flat_design(
         caption=request.caption,
         privacy_preset=request.privacy_preset,
         protect_content=request.protect_content,
-        collage_layout=request.collage_layout if extras else None,
         period_seconds=request.period_seconds,
+    )
+    try:
+        check_design_limits(design)
+    except AccountActionError as exc:
+        raise ScheduledPostRefusedError(_BAD_DESIGN) from exc
+    story = ScheduledStoryOptions.from_design(
+        design,
+        media_kind="video" if is_video else "image",
+        collage_layout=request.collage_layout if extras else None,
     )
     return await _insert(_new_post(account_id, request, list(request.media_ids), story))
 
@@ -273,6 +282,10 @@ def to_read(post: ScheduledPost) -> ScheduledPostRead:
         caption=None if post.story is None else post.story.caption,
         privacy_preset=None if post.story is None else post.story.privacy_preset,
         story_id=post.story_id,
+        period_hours=None if post.story is None else post.story.period_seconds // 3600,
+        pinned=None if post.story is None else post.story.pinned,
+        link_sticker_count=None if post.story is None else len(post.story.link_stickers),
+        downgraded=post.downgraded,
         thumb_url=_thumb_url(post),
     )
 

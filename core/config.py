@@ -284,6 +284,11 @@ class ProfileMediaSettings(BaseSettings):
     # composite, and the gap (px) drawn between cells on the 1080x1920 canvas.
     story_collage_max_images: int = Field(default=6, ge=2, le=6)
     story_collage_gap_px: int = Field(default=8, ge=0)
+    # Story design limits. A free account's caption stops at ``story_free_caption_max``
+    # (Premium goes to Telegram's 2048); link stickers and their labels are Premium-only.
+    story_free_caption_max: int = Field(default=200, ge=1, le=2048)
+    story_link_stickers_max: int = Field(default=3, ge=1, le=3)
+    story_link_label_max: int = Field(default=40, ge=1, le=40)
     music_max_bytes: int = Field(default=30_000_000, ge=1)
     # Concurrent thumbnail downloads per read batch (photo history / stories).
     # Unbounded gather over up to 100 downloads hammered the DC in parallel and

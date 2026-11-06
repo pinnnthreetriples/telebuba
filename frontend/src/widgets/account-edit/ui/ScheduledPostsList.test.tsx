@@ -231,3 +231,42 @@ test('Escape during a save keeps both the editor and the dialog open', async () 
   expect(screen.getByLabelText('Новое время')).toBeInTheDocument();
   release();
 });
+
+test('a story row shows its period, pin, link count and what Premium would have added', async () => {
+  serve([
+    post({
+      post_id: 's1',
+      kind: 'story',
+      filename: 'story.png',
+      period_hours: 12,
+      pinned: true,
+      link_sticker_count: 2,
+      downgraded: ['period', 'link_stickers'],
+    }),
+  ]);
+  renderWithClient(<ScheduledPostsList accountId="acc-1" kind="story" />);
+
+  expect(await screen.findByText('12 ч')).toBeInTheDocument();
+  expect(screen.getByText('Закреплено')).toBeInTheDocument();
+  expect(screen.getByText('Ссылки: 2')).toBeInTheDocument();
+  expect(screen.getByText('Без Premium: срок показа (стал 24 ч), ссылки')).toBeInTheDocument();
+});
+
+test('a plain story row carries none of the extras', async () => {
+  serve([
+    post({
+      post_id: 's1',
+      kind: 'story',
+      period_hours: 24,
+      pinned: false,
+      link_sticker_count: 0,
+      downgraded: [],
+    }),
+  ]);
+  renderWithClient(<ScheduledPostsList accountId="acc-1" kind="story" />);
+
+  await screen.findByText('Ожидает');
+  expect(screen.queryByText('24 ч')).not.toBeInTheDocument();
+  expect(screen.queryByText('Закреплено')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Без Premium/)).not.toBeInTheDocument();
+});
