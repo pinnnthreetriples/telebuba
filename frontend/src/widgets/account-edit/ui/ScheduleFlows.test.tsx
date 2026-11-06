@@ -6,6 +6,7 @@ import { toLocalInput } from '@/features/schedule-post';
 import type { AccountRead } from '@/shared/api';
 
 import { AddStoryModal } from './AddStoryModal';
+import { typeCaption } from './AddStoryModal.test-helpers';
 import { BulkEditModal } from './BulkEditModal';
 import { jsonResponse, renderWithClient } from './ProfileModal.test-helpers';
 import { SchedulePhotosModal } from './SchedulePhotosModal';
@@ -120,7 +121,7 @@ test('the story composer schedules instead of publishing when set to a time', as
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={onPosted} />);
 
   await userEvent.click(screen.getByText('По расписанию'));
-  await userEvent.click(screen.getByText('Публично'));
+  await userEvent.click(screen.getByText('Все'));
   pick([png('s.png')]);
   await userEvent.click(screen.getByRole('button', { name: 'Запланировать' }));
 
@@ -131,7 +132,7 @@ test('the story composer schedules instead of publishing when set to a time', as
   expect(onPosted).not.toHaveBeenCalled();
   const body = log.stories[0]?.body ?? {};
   expect(body.media_ids).toEqual([`${'1'.padStart(64, '0')}.png`]);
-  expect(body.privacy_preset).toBe('public');
+  expect((body.design as { privacy_preset: string }).privacy_preset).toBe('public');
   expect(await screen.findByText('Запланировано')).toBeInTheDocument();
 });
 
@@ -295,7 +296,7 @@ test('a retry after a failed story schedule keeps its key, edited or not', async
   await waitFor(() => {
     expect(keys).toHaveLength(1);
   });
-  await userEvent.type(screen.getByPlaceholderText('Введите подпись…'), 'новая');
+  typeCaption('новая');
   await userEvent.click(screen.getByRole('button', { name: 'Запланировать' }));
 
   await waitFor(() => {
@@ -303,4 +304,37 @@ test('a retry after a failed story schedule keeps its key, edited or not', async
   });
   // The server finds the post a lost answer may have made and updates it.
   expect(keys[1]).toBe(keys[0]);
+});
+
+async function openBulkStories(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Добавить аккаунты' }));
+  await user.click(await screen.findByRole('checkbox', { name: 'Выбрать все (3)' }));
+  await user.click(screen.getByRole('button', { name: 'Добавить (3)' }));
+  await user.click(screen.getByRole('tab', { name: 'Сторис' }));
+}
+
+test('a bulk story run uploads every file once and schedules the whole collage with its design', async () => {
+  const log = route();
+  const user = userEvent.setup();
+  renderWithClient(<BulkEditModal account={FLEET[0] as AccountRead} onClose={vi.fn()} />);
+
+  await openBulkStories(user);
+  pick([png('a.png'), png('b.png')]);
+  typeCaption('привет');
+  await user.click(screen.getByRole('switch', { name: 'Закрепить в профиле' }));
+  await user.click(screen.getByText('По расписанию'));
+  await user.click(screen.getByRole('button', { name: 'Запланировать для 3 аккаунтов' }));
+
+  await waitFor(() => {
+    expect(log.stories).toHaveLength(3);
+  });
+  expect(log.uploads).toBe(2);
+  expect(log.now).toBe(0);
+  const ids = [`${'1'.padStart(64, '0')}.png`, `${'2'.padStart(64, '0')}.png`];
+  for (const entry of log.stories) {
+    expect(entry.body.media_ids).toEqual(ids);
+    expect(entry.body.filename).toBe('a.png');
+    expect(entry.body.collage_layout).toBe('v2');
+    expect(entry.body.design).toMatchObject({ caption: 'привет', pinned: true, period_hours: 24 });
+  }
 });

@@ -8,6 +8,7 @@ import '@/shared/i18n';
 import type { AccountRead } from '@/shared/api';
 import { toastError } from '@/shared/ui';
 
+import { typeCaption } from './AddStoryModal.test-helpers';
 import { BulkEditModal } from './BulkEditModal';
 
 // The modal has no <Toaster/> of its own, so the queue is what we assert on.
@@ -29,7 +30,7 @@ const FLEET: AccountRead[] = [
   { ...ACC1, account_id: 'acc-3', first_name: 'Анна' },
 ];
 
-type Sent = { url: string; fileName: string | null };
+type Sent = { url: string; fileName: string | null; design: string | null };
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -50,14 +51,17 @@ function routeApi(): Sent[] {
     }
     if (request.method === 'POST') {
       let fileName: string | null = null;
+      let design: string | null = null;
       try {
         const form = await request.clone().formData();
         const file = form.get('file') ?? form.get('files');
         fileName = file instanceof File ? file.name : null;
+        const field = form.get('design');
+        design = typeof field === 'string' ? field : null;
       } catch {
         // not multipart (the avatar re-sync has no body at all)
       }
-      sent.push({ url: pathname, fileName });
+      sent.push({ url: pathname, fileName, design });
     }
     return jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' });
   });
@@ -192,4 +196,93 @@ test('an oversized avatar is refused before a single upload', async () => {
   });
   expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
   expect(sent.filter((row) => row.url === '/api/v1/accounts/photo')).toHaveLength(0);
+});
+
+test('one design goes to every account: caption, protection and period are sent for real', async () => {
+  const sent = routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await selectWholeFleet(user);
+  await user.click(screen.getByRole('tab', { name: 'Сторис' }));
+  pick([photo('story.jpg')]);
+  typeCaption('привет');
+  await user.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
+  await user.click(screen.getByRole('button', { name: 'Применить к 3 аккаунтам' }));
+  await waitFor(() => {
+    expect(screen.getByText('Применено 3 из 3')).toBeInTheDocument();
+  });
+
+  const stories = sent.filter((row) => row.url.endsWith('/story'));
+  expect(stories).toHaveLength(3);
+  for (const row of stories) {
+    expect(JSON.parse(row.design ?? '{}')).toMatchObject({
+      caption: 'привет',
+      protect_content: true,
+      period_hours: 24,
+      privacy_preset: 'contacts',
+    });
+  }
+});
+
+test('a link sticker without an address keeps the bulk story from starting', async () => {
+  routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await user.click(screen.getByRole('tab', { name: 'Сторис' }));
+  pick([photo('story.jpg')]);
+  expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeEnabled();
+  await user.click(screen.getByRole('button', { name: 'Добавить ссылку' }));
+  expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
+});
+
+test('accounts without Premium are counted in the hint and their rows say what was dropped', async () => {
+  routeApi();
+  const base = vi.mocked(fetch).getMockImplementation();
+  const fleet = FLEET.map((row, index) => ({ ...row, premium: index !== 1 }));
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return jsonResponse({ items: fleet, next_cursor: null });
+    }
+    if (pathname === '/api/v1/accounts/acc-2/story') {
+      return jsonResponse({
+        status: 'ok',
+        action_type: 'post_story',
+        account_id: 'acc-2',
+        downgraded: ['period'],
+      });
+    }
+    return base ? base(input) : jsonResponse({});
+  });
+  const user = userEvent.setup();
+  renderModal();
+
+  await selectWholeFleet(user);
+  await user.click(screen.getByRole('tab', { name: 'Сторис' }));
+  pick([photo('story.jpg')]);
+  await user.click(screen.getByRole('radio', { name: '48 ч' }));
+  expect(
+    await screen.findByText('1 аккаунт без Premium опубликует без: выбранного срока'),
+  ).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Применить к 3 аккаунтам' }));
+  await waitFor(() => {
+    expect(screen.getByText('Применено 3 из 3')).toBeInTheDocument();
+  });
+  expect(screen.getByText('1 без Premium')).toBeInTheDocument();
+  expect(screen.getByText('Готово · без Premium: срок показа (стал 24 ч)')).toBeInTheDocument();
+});
+
+test('a story takes at most six photos, laid out as a collage', async () => {
+  routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await user.click(screen.getByRole('tab', { name: 'Сторис' }));
+  pick(['1', '2', '3', '4', '5', '6', '7'].map((n) => photo(`p${n}.jpg`)));
+  expect(screen.getAllByRole('button', { name: 'Убрать файл' })).toHaveLength(6);
+  expect(screen.getByRole('button', { name: 'Раскладка grid2x3' })).toBeInTheDocument();
 });

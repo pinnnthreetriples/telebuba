@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.migration_steps import _sqlite_table_exists
+
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
@@ -63,3 +65,16 @@ def _add_scheduled_posts_tables(connection: Connection) -> None:
     connection.exec_driver_sql(
         "CREATE INDEX IF NOT EXISTS ix_sched_media_name ON scheduled_post_media (media_name)",
     )
+
+
+def _add_scheduled_posts_downgraded(connection: Connection) -> None:
+    # Migration 110: which Premium features a free account lost when the story went out.
+    # NULL for every existing row (and every photo): nothing was dropped.
+    if not _sqlite_table_exists(connection, "scheduled_profile_posts"):
+        return
+    # Outside ``_ALLOWED_TABLES``, so the column probe is inlined (a fixed table name).
+    rows = connection.exec_driver_sql("PRAGMA table_info(scheduled_profile_posts)").mappings().all()
+    if "downgraded" not in {str(row["name"]) for row in rows}:
+        connection.exec_driver_sql(
+            "ALTER TABLE scheduled_profile_posts ADD COLUMN downgraded VARCHAR",
+        )

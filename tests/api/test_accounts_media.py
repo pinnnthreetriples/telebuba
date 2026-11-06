@@ -603,12 +603,12 @@ async def test_set_photo_main_preserves_int64_ids(
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_over_long_story_caption_is_a_validation_error_not_a_500(app: FastAPI) -> None:
-    """1024 is ``AccountStoryUpload``'s cap and the SPA's input has no maxLength."""
+    """2048 is ``AccountStoryUpload``'s cap and the SPA's input has no maxLength."""
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/story",
             files={"files": ("a.jpg", b"\xff\xd8\xff", "image/jpeg")},
-            data={"caption": "x" * 1100},
+            data={"caption": "x" * 2100},
         )
     assert resp.status_code == 422
     error = resp.json()["error"]
@@ -623,7 +623,7 @@ def test_the_caption_cap_is_declared_in_the_openapi_contract(app: FastAPI) -> No
     body = operation["requestBody"]["content"]["multipart/form-data"]["schema"]
     model_name = body["$ref"].rsplit("/", 1)[-1]
     field = schema["components"]["schemas"][model_name]["properties"]["caption"]
-    assert 1024 in [option.get("maxLength") for option in field.get("anyOf", [field])]
+    assert 2048 in [option.get("maxLength") for option in field.get("anyOf", [field])]
 
 
 @pytest.mark.asyncio

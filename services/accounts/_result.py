@@ -83,6 +83,8 @@ _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
         "QrLoginGatewayError",
         "StoryCollageLayoutError",
         "StoryImageNormalisationError",
+        # A link sticker's label no installed font can draw.
+        "StoryStickerError",
         "StoryVideoNormalisationError",
         # The cloud-password refusals. Its codes are the only place a refused 2FA
         # write says anything at all: the exception deliberately carries no Telethon

@@ -1249,6 +1249,10 @@ export type BodyPostAccountStory = {
    * Collage Layout
    */
   collage_layout?: string | null;
+  /**
+   * Design
+   */
+  design?: string | null;
 };
 
 /**
@@ -7180,6 +7184,7 @@ export type ScheduleStoryRequest = {
    * Period Seconds
    */
   period_seconds?: number;
+  design?: StoryDesign | null;
 };
 
 /**
@@ -7274,6 +7279,22 @@ export type ScheduledPostRead = {
    * Story Id
    */
   story_id?: number | null;
+  /**
+   * Period Hours
+   */
+  period_hours?: number | null;
+  /**
+   * Pinned
+   */
+  pinned?: boolean | null;
+  /**
+   * Link Sticker Count
+   */
+  link_sticker_count?: number | null;
+  /**
+   * Downgraded
+   */
+  downgraded?: Array<string>;
   /**
    * Thumb Url
    */
@@ -7751,6 +7772,100 @@ export type StopWarmingRequest = {
 };
 
 /**
+ * StoryDesign
+ */
+export type StoryDesign = {
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Entities
+   */
+  entities?: Array<StoryEntity>;
+  /**
+   * Period Hours
+   */
+  period_hours?: 6 | 12 | 24 | 48;
+  /**
+   * Pinned
+   */
+  pinned?: boolean;
+  /**
+   * Protect Content
+   */
+  protect_content?: boolean;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: 'contacts' | 'close_friends' | 'public';
+  /**
+   * Link Stickers
+   */
+  link_stickers?: Array<StoryLinkSticker>;
+};
+
+/**
+ * StoryEntity
+ *
+ * One formatted span of the caption; ``offset``/``length`` are UTF-16 units.
+ */
+export type StoryEntity = {
+  /**
+   * Type
+   */
+  type: 'bold' | 'italic' | 'underline' | 'strike' | 'spoiler' | 'code' | 'text_url';
+  /**
+   * Offset
+   */
+  offset: number;
+  /**
+   * Length
+   */
+  length: number;
+  /**
+   * Url
+   */
+  url?: string | null;
+};
+
+/**
+ * StoryLinkSticker
+ *
+ * A tappable link plate; ``x``/``y`` are its centre in percent of the media.
+ */
+export type StoryLinkSticker = {
+  /**
+   * Url
+   */
+  url: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * Style
+   */
+  style?: 'white' | 'dark' | 'glass' | 'accent';
+  /**
+   * X
+   */
+  x: number;
+  /**
+   * Y
+   */
+  y: number;
+  /**
+   * Scale
+   */
+  scale?: number;
+  /**
+   * Rotation
+   */
+  rotation?: number;
+};
+
+/**
  * StoryPinRequest
  */
 export type StoryPinRequest = {
@@ -7762,6 +7877,89 @@ export type StoryPinRequest = {
    * Pinned
    */
   pinned: boolean;
+};
+
+/**
+ * StoryPostResult
+ *
+ * A posted story's outcome plus what a free account lost on the way.
+ */
+export type StoryPostResult = {
+  /**
+   * Status
+   */
+  status:
+    | 'ok'
+    | 'already_participant'
+    | 'flood_wait'
+    | 'slow_mode_wait'
+    | 'premium_wait'
+    | 'peer_flood'
+    | 'failed'
+    | 'unavailable';
+  /**
+   * Action Type
+   */
+  action_type: string;
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Message Id
+   */
+  message_id?: number | null;
+  /**
+   * Channel Id
+   */
+  channel_id?: string | null;
+  /**
+   * Recent Message Ids
+   */
+  recent_message_ids?: Array<string> | null;
+  /**
+   * Recent Media Kinds
+   */
+  recent_media_kinds?: {
+    [key: string]: 'poll' | 'video' | 'voice';
+  } | null;
+  read_facts?: ReadChannelFacts | null;
+  /**
+   * Warm Skip
+   */
+  warm_skip?: string | null;
+  /**
+   * Flood Wait Seconds
+   */
+  flood_wait_seconds?: number | null;
+  /**
+   * Applied Privacy Keys
+   */
+  applied_privacy_keys?: Array<string> | null;
+  /**
+   * Twofa Email Code Length
+   */
+  twofa_email_code_length?: number | null;
+  /**
+   * Twofa Email Unconfirmed
+   */
+  twofa_email_unconfirmed?: boolean;
+  /**
+   * Twofa Hint
+   */
+  twofa_hint?: string | null;
+  /**
+   * Error Type
+   */
+  error_type?: string | null;
+  /**
+   * Error Message
+   */
+  error_message?: string | null;
+  /**
+   * Downgraded
+   */
+  downgraded?: Array<'period' | 'link_stickers' | 'long_caption' | 'formatting'>;
 };
 
 /**
@@ -10842,7 +11040,7 @@ export type PostAccountStoryResponses = {
   /**
    * Successful Response
    */
-  200: ActionResult;
+  200: StoryPostResult;
 };
 
 export type PostAccountStoryResponse = PostAccountStoryResponses[keyof PostAccountStoryResponses];

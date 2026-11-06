@@ -22,6 +22,7 @@ import { formatLocalDateTime, formatRelativeTo, useLogEventStream } from '@/shar
 import { Badge, type BadgeTone, Button, ConfirmModal, Icon } from '@/shared/ui';
 
 import { profileCodeText, tileStyle } from './_profileShared';
+import { downgradedList } from './_storyShared';
 
 type ScheduledPostState = ScheduledPostRead['state'];
 
@@ -211,6 +212,18 @@ function ScheduledRow({
       ? t('accounts.schedule.retryAt', { when: formatLocalDateTime(nextAt, i18n.language) })
       : t('accounts.schedule.notBefore', { when: formatLocalDateTime(runAt, i18n.language) });
 
+  // What the story will carry beyond the media: a non-default period, the pin, links.
+  const pinnedText = t('accounts.schedule.pinned');
+  const storyBits: string[] = [];
+  if (item.period_hours != null && item.period_hours !== 24) {
+    storyBits.push(t('accounts.schedule.period', { n: item.period_hours }));
+  }
+  if (item.pinned) storyBits.push(pinnedText);
+  if ((item.link_sticker_count ?? 0) > 0) {
+    storyBits.push(t('accounts.schedule.linkStickers', { n: item.link_sticker_count }));
+  }
+  const downgraded = item.downgraded ?? [];
+
   return (
     <li ref={rowRef} className="flex items-start gap-3 rounded-md border border-line px-3 py-2">
       <div
@@ -238,6 +251,21 @@ function ScheduledRow({
               : (item.filename ?? '')}
           {item.media_count > 1 && ` · ${t('accounts.schedule.collage', { n: item.media_count })}`}
         </div>
+        {item.kind === 'story' && storyBits.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 type-small">
+            {storyBits.map((bit) => (
+              <span key={bit} className="inline-flex items-center gap-1">
+                {bit === pinnedText && <Icon name="pin" size={12} />}
+                {bit}
+              </span>
+            ))}
+          </div>
+        )}
+        {downgraded.length > 0 && (
+          <div className="type-small text-warning-deep">
+            {t('accounts.schedule.downgradedNote', { list: downgradedList(t, downgraded) })}
+          </div>
+        )}
         {open && (
           <form
             className="mt-2 flex flex-wrap items-end gap-2"

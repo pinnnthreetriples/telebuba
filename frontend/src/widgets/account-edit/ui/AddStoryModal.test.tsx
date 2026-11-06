@@ -6,7 +6,16 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
+import { toastError } from '@/shared/ui';
+
 import { AddStoryModal } from './AddStoryModal';
+import { typeCaption } from './AddStoryModal.test-helpers';
+
+// The modal has no <Toaster/> of its own, so the queue is what we assert on.
+vi.mock('@/shared/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/ui')>()),
+  toastError: vi.fn(),
+}));
 
 function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -48,14 +57,13 @@ test('audience, caption and no-forward interact and the modal closes', async () 
   expect(screen.getByText('Новая сторис')).toBeInTheDocument();
 
   await userEvent.click(screen.getByText('Близкие друзья'));
-  await userEvent.click(screen.getByText('Публично'));
+  await userEvent.click(screen.getByText('Все'));
   await userEvent.click(screen.getByText('Контакты'));
 
-  await userEvent.click(screen.getByText('Запретить пересылку сторис'));
+  await userEvent.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
 
-  const caption = screen.getByPlaceholderText('Введите подпись…');
-  await userEvent.type(caption, 'привет');
-  expect(caption).toHaveValue('привет');
+  typeCaption('привет');
+  expect(screen.getByRole('textbox', { name: 'Подпись' })).toHaveTextContent('привет');
 
   // A composed, unpublished story asks before × throws it away.
   await userEvent.click(screen.getByLabelText('Закрыть'));
@@ -167,11 +175,124 @@ test('a rate-limited publish shows the wait, not the raw code', async () => {
   expect(screen.queryByText('flood_wait')).not.toBeInTheDocument();
 });
 
-test('the caption input mirrors the server-side 1024-character cap', () => {
-  // Without it the whole upload is spent to come back a 422 about a field whose
-  // end the operator can no longer see.
+test('the story goes out as one design: caption, audience, protection, period and pin', async () => {
+  mockStoryOk();
+  renderWithClient(
+    <AddStoryModal accountId="acc-1" premium onClose={vi.fn()} onPosted={vi.fn()} />,
+  );
+
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  typeCaption('привет');
+  await userEvent.click(screen.getByText('Близкие друзья'));
+  await userEvent.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
+  await userEvent.click(screen.getByRole('switch', { name: 'Закрепить в профиле' }));
+  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await userEvent.click(screen.getByText('Опубликовать'));
+
+  await waitFor(() => {
+    expect(
+      vi.mocked(fetch).mock.calls.some(([request]) => (request as Request).method === 'POST'),
+    ).toBe(true);
+  });
+  const form = await lastStoryBody();
+  expect(JSON.parse(form.get('design') as string)).toEqual({
+    caption: 'привет',
+    entities: [],
+    period_hours: 48,
+    pinned: true,
+    protect_content: true,
+    privacy_preset: 'close_friends',
+    link_stickers: [],
+  });
+  // The flat fields the design replaces are not sent beside it.
+  expect(form.get('caption')).toBeNull();
+  expect(form.get('protect_content')).toBeNull();
+});
+
+test('an account without Premium is told what will be left out', async () => {
+  renderWithClient(
+    <AddStoryModal accountId="acc-1" premium={false} onClose={vi.fn()} onPosted={vi.fn()} />,
+  );
+  expect(screen.queryByText(/Без Premium будет опубликовано/)).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  expect(
+    screen.getByText('Без Premium будет опубликовано без: выбранного срока'),
+  ).toBeInTheDocument();
+});
+
+test('a Premium account gets no warning for the same choice', async () => {
+  renderWithClient(
+    <AddStoryModal accountId="acc-1" premium onClose={vi.fn()} onPosted={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  expect(screen.queryByText(/Без Premium будет опубликовано/)).not.toBeInTheDocument();
+});
+
+test('a story published without Premium features says which ones were dropped', async () => {
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          status: 'ok',
+          action_type: 'post_story',
+          account_id: 'acc-1',
+          downgraded: ['period', 'formatting'],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ),
+  );
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
-  expect(screen.getByPlaceholderText('Введите подпись…')).toHaveAttribute('maxlength', '1024');
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  await userEvent.click(screen.getByText('Опубликовать'));
+
+  expect(
+    await screen.findByText('Опубликовано без Premium: срок показа (стал 24 ч), форматирование'),
+  ).toBeInTheDocument();
+});
+
+test('a clean publish shows no downgrade notice', async () => {
+  mockStoryOk();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  await userEvent.click(screen.getByText('Опубликовать'));
+  expect(await screen.findByText('Опубликовано')).toBeInTheDocument();
+  expect(screen.queryByText(/без Premium/)).not.toBeInTheDocument();
+});
+
+test('a link sticker without an address keeps Publish disabled', async () => {
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить ссылку' }));
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+});
+
+test('a file the backend would refuse is skipped before any upload', async () => {
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const big = new File([new Uint8Array(11_000_000)], 'huge.jpg', { type: 'image/jpeg' });
+  const gif = new File(['x'], 'anim.gif', { type: 'image/gif' });
+  fireEvent.change(fileInput(), { target: { files: [big, gif] } });
+
+  await waitFor(() => {
+    expect(vi.mocked(toastError)).toHaveBeenCalledTimes(2);
+  });
+  expect(vi.mocked(toastError)).toHaveBeenCalledWith(
+    '«huge.jpg» пропущен — .jpg, .jpeg, .png, .webp, .mp4, .mov до 100 МБ',
+  );
+  expect(screen.queryByAltText('huge.jpg')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+});
+
+test('a design edit alone makes the modal dirty', async () => {
+  const onClose = vi.fn();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={onClose} onPosted={vi.fn()} />);
+  await userEvent.click(screen.getByRole('switch', { name: 'Закрепить в профиле' }));
+  await userEvent.click(screen.getByLabelText('Закрыть'));
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Закрыть без сохранения' })).toBeInTheDocument();
 });
 
 test('the picked video size uses localized units, not hardcoded RU', async () => {

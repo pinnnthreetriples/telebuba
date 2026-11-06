@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from io import BytesIO
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -25,7 +24,7 @@ from telethon.tl.types import (
 )
 
 from core.telegram_client import execute, execute_read
-from core.telegram_client._story_link import caption_with_mentions, draw_link_plate
+from core.telegram_client._story_link import caption_with_mentions
 from schemas.telegram_actions import PostStory
 from schemas.telegram_actions_masstagging import (
     ListMasstagContacts,
@@ -256,29 +255,6 @@ async def test_a_plain_story_has_no_entities_nor_areas(monkeypatch: pytest.Monke
 
     sent = next(r for r in client.requests if isinstance(r, SendStoryRequest))
     assert (sent.entities, sent.media_areas, sent.caption) == (None, None, "x")
-
-
-def test_the_link_plate_is_drawn_only_with_a_usable_font(monkeypatch: pytest.MonkeyPatch) -> None:
-    content = _jpeg()
-    monkeypatch.setattr("core.telegram_client._story_link._FONT_CANDIDATES", ())
-
-    assert draw_link_plate(content, "Go") == content
-    assert draw_link_plate(content, "   ") == content
-
-
-def test_the_link_plate_is_drawn_where_the_area_is() -> None:
-    from core.telegram_client._story_link import _FONT_CANDIDATES  # noqa: PLC0415
-
-    content = _jpeg()
-    drawn = draw_link_plate(content, "Go")
-
-    if any(Path(candidate).is_file() for candidate in _FONT_CANDIDATES):
-        assert drawn != content
-        with Image.open(BytesIO(drawn)) as image:
-            # The plate is white and centred where ``LINK_AREA`` puts the link.
-            assert image.getpixel((200 - 100, int(600 * 0.82))) == (255, 255, 255)
-    else:
-        assert drawn == content
 
 
 @pytest.mark.asyncio

@@ -28,6 +28,12 @@ from core.repositories import scheduled_posts as repo
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute, refresh_account_avatar
 from schemas.telegram_actions import PostStory, SetProfilePhoto
 from services.accounts._result import result_code
+from services.accounts._story_premium import (
+    StoryMedia,
+    send_story_for_account,
+    story_action,
+    with_design,
+)
 from services.accounts.profile_read import invalidate_account_profile_cache
 from services.pacing import await_send_slot
 
@@ -36,6 +42,7 @@ if TYPE_CHECKING:
 
     from schemas.logs import LogLevel
     from schemas.scheduled_posts import ScheduledPost, ScheduledPostState
+    from schemas.story_design import PremiumFeature
     from schemas.telegram_actions import ActionResult
 
 logger = logging.getLogger(__name__)
@@ -69,16 +76,33 @@ async def _build_action(post: ScheduledPost) -> SetProfilePhoto | PostStory:
     suffix = "." + post.media_names[0].rsplit(".", 1)[1]
     if post.story is None:
         return SetProfilePhoto(filename=f"photo{suffix}", content=contents[0])
-    return PostStory(
-        filename=f"story{suffix}",
-        content=contents[0],
-        media_kind=post.story.media_kind,
-        caption=post.story.caption,
-        privacy_preset=post.story.privacy_preset,
-        period_seconds=post.story.period_seconds,
-        protect_content=post.story.protect_content,
-        extra_images=contents[1:],
-        collage_layout=post.story.collage_layout,
+    media = StoryMedia(
+        f"story{suffix}",
+        contents[0],
+        post.story.media_kind,
+        contents[1:],
+        post.story.collage_layout,
+    )
+    return story_action(media, post.story.to_design())
+
+
+async def _send(
+    post: ScheduledPost, action: SetProfilePhoto | PostStory
+) -> tuple[ActionResult, list[PremiumFeature]]:
+    """Send ``action``; a story goes through the Premium policy (see ``_story_premium``)."""
+    if not isinstance(action, PostStory) or post.story is None:
+        return await execute(post.account_id, action, domain=_DOMAIN), []
+    account = await fetch_account(post.account_id)
+    story = action
+
+    async def send(sent: PostStory) -> ActionResult:
+        return await execute(post.account_id, sent, domain=_DOMAIN)
+
+    return await send_story_for_account(
+        send,
+        premium=None if account is None else account.premium,
+        design=post.story.to_design(),
+        make_action=lambda design: with_design(story, design),
     )
 
 
@@ -137,14 +161,18 @@ async def _resync_avatar(post: ScheduledPost) -> None:
         )
 
 
-async def _settle(post: ScheduledPost, result: ActionResult) -> None:
+async def _settle(
+    post: ScheduledPost, result: ActionResult, downgraded: list[PremiumFeature] | None = None
+) -> None:
     # A failed action can still have touched server state (the #249 pattern).
     invalidate_account_profile_cache(post.account_id)
     attempt = post.attempts + 1
     if result.status == "ok":
         story_id = result.message_id if post.kind == "story" else None
         # False: the row went with its account while the post was going out.
-        if await repo.finish_dispatched(post.post_id, "done", story_id=story_id):
+        if await repo.finish_dispatched(
+            post.post_id, "done", story_id=story_id, downgraded=downgraded
+        ):
             # Resync first: the SPA refetches the accounts table on this event.
             if post.kind == "photo":
                 await _resync_avatar(post)
@@ -224,8 +252,8 @@ async def publish(post: ScheduledPost, *, accepting: Callable[[], bool]) -> None
             if not await repo.mark_dispatching(post.post_id):
                 return
             sent = True
-            result = await execute(post.account_id, action, domain=_DOMAIN)
-        settling = asyncio.ensure_future(_settle(post, result))
+            result, downgraded = await _send(post, action)
+        settling = asyncio.ensure_future(_settle(post, result, downgraded))
         await asyncio.shield(settling)
     except asyncio.CancelledError:
         if settling is not None:

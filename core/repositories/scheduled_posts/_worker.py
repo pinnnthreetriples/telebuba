@@ -12,6 +12,7 @@ the publisher for every other account.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -28,7 +29,7 @@ from core.repositories.scheduled_posts._rows import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from sqlalchemy import ColumnElement, Select
 
@@ -154,11 +155,13 @@ async def finish_dispatched(
     *,
     error_code: str | None = None,
     story_id: int | None = None,
+    downgraded: Sequence[str] | None = None,
 ) -> bool:
     values = {
         "state": state,
         "error_code": error_code,
         "story_id": story_id,
+        "downgraded": json.dumps(downgraded) if downgraded else None,
         "finished_unix": now_unix(),
     }
     return await asyncio.to_thread(_transition, post_id, dispatching(), values)

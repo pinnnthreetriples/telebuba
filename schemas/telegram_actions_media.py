@@ -13,6 +13,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from schemas.story_design import (
+    STORY_ENTITIES_MAX,
+    STORY_STICKERS_MAX,
+    StoryEntity,
+    StoryLinkSticker,
+    check_entities_in_caption,
+)
+
 
 class SetProfilePhoto(BaseModel):
     action_type: Literal["set_profile_photo"] = "set_profile_photo"
@@ -55,7 +63,21 @@ class PostStory(BaseModel):
     collage_layout: str | None = None
     # Appended to the caption, each with a mention entity, so the person gets the push.
     mentions: list[StoryMention] = Field(default_factory=list, max_length=10)
+    # The masstagging link: one white sticker at a fixed spot, kept so that flow's
+    # placement is unchanged. Operator-designed stickers go in ``link_stickers``.
     link: StoryLink | None = None
+    # Formatting of ``caption`` only (UTF-16 offsets); mentions are appended after it.
+    entities: list[StoryEntity] = Field(default_factory=list, max_length=STORY_ENTITIES_MAX)
+    link_stickers: list[StoryLinkSticker] = Field(
+        default_factory=list, max_length=STORY_STICKERS_MAX
+    )
+    # Keep the story on the profile after its period ends.
+    pinned: bool = False
+
+    @model_validator(mode="after")
+    def _check_entities(self) -> PostStory:
+        check_entities_in_caption(self.caption, self.entities)
+        return self
 
     @model_validator(mode="after")
     def _check_collage(self) -> PostStory:

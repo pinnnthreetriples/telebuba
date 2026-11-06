@@ -35,9 +35,11 @@ from schemas.profile_media import (
     PhotoRemoveRequest,
     StoryMediaKind,
     StoryPinRequest,
+    StoryPostResult,
     StoryPrivacyPreset,
     StoryRemoveRequest,
 )
+from schemas.story_design import STORY_CAPTION_MAX, StoryDesign
 from schemas.telegram_actions import ActionResult
 from services import accounts
 
@@ -137,9 +139,22 @@ async def get_account_profile_snapshot(
     return await accounts.account_profile_view(account_id, force_refresh=refresh)
 
 
+def _parse_design(raw: str | None) -> StoryDesign | None:
+    """The ``design`` form field as a model, or a 400 with a stable code."""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return StoryDesign.model_validate_json(raw)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="story_design_invalid",
+        ) from exc
+
+
 @media_router.post(
     "/accounts/{account_id}/story",
-    response_model=ActionResult,
+    response_model=StoryPostResult,
     operation_id="postAccountStory",
     responses=SERVICE_ERRORS,
 )
@@ -150,11 +165,15 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     # The cap is declared HERE as well as on AccountStoryUpload.caption so it is
     # part of the OpenAPI contract the SPA generates from, instead of a surprise
     # rejection after the whole multipart body was uploaded.
-    caption: Annotated[str | None, Form(max_length=1024)] = None,
+    caption: Annotated[str | None, Form(max_length=STORY_CAPTION_MAX)] = None,
     privacy_preset: Annotated[StoryPrivacyPreset, Form()] = "contacts",
     protect_content: Annotated[bool, Form()] = False,  # noqa: FBT002 - multipart form field
     collage_layout: Annotated[str | None, Form()] = None,
-) -> ActionResult:
+    # A ``StoryDesign`` as a JSON string. When present it wins over the flat
+    # caption / privacy_preset / protect_content fields above, which stay for
+    # older clients. An invalid design answers 400 ``story_design_invalid``.
+    design: Annotated[str | None, Form()] = None,
+) -> StoryPostResult:
     # First file = image #1; any remaining files = the collage's images 2..N.
     # A single-file post is just a list of length 1 (the old single-photo path).
     if not files:
@@ -168,6 +187,7 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail="story_collage_too_many_images",
         )
+    parsed_design = _parse_design(design)
     primary, *extras = files
     # Size-cap each part from the multipart size BEFORE buffering it into RAM;
     # the service re-checks after decode (same messages, defense-in-depth).
@@ -196,6 +216,7 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
             protect_content=protect_content,
             extra_images=[await extra.read() for extra in extras],
             collage_layout=collage_layout,
+            design=parsed_design,
         )
         return await accounts.post_account_story(upload)
 

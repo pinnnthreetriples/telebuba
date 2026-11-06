@@ -515,6 +515,16 @@
       "removePhoto": "Remove photo {{n}}",
       "moveLeft": "Move photo {{n}} left",
       "moveRight": "Move photo {{n}} right",
+      "downgraded": {
+        "posted": "Published without Premium: {{list}}",
+        "scheduled": "Scheduled without Premium: {{list}}",
+        "feature": {
+          "period": "custom duration (now 24 h)",
+          "link_stickers": "links",
+          "long_caption": "long caption",
+          "formatting": "formatting"
+        }
+      },
       "code": {
         "story_image_invalid": "The image could not be read — choose a JPG/PNG/WebP file",
         "story_video_invalid": "The video could not be processed — choose an MP4/MOV file",
@@ -525,6 +535,8 @@
         "story_collage_requires_image": "A collage can only contain photos, not video",
         "story_collage_too_many_images": "Too many photos for one collage",
         "story_collage_unknown_layout": "That collage layout is not available for this number of photos",
+        "story_design_invalid": "The story design is not valid — check the caption, links and period",
+        "story_link_label_unrenderable": "The link label cannot be drawn on the story — shorten it or remove unusual characters",
         "failed": "Telegram refused the story — try a different file"
       }
     },
@@ -877,6 +889,8 @@
       "apply_one": "Apply to {{count}} account",
       "apply_other": "Apply to {{count}} accounts",
       "progress": "Applied {{done}} of {{total}}",
+      "rowDowngraded": "without Premium: {{list}}",
+      "downgradedCount": "{{n}} without Premium",
       "failedCount": "{{n}} failed",
       "rowQueued": "Waiting",
       "rowRunning": "Applying",
@@ -1322,6 +1336,10 @@
       "now": "Now",
       "later": "On schedule",
       "echo": "Not before {{when}} · {{rel}}",
+      "period": "{{n}} h",
+      "pinned": "Pinned",
+      "linkStickers": "Links: {{n}}",
+      "downgradedNote": "Without Premium: {{list}}",
       "problem": {
         "empty": "Pick a date and time",
         "past": "Too soon — pick a time at least {{n}} min from now",
@@ -5410,6 +5428,90 @@
       "close": "Close the inbox",
       "manualType": "Type into phone",
       "manualInputPlaceholder": "Enter code manually"
+    }
+  },
+  "storyComposer": {
+    "caption": {
+      "label": "Caption",
+      "placeholder": "Text under the story",
+      "counter": "{{count}} / {{max}}",
+      "overFree": "Over {{free}} characters needs Premium",
+      "toolbar": "Formatting",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "strike": "Strikethrough",
+      "spoiler": "Spoiler",
+      "code": "Monospace",
+      "link": "Link",
+      "linkUrl": "Link address",
+      "linkApply": "Apply",
+      "linkRemove": "Remove link",
+      "linkCancel": "Cancel",
+      "linkInvalid": "Enter an http, https or tg address",
+      "linkNeedsSelection": "Select some text first"
+    },
+    "canvas": {
+      "label": "Story preview",
+      "empty": "No media",
+      "sticker": "Link: {{label}}",
+      "stickerFallback": "Untitled link",
+      "scaleHandle": "Resize",
+      "rotateHandle": "Rotate",
+      "editLabel": "Link label",
+      "hint": "Drag a link; arrows move, +/- resize, [ ] rotate, Delete removes"
+    },
+    "stickers": {
+      "title": "Story links",
+      "add": "Add a link",
+      "limit": "At most {{count}} links",
+      "item": "Link {{index}}",
+      "url": "Address",
+      "urlPlaceholder": "example.com",
+      "urlInvalid": "Enter an http, https or tg address",
+      "label": "Label",
+      "labelPlaceholder": "Learn more",
+      "labelCounter": "{{count}} / {{max}}",
+      "labelEmpty": "Enter a label",
+      "labelEmoji": "Emoji are not supported in the label",
+      "labelTooLong": "The label is too long",
+      "style": "Style",
+      "styles": {
+        "white": "White",
+        "dark": "Dark",
+        "glass": "Glass",
+        "accent": "Accent"
+      },
+      "remove": "Remove link",
+      "premium": "Premium"
+    },
+    "options": {
+      "period": "Visible for",
+      "periodHours": "{{count}} h",
+      "premium": "Premium",
+      "pinned": "Pin to profile",
+      "protect": "Forbid forwarding",
+      "audience": "Who can see it",
+      "audiences": {
+        "contacts": "Contacts",
+        "close_friends": "Close friends",
+        "public": "Everyone"
+      }
+    },
+    "hint": {
+      "loss": {
+        "period": "the chosen duration",
+        "link_stickers": "links",
+        "long_caption": "text longer than {{free}} characters",
+        "formatting": "formatting"
+      },
+      "free": "Without Premium it will be published without: {{list}}",
+      "unknown": "If the account has no Premium, it will be published without: {{list}}",
+      "bulk_one": "{{count}} account without Premium will publish without: {{list}}",
+      "bulk_other": "{{count}} accounts without Premium will publish without: {{list}}"
+    },
+    "composer": {
+      "label": "Story design"
     }
   }
 }

@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from io import BytesIO
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageFont
 from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
     SendStoryRequest,
     TogglePinnedRequest,
 )
+from telethon.tl.types import InputPeerUser, MediaAreaUrl, MessageEntityTextUrl
 
-from core.telegram_client import execute
+from core.telegram_client import _media_stories, execute
 from schemas.telegram_actions import PostStory, RemoveStory, ToggleStoryPinned
+from schemas.telegram_actions_media import StoryLink, StoryMention
 from tests.core.telegram_client.helpers import patch_action_client as _patch_client
 
 
@@ -325,3 +328,346 @@ async def test_execute_toggle_story_pinned_sends_toggle_request(
     assert len(toggles) == 1
     assert toggles[0].id == [3210]
     assert toggles[0].pinned is pinned
+
+
+def _loose(value: list[dict[str, Any]]) -> Any:
+    """Raw JSON-shaped values, as the API hands them over, for pydantic to validate."""
+    return value
+
+
+def _url(area: object) -> str:
+    assert isinstance(area, MediaAreaUrl)
+    return area.url
+
+
+class _StoryClient:
+    """Records the requests and the bytes uploaded; answers a story id."""
+
+    def __init__(self) -> None:
+        self.requests: list[object] = []
+        self.uploads: list[tuple[str, bytes]] = []
+
+    async def connect(self) -> None:
+        return None
+
+    async def get_input_entity(self, entity: object) -> object:
+        return (
+            MagicMock()
+            if entity == "me"
+            else InputPeerUser(user_id=int(str(entity)), access_hash=1)
+        )
+
+    async def upload_file(self, file: BytesIO, *, file_name: str) -> object:
+        self.uploads.append((file_name, file.read()))
+        return MagicMock()
+
+    async def __call__(self, request: object) -> object:
+        self.requests.append(request)
+        if isinstance(request, SendStoryRequest):
+            return SimpleNamespace(updates=[SimpleNamespace(story=SimpleNamespace(id=5))])
+        return MagicMock()
+
+    def sent(self) -> SendStoryRequest:
+        return next(r for r in self.requests if isinstance(r, SendStoryRequest))
+
+
+@pytest.fixture
+def story_client(monkeypatch: pytest.MonkeyPatch) -> _StoryClient:
+    client = _StoryClient()
+    _patch_client(monkeypatch, client)
+    monkeypatch.setattr(
+        "core.telegram_client._story_stickers._font",
+        lambda _text, size: ImageFont.load_default(max(size, 1)),
+    )
+    return client
+
+
+@pytest.mark.asyncio
+async def test_caption_entities_map_to_telegram_entities_with_utf16_offsets(
+    story_client: _StoryClient,
+) -> None:
+    # "Hi <emoji> " is 6 UTF-16 units (the emoji is two), so "world" starts at 6.
+    result = await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((400, 500), (9, 9, 9)),
+            media_kind="image",
+            caption="Hi \U0001f393 world  ",
+            entities=_loose(
+                [
+                    {"type": "bold", "offset": 6, "length": 5},
+                    {"type": "italic", "offset": 0, "length": 2},
+                    {"type": "underline", "offset": 0, "length": 2},
+                    {"type": "strike", "offset": 3, "length": 2},
+                    {"type": "spoiler", "offset": 6, "length": 2},
+                    {"type": "code", "offset": 6, "length": 5},
+                    {"type": "text_url", "offset": 6, "length": 7, "url": "example.com/a"},
+                ]
+            ),
+            mentions=[StoryMention(user_id=11, username="alpha")],
+        ),
+    )
+
+    assert result.status == "ok"
+    sent = story_client.sent()
+    assert sent.caption == "Hi \U0001f393 world @alpha"
+    assert sent.entities is not None
+    kinds = [(type(e).__name__, e.offset, e.length) for e in sent.entities]
+    assert kinds == [
+        ("MessageEntityBold", 6, 5),
+        ("MessageEntityItalic", 0, 2),
+        ("MessageEntityUnderline", 0, 2),
+        ("MessageEntityStrike", 3, 2),
+        ("MessageEntitySpoiler", 6, 2),
+        ("MessageEntityCode", 6, 5),
+        # The caption loses its trailing blanks, which cuts this one from 7 to 5.
+        ("MessageEntityTextUrl", 6, 5),
+        # Mentions come after the caption's own entities, so those offsets never move.
+        ("InputMessageEntityMentionName", 12, 6),
+    ]
+    link = next(e for e in sent.entities if isinstance(e, MessageEntityTextUrl))
+    assert link.url == "https://example.com/a"
+
+
+@pytest.mark.asyncio
+async def test_leading_blanks_are_trimmed_and_entities_shift_with_them(
+    story_client: _StoryClient,
+) -> None:
+    # "\n  " is 3 units: "bold" at 3 becomes "bold" at 0; an entity on the blanks is dropped.
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((400, 500), (9, 9, 9)),
+            media_kind="image",
+            caption="\n  bold text",
+            entities=_loose(
+                [
+                    {"type": "bold", "offset": 3, "length": 4},
+                    {"type": "italic", "offset": 0, "length": 2},
+                    {"type": "underline", "offset": 1, "length": 6},
+                ]
+            ),
+        ),
+    )
+
+    sent = story_client.sent()
+    assert sent.caption == "bold text"
+    assert sent.entities is not None
+    assert [(type(e).__name__, e.offset, e.length) for e in sent.entities] == [
+        ("MessageEntityBold", 0, 4),
+        ("MessageEntityUnderline", 0, 4),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_entity_trimmed_to_nothing_is_dropped(story_client: _StoryClient) -> None:
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((400, 500), (9, 9, 9)),
+            media_kind="image",
+            caption="Hi   ",
+            entities=_loose([{"type": "bold", "offset": 3, "length": 2}]),
+        ),
+    )
+
+    sent = story_client.sent()
+    assert (sent.caption, sent.entities) == ("Hi", None)
+
+
+@pytest.mark.asyncio
+async def test_pinned_and_a_48_hour_period_reach_telegram(story_client: _StoryClient) -> None:
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((400, 500), (9, 9, 9)),
+            media_kind="image",
+            pinned=True,
+            period_seconds=172_800,
+            protect_content=True,
+        ),
+    )
+
+    sent = story_client.sent()
+    assert (sent.pinned, sent.period, sent.noforwards) == (True, 172_800, True)
+
+
+@pytest.mark.asyncio
+async def test_an_unpinned_story_leaves_the_pin_flag_off(story_client: _StoryClient) -> None:
+    await execute(
+        "acc",
+        PostStory(filename="s.jpg", content=_jpeg((400, 500), (9, 9, 9)), media_kind="image"),
+    )
+
+    assert not story_client.sent().pinned
+
+
+@pytest.mark.asyncio
+async def test_photo_stickers_are_drawn_into_the_image_and_become_tap_areas(
+    story_client: _StoryClient,
+) -> None:
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((1080, 1920), (128, 128, 128)),
+            media_kind="image",
+            link_stickers=_loose(
+                [
+                    {"url": "example.com", "label": "Shop", "x": 30, "y": 25, "rotation": 15},
+                    {
+                        "url": "tg://resolve?domain=x",
+                        "label": "Chat",
+                        "x": 70,
+                        "y": 75,
+                        "style": "dark",
+                    },
+                ]
+            ),
+        ),
+    )
+
+    areas = story_client.sent().media_areas
+    assert areas is not None
+    assert [_url(a) for a in areas] == ["https://example.com", "tg://resolve?domain=x"]
+    first = areas[0].coordinates
+    assert (first.x, first.y, first.rotation) == pytest.approx((30, 25, 15))
+    uploaded = story_client.uploads[0][1]
+    with Image.open(BytesIO(uploaded)) as image:
+        assert image.size == (1080, 1920)
+        # The plate under the tap area is not the grey background any more.
+        spot = (round(first.x / 100 * 1080), round(first.y / 100 * 1920))
+        pixel = image.getpixel(spot)
+        assert isinstance(pixel, tuple)
+        assert max(abs(int(c) - 128) for c in pixel) > 40
+        # And an untouched corner still is.
+        assert image.getpixel((5, 5)) == pytest.approx((128, 128, 128), abs=4)
+
+
+@pytest.mark.asyncio
+async def test_the_masstagging_link_becomes_one_white_sticker_at_its_old_place(
+    story_client: _StoryClient,
+) -> None:
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((1080, 1920), (128, 128, 128)),
+            media_kind="image",
+            link=StoryLink(url="https://t.me/school", text="Go"),
+        ),
+    )
+
+    areas = story_client.sent().media_areas
+    assert areas is not None
+    assert [_url(a) for a in areas] == ["https://t.me/school"]
+    coords = areas[0].coordinates
+    assert (coords.x, coords.y, coords.rotation) == (50, 82, 0)
+    assert coords.h == pytest.approx(6, abs=0.1)
+
+
+def test_a_link_text_no_font_can_draw_falls_back_to_the_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "core.telegram_client._media_stories.can_render_label", lambda text: text.isascii()
+    )
+
+    sticker = _media_stories._link_sticker(StoryLink(url="https://t.me/school", text="\U0001f517"))
+    blank = _media_stories._link_sticker(StoryLink(url="https://t.me/school", text="  "))
+
+    assert (sticker.label, blank.label) == ("t.me", "t.me")
+
+
+def test_an_undrawable_host_falls_back_to_a_plain_word(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An IDN host on a machine with no font for its script: the story still gets a plate.
+    monkeypatch.setattr(
+        "core.telegram_client._media_stories.can_render_label", lambda text: text.isascii()
+    )
+
+    sticker = _media_stories._link_sticker(StoryLink(url="https://пример.рф/a", text=""))
+
+    assert sticker.label == "LINK"
+
+
+@pytest.mark.asyncio
+async def test_an_unrenderable_sticker_label_surfaces_a_stable_code(
+    story_client: _StoryClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("core.telegram_client._story_stickers._font", lambda *_: None)
+
+    result = await execute(
+        "acc",
+        PostStory(
+            filename="s.jpg",
+            content=_jpeg((400, 500), (9, 9, 9)),
+            media_kind="image",
+            link_stickers=_loose([{"url": "example.com", "label": "Go", "x": 50, "y": 50}]),
+        ),
+    )
+
+    assert (result.status, result.error_type, result.error_message) == (
+        "failed",
+        "StoryStickerError",
+        "story_link_label_unrenderable",
+    )
+    assert not any(isinstance(r, SendStoryRequest) for r in story_client.requests)
+
+
+@pytest.mark.asyncio
+async def test_video_stickers_go_to_ffmpeg_as_an_overlay_png(
+    story_client: _StoryClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, bytes | None] = {}
+
+    async def fake_normalise(
+        _content: bytes, *, overlay_png: bytes | None = None
+    ) -> tuple[bytes, bytes, float, int, int]:
+        captured["overlay"] = overlay_png
+        return b"video", b"thumb", 3.0, 720, 1280
+
+    monkeypatch.setattr(_media_stories, "normalize_story_video_for_telegram", fake_normalise)
+
+    await execute(
+        "acc",
+        PostStory(
+            filename="s.mp4",
+            content=b"raw",
+            media_kind="video",
+            link_stickers=_loose([{"url": "example.com", "label": "Go", "x": 50, "y": 60}]),
+        ),
+    )
+
+    overlay = captured["overlay"]
+    assert overlay is not None
+    with Image.open(BytesIO(overlay)) as png:
+        assert png.size == (720, 1280)
+    areas = story_client.sent().media_areas
+    assert areas is not None
+    assert (areas[0].coordinates.x, areas[0].coordinates.y) == (50, 60)
+
+
+@pytest.mark.asyncio
+async def test_a_video_without_stickers_has_no_overlay(
+    story_client: _StoryClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[bytes | None] = []
+
+    async def fake_normalise(
+        _content: bytes, *, overlay_png: bytes | None = None
+    ) -> tuple[bytes, bytes, float, int, int]:
+        captured.append(overlay_png)
+        return b"video", b"thumb", 3.0, 720, 1280
+
+    monkeypatch.setattr(_media_stories, "normalize_story_video_for_telegram", fake_normalise)
+
+    await execute("acc", PostStory(filename="s.mp4", content=b"raw", media_kind="video"))
+
+    assert captured == [None]
+    assert story_client.sent().media_areas is None

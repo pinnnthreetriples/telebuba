@@ -20,42 +20,45 @@ import {
   type ScheduleMode,
 } from '@/features/schedule-post';
 import {
-  Button,
-  CloseButton,
-  Icon,
-  Input,
-  Modal,
-  ProgressBar,
-  SegmentedControl,
-  Spinner,
-} from '@/shared/ui';
+  StoryComposer,
+  createDefaultDesign,
+  designIsValid,
+  toWireDesign,
+} from '@/features/story-composer';
+import { Button, CloseButton, Modal, toastError } from '@/shared/ui';
 
-import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
-import { retryAfterSeconds } from './_profileShared';
 import {
-  type CollageCell,
+  envelopeMessage,
+  isUploadablePostMedia,
+  PHOTO_SUFFIXES,
+  VIDEO_MAX_BYTES,
+  VIDEO_SUFFIXES,
+  type Translate,
+} from './_channelsShared';
+import { retryAfterSeconds } from './_profileShared';
+import { isVideoFile, mergeStoryPick, storyMediaOf, usePreviewUrls } from './_storyShared';
+import { StoryMediaPicker } from './StoryMediaPicker';
+import { StoryStatusFooter } from './StoryStatusFooter';
+import {
   MAX_COLLAGE_IMAGES,
   MIN_COLLAGE_IMAGES,
   defaultLayoutId,
   isLayoutValidForCount,
-  layoutsForCount,
 } from './storyCollageLayouts';
 
-// The design's new-story modal: audience segmented control, caption, a
-// no-forward checkbox, and a media dropzone. Opened above the profile modal
+// The design's new-story modal: the story composer (preview with link stickers, caption,
+// period, audience, protection) and a media dropzone. Opened above the profile modal
 // (z=75). Publishing posts a real story (postAccountStory) for the account.
 //
 // Multi-photo "collage": Telegram has no native multi-photo story, so the
 // backend stitches 2..6 photos into one composite using a named layout. The UI
 // picks the ordered photos + a layout; a single video stays a single-media
 // story with no collage/layout.
-type Audience = 'contacts' | 'closeFriends' | 'public';
 
-const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
-  contacts: 'contacts',
-  closeFriends: 'close_friends',
-  public: 'public',
-};
+// How long the success window stays open: a story that lost Premium features keeps its
+// notice on screen long enough to be read.
+const CLOSE_MS = 900;
+const CLOSE_NOTICE_MS = 5000;
 
 function fileSize(
   file: File | null,
@@ -91,53 +94,20 @@ function errorText(err: unknown, t: Translate, fallback: string): string {
   );
 }
 
-// A 9:16 mini-preview of a collage layout: each cell drawn as a rounded rect
-// inside a framed portrait canvas. Selected state paints the cells in primary.
-function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; selected: boolean }) {
-  const w = 26;
-  const h = 46;
-  const gap = 1.4;
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      {/* Tokens, not hexes: the selected frame matches the button's own
-          `border-action-primary`, and the cells inherit the button's `text-action-primary`. */}
-      <rect
-        x="0.5"
-        y="0.5"
-        width={w - 1}
-        height={h - 1}
-        rx="4"
-        fill="none"
-        className={selected ? 'stroke-action-primary' : 'stroke-content-subtle'}
-      />
-      {cells.map(([x, y, cw, ch], i) => (
-        <rect
-          key={i}
-          x={x * w + gap}
-          y={y * h + gap}
-          width={cw * w - gap * 2}
-          height={ch * h - gap * 2}
-          rx="1.4"
-          className={selected ? 'fill-current' : 'fill-content-subtle'}
-        />
-      ))}
-    </svg>
-  );
-}
-
 export function AddStoryModal({
   accountId,
+  premium = null,
   onClose,
   onPosted,
 }: {
   accountId: string;
+  // The account's Premium status (null: not known yet).
+  premium?: boolean | null;
   onClose: () => void;
   onPosted: () => void;
 }) {
   const { t } = useTranslation();
-  const [audience, setAudience] = useState<Audience>('contacts');
-  const [noForward, setNoForward] = useState(false);
-  const [caption, setCaption] = useState('');
+  const [design, setDesign] = useState(createDefaultDesign);
   // Ordered collage photos (image #1 first) OR a single video — never both.
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
@@ -165,6 +135,7 @@ export function AddStoryModal({
   const busy = post.isPending || scheduling;
   const done = post.isSuccess || scheduled;
   const failed = post.isError || scheduleError !== null;
+  const locked = busy || done;
   const resetAll = () => {
     post.reset();
     setScheduleError(null);
@@ -173,20 +144,11 @@ export function AddStoryModal({
   const count = images.length;
   const isCollage = video === null && count >= MIN_COLLAGE_IMAGES;
   const hasMedia = video !== null || count > 0;
-
-  // Object URLs for the image tiles, derived synchronously with the images so
-  // a remove/reorder never renders one frame of previews[index] against the
-  // new order (wrong image under the number, briefly-revoked URL). The effect
-  // revokes the previous batch after commit (and on unmount) so blobs don't leak.
-  const previews = useMemo(() => images.map((file) => URL.createObjectURL(file)), [images]);
-  useEffect(
-    () => () => {
-      previews.forEach((url) => {
-        URL.revokeObjectURL(url);
-      });
-    },
-    [previews],
-  );
+  const files = useMemo(() => (video !== null ? [video] : images), [video, images]);
+  const previews = usePreviewUrls(files);
+  const media = storyMediaOf(files, previews, isCollage ? collageLayout : null);
+  // A scheduled story's losses are decided when it goes out: the scheduled list shows them.
+  const downgraded = (later ? null : post.data?.downgraded) ?? [];
 
   // Keep the selected layout valid for the current photo count: below the
   // collage floor there is no layout; otherwise snap to the count's default
@@ -220,24 +182,32 @@ export function AddStoryModal({
     // The add control is disabled while busy/done, but this handler sits on the
     // hidden input rather than the button, so it keeps its own guard: the
     // post.reset() below would detach the mutation observer mid-flight.
-    if (busy || done) return;
+    if (locked) return;
     // Materialize the FileList BEFORE clearing the input — reading files off a
     // live FileList after value='' yields an empty list in real browsers.
     const picked = Array.from(event.target.files ?? []);
     event.target.value = '';
     resetAll();
-    if (picked.length === 0) return;
-    const videos = picked.filter((file) => file.type.startsWith('video'));
-    const photos = picked.filter((file) => !file.type.startsWith('video'));
+    // A file the backend would refuse is refused here, before the upload spends the
+    // request to learn it: the same gate the bulk tab and the channel post composer use.
+    const usable = picked.filter((file) => {
+      if (isUploadablePostMedia(file)) return true;
+      toastError(
+        t('accounts.bulk.fileRejected', {
+          name: file.name,
+          formats: [...PHOTO_SUFFIXES, ...VIDEO_SUFFIXES].join(', '),
+          mb: VIDEO_MAX_BYTES / 1_000_000,
+        }),
+      );
+      return false;
+    });
+    if (usable.length === 0) return;
     // A video is single-media: it wins and clears any staged photos. Otherwise
     // append photos (capped at the collage max) and drop any staged video.
-    if (videos.length > 0) {
-      setVideo(videos[0] ?? null);
-      setImages([]);
-      return;
-    }
-    setVideo(null);
-    setImages((prev) => [...prev, ...photos].slice(0, MAX_COLLAGE_IMAGES));
+    const next = mergeStoryPick([...images, ...(video ? [video] : [])], usable, MAX_COLLAGE_IMAGES);
+    const nextVideo = next.find(isVideoFile) ?? null;
+    setVideo(nextVideo);
+    setImages(nextVideo ? [] : next);
   };
 
   const moveImage = (from: number, to: number) => {
@@ -266,13 +236,13 @@ export function AddStoryModal({
     [],
   );
 
-  const schedulePublish = async (files: File[]) => {
+  const schedulePublish = async (picked: File[]) => {
     if (runAt === null) return;
     setScheduling(true);
     setScheduleError(null);
     try {
       const mediaIds: string[] = [];
-      for (const file of files) {
+      for (const file of picked) {
         const known = storedIds.current.get(file);
         const mediaId = known ?? (await upload.mutateAsync({ body: { file } })).media_id;
         storedIds.current.set(file, mediaId);
@@ -286,10 +256,8 @@ export function AddStoryModal({
           run_at: toIso(clampToLead(runAt, Date.now())),
           batch_id: batchId.current,
           client_key: 'story',
-          filename: files[0]?.name ?? null,
-          caption: caption.trim() || null,
-          privacy_preset: PRIVACY[audience],
-          protect_content: noForward,
+          filename: picked[0]?.name ?? null,
+          design: toWireDesign(design),
           collage_layout: isCollage ? collageLayout : null,
         },
       });
@@ -298,7 +266,7 @@ export function AddStoryModal({
         queryKey: accountScheduledPostsQueryKey({ path: { account_id: accountId } }),
       });
       // Nothing was published, so the profile grid has nothing to refresh.
-      closeTimer.current = window.setTimeout(onClose, 900);
+      closeTimer.current = window.setTimeout(onClose, CLOSE_MS);
     } catch (error) {
       // A swept file must be uploaded again, not named again.
       if (envelopeMessage(error) === 'scheduled_media_missing') storedIds.current.clear();
@@ -309,7 +277,6 @@ export function AddStoryModal({
   };
 
   const publish = () => {
-    const files = video !== null ? [video] : images;
     if (files.length === 0) return;
     if (later) {
       void schedulePublish(files);
@@ -321,18 +288,19 @@ export function AddStoryModal({
         body: {
           files,
           media_kind: video !== null ? 'video' : 'image',
-          caption: caption.trim() || null,
-          privacy_preset: PRIVACY[audience],
-          protect_content: noForward,
+          design: JSON.stringify(toWireDesign(design)),
           collage_layout: isCollage ? collageLayout : null,
         },
       },
       {
         // Hold the modal open a beat so the success (tb-pop check + full bar)
         // animation plays before the profile refresh + close, per the design.
-        onSuccess: () => {
+        onSuccess: (result) => {
           onPosted();
-          closeTimer.current = window.setTimeout(onClose, 900);
+          closeTimer.current = window.setTimeout(
+            onClose,
+            (result.downgraded ?? []).length > 0 ? CLOSE_NOTICE_MS : CLOSE_MS,
+          );
         },
       },
     );
@@ -342,12 +310,10 @@ export function AddStoryModal({
   // closes by itself and has nothing left to lose.
   const dirty =
     !done &&
-    (images.length > 0 ||
-      video !== null ||
-      caption.trim() !== '' ||
-      audience !== 'contacts' ||
-      noForward ||
+    (hasMedia ||
+      JSON.stringify(design) !== JSON.stringify(createDefaultDesign()) ||
       mode !== 'now');
+  const timeBad = later && runAtProblem(runAt, now) !== null;
 
   return (
     // Every exit — Escape, backdrop, Cancel/× — is locked while a publish is in
@@ -376,7 +342,7 @@ export function AddStoryModal({
           <ScheduleModeControl
             className="mb-3"
             value={mode}
-            disabled={busy || done}
+            disabled={locked}
             onChange={(next) => {
               setMode(next);
               resetAll();
@@ -389,337 +355,54 @@ export function AddStoryModal({
                 onChange={setRunAt}
                 now={now}
                 label={t('accounts.schedule.storyAt')}
-                disabled={busy || done}
+                disabled={locked}
               />
             </div>
           )}
 
-          <div className="mb-2 type-body-medium text-content-secondary">
-            {t('accounts.addStory.audience')}
-          </div>
-          <SegmentedControl
-            className="mb-4"
-            value={audience}
-            ariaLabel={t('accounts.addStory.audience')}
-            options={(['contacts', 'closeFriends', 'public'] as const).map((value) => ({
-              value,
-              label: t(`accounts.addStory.${value}`),
-            }))}
-            disabled={busy || done}
-            onChange={(value) => {
-              setAudience(value);
-            }}
-          />
-
-          <label className="mb-4 block">
-            <span className="mb-2 block type-body-medium text-content-secondary">
-              {t('accounts.addStory.caption')}
-            </span>
-            <Input
-              value={caption}
-              // Read once at the click: an edit during the publish would be ignored.
-              disabled={busy || done}
-              onChange={(event) => {
-                setCaption(event.target.value);
-              }}
-              // Mirrors the server's own Form(max_length=1024) on the caption: past
-              // it the whole upload is spent to come back a 422 naming a field the
-              // operator can no longer see the end of.
-              maxLength={POST_CAPTION_MAX}
-              placeholder={t('accounts.addStory.captionPlaceholder')}
+          <div className="mb-4">
+            <StoryComposer
+              media={media}
+              design={design}
+              onChange={setDesign}
+              premium={premium}
+              disabled={locked}
             />
-          </label>
-
-          <button
-            type="button"
-            disabled={busy || done}
-            onClick={() => {
-              setNoForward((value) => !value);
-            }}
-            className="mb-4 flex w-full items-center gap-3 text-left"
-          >
-            <span
-              className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
-            >
-              {noForward && <Icon name="check" size={14} className="stroke-on-fill" />}
-            </span>
-            <span className="type-body text-content-secondary">
-              {t('accounts.addStory.noForward')}
-            </span>
-          </button>
-
-          <div className="mb-2 flex items-center justify-between">
-            <span className="type-body-medium text-content-secondary">
-              {t('accounts.addStory.media')}
-            </span>
-            {video === null && count > 0 && (
-              <span className="type-small">
-                {t('accounts.addStory.photoCount', { n: count, max: MAX_COLLAGE_IMAGES })}
-              </span>
-            )}
           </div>
 
-          {/* Add control — hidden once a collage is full (6 photos). A video
-            replaces photos and vice-versa (handled in onPick). Locked while a
-            publish is in flight or in its success window: onPick calls
-            post.reset(), which detaches the observer — that both re-enables
-            Publish (a second story on the live account) and kills the
-            mutate-level onSuccess, so the grid never refreshes and the modal
-            never closes. Same reason the single-video remove is guarded below. */}
-          {!(video === null && count >= MAX_COLLAGE_IMAGES) && (
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              disabled={busy || done}
-              className="flex w-full items-center gap-3 rounded-md border border-dashed border-line bg-surface-card px-4 py-4 text-left disabled:opacity-50"
-            >
-              <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-md border border-line bg-surface-card text-action-primary">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="3" />
-                  <path d="M3 15l5-5 4 4M14 14l3-3 4 4" />
-                  <circle cx="9" cy="9" r="1.6" />
-                </svg>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate type-body-medium">
-                  {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
-                </div>
-                <div className="type-small">
-                  {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
-                </div>
-              </div>
-            </button>
-          )}
-          {video === null && count >= MAX_COLLAGE_IMAGES && (
-            <div className="rounded-md border border-line bg-surface px-4 py-3 type-small">
-              {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
-            </div>
-          )}
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            className="hidden"
-            onChange={onPick}
+          <StoryMediaPicker
+            images={images}
+            video={video}
+            previews={previews}
+            locked={locked}
+            inputRef={fileInput}
+            onPick={onPick}
+            onMove={moveImage}
+            onRemoveImage={removeImage}
+            onRemoveVideo={() => {
+              setVideo(null);
+              resetAll();
+            }}
+            layout={collageLayout}
+            onLayout={setCollageLayout}
+            isCollage={isCollage}
+            videoMeta={metaText}
+            videoMetaTone={metaTone}
           />
 
-          {/* Image tiles: ordered previews with reorder (◀ ▶) + remove (×). The
-            tile order is the collage cell order sent to the backend. */}
-          {video === null && count > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {images.map((image, index) => (
-                <div
-                  key={`${image.name}-${index}`}
-                  className="tb-fadeup flex w-readout flex-col gap-1"
-                >
-                  <div
-                    // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the story preview's own portrait box, one component's internal layout
-                    className="relative h-[104px] w-readout overflow-hidden rounded-md border border-line bg-canvas"
-                  >
-                    <img
-                      src={previews[index]}
-                      alt={image.name}
-                      className="h-full w-full object-cover"
-                    />
-                    <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-1 text-small font-medium text-on-fill">
-                      {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        removeImage(index);
-                      }}
-                      disabled={busy || done}
-                      aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                      className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-fill disabled:opacity-40"
-                    >
-                      <Icon name="close" size={10} />
-                    </button>
-                  </div>
-                  <div className="flex items-stretch gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        moveImage(index, index - 1);
-                      }}
-                      // moveImage also resets the mutation — see the add control.
-                      disabled={index === 0 || busy || done}
-                      aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
-                      className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-surface-card text-content-muted transition hover:bg-canvas hover:text-content-primary active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-card disabled:hover:text-content-muted"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m15 6-6 6 6 6" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        moveImage(index, index + 1);
-                      }}
-                      disabled={index === count - 1 || busy || done}
-                      aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
-                      className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-surface-card text-content-muted transition hover:bg-canvas hover:text-content-primary active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-card disabled:hover:text-content-muted"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m9 6 6 6-6 6" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Layout picker — only for a 2..6 photo collage. */}
-          {isCollage && (
-            <div className="mt-4">
-              <div className="mb-2 type-body-medium text-content-secondary">
-                {t('accounts.addStory.layout')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {layoutsForCount(count).map((layout) => {
-                  const selected = collageLayout === layout.id;
-                  return (
-                    <button
-                      key={layout.id}
-                      type="button"
-                      onClick={() => {
-                        setCollageLayout(layout.id);
-                      }}
-                      aria-label={t('accounts.addStory.layoutOption', { id: layout.id })}
-                      aria-pressed={selected}
-                      // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the collage-layout tile's own box, one component's internal layout
-                      className={`flex h-[62px] w-[46px] items-center justify-center rounded-sm border text-action-primary transition ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
-                    >
-                      <LayoutIcon cells={layout.cells} selected={selected} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Single-video row: filename + size + remove (mirrors the photo path). */}
-          {video !== null && (
-            <div className="mt-3 tb-fadeup rounded-md border border-line bg-surface-card px-3 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-tile shrink-0 items-center justify-center rounded-sm bg-canvas text-content-muted">
-                  <Icon name="video" size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate type-body-medium">{video.name}</div>
-                  <div className={`text-small ${metaTone}`}>{metaText}</div>
-                </div>
-                {!busy && !done && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideo(null);
-                      resetAll();
-                    }}
-                    aria-label={t('accounts.addStory.removeFile')}
-                    className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
-                  >
-                    <Icon name="close" size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Per-publish status: uploading spinner + bar → success check + full
-            bar → error icon (hover = reason) + retry. Shared by both modes. */}
-          {hasMedia && (busy || done || failed) && (
-            <div className="mt-3 tb-fadeup flex items-center gap-3 rounded-md border border-line bg-surface-card px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <div className={`type-small-medium ${metaTone}`}>{metaText}</div>
-                {(busy || done) && (
-                  <ProgressBar
-                    className="mt-2"
-                    tone="success"
-                    value={1}
-                    max={1}
-                    indeterminate={!done}
-                  />
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {busy && <Spinner className="m-1" />}
-                {done && (
-                  <span className="tb-pop m-1 inline-flex text-success-deep">
-                    <Icon name="check-circle" size={18} />
-                  </span>
-                )}
-                {failed && (
-                  <>
-                    <span className="group relative m-1 inline-flex text-danger">
-                      <svg
-                        width="17"
-                        height="17"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 8v4M12 16h.01" />
-                      </svg>
-                      <span
-                        role="tooltip"
-                        className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-sm bg-term px-3 py-2 text-left text-small font-normal text-on-fill shadow-pop group-hover:block"
-                      >
-                        {errorDetail}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={publish}
-                      disabled={later && runAtProblem(runAt, now) !== null}
-                      aria-label={t('accounts.addStory.retry')}
-                      className="inline-flex size-chip items-center justify-center rounded-full text-content-muted"
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.9"
-                      >
-                        <path d="M3 2v6h6" />
-                        <path d="M3 8a9 9 0 1 0 2.5-3.5L3 8" />
-                      </svg>
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+          {hasMedia && (
+            <StoryStatusFooter
+              busy={busy}
+              done={done}
+              failed={failed}
+              metaText={metaText}
+              metaTone={metaTone}
+              errorDetail={errorDetail}
+              onRetry={publish}
+              retryDisabled={timeBad || !designIsValid(design)}
+              downgraded={downgraded}
+              scheduled={later}
+            />
           )}
 
           <div className="mt-6 flex justify-end gap-2">
@@ -729,10 +412,10 @@ export function AddStoryModal({
             <Button
               variant="primary"
               onClick={publish}
-              // `done` keeps the button locked through the 900ms success-close
-              // window — isPending is already false there, and a second click
-              // would publish the same story to the live account twice.
-              disabled={!hasMedia || busy || done || (later && runAtProblem(runAt, now) !== null)}
+              // `done` keeps the button locked through the success-close window —
+              // isPending is already false there, and a second click would publish
+              // the same story to the live account twice.
+              disabled={!hasMedia || locked || timeBad || !designIsValid(design)}
             >
               {later ? t('accounts.schedule.storySubmit') : t('accounts.addStory.publish')}
             </Button>

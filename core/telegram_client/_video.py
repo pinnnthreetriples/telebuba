@@ -38,11 +38,12 @@ from pathlib import Path
 from typing import Final, Literal
 
 from core.config import settings
-
-# Telegram story spec — see core.telegram.org/api/stories.
-_TARGET_WIDTH: Final[int] = 720
-_TARGET_HEIGHT: Final[int] = 1280
-_MAX_DURATION_SEC: Final[int] = 60
+from core.telegram_client._video_args import (
+    TARGET_HEIGHT,
+    TARGET_WIDTH,
+    _encode_args,
+    _thumbnail_args,
+)
 
 # Stable, locale-neutral failure codes (non-negotiable #12). The SPA translates
 # these — no Russian prose crosses the wire. One code per distinct failure.
@@ -53,13 +54,6 @@ StoryVideoErrorCode = Literal[
     "story_video_duration_failed",
     "story_video_ffmpeg_missing",
 ]
-
-_FFMPEG_ENCODE_FILTER: Final[str] = (
-    # Crop the largest 9:16 rectangle that fits inside the source, then scale
-    # to the canvas. Mirrors the official Android editor's behaviour.
-    "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',"
-    f"scale={_TARGET_WIDTH}:{_TARGET_HEIGHT}:flags=lanczos,format=yuv420p"
-)
 
 _CHANNEL_ENCODE_FILTER: Final[str] = (
     # Channel posts keep the SOURCE resolution (they aren't 9:16 stories) —
@@ -98,6 +92,8 @@ class StoryVideoNormalisationError(ValueError):
 
 async def normalize_story_video_for_telegram(
     content: bytes,
+    *,
+    overlay_png: bytes | None = None,
 ) -> tuple[bytes, bytes, float, int, int]:
     """Transform arbitrary video bytes into a sendable Telegram story MP4.
 
@@ -115,6 +111,9 @@ async def normalize_story_video_for_telegram(
     stable ``code`` when ffmpeg is missing, the input is corrupt, or the encode
     fails — the UI layer catches it via the existing ``ValueError`` path and
     translates the code (non-negotiable #12).
+
+    ``overlay_png`` is a transparent PNG at the 720x1280 canvas (the link stickers);
+    when given it is burnt into both the video and its thumbnail.
     """
     ffmpeg_bin = _resolve_ffmpeg_binary()
     with tempfile.TemporaryDirectory() as tempdir:
@@ -122,19 +121,22 @@ async def normalize_story_video_for_telegram(
         source_path = td / "input.bin"
         output_path = td / "story.mp4"
         thumb_path = td / "thumb.jpg"
+        overlay_path = td / "overlay.png" if overlay_png is not None else None
         # Offloaded: ``story_video_max_bytes`` defaults to 100 MB, and a synchronous
         # write/read of that on the event loop stalls every other API request plus
         # all warming/neurocomment tasks (one uvicorn worker). Mirrors the rest of
         # the slice (``_validate_profile_photo``, ``_compose_story_collage``).
         await asyncio.to_thread(source_path.write_bytes, content)
+        if overlay_path is not None and overlay_png is not None:
+            await asyncio.to_thread(overlay_path.write_bytes, overlay_png)
         await _run_ffmpeg(
             ffmpeg_bin,
-            _encode_args(source_path, output_path),
+            _encode_args(source_path, output_path, overlay_path),
             failure_code="story_video_invalid",
         )
         await _run_ffmpeg(
             ffmpeg_bin,
-            _thumbnail_args(source_path, thumb_path),
+            _thumbnail_args(source_path, thumb_path, overlay_path),
             failure_code="story_video_thumb_failed",
         )
         duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
@@ -142,8 +144,8 @@ async def normalize_story_video_for_telegram(
             await asyncio.to_thread(output_path.read_bytes),
             await asyncio.to_thread(thumb_path.read_bytes),
             duration,
-            _TARGET_WIDTH,
-            _TARGET_HEIGHT,
+            TARGET_WIDTH,
+            TARGET_HEIGHT,
         )
 
 
@@ -286,65 +288,6 @@ async def _output_resolution(
         return (0, 0)
     parsed = _parse_stream_resolution(stderr_bytes.decode("utf-8", errors="replace"))
     return parsed if parsed is not None else (0, 0)
-
-
-def _encode_args(source: Path, output: Path) -> list[str]:
-    return [
-        "-y",
-        "-i",
-        str(source),
-        "-t",
-        str(_MAX_DURATION_SEC),
-        "-vf",
-        _FFMPEG_ENCODE_FILTER,
-        "-c:v",
-        "libx264",
-        "-profile:v",
-        "main",
-        "-level",
-        "4.0",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-r",
-        "30",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        "-ac",
-        "2",
-        "-ar",
-        "44100",
-        "-movflags",
-        "+faststart",
-        "-pix_fmt",
-        "yuv420p",
-        str(output),
-    ]
-
-
-def _thumbnail_args(source: Path, thumb: Path) -> list[str]:
-    # Apply the same 9:16 crop+scale as the main encode so the thumbnail
-    # matches the actually-published video, but pull the frame straight
-    # from the source. That skips the H.264 CRF 23 generation loss that
-    # made re-encoded thumbs look noticeably softer. ``-q:v 2`` is mjpeg's
-    # near-max quality (range 2-31, lower = better).
-    return [
-        "-y",
-        "-ss",
-        "0.5",
-        "-i",
-        str(source),
-        "-vf",
-        _FFMPEG_ENCODE_FILTER,
-        "-frames:v",
-        "1",
-        "-q:v",
-        "2",
-        str(thumb),
-    ]
 
 
 def _resolve_ffmpeg_binary() -> str:

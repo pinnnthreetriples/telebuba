@@ -11,11 +11,18 @@ from __future__ import annotations
 from datetime import datetime  # noqa: TC003 - pydantic resolves field annotations at runtime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
-from schemas.profile_media import (  # noqa: TC001 - pydantic resolves them at runtime
-    StoryMediaKind,
+from schemas.profile_media import StoryMediaKind  # noqa: TC001 - pydantic resolves it at runtime
+from schemas.story_design import (
+    STORY_ENTITIES_MAX,
+    STORY_STICKERS_MAX,
+    StoryDesign,
+    StoryEntity,
+    StoryLinkSticker,
     StoryPrivacyPreset,
+    check_entities_in_caption,
+    period_hours_for,
 )
 
 # ``<sha256 hex><suffix>``: the store's own file name, handed back as the id.
@@ -50,17 +57,59 @@ ScheduledPostRefusalCode = Literal[
     "scheduled_post_not_found",
     "scheduled_post_invalid",
 ]
+_MAX_PERIOD_SECONDS = 172_800
 
 
 class ScheduledStoryOptions(BaseModel):
-    """Everything a story needs besides its media, frozen at schedule time."""
+    """Everything a story needs besides its media, frozen at schedule time.
+
+    Rows stored before the story design existed lack the newer fields and parse with
+    their defaults, so they publish exactly as they were scheduled.
+    """
 
     media_kind: StoryMediaKind = "image"
-    caption: str | None = Field(default=None, max_length=1024)
+    caption: str | None = Field(default=None, max_length=2048)
     privacy_preset: StoryPrivacyPreset = "contacts"
     protect_content: bool = False
     collage_layout: str | None = Field(default=None, max_length=64)
-    period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
+    period_seconds: int = Field(default=86_400, ge=21_600, le=_MAX_PERIOD_SECONDS)
+    entities: list[StoryEntity] = Field(default_factory=list, max_length=STORY_ENTITIES_MAX)
+    link_stickers: list[StoryLinkSticker] = Field(
+        default_factory=list, max_length=STORY_STICKERS_MAX
+    )
+    pinned: bool = False
+
+    @model_validator(mode="after")
+    def _check_entities(self) -> ScheduledStoryOptions:
+        check_entities_in_caption(self.caption, self.entities)
+        return self
+
+    @classmethod
+    def from_design(
+        cls, design: StoryDesign, *, media_kind: StoryMediaKind, collage_layout: str | None
+    ) -> ScheduledStoryOptions:
+        return cls(
+            media_kind=media_kind,
+            caption=design.caption,
+            privacy_preset=design.privacy_preset,
+            protect_content=design.protect_content,
+            collage_layout=collage_layout,
+            period_seconds=design.period_seconds,
+            entities=design.entities,
+            link_stickers=design.link_stickers,
+            pinned=design.pinned,
+        )
+
+    def to_design(self) -> StoryDesign:
+        return StoryDesign(
+            caption=self.caption,
+            entities=self.entities,
+            period_hours=period_hours_for(self.period_seconds),
+            pinned=self.pinned,
+            protect_content=self.protect_content,
+            privacy_preset=self.privacy_preset,
+            link_stickers=self.link_stickers,
+        )
 
 
 class ScheduledPost(BaseModel):
@@ -81,6 +130,8 @@ class ScheduledPost(BaseModel):
     client_key: str | None = None
     error_code: str | None = None
     story_id: int | None = None
+    # Premium features a free account lost when this story went out.
+    downgraded: list[str] = Field(default_factory=list)
     created_at: str
     updated_unix: int
     finished_unix: int | None = None
@@ -108,11 +159,13 @@ class SchedulePhotoRequest(_ScheduleBase):
 class ScheduleStoryRequest(_ScheduleBase):
     # First = the story's media; the rest = the collage's images 2..N.
     media_ids: list[MediaId] = Field(min_length=1, max_length=6)
-    caption: str | None = Field(default=None, max_length=1024)
+    # The flat fields are the pre-design spelling; a ``design`` wins over them.
+    caption: str | None = Field(default=None, max_length=2048)
     privacy_preset: StoryPrivacyPreset = "contacts"
     protect_content: bool = False
     collage_layout: str | None = Field(default=None, max_length=64)
-    period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
+    period_seconds: int = Field(default=86_400, ge=21_600, le=_MAX_PERIOD_SECONDS)
+    design: StoryDesign | None = None
 
 
 class ScheduledPostReschedule(BaseModel):
@@ -134,6 +187,12 @@ class ScheduledPostRead(BaseModel):
     caption: str | None = None
     privacy_preset: StoryPrivacyPreset | None = None
     story_id: int | None = None
+    # Story only: what the design asked for, so the list can show it.
+    period_hours: int | None = None
+    pinned: bool | None = None
+    link_sticker_count: int | None = None
+    # Premium features a free account lost when this story went out.
+    downgraded: list[str] = Field(default_factory=list)
     # Relative URL of a small preview, or None once the media is gone / is a video.
     thumb_url: str | None = None
 

@@ -204,12 +204,8 @@ async def test_post_account_story_collage_passes_extra_images(
         action.collage_layout,
     ) == ("caption", "close_friends", 21_600, True, [b"second", b"third"], "grid-3")
     assert extras == [
-        {
-            "filename": "s.jpg",
-            "media_kind": "image",
-            "privacy_preset": "close_friends",
-            "image_count": 3,
-        },
+        {"filename": "s.jpg", "media_kind": "image", "privacy_preset": "close_friends"}
+        | {"image_count": 3, "downgraded": []},
     ]
 
 
