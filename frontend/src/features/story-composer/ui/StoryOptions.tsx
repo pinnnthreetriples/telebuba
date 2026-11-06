@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Badge, SegmentedControl, SettingRow, Switch } from '@/shared/ui';
+import { Select, SettingRow, Switch } from '@/shared/ui';
 
 import { DEFAULT_PERIOD_HOURS } from '../model/limits';
 import type { StoryDesign, StoryPeriodHours, StoryPrivacyPreset } from '../model/types';
@@ -28,26 +28,26 @@ export function StoryOptions({
   return (
     <div className="flex flex-col gap-3">
       <SettingRow label={t('storyComposer.options.period')} first>
-        <SegmentedControl
-          value={String(design.period_hours)}
-          disabled={disabled}
-          ariaLabel={t('storyComposer.options.period')}
-          options={PERIODS.map((hours) => ({
-            value: String(hours),
-            label: (
-              <span className="inline-flex items-center justify-center gap-1">
-                {t('storyComposer.options.periodHours', { count: hours })}
-                {hours !== DEFAULT_PERIOD_HOURS && premium !== true ? (
-                  <Badge tone="info">{t('storyComposer.options.premium')}</Badge>
-                ) : null}
-              </span>
-            ),
-            ariaLabel: t('storyComposer.options.periodHours', { count: hours }),
-          }))}
-          onChange={(value) => {
-            onChange({ period_hours: Number(value) as StoryPeriodHours });
-          }}
-        />
+        <div className="w-col max-w-full">
+          <Select
+            value={String(design.period_hours)}
+            disabled={disabled}
+            ariaLabel={t('storyComposer.options.period')}
+            options={PERIODS.map((hours) => {
+              const hoursLabel = t('storyComposer.options.periodHours', { count: hours });
+              return {
+                value: String(hours),
+                label:
+                  hours !== DEFAULT_PERIOD_HOURS && premium !== true
+                    ? `${hoursLabel} · ${t('storyComposer.options.premium')}`
+                    : hoursLabel,
+              };
+            })}
+            onChange={(value) => {
+              onChange({ period_hours: Number(value) as StoryPeriodHours });
+            }}
+          />
+        </div>
       </SettingRow>
       <SettingRow label={t('storyComposer.options.pinned')}>
         <Switch
@@ -70,18 +70,20 @@ export function StoryOptions({
         />
       </SettingRow>
       <SettingRow label={t('storyComposer.options.audience')}>
-        <SegmentedControl
-          value={design.privacy_preset}
-          disabled={disabled}
-          ariaLabel={t('storyComposer.options.audience')}
-          options={AUDIENCES.map((preset) => ({
-            value: preset,
-            label: t(`storyComposer.options.audiences.${preset}`),
-          }))}
-          onChange={(privacy_preset) => {
-            onChange({ privacy_preset });
-          }}
-        />
+        <div className="w-col max-w-full">
+          <Select
+            value={design.privacy_preset}
+            disabled={disabled}
+            ariaLabel={t('storyComposer.options.audience')}
+            options={AUDIENCES.map((preset) => ({
+              value: preset,
+              label: t(`storyComposer.options.audiences.${preset}`),
+            }))}
+            onChange={(privacy_preset) => {
+              onChange({ privacy_preset: privacy_preset as StoryPrivacyPreset });
+            }}
+          />
+        </div>
       </SettingRow>
     </div>
   );

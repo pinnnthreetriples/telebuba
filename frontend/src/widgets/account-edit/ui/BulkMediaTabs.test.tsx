@@ -263,7 +263,8 @@ test('accounts without Premium are counted in the hint and their rows say what w
   await selectWholeFleet(user);
   await user.click(screen.getByRole('tab', { name: 'Сторис' }));
   pick([photo('story.jpg')]);
-  await user.click(screen.getByRole('radio', { name: '48 ч' }));
+  await user.click(screen.getByRole('combobox', { name: 'Срок показа' }));
+  await user.click(screen.getByRole('option', { name: '48 ч · Premium' }));
   expect(
     await screen.findByText('1 аккаунт без Premium опубликует без: выбранного срока'),
   ).toBeInTheDocument();

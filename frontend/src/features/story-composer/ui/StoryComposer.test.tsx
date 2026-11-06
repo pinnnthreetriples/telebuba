@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -42,33 +42,39 @@ function lastDesign(spy: ReturnType<typeof vi.fn>): StoryDesign {
   return spy.mock.calls.at(-1)?.[0] as StoryDesign;
 }
 
+// The period and audience are dropdowns: open the trigger, then pick a row.
+async function pickOption(trigger: string, option: string) {
+  await userEvent.click(screen.getByRole('combobox', { name: trigger }));
+  await userEvent.click(screen.getByRole('option', { name: option }));
+}
+
 test('options change the design: period, pin, forwarding and audience', async () => {
   const spy = vi.fn();
   render(<Composer premium onDesign={spy} />);
 
-  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await pickOption('Срок показа', '48 ч');
   expect(lastDesign(spy).period_hours).toBe(48);
   await userEvent.click(screen.getByRole('switch', { name: 'Закрепить в профиле' }));
   expect(lastDesign(spy).pinned).toBe(true);
   await userEvent.click(screen.getByRole('switch', { name: 'Запретить пересылку' }));
   expect(lastDesign(spy).protect_content).toBe(true);
-  await userEvent.click(screen.getByRole('radio', { name: 'Близкие друзья' }));
+  await pickOption('Кто увидит', 'Близкие друзья');
   expect(lastDesign(spy).privacy_preset).toBe('close_friends');
   expect(lastDesign(spy).period_hours).toBe(48);
 });
 
-test('only the non-default periods carry a Premium badge, and not for a Premium account', () => {
+test('only the non-default periods carry a Premium mark, and not for a Premium account', () => {
   const props = {
     design: createDefaultDesign(),
     onChange: () => undefined,
   };
   const { rerender } = render(<StoryOptions {...props} premium={false} />);
-  expect(within(screen.getByRole('radio', { name: '48 ч' })).getByText('Premium')).toBeVisible();
-  expect(within(screen.getByRole('radio', { name: '6 ч' })).getByText('Premium')).toBeVisible();
-  expect(within(screen.getByRole('radio', { name: '24 ч' })).queryByText('Premium')).toBeNull();
+  expect(screen.getByRole('option', { name: '48 ч · Premium' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: '6 ч · Premium' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: '24 ч' })).toBeInTheDocument();
 
   rerender(<StoryOptions {...props} premium />);
-  expect(screen.queryByText('Premium')).toBeNull();
+  expect(screen.queryByText(/Premium/)).toBeNull();
 });
 
 test('stickers: add up to three, then the button stops', async () => {
@@ -178,7 +184,7 @@ test('no hint for a plain story, whatever the account', () => {
 test('a free account is told exactly what will be stripped', async () => {
   render(<Composer premium={false} />);
 
-  await userEvent.click(screen.getByRole('radio', { name: '48 ч' }));
+  await pickOption('Срок показа', '48 ч · Premium');
   await userEvent.click(screen.getByRole('button', { name: 'Добавить ссылку' }));
 
   expect(screen.getByRole('status')).toHaveTextContent(
