@@ -126,6 +126,7 @@ import {
   handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
+  importMasstaggingStoryMedia,
   importMasstaggingTargets,
   keepSpamBlockedAccount,
   labelWarmingChannel,
@@ -616,6 +617,9 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
+  ImportMasstaggingStoryMediaData,
+  ImportMasstaggingStoryMediaError,
+  ImportMasstaggingStoryMediaResponse,
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsError,
   ImportMasstaggingTargetsResponse,
@@ -8022,6 +8026,38 @@ export const uploadMasstaggingMediaMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await uploadMasstaggingMedia({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Import Story Media
+ *
+ * Take a story the account already has into the campaign's media pool.
+ *
+ * 400 ``masstagging_story_unavailable`` when the story is gone or Telegram does not give
+ * the file, ``account_not_found`` for an account that no longer exists.
+ */
+export const importMasstaggingStoryMediaMutation = (
+  options?: Partial<Options<ImportMasstaggingStoryMediaData>>,
+): UseMutationOptions<
+  ImportMasstaggingStoryMediaResponse,
+  ImportMasstaggingStoryMediaError,
+  Options<ImportMasstaggingStoryMediaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ImportMasstaggingStoryMediaResponse,
+    ImportMasstaggingStoryMediaError,
+    Options<ImportMasstaggingStoryMediaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await importMasstaggingStoryMedia({
         ...options,
         ...fnOptions,
         throwOnError: true,

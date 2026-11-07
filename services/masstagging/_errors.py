@@ -25,6 +25,7 @@ TARGET_NOT_FOUND: MasstaggingRefusalCode = "masstagging_target_not_found"
 TARGET_STATE_CHANGED: MasstaggingRefusalCode = "masstagging_target_state_changed"
 MEDIA_INVALID: MasstaggingRefusalCode = "masstagging_media_invalid"
 MEDIA_TOO_LARGE: MasstaggingRefusalCode = "masstagging_media_too_large"
+STORY_UNAVAILABLE: MasstaggingRefusalCode = "masstagging_story_unavailable"
 IMPORT_INVALID: MasstaggingRefusalCode = "masstagging_import_invalid"
 BASE_NOT_FOUND: MasstaggingRefusalCode = "masstagging_base_not_found"
 

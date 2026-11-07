@@ -5,7 +5,12 @@ import { vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { MasstaggingBoard, MasstaggingCampaign, MasstaggingSettingsRead } from '@/shared/api';
+import type {
+  MasstaggingBoard,
+  MasstaggingCampaign,
+  MasstaggingSettingsRead,
+  ProfileStoryView,
+} from '@/shared/api';
 
 import { board, CAMPAIGN, SETTINGS_READ } from '../model/fixtures.test-helpers';
 
@@ -51,6 +56,12 @@ export type Api = {
   settings: MasstaggingSettingsRead;
   // A refusal the next write to a path ending like this answers with.
   refuse: { path: string; status: number; code: string } | null;
+  // Account id -> the stories its profile shows; an account not listed has none.
+  stories: Record<string, ProfileStoryView[]>;
+  // Story ids the server cannot take into the pool.
+  goneStories: number[];
+  // The profile read answers 200 carrying an error (Telegram refused it).
+  snapshotError: boolean;
 };
 
 export function routeApi(over: Partial<Api> = {}): Api {
@@ -59,6 +70,9 @@ export function routeApi(over: Partial<Api> = {}): Api {
     board: board(),
     settings: SETTINGS_READ,
     refuse: null,
+    stories: {},
+    goneStories: [],
+    snapshotError: false,
     ...over,
   };
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -101,6 +115,22 @@ export function routeApi(over: Partial<Api> = {}): Api {
     }
     if (path.endsWith('/targets/base')) {
       return jsonResponse({ targets: ['@base1', '@base2'], skipped: 0, name: 'Москва' });
+    }
+    const snapshot = /^\/api\/v1\/accounts\/([^/]+)\/profile-snapshot$/.exec(path);
+    if (snapshot !== null) {
+      if (api.snapshotError) return jsonResponse({ error: 'flood_wait', stories: [] });
+      return jsonResponse({ stories: api.stories[snapshot[1] ?? ''] ?? [] });
+    }
+    if (path.endsWith('/media/from-story')) {
+      const { story_id: storyId } = (await request.clone().json()) as { story_id: number };
+      if (api.goneStories.includes(storyId)) {
+        return jsonResponse(
+          { error: { code: 'invalid', message: 'masstagging_story_unavailable' } },
+          400,
+        );
+      }
+      const hex = storyId.toString(16).padStart(64, 'c');
+      return jsonResponse({ media_id: `${hex}.jpg`, name: `story-${String(storyId)}.jpg` });
     }
     if (path.endsWith('/media')) {
       return jsonResponse({ media_id: `${'b'.repeat(64)}.png`, name: 'cover.png' });

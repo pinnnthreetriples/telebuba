@@ -47,6 +47,7 @@ MasstaggingRefusalCode = Literal[
     "masstagging_target_state_changed",
     "masstagging_media_invalid",
     "masstagging_media_too_large",
+    "masstagging_story_unavailable",
     "masstagging_import_invalid",
     "masstagging_base_not_found",
 ]
@@ -71,6 +72,15 @@ class MasstaggingMedia(BaseModel):
 
     media_id: str = Field(pattern=MEDIA_ID_PATTERN)
     name: str = Field(min_length=1, max_length=200)
+
+
+class MasstaggingStoryPick(BaseModel):
+    """A story the account already has, taken into the campaign's media pool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(min_length=1, max_length=200)
+    story_id: int = Field(gt=0)
 
 
 class MasstaggingPace(BaseModel):

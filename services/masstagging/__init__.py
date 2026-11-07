@@ -27,7 +27,7 @@ from services.masstagging.campaigns import (
     save_settings,
 )
 from services.masstagging.gear import save_pace
-from services.masstagging.media import max_bytes, upload_media
+from services.masstagging.media import import_story_media, max_bytes, upload_media
 from services.masstagging.targets import from_base, import_file
 
 __all__ = [
@@ -40,6 +40,7 @@ __all__ = [
     "delete_campaign",
     "from_base",
     "import_file",
+    "import_story_media",
     "list_campaigns",
     "load_board",
     "load_settings",

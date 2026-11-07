@@ -13,6 +13,7 @@ from api import _large_upload_patterns
 from core.config import settings
 from core.repositories import masstagging as repository
 from core.repositories import user_parser as user_parser_repository
+from schemas.telegram_profile_snapshot import TelegramStoryMedia
 from schemas.user_parser import UserParserRequest
 from schemas.user_parser_run import UserParserRun, UserParserUser
 from services import _account_owner
@@ -249,6 +250,34 @@ async def test_media_upload(app: FastAPI) -> None:
         "masstagging_media_invalid",
     )
     assert unknown.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_media_from_a_story_the_account_has(app: FastAPI, telegram: FakeTelegram) -> None:
+    cid = await seed()
+    telegram.story_files[("a1", 7)] = TelegramStoryMedia(content=png())
+    async with _client(app) as client:
+        taken = await client.post(
+            f"{_BASE}/campaigns/{cid}/media/from-story", json={"account_id": "a1", "story_id": 7}
+        )
+        gone = await client.post(
+            f"{_BASE}/campaigns/{cid}/media/from-story", json={"account_id": "a1", "story_id": 8}
+        )
+        unknown = await client.post(
+            f"{_BASE}/campaigns/nope/media/from-story", json={"account_id": "a1", "story_id": 7}
+        )
+        bad = await client.post(
+            f"{_BASE}/campaigns/{cid}/media/from-story", json={"account_id": "a1", "story_id": 0}
+        )
+
+    assert taken.status_code == 200
+    assert taken.json()["name"] == "story-7.jpg"
+    assert (gone.status_code, gone.json()["error"]["message"]) == (
+        400,
+        "masstagging_story_unavailable",
+    )
+    assert unknown.status_code == 404
+    assert bad.status_code == 422
 
 
 @pytest.mark.asyncio

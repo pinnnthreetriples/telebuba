@@ -18,6 +18,7 @@ from core.config import settings
 from schemas.masstagging import (
     MasstaggingBaseRequest,
     MasstaggingMediaRead,
+    MasstaggingStoryPick,
     MasstaggingTargetAction,
     MasstaggingTargetList,
     MasstaggingVersionRequest,
@@ -117,6 +118,25 @@ async def upload_media(
     content = await file.read()
     try:
         return await mt_service.upload_media(filename, content)
+    except mt_service.MasstaggingInvalidError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc
+
+
+@run_router.post(
+    "/campaigns/{campaign_id}/media/from-story",
+    response_model=MasstaggingMediaRead,
+    operation_id="importMasstaggingStoryMedia",
+    responses=error_responses(400, 404),
+)
+async def import_story_media(campaign_id: str, body: MasstaggingStoryPick) -> MasstaggingMediaRead:
+    """Take a story the account already has into the campaign's media pool.
+
+    400 ``masstagging_story_unavailable`` when the story is gone or Telegram does not give
+    the file, ``account_not_found`` for an account that no longer exists.
+    """
+    await _known(campaign_id)
+    try:
+        return await mt_service.import_story_media(body.account_id, body.story_id)
     except mt_service.MasstaggingInvalidError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=exc.code) from exc
 

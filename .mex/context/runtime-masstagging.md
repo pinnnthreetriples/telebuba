@@ -1,7 +1,7 @@
 ---
 name: runtime-masstagging
 description: Masstagging campaigns — story mentions and priming through the auto-delete toggle.
-last_updated: 2026-10-11
+last_updated: 2026-11-07
 edges:
   - target: context/runtime-chat-broadcast.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -30,6 +30,10 @@ a failed run continue the same run, a restart resumes it.
   nobody could confirm Telegram's number), five mentions per story, a 24 h lifetime, a
   200-character caption and no link. The link area is a bare rectangle in the API; on a
   photo its plate is drawn into the picture.
+- The media pool is shared by the whole roster, so a story the operator picks from an
+  account's profile is copied into it as a file (the server downloads it under that
+  account's lock), never stored as a story id: an id means something only to its owner.
+  Only pinned and active stories are listable; the archive is not read.
 - Limits are per account and day, whatever campaign spends them; the day starts at 09:00
   local time. A day spent rests the campaign until then and it goes on by itself; floods
   in a row rest that account; every account flooded out stops the run for the operator.

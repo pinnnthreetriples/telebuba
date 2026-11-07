@@ -29,6 +29,8 @@ from schemas.telegram_actions_masstagging import (
     MasstagUser,
     ResolveMasstagTarget,
 )
+from schemas.telegram_actions_media import DownloadStoryMedia
+from schemas.telegram_profile_snapshot import TelegramStoryMedia
 from services import masstagging as service
 from services.masstagging.pace import next_day_start
 
@@ -83,6 +85,10 @@ class FakeTelegram:
     # Lookups that raise (a flood on the read side).
     lookup_errors: dict[str, TelegramReadError] = field(default_factory=dict)
     contacts: dict[str, list[MasstagUser]] = field(default_factory=dict)
+    # (account, story id) -> the story's file; a story not listed is gone (empty answer).
+    story_files: dict[tuple[str, int], TelegramStoryMedia] = field(default_factory=dict)
+    # (account, story id) -> a read that raises.
+    story_errors: dict[tuple[str, int], Exception] = field(default_factory=dict)
     clock: Clock | None = None
     # While set and not yet fired, every write waits for it: a run held open mid-flight.
     hold: asyncio.Event | None = None
@@ -137,6 +143,11 @@ class FakeTelegram:
                 return MasstagResolvedTarget(outcome="user", user=user)
             case ListMasstagContacts():
                 return MasstagContactsResult(users=self.contacts.get(account_id, []))
+            case DownloadStoryMedia():
+                key = (account_id, action.story_id)
+                if key in self.story_errors:
+                    raise self.story_errors[key]
+                return self.story_files.get(key, TelegramStoryMedia())
             case _:  # pragma: no cover - the engine reads nothing else
                 raise AssertionError(action)
 
