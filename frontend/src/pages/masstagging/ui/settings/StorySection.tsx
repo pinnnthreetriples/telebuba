@@ -2,12 +2,14 @@
 // pool (taken in turn), the caption, the Premium link with its button text, who sees the
 // story, how long it stays up, and the dialog opened before the mention.
 import { useMutation } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { uploadMasstaggingMediaMutation } from '@/entities/masstagging';
+import type { AccountRead } from '@/shared/api';
 import {
   Badge,
+  Button,
   HelpHint,
   Icon,
   IconButton,
@@ -21,6 +23,7 @@ import {
 import type { Settings } from '../../model/draft';
 
 import { Row, Section } from './fields';
+import { StoryPicker } from './StoryPicker';
 
 type Patch = (next: Partial<Settings>) => void;
 type Media = Settings['media'];
@@ -33,15 +36,20 @@ const VIDEO = /\.(mp4|mov)$/i;
 
 function MediaPool({
   campaignId,
+  accountIds,
+  fleet,
   media,
   onMedia,
 }: {
   campaignId: string;
+  accountIds: string[];
+  fleet: AccountRead[];
   media: Media;
   onMedia: MediaUpdate;
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [picking, setPicking] = useState(false);
   const upload = useMutation(uploadMasstaggingMediaMutation());
   const add = async (files: File[]) => {
     for (const file of files) {
@@ -95,6 +103,37 @@ function MediaPool({
           />
         </span>
       </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          disabled={accountIds.length === 0}
+          onClick={() => {
+            setPicking(true);
+          }}
+        >
+          <Icon name="video" size={14} />
+          {t('masstagging.settings.story.pick')}
+        </Button>
+        {accountIds.length === 0 ? (
+          <span className="type-small">{t('masstagging.settings.story.pickNoAccounts')}</span>
+        ) : null}
+      </div>
+      {picking ? (
+        <StoryPicker
+          campaignId={campaignId}
+          accountIds={accountIds}
+          fleet={fleet}
+          onPicked={(stored) => {
+            onMedia((current) => [
+              ...current.filter((item) => item.media_id !== stored.media_id),
+              stored,
+            ]);
+          }}
+          onClose={() => {
+            setPicking(false);
+          }}
+        />
+      ) : null}
       {media.length === 0 ? null : (
         <div className="flex flex-wrap gap-2">
           {media.map((item) => (
@@ -121,12 +160,16 @@ function MediaPool({
 
 export function StorySection({
   campaignId,
+  accountIds,
+  fleet,
   settings,
   captionLimit,
   onPatch,
   onMedia,
 }: {
   campaignId: string;
+  accountIds: string[];
+  fleet: AccountRead[];
   settings: Settings;
   captionLimit: number;
   onPatch: Patch;
@@ -140,7 +183,13 @@ export function StorySection({
       hint={t('masstagging.settings.story.hint')}
       example={t('masstagging.settings.story.example')}
     >
-      <MediaPool campaignId={campaignId} media={settings.media} onMedia={onMedia} />
+      <MediaPool
+        campaignId={campaignId}
+        accountIds={accountIds}
+        fleet={fleet}
+        media={settings.media}
+        onMedia={onMedia}
+      />
       <label className="flex flex-col gap-1">
         <span className="flex items-center gap-1">
           <span className="type-body-medium">{t('masstagging.settings.story.caption')}</span>

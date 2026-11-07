@@ -3,6 +3,7 @@ export {
   copyMasstaggingBaseMutation,
   createMasstaggingCampaignMutation,
   deleteMasstaggingCampaignMutation,
+  importMasstaggingStoryMediaMutation,
   importMasstaggingTargetsMutation,
   masstaggingBoardQueryOptions,
   masstaggingCampaignsQueryOptions,

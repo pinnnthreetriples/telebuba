@@ -123,6 +123,8 @@ export function SettingsDialog({
               {stories ? (
                 <StorySection
                   campaignId={read.campaign_id}
+                  accountIds={draft.accountIds}
+                  fleet={fleet}
                   settings={settings}
                   captionLimit={premiumOnly ? PREMIUM_CAPTION_LIMIT : FREE_CAPTION_LIMIT}
                   onPatch={patch}

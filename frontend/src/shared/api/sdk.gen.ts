@@ -361,6 +361,9 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
+  ImportMasstaggingStoryMediaData,
+  ImportMasstaggingStoryMediaErrors,
+  ImportMasstaggingStoryMediaResponses,
   ImportMasstaggingTargetsData,
   ImportMasstaggingTargetsErrors,
   ImportMasstaggingTargetsResponses,
@@ -4816,6 +4819,34 @@ export const uploadMasstaggingMedia = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Import Story Media
+ *
+ * Take a story the account already has into the campaign's media pool.
+ *
+ * 400 ``masstagging_story_unavailable`` when the story is gone or Telegram does not give
+ * the file, ``account_not_found`` for an account that no longer exists.
+ */
+export const importMasstaggingStoryMedia = <ThrowOnError extends boolean = false>(
+  options: Options<ImportMasstaggingStoryMediaData, ThrowOnError>,
+): RequestResult<
+  ImportMasstaggingStoryMediaResponses,
+  ImportMasstaggingStoryMediaErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ImportMasstaggingStoryMediaResponses,
+    ImportMasstaggingStoryMediaErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/masstagging/campaigns/{campaign_id}/media/from-story',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   });

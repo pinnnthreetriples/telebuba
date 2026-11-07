@@ -4611,6 +4611,22 @@ export type MasstaggingSettingsUpdate = {
 };
 
 /**
+ * MasstaggingStoryPick
+ *
+ * A story the account already has, taken into the campaign's media pool.
+ */
+export type MasstaggingStoryPick = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Story Id
+   */
+  story_id: number;
+};
+
+/**
  * MasstaggingTargetAction
  *
  * A manual action on one target of the board.
@@ -20481,6 +20497,54 @@ export type UploadMasstaggingMediaResponses = {
 
 export type UploadMasstaggingMediaResponse =
   UploadMasstaggingMediaResponses[keyof UploadMasstaggingMediaResponses];
+
+export type ImportMasstaggingStoryMediaData = {
+  body: MasstaggingStoryPick;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/masstagging/campaigns/{campaign_id}/media/from-story';
+};
+
+export type ImportMasstaggingStoryMediaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ImportMasstaggingStoryMediaError =
+  ImportMasstaggingStoryMediaErrors[keyof ImportMasstaggingStoryMediaErrors];
+
+export type ImportMasstaggingStoryMediaResponses = {
+  /**
+   * Successful Response
+   */
+  200: MasstaggingMediaRead;
+};
+
+export type ImportMasstaggingStoryMediaResponse =
+  ImportMasstaggingStoryMediaResponses[keyof ImportMasstaggingStoryMediaResponses];
 
 export type ImportMasstaggingTargetsData = {
   body: BodyImportMasstaggingTargets;

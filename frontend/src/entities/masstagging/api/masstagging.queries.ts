@@ -9,6 +9,7 @@ export {
   // Deliberately NOT part of the page's log-stream invalidation set: it backs an
   // explicit-save dialog and refreshes from its own mutation.
   getMasstaggingSettingsOptions as masstaggingSettingsQueryOptions,
+  importMasstaggingStoryMediaMutation,
   importMasstaggingTargetsMutation,
   listMasstaggingCampaignsOptions as masstaggingCampaignsQueryOptions,
   saveMasstaggingPaceMutation,
