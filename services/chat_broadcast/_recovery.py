@@ -143,8 +143,12 @@ async def watch_halted(ctx: RunContext) -> bool:
         if not ready:
             await _seams.sleep(min(limits.idle_poll_seconds, *waits.values()))
             continue
+        revived = False
         for account_id in ready:
-            await repository.revive_account(ctx.campaign_id, account_id)
+            if not await repository.revive_account(ctx.campaign_id, account_id):
+                # Brought back by someone else since the read: nothing of ours to count.
+                continue
+            revived = True
             _state.note_retry(ctx.campaign_id, account_id)
             await log_event(
                 "INFO",
@@ -152,4 +156,5 @@ async def watch_halted(ctx: RunContext) -> bool:
                 account_id=account_id,
                 extra={"campaign_id": ctx.campaign_id, "reason": "retry"},
             )
-        return True
+        if revived:
+            return True

@@ -4260,7 +4260,7 @@
         "stalledErrors": "Broadcast stalled: the accounts stopped on repeated errors and used up their automatic retries. “Continue” gives them a new try.",
         "stalledDead": "Broadcast stalled: the accounts' sessions are invalid or the accounts are unavailable. Add working accounts in the settings and press “Continue”.",
         "stalledBusy": "Broadcast stalled: the free accounts are busy with another campaign or feature. Free them up or add other accounts in the settings and press “Continue”.",
-        "halted": "Dropped out: {{names}} — their chats went to the other accounts at once.",
+        "halted": "Dropped out: {{names}} — their chats were passed to the other accounts.",
         "accountsResting": "Resting, back by themselves: {{names}}. Chats that cannot wait already went to accounts with room.",
         "busy": "Busy with other modules and left out: {{names}}."
       },

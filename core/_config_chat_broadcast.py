@@ -50,8 +50,8 @@ class ChatBroadcastSettings(BaseSettings):
     # the load) runs at most this often per campaign.
     schedule_tick_seconds: float = Field(default=10.0, gt=0.0)
     # A worker that died with an unexpected error starts again after this pause, so a
-    # fault that repeats cannot spin.
-    worker_restart_seconds: float = Field(default=60.0, ge=0.0)
+    # fault that repeats cannot spin: never zero.
+    worker_restart_seconds: float = Field(default=60.0, gt=0.0)
     # The least difference in open chats between the busiest and the idlest live account
     # that moves a chat from one to the other (1 would swap the same chat back and forth).
     rebalance_min_gap: int = Field(default=2, ge=2)

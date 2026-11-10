@@ -264,7 +264,7 @@ test('the pipeline view for a draft, a run and a stall', () => {
   expect(stalled.action).toMatchObject({ kind: 'resume', disabled: true });
   expect(stalled.extras.map((extra) => extra.tone)).toEqual(['warning', 'info']);
   // peer_flood has no halt wording: the name stands alone, no raw code.
-  expect(stalled.extras[0]!.text).toBe('Выбыли: n-a1 — их чаты сразу взяли другие аккаунты.');
+  expect(stalled.extras[0]!.text).toBe('Выбыли: n-a1 — их чаты переданы другим аккаунтам.');
   expect(stalled.extras[1]!.text).toContain('n-a2 (прогрев)');
   for (const phase of ['joining', 'resting', 'stopped', 'done', 'failed', 'stopping'] as const) {
     const view = pipelineView(t, {

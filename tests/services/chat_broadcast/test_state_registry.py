@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from services.chat_broadcast import _state
 
 
@@ -53,3 +55,14 @@ def test_the_time_of_a_halt_goes_with_the_campaign() -> None:
     assert _state.halted_at("c1", "a1") == 7
     _state.forget_campaign("c1")
     assert _state.halted_at("c1", "a1") is None
+
+
+@pytest.mark.asyncio
+async def test_forgetting_a_campaign_keeps_the_tick_lock_a_pass_still_holds() -> None:
+    lock = _state.tick_lock("c1")
+    async with lock:
+        _state.forget_campaign("c1")
+        # A pass is running: a second lock would let the next one in beside it.
+        assert _state.tick_lock("c1") is lock
+    _state.forget_campaign("c1")
+    assert _state.tick_lock("c1") is not lock

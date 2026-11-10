@@ -203,7 +203,8 @@ async def account_refused(
 
     A flood rests it for Telegram's wait. A spam block rests it for hours — unless the
     refusal was a ban @SpamBot says the account does not carry, which is this chat's
-    ban: only the chat moves. A dead session leaves.
+    ban: only the chat moves (once; a chat that already moved is skipped, the account
+    goes on). A dead session leaves.
     """
     reason = halt_reason(result)
     limits = settings.chat_broadcast
@@ -213,12 +214,13 @@ async def account_refused(
     if verdict == "account_halt":
         await _moves.halt_account(ctx, account_id, reason)
         return "halted"
-    if (
-        reason == _BANNED_IN_CHAT
-        and target.handed_from_account_id is None
-        and await _seams.spam_verdict(account_id) == "clean"
-    ):
-        await reroute(ctx, account_id, target, "banned")
+    if reason == _BANNED_IN_CHAT and await _seams.spam_verdict(account_id) == "clean":
+        if target.handed_from_account_id is None:
+            await reroute(ctx, account_id, target, "banned")
+        else:
+            # Moved once already and banned again: the chat does not want us. The account is
+            # clean — it must not sit out hours for a ban it does not carry.
+            await _moves.skip(ctx, target, "banned", account_id)
         return "acted"
     return await rest_for(ctx, account_id, limits.spam_rest_seconds, reason, target)
 
@@ -249,18 +251,20 @@ async def reroute(
     """This chat banned or muted this account; another one writes there.
 
     Moved once at most: a chat that refuses its second account too is a chat that
-    refuses us, and with nobody to move it to it is skipped for ``reason``.
+    refuses us, and with nobody to move it to it is skipped for ``reason``. Nobody means
+    nobody it has not banned or muted already: it is never given back to one of those.
     """
-    others = await room(ctx, account_id) or [
-        account for account in await live_accounts(ctx.campaign_id) if account != account_id
-    ]
     fresh = await repository.fetch_target(ctx.campaign_id, target.chat_key) or target
     await repository.add_refusal(ctx.campaign_id, target.chat_key, account_id)
-    if not others:
+    refused = fresh.model_copy(update={"refused_by": [*fresh.refused_by, account_id]})
+    others = _moves.receivers(await room(ctx, account_id), refused) or _moves.receivers(
+        [a for a in await live_accounts(ctx.campaign_id) if a != account_id], refused
+    )
+    load = _moves.open_load(await repository.list_targets(ctx.campaign_id))
+    to = _moves.least_loaded(others, load)
+    if to is None:
         await _moves.skip(ctx, fresh, reason, account_id)
         return
-    load = _moves.open_load(await repository.list_targets(ctx.campaign_id))
-    to = min(others, key=lambda account: (load[account], others.index(account)))
     if await _moves.assign(ctx, fresh, to):
         await log_event(
             "WARNING",

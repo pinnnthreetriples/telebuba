@@ -55,6 +55,7 @@ from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_account_rest,
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
+    _add_chat_broadcast_pinned,
     _add_chat_broadcast_refusals,
     _add_chat_broadcast_tables,
 )
@@ -295,6 +296,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (109, "add_account_twofa_pending", _add_account_twofa_pending),
     (110, "add_scheduled_posts_downgraded", _add_scheduled_posts_downgraded),
     (111, "add_chat_broadcast_refusals", _add_chat_broadcast_refusals),
+    (112, "add_chat_broadcast_pinned", _add_chat_broadcast_pinned),
 )
 
 

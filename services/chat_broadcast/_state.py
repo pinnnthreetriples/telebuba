@@ -153,7 +153,10 @@ def forget_campaign(campaign_id: str) -> None:
     """A run settled or a campaign deleted: its live pauses, rests and tick go too."""
     _PACE.pop(campaign_id, None)
     _LAST_TICK.pop(campaign_id, None)
-    _TICK_LOCKS.pop(campaign_id, None)
+    lock = _TICK_LOCKS.get(campaign_id)
+    if lock is not None and not lock.locked():
+        # A pass still holds it: dropping it would let the next pass run beside that one.
+        del _TICK_LOCKS[campaign_id]
     _STUCK_SINCE.pop(campaign_id, None)
     for registry in (_REST_STARTED, _HALTED_AT, _RETRIES):
         for key in [key for key in registry if key[0] == campaign_id]:

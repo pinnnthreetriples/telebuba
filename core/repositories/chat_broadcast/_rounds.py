@@ -64,6 +64,7 @@ def _promote_target(campaign_id: str, chat_key: str, round_number: int, due: _Pr
                 round=round_number + 1,
                 step_index=0,
                 next_action_unix=None,
+                pinned=0,
                 updated_unix=int(time.time()),
             ),
         )
@@ -82,8 +83,8 @@ async def promote_target(
 
     Compare-and-set on the round the chat is leaving, so two workers promoting the same
     chat advance it by one round, not two. Re-queued: a chat that finished its chain, one
-    an error skipped, and one skipped for deletions that the operator kept since. With
-    ``max_round`` the last round is never left.
+    an error skipped, and one skipped for deletions that the operator kept since; a new
+    round also ends a pin. With ``max_round`` the last round is never left.
     """
     return await asyncio.to_thread(
         _promote_target, campaign_id, chat_key, round_number, _Promotion(now_unix, max_round)
@@ -100,7 +101,12 @@ def _rest_target(campaign_id: str, chat_key: str, round_number: int, until_unix:
                 _TARGETS.c.round == round_number,
                 _TARGETS.c.state == "writing",
             )
-            .values(state="round_done", next_action_unix=until_unix, updated_unix=int(time.time())),
+            .values(
+                state="round_done",
+                next_action_unix=until_unix,
+                pinned=0,
+                updated_unix=int(time.time()),
+            ),
         )
     return result.rowcount > 0
 
@@ -110,7 +116,8 @@ async def rest_target(
 ) -> bool:
     """A chat has sent its whole chain: it rests until ``until_unix``, then opens its next round.
 
-    Only from ``writing`` and only in ``round_number``.
+    Only from ``writing`` and only in ``round_number``. A hand-over by the operator covered
+    this round and is spent: the chat is no longer pinned to its account.
     """
     return await asyncio.to_thread(_rest_target, campaign_id, chat_key, round_number, until_unix)
 

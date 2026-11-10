@@ -76,7 +76,8 @@ async def _hand(
         raise ChatBroadcastInvalidError(ACCOUNT_NOT_IN_CAMPAIGN)
     if target.state not in _HANDABLE or target.assigned_account_id == entry.account_id:
         return False
-    return await _moves.assign(ctx, target, entry.account_id)
+    # Pinned: the balance must not undo what the operator just decided.
+    return await _moves.assign(ctx, target, entry.account_id, pin=True)
 
 
 async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -> bool:

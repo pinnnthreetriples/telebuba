@@ -88,6 +88,28 @@ async def test_the_crashed_account_starts_again_after_a_pause_and_finishes_its_c
 
 
 @pytest.mark.asyncio
+async def test_a_worker_that_keeps_crashing_never_restarts_without_a_pause_even_with_no_limit(
+    telegram: FakeTelegram, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No limit on errors in a row: nothing ever takes the account out, only the pause spaces
+    # the restarts — so every one of them must wait it out.
+    campaign_id = await seed(
+        accounts=("a1",), targets=_CHATS[:1], messages=("Hi",), max_consecutive_errors=0
+    )
+    hit = _crashing_handle(monkeypatch, account="a1", times=3)
+    started = clock.now()
+
+    await run_to_end(campaign_id)
+
+    assert len(hit) == 3
+    assert clock.now() - started >= 3 * _PAUSE
+    assert len(await _crash_logs()) == 3
+    [account] = await repository.list_roster(campaign_id)
+    assert (account.state, account.halted_reason) == ("active", None)
+    assert [s.account_id for s in telegram.sent] == ["a1"]
+
+
+@pytest.mark.asyncio
 async def test_a_series_of_crashes_takes_the_account_out_and_its_chats_go_on(
     telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -59,7 +59,7 @@ async def at_join_cap(account_id: str) -> bool:
     cap = await account_join_cap(account_id, settings.chat_broadcast.max_joins_per_account_per_day)
     if cap <= 0:
         return False
-    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    since = (datetime.fromtimestamp(_seams.now(), UTC) - timedelta(days=1)).isoformat()
     return await count_account_joins_since(account_id, since) >= cap
 
 

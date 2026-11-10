@@ -173,7 +173,7 @@ async def _chain_played(ctx: RunContext, target: TargetRecord) -> None:
             "chat_broadcast_rest_started",
             extra={
                 "campaign_id": ctx.campaign_id,
-                "chat": target.raw,
+                "chat": _moves.chat_ref(target),
                 "round": target.round,
                 "until": until,
             },

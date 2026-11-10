@@ -98,6 +98,9 @@ class TargetRecord(TargetSeed):
     refused_by: list[str] = Field(default_factory=list)
     # How an account saw the chat; decides whose message ids a deletion check may read.
     chat_kind: ChatKind | None = None
+    # The operator handed this chat to its account by hand: the balance leaves it there until
+    # the chat plays its chain, or an account's rest or halt moves it.
+    pinned: bool = False
 
     @field_validator("refused_by", mode="before")
     @classmethod

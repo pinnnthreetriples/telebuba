@@ -83,6 +83,14 @@ def test_max_joins_per_account_per_day_rejects_negative() -> None:
         NeurocommentSettings(max_joins_per_account_per_day=-1)
 
 
+def test_a_crashed_chat_broadcast_worker_never_restarts_without_a_pause() -> None:
+    """A zero pause would let a fault that repeats spin the run: the setting must be above 0."""
+    chat_broadcast = type(settings.chat_broadcast)
+    with pytest.raises(ValidationError):
+        chat_broadcast(worker_restart_seconds=0.0)
+    assert chat_broadcast(worker_restart_seconds=0.5).worker_restart_seconds == 0.5
+
+
 def test_challenge_thinking_budget_must_leave_room_for_the_decision_json() -> None:
     """Thoughts are billed against the output cap.
 

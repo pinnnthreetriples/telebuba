@@ -112,14 +112,28 @@ async def revive_accounts(campaign_id: str, keep_reasons: frozenset[str]) -> lis
     return await asyncio.to_thread(_revive_accounts, campaign_id, keep_reasons)
 
 
-async def revive_account(campaign_id: str, account_id: str) -> None:
-    """Back in the rotation after a halt: active, no reason, no errors counted."""
-    await asyncio.to_thread(
-        _update_roster,
-        campaign_id,
-        account_id,
-        {"state": "active", "halted_reason": None, "consecutive_errors": 0},
-    )
+def _revive_account(campaign_id: str, account_id: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_ROSTER)
+            .where(
+                _ROSTER.c.campaign_id == campaign_id,
+                _ROSTER.c.account_id == account_id,
+                _ROSTER.c.state == "halted",
+            )
+            .values(state="active", halted_reason=None, consecutive_errors=0),
+        )
+    return result.rowcount > 0
+
+
+async def revive_account(campaign_id: str, account_id: str) -> bool:
+    """Back in the rotation after a halt: active, no reason, no errors counted.
+
+    A compare-and-set on the halt: the caller decided from a read, and an account that has
+    been brought back (or never was halted) since keeps the error count it has earned.
+    ``False`` when it was not halted any more.
+    """
+    return await asyncio.to_thread(_revive_account, campaign_id, account_id)
 
 
 def _list_targets(campaign_id: str) -> list[TargetRecord]:

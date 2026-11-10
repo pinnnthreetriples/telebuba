@@ -28,7 +28,8 @@ ChatBroadcastTargetState = Literal[
     "reconnecting",
     # Its account dropped out and no live account could take it yet.
     "waiting_account",
-    # This round's chain is complete; the chat waits for the next round.
+    # The chat played its chain and rests on its own clock (``next_action_at``); it opens
+    # its next round by itself when that is over, whatever the other chats are doing.
     "round_done",
     "done",
     "skipped",

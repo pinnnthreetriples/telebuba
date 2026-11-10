@@ -192,7 +192,7 @@ async def promote(
                 "chat_broadcast_round_started",
                 extra={
                     "campaign_id": ctx.campaign_id,
-                    "chat": target.raw,
+                    "chat": _moves.chat_ref(target),
                     "round": target.round + 1,
                 },
             )
@@ -220,14 +220,16 @@ def _pick(
     a resting chat goes after the ones about to be played, then the run's own order. A chat
     the receiver is not inside and has no way into (a group known by its id alone) is not
     for it: it would be lost, not moved. Nor — for a receiver that has spent its join
-    budget — one it would have to join. ``excluded`` are chats off the table for it (lost to
-    a change under the balance, or banned or muted the receiver).
+    budget — one it would have to join. A chat the operator handed over by hand is not moved
+    either. ``excluded`` are chats off the table for it (lost to a change under the balance,
+    or banned or muted the receiver).
     """
     movable = [
         t
         for t in targets
         if t.assigned_account_id == donor
         and t.state in _moves.REBALANCE_STATES
+        and not t.pinned
         and t.chat_key not in excluded
         and (t.member_account_id == receiver or (_join.can_join(t) and not receiver_at_join_cap))
     ]
@@ -282,8 +284,8 @@ async def rebalance(ctx: RunContext, live: list[str]) -> int:
     with nothing it can give (all in flight, or nothing the receiver may take) gives way to
     the next donor, and a receiver nobody can give to, to the next receiver. Every
     move narrows the gap by two, so the walk ends, a move back is never due, and a second
-    pass finds nothing to do. Nothing in flight is moved, and the chat's origin is kept:
-    see :func:`services.chat_broadcast._moves.assign`.
+    pass finds nothing to do. Nothing in flight is moved, nor a chat the operator pinned by
+    hand, and the chat's origin is kept: see :func:`services.chat_broadcast._moves.assign`.
     """
     if len(live) <= 1:
         return 0

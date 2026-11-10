@@ -21,7 +21,7 @@ from schemas.chat_broadcast_board import (
     ChatBroadcastHistoryEntry,
     ChatBroadcastPhase,
 )
-from services.chat_broadcast import _moves, _schedule
+from services.chat_broadcast import _moves, _schedule, _seams
 from services.chat_broadcast._context import usable_chain
 from services.chat_broadcast.campaigns import busy_owners, settings_of, to_campaign
 
@@ -143,11 +143,16 @@ def _phase(record: CampaignRecord, targets: list[TargetRecord]) -> ChatBroadcast
 
 
 def _rest_until(phase: ChatBroadcastPhase, targets: list[TargetRecord]) -> int | None:
-    """While every chat rests: when the first of them is back in play."""
+    """While every chat rests: when the first of them is back in play.
+
+    ``None`` when that moment has passed already: the chats are only waiting for the
+    scheduler to open their rounds, and a countdown to the past would read as a stuck run.
+    """
     if phase != "resting":
         return None
     ends = [t.next_action_unix for t in _unfinished(targets) if t.next_action_unix is not None]
-    return min(ends, default=None)
+    soonest = min(ends, default=None)
+    return soonest if soonest is not None and soonest > _seams.now() else None
 
 
 def _rows(

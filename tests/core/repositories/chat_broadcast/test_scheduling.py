@@ -344,7 +344,7 @@ async def test_one_account_comes_back_from_a_halt() -> None:
     await repository.halt_account(campaign_id, "a2", "errors_in_a_row")
     await repository.set_consecutive_errors(campaign_id, "a1", 5)
 
-    await repository.revive_account(campaign_id, "a1")
+    assert await repository.revive_account(campaign_id, "a1")
 
     roster = {r.account_id: r for r in await repository.list_roster(campaign_id)}
     assert (roster["a1"].state, roster["a1"].halted_reason, roster["a1"].consecutive_errors) == (
@@ -353,6 +353,36 @@ async def test_one_account_comes_back_from_a_halt() -> None:
         0,
     )
     assert roster["a2"].state == "halted"
+
+
+@pytest.mark.asyncio
+async def test_reviving_from_a_stale_read_leaves_an_account_that_is_not_halted_alone() -> None:
+    campaign_id = await _campaign()
+    await repository.halt_account(campaign_id, "a1", "errors_in_a_row")
+    # What the retrier read: a1 halted. Before it writes, a1 was brought back and erred again.
+    assert await repository.revive_account(campaign_id, "a1")
+    await repository.set_consecutive_errors(campaign_id, "a1", 3)
+
+    assert not await repository.revive_account(campaign_id, "a1")
+
+    [a1, _a2] = await repository.list_roster(campaign_id)
+    assert (a1.state, a1.consecutive_errors) == ("active", 3)
+
+
+@pytest.mark.asyncio
+async def test_a_chat_pinned_by_hand_is_free_again_when_it_plays_out_or_opens_a_round() -> None:
+    campaign_id = await _campaign()
+    await repository.replace_targets(campaign_id, [_seed("w"), _seed("r")])
+    await repository.update_target(campaign_id, "w", state="writing", pinned=1)
+    await repository.update_target(
+        campaign_id, "r", state="round_done", next_action_unix=_NOW, pinned=1
+    )
+
+    assert await repository.rest_target(campaign_id, "w", round_number=1, until_unix=_NOW + 60)
+    assert await repository.promote_target(campaign_id, "r", round_number=1, now_unix=_NOW)
+
+    assert not (await _target(campaign_id, "w")).pinned
+    assert not (await _target(campaign_id, "r")).pinned
 
 
 @pytest.mark.asyncio

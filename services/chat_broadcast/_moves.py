@@ -55,6 +55,27 @@ def open_load(targets: Iterable[TargetRecord]) -> Counter[str]:
     )
 
 
+def chat_ref(target: TargetRecord) -> str:
+    """How the log names a chat: its public handle, else its numeric id — never an invite link.
+
+    An invite link is the way into a private chat, so it stays out of the logs that name a
+    chat on every round.
+    """
+    if target.kind in {"public", "own"} and target.username:
+        return f"@{target.username}"
+    return f"id:{target.peer_id}" if target.peer_id else f"#{target.position}"
+
+
+def receivers(accounts: Iterable[str], target: TargetRecord) -> list[str]:
+    """The accounts that may be given ``target``: never one it banned or muted."""
+    return [account for account in accounts if account not in target.refused_by]
+
+
+def least_loaded(candidates: list[str], load: Counter[str]) -> str | None:
+    """The idlest of ``candidates``, the first of them on a tie; ``None`` when there are none."""
+    return min(candidates, key=lambda a: (load[a], candidates.index(a)), default=None)
+
+
 def rest_end(started_unix: int, bounds: MinutesRange) -> int:
     """When a rest begun at ``started_unix`` ends, drawn from the operator's range."""
     return started_unix + int(_seams.rng.uniform(bounds.min, bounds.max) * 60)
@@ -132,8 +153,9 @@ async def hand_over(
     """Give ``from_account``'s unfinished chats to the live accounts, least loaded first.
 
     A chat the new account is not in starts over at the join — and at the pause after
-    it — but keeps its place in the chain. With no live account left the chats wait for
-    one. ``only_unjoined`` is the limit case: chats it already sits in stay with it.
+    it — but keeps its place in the chain. With no live account left, or none that the chat
+    has not banned or muted, the chat waits for one. ``only_unjoined`` is the limit case:
+    chats it already sits in stay with it.
     """
     targets = await repository.list_targets(ctx.campaign_id)
     others = [account for account in live if account != from_account]
@@ -144,15 +166,10 @@ async def hand_over(
             continue
         if only_unjoined and target.member_account_id == from_account:
             continue
-        if not others:
-            await repository.update_target(
-                ctx.campaign_id,
-                target.chat_key,
-                expect_states=_HANDABLE,
-                state="waiting_account",
-            )
+        to = least_loaded(receivers(others, target), load)
+        if to is None:
+            await _wait_for_account(ctx, target)
             continue
-        to = min(others, key=lambda account: (load[account], others.index(account)))
         if await assign(ctx, target, to):
             load[to] += 1
             moved += 1
@@ -166,24 +183,36 @@ async def hand_over(
     return moved
 
 
-async def assign(
+async def _wait_for_account(ctx: RunContext, target: TargetRecord) -> None:
+    """Nobody may take this chat now: it waits for an account (``reclaim_waiting`` returns it)."""
+    if target.state != "waiting_account":
+        await repository.update_target(
+            ctx.campaign_id, target.chat_key, expect_states=_HANDABLE, state="waiting_account"
+        )
+
+
+async def assign(  # noqa: PLR0913 - the three modes of a move are keywords of one call
     ctx: RunContext,
     target: TargetRecord,
     to: str,
     *,
     expect_states: tuple[str, ...] = _HANDABLE,
     record_origin: bool = True,
+    pin: bool = False,
 ) -> bool:
     """Move one chat to ``to``; it re-joins unless ``to`` is already inside.
 
-    ``record_origin`` keeps who it came from on the chat: what decides that a chat has
-    been moved once already. A balancing move leaves it alone — a chat that only changed
-    hands to even the load is still owed its one move when a ban hits it. A chat resting
-    between rounds changes owner and nothing else: its rest runs out as it was.
+    ``record_origin`` keeps who it came from on the chat — the FIRST account it was moved
+    from, never overwritten by a later move: what decides that a chat has been moved once
+    already. A balancing move leaves it alone — a chat that only changed hands to even the
+    load is still owed its one move when a ban hits it. A chat resting between rounds
+    changes owner and nothing else: its rest runs out as it was. ``pin`` is the operator's
+    hand-over from the board: the balance leaves the chat where it was put; any other move
+    ends the pin.
     """
     inside = target.member_account_id == to
-    fields: dict[str, object] = {"assigned_account_id": to}
-    if record_origin:
+    fields: dict[str, object] = {"assigned_account_id": to, "pinned": int(pin)}
+    if record_origin and target.handed_from_account_id is None:
         fields["handed_from_account_id"] = target.assigned_account_id
     if target.state == "round_done":
         pass
@@ -221,8 +250,10 @@ async def adopt_orphans(ctx: RunContext, live: list[str], keep: list[str] | None
     for target in targets:
         if target.state not in _HANDABLE or target.assigned_account_id in owners or not live:
             continue
-        to = min(live, key=lambda account: (load[account], live.index(account)))
-        if await assign(ctx, target, to):
+        to = least_loaded(receivers(live, target), load)
+        if to is None:
+            await _wait_for_account(ctx, target)
+        elif await assign(ctx, target, to):
             load[to] += 1
 
 
@@ -230,7 +261,8 @@ async def reclaim_waiting(ctx: RunContext, live: list[str]) -> None:
     """An account is back: chats left waiting for one go back to work.
 
     A chat stays with its own account when that one is live, else goes to a live
-    account already inside it, else to the least loaded one.
+    account already inside it, else to the least loaded one — never to an account that was
+    banned or muted in it: with none left it keeps waiting.
     """
     if not live:
         return
@@ -249,10 +281,11 @@ async def reclaim_waiting(ctx: RunContext, live: list[str]) -> None:
                 next_action_unix=_seams.now() if inside else None,
             )
             continue
+        candidates = receivers(live, target)
         to = (
             target.member_account_id
-            if target.member_account_id in live
-            else min(live, key=lambda account: (load[account], live.index(account)))
+            if target.member_account_id in candidates
+            else least_loaded(candidates, load)
         )
         if to is not None and await assign(ctx, target, to):
             load[to] += 1

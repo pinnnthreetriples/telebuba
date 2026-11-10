@@ -33,8 +33,11 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   until loads differ by at most one. A chat in flight (joining, captcha, writing,
   awaiting approval) is never taken; a handover racing a worker is refused by the owner
   check on the worker's own write. Chats the receiver must join are not given to an
-  account at its join cap, and a chat is never given back to an account that was banned
-  or muted in it: `chat_broadcast_targets.refused_by` keeps that across restarts.
+  account at its join cap. No placement (balance, hand-over, adoption, return from
+  waiting, reroute) gives a chat to an account that was banned or muted in it:
+  `chat_broadcast_targets.refused_by` keeps that across restarts, and with nobody else the
+  chat waits. A chat the operator hands over from the board stays where it was put until
+  it plays its chain; only a rest or a halt moves it sooner (`pinned`).
 - Accounts another feature drives are left out; Start refuses only when none is free.
 - Stop, a stall and a failure continue with the SAME run id; only a finished campaign
   mints a new one. The journal row is written `pending` before every send: an occupied
@@ -50,7 +53,8 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   a flood wait, its own limit or a spam block rests it until a known moment, a waker
   brings it back, and its chats stay, are handed over or are all handed over by the
   length of the rest. A ban is asked to @SpamBot at once: a clean account loses only
-  that chat, moved once. Only a dead session leaves for good.
+  that chat, moved once (skipped when it bans a second account); only a ban @SpamBot
+  confirms rests the account. Only a dead session leaves for good.
 - The run does not stall while an account can come back. A busy account is claimed as
   soon as it frees up; one halted by errors in a row or a crash is returned after a
   pause, a few times, and a successful send resets the count. A spam block and a dead
