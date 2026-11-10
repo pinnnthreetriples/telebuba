@@ -192,6 +192,7 @@ async def test_a_spam_blocked_account_rests_and_hands_its_chats_over(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("no_rebalance")
 async def test_a_ban_in_one_chat_moves_only_that_chat(telegram: FakeTelegram) -> None:
     campaign_id = await seed(
         accounts=("a1", "a2"), targets=("@alpha", "@beta", "@gamma"), messages=("Hi",)
@@ -323,6 +324,7 @@ async def test_the_volume_stops_the_run(telegram: FakeTelegram) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("no_rebalance")
 async def test_an_account_at_its_hourly_limit_hands_unjoined_chats_to_others(
     telegram: FakeTelegram,
 ) -> None:

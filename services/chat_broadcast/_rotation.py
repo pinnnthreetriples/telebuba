@@ -17,13 +17,14 @@ What stops an account, and what becomes of it:
 
 While it rests its chats are not abandoned: a short rest keeps them, a medium one hands
 over the chats it has not joined (re-joining costs a join and a pause, waiting does not),
-a long one hands over everything — always to accounts that still have room. A round with
-every account resting waits for the first one back instead of stalling.
+a long one hands over everything — always to accounts that still have room. The run with
+every account resting waits for the first one back instead of stalling, and the scheduler
+re-applies those thresholds to the rest that is left (``place_resting``), so a chat that
+comes up for its next round while its owner still rests is not kept waiting for it.
 """
 
 from __future__ import annotations
 
-from collections import Counter
 from typing import TYPE_CHECKING, Final, Literal
 
 from core.config import settings
@@ -59,7 +60,7 @@ FINAL_HALT_REASONS: Final = frozenset(
 Resting = Literal["resting"]
 
 
-def _held(item: RosterAccount, campaign_id: str) -> bool:
+def held(item: RosterAccount, campaign_id: str) -> bool:
     return (
         item.state == "active"
         and _account_owner.owner_of(item.account_id) == _OWNER
@@ -69,22 +70,26 @@ def _held(item: RosterAccount, campaign_id: str) -> bool:
 
 async def live_accounts(campaign_id: str) -> list[str]:
     """Roster accounts in the run, held by it and not resting, in roster order."""
-    roster = await repository.list_roster(campaign_id)
-    return [
-        item.account_id
-        for item in roster
-        if _held(item, campaign_id) and item.resting_until_unix is None
-    ]
+    return (await accounts_by_rest(campaign_id))[0]
 
 
 async def resting_accounts(campaign_id: str) -> list[str]:
     """Roster accounts held by the run that are sitting a rest out."""
-    roster = await repository.list_roster(campaign_id)
-    return [
-        item.account_id
-        for item in roster
-        if _held(item, campaign_id) and item.resting_until_unix is not None
-    ]
+    return (await accounts_by_rest(campaign_id))[1]
+
+
+async def accounts_by_rest(campaign_id: str) -> tuple[list[str], list[str]]:
+    """The live and the resting accounts from ONE read of the roster.
+
+    Two reads can straddle a wake-up and see the account in neither list, which looks like
+    an account that left: its chats would be taken from it.
+    """
+    live: list[str] = []
+    resting: list[str] = []
+    for item in await repository.list_roster(campaign_id):
+        if held(item, campaign_id):
+            (live if item.resting_until_unix is None else resting).append(item.account_id)
+    return live, resting
 
 
 async def limit_ends(ctx: RunContext, account_id: str) -> tuple[int, str] | None:
@@ -156,6 +161,22 @@ async def rest_until(
         extra={"campaign_id": ctx.campaign_id, "reason": reason, "until": until, "count": handed},
     )
     return "resting"
+
+
+async def place_resting(ctx: RunContext) -> int:
+    """Place the chats of every resting account by the rest it has LEFT; chats moved.
+
+    A chat that came up for its next round during a long rest would otherwise wait for
+    its owner. Idempotent: a chat already given to a live account is not touched again.
+    """
+    now = _seams.now()
+    handed = 0
+    for item in await repository.list_roster(ctx.campaign_id):
+        if not held(item, ctx.campaign_id) or item.resting_until_unix is None:
+            continue
+        if (remaining := item.resting_until_unix - now) > 0:
+            handed += await _place_chats(ctx, item.account_id, remaining)
+    return handed
 
 
 async def _place_chats(ctx: RunContext, account_id: str, seconds: int) -> int:
@@ -234,14 +255,11 @@ async def reroute(
         account for account in await live_accounts(ctx.campaign_id) if account != account_id
     ]
     fresh = await repository.fetch_target(ctx.campaign_id, target.chat_key) or target
+    await repository.add_refusal(ctx.campaign_id, target.chat_key, account_id)
     if not others:
         await _moves.skip(ctx, fresh, reason, account_id)
         return
-    load = Counter(
-        t.assigned_account_id
-        for t in await repository.list_targets(ctx.campaign_id)
-        if t.state in _moves.ACTIVE_STATES
-    )
+    load = _moves.open_load(await repository.list_targets(ctx.campaign_id))
     to = min(others, key=lambda account: (load[account], others.index(account)))
     if await _moves.assign(ctx, fresh, to):
         await log_event(
@@ -266,7 +284,7 @@ async def limit(ctx: RunContext, account_id: str, target: TargetRecord) -> Resti
 async def sit_out(ctx: RunContext, account_id: str) -> bool:
     """Wait the account's rest out. ``True`` = back in the run, ``False`` = it left.
 
-    Slept in slices, re-reading the end each time, like the rest between rounds. At the
+    Slept in slices, re-reading the end each time. At the
     end a spam block is checked with @SpamBot and a limit is counted again — a send by
     another campaign may have used the room up meanwhile.
     """

@@ -50,7 +50,12 @@ def _join_action(target: TargetRecord) -> TelegramAction | None:
     return None if token is None else JoinChannel(channel=token)
 
 
-async def _at_join_cap(account_id: str) -> bool:
+def can_join(target: TargetRecord) -> bool:
+    """Is there a way in for an account that is not inside? A group known by its id has none."""
+    return _join_action(target) is not None
+
+
+async def at_join_cap(account_id: str) -> bool:
     cap = await account_join_cap(account_id, settings.chat_broadcast.max_joins_per_account_per_day)
     if cap <= 0:
         return False
@@ -78,18 +83,19 @@ async def join(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
     inside = await _already_inside(account_id, target)
     if inside is not None:
         return await _enter_as_member(ctx, account_id, target, inside)
-    if await _at_join_cap(account_id):
+    if await at_join_cap(account_id):
         return await _cap_reached(ctx, account_id, target)
     if not await repository.update_target(
         ctx.campaign_id,
         target.chat_key,
         expect_states=("queued", "reconnecting", "waiting"),
+        assigned_to=account_id,
         state="joining",
     ):
         return "idle"
     await _seams.await_send_slot(f"join:{account_id}", join_pause())
     async with join_lock(account_id):
-        if await _at_join_cap(account_id):
+        if await at_join_cap(account_id):
             return await _cap_reached(ctx, account_id, target)
         result = await _seams.execute(account_id, action)
         verdict = classify_join(result)
@@ -121,6 +127,7 @@ async def _enter_as_member(
         ctx.campaign_id,
         target.chat_key,
         expect_states=("queued", "reconnecting", "waiting"),
+        assigned_to=account_id,
         state="joining",
     ):
         return "idle"
@@ -214,6 +221,7 @@ async def poll_approval(ctx: RunContext, account_id: str, target: TargetRecord) 
             ctx.campaign_id,
             target.chat_key,
             expect_states=("pending_approval",),
+            assigned_to=account_id,
             state="joining",
         ):
             return "idle"
@@ -274,6 +282,9 @@ async def after_join(
         joined_unix=now,
         next_action_unix=due,
     )
+    if moved and resolved is not None:
+        # How this account sees the chat: whose message ids a later check may read.
+        await repository.update_target(ctx.campaign_id, target.chat_key, chat_kind=resolved.kind)
     if moved:
         await repository.add_event(
             ctx.campaign_id,

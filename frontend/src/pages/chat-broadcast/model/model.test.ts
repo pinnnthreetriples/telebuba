@@ -14,7 +14,7 @@ import {
   splitTargets,
 } from './draft';
 import { conflictCode } from './errors';
-import { board, row, SETTINGS_READ } from './fixtures.test-helpers';
+import { board, CAMPAIGN, row, SETTINGS_READ } from './fixtures.test-helpers';
 import { pipelineView } from './pipeline';
 import {
   buildBlocks,
@@ -121,19 +121,23 @@ test('row views name the state, the time and the tone', () => {
   });
   // In a finished campaign it is skipped for this run, as before.
   expect(rowView(t, { ...kept, active: false }, ctx).tone).toBe('danger');
-  // Before the round's last chat has written there is no rest yet, so no next-round time.
-  expect(rowView(t, row({ state: 'round_done', round: 8 }), ctx)).toMatchObject({
-    label: 'Круг пройден',
-    when: 'ждёт остальные чаты круга 8',
-  });
-  const resting = {
-    ...ctx,
-    board: board({ campaign: { ...ctx.board.campaign, rest_until: '2026-10-06T16:30:00Z' } }),
-  };
-  expect(rowView(t, row({ state: 'round_done' }), resting)).toMatchObject({
-    label: 'Отдых до 16:30',
-    when: 'круг 2 в 16:30',
-  });
+  // Every chat rests on its own clock: the row shows its own end, not the campaign's.
+  expect(
+    rowView(t, row({ state: 'round_done', next_action_at: '2026-10-06T16:30:00Z' }), ctx),
+  ).toMatchObject({ label: 'Отдых до 16:30', when: 'круг 2 в 16:30' });
+  const other = rowView(
+    t,
+    row({ state: 'round_done', round: 4, next_action_at: '2026-10-06T13:05:00Z' }),
+    {
+      ...ctx,
+      board: board({ campaign: { ...ctx.board.campaign, rest_until: '2026-10-06T12:30:00Z' } }),
+    },
+  );
+  expect(other).toMatchObject({ label: 'Отдых до 13:05', when: 'круг 5 в 13:05' });
+  // Older data with no time yet: nobody is waited for, it is just queued for the next round.
+  const queued = rowView(t, row({ state: 'round_done', round: 8 }), ctx);
+  expect(queued).toMatchObject({ label: 'Круг пройден', when: 'в очереди на следующий круг' });
+  expect(queued.when).not.toContain('ждёт');
   for (const state of [
     'pending_approval',
     'joining',
@@ -259,6 +263,8 @@ test('the pipeline view for a draft, a run and a stall', () => {
   });
   expect(stalled.action).toMatchObject({ kind: 'resume', disabled: true });
   expect(stalled.extras.map((extra) => extra.tone)).toEqual(['warning', 'info']);
+  // peer_flood has no halt wording: the name stands alone, no raw code.
+  expect(stalled.extras[0]!.text).toBe('Выбыли: n-a1 — их чаты сразу взяли другие аккаунты.');
   expect(stalled.extras[1]!.text).toContain('n-a2 (прогрев)');
   for (const phase of ['joining', 'resting', 'stopped', 'done', 'failed', 'stopping'] as const) {
     const view = pipelineView(t, {
@@ -383,4 +389,91 @@ test('a chat whose account rests says why and when it writes, not a countdown th
   expect(pipeline.extras.map((extra) => extra.text)).toEqual([
     expect.stringContaining('n-a1 (лимит в сутки до 14:32)'),
   ]);
+});
+
+const settingsOf = () => draftOf(SETTINGS_READ).settings;
+const noticeOf = (over: Partial<ChatBroadcastBoard>, nameOf = (id: string) => id) =>
+  pipelineView(t, { board: board(over), settings: settingsOf(), missing: [], time, nameOf }).notice;
+
+test('a stalled run says why by the code the run left, and any other value keeps the general text', () => {
+  const stalled = (last_error: string | null) =>
+    noticeOf({ phase: 'stalled', campaign: { ...CAMPAIGN, status: 'stalled', last_error } });
+
+  expect(stalled('accounts_spam')).toMatchObject({
+    tone: 'danger',
+    text: expect.stringContaining('спам-блок Telegram'),
+  });
+  expect(stalled('accounts_errors').text).toContain('повторяющихся ошибок');
+  expect(stalled('accounts_dead').text).toContain('сессии аккаунтов недействительны');
+  expect(stalled('accounts_busy').text).toContain('заняты другой рассылкой');
+  const general = stalled(null).text;
+  expect(general).toContain('у всех аккаунтов спам-блок, ограничение или они заняты');
+  // The code the old engine left, and one nobody knows, read as before.
+  expect(stalled('AccountBusy').text).toBe(general);
+  expect(stalled('something_else').text).toBe(general);
+  expect(
+    new Set(
+      ['accounts_spam', 'accounts_errors', 'accounts_dead', 'accounts_busy'].map(
+        (c) => stalled(c).text,
+      ),
+    ).size,
+  ).toBe(4);
+});
+
+test('a running run with nobody writing says it waits for accounts to come back', () => {
+  const idleCounters = { ...board().counters, accounts_working: 0 };
+
+  expect(noticeOf({ counters: idleCounters })).toMatchObject({
+    tone: 'info',
+    text: expect.stringContaining('Ждём освободившиеся аккаунты'),
+  });
+  expect(noticeOf({}).text).toContain('Рассылка идёт · чатов ждут паузы');
+  // Only a run that is going: a stopped one is not "waiting for accounts".
+  expect(noticeOf({ phase: 'stopped', counters: idleCounters }).text).not.toContain('Ждём');
+});
+
+test('while every chat rests the notice names the first one back, not a round', () => {
+  const view = noticeOf({
+    phase: 'resting',
+    campaign: { ...CAMPAIGN, round: 3, rest_until: '2026-10-06T16:30:00Z' },
+  });
+
+  expect(view.text).toContain('ближайший вернётся в 16:30');
+  expect(view.text).not.toContain('Круг 3');
+  expect(noticeOf({ phase: 'resting' }).text).toContain('в —');
+});
+
+test('the rounds node shows the campaign round, the laggard, and each row its own', () => {
+  const laggard = board({
+    campaign: { ...CAMPAIGN, round: 2 },
+    rows: [row({ chat_key: 'a', round: 2 }), row({ chat_key: 'b', round: 5 })],
+  });
+  const view = pipelineView(t, {
+    board: laggard,
+    settings: settingsOf(),
+    missing: [],
+    time,
+    nameOf: (id) => id,
+  });
+
+  expect(view.nodes.find((node) => node.id === 'rounds')!.sub).toBe('круг 2 из 3');
+  expect(laggard.rows.map((r) => r.round)).toEqual([2, 5]);
+});
+
+test('an account halted by a worker crash or repeated errors is named with its reason', () => {
+  const extra = (reason: string | null) =>
+    pipelineView(t, {
+      board: board({
+        accounts: [{ account_id: 'a1', state: 'halted', halted_reason: reason, busy_owner: null }],
+      }),
+      settings: settingsOf(),
+      missing: [],
+      time,
+      nameOf: (id) => `n-${id}`,
+    }).extras[0]!.text;
+
+  expect(extra('worker_crash')).toContain('n-a1 (сбой в работе аккаунта)');
+  expect(extra('errors_in_a_row')).toContain('n-a1 (слишком много ошибок подряд)');
+  expect(extra('spam_block')).toContain('n-a1 (спам-блок)');
+  expect(extra(null)).toContain('Выбыли: n-a1 —');
 });

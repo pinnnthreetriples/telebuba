@@ -17,6 +17,7 @@ from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_account_rest,
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
+    _add_chat_broadcast_refusals,
     _add_chat_broadcast_tables,
 )
 from core.migrations import MIGRATIONS
@@ -55,6 +56,7 @@ def migrated_engine(legacy_engine: _EngineFactory) -> Engine:
         _add_chat_broadcast_ignore_deleted(connection)
         _add_chat_broadcast_collections(connection)
         _add_chat_broadcast_account_rest(connection)
+        _add_chat_broadcast_refusals(connection)
     return engine
 
 
@@ -67,6 +69,8 @@ def test_the_registry_carries_the_migration_exactly_once() -> None:
     assert lists == [(70, "add_chat_broadcast_collections", _add_chat_broadcast_collections)]
     rest = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_account_rest]
     assert rest == [(103, "add_chat_broadcast_account_rest", _add_chat_broadcast_account_rest)]
+    refusals = [entry for entry in MIGRATIONS if entry[2] is _add_chat_broadcast_refusals]
+    assert refusals == [(111, "add_chat_broadcast_refusals", _add_chat_broadcast_refusals)]
 
 
 @pytest.mark.parametrize("table", _TABLES)
@@ -85,6 +89,7 @@ def test_the_migration_is_idempotent(migrated_engine: Engine) -> None:
         _add_chat_broadcast_ignore_deleted(connection)
         _add_chat_broadcast_collections(connection)
         _add_chat_broadcast_account_rest(connection)
+        _add_chat_broadcast_refusals(connection)
     assert {table: _shape(migrated_engine, table) for table in _TABLES} == before
 
 
@@ -96,3 +101,27 @@ def test_the_journal_key_is_unique_per_step(created_engine: Engine) -> None:
     assert indexes["ux_cb_messages_step"] == (1, "c", key)
     checks = _checks(created_engine, "chat_broadcast_messages")
     assert any("'unconfirmed'" in check for check in checks)
+
+
+def test_an_existing_table_gains_the_refusal_columns_with_empty_defaults(
+    legacy_engine: _EngineFactory,
+) -> None:
+    engine = legacy_engine("before.db")
+    _metadata.tables["accounts"].create(engine)
+    with engine.begin() as connection:
+        _add_chat_broadcast_tables(connection)
+        connection.exec_driver_sql(
+            "INSERT INTO chat_broadcast_campaigns(campaign_id, name, created_at, updated_at)"
+            " VALUES ('c', 'n', 't', 't')"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO chat_broadcast_targets(campaign_id, chat_key, position, raw, kind,"
+            " updated_unix) VALUES ('c', 'x', 0, '@x', 'public', 1)"
+        )
+
+        _add_chat_broadcast_refusals(connection)
+
+        row = connection.exec_driver_sql(
+            "SELECT refused_by, chat_kind FROM chat_broadcast_targets"
+        ).one()
+    assert tuple(row) == ("[]", None)

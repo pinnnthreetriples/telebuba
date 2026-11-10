@@ -161,27 +161,6 @@ async def test_merge_appends_new_chats_and_skips_removed_ones() -> None:
 
 
 @pytest.mark.asyncio
-async def test_round_transitions_requeue_finished_and_error_skipped_chats() -> None:
-    campaign_id = await _campaign()
-    await repository.replace_targets(
-        campaign_id, [_seed("done"), _seed("err"), _seed("admin"), _seed("late")]
-    )
-    await repository.update_target(campaign_id, "done", state="round_done", step_index=2)
-    await repository.update_target(campaign_id, "err", state="skipped", skip_reason="error")
-    await repository.update_target(campaign_id, "admin", state="skipped", skip_reason="admin_only")
-
-    assert await repository.start_round(campaign_id, 2) == 2
-    await repository.update_target(campaign_id, "late", state="round_done")
-    await repository.finish_rounds(campaign_id)
-
-    rows = {t.chat_key: t for t in await repository.list_targets(campaign_id)}
-    assert (rows["done"].state, rows["done"].round, rows["done"].step_index) == ("queued", 2, 0)
-    assert (rows["err"].state, rows["err"].skip_reason) == ("queued", None)
-    assert rows["admin"].state == "skipped"
-    assert rows["late"].state == "done"
-
-
-@pytest.mark.asyncio
 async def test_settle_interrupted_restarts_half_done_steps() -> None:
     campaign_id = await _campaign()
     await repository.replace_targets(campaign_id, [_seed("j"), _seed("c"), _seed("r"), _seed("w")])

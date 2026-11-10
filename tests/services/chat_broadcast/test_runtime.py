@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from core.db import create_account
 from core.repositories import chat_broadcast as repository
+from schemas.accounts import AccountCreate
 from schemas.chat_broadcast import ChatBroadcastSettingsUpdate
 from schemas.chat_broadcast_records import JournalKey, TargetSeed
 from services import _account_owner
@@ -186,21 +188,17 @@ def _seed_member(key: str) -> TargetSeed:
 
 
 @pytest.mark.asyncio
-async def test_restart_finishes_an_interrupted_stop_and_stalls_without_accounts(
+async def test_restart_finishes_an_interrupted_stop_and_fails_a_run_without_an_id(
     telegram: FakeTelegram,
 ) -> None:
     stopping = await seed(accounts=("a1",))
     await repository.set_status(stopping, "stopping", run_id="run-1")
-    busy = await seed(accounts=("a2",))
-    await repository.set_status(busy, "running", run_id="run-2", round=1)
     lost = await seed(accounts=("a3",))
     await repository.set_status(lost, "running", run_id=None)
-    _account_owner.try_claim("a2", "warming", "w-1")
 
     await service.reconcile_chat_broadcast_on_startup()
 
     assert await _status(stopping) == "stopped"
-    assert await _status(busy) == "stalled"
     assert await _status(lost) == "failed"
     assert telegram.joins == []
 
@@ -220,14 +218,27 @@ async def test_shutdown_leaves_the_run_running_for_the_next_boot(telegram: FakeT
 async def test_continue_after_a_stall_with_a_new_account(telegram: FakeTelegram) -> None:
     from tests.services.chat_broadcast.fakes import refused  # noqa: PLC0415
 
-    campaign_id = await seed(accounts=("a1", "a9"), targets=("@alpha",), messages=("Hi",))
-    _account_owner.try_claim("a9", "warming", "w-1")
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha",), messages=("Hi",))
+    await create_account(AccountCreate(account_id="a9", label="a9", session_name="a9"))
     # Blocked for good: Continue gives it another try, and it is refused again.
     telegram.send_answers["a1"] = [refused("peer_flood"), refused("peer_flood")]
     await run_to_end(campaign_id)
     assert await _status(campaign_id) == "stalled"
+    stalled = await repository.fetch_campaign(campaign_id)
+    assert stalled is not None
+    assert stalled.last_error == "accounts_spam"
 
-    _account_owner.release("a9", "warming", "w-1")
+    current = await service.load_settings(campaign_id)
+    assert current is not None
+    await service.save_settings(
+        campaign_id,
+        ChatBroadcastSettingsUpdate(
+            expected_updated_at=current.updated_at,
+            name=current.name,
+            account_ids=["a1", "a9"],
+            settings=current.settings,
+        ),
+    )
     await run_to_end(campaign_id)
 
     assert await _status(campaign_id) == "done"
@@ -242,7 +253,6 @@ async def test_continue_rejoins_a_chat_stop_caught_mid_join() -> None:
     # As a Stop during the join leaves it: the run stopped, the chat still "joining".
     await repository.set_status(campaign_id, "stopped", round=1, finished_unix=1)
     await repository.update_target(campaign_id, "alpha", state="joining", member_account_id=None)
-    await repository.start_round(campaign_id, 1)
 
     await run_to_end(campaign_id)
 

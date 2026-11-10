@@ -2,8 +2,8 @@
 
 The rest of the settings stay locked while a run is attached (the run reads them once),
 but the pauses are read live: the save lands in the row, the running engine sees it
-through ``_state`` from its next pause on, and a rest already under way is drawn again
-from the moment it began, so shortening it can end it at once.
+through ``_state`` from its next pause on, and every chat's rest already under way is
+drawn again from the moment it began, so shortening them can end them at once.
 """
 
 from __future__ import annotations
@@ -12,14 +12,13 @@ from typing import TYPE_CHECKING
 
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
-from services.chat_broadcast import _state
-from services.chat_broadcast._coordinator import rest_end
+from services.chat_broadcast import _schedule, _state
 from services.chat_broadcast._errors import CAMPAIGN_CHANGED, ChatBroadcastConflictError
+from services.chat_broadcast._moves import rest_end
 from services.chat_broadcast.campaigns import load_settings, settings_of
 
 if TYPE_CHECKING:
     from schemas.chat_broadcast import ChatBroadcastPace, ChatBroadcastSettingsRead
-    from schemas.chat_broadcast_records import CampaignRecord
 
 
 async def save_pace(campaign_id: str, pace: ChatBroadcastPace) -> ChatBroadcastSettingsRead | None:
@@ -44,7 +43,7 @@ async def save_pace(campaign_id: str, pace: ChatBroadcastPace) -> ChatBroadcastS
     _state.set_pace(campaign_id, pace)
     until = None
     if pace.rest_minutes != current.rest_minutes:
-        until = await _redraw_rest(record, pace)
+        until = await _redraw_rests(campaign_id, pace)
     extra: dict[str, object] = {"campaign_id": campaign_id}
     if until is not None:
         extra["until"] = until
@@ -52,15 +51,22 @@ async def save_pace(campaign_id: str, pace: ChatBroadcastPace) -> ChatBroadcastS
     return await load_settings(campaign_id)
 
 
-async def _redraw_rest(record: CampaignRecord, pace: ChatBroadcastPace) -> int | None:
-    """Move the end of the rest under way; ``None`` when there is none to move.
+async def _redraw_rests(campaign_id: str, pace: ChatBroadcastPace) -> int | None:
+    """Move the end of every chat's rest under way; the nearest new end, ``None`` if none moved.
 
     A rest whose start this process never saw (it began before a restart) keeps its end:
-    the new range applies from the next rest.
+    the new range applies from the next rest. A chat that has left its rest meanwhile is
+    in its next round and is not touched — a redraw never puts a rest into a round.
     """
-    started = _state.rest_started(record.campaign_id)
-    if record.rest_until_unix is None or started is None:
-        return None
-    until = rest_end(started, pace.rest_minutes)
-    moved = await repository.move_rest(record.campaign_id, round_number=record.round, until=until)
-    return until if moved else None
+    starts = _state.rest_starts(campaign_id)
+    nearest: int | None = None
+    for target in await repository.list_targets(campaign_id):
+        started = starts.get(target.chat_key)
+        if started is None or target.next_action_unix is None or not _schedule.is_resting(target):
+            continue
+        until = rest_end(started, pace.rest_minutes)
+        if await repository.move_target_rest(
+            campaign_id, target.chat_key, round_number=target.round, until_unix=until
+        ):
+            nearest = until if nearest is None else min(nearest, until)
+    return nearest

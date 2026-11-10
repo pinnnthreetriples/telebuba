@@ -2120,6 +2120,7 @@
     "chat_broadcast_chats_handed": "Chats handed to other accounts",
     "chat_broadcast_account_resting": "Account resting, back by itself",
     "chat_broadcast_account_back": "Account back in the broadcast",
+    "chat_broadcast_worker_crashed": "Account worker crashed: restarting it shortly",
     "chat_broadcast_chat_rerouted": "Chat moved on: the account is banned there",
     "chat_broadcast_muted_rerouted": "Chat moved on: an admin muted the account there",
     "chat_broadcast_photo_dropped": "The chat takes no photos: text sent without one",
@@ -2213,6 +2214,8 @@
     "session_watch_passkey_missing": "Telegram no longer lists the account's passkey"
   },
   "logEventReason": {
+    "freed": "the account became free",
+    "retry": "automatic retry after a pause",
     "restart": "back in after a start",
     "hour_limit": "hourly message limit",
     "day_limit": "daily message limit",
@@ -4246,12 +4249,17 @@
         "missingMessages": "add at least one message",
         "joining": "Accounts are joining chats: {{joined}} joined, {{pending}} waiting for approval. In a new chat they write {{delay}} after joining, where they already are — at once.",
         "running": "Broadcast running · chats waiting out the pause after a join: {{waiting}}.",
-        "resting": "Round {{round}} done. Resting until {{time}} — then round {{next}} over the same chats, without joins or pauses.",
+        "runningIdle": "Broadcast running, but no account is writing right now: they are busy, resting or stopped. Waiting for accounts to free up — the chats carry on by themselves.",
+        "resting": "All chats are resting, the first one is back at {{time}}. After that they go round after round by themselves, without joins or pauses.",
         "stopping": "Stopping — waiting for the send in flight to finish its step.",
         "stopped": "Stopped at {{time}}. “Continue” resumes from the same place; pauses after joins carry on.",
         "done": "Broadcast finished: {{sent}} sent, {{chats}} chats, {{skipped}} skipped.",
         "failed": "Broadcast stopped by an error ({{error}}). “Continue” resumes from the same place.",
         "stalled": "Broadcast stalled: every account is spam-blocked, restricted or busy with another module. Add accounts in the settings — their chats go to the new ones, then continue.",
+        "stalledSpam": "Broadcast stalled: the accounts have a Telegram spam block and will not come back by themselves. Once it is lifted press “Continue”, or add other accounts in the settings.",
+        "stalledErrors": "Broadcast stalled: the accounts stopped on repeated errors and used up their automatic retries. “Continue” gives them a new try.",
+        "stalledDead": "Broadcast stalled: the accounts' sessions are invalid or the accounts are unavailable. Add working accounts in the settings and press “Continue”.",
+        "stalledBusy": "Broadcast stalled: the free accounts are busy with another campaign or feature. Free them up or add other accounts in the settings and press “Continue”.",
         "halted": "Dropped out: {{names}} — their chats went to the other accounts at once.",
         "accountsResting": "Resting, back by themselves: {{names}}. Chats that cannot wait already went to accounts with room.",
         "busy": "Busy with other modules and left out: {{names}}."
@@ -4340,7 +4348,7 @@
       "joiningNow": "joining now",
       "queued": "queued",
       "nextRound": "round {{round}} at {{time}}",
-      "roundWaits": "waiting for the other chats of round {{round}}",
+      "nextRoundQueued": "queued for the next round",
       "reconnect": "continues once connected",
       "needAccount": "needs an account",
       "done": "done",
@@ -4357,6 +4365,15 @@
       "hour_limit": "hourly limit",
       "day_limit": "daily limit",
       "other": "pause"
+    },
+    "haltReason": {
+      "errors_in_a_row": "too many errors in a row",
+      "worker_crash": "the account's worker crashed",
+      "spam_block": "spam block",
+      "session_dead": "session is no longer valid",
+      "account_deactivated": "account deactivated",
+      "account_frozen": "account frozen",
+      "ChannelsTooMuchError": "too many chats in the account"
     },
     "restUntil": "until {{time}}",
     "status": {

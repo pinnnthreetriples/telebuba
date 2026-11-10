@@ -22,9 +22,7 @@ if TYPE_CHECKING:
 async def test_a_repeated_run_writes_at_once_where_its_accounts_already_are(
     telegram: FakeTelegram, clock: Clock
 ) -> None:
-    campaign_id = await seed(
-        targets=("@alpha", "@beta", "@gamma"), messages=("Hi",), join_delay_minutes=60
-    )
+    campaign_id = await seed(targets=("@alpha", "@beta"), messages=("Hi",), join_delay_minutes=60)
     await run_to_end(campaign_id)
     first_joins = sorted(telegram.joins)
     telegram.joins.clear()
@@ -32,13 +30,12 @@ async def test_a_repeated_run_writes_at_once_where_its_accounts_already_are(
 
     await run_to_end(campaign_id)
 
-    assert first_joins == [("a1", "alpha"), ("a1", "gamma"), ("a2", "beta")]
+    assert first_joins == [("a1", "alpha"), ("a2", "beta")]
     assert telegram.joins == []
     targets = await repository.list_targets(campaign_id)
     assert {(t.chat_key, t.assigned_account_id, t.state) for t in targets} == {
         ("alpha", "a1", "done"),
         ("beta", "a2", "done"),
-        ("gamma", "a1", "done"),
     }
     # Nothing waited out the hour: the run is over well before it.
     record = await repository.fetch_campaign(campaign_id)

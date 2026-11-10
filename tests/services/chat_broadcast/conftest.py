@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from core.db import configure_database
 from services import _account_owner
 from services.chat_broadcast import _runtime, _seams, _state
@@ -47,6 +48,12 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     monkeypatch.setattr(_seams, "sleep", _sleep)
     monkeypatch.setattr(_seams, "await_send_slot", _slot)
     return fake
+
+
+@pytest.fixture
+def no_rebalance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chats stay where they were dealt or handed: for tests of the hand-over paths alone."""
+    monkeypatch.setattr(settings.chat_broadcast, "rebalance_min_gap", 1_000_000)
 
 
 @pytest.fixture

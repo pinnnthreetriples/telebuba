@@ -55,6 +55,7 @@ from core.migration_steps_chat_broadcast import (
     _add_chat_broadcast_account_rest,
     _add_chat_broadcast_collections,
     _add_chat_broadcast_ignore_deleted,
+    _add_chat_broadcast_refusals,
     _add_chat_broadcast_tables,
 )
 from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
@@ -293,6 +294,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (108, "add_account_own_authorizations", _add_account_own_authorizations),
     (109, "add_account_twofa_pending", _add_account_twofa_pending),
     (110, "add_scheduled_posts_downgraded", _add_scheduled_posts_downgraded),
+    (111, "add_chat_broadcast_refusals", _add_chat_broadcast_refusals),
 )
 
 

@@ -1,4 +1,8 @@
-"""Smart rotation: a stopped account rests and comes back, its chats never sit idle."""
+"""Smart rotation: a stopped account rests and comes back, its chats never sit idle.
+
+Where the chats were handed is what these tests read, so the load balance (its own tests
+are in ``test_rebalance``) is kept out of them.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ from tests.services.chat_broadcast.fakes import refused, run_to_end, seed
 
 if TYPE_CHECKING:
     from tests.services.chat_broadcast.fakes import Clock, FakeTelegram
+
+pytestmark = pytest.mark.usefixtures("no_rebalance")
 
 
 @pytest.mark.asyncio
