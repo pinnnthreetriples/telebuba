@@ -68,7 +68,7 @@ async def _cap_reached(ctx: RunContext, account_id: str, target: TargetRecord) -
         "WARNING",
         "chat_broadcast_join_daily_cap",
         account_id=account_id,
-        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+        extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target)},
     )
     await _moves.defer(ctx, target, settings.chat_broadcast.limit_retry_seconds, state="queued")
     return "idle"
@@ -190,7 +190,7 @@ async def _requested(ctx: RunContext, account_id: str, target: TargetRecord) -> 
         "INFO",
         "chat_broadcast_join_requested",
         account_id=account_id,
-        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+        extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target)},
     )
     return "acted"
 
@@ -215,7 +215,7 @@ async def poll_approval(ctx: RunContext, account_id: str, target: TargetRecord) 
             "INFO",
             "chat_broadcast_join_approved",
             account_id=account_id,
-            extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+            extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target)},
         )
         if not await repository.update_target(
             ctx.campaign_id,
@@ -266,7 +266,7 @@ async def after_join(
         await repository.update_target(
             ctx.campaign_id, target.chat_key, expect_states=("joining",), state="captcha"
         )
-        outcome = await _seams.solve_challenge(account_id, target.raw, peer_id)
+        outcome = await _seams.solve_challenge(account_id, _moves.chat_ref(target), peer_id)
         if outcome in _CAPTCHA_FAILED:
             await _moves.skip(ctx, target, "captcha", account_id)
             return "acted"
@@ -298,7 +298,11 @@ async def after_join(
             "INFO",
             "chat_broadcast_chat_joined",
             account_id=account_id,
-            extra={"campaign_id": ctx.campaign_id, "chat": target.raw, "already": already},
+            extra={
+                "campaign_id": ctx.campaign_id,
+                "chat": _moves.chat_ref(target),
+                "already": already,
+            },
         )
     return "acted"
 

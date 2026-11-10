@@ -9,6 +9,7 @@ results). The ``max_length`` bound is an explicit argument rather than a
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 _INVITE_HASH_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -39,6 +40,37 @@ def extract_invite_hash(channel: str) -> str | None:
         invite = cleaned[9:]
         return invite if _INVITE_HASH_RE.match(invite) else None
     return None
+
+
+def _fingerprint(kind: str, secret: str) -> str:
+    """``kind:`` and six hex digits of the secret's hash: tells two chats apart, opens neither."""
+    return f"{kind}:{hashlib.sha256(secret.encode()).hexdigest()[:6]}"
+
+
+def loggable_folder(slug: str) -> str:
+    """A shared-folder slug as a log may carry it (``folder:<fingerprint>``)."""
+    return _fingerprint("folder", slug)
+
+
+def loggable_ref(value: str) -> str:
+    """``value`` as a log or an event payload may carry it.
+
+    A private invite (``+HASH``, ``joinchat/HASH``) and a shared-folder link
+    (``addlist/SLUG``) are the way INTO a chat, so a log that holds one hands that chat
+    to whoever reads the log. Each becomes ``invite:<fingerprint>`` / ``folder:<fingerprint>``;
+    anything else (a handle, a numeric id) passes through unchanged.
+    """
+    invite = extract_invite_hash(value)
+    if invite is not None:
+        return _fingerprint("invite", invite)
+    cleaned = value.strip().strip("<>").rstrip("/").split("?", 1)[0]
+    for prefix in _LINK_PREFIXES:
+        if cleaned.lower().startswith(prefix):
+            cleaned = cleaned[len(prefix) :]
+            break
+    if cleaned.lower().startswith("addlist/") and len(cleaned) > len("addlist/"):
+        return loggable_folder(cleaned[len("addlist/") :])
+    return value
 
 
 def normalize_channel(token: str, *, max_length: int) -> str | None:  # noqa: PLR0911

@@ -263,7 +263,7 @@ async def _without_photo(
         "INFO",
         "chat_broadcast_photo_dropped",
         account_id=account_id,
-        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+        extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target)},
     )
     return await _seams.execute(account_id, action.model_copy(update={"photo": None}))
 
@@ -312,7 +312,7 @@ async def _settle(
             account_id=account_id,
             extra={
                 "campaign_id": ctx.campaign_id,
-                "chat": target.raw,
+                "chat": _moves.chat_ref(target),
                 "step": key.step_index + 1,
                 "steps": len(ctx.chain),
                 "round": key.round,

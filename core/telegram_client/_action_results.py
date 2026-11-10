@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import loggable_ref
 from core.logging import log_event
 from core.telegram_client._pool_errors import TelegramDeviceUnavailableError
 from core.telegram_client._util import event_name, id_strings
@@ -197,6 +198,12 @@ async def _unavailable_result(
     )
 
 
+def logged_channel(action: TelegramAction) -> str | None:
+    """The action's channel as a log may carry it: a private invite by its fingerprint."""
+    channel = getattr(action, "channel", None)
+    return loggable_ref(channel) if isinstance(channel, str) else None
+
+
 def _applied_privacy_keys(exc: BaseException) -> list[str] | None:
     """Privacy keys ``dispatch_set_privacy_settings`` applied before this refusal.
 
@@ -263,7 +270,7 @@ async def _generic_error(
     # constructed FROM, so it is always on the exception in hand.
     code = getattr(exc, "code", None)
     is_stable_code = isinstance(code, str) and isinstance(exc, ValueError)
-    channel = getattr(action, "channel", None)
+    channel = logged_channel(action)
     await log_event(
         "ERROR",
         event_name(domain, f"telegram_{action.action_type}_failed"),
@@ -311,7 +318,7 @@ async def _join_by_request_result(
         "INFO",
         event_name(domain, f"telegram_{action.action_type}_by_request"),
         account_id=account_id,
-        extra={"channel": getattr(action, "channel", None)},
+        extra={"channel": logged_channel(action)},
     )
     return ActionResult(
         status="failed",

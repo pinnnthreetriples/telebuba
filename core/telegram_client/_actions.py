@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from telethon import errors
 from telethon.tl.functions.account import UpdateStatusRequest
 
+from core.channel_tokens import loggable_ref
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_families import prefix_family
@@ -19,6 +20,7 @@ from core.telegram_client._action_results import (
     _ok_result,
     _too_fresh_result,
     _unavailable_result,
+    logged_channel,
 )
 from core.telegram_client._copy_media import dispatch_copy_message_media
 from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
@@ -186,7 +188,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
                 "INFO",
                 event_name(domain, f"telegram_{action.action_type}_already_participant"),
                 account_id=account_id,
-                extra={"channel": getattr(action, "channel", None)},
+                extra={"channel": logged_channel(action)},
             )
             return ActionResult(
                 status="already_participant",
@@ -356,7 +358,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             | ReadChannel()
             | ReactToPost()
         ):
-            extra = {"channel": action.channel}
+            extra = {"channel": loggable_ref(action.channel)}
         case WatchPeerStories():
             extra = {"peer": action.peer}
         case PostComment():
@@ -378,7 +380,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             # ``reply_to`` too: a reply and a top-level comment are the same action_type,
             # and the log is the only place the difference survives.
             extra = {
-                "channel": action.channel,
+                "channel": loggable_ref(action.channel),
                 "post_id": action.post_id,
                 "reply_to": action.reply_to,
             }

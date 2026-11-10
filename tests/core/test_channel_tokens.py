@@ -15,6 +15,8 @@ from core.channel_tokens import (
     channel_fold_sql,
     dedup_key,
     extract_invite_hash,
+    loggable_folder,
+    loggable_ref,
     normalize_channel,
     parse_channels,
     parse_message_link,
@@ -219,3 +221,55 @@ def test_parse_message_link_reads_both_public_and_private_forms(
 )
 def test_parse_message_link_refuses_anything_that_is_not_one(link: str) -> None:
     assert parse_message_link(link) is None
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        "+AbCdEfGhIjK",
+        "https://t.me/+AbCdEfGhIjK",
+        "t.me/+AbCdEfGhIjK/",
+        "<http://t.me/+AbCdEfGhIjK?single>",
+        "https://t.me/joinchat/AbCdEfGhIjK",
+        "joinchat/AbCdEfGhIjK",
+    ],
+)
+def test_every_spelling_of_a_private_invite_logs_as_the_same_fingerprint(link: str) -> None:
+    logged = loggable_ref(link)
+
+    assert logged == loggable_ref("+AbCdEfGhIjK")
+    assert logged.startswith("invite:")
+    assert len(logged) == len("invite:") + 6
+    assert "AbCdEfGhIjK" not in logged
+
+
+def test_two_private_invites_are_told_apart_by_their_fingerprint() -> None:
+    assert loggable_ref("+AbCdEfGhIjK") != loggable_ref("+AbCdEfGhIjL")
+    # The hash is case-sensitive, and so is its fingerprint.
+    assert loggable_ref("+AbCdEfGhIjK") != loggable_ref("+abcdefghijk")
+
+
+@pytest.mark.parametrize(
+    "link", ["t.me/addlist/FolderSlug01", "https://t.me/addlist/FolderSlug01/"]
+)
+def test_a_folder_link_logs_as_the_fingerprint_of_its_slug(link: str) -> None:
+    assert loggable_ref(link) == loggable_folder("FolderSlug01")
+    assert loggable_folder("FolderSlug01").startswith("folder:")
+    assert "FolderSlug01" not in loggable_ref(link)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "@news",
+        "news",
+        "t.me/news",
+        "https://t.me/news/12",
+        "-100123",
+        "id:7",
+        "+short",
+        "t.me/addlist/",
+    ],
+)
+def test_what_is_no_way_into_a_private_chat_is_logged_as_it_is(value: str) -> None:
+    assert loggable_ref(value) == value

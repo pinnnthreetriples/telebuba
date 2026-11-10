@@ -110,7 +110,7 @@ async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -
     await log_event(
         "INFO",
         "chat_broadcast_chat_kept",
-        extra={"campaign_id": ctx.campaign_id, "chat": target.raw},
+        extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target)},
     )
     return True
 
