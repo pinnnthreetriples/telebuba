@@ -86,9 +86,11 @@ async def _revive(campaign_id: str) -> None:
     """Start and Continue give every account a fresh chance but a dead one.
 
     A halt for errors in a row or a spam block that was still standing is a verdict on
-    that moment; pressing Start is the operator asking to try again. A rest under way
-    is kept — it ends on its own.
+    that moment; pressing Start is the operator asking to try again, and the count of
+    times the run brought an account back on its own starts over. A rest under way is
+    kept — it ends on its own.
     """
+    _state.reset_retries(campaign_id)
     revived = await repository.revive_accounts(campaign_id, _rotation.FINAL_HALT_REASONS)
     for account_id in revived:
         await log_event(
@@ -200,7 +202,8 @@ async def _run(campaign_id: str, run_id: str, generation: int, *, refresh: bool)
     try:
         with _seams.run_scope(lambda: _state.run_is_current(campaign_id, generation)):
             outcome = await _coordinator.run_campaign(campaign_id, run_id, refresh=refresh)
-        status = "stalled" if outcome == "stalled" else "done"
+        # A stall names its cause in the row: the board words it.
+        status, error = outcome.status, outcome.code
     except asyncio.CancelledError:
         raise
     except _seams.ChatBroadcastRunRevokedError:
@@ -288,10 +291,9 @@ async def _resume(record: CampaignRecord) -> None:
     await repository.settle_interrupted(campaign_id)
     roster = await repository.list_roster(campaign_id)
     active = [item.account_id for item in roster if item.state == "active"]
-    if not await claim_free(campaign_id, active):
-        await repository.set_status(campaign_id, "stalled", last_error="AccountBusy")
-        await log_event("ERROR", "chat_broadcast_run_stalled", extra={"campaign_id": campaign_id})
-        return
+    # Accounts another feature holds now are not a reason to stop: the run starts without
+    # them, its chats wait, and the run takes them as soon as they are free.
+    await claim_free(campaign_id, active)
     generation = _state.begin_run(campaign_id, record.run_id)
     await repository.set_status(campaign_id, "running", resumed_unix=_seams.now())
     await log_event(

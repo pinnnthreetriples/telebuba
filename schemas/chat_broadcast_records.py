@@ -7,17 +7,20 @@ way the engine compares them.
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
-# Pydantic resolves model fields at runtime, so these stay runtime imports.
 from schemas.chat_broadcast import ChatBroadcastStatus  # noqa: TC001
 from schemas.chat_broadcast_board import (  # noqa: TC001
     ChatBroadcastSkipReason,
     ChatBroadcastTargetKind,
     ChatBroadcastTargetState,
 )
+
+# Pydantic resolves model fields at runtime, so these stay runtime imports.
+from schemas.telegram_actions_chat import ChatKind  # noqa: TC001
 
 ChatBroadcastJournalStatus = Literal["pending", "sent", "failed", "unconfirmed", "deleted"]
 ChatBroadcastJournalKind = Literal["text", "photo", "post"]
@@ -91,6 +94,18 @@ class TargetRecord(TargetSeed):
     # The operator kept this chat despite deleted messages: only a ban skips it now.
     ignore_deleted: bool = False
     updated_unix: int
+    # Accounts this chat banned or muted: the balance never hands it back to one of them.
+    refused_by: list[str] = Field(default_factory=list)
+    # How an account saw the chat; decides whose message ids a deletion check may read.
+    chat_kind: ChatKind | None = None
+    # The operator handed this chat to its account by hand: the balance leaves it there until
+    # the chat plays its chain, or an account's rest or halt moves it.
+    pinned: bool = False
+
+    @field_validator("refused_by", mode="before")
+    @classmethod
+    def _decode_refused_by(cls, value: object) -> object:
+        return json.loads(value) if isinstance(value, str) else value
 
 
 class JournalKey(BaseModel):

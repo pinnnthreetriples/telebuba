@@ -32,8 +32,11 @@ uiautomator() {
   if [ "$FAIL" = 1 ]; then echo "ERROR: could not get idle state."; return 0; fi
   echo "<hierarchy rotation=\\"0\\" />" > "$2"
   if [ "$HANG" = 1 ]; then exec sh -c 'echo $$ > "$PIDFILE"; exec sleep "$LINGER"'; fi
-  echo "UI hierchary dumped to: $2"
-  exec sh -c 'echo $$ > "$PIDFILE"; exec sleep "$LINGER"'
+  # The process that prints the marker is the one that lingers, and its pid is on file
+  # BEFORE the print: an `exec` after the print is not atomic under MSYS (the old image
+  # is killed while the new one it already started goes on), which let the script's kill
+  # miss the pid on record, on a loaded machine, in a few runs of a hundred.
+  exec sh -c 'echo $$ > "$PIDFILE"; echo "UI hierchary dumped to: $1"; sleep "$LINGER"' sh "$2"
 }
 """
 
@@ -84,8 +87,13 @@ def _alive(pid: str) -> bool:
     return probe.returncode == 0
 
 
-def _outlives_kill(pid: str, *, grace: float = 3.0) -> bool:
+def _outlives_kill(pid: str, *, grace: float = 30.0) -> bool:
     """Whether ``pid`` is still alive ``grace`` seconds on.
+
+    ``grace`` is only how long a death is waited for — it returns the moment the process is
+    gone — and it must sit far below the fake's linger: each probe is a spawned ``sh``,
+    which a machine under load takes long to start, so a short wait read a kill that had
+    happened as a process that outlived it.
 
     The script's ``kill`` only sends the signal and the script exits at once: the
     orphan can still answer ``kill -0`` (dying, or a zombie its new parent has not
@@ -100,9 +108,11 @@ def _outlives_kill(pid: str, *, grace: float = 3.0) -> bool:
 
 
 def test_the_dump_is_served_without_waiting_for_uiautomator_to_exit(tmp_path: Path) -> None:
-    run = _run(tmp_path, linger=20)
+    # Far longer than the wait for its death and than the serving: only a script that
+    # killed it at the print, or served at the print, passes both.
+    run = _run(tmp_path, linger=60)
 
-    assert run.seconds < 10
+    assert run.seconds < 30
     assert not run.uiautomator_alive, "the lingering uiautomator was killed at its print"
     marker, _, xml = run.stdout.partition("\n")
     assert "dumped to" in marker

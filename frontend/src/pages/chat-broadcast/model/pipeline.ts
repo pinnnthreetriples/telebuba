@@ -182,6 +182,23 @@ function nodesOf(t: TFunction, inputs: Inputs): PipelineView['nodes'] {
   ];
 }
 
+// The run names why it stalled in `last_error`; an older or unknown value keeps the
+// general text.
+function stalledText(t: TFunction, code: string | null): string {
+  switch (code) {
+    case 'accounts_spam':
+      return t('chatBroadcast.pipeline.notice.stalledSpam');
+    case 'accounts_errors':
+      return t('chatBroadcast.pipeline.notice.stalledErrors');
+    case 'accounts_dead':
+      return t('chatBroadcast.pipeline.notice.stalledDead');
+    case 'accounts_busy':
+      return t('chatBroadcast.pipeline.notice.stalledBusy');
+    default:
+      return t('chatBroadcast.pipeline.notice.stalled');
+  }
+}
+
 function noticeOf(t: TFunction, inputs: Inputs): PipelineView['notice'] {
   const { board, settings } = inputs;
   const counters = board.counters;
@@ -204,16 +221,18 @@ function noticeOf(t: TFunction, inputs: Inputs): PipelineView['notice'] {
         }),
       };
     case 'running':
-      return {
-        tone: 'success',
-        text: t('chatBroadcast.pipeline.notice.running', { waiting: counters.waiting }),
-      };
+      // Nobody is writing right now (busy, resting or halted): the run is not stuck, it
+      // waits for an account to come back.
+      return counters.accounts_working === 0
+        ? { tone: 'info', text: t('chatBroadcast.pipeline.notice.runningIdle') }
+        : {
+            tone: 'success',
+            text: t('chatBroadcast.pipeline.notice.running', { waiting: counters.waiting }),
+          };
     case 'resting':
       return {
         tone: 'info',
         text: t('chatBroadcast.pipeline.notice.resting', {
-          round: campaign.round,
-          next: campaign.round + 1,
           time: campaign.rest_until ? inputs.time(campaign.rest_until) : '—',
         }),
       };
@@ -239,7 +258,7 @@ function noticeOf(t: TFunction, inputs: Inputs): PipelineView['notice'] {
         text: t('chatBroadcast.pipeline.notice.failed', { error: campaign.last_error ?? '—' }),
       };
     case 'stalled':
-      return { tone: 'danger', text: t('chatBroadcast.pipeline.notice.stalled') };
+      return { tone: 'danger', text: stalledText(t, campaign.last_error ?? null) };
     default:
       return { tone: 'info', text: t('chatBroadcast.pipeline.notice.stopping') };
   }
@@ -258,6 +277,13 @@ export function restLabel(
   return until ? `${reason} ${t('chatBroadcast.restUntil', { time: time(until) })}` : reason;
 }
 
+// Why an account dropped out of the run; empty for a reason the board has no words for.
+function haltLabel(t: TFunction, account: ChatBroadcastBoardAccount): string {
+  return account.halted_reason
+    ? t(`chatBroadcast.haltReason.${account.halted_reason}`, { defaultValue: '' })
+    : '';
+}
+
 export function pipelineView(t: TFunction, inputs: Inputs): PipelineView {
   const { board } = inputs;
   const counters = board.counters;
@@ -269,7 +295,13 @@ export function pipelineView(t: TFunction, inputs: Inputs): PipelineView {
     extras.push({
       tone: 'warning',
       text: t('chatBroadcast.pipeline.notice.halted', {
-        names: halted.map((account) => inputs.nameOf(account.account_id)).join(', '),
+        names: halted
+          .map((account) => {
+            const name = inputs.nameOf(account.account_id);
+            const reason = haltLabel(t, account);
+            return reason === '' ? name : `${name} (${reason})`;
+          })
+          .join(', '),
       }),
     });
   }

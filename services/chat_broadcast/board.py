@@ -21,7 +21,7 @@ from schemas.chat_broadcast_board import (
     ChatBroadcastHistoryEntry,
     ChatBroadcastPhase,
 )
-from services.chat_broadcast import _seams
+from services.chat_broadcast import _moves, _schedule, _seams
 from services.chat_broadcast._context import usable_chain
 from services.chat_broadcast.campaigns import busy_owners, settings_of, to_campaign
 
@@ -61,9 +61,15 @@ async def load_board(campaign_id: str) -> ChatBroadcastBoard | None:
     journal = await repository.list_journal(campaign_id, record.run_id) if record.run_id else []
     events = await repository.list_events(campaign_id)
     accounts = [_account(item, busy) for item in roster]
+    phase = _phase(record, targets)
     return ChatBroadcastBoard(
-        campaign=to_campaign(record),
-        phase=_phase(record, targets),
+        campaign=to_campaign(record).model_copy(
+            update={
+                "round": _schedule.current_round(targets, record.round),
+                "rest_until": _at(_rest_until(phase, targets)),
+            }
+        ),
+        phase=phase,
         chain_length=chain_length,
         started_at=_at(record.started_unix),
         resumed_at=_at(record.resumed_unix),
@@ -117,17 +123,36 @@ def _counters(
     )
 
 
+def _unfinished(targets: list[TargetRecord]) -> list[TargetRecord]:
+    return [t for t in targets if t.skip_reason != "removed" and t.state in _moves.OPEN_STATES]
+
+
 def _phase(record: CampaignRecord, targets: list[TargetRecord]) -> ChatBroadcastPhase:
+    """The campaign's phase. Chats keep their own rounds: it rests only when ALL of them do."""
     if record.status != "running":
         return record.status
-    if record.rest_until_unix is not None and record.rest_until_unix > _seams.now():
+    unfinished = _unfinished(targets)
+    if unfinished and all(t.state == "round_done" for t in unfinished):
         return "resting"
-    if record.round <= 1 and any(
+    if _schedule.current_round(targets, record.round) <= 1 and any(
         t.state in _JOINING or (t.state == "queued" and t.member_account_id is None)
         for t in targets
     ):
         return "joining"
     return "running"
+
+
+def _rest_until(phase: ChatBroadcastPhase, targets: list[TargetRecord]) -> int | None:
+    """While every chat rests: when the first of them is back in play.
+
+    ``None`` when that moment has passed already: the chats are only waiting for the
+    scheduler to open their rounds, and a countdown to the past would read as a stuck run.
+    """
+    if phase != "resting":
+        return None
+    ends = [t.next_action_unix for t in _unfinished(targets) if t.next_action_unix is not None]
+    soonest = min(ends, default=None)
+    return soonest if soonest is not None and soonest > _seams.now() else None
 
 
 def _rows(

@@ -1,4 +1,4 @@
-"""Migrations 68-70 and 103 — chat-broadcast tables, kept chats, saved lists, account rests.
+"""Migrations 68-70, 103, 111 and 112 — chat-broadcast tables, lists, rests, refusals, pins.
 
 ``CREATE ... IF NOT EXISTS`` throughout: ``create_all`` runs BEFORE ``apply_migrations``,
 so on a fresh database the schema comes from ``core.repositories.chat_broadcast._tables``
@@ -215,4 +215,47 @@ def _add_chat_broadcast_account_rest(connection: Connection) -> None:
     if "rest_reason" not in columns:
         connection.exec_driver_sql(
             "ALTER TABLE chat_broadcast_accounts ADD COLUMN rest_reason VARCHAR"
+        )
+
+
+def _add_chat_broadcast_refusals(connection: Connection) -> None:
+    # #111: which accounts a chat banned or muted (a JSON list: the balance never hands the
+    # chat back to one of them, restart or not) and what kind of chat it is (a megagroup's
+    # message ids are global, a basic group's per account: the deleted-message check reads
+    # by it). '[]' / NULL on existing rows = nobody refused, kind not known yet. Column
+    # guard: ``create_all`` built them on a fresh database.
+    columns = {
+        str(row["name"])
+        for row in connection.exec_driver_sql("PRAGMA table_info(chat_broadcast_targets)")
+        .mappings()
+        .all()
+    }
+    if not columns:
+        return
+    if "refused_by" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_targets ADD COLUMN refused_by VARCHAR DEFAULT '[]' NOT NULL"
+        )
+    if "chat_kind" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_targets ADD COLUMN chat_kind VARCHAR"
+        )
+
+
+def _add_chat_broadcast_pinned(connection: Connection) -> None:
+    # #112: a chat the operator handed to an account by hand stays there — the balance
+    # skips pinned chats until the chat plays its chain (or a rest or a halt moves it).
+    # 0 on existing rows = nobody pinned it. Column guard: ``create_all`` built it on a
+    # fresh database.
+    columns = {
+        str(row["name"])
+        for row in connection.exec_driver_sql("PRAGMA table_info(chat_broadcast_targets)")
+        .mappings()
+        .all()
+    }
+    if not columns:
+        return
+    if "pinned" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE chat_broadcast_targets ADD COLUMN pinned INTEGER DEFAULT 0 NOT NULL"
         )

@@ -30,6 +30,8 @@ from core.emulator._seeder import (
 )
 
 if TYPE_CHECKING:
+    from core.emulator._profile import ContainerSpec
+    from core.emulator._seed_data import Photo
     from tests.core.emulator.conftest import Console
 
 _SERIAL = "127.0.0.1:5600"
@@ -295,6 +297,12 @@ async def test_the_photos_are_made_and_pushed_while_the_contacts_are_written(
     console.answer = _device(seeded=False)
     pushed = asyncio.Event()
     real_push, real_shell = _seeder.adb.push, _seeder.adb.shell
+    real_make_photos = _seeder.make_photos
+
+    def few_photos(spec: ContainerSpec, rng: random.Random, now: datetime) -> list[Photo]:
+        # The order is what is under test, not the pictures: rendering a dozen JPEGs made
+        # the push late enough, on a loaded machine, to trip the deadlock guard below.
+        return real_make_photos(spec, rng, now, count=2)
 
     async def push(serial: str, *local: str, remote: str) -> None:
         await real_push(serial, *local, remote=remote)
@@ -304,9 +312,10 @@ async def test_the_photos_are_made_and_pushed_while_the_contacts_are_written(
     async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
         if list(args) == ["sh", _SCRIPT]:
             # One after the other, the photos would wait for this script: it never ends.
-            await asyncio.wait_for(pushed.wait(), timeout=10)
+            await asyncio.wait_for(pushed.wait(), timeout=60)
         return await real_shell(serial, *args, seconds=seconds)
 
+    monkeypatch.setattr(_seeder, "make_photos", few_photos)
     monkeypatch.setattr(_seeder.adb, "push", push)
     monkeypatch.setattr(_seeder.adb, "shell", shell)
 

@@ -17,7 +17,7 @@ from core.repositories import chat_broadcast as repository
 from schemas.chat_broadcast_records import JournalKey
 from schemas.telegram_actions import BroadcastForwardPost, BroadcastSendMessage
 from services import pacing
-from services.chat_broadcast import _moves, _rewrite, _rotation, _seams
+from services.chat_broadcast import _moves, _rewrite, _rotation, _seams, _state
 from services.chat_broadcast._verdicts import classify_send
 from services.chat_broadcast.links import parse_post
 
@@ -124,7 +124,11 @@ async def _pause_before_next(ctx: RunContext, target: TargetRecord) -> None:
 async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
     """Send the rest of the chain into ``target`` from its current step."""
     if not await repository.update_target(
-        ctx.campaign_id, target.chat_key, expect_states=_WRITABLE, state="writing"
+        ctx.campaign_id,
+        target.chat_key,
+        expect_states=_WRITABLE,
+        assigned_to=account_id,
+        state="writing",
     ):
         return "idle"
     for step in range(target.step_index, len(ctx.chain)):
@@ -140,14 +144,40 @@ async def play_chain(ctx: RunContext, account_id: str, target: TargetRecord) -> 
             return outcome
         if step < len(ctx.chain) - 1:
             await _pause_before_next(ctx, target)
-    await repository.update_target(
-        ctx.campaign_id,
-        target.chat_key,
-        expect_states=("writing",),
-        state="round_done",
-        next_action_unix=None,
-    )
+    await _chain_played(ctx, target)
     return "acted"
+
+
+async def _chain_played(ctx: RunContext, target: TargetRecord) -> None:
+    """The chat has its whole chain: through for good, or resting before its next round.
+
+    Each chat rests on its own: nothing waits for the other chats of the round.
+    """
+    if not _moves.more_rounds(ctx, target):
+        await repository.update_target(
+            ctx.campaign_id,
+            target.chat_key,
+            expect_states=("writing",),
+            state="done",
+            next_action_unix=None,
+        )
+        return
+    started = _seams.now()
+    until = _moves.rest_end(started, ctx.pace.rest_minutes)
+    if await repository.rest_target(
+        ctx.campaign_id, target.chat_key, round_number=target.round, until_unix=until
+    ):
+        _state.note_rest_started(ctx.campaign_id, target.chat_key, started)
+        await log_event(
+            "INFO",
+            "chat_broadcast_rest_started",
+            extra={
+                "campaign_id": ctx.campaign_id,
+                "chat": _moves.chat_ref(target),
+                "round": target.round,
+                "until": until,
+            },
+        )
 
 
 async def limit_reached(
@@ -190,7 +220,14 @@ async def _play_step(
     if not claimed:
         await _advance(ctx, target, step)
         return None
-    action, text, rewritten = await _action(ctx, step, message, target)
+    try:
+        action, text, rewritten = await _action(ctx, step, message, target)
+    except BaseException:
+        # Nothing has gone out yet — the text could not be made, or the run was stopped
+        # while it was: a reservation left `pending` would read as a step already played
+        # and the chat would never get it.
+        await repository.release_message(key)
+        raise
     if action is None:
         await repository.settle_message(key, "failed", text=text, error_type="EmptyMessage")
         await _advance(ctx, target, step)
@@ -265,6 +302,9 @@ async def _settle(
             error_type=result.error_type,
         )
         await _moves.account_error(ctx, account_id, failed=False)
+        if verdict == "sent":
+            # A send that went out starts its account's count of retries over.
+            _state.reset_retries(ctx.campaign_id, account_id)
         await _advance(ctx, target, key.step_index)
         await log_event(
             "INFO",

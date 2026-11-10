@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.repositories import chat_broadcast as repository
+from services.chat_broadcast import targets as targets_module
+from services.chat_broadcast._context import load_context
 from tests.services.chat_broadcast.fakes import refused, run_to_end, seed
 
 if TYPE_CHECKING:
@@ -17,15 +19,21 @@ if TYPE_CHECKING:
 @pytest.mark.asyncio
 async def test_each_chat_gets_one_account_round_robin(telegram: FakeTelegram) -> None:
     campaign_id = await seed(targets=("@alpha", "@beta", "@gamma"))
+    ctx = await load_context(campaign_id, "run-1")
+    assert ctx is not None
+    layout = await targets_module.materialize(campaign_id, ctx.settings, ["a1", "a2"])
+    assert [(s.chat_key, s.assigned_account_id) for s in layout] == [
+        ("alpha", "a1"),
+        ("beta", "a2"),
+        ("gamma", "a1"),
+    ]
 
     await run_to_end(campaign_id)
 
-    assert sorted(telegram.joins) == [("a1", "alpha"), ("a1", "gamma"), ("a2", "beta")]
-    assert sorted((s.account_id, s.text) for s in telegram.sent if s.text == "Second") == [
-        ("a1", "Second"),
-        ("a1", "Second"),
-        ("a2", "Second"),
-    ]
+    # One account joins each chat, once — whoever the balance let take it over meanwhile.
+    assert sorted(chat for _account, chat in telegram.joins) == ["alpha", "beta", "gamma"]
+    assert {account for account, _chat in telegram.joins} == {"a1", "a2"}
+    assert [s.text for s in telegram.sent].count("Second") == 3
     record = await repository.fetch_campaign(campaign_id)
     assert record is not None
     assert record.status == "done"

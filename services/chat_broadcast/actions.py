@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
-from services.chat_broadcast import _coordinator, _moves, _rotation, _seams
+from services.chat_broadcast import _moves, _rotation, _seams
 from services.chat_broadcast._context import RunContext
 from services.chat_broadcast._errors import (
     ACCOUNT_NOT_IN_CAMPAIGN,
@@ -76,7 +76,8 @@ async def _hand(
         raise ChatBroadcastInvalidError(ACCOUNT_NOT_IN_CAMPAIGN)
     if target.state not in _HANDABLE or target.assigned_account_id == entry.account_id:
         return False
-    return await _moves.assign(ctx, target, entry.account_id)
+    # Pinned: the balance must not undo what the operator just decided.
+    return await _moves.assign(ctx, target, entry.account_id, pin=True)
 
 
 async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -> bool:
@@ -85,21 +86,14 @@ async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -
     The deletions are an admin's signal the operator may overrule; a ban still stops the
     chat. It keeps its account (still inside) unless that account left the run.
 
-    Decided from what was read, written only while the campaign is still there: the run
-    may close the round, open the next one or finish in between — then it decides anew.
+    Decided from what was read, written only while the campaign still has the status it
+    was read in: the run may finish in between — then it decides anew.
     """
-    into_open_round = False
     for _attempt in range(_KEEP_ATTEMPTS):
         if target.state != "skipped" or target.skip_reason != "deleted":
             return False
-        fields = await _comeback(record, target)
-        into_open_round = bool(fields) and record.status == "running"
-        if await repository.keep_target(
-            record,
-            target.chat_key,
-            open_states=_moves.ACTIVE_STATES if into_open_round else None,
-            **fields,
-        ):
+        fields = _comeback(record, target)
+        if await repository.keep_target(record, target.chat_key, **fields):
             break
         fresh = await repository.fetch_campaign(ctx.campaign_id)
         moved = await repository.fetch_target(ctx.campaign_id, target.chat_key)
@@ -108,11 +102,9 @@ async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -
         record, target = fresh, moved
     else:
         return False
-    if into_open_round:
-        # Its account may have dropped out since; a live one takes the chat, as at the
-        # start of every round.
-        live = await _coordinator.live_accounts(ctx.campaign_id)
-        resting = await _rotation.resting_accounts(ctx.campaign_id)
+    if fields and record.status == "running":
+        # Its account may have dropped out since; a live one takes the chat.
+        live, resting = await _rotation.accounts_by_rest(ctx.campaign_id)
         if live and target.assigned_account_id not in {*live, *resting}:
             await _moves.adopt_orphans(ctx, live, keep=resting)
     await log_event(
@@ -123,38 +115,21 @@ async def _keep(ctx: RunContext, record: CampaignRecord, target: TargetRecord) -
     return True
 
 
-async def _comeback(record: CampaignRecord, target: TargetRecord) -> dict[str, object]:
-    """Where a kept chat goes, by where the campaign is.
+def _comeback(record: CampaignRecord, target: TargetRecord) -> dict[str, object]:
+    """Where a kept chat goes, by where the campaign is. A chat has its own round.
 
-    * a round under way: queued in it, due now — the workers pick it up this round;
-    * stopped, stalled or failed: queued in the round it stopped in, which Continue
-      plays again;
-    * anything else — a rest, a round whose chats are all through (it may be closing),
-      a run stopping or finished: it stays skipped and only takes the flag. The next
-      round re-queues it; the next run lays its chats out anew and carries the flag over.
+    * running: queued in its own round, due now — a worker picks it up;
+    * stopped, stalled or failed: queued in its own round, which Continue plays again;
+    * anything else — a run stopping or finished, a campaign never laid out: it stays
+      skipped and only takes the flag; the next run lays its chats out anew and carries
+      the flag over.
     """
-    if record.round == 0:
+    if record.round == 0 or (record.status != "running" and record.status not in _RESUMABLE):
         return {}
     requeue: dict[str, object] = {
         "state": "queued",
         "skip_reason": None,
-        "round": record.round,
+        "round": target.round,
         "step_index": 0,
     }
-    if record.status in _RESUMABLE:
-        return requeue | {"next_action_unix": None}
-    if (
-        record.status == "running"
-        and record.rest_until_unix is None
-        and await _round_open(record, target)
-    ):
-        return requeue | {"next_action_unix": _seams.now()}
-    return {}
-
-
-async def _round_open(record: CampaignRecord, target: TargetRecord) -> bool:
-    return any(
-        t.state in _moves.ACTIVE_STATES and t.round == record.round
-        for t in await repository.list_targets(record.campaign_id)
-        if t.chat_key != target.chat_key
-    )
+    return requeue | {"next_action_unix": _seams.now() if record.status == "running" else None}

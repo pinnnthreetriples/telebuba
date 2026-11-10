@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 
 _MUTED = "ChatWriteForbiddenError"
 
+# Where a chat was moved is what these read: the load balance has its own tests.
+pytestmark = pytest.mark.usefixtures("no_rebalance")
+
 
 @pytest.mark.asyncio
 async def test_a_mute_on_one_account_moves_the_chat_to_another(telegram: FakeTelegram) -> None:

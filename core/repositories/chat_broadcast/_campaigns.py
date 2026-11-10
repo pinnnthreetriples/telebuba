@@ -15,9 +15,11 @@ from core.repositories.chat_broadcast._tables import (
     _chat_broadcast_campaigns,
     _chat_broadcast_targets,
 )
-from schemas.chat_broadcast_records import CampaignRecord
+from schemas.chat_broadcast_records import CampaignRecord, TargetRecord
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     from sqlalchemy import Connection, RowMapping, Select
 
     from schemas.chat_broadcast import ChatBroadcastStatus
@@ -240,28 +242,52 @@ async def save_pace(campaign_id: str, *, settings_json: str, expected_updated_at
     return await asyncio.to_thread(_save_pace, campaign_id, settings_json, expected_updated_at)
 
 
-def _move_rest(campaign_id: str, round_number: int, until: int) -> bool:
+def _try_finish(
+    campaign_id: str, work_left: Callable[[Sequence[TargetRecord]], bool], now_unix: int
+) -> bool:
     table = _chat_broadcast_campaigns
+    targets = _chat_broadcast_targets
     with _get_engine().begin() as connection:
-        result = connection.execute(
-            update(table)
-            .where(
-                table.c.campaign_id == campaign_id,
-                table.c.round == round_number,
-                table.c.rest_until_unix.is_not(None),
-            )
-            .values(rest_until_unix=until),
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        current = connection.execute(
+            select(table.c.updated_at, table.c.status).where(table.c.campaign_id == campaign_id)
+        ).first()
+        if current is None or str(current[1]) != "running":
+            return False
+        rows = connection.execute(
+            select(targets).where(targets.c.campaign_id == campaign_id)
+        ).mappings()
+        if work_left([TargetRecord.model_validate(dict(row)) for row in rows]):
+            return False
+        connection.execute(
+            update(targets)
+            .where(targets.c.campaign_id == campaign_id, targets.c.state == "round_done")
+            .values(state="done", updated_unix=now_unix),
         )
-    return result.rowcount > 0
+        connection.execute(
+            update(table)
+            .where(table.c.campaign_id == campaign_id)
+            .values(
+                status="done",
+                finished_unix=now_unix,
+                rest_until_unix=None,
+                updated_at=_newer_stamp(str(current[0])),
+            ),
+        )
+    return True
 
 
-async def move_rest(campaign_id: str, *, round_number: int, until: int) -> bool:
-    """Move the end of the rest after ``round_number`` — only while that rest still runs.
+async def try_finish(
+    campaign_id: str, *, work_left: Callable[[Sequence[TargetRecord]], bool], now_unix: int
+) -> bool:
+    """End a running campaign if no chat has anything left to do; ``False`` otherwise.
 
-    The engine clears the rest as it opens the next round; a move that lands after that
-    must not put a rest into the middle of the new round.
+    The chats are read and the status written in one write transaction, so a chat the
+    operator kept (or a run step that opened one) at that very moment either lands first
+    and is seen here, or lands after and finds the campaign already done. ``work_left``
+    judges the chats read; a chat still resting is work left.
     """
-    return await asyncio.to_thread(_move_rest, campaign_id, round_number, until)
+    return await asyncio.to_thread(_try_finish, campaign_id, work_left, now_unix)
 
 
 def _set_status(

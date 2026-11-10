@@ -1,51 +1,66 @@
-"""One account's loop through its own queue of chats, for one round.
+"""One account's loop through its own queue of chats, for the whole run.
 
 Accounts work in parallel, each through its own chats in order; a chat is only ever
-touched by the account it is assigned to. The loop re-reads its queue every pass, so a
-chat handed over (from a halted or resting account, or from the board) is picked up
-without a restart, and it stays alive until the whole round is finished — not just its
-own part — so it can still take chats from an account that drops out late. A rest ends
-the loop; the coordinator starts it again when the account is back.
+touched by the account it is assigned to. Every chat has its own rounds: a chat that
+finished its chain rests and opens its next round on its own, and the loop plays whatever
+is due, the lowest round first (so a short rest cannot keep the chats behind it from their
+turn). The loop re-reads its queue every pass, so a chat handed over (from a halted or
+resting account, from the balance, or from the board) is picked up without a restart. It
+lives until nothing is left anywhere in the campaign, so it can still take chats from an
+account that drops out late. A rest ends the loop; the coordinator starts it again when
+the account is back.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from core.config import settings
 from core.repositories import chat_broadcast as repository
 from core.telegram_client import TelegramReadError
 from schemas.telegram_action_results import ReadChatMessagesResult
 from schemas.telegram_actions import ReadChatMessages
-from services.chat_broadcast import _join, _moves, _seams, _send
+from services.chat_broadcast import _join, _moves, _schedule, _seams, _send
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from schemas.chat_broadcast_records import TargetRecord
     from services.chat_broadcast._context import RunContext
 
-WorkerOutcome = Literal["round_done", "halted", "resting", "volume"]
+WorkerOutcome = Literal["finished", "halted", "resting", "volume"]
+# Chats whose message ids belong to the chat, whoever reads them.
+_GLOBAL_ID_KINDS: Final = frozenset({"megagroup", "channel"})
 
 
-async def work(ctx: RunContext, account_id: str, round_number: int) -> WorkerOutcome:
+async def work(ctx: RunContext, account_id: str) -> WorkerOutcome:
     while True:
         _seams.assert_live_run()
         if await _send.volume_reached(ctx):
             return "volume"
+        await _schedule.tick_safely(ctx, account_id=account_id)
         targets = await repository.list_targets(ctx.campaign_id)
-        open_chats = [
-            t for t in targets if t.state in _moves.ACTIVE_STATES and t.round == round_number
-        ]
-        if not open_chats:
-            return "round_done"
+        # Its own chats whose rest is over go on at once, without waiting for a tick.
+        if await _schedule.promote(ctx, targets, owner=account_id):
+            continue
+        if _schedule.nothing_left(targets, ctx.rounds):
+            return "finished"
         mine = [
             t
-            for t in open_chats
-            if t.assigned_account_id == account_id and t.state != "waiting_account"
+            for t in targets
+            if t.assigned_account_id == account_id
+            and t.state in _moves.ACTIVE_STATES
+            and t.state != "waiting_account"
         ]
         now = _seams.now()
-        due = [t for t in mine if (t.next_action_unix or 0) <= now]
+        # Lowest round first, then the run's own order: with a rest shorter than the pause
+        # between chats the first chat would be due again before the last had its turn.
+        due = sorted(
+            (t for t in mine if (t.next_action_unix or 0) <= now),
+            key=lambda t: (t.round, t.position),
+        )
         if not due:
-            await _seams.sleep(_idle(mine, now))
+            await _seams.sleep(_idle(ctx, targets, account_id, now))
             continue
         step = await handle(ctx, account_id, due[0])
         if step == "halted" or step == "resting" or step == "volume":  # noqa: PLR1714 - narrows for ty
@@ -55,9 +70,23 @@ async def work(ctx: RunContext, account_id: str, round_number: int) -> WorkerOut
         await _seams.sleep(_send.between_chats(ctx) if step == "acted" else 1)
 
 
-def _idle(mine: list[TargetRecord], now: int) -> float:
+def _idle(ctx: RunContext, targets: Sequence[TargetRecord], account_id: str, now: int) -> float:
+    """How long to sleep: to the nearest moment one of its chats is due, but not past the poll.
+
+    A chat that is through for good (an error skip in the last round) is not coming back and
+    is not waited for: its old time would keep the sleep at its one-second floor.
+    """
     poll = settings.chat_broadcast.idle_poll_seconds
-    upcoming = [t.next_action_unix for t in mine if t.next_action_unix is not None]
+    upcoming = [
+        t.next_action_unix
+        for t in targets
+        if t.assigned_account_id == account_id
+        and t.next_action_unix is not None
+        and (
+            (t.state in _moves.ACTIVE_STATES and t.state != "waiting_account")
+            or _schedule.will_return(t, ctx.rounds)
+        )
+    ]
     if not upcoming:
         return poll
     return float(min(poll, max(1, min(upcoming) - now)))
@@ -97,10 +126,15 @@ async def handle(ctx: RunContext, account_id: str, target: TargetRecord) -> _sen
 async def _was_deleted(ctx: RunContext, account_id: str, target: TargetRecord) -> bool:
     """Did an admin remove what we wrote here in the previous round?
 
-    Read with the account that sent them; message ids of a basic group are that
-    account's own. An unreadable chat is not proof of a deletion.
+    Read with the account that is in the chat now. The messages it can look up are its own,
+    and — where message ids are the chat's, not the account's (a megagroup, a channel) —
+    those another account sent before the chat was handed over. In a basic group ids are per
+    account: another account's ids would name other messages and read as deleted, so a chat
+    whose kind is not known to be global is read for this account's own messages only. An
+    unreadable chat is not proof of a deletion.
     """
     journal = await repository.list_journal(ctx.campaign_id, ctx.run_id)
+    shared_ids = target.chat_kind in _GLOBAL_ID_KINDS
     ours = [
         row
         for row in journal
@@ -108,7 +142,7 @@ async def _was_deleted(ctx: RunContext, account_id: str, target: TargetRecord) -
         and row.round == target.round - 1
         and row.status == "sent"
         and row.tg_message_id is not None
-        and row.account_id == account_id
+        and (shared_ids or row.account_id == account_id)
     ]
     if not ours or target.peer_id is None:
         return False

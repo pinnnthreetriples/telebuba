@@ -44,9 +44,27 @@ class ChatBroadcastSettings(BaseSettings):
     # Longest a worker sleeps without re-reading its queue, so a manual "write now" or
     # "hand over" from the board is picked up without a restart.
     idle_poll_seconds: float = Field(default=30.0, gt=0.0)
-    # Longest a rest between rounds sleeps without re-reading its end, so a rest the
-    # board's gear shortened is over within this much of its new end.
+    # Longest an account's rest sleeps without re-reading its end.
     rest_poll_seconds: float = Field(default=30.0, gt=0.0)
+    # Chats keep their own rounds: the scheduler (promote finished chats, hand over, balance
+    # the load) runs at most this often per campaign.
+    schedule_tick_seconds: float = Field(default=10.0, gt=0.0)
+    # A worker that died with an unexpected error starts again after this pause, so a
+    # fault that repeats cannot spin: never zero.
+    worker_restart_seconds: float = Field(default=60.0, gt=0.0)
+    # The least difference in open chats between the busiest and the idlest live account
+    # that moves a chat from one to the other (1 would swap the same chat back and forth).
+    rebalance_min_gap: int = Field(default=2, ge=2)
+    # How often the run tries to take back an account another feature has released.
+    claim_poll_seconds: float = Field(default=60.0, gt=0.0)
+    # With nothing but accounts held elsewhere to wait for (another campaign, another
+    # feature), the run waits this long for one to come free, then ends stalled and says so.
+    claim_give_up_seconds: float = Field(default=3600.0, gt=0.0)
+    # An account stopped for errors in a row or a crashed worker is tried again after this
+    # long, at most ``halt_retry_max`` times in a row (0 = never; a spam block and a dead
+    # session are never retried, only Start / Continue brings those back).
+    halt_retry_seconds: float = Field(default=1800.0, ge=0.0)
+    halt_retry_max: int = Field(default=3, ge=0)
     # Back-off after the account's connection dropped mid-chat.
     reconnect_delay_seconds: float = Field(default=60.0, gt=0.0)
     # Back-off after the account hit its own join cap.

@@ -66,7 +66,9 @@ async def test_phases_while_running(clock: Clock) -> None:
     joining = await service.load_board(campaign_id)
     await repository.update_target(campaign_id, "alpha", member_account_id="a1", state="waiting")
     running = await service.load_board(campaign_id)
-    await repository.set_runtime(campaign_id, rest_until_unix=clock.now() + 600)
+    await repository.update_target(
+        campaign_id, "alpha", state="round_done", next_action_unix=clock.now() + 600
+    )
     resting = await service.load_board(campaign_id)
 
     assert [b.phase for b in (joining, running, resting) if b] == [
@@ -74,6 +76,42 @@ async def test_phases_while_running(clock: Clock) -> None:
         "running",
         "resting",
     ]
+    assert resting is not None
+    assert resting.campaign.rest_until is not None
+    assert int(resting.campaign.rest_until.timestamp()) == clock.now() + 600
+    assert running is not None
+    assert running.campaign.rest_until is None
+
+
+@pytest.mark.asyncio
+async def test_the_campaign_rests_only_when_every_unfinished_chat_does(clock: Clock) -> None:
+    campaign_id = await seed()
+    await repository.set_status(campaign_id, "running", run_id="r1", round=1)
+    await repository.replace_targets(campaign_id, [_seed("alpha"), _seed("beta"), _seed("gamma")])
+    for key, wait in (("alpha", 900), ("beta", 300)):
+        await repository.update_target(
+            campaign_id, key, state="round_done", round=3, next_action_unix=clock.now() + wait
+        )
+    await repository.update_target(campaign_id, "gamma", state="done", round=4)
+
+    board = await service.load_board(campaign_id)
+
+    assert board is not None
+    assert board.phase == "resting"
+    # The first of them back in play, and the least advanced round among the unfinished.
+    assert board.campaign.rest_until is not None
+    assert int(board.campaign.rest_until.timestamp()) == clock.now() + 300
+    assert board.campaign.round == 3
+
+    await repository.update_target(campaign_id, "alpha", state="writing")
+    board = await service.load_board(campaign_id)
+    assert board is not None
+    assert (board.phase, board.campaign.rest_until) == ("running", None)
+    await repository.update_target(campaign_id, "alpha", state="done")
+    await repository.update_target(campaign_id, "beta", state="done")
+    board = await service.load_board(campaign_id)
+    assert board is not None
+    assert board.campaign.round == 4
 
 
 @pytest.mark.asyncio

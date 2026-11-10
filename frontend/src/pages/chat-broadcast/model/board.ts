@@ -128,22 +128,20 @@ export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context):
         tone: 'warning',
         when: t('chatBroadcast.when.needAccount'),
       };
-    case 'round_done': {
-      const rest = board.campaign.rest_until ?? null;
-      // No rest yet: it starts only once the LAST chat of the round has written, so
-      // the next round's time is unknown — say what the row is waiting for instead.
-      return rest === null
+    case 'round_done':
+      // Each chat rests on its own clock and nobody waits for the others. A row without
+      // a time is older data that has not been scheduled yet: queued for its next round.
+      return next === null
         ? {
             label: t('chatBroadcast.status.roundDone'),
             tone: 'neutral',
-            when: t('chatBroadcast.when.roundWaits', { round: row.round }),
+            when: t('chatBroadcast.when.nextRoundQueued'),
           }
         : {
-            label: t('chatBroadcast.status.restUntil', { time: time(rest) }),
+            label: t('chatBroadcast.status.restUntil', { time: time(next) }),
             tone: 'neutral',
-            when: t('chatBroadcast.when.nextRound', { round: row.round + 1, time: time(rest) }),
+            when: t('chatBroadcast.when.nextRound', { round: row.round + 1, time: time(next) }),
           };
-    }
     default:
       return {
         label: t('chatBroadcast.status.queued'),

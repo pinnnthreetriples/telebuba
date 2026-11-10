@@ -122,6 +122,12 @@ _chat_broadcast_targets = Table(
     # it. Added by migration 69, so it follows ``updated_unix`` in a migrated table.
     Column("ignore_deleted", Integer, nullable=False, server_default=text("0")),
     Column("updated_unix", Integer, nullable=False),
+    # Migration 111: the accounts this chat banned or muted (a JSON list), and its kind as
+    # an account resolved it ("megagroup", "basic_group", ...; NULL = not known).
+    Column("refused_by", String, nullable=False, server_default=text("'[]'")),
+    Column("chat_kind", String, nullable=True),
+    # Migration 112: the operator handed the chat over by hand; the balance leaves it be.
+    Column("pinned", Integer, nullable=False, server_default=text("0")),
     CheckConstraint("kind IN ('public','invite','folder','own')"),
     CheckConstraint(_in("state", TARGET_STATES)),
     Index("ix_cb_targets_account", "campaign_id", "assigned_account_id", "state"),

@@ -292,3 +292,30 @@ test('the pause dialog asks before a changed range is thrown away', async () => 
   expect(screen.queryByRole('dialog', { name: 'Паузы рассылки' })).toBeNull();
   expect(callsTo(`${BASE}/pace`, 'PUT')).toHaveLength(0);
 });
+
+test('chats resting on their own clocks do not collapse while another one is working', async () => {
+  routeApi({
+    board: board({
+      phase: 'running',
+      campaign: { ...CAMPAIGN, round: 2, rest_until: null },
+      rows: [
+        row({ chat_key: 'alpha', raw: '@alpha', state: 'writing', round: 3 }),
+        row({
+          chat_key: 'beta',
+          raw: '@beta',
+          state: 'round_done',
+          round: 2,
+          next_action_at: '2026-10-06T16:30:00Z',
+        }),
+        row({ chat_key: 'gamma', raw: '@gamma', state: 'round_done', round: 2 }),
+      ],
+    }),
+  });
+  renderPage();
+
+  expect(await screen.findByText('@alpha')).toBeInTheDocument();
+  expect(screen.queryByText(/Все чаты отдыхают/)).not.toBeInTheDocument();
+  expect(screen.getByText('@beta')).toBeInTheDocument();
+  expect(screen.getByText('в очереди на следующий круг')).toBeInTheDocument();
+  expect(screen.queryByText(/ждёт остальные/)).not.toBeInTheDocument();
+});
