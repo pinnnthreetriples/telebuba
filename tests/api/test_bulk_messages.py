@@ -32,9 +32,11 @@ _ALWAYS_OPEN = {
 def _empty_jobs() -> Iterator[None]:
     bulk_messages._RUNS.clear()
     bulk_messages._TASKS.clear()
+    bulk_messages._DRIVING.clear()
     yield
     bulk_messages._RUNS.clear()
     bulk_messages._TASKS.clear()
+    bulk_messages._DRIVING.clear()
 
 
 def _no_launch(monkeypatch: pytest.MonkeyPatch) -> list[str]:

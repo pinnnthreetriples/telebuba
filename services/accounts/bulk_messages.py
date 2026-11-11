@@ -68,6 +68,8 @@ _FINAL = frozenset(_OUTCOME_STATUS)
 _SKIP_REASONS = frozenset(get_args(SkipReason))
 # Live runs of this process, so a cancel reaches the loop and shutdown can stop it.
 _RUNS: dict[str, BulkRun] = {}
+# Jobs a loop of this process has taken over, until the row is final.
+_DRIVING: set[str] = set()
 _TASKS: dict[str, asyncio.Task[None]] = {}
 logger = logging.getLogger(__name__)
 
@@ -346,17 +348,23 @@ async def _load_run(record: BulkRunRecord) -> BulkRun:
 
 async def run_bulk_message_job(job_id: str) -> None:
     """Drive a stored run to its end; the row's final status says how it ended."""
+    if job_id in _DRIVING:
+        return  # a second loop would send every item twice
+    # Claimed before the first await and held until the final status is stored: a claim
+    # taken only at the ``_RUNS`` registration lets a call that loaded the run early
+    # register again once the first has finished, and resend its stale items.
+    _DRIVING.add(job_id)
+    try:
+        await _drive(job_id)
+    finally:
+        _DRIVING.discard(job_id)
+
+
+async def _drive(job_id: str) -> None:
     record = await repo.get_bulk_run(job_id)
     if record is None or record.status != "running":
         return
-    if job_id in _RUNS:
-        # Already driven by this process: a second loop would send every item twice,
-        # and its end would release the claims the first one still sends under.
-        return
     run = await _load_run(record)
-    if job_id in _RUNS:
-        # A concurrent call got past the check above while this one loaded the run.
-        return
     _RUNS[job_id] = run
     try:
         live = [account_id for account_id, lane in run.lanes.items() if lane.row.stop_code is None]
@@ -383,7 +391,7 @@ async def run_bulk_message_job(job_id: str) -> None:
 
 def is_bulk_message_job_driven(job_id: str) -> bool:
     """Whether this process runs the job's loop; a live row without one was orphaned."""
-    return job_id in _TASKS or job_id in _RUNS
+    return job_id in _TASKS or job_id in _DRIVING
 
 
 def launch_bulk_message_job(job_id: str) -> None:

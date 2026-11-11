@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -32,6 +33,12 @@ from tests.services.neurocomment.discovery_support import (
     seed_listener,
     start_run,
 )
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    from schemas.telegram_actions import TelegramReadAction
+
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
@@ -486,7 +493,15 @@ async def test_every_picked_account_reads_and_all_are_claimed(
     # handing the second one to whichever account is still eligible.
     monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 1)
     reader = ReadRecorder(search=matches())
-    monkeypatch.setattr(_seams, "execute_read", reader)
+    in_flight = asyncio.Event()
+
+    async def _gated_read(account_id: str, action: TelegramReadAction) -> BaseModel:
+        # The run parks on its first read until the test has looked at the claims: on a
+        # fast runner an ungated run finishes (and releases them) before the asserts.
+        await in_flight.wait()
+        return await reader(account_id, action)
+
+    monkeypatch.setattr(_seams, "execute_read", _gated_read)
     await seed_account("acc-b")
     await seed_account("acc-a")
     campaign_id = await new_campaign()
@@ -498,10 +513,13 @@ async def test_every_picked_account_reads_and_all_are_claimed(
         search_request(keywords=["alpha", "bravo"], account_ids=["acc-b", "acc-a"], kind="groups"),
     )
 
-    assert started.status == "started"
-    # Both are busy for warming and the listener for as long as the run is in flight.
-    assert _discovery_state.account_busy("acc-a") is True
-    assert _discovery_state.account_busy("acc-b") is True
+    try:
+        assert started.status == "started"
+        # Both are busy for warming and the listener for as long as the run is in flight.
+        assert _discovery_state.account_busy("acc-a") is True
+        assert _discovery_state.account_busy("acc-b") is True
+    finally:
+        in_flight.set()
     await drain_discovery(campaign_id)
     assert set(reader.accounts) == {"acc-a", "acc-b"}
     assert _discovery_state.account_busy("acc-a") is False
