@@ -20,6 +20,7 @@ from telethon.tl.functions.chatlists import (
 from telethon.tl.types import Channel, Chat
 from telethon.tl.types.chatlists import ChatlistInviteAlready
 
+from core.channel_tokens import loggable_folder, loggable_ref
 from core.telegram_client._action_results import _DispatchResult
 from core.telegram_client._channels import ChannelGatewayError
 from core.telegram_client._io import _named_bytes
@@ -63,14 +64,21 @@ async def dispatch_broadcast_action(
 
 
 def broadcast_log_extra(action: TelegramAction) -> dict[str, object]:
-    """Ids and flags only — the text and the photo bytes never reach a log row."""
+    """Ids and flags only — the text and the photo bytes never reach a log row.
+
+    A chat named by a private invite or a folder link is logged by its fingerprint.
+    """
     match action:
         case BroadcastSendMessage():
-            return {"chat": action.chat, "has_photo": action.photo is not None}
+            return {"chat": loggable_ref(action.chat), "has_photo": action.photo is not None}
         case BroadcastForwardPost():
-            return {"chat": action.chat, "channel": action.channel, "post_id": action.message_id}
+            return {
+                "chat": loggable_ref(action.chat),
+                "channel": loggable_ref(action.channel),
+                "post_id": action.message_id,
+            }
         case BroadcastJoinChatlist():
-            return {"slug": action.slug, "peer_id": action.peer_id}
+            return {"slug": loggable_folder(action.slug), "peer_id": action.peer_id}
         case _:  # pragma: no cover - the family table routes only broadcast_* here
             return {}
 

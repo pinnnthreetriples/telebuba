@@ -71,6 +71,8 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
 - A deletion is an admin's signal the operator may overrule: a kept chat still records
   deletions but is skipped only for a ban. `chat_kind` tells the deletion check whether
   message ids are shared (megagroup) or per account (basic group).
+- Logs never hold a chat's invite or folder link: events name it by `_moves.chat_ref`
+  (handle, id or position), gateway rows by `loggable_ref`'s fingerprint. `chat_key` stays.
 - The board orders rows once per load and keys expansion by chat, so a row the operator
   acts on does not slide away.
 

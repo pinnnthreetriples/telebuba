@@ -272,7 +272,7 @@ async def reroute(
             if reason == "banned"
             else "chat_broadcast_muted_rerouted",
             account_id=account_id,
-            extra={"campaign_id": ctx.campaign_id, "chat": target.raw, "to": to},
+            extra={"campaign_id": ctx.campaign_id, "chat": _moves.chat_ref(target), "to": to},
         )
 
 

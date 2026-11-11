@@ -11,6 +11,7 @@ import logging
 from collections import Counter
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import loggable_folder, loggable_ref
 from core.config import settings
 from core.logging import log_event
 from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
@@ -54,7 +55,9 @@ async def _chatlist(account_id: str, slug: str) -> ChatlistResult | None:
     try:
         result = await _seams.execute_read(account_id, CheckChatlist(slug=slug))
     except _READ_ERRORS:
-        logger.warning("could not open folder %s with %s", slug, account_id, exc_info=True)
+        logger.warning(
+            "could not open folder %s with %s", loggable_folder(slug), account_id, exc_info=True
+        )
         return None
     return result if isinstance(result, ChatlistResult) else None
 
@@ -143,7 +146,7 @@ async def _list_seeds(
             await log_event(
                 "WARNING",
                 "chat_broadcast_folder_unavailable",
-                extra={"campaign_id": campaign_id, "chat": raw},
+                extra={"campaign_id": campaign_id, "chat": loggable_ref(raw)},
             )
             continue
         for group in folder.groups:

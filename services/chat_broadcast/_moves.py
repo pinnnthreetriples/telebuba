@@ -119,7 +119,7 @@ async def skip(
             "WARNING",
             "chat_broadcast_chat_skipped",
             account_id=account_id,
-            extra={"campaign_id": ctx.campaign_id, "chat": target.raw, "reason": reason},
+            extra={"campaign_id": ctx.campaign_id, "chat": chat_ref(target), "reason": reason},
         )
     return moved
 
@@ -321,7 +321,7 @@ async def chat_failed(
         "WARNING",
         "chat_broadcast_message_failed",
         account_id=account_id,
-        extra={"campaign_id": ctx.campaign_id, "chat": target.raw}
+        extra={"campaign_id": ctx.campaign_id, "chat": chat_ref(target)}
         | ({"error_type": error_type} if error_type else {}),
     )
     leave = await account_error(ctx, account_id, failed=True)
