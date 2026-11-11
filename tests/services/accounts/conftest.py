@@ -191,7 +191,7 @@ def typing_shows(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, Outrea
 @pytest.fixture
 def empty_bulk_jobs() -> Iterator[None]:
     """Live bulk runs are tracked in module-level dicts; start and end each test empty."""
-    tables = (bulk_messages._RUNS, bulk_messages._TASKS)
+    tables = (bulk_messages._RUNS, bulk_messages._TASKS, bulk_messages._DRIVING)
     for table in tables:
         table.clear()
     yield

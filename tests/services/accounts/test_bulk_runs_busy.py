@@ -350,3 +350,49 @@ async def test_two_loops_started_together_send_once(telegram: _Telegram) -> None
 
     assert telegram.sent == [("a1", "rcpt1")]
     assert _account_owner.owners() == {}
+
+
+@pytest.mark.asyncio
+async def test_a_call_that_loaded_the_run_before_the_first_one_finished_does_not_resend(
+    telegram: _Telegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check-then-load gap, held open by gates instead of left to scheduling.
+
+    Both calls read the row as running and load the run before either sends. The first
+    call is then let through to send and finish; only after that does the second call
+    come back from its load. A guard that tests ``_RUNS`` only after the load lets that
+    stale run register and send again, so this resends on such code every time.
+    """
+    loaded = [asyncio.Event(), asyncio.Event()]
+    release = [asyncio.Event(), asyncio.Event()]
+    calls: list[int] = []
+    load = bulk_messages._load_run
+
+    async def gated_load(record: BulkRunRecord) -> _bulk_runner.BulkRun:
+        slot = len(calls)
+        calls.append(slot)
+        run = await load(record)  # reads the items now, still unsent
+        loaded[slot].set()
+        await release[slot].wait()
+        return run
+
+    monkeypatch.setattr(bulk_messages, "_load_run", gated_load)
+    job_id = await _start()
+
+    first = asyncio.create_task(bulk_messages.run_bulk_message_job(job_id))
+    second = asyncio.create_task(bulk_messages.run_bulk_message_job(job_id))
+    await loaded[0].wait()
+    # Either the second call is parked after loading (a guard that lets it in), or it
+    # already turned back at the door and never loads at all.
+    parked = asyncio.create_task(loaded[1].wait())
+    await asyncio.wait({second, parked}, return_when=asyncio.FIRST_COMPLETED)
+    parked.cancel()
+
+    release[0].set()
+    await first
+    release[1].set()
+    await second
+
+    assert telegram.sent == [("a1", "rcpt1")]
+    assert _account_owner.owners() == {}
+    assert bulk_messages.is_bulk_message_job_driven(job_id) is False
