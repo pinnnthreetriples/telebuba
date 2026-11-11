@@ -105,8 +105,19 @@ test('switching from a scrolled page starts the next page at the top', async ({ 
   await setup(page);
   await page.goto('/warming');
   await expect(page.getByText('Готовы к прогреву')).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, 700));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+  // Scroll INSIDE the poll, not once before it. A single `scrollTo` is lost whenever the
+  // document is not yet tall enough to take it (clamped to 0) or the dev server reloads
+  // the page after a late dependency re-optimisation (scroll resets to 0); the poll then
+  // watched a position nothing would ever change again. Re-asking until the page
+  // actually holds the offset waits for the real precondition instead of hoping.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        window.scrollTo(0, 700);
+        return window.scrollY;
+      }),
+    )
+    .toBeGreaterThan(100);
   await goTo(page, 'Нейрошиллинг');
   await expect(page.getByRole('heading', { name: 'Нейрошиллинг' })).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
