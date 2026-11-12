@@ -39,7 +39,7 @@ from core.logging import log_event
 from core.repositories import neuroshilling as repository
 from core.repositories.accounts import list_account_user_ids
 from services import pacing
-from services.neuroshilling import _listen, _revive, _seams, _steps, _telegram
+from services.neuroshilling import _cast, _listen, _revive, _seams, _steps, _telegram
 from services.neuroshilling._context import RunContext
 from services.neuroshilling.campaigns import parse_targets
 
@@ -153,7 +153,11 @@ async def _play_target(
 ) -> None:
     """Get the cast into one chat and act the dialogue out in it."""
     chats = await _enter(context, target)
-    if not chats:
+    # Nobody inside, or nobody inside who could say the first line: the dialogue cannot
+    # open here, and ``_steps.play_step`` would only find that out after the settle
+    # pause and the first step's delay — minutes per dead chat on a long target list.
+    opener = _cast.opening_role(context, steps[0])
+    if not chats or (opener is not None and not _has_voice(context, opener, chats)):
         await log_event(
             "WARNING",
             "neuroshilling_target_failed",
@@ -161,6 +165,14 @@ async def _play_target(
         )
         return
     await _act(context, target, steps, chats)
+
+
+def _has_voice(context: RunContext, role_id: str, chats: dict[str, int]) -> bool:
+    """Whether any account of ``role_id`` got into the chat and is still in the run."""
+    return any(
+        account_id in chats and account_id not in context.halted
+        for account_id in context.by_role.get(role_id, ())
+    )
 
 
 async def _act(
@@ -179,8 +191,11 @@ async def _act(
     the target ends the moment its last line lands.
     """
     await _seams.sleep(_telegram.settle_pause())
+    # Fresh for every telling: who this chat refused is remembered for one pass of the
+    # dialogue and no longer, so a revive cycle asks again.
+    voices = _cast.Voices(chats, set())
     for step in steps:
-        if not await _steps.play_step(context, target, step, chats):
+        if not await _steps.play_step(context, target, step, voices):
             break
     await _listen.listen(context, target, chats)
 

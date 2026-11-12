@@ -140,14 +140,18 @@ async def test_a_step_that_already_has_a_row_is_not_sent_again(gateway: _Gateway
 
 @pytest.mark.usefixtures("no_sleep")
 @pytest.mark.asyncio
-async def test_a_fresh_run_id_faces_an_empty_index(gateway: _Gateway) -> None:
-    """Why a resumed run must NOT mint a new id — and what catches it if one does.
+async def test_a_second_launch_plays_the_dialogue_into_the_same_chat_again(
+    gateway: _Gateway,
+) -> None:
+    """Start pressed twice is the operator asking twice — and why a RESUME keeps its id.
 
-    The unique index is keyed on the run, so a new id claims every step again: two
-    fresh rows, and nothing in the journal that says the dialogue has already been
-    played here. What stops the words actually going out a second time is the content
-    gate, which recognises the same text in the same chat — so the rows land as
-    ``skipped`` and the gateway is never called.
+    The journal and the dedup reservation are both keyed on the run, so a new id is a
+    new telling: every step is claimed and published again. Scoped to the chat alone,
+    the reservation outlived the run by a week and a second launch settled every line
+    ``skipped`` after paying every delay — a campaign could be played exactly once.
+
+    The same property is the reason a resumed run must NOT mint an id: it would repeat
+    a dialogue the chat already has, with nothing left to stop it.
     """
     seeded = await seed_campaign()
     await engine.run_campaign(seeded.campaign_id, _RUN)
@@ -156,9 +160,24 @@ async def test_a_fresh_run_id_faces_an_empty_index(gateway: _Gateway) -> None:
     await engine.run_campaign(seeded.campaign_id, "run-2")
 
     rows = await _rows()
-    assert len(rows) == 2 * first
-    assert [row["status"] for row in rows[first:]] == ["skipped"] * first
-    assert len(gateway.actions) == first
+    assert [row["status"] for row in rows] == ["sent"] * (2 * first)
+    assert len(gateway.actions) == 2 * first
+
+
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.asyncio
+async def test_one_pass_still_refuses_the_same_line_twice_in_one_chat(gateway: _Gateway) -> None:
+    """The dedup gate is scoped to the pass, not dropped: a repeat inside it is a repeat."""
+    steps = [
+        NeuroshillingStepInput(role_id="#0", text="same", delay_min_seconds=0, delay_max_seconds=0),
+        NeuroshillingStepInput(role_id="#1", text="same", delay_min_seconds=0, delay_max_seconds=0),
+    ]
+    seeded = await seed_campaign(steps=steps)
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    assert [row["status"] for row in await _rows()] == ["sent", "skipped"]
+    assert len(gateway.actions) == 1
 
 
 @pytest.mark.usefixtures("no_sleep")
@@ -269,8 +288,13 @@ async def test_a_failing_account_is_not_dealt_the_next_step_as_well(
 
     await engine.run_campaign(seeded.campaign_id, _RUN)
 
-    assert [account_id for account_id, _action in gateway.actions] == ["acc-1", "acc-2"]
-    assert [row["status"] for row in await _rows()] == ["failed", "sent"]
+    # The sibling is handed the very line acc-1 could not say, and then its own.
+    assert [account_id for account_id, _action in gateway.actions] == ["acc-1", "acc-2", "acc-2"]
+    rows = await _rows()
+    assert [(row["account_id"], row["status"]) for row in rows] == [
+        ("acc-2", "sent"),
+        ("acc-2", "sent"),
+    ]
 
 
 @pytest.mark.usefixtures("no_sleep")

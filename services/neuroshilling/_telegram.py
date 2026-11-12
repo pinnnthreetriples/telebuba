@@ -31,9 +31,10 @@ look like nothing at all to a caller that only reads ``error_type``:
 
 Bans get the same treatment for the same reason: only ``UserBannedInChannelError``
 (a 400 about the caller, and the one ban that does reach us as itself) and those
-dead-session codes are about the ACCOUNT. ``ChatWriteForbiddenError`` and its
-siblings are properties of the CHAT, so substituting a reserve account there spends
-an account to hit the identical wall.
+dead-session codes are about the ACCOUNT everywhere. ``ChatWriteForbiddenError`` and
+its siblings are about the account IN THAT CHAT — a mute, a removal, a chat that is
+read-only for everyone — so a reserve is never spent on one: ``_dispatch`` silences
+the account for the target and the line passes to a cast member already inside.
 """
 
 from __future__ import annotations
@@ -115,8 +116,8 @@ _ERROR_VERDICTS: Final[dict[str, SendVerdict]] = {
     # A 400 about the caller in this chat, and so the one ban that survives as its own
     # class; the rest reach us as the dead-session codes above.
     "UserBannedInChannelError": "account_banned",
-    # Refusals that belong to the CHAT: a substitute account meets them identically,
-    # so they must never trigger a replacement.
+    # Refusals scoped to this chat: they say nothing about the account elsewhere, so
+    # they must never trigger a replacement from the reserve pool.
     "ChatWriteForbiddenError": "chat_blocked",
     "ChatSendPlainForbiddenError": "chat_blocked",
     "ChatSendMediaForbiddenError": "chat_blocked",

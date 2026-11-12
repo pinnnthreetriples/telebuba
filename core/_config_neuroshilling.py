@@ -47,6 +47,12 @@ class NeuroshillingSettings(BaseSettings):
     # floor that no configuration can take to zero — unlike every other delay here.
     post_join_settle_min_seconds: float = Field(default=45.0, ge=10.0)
     post_join_settle_max_seconds: float = Field(default=120.0, ge=10.0)
+    # The longest slow-mode wait a step sits out before it is sent again, once. A chat's
+    # slow mode is a per-member timer measured in seconds or minutes, so waiting it out
+    # costs less than the line — and the line a run loses this way is as likely to be
+    # the closing one as any other. Past this bound the step is skipped as before; 0
+    # switches the wait off.
+    slow_mode_max_wait_seconds: float = Field(default=300.0, ge=0.0)
     # How long a recorded flood keeps an account out of neuroshilling, measured from
     # the moment it was written. The presence row carries no expiry of its own — it has
     # ``updated_at`` and nothing else — so the window is a fixed cooldown rather than

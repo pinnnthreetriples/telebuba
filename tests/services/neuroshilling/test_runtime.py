@@ -309,10 +309,11 @@ async def test_stopping_an_idle_campaign_is_a_no_op() -> None:
 async def test_resume_reuses_the_persisted_run_id(gateway: list[TelegramAction]) -> None:
     """A fresh id would face an empty index and replay every step already delivered.
 
-    Asserted on the journal rows the resumed pass WROTE, and not on the silence at the
-    gateway: the content gate refuses the same words in the same chat whatever id they
-    are claimed under, so a run that minted a fresh id would send nothing either and
-    pass a test that only counted sends.
+    Asserted on the journal rows the resumed pass WROTE: they sit under the id the
+    campaign row carried, which is the whole guarantee. Nothing else would stop the
+    repeat — the dedup reservation is scoped to the run as well — and here it is
+    visible, because the rows of the pass that really played the dialogue went with
+    the id this test overwrote.
     """
     seeded = await seed_campaign()
     await _runtime.start_campaign(seeded.campaign_id)
@@ -330,9 +331,7 @@ async def test_resume_reuses_the_persisted_run_id(gateway: list[TelegramAction])
     assert await repository.list_journalled_steps("run-kept") == {
         ("alpha", step.step_id) for step in seeded.steps
     }
-    # Nothing new went out: the dialogue's own rows are gone with the old run id, but
-    # the content gate recognises the same words in the same chat.
-    assert len(gateway) == played
+    assert len(gateway) == 2 * played
 
 
 @pytest.mark.usefixtures("no_sleep", "gateway")

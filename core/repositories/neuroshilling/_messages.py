@@ -159,6 +159,36 @@ async def fetch_message_id(key: NeuroshillingStepKey) -> int | None:
     return await asyncio.to_thread(_fetch_message_id, key)
 
 
+def _has_sent_message(run_id: str, target: str) -> bool:
+    statement = (
+        select(_TABLE.c.id)
+        .where(
+            (_TABLE.c.run_id == run_id)
+            & (_TABLE.c.target == target)
+            & _TABLE.c.status.in_(("sent", "pending"))
+        )
+        .limit(1)
+    )
+    with _get_engine().connect() as connection:
+        return connection.execute(statement).first() is not None
+
+
+async def has_sent_message(run_id: str, target: str) -> bool:
+    """Whether this pass has put ANYTHING into ``target`` yet.
+
+    The engine asks before every line that is not the dialogue's opening one: a reply
+    played into a chat that never got the question it answers is an orphan, and a
+    resumed run would otherwise walk straight back into a target it gave up on and
+    start from the middle. Matched on the exact ``run_id`` and not ``run_scope``, so
+    each revive cycle answers for its own round.
+
+    A ``pending`` row counts. While a pass is running the only rows left in that state
+    are dispatches whose outcome never came back, which Telegram may well have
+    published — the same reading that keeps them from ever being retried.
+    """
+    return await asyncio.to_thread(_has_sent_message, run_id, target)
+
+
 def _hand_over_message(key: NeuroshillingStepKey, account_id: str) -> bool:
     statement = (
         update(_TABLE)

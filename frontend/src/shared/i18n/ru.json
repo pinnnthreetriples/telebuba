@@ -1898,6 +1898,8 @@
     "neuroshilling_substitute_locked_out": "Резервный аккаунт принял роль, но в этот чат не попал",
     "neuroshilling_chat_bans_the_fleet": "Банит чат, а не Telegram: цель оставлена, резерв на неё больше не тратится",
     "neuroshilling_replay_dropped": "Резервный аккаунт вступил, но реплика уже закрыта и повторена не будет",
+    "neuroshilling_account_silenced": "Аккаунту отказано в этом чате: его реплики переходят другим аккаунтам роли",
+    "neuroshilling_dialogue_not_opened": "Чат пропущен: открывающая реплика не отправлена, продолжение без неё не публикуется",
     "neuroshilling_role_exhausted": "У роли не осталось аккаунтов, которые могут писать сюда",
     "neuroshilling_no_speakers": "Ни у одного аккаунта в составе нет роли с репликой",
     "neuroshilling_target_failed": "Цель пропущена",

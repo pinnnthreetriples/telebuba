@@ -10,13 +10,22 @@ path in the project runs these two calls. This one differs in a single respect: 
 dedup reservation is taken on the text SCOPED TO ITS TARGET. The other callers generate
 a fresh line per send, whereas a campaign replays ONE approved dialogue into many chats
 on purpose — global dedup would let the first target through and refuse every other as
-a duplicate of it. Scoped, the gate still fires on what really is a signal: the same
-words twice in the same chat, including a re-run of a dialogue that chat already has.
+a duplicate of it.
 
-A SCENARIO step of a ``revive`` run is scoped narrower still — :func:`_step_dedup_key`
-adds the cycle — because saying the same lines into the same chat again is that mode
-rather than an accident of it. The autoreply path keeps the plain target key: it
-publishes a freshly generated sentence every time, so a repeat there really is one.
+A SCENARIO step is scoped narrower still — :func:`_step_dedup_key` adds the pass —
+because playing an approved dialogue into a chat again is the operator pressing Start
+again rather than an accident: scoped to the target alone, the second launch of a
+campaign settled every line ``skipped`` for the length of the dedup window. Inside one
+pass the gate still fires on the same words twice in the same chat. The autoreply path
+keeps the plain target key: it publishes a freshly generated sentence every time, so a
+repeat there really is one.
+
+**A refusal belongs to the account that met it.** ``ChatWriteForbiddenError`` and its
+siblings are reported per (account, chat) — an anti-spam bot mutes or removes ONE
+member — so the answer to one is that this account has no voice in this chat, not that
+the chat is lost: :func:`dispatch` says so with ``False`` and ``_steps`` hands the line
+to another account of the role. Abandoning the target instead is what cost a dialogue
+its closing line whenever the account with the line before it was refused.
 
 **One outcome is never settled.** A dispatch already on the wire when the connection
 died answers ``unconfirmed``; Telegram may have applied it, so the row stays ``pending``
@@ -32,6 +41,7 @@ import logging
 from typing import TYPE_CHECKING, Final
 
 from core.channel_tokens import parse_message_link
+from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
 from schemas.neuroshilling import NeuroshillingStepKey
@@ -59,9 +69,13 @@ _BANS_ACCOUNT: Final = frozenset({"account_dead", "account_banned"})
 # kind onto every presence row, so the halt outlives this process too. Owned by
 # ``_telegram`` because the autoreply path acts on the same set.
 _HALTS_ACCOUNT: Final = _telegram.HALTS_ACCOUNT
-# Verdicts that belong to the CHAT. Another account of the same role meets them
-# identically, so the target is abandoned rather than retried with a second session.
-_LOSES_TARGET: Final = frozenset({"chat_blocked", "chat_unavailable"})
+# Verdicts on ONE account IN ONE chat: it may not write here, or is not in here at
+# all. The account says nothing more in this target and the line passes to another
+# account of its role; none of them is evidence about the account anywhere else, so
+# nobody is halted and no reserve is spent.
+_SILENCES_ACCOUNT: Final = frozenset({"chat_blocked", "chat_unavailable", "not_member"})
+# Added to the wait Telegram names, so the retry lands after the timer rather than on it.
+_SLOW_MODE_MARGIN_SECONDS: Final = 1.0
 # The two outcomes that must NOT give the dedup reservation back: one published the
 # text, and one may have.
 _KEEPS_RESERVATION: Final = frozenset({"sent", "unconfirmed"})
@@ -73,31 +87,31 @@ def dedup_key(target: str, text: str) -> str:
 
 
 def _step_dedup_key(context: RunContext, target: str, text: str) -> str:
-    """:func:`dedup_key` for a scenario step, carrying the cycle on a revive run.
+    """:func:`dedup_key` for a scenario step, scoped to the pass that is playing it.
 
-    ``context.run_id`` is ``f"{run}#{n}"`` inside a cycle and the plain run id
-    everywhere else — ``_revive._cycle_context`` is the only writer of the suffix —
-    so naming it here scopes the reservation to ONE cycle. Without that, cycle 1's
-    reservation stands for the whole ``content_dedup_window_days`` (7 by default) and
-    every later cycle is refused as a repeat of it: the step settles ``skipped`` with
-    ``neuroshilling_text_duplicate`` and a run whose entire shape is repetition
-    publishes exactly one round and then nothing for a week.
+    ``context.run_id`` is the run's id, or ``f"{run}#{n}"`` inside a revive cycle —
+    ``_revive._cycle_context`` is the only writer of the suffix — so the reservation
+    lasts for ONE pass of the dialogue. Scoped to the target alone it stood for the
+    whole ``content_dedup_window_days`` (7 by default): the operator pressed Start on a
+    campaign that had already run, every step settled ``skipped`` with
+    ``neuroshilling_text_duplicate``, and the run paid every delay of every target to
+    publish nothing. A revive run met the same wall one cycle in.
 
-    The gate is scoped rather than dropped for two reasons. One cycle is still one
-    pass of the dialogue, so the same line twice inside it is refused exactly as it is
-    inside a campaign's pass — the mode changes how often a dialogue restarts, not
-    what a single round of it may contain. And the reservation and the release in
-    :func:`_record` both come through here, so a failed revive send cannot delete a
-    hash some other campaign is holding for the same words.
+    The gate is scoped rather than dropped for two reasons. One pass is still one
+    telling of the dialogue, so the same line twice inside it is refused — the scope
+    changes how often a dialogue may restart, not what a single round of it may
+    contain. And the reservation and the release in :func:`_record` both come through
+    here, so a failed send cannot delete a hash some other campaign is holding for the
+    same words.
 
-    What it costs: a revive run's SCENARIO steps stop sharing the dedup namespace with
-    anything else — its autoreplies keep the plain target key — so an ordinary campaign
-    posting the same wording into the same chat is no longer refused as a duplicate of
-    a revive line, nor a revive line of it. Both are the operator asking for that chat
-    to receive those words, and only one of them is the signal the gate exists for.
+    A RESUMED run is not a second pass: it keeps its stored run id, so its
+    reservations are still its own, and the journal is what stops it repeating a line.
+
+    What it costs: scenario steps share the dedup namespace with nothing else — the
+    autoreplies keep the plain target key — so two campaigns posting the same wording
+    into the same chat are not refused as duplicates of each other. Both are the
+    operator asking for that chat to receive those words.
     """
-    if context.campaign.mode != "revive":
-        return dedup_key(target, text)
     return f"{context.run_id}\n{dedup_key(target, text)}"
 
 
@@ -218,9 +232,13 @@ async def dispatch(
     account_id: str,
     action: TelegramAction,
 ) -> bool:
-    """Send the claimed step and settle its row. ``False`` abandons the target."""
+    """Send the claimed step and settle its row.
+
+    ``False`` means THIS ACCOUNT was refused in this chat — see ``_SILENCES_ACCOUNT`` —
+    and the row is ``failed``, ready to be handed to another account of the role.
+    """
     try:
-        result = await _seams.execute(account_id, action)
+        result = await _send(account_id, action)
     except (_seams.NeuroshillingRunRevokedError, asyncio.CancelledError):
         # Stop, or shutdown. The row stays ``pending`` and a sweep settles it — Stop's own
         # for the first, the next boot for a shutdown that leaves the campaign running —
@@ -232,6 +250,27 @@ async def dispatch(
         await _settle_failure(context, target, step, account_id, type(exc).__name__)
         return True
     return await _record(context, target, step, account_id, result)
+
+
+async def _send(account_id: str, action: TelegramAction) -> ActionResult:
+    """One write, sat out and repeated once when the chat's slow mode refused it.
+
+    Slow mode is a timer on the member, and Telegram names it: nothing reached the chat
+    and the same request is good the moment the timer runs out. Skipping the step
+    instead dropped a line the dialogue cannot spare for the price of a short wait.
+
+    Once, and only inside ``slow_mode_max_wait_seconds``: a second refusal means the
+    timer is not what it said, and a chat that asks for an hour is one the pass should
+    walk on from. Both still settle as the skip they always were.
+    """
+    result = await _seams.execute(account_id, action)
+    wait = result.flood_wait_seconds
+    if _telegram.classify_send(result) != "chat_wait" or wait is None:
+        return result
+    if wait > settings.neuroshilling.slow_mode_max_wait_seconds:
+        return result
+    await _seams.sleep(wait + _SLOW_MODE_MARGIN_SECONDS)
+    return await _seams.execute(account_id, action)
 
 
 async def _record(
@@ -301,10 +340,21 @@ async def _record(
             account_id=account_id,
             extra={"target": target, "verdict": verdict},
         )
-    if verdict in _LOSES_TARGET:
+    if verdict in _SILENCES_ACCOUNT:
+        # Written down as ``refused`` — the pair's verdict on one attempt, which the
+        # next run's join is entitled to try again — because the row still said
+        # ``joined``: an account an anti-spam bot had removed was walked back into the
+        # same chat on every launch, straight past the join that might have let it in.
+        await repository.record_presence(
+            campaign_id,
+            account_id,
+            target,
+            "refused",
+            error_type=result.error_type,
+        )
         await log_event(
             "WARNING",
-            "neuroshilling_target_failed",
+            "neuroshilling_account_silenced",
             account_id=account_id,
             extra={"target": target, "verdict": verdict},
         )

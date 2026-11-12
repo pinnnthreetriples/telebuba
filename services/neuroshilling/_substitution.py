@@ -2,9 +2,10 @@
 
 **Only a confirmed ACCOUNT ban buys a reserve.** ``_telegram.classify_send`` already
 separates the two kinds of refusal, and the separation is the whole economics of this
-module: ``chat_blocked`` and ``chat_unavailable`` are properties of the CHAT, so a
-substitute walks into the identical wall and the campaign has spent an account to learn
-nothing; ``chat_wait`` is a delay. ``_dispatch`` therefore hands over only
+module: ``chat_blocked`` and ``chat_unavailable`` are about one account in one chat —
+or about a chat nobody may write in — and a reserve spent there is an account gone for
+good to learn which; ``chat_wait`` is a delay. Those lines pass to a cast member
+already inside (``_steps.play_step``), and ``_dispatch`` hands over only
 ``account_banned`` and ``account_dead``, through ``RunContext.banned``.
 
 **The verdict is not re-probed.** ``services.neurocomment.bans`` does confirm its ban
@@ -47,7 +48,7 @@ is not.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
@@ -55,6 +56,53 @@ from services.neuroshilling import _seams, _telegram
 
 if TYPE_CHECKING:
     from services.neuroshilling._context import RunContext
+
+
+# The one ban verdict that says anything about the chat it was suffered in.
+_ACCOUNT_BANNED: Final = "account_banned"
+
+
+class Ban(NamedTuple):
+    """An account Telegram finished off, and which of the two verdicts finished it.
+
+    One name rather than two arguments because everything below weighs them together:
+    both buy a substitute, and only one of them is evidence about the chat.
+    """
+
+    account_id: str
+    verdict: str
+
+
+async def chat_bans_the_fleet(context: RunContext, target: str, ban: Ban) -> bool:
+    """Record a ban suffered in ``target`` and answer whether the CHAT is the cause.
+
+    One ban is about the account, which is what buys a reserve. A SECOND ban in the
+    same chat is evidence of the correlated fleet condition an account ban cannot
+    explain — one proxy subnet, one registration batch — and Telegram does not report
+    that as a chat refusal, so nothing else here can tell the difference. Without this
+    count a role with five players spends five reserves on one hostile chat, because
+    ``account_banned`` is not a verdict that loses the target on its own.
+
+    Only ``account_banned`` counts. ``account_dead`` buys a substitute too — the session
+    is finished and somebody has to say the line — but a session that is logged out was
+    logged out before it opened this chat, and treating two of them as "this chat bans
+    the fleet" abandons a target over something the target had no part in.
+
+    Counted per target for the whole run, so the answer also holds for the substitution
+    a later step of the same dialogue would ask for, and for the next revive cycle.
+    """
+    banned_here = context.banned_in.setdefault(target, set())
+    if ban.verdict == _ACCOUNT_BANNED:
+        banned_here.add(ban.account_id)
+    if len(banned_here) < 2:  # noqa: PLR2004 - the second ban IS the threshold
+        return False
+    await log_event(
+        "WARNING",
+        "neuroshilling_chat_bans_the_fleet",
+        account_id=ban.account_id,
+        extra={"campaign_id": context.campaign.campaign_id, "target": target},
+    )
+    return True
 
 
 async def substitute(

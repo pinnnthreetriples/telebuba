@@ -1859,6 +1859,8 @@
     "neuroshilling_substitute_locked_out": "The reserve account took the role but could not get into this chat",
     "neuroshilling_chat_bans_the_fleet": "The chat is banning the accounts, not Telegram: it is abandoned and costs no more reserves",
     "neuroshilling_replay_dropped": "The reserve account joined, but the line was already settled and will not be repeated",
+    "neuroshilling_account_silenced": "The account was refused in this chat: its lines pass to the role's other accounts",
+    "neuroshilling_dialogue_not_opened": "The chat was skipped: the opening line was not sent, so nothing after it is posted",
     "neuroshilling_role_exhausted": "The role has no account left that can post here",
     "neuroshilling_no_speakers": "No account on the roster has a role with a line to say",
     "neuroshilling_target_failed": "The target was skipped",

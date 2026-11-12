@@ -4,7 +4,8 @@ The rate-limit family arrives as a STATUS with no ``error_type`` at all, so an e
 that switched on the error class would see an empty field, file the step as an ordinary
 failure, and go on posting after Telegram refused it. The split that matters is scope:
 a flood belongs to the ACCOUNT and takes it out of the whole run, slow mode belongs to
-the CHAT and costs one step, and a write-forbidden chat costs the target.
+the CHAT and is sat out once before it costs a step, and a write-forbidden chat costs
+the refused account its voice there.
 """
 
 from __future__ import annotations
@@ -100,14 +101,50 @@ async def test_a_flood_wait_halts_the_account_for_the_whole_run(
 
 @pytest.mark.usefixtures("no_sleep")
 @pytest.mark.asyncio
-async def test_a_slow_mode_wait_only_skips_the_step(answers: list[ActionResult]) -> None:
-    """The chat is pacing us, not the account: the next step goes on as usual."""
+async def test_a_short_slow_mode_wait_is_sat_out_and_the_line_sent(
+    answers: list[ActionResult],
+    no_sleep: list[float],
+) -> None:
+    """The chat names a timer; waiting it out costs seconds and skipping costs the line."""
     answers.append(refused("slow_mode_wait", flood_wait_seconds=10))
     seeded = await seed_campaign(accounts=("acc-1",), steps=_solo_steps(2))
 
     await engine.run_campaign(seeded.campaign_id, _RUN)
 
-    assert await _rows() == [("alpha", "acc-1", "skipped"), ("alpha", "acc-1", "sent")]
+    assert await _rows() == [("alpha", "acc-1", "sent"), ("alpha", "acc-1", "sent")]
+    # The wait Telegram named, plus the margin that lands the retry after the timer.
+    assert 11.0 in no_sleep
+
+
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "refusals",
+    [
+        # Longer than ``slow_mode_max_wait_seconds``: the pass walks on.
+        [refused("slow_mode_wait", flood_wait_seconds=3600)],
+        # Refused again after the wait: once is the whole retry budget.
+        [
+            refused("slow_mode_wait", flood_wait_seconds=10),
+            refused("slow_mode_wait", flood_wait_seconds=10),
+        ],
+    ],
+)
+async def test_a_slow_mode_the_wait_cannot_cure_only_skips_the_step(
+    answers: list[ActionResult],
+    refusals: list[ActionResult],
+) -> None:
+    """The chat is pacing us, not the account: the next step goes on as usual.
+
+    Refused on the SECOND line, because a dialogue whose opening one was skipped is not
+    continued at all — that rule has tests of its own in ``test_engine_refusal``.
+    """
+    answers.extend([sent(101), *refusals])
+    seeded = await seed_campaign(accounts=("acc-1",), steps=_solo_steps(3))
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    assert [status for _target, _account, status in await _rows()] == ["sent", "skipped", "sent"]
 
 
 @pytest.mark.usefixtures("no_sleep")
@@ -115,7 +152,11 @@ async def test_a_slow_mode_wait_only_skips_the_step(answers: list[ActionResult])
 async def test_a_write_forbidden_chat_loses_the_target_and_no_more(
     answers: list[ActionResult],
 ) -> None:
-    """A read-only chat refuses the substitute exactly as it refused the first."""
+    """The only account of the role is refused on the opening line, so nothing follows.
+
+    The target is given up — a dialogue that never opened is not continued — and the
+    account is not: it plays the next chat as if nothing had happened.
+    """
     answers.append(refused("failed", error_type="ChatWriteForbiddenError"))
     seeded = await seed_campaign(targets="@alpha @beta", accounts=("acc-1",), steps=_solo_steps(2))
 
