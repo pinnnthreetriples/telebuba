@@ -150,15 +150,20 @@ async def test_a_write_forbidden_chat_does_not_burn_the_reserve(
 async def test_a_not_participant_failure_does_not_burn_the_reserve(
     answers: list[ActionResult],
 ) -> None:
-    """Not being in the chat says nothing about the account: the next step goes on."""
+    """Not being in the chat says nothing about the account, so no reserve is spent.
+
+    It does say the account has no voice HERE: the opening line is lost with nobody of
+    the role to take it, and nothing is played on top of a dialogue that never opened.
+    """
     answers.append(refused("failed", error_type="UserNotParticipantError"))
     seeded = await seed_campaign(accounts=("acc-1",), reserves=("res-1",), steps=_solo_steps(2))
 
     await engine.run_campaign(seeded.campaign_id, _RUN)
 
     roster = await _roster(seeded.campaign_id)
+    assert roster["acc-1"].state == "active"
     assert roster["res-1"].is_reserve is True
-    assert await _rows() == [("alpha", "acc-1", "failed"), ("alpha", "acc-1", "sent")]
+    assert await _rows() == [("alpha", "acc-1", "failed")]
 
 
 @pytest.mark.usefixtures("no_sleep")

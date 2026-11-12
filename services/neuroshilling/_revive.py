@@ -117,10 +117,11 @@ async def run(
 
     The loop ends by cancellation (Stop, or shutdown) or when every account that
     resolved a chat is in ``context.halted`` — which only a verdict about the SESSION
-    puts it there for. A verdict about the CHAT is not an exit: ``chat_blocked`` and
-    ``chat_unavailable`` end the step loop for that one cycle and halt nobody, so a
-    target the fleet lost is acted in again on the next cycle, and on every cycle
-    after it. Nothing else ends the run, which is the mode.
+    puts it there for. A chat refusing an account is not an exit: ``chat_blocked`` and
+    ``chat_unavailable`` silence that account for the one cycle and halt nobody —
+    ``engine._act`` starts each cycle with nobody silenced — so a target the fleet lost
+    is acted in again on the next cycle, and on every cycle after it. Nothing else ends
+    the run, which is the mode.
 
     The cycle number continues from the journal rather than from zero, so a run that
     is resumed writes under keys nothing holds — see ``repository.last_revive_cycle``

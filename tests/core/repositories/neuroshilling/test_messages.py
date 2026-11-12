@@ -14,6 +14,7 @@ from core.repositories.neuroshilling import (
     fail_pending_messages,
     fetch_message_id,
     hand_over_message,
+    has_sent_message,
     list_journalled_steps,
     list_sent_message_ids,
     read_quota_usage,
@@ -303,3 +304,27 @@ async def test_our_own_message_ids_are_read_back_across_every_run_and_campaign()
     assert await list_sent_message_ids("alpha", [102]) == {102}
     assert await list_sent_message_ids("beta", [101, 102, 205]) == set()
     assert await list_sent_message_ids("alpha", []) == set()
+
+
+@pytest.mark.asyncio
+async def test_a_pass_has_spoken_once_a_row_is_sent_or_possibly_sent() -> None:
+    """What the engine asks before a line that is not the dialogue's opening one.
+
+    ``pending`` counts — mid-pass it is a dispatch whose outcome never came back, which
+    Telegram may have published — and ``failed`` and ``skipped`` do not. Scoped to the
+    exact run and target, so another chat or a revive cycle answers for itself.
+    """
+    campaign_id, steps = await _campaign()
+    first, second = steps[0].step_id, steps[1].step_id
+    assert await has_sent_message(_RUN, "alpha") is False
+
+    await _claim(campaign_id, "alpha", first, "acc-1", "a")
+    assert await has_sent_message(_RUN, "alpha") is True
+    await settle_message(_key("alpha", first), status="failed")
+    assert await has_sent_message(_RUN, "alpha") is False
+
+    await _claim(campaign_id, "alpha", second, "acc-1", "b")
+    await settle_message(_key("alpha", second), status="sent", message_id=7)
+    assert await has_sent_message(_RUN, "alpha") is True
+    assert await has_sent_message(_RUN, "beta") is False
+    assert await has_sent_message(f"{_RUN}#2", "alpha") is False
