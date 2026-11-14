@@ -89,12 +89,13 @@ test('chats: pasted links are checked, folders counted, junk refused', async () 
   const user = userEvent.setup();
 
   await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
-  await user.type(screen.getByLabelText('Добавить чаты'), '@beta t.me/addlist/abc !!bad');
-  await user.click(screen.getByRole('button', { name: 'Добавить' }));
+  await user.type(screen.getByLabelText('Список чатов'), '@beta t.me/addlist/abc !!bad');
+  expect(screen.getByText('Не распознаны, не добавятся (1): !!bad')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Добавить 2 чата' }));
 
   expect(await screen.findByText('@beta')).toBeInTheDocument();
   expect(await screen.findByText('папка · 9 чатов')).toBeInTheDocument();
-  expect(screen.getByText('Не распознаны: !!bad')).toBeInTheDocument();
+  expect(screen.queryByText(/!!bad/)).toBeNull();
   expect(screen.getByText('закрытый чат')).toBeInTheDocument();
   await user.click(screen.getByLabelText('Убрать @beta'));
   expect(screen.queryByText('@beta')).toBeNull();
@@ -234,27 +235,57 @@ test('an edited dialog asks before a backdrop click closes it', async () => {
   expect(callsTo(PUT, 'PUT')).toHaveLength(0);
 });
 
-test('links typed in the chat editor but not added count as unsaved input', async () => {
+test('a slow answer joins the list as it is then, not as it was when sent', async () => {
+  // A folder takes a while to open; a second paste meanwhile must not be overwritten.
+  routeApi();
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  let release = () => undefined as void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname.endsWith('/targets/resolve')) {
+      const body = (await request.clone().json()) as { targets: string[] };
+      if (body.targets.includes('@slow')) await gate;
+    }
+    return base(input, init);
+  });
+  open();
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Список чатов'), '@slow');
+  await user.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Список чатов'), '@fast');
+  await user.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
+  expect(await screen.findByText('@fast')).toBeInTheDocument();
+
+  release();
+  expect(await screen.findByText('@slow')).toBeInTheDocument();
+  expect(screen.getByText('@fast')).toBeInTheDocument();
+});
+
+test('links pasted but not added count as unsaved input', async () => {
   routeApi();
   const { onClose } = open();
   const user = userEvent.setup();
-  const dialog = screen.getByRole('dialog', { name: 'Настройки рассылки' });
 
   await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
-  await user.type(screen.getByLabelText('Добавить чаты'), '@beta');
-  await user.click(dialog.parentElement!);
+  await user.type(screen.getByLabelText('Список чатов'), '@beta{Escape}');
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByRole('dialog', { name: 'Закрыть без сохранения?' })).toBeInTheDocument();
 });
 
-test('Escape in the chat editor cancels the editor only', async () => {
+test('Escape in an empty paste dialog closes that dialog only', async () => {
   routeApi();
   const { onClose } = open();
   const user = userEvent.setup();
 
   await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
-  await user.type(screen.getByLabelText('Добавить чаты'), '@beta{Escape}');
-  expect(screen.queryByLabelText('Добавить чаты')).toBeNull();
+  await user.type(screen.getByLabelText('Список чатов'), '{Escape}');
+  expect(screen.queryByRole('dialog', { name: 'Добавить чаты' })).toBeNull();
   expect(screen.getByRole('dialog', { name: 'Настройки рассылки' })).toBeInTheDocument();
   expect(screen.queryByRole('dialog', { name: 'Закрыть без сохранения?' })).toBeNull();
   expect(onClose).not.toHaveBeenCalled();

@@ -2,7 +2,7 @@
 // the accounts are already in. Pasted links are checked by the server, which also opens a
 // folder link to say how many chats it holds.
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
@@ -10,6 +10,7 @@ import {
   chatBroadcastOwnChatsQueryOptions,
   resolveChatBroadcastTargetsMutation,
 } from '@/entities/chat-broadcast';
+import { BulkChatPasteModal } from '@/features/bulk-chat-paste';
 import type { AccountRead, ChatBroadcastResolvedTarget } from '@/shared/api';
 import {
   Button,
@@ -17,16 +18,13 @@ import {
   HelpHint,
   Icon,
   IconButton,
-  InlineChipEditor,
   Notice,
   SegmentedControl,
   Spinner,
-  useModalDirty,
 } from '@/shared/ui';
 
-import { guessKind } from '../../model/collections';
+import { guessKind, mergeTargets } from '../../model/collections';
 import type { Settings } from '../../model/draft';
-import { splitTargets } from '../../model/draft';
 
 import { ChatCollections } from './ChatCollections';
 import { Eyebrow, Row } from './fields';
@@ -47,11 +45,15 @@ function ListTargets({
   const resolve = useMutation(resolveChatBroadcastTargetsMutation());
   const [resolved, setResolved] = useState<Resolved>({});
   const [adding, setAdding] = useState(false);
-  const [entry, setEntry] = useState('');
   const [invalid, setInvalid] = useState<string[]>([]);
   const reader = accountIds[0];
-  // Links typed but not yet added are input the dialog around cannot see.
-  useModalDirty(entry.trim() !== '');
+  // Opening a folder takes a while, and the list may change before the answer lands: a
+  // second paste, a chip removed. The answer joins the list as it is THEN; the list as
+  // it was when the paste went out would drop whatever changed in between.
+  const latest = useRef(settings.targets);
+  useEffect(() => {
+    latest.current = settings.targets;
+  });
 
   // Folders are opened once per dialog (and again when the first account changes):
   // the count is the one thing a chip cannot tell from its own link.
@@ -70,10 +72,9 @@ function ListTargets({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read on the inputs only
   }, [folders, reader]);
 
-  const add = () => {
-    const pasted = splitTargets(entry).filter((raw) => !settings.targets.includes(raw));
-    setAdding(false);
-    setEntry('');
+  // The paste dialog has already dropped duplicates and what is not a link; the server
+  // still has the last word on each one and opens folders to count their chats.
+  const add = (pasted: string[]) => {
     if (pasted.length === 0) return;
     void resolve
       .mutateAsync({ body: { targets: pasted, account_ids: reader ? [reader] : [] } })
@@ -86,7 +87,12 @@ function ListTargets({
           ...current,
           ...Object.fromEntries(good.map((item) => [item.raw, item])),
         }));
-        onPatch({ targets: [...settings.targets, ...good.map((item) => item.raw)] });
+        const next = mergeTargets(
+          latest.current,
+          good.map((item) => item.raw),
+        );
+        latest.current = next;
+        onPatch({ targets: next });
       })
       .catch(() => undefined);
   };
@@ -104,30 +110,25 @@ function ListTargets({
             }}
           />
         ))}
-        {adding ? (
-          <InlineChipEditor
-            value={entry}
-            onChange={setEntry}
-            onConfirm={add}
-            onCancel={() => {
-              setAdding(false);
-              setEntry('');
-            }}
-            placeholder={t('chatBroadcast.settings.chats.placeholder')}
-            inputLabel={t('chatBroadcast.settings.chats.addLabel')}
-            confirmLabel={t('chatBroadcast.settings.chats.addConfirm')}
-          />
-        ) : (
-          <ChipAddButton
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            {t('chatBroadcast.settings.chats.add')}
-          </ChipAddButton>
-        )}
+        <ChipAddButton
+          onClick={() => {
+            setAdding(true);
+          }}
+        >
+          {t('chatBroadcast.settings.chats.add')}
+        </ChipAddButton>
         {resolve.isPending ? <Spinner /> : null}
       </div>
+      {adding ? (
+        <BulkChatPasteModal
+          current={settings.targets}
+          allowFolders
+          onAdd={add}
+          onClose={() => {
+            setAdding(false);
+          }}
+        />
+      ) : null}
       {invalid.length > 0 ? (
         <Notice tone="warning" bordered={false}>
           {t('chatBroadcast.settings.chats.invalid', { targets: invalid.join(', ') })}

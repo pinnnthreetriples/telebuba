@@ -150,8 +150,9 @@ test('the setup card saves ITS slice over an echo of every other card s fields',
   routeLaunchable();
   renderPage();
   await openSettings();
-  await userEvent.click(await screen.findByRole('button', { name: '+ Чат' }));
-  await userEvent.type(screen.getByLabelText('+ Чат'), '@third{Enter}');
+  await userEvent.click(await screen.findByRole('button', { name: '+ Чаты' }));
+  await userEvent.type(screen.getByLabelText('Список чатов'), '@third');
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
   await userEvent.click(screen.getByText('Сохранить настройки'));
 
   await waitFor(() => {
@@ -317,8 +318,9 @@ test('what the operator typed into the setup card survives a log frame', async (
   routeLaunchable();
   renderPage();
   await openSettings();
-  await userEvent.click(await screen.findByRole('button', { name: '+ Чат' }));
-  await userEvent.type(screen.getByLabelText('+ Чат'), '@third{Enter}');
+  await userEvent.click(await screen.findByRole('button', { name: '+ Чаты' }));
+  await userEvent.type(screen.getByLabelText('Список чатов'), '@third');
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
   const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
 
   emitLogFrame();

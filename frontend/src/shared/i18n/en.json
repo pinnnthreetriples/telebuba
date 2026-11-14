@@ -3243,10 +3243,8 @@
         "placeholder": "@chat\nhttps://t.me/another_chat",
         "count": "Targets: {{n}}",
         "eyebrow": "Targets",
-        "add": "+ Chat",
-        "addPlaceholder": "@chat or link",
-        "remove": "Remove {{name}}",
-        "confirm": "Add the chat"
+        "add": "+ Chats",
+        "remove": "Remove {{name}}"
       },
       "runMode": {
         "label": "Run mode",
@@ -4480,9 +4478,6 @@
         "folderHint": "Telegram folder: one link, several chats",
         "remove": "Remove {{target}}",
         "add": "+ Add chats",
-        "addLabel": "Add chats",
-        "addConfirm": "Add",
-        "placeholder": "@chat, t.me/chat, t.me/+invite, t.me/addlist/…",
         "invalid": "Not recognised: {{targets}}",
         "ownSummary": "{{groups}} groups of {{accounts}} accounts · skipped channels {{channels}}, admins-only {{adminOnly}}",
         "ownHint": "Channels cannot be written to — groups only. A group several accounts share gets one message.",
@@ -5546,5 +5541,23 @@
     "composer": {
       "label": "Story design"
     }
+  },
+  "bulkChatPaste": {
+    "title": "Add chats",
+    "hint": "Paste a list: one link per line, or separated by spaces or commas. Numbering and list bullets are ignored.",
+    "formats": "Accepted: @chat, t.me/chat and t.me/+… invites",
+    "formatsFolders": "Accepted: @chat, t.me/chat, t.me/+… invites and t.me/addlist/… folders",
+    "inputLabel": "List of chats",
+    "placeholder": "@chat\nt.me/another_chat\nhttps://t.me/+AbCdEfGh123",
+    "fresh_one": "New chats: {{count}}",
+    "fresh_other": "New chats: {{count}}",
+    "existing": "Already in the list, will be skipped ({{count}}): {{targets}}",
+    "repeated": "Repeated in the paste, one copy will be added ({{count}}): {{targets}}",
+    "invalid": "Not recognised, will be skipped ({{count}}): {{targets}}",
+    "more": "{{shown}} and {{count}} more",
+    "cancel": "Cancel",
+    "confirm_one": "Add {{count}} chat",
+    "confirm_other": "Add {{count}} chats",
+    "nothing": "Nothing to add"
   }
 }

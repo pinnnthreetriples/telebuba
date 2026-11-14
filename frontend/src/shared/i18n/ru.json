@@ -3286,10 +3286,8 @@
         "placeholder": "@chat\nhttps://t.me/another_chat",
         "count": "Целей: {{n}}",
         "eyebrow": "Цели",
-        "add": "+ Чат",
-        "addPlaceholder": "@chat или ссылка",
-        "remove": "Убрать {{name}}",
-        "confirm": "Добавить чат"
+        "add": "+ Чаты",
+        "remove": "Убрать {{name}}"
       },
       "runMode": {
         "label": "Режим запуска",
@@ -4558,9 +4556,6 @@
         "folderHint": "Папка Telegram: одна ссылка — сразу несколько чатов",
         "remove": "Убрать {{target}}",
         "add": "+ Добавить чаты",
-        "addLabel": "Добавить чаты",
-        "addConfirm": "Добавить",
-        "placeholder": "@chat, t.me/chat, t.me/+инвайт, t.me/addlist/…",
         "invalid": "Не распознаны: {{targets}}",
         "ownSummary": "{{groups}} групп у {{accounts}} аккаунтов · пропущено каналов {{channels}}, только для админов {{adminOnly}}",
         "ownHint": "В канал писать нельзя — только в группы. Если группа общая у нескольких аккаунтов, в неё напишет один.",
@@ -5663,5 +5658,27 @@
     "composer": {
       "label": "Оформление истории"
     }
+  },
+  "bulkChatPaste": {
+    "title": "Добавить чаты",
+    "hint": "Вставьте список: по ссылке в строке, через пробел или запятую. Нумерация и маркеры списка не мешают.",
+    "formats": "Подходят @chat, t.me/chat и инвайты t.me/+…",
+    "formatsFolders": "Подходят @chat, t.me/chat, инвайты t.me/+… и папки t.me/addlist/…",
+    "inputLabel": "Список чатов",
+    "placeholder": "@chat\nt.me/another_chat\nhttps://t.me/+AbCdEfGh123",
+    "fresh_one": "Новых чатов: {{count}}",
+    "fresh_few": "Новых чатов: {{count}}",
+    "fresh_many": "Новых чатов: {{count}}",
+    "fresh_other": "Новых чатов: {{count}}",
+    "existing": "Уже в списке, не добавятся ({{count}}): {{targets}}",
+    "repeated": "Повторы во вставке, добавится одна копия ({{count}}): {{targets}}",
+    "invalid": "Не распознаны, не добавятся ({{count}}): {{targets}}",
+    "more": "{{shown}} и ещё {{count}}",
+    "cancel": "Отмена",
+    "confirm_one": "Добавить {{count}} чат",
+    "confirm_few": "Добавить {{count}} чата",
+    "confirm_many": "Добавить {{count}} чатов",
+    "confirm_other": "Добавить {{count}} чата",
+    "nothing": "Нечего добавлять"
   }
 }

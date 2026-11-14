@@ -10,6 +10,7 @@ import {
   resolveChatBroadcastTargetsMutation,
   saveChatCollectionMutation,
 } from '@/entities/chat-broadcast';
+import { BulkChatPasteModal } from '@/features/bulk-chat-paste';
 import type { ChatCollection } from '@/shared/api';
 import {
   Button,
@@ -18,7 +19,6 @@ import {
   ConfirmModal,
   Icon,
   IconButton,
-  InlineChipEditor,
   Input,
   Modal,
   ModalFooter,
@@ -29,7 +29,6 @@ import {
 } from '@/shared/ui';
 
 import { mergeTargets, sameTargets } from '../../model/collections';
-import { splitTargets } from '../../model/draft';
 
 import { TargetChip } from './TargetChip';
 
@@ -44,22 +43,15 @@ function CollectionEditor({
   const [name, setName] = useState(collection.name);
   const [targets, setTargets] = useState(collection.targets);
   const [adding, setAdding] = useState(false);
-  const [entry, setEntry] = useState('');
   const [invalid, setInvalid] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
   const resolve = useMutation(resolveChatBroadcastTargetsMutation());
   const save = useMutation(saveChatCollectionMutation());
   const remove = useMutation(deleteChatCollectionMutation());
   const dirty = name.trim() !== collection.name || !sameTargets(targets, collection.targets);
-  useModalDirty(dirty || entry.trim() !== '');
+  useModalDirty(dirty);
 
-  const stopAdding = () => {
-    setAdding(false);
-    setEntry('');
-  };
-  const add = () => {
-    const pasted = splitTargets(entry);
-    stopAdding();
+  const add = (pasted: string[]) => {
     if (pasted.length === 0) return;
     void resolve
       .mutateAsync({ body: { targets: pasted, account_ids: [] } })
@@ -138,27 +130,25 @@ function CollectionEditor({
             }}
           />
         ))}
-        {adding ? (
-          <InlineChipEditor
-            value={entry}
-            onChange={setEntry}
-            onConfirm={add}
-            onCancel={stopAdding}
-            placeholder={t('chatBroadcast.settings.chats.placeholder')}
-            inputLabel={t('chatBroadcast.settings.chats.addLabel')}
-            confirmLabel={t('chatBroadcast.settings.chats.addConfirm')}
-          />
-        ) : (
-          <ChipAddButton
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            {t('chatBroadcast.settings.chats.add')}
-          </ChipAddButton>
-        )}
+        <ChipAddButton
+          onClick={() => {
+            setAdding(true);
+          }}
+        >
+          {t('chatBroadcast.settings.chats.add')}
+        </ChipAddButton>
         {resolve.isPending ? <Spinner /> : null}
       </div>
+      {adding ? (
+        <BulkChatPasteModal
+          current={targets}
+          allowFolders
+          onAdd={add}
+          onClose={() => {
+            setAdding(false);
+          }}
+        />
+      ) : null}
       {invalid.length > 0 ? (
         <Notice tone="warning" bordered={false}>
           {t('chatBroadcast.settings.chats.invalid', { targets: invalid.join(', ') })}
