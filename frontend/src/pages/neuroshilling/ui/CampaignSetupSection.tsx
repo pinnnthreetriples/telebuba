@@ -85,6 +85,9 @@ export function CampaignSetupSection({
   const { t } = useTranslation();
   const [limitsOpen, setLimitsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  // Прогон, стартовавший при открытом окне вставки, закрывает его насовсем: иначе флаг
+  // остался бы поднят и окно само всплыло бы, когда прогон кончится.
+  if (live && adding) setAdding(false);
   const targets = splitTargets(draft.targetsRaw);
   const neuro = draft.autoresponder === 'neurodialog';
 
@@ -136,7 +139,7 @@ export function CampaignSetupSection({
           {t('neuroshilling.setup.targets.add')}
         </ChipAddButton>
       </div>
-      {adding && !live ? (
+      {adding ? (
         <BulkChatPasteModal
           current={targets}
           allowFolders={false}

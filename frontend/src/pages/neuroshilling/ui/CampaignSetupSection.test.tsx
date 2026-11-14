@@ -161,6 +161,23 @@ test('a pasted column becomes one chip per chat, without duplicates or junk', as
   expect(screen.queryByRole('dialog', { name: 'Добавить чаты' })).toBeNull();
 });
 
+test('a run that starts while the paste dialog is open closes it for good', async () => {
+  // Окно, спрятанное на время прогона, не должно само всплыть, когда прогон кончится.
+  const props = {
+    initial: setupDraftOf(CAMPAIGN),
+    onDraft: vi.fn(),
+    reserveCount: 0,
+  };
+  const { rerender } = render(<Harness {...props} live={false} />);
+  await userEvent.click(screen.getByRole('button', { name: '+ Чаты' }));
+  expect(screen.getByRole('dialog', { name: 'Добавить чаты' })).toBeInTheDocument();
+
+  rerender(<Harness {...props} live />);
+  expect(screen.queryByRole('dialog', { name: 'Добавить чаты' })).toBeNull();
+  rerender(<Harness {...props} live={false} />);
+  expect(screen.queryByRole('dialog', { name: 'Добавить чаты' })).toBeNull();
+});
+
 test('the limits row summarises what is inside instead of opening a panel in place', async () => {
   renderCard({ draft: { ...setupDraftOf(CAMPAIGN), messagesPerHour: 4, reserveEnabled: true } });
   expect(screen.queryByLabelText('Сообщений в час')).toBeNull();

@@ -2,7 +2,7 @@
 // the accounts are already in. Pasted links are checked by the server, which also opens a
 // folder link to say how many chats it holds.
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
@@ -23,7 +23,7 @@ import {
   Spinner,
 } from '@/shared/ui';
 
-import { guessKind } from '../../model/collections';
+import { guessKind, mergeTargets } from '../../model/collections';
 import type { Settings } from '../../model/draft';
 
 import { ChatCollections } from './ChatCollections';
@@ -47,6 +47,13 @@ function ListTargets({
   const [adding, setAdding] = useState(false);
   const [invalid, setInvalid] = useState<string[]>([]);
   const reader = accountIds[0];
+  // Opening a folder takes a while, and the list may change before the answer lands: a
+  // second paste, a chip removed. The answer joins the list as it is THEN; the list as
+  // it was when the paste went out would drop whatever changed in between.
+  const latest = useRef(settings.targets);
+  useEffect(() => {
+    latest.current = settings.targets;
+  });
 
   // Folders are opened once per dialog (and again when the first account changes):
   // the count is the one thing a chip cannot tell from its own link.
@@ -80,7 +87,12 @@ function ListTargets({
           ...current,
           ...Object.fromEntries(good.map((item) => [item.raw, item])),
         }));
-        onPatch({ targets: [...settings.targets, ...good.map((item) => item.raw)] });
+        const next = mergeTargets(
+          latest.current,
+          good.map((item) => item.raw),
+        );
+        latest.current = next;
+        onPatch({ targets: next });
       })
       .catch(() => undefined);
   };

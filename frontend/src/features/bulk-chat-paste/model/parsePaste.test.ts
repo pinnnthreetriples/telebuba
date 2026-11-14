@@ -36,6 +36,20 @@ describe('chatLinkKey', () => {
     expect(chatLinkKey('t.me/addlist/', FOLDERS)).toBeNull();
   });
 
+  test('where folders open, `addlist…` is a folder or nothing, as the server reads it', () => {
+    // `parse_target` takes `addlist/slug` without the `t.me/` prefix and refuses any other
+    // value that starts with `addlist`, so a public `addlistfan` would be dropped there.
+    expect(chatLinkKey('addlist/Slug-1', FOLDERS)?.key).toBe('addlist:Slug-1');
+    expect(chatLinkKey('addlistfan', FOLDERS)).toBeNull();
+    expect(chatLinkKey('t.me/addlistfan', FOLDERS)).toBeNull();
+    expect(chatLinkKey('@addlistfan', FOLDERS)?.key).toBe('addlistfan');
+    expect(chatLinkKey('t.me/addlist', NO_FOLDERS)).toBeNull();
+  });
+
+  test('a run of digits is a username the server takes', () => {
+    expect(chatLinkKey('12345', NO_FOLDERS)).toEqual({ key: '12345', kind: 'public' });
+  });
+
   test.each([
     '!!bad',
     'ab',
@@ -61,6 +75,22 @@ describe('analyzePaste', () => {
     const result = analyzePaste('1. @one\n2) «@two»\n- (t.me/three).\n• @four', [], NO_FOLDERS);
     expect(result.fresh).toEqual(['@one', '@two', 't.me/three', '@four']);
     expect(result.invalid).toEqual([]);
+  });
+
+  test('a numbered list loses its numbers, but a number on its own is still a chat', () => {
+    const result = analyzePaste('1. @one\n(2) @two\n100. @three\n12345', [], NO_FOLDERS);
+    expect(result.fresh).toEqual(['@one', '@two', '@three', '12345']);
+    expect(result.invalid).toEqual([]);
+  });
+
+  test('the list is read by the same rules as the paste', () => {
+    // Neuroshilling keeps `addlistfan` as a chat, so pasting it again is a repeat.
+    expect(analyzePaste('@addlistfan', ['addlistfan'], NO_FOLDERS).existing).toEqual([
+      '@addlistfan',
+    ]);
+    expect(analyzePaste('addlist/abc', ['t.me/addlist/abc'], FOLDERS).existing).toEqual([
+      'addlist/abc',
+    ]);
   });
 
   test('a chat already in the list or repeated in the paste is reported, not added', () => {

@@ -235,6 +235,38 @@ test('an edited dialog asks before a backdrop click closes it', async () => {
   expect(callsTo(PUT, 'PUT')).toHaveLength(0);
 });
 
+test('a slow answer joins the list as it is then, not as it was when sent', async () => {
+  // A folder takes a while to open; a second paste meanwhile must not be overwritten.
+  routeApi();
+  const base = vi.mocked(fetch).getMockImplementation()!;
+  let release = () => undefined as void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname.endsWith('/targets/resolve')) {
+      const body = (await request.clone().json()) as { targets: string[] };
+      if (body.targets.includes('@slow')) await gate;
+    }
+    return base(input, init);
+  });
+  open();
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Список чатов'), '@slow');
+  await user.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
+  await user.click(screen.getByRole('button', { name: '+ Добавить чаты' }));
+  await user.type(screen.getByLabelText('Список чатов'), '@fast');
+  await user.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
+  expect(await screen.findByText('@fast')).toBeInTheDocument();
+
+  release();
+  expect(await screen.findByText('@slow')).toBeInTheDocument();
+  expect(screen.getByText('@fast')).toBeInTheDocument();
+});
+
 test('links pasted but not added count as unsaved input', async () => {
   routeApi();
   const { onClose } = open();

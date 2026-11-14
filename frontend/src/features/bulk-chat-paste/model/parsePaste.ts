@@ -15,8 +15,10 @@ const USERNAME_RE = /^[A-Za-z0-9_]{3,32}$/;
 const SEPARATOR_RE = /[\s,;]+/;
 // Wrapping a link picks up in prose and lists: quotes, brackets, a full stop.
 const WRAPPING_RE = /^["'«»“”(<[]+|["'«»“”)>\].:!?]+$/g;
-// List markers that carry no link: `1.`, `2)`, `-`, `•`, `—`. Skipped, not reported.
-const MARKER_RE = /^(\d+[.)]?|[-–—•*·])$/;
+// List markers that carry no link: `1.`, `2)`, `(3)`, `-`, `•`, `—`. Skipped, not reported.
+// Matched BEFORE the wrapping is stripped: a bare number is a (numeric) username the
+// server takes, and must not vanish as if it were the `1` of `1.`.
+const MARKER_RE = /^(\(?\d+[.)]|[-–—•*·])$/;
 
 export type ChatLinkKind = 'public' | 'invite' | 'folder';
 
@@ -35,10 +37,17 @@ export function chatLinkKey(
   { allowFolders }: { allowFolders: boolean },
 ): { key: string; kind: ChatLinkKind } | null {
   const { rest, prefixed } = stripLink(raw.trim());
-  if (prefixed && /^addlist(\/|$)/i.test(rest)) {
+  if (allowFolders && rest.toLowerCase().startsWith('addlist')) {
+    // `parse_target`: anything that starts with `addlist` is a folder or nothing, with or
+    // without the `t.me/` prefix — `addlistfan` is refused, `addlist/slug` is a folder.
     const slug = rest.slice('addlist/'.length);
-    return allowFolders && SLUG_RE.test(slug) ? { key: `addlist:${slug}`, kind: 'folder' } : null;
+    return /^addlist\//i.test(rest) && SLUG_RE.test(slug)
+      ? { key: `addlist:${slug}`, kind: 'folder' }
+      : null;
   }
+  // Where folders are not opened, a folder link is refused rather than read as the
+  // public chat `addlist` the way `normalize_channel` would read it.
+  if (prefixed && /^addlist(\/|$)/i.test(rest)) return null;
   const invite = rest.startsWith('+')
     ? rest.slice(1)
     : rest.toLowerCase().startsWith('joinchat/')
@@ -71,14 +80,16 @@ export function analyzePaste(
 ): PasteAnalysis {
   const known = new Set<string>();
   for (const raw of current) {
-    const parsed = chatLinkKey(raw, { allowFolders: true });
+    // The list is read by the same rules as the paste, or a chat both hold reads as new.
+    const parsed = chatLinkKey(raw, { allowFolders });
     if (parsed) known.add(parsed.key);
   }
   const seen = new Set<string>();
   const result: PasteAnalysis = { fresh: [], existing: [], repeated: [], invalid: [] };
   for (const piece of text.split(SEPARATOR_RE)) {
+    if (MARKER_RE.test(piece)) continue;
     const token = piece.replace(WRAPPING_RE, '');
-    if (token === '' || MARKER_RE.test(token)) continue;
+    if (token === '') continue;
     const parsed = chatLinkKey(token, { allowFolders });
     if (parsed === null) result.invalid.push(token);
     else if (known.has(parsed.key)) result.existing.push(token);
