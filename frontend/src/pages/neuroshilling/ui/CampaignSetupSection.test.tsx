@@ -131,15 +131,34 @@ test('targets are chips that can be removed one at a time', async () => {
   expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).targetsRaw).toBe('@other');
 });
 
-test('a pasted block becomes one chip per chat, so bulk entry survives the textarea', async () => {
-  // Поля-простыни больше нет, но вставка списком осталась: строка ввода режется тем же
-  // разделителем, что и сохранённое значение.
+test('a pasted column becomes one chip per chat, without duplicates or junk', async () => {
+  // Столбец из таблицы: переносы строк однострочное поле съело бы, склеив `@one@two`.
   const { onDraft } = renderCard();
-  await userEvent.click(screen.getByRole('button', { name: '+ Чат' }));
-  await userEvent.type(screen.getByLabelText('+ Чат'), '@one, @two @three{Enter}');
+  await userEvent.click(screen.getByRole('button', { name: '+ Чаты' }));
+  await userEvent.click(screen.getByLabelText('Список чатов'));
+  await userEvent.paste(
+    ['1. @one', '2. t.me/two', '@Chat', '@one', 't.me/addlist/abc', '@three, !!bad'].join('\n'),
+  );
+
+  expect(screen.getByText('Новых чатов: 3')).toBeInTheDocument();
+  expect(screen.getByText('Уже в списке, не добавятся (1): @Chat')).toBeInTheDocument();
+  expect(
+    screen.getByText('Повторы во вставке, добавится одна копия (1): @one'),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText('Не распознаны, не добавятся (2): t.me/addlist/abc, !!bad'),
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить 3 чата' }));
 
   const raw = (onDraft.mock.calls.at(-1)?.[0] as SetupDraft).targetsRaw;
-  expect(raw.split(String.fromCharCode(10))).toEqual(['@chat', '@other', '@one', '@two', '@three']);
+  expect(raw.split(String.fromCharCode(10))).toEqual([
+    '@chat',
+    '@other',
+    '@one',
+    't.me/two',
+    '@three',
+  ]);
+  expect(screen.queryByRole('dialog', { name: 'Добавить чаты' })).toBeNull();
 });
 
 test('the limits row summarises what is inside instead of opening a panel in place', async () => {
@@ -257,7 +276,7 @@ test('a running campaign locks every control, not just the save it no longer own
   // Сервер отказывает всему PUT с `campaign_running`, поэтому замок висит на КАЖДОМ
   // поле: видно, что именно нельзя тронуть, а не одна серая кнопка в подвале.
   renderCard({ live: true });
-  expect(screen.getByRole('button', { name: '+ Чат' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '+ Чаты' })).toBeDisabled();
   expect(screen.getByRole('radio', { name: 'Последовательно' })).toBeDisabled();
   expect(screen.getByLabelText('Минимальная пауза между целями, сек')).toBeDisabled();
   expect(screen.getByRole('switch', { name: 'Разные голоса у ролей' })).toBeDisabled();

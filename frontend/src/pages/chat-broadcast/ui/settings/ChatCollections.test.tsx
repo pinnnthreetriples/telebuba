@@ -98,10 +98,11 @@ test('the editor renames a category, drops and adds chats, and saves the whole l
   await user.type(name, 'Крипта 2');
   await user.click(within(dialog).getByLabelText('Убрать t.me/Alpha'));
   await user.click(within(dialog).getByRole('button', { name: '+ Добавить чаты' }));
-  await user.type(within(dialog).getByLabelText('Добавить чаты'), '@beta !!bad');
-  await user.click(within(dialog).getByRole('button', { name: 'Добавить' }));
+  const paste = screen.getByRole('dialog', { name: 'Добавить чаты' });
+  await user.type(within(paste).getByLabelText('Список чатов'), '@beta !!bad');
+  expect(within(paste).getByText('Не распознаны, не добавятся (1): !!bad')).toBeInTheDocument();
+  await user.click(within(paste).getByRole('button', { name: 'Добавить 1 чат' }));
   expect(await within(dialog).findByText('@beta')).toBeInTheDocument();
-  expect(within(dialog).getByText('Не распознаны: !!bad')).toBeInTheDocument();
 
   await user.click(within(dialog).getByRole('button', { name: 'Сохранить категорию Крипта' }));
 

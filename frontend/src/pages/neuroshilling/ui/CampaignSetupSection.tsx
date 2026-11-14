@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BulkChatPasteModal } from '@/features/bulk-chat-paste';
 import {
   Button,
   ChipAddButton,
   HelpHint,
   Icon,
   IconButton,
-  InlineChipEditor,
   Input,
   SectionLabel,
   SegmentedControl,
@@ -85,21 +85,16 @@ export function CampaignSetupSection({
   const { t } = useTranslation();
   const [limitsOpen, setLimitsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [entry, setEntry] = useState('');
   const targets = splitTargets(draft.targetsRaw);
   const neuro = draft.autoresponder === 'neurodialog';
 
   const setTargets = (next: string[]) => {
     onDraft({ ...draft, targetsRaw: next.join('\n') });
   };
-  // Вставка целым списком остаётся возможной, хотя поля-простыни больше нет: строка
-  // ввода режется тем же разделителем, что и сохранённое значение, поэтому вставленный
-  // из таблицы столбец превращается в столько чипов, сколько в нём чатов.
-  const commitEntry = () => {
-    const parsed = splitTargets(entry);
-    if (parsed.length > 0) setTargets([...targets, ...parsed]);
-    setEntry('');
-    setAdding(false);
+  // Список вставляется целиком в диалог: он уже убрал дубли и то, что не ссылка на чат.
+  // Папок t.me/addlist нейрошилинг не открывает, поэтому они здесь — нераспознанные.
+  const addTargets = (added: string[]) => {
+    if (added.length > 0) setTargets([...targets, ...added]);
   };
 
   return (
@@ -132,31 +127,25 @@ export function CampaignSetupSection({
             </IconButton>
           </span>
         ))}
-        {adding ? (
-          <InlineChipEditor
-            value={entry}
-            onChange={setEntry}
-            onConfirm={commitEntry}
-            onCancel={() => {
-              setEntry('');
-              setAdding(false);
-            }}
-            placeholder={t('neuroshilling.setup.targets.addPlaceholder')}
-            inputLabel={t('neuroshilling.setup.targets.add')}
-            confirmLabel={t('neuroshilling.setup.targets.confirm')}
-            disabled={live}
-          />
-        ) : (
-          <ChipAddButton
-            disabled={live}
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            {t('neuroshilling.setup.targets.add')}
-          </ChipAddButton>
-        )}
+        <ChipAddButton
+          disabled={live}
+          onClick={() => {
+            setAdding(true);
+          }}
+        >
+          {t('neuroshilling.setup.targets.add')}
+        </ChipAddButton>
       </div>
+      {adding && !live ? (
+        <BulkChatPasteModal
+          current={targets}
+          allowFolders={false}
+          onAdd={addTargets}
+          onClose={() => {
+            setAdding(false);
+          }}
+        />
+      ) : null}
 
       {/* Две колонки, разделённые волосяной линией, как в макете. Ниже `sm` они
           складываются в стопку, и разделитель тогда лежит НАД правой колонкой. */}

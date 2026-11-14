@@ -242,8 +242,9 @@ test('one settings save combines setup and scenario edits atomically', async () 
   renderPage();
   await openSettings();
   await userEvent.type(await screen.findByLabelText('Тема'), '!');
-  await userEvent.click(await screen.findByRole('button', { name: '+ Чат' }));
-  await userEvent.type(screen.getByLabelText('+ Чат'), '@third{Enter}');
+  await userEvent.click(await screen.findByRole('button', { name: '+ Чаты' }));
+  await userEvent.type(screen.getByLabelText('Список чатов'), '@third');
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 чат' }));
   await userEvent.click(screen.getByText('Сохранить настройки'));
 
   await waitFor(() => {
