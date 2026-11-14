@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 _ALLOWED_TABLES = frozenset(
     {
+        "account_rekeys",
         "accounts",
         "bulk_runs",
         "account_proxies",

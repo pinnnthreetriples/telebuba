@@ -107,8 +107,8 @@ async def test_one_of_our_own_sessions_is_never_closed_whatever_is_asked(
 async def test_the_second_devices_session_is_ours_and_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    desktop = _Client([_auth(1, current=True), _auth(2), _auth(3)])
-    mobile = _Client([_auth(1), _auth(2, current=True), _auth(3)])
+    desktop = _Client([_auth(0, current=True), _auth(2), _auth(3)])
+    mobile = _Client([_auth(0, current=True), _auth(1), _auth(3)])
     clients = {"desktop": desktop, "mobile": mobile}
 
     async def _get_client(_account_id: str, device: str | None = None) -> _Client:

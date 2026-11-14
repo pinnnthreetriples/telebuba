@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 _UNAVAILABLE: SessionAuditGatewayCode = "unavailable"
 # What Telegram's 406 means: the asking session has not been signed in for a day yet.
 _FRESH_SESSION_WINDOW = timedelta(hours=24)
+_ASKING_HASH = "0"
 
 
 def _outcome(
@@ -127,7 +128,10 @@ async def close_sessions(
     calls = 0
     for hash_ in hashes:
         session = by_hash.get(hash_)
-        if session is None:
+        if hash_ == _ASKING_HASH or (session is not None and session.is_current):
+            # ``0`` is whoever asks (Telegram lists the asking session so): never a target.
+            outcomes.append(_outcome(hash_, "not_foreign"))
+        elif session is None:
             outcomes.append(_outcome(hash_, "gone"))
         elif session.is_ours:
             outcomes.append(_outcome(hash_, "not_foreign"))

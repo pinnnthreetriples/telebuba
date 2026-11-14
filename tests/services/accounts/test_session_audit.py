@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.repositories.lifecycle import list_lifecycle_events
 from core.repositories.session_audits import fetch_last_session_audit_event, fetch_session_audit
 from core.telegram_client import SessionAuditGatewayError
 from schemas.accounts import AccountRead
 from schemas.session_audit import AccountSession, AuthorizationList
+from schemas.session_rekey import StoredRekey
 from services.accounts import AccountActionError, AccountNotFoundError
 from services.accounts import session_audit as svc
 
@@ -202,3 +204,50 @@ async def test_a_refused_first_audit_never_breaks_the_check(wire: _Wire) -> None
     await svc.audit_after_first_check(_account())
 
     assert await fetch_session_audit("acc-1") is None
+
+
+def _stuck(old_hash: str, problem: str = "old_key_is_ours") -> StoredRekey:
+    return StoredRekey(
+        account_id="acc-1",
+        old_hash=old_hash,
+        rekeyed_at="2026-11-07T13:34:45+00:00",
+        problem=problem,  # ty: ignore[invalid-argument-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_audit_that_no_longer_lists_the_old_key_clears_the_problem(wire: _Wire) -> None:
+    await save_rekey(_stuck("77"))
+    wire.listing = AuthorizationList(sessions=[_session("1", ours=True)], ttl_days=180)
+
+    await svc.audit_account_sessions("acc-1")
+
+    rekey = await fetch_rekey("acc-1")
+    assert rekey is not None
+    assert (rekey.problem, rekey.closed_at is not None) == (None, True)
+
+
+@pytest.mark.asyncio
+async def test_a_problem_stays_while_its_hash_is_still_listed(wire: _Wire) -> None:
+    await save_rekey(_stuck("77"))
+    wire.listing = AuthorizationList(
+        sessions=[_session("1", ours=True), _session("77", ours=False)], ttl_days=180
+    )
+
+    await svc.audit_account_sessions("acc-1")
+
+    rekey = await fetch_rekey("acc-1")
+    assert rekey is not None
+    assert (rekey.problem, rekey.closed_at) == ("old_key_is_ours", None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("wire")
+async def test_a_zero_hash_problem_is_never_cleared_by_an_audit() -> None:
+    await save_rekey(_stuck("0", "old_key_unknown"))
+
+    await svc.audit_account_sessions("acc-1")
+
+    rekey = await fetch_rekey("acc-1")
+    assert rekey is not None
+    assert (rekey.problem, rekey.closed_at) == ("old_key_unknown", None)

@@ -119,7 +119,7 @@ from core.migration_steps_pool import (
 from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_recipients import _add_recipient_history
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
-from core.migration_steps_rekeys import _add_account_rekeys
+from core.migration_steps_rekeys import _add_account_rekey_problem, _add_account_rekeys
 from core.migration_steps_scheduled_posts import (
     _add_scheduled_posts_downgraded,
     _add_scheduled_posts_tables,
@@ -297,6 +297,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (110, "add_scheduled_posts_downgraded", _add_scheduled_posts_downgraded),
     (111, "add_chat_broadcast_refusals", _add_chat_broadcast_refusals),
     (112, "add_chat_broadcast_pinned", _add_chat_broadcast_pinned),
+    (113, "add_account_rekey_problem", _add_account_rekey_problem),
 )
 
 

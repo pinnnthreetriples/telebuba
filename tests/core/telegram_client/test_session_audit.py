@@ -71,15 +71,13 @@ def _borrow(monkeypatch: pytest.MonkeyPatch, clients: dict[str, object]) -> list
 async def test_one_device_marks_its_own_session_ours_and_the_rest_foreign(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _Client(
-        _reply(_auth(11, current=True), _auth(22, official_app=True, unconfirmed=True))
-    )
+    client = _Client(_reply(_auth(0, current=True), _auth(22, official_app=True, unconfirmed=True)))
     _borrow(monkeypatch, {"desktop": client})
 
     listing = await read_account_sessions("acc-1", ["desktop"])
 
     mine, other = listing.sessions
-    assert (mine.hash, mine.is_current, mine.is_ours) == ("11", True, True)
+    assert (mine.hash, mine.is_current, mine.is_ours) == ("0", True, True)
     assert (other.hash, other.is_current, other.is_ours) == ("22", False, False)
     assert other.official_app is True
     assert other.unconfirmed is True
@@ -90,16 +88,16 @@ async def test_one_device_marks_its_own_session_ours_and_the_rest_foreign(
 
 @pytest.mark.asyncio
 async def test_the_second_devices_own_session_is_ours_too(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Telegram lists every session from either client; only ``current`` differs.
-    desktop = _Client(_reply(_auth(11, current=True), _auth(22), _auth(33)))
-    mobile = _Client(_reply(_auth(11), _auth(22, current=True), _auth(33)))
+    # Telegram lists the asking session as 0 and every other by its real hash.
+    desktop = _Client(_reply(_auth(0, current=True), _auth(22), _auth(33)))
+    mobile = _Client(_reply(_auth(0, current=True), _auth(11), _auth(33)))
     borrowed = _borrow(monkeypatch, {"desktop": desktop, "mobile": mobile})
 
     listing = await read_account_sessions("acc-1", ["desktop", "mobile"])
 
     assert borrowed == ["desktop", "mobile"]
     assert [(s.hash, s.is_current, s.is_ours) for s in listing.sessions] == [
-        ("11", True, True),
+        ("0", True, True),
         ("22", False, True),
         ("33", False, False),
     ]

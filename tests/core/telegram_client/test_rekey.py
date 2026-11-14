@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,6 +22,8 @@ from core.telegram_client._rekey import RekeyGatewayError, rekey_session
 _USER = 4242
 _OLD_HASH = 111
 _NEW_HASH = 222
+# When the imported session was created: Telegram always says, and the re-key needs it.
+_CREATED = datetime(2026, 11, 7, 13, 34, 38, tzinfo=UTC)
 
 
 def _write(path: Path, marker: str) -> None:
@@ -45,15 +48,17 @@ class _Approver:
         self.requests: list[object] = []
         self.order: list[str] = []
         self.failure: Exception | None = None
+        self.created: object = _CREATED
 
     async def __call__(self, request: object) -> object:
         self.requests.append(request)
         if self.failure is not None:
             raise self.failure
         if isinstance(request, GetAuthorizationsRequest):
+            # Telegram lists the asking session as hash 0, current.
             return SimpleNamespace(
                 authorization_ttl_days=180,
-                authorizations=[SimpleNamespace(hash=_OLD_HASH, current=True)],
+                authorizations=[SimpleNamespace(hash=0, current=True, date_created=self.created)],
             )
         if isinstance(request, AcceptLoginTokenRequest):
             self.order.append("accept")
@@ -75,6 +80,15 @@ class _New:
         self.events: list[str] = []
         self.order: list[str] = []
         self.connected = True
+        # What the new session lists once signed in: itself as 0, the imported one by hash.
+        self.listing: list[SimpleNamespace] = [
+            SimpleNamespace(hash=0, current=True, date_created=None),
+            SimpleNamespace(hash=_OLD_HASH, current=False, date_created=_CREATED),
+        ]
+
+    async def __call__(self, request: object) -> object:
+        assert isinstance(request, GetAuthorizationsRequest)
+        return SimpleNamespace(authorization_ttl_days=180, authorizations=self.listing)
 
     def is_connected(self) -> bool:
         return self.connected

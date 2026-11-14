@@ -19,6 +19,8 @@ import { Button, ConfirmModal, Notice } from '@/shared/ui';
 // younger than a day cannot end others), so the card says when the old session closes.
 // Every outcome stays on the card after the dialog closes: a failure says why and that the
 // session is as it was, a success says whether the old session is closed or when it will be.
+// A row Telebuba gave up on (`problem`) says so instead: the old session is still alive and
+// the operator has to close it in the session list.
 export function SessionRekeyControls({
   accountId,
   open,
@@ -80,12 +82,23 @@ export function SessionRekeyControls({
               ? t('accounts.edit.rekeyNever')
               : view.closed_at
                 ? t('accounts.edit.rekeyClosed', { date: when(view.closed_at) })
-                : view.close_after
-                  ? t('accounts.edit.rekeyScheduled', { date: when(view.close_after) })
-                  : t('accounts.edit.rekeyDone', { date: when(view.rekeyed_at) })}
+                : view.problem
+                  ? null
+                  : view.close_after
+                    ? t('accounts.edit.rekeyScheduled', { date: when(view.close_after) })
+                    : t('accounts.edit.rekeyDone', { date: when(view.rekeyed_at) })}
           </span>
         ) : null}
       </div>
+      {view?.problem && !view.closed_at ? (
+        <div className="mt-3">
+          <Notice tone="warning" role="status">
+            {view.problem === 'old_key_is_ours'
+              ? t('accounts.edit.rekeyProblemIsOurs')
+              : t('accounts.edit.rekeyProblemUnknown')}
+          </Notice>
+        </div>
+      ) : null}
       {hasProxy ? null : (
         <p className="mt-2 type-small text-content-subtle">{t('accounts.edit.rekeyNoProxy')}</p>
       )}
@@ -96,7 +109,7 @@ export function SessionRekeyControls({
           </Notice>
         </div>
       ) : null}
-      {completed ? (
+      {completed && !completed.problem ? (
         <div className="mt-3">
           <Notice tone={completed.closed_at ? 'success' : 'warning'} role="status">
             {completed.closed_at || !completed.close_after

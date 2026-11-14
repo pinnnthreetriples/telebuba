@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { expect, test, vi } from 'vitest';
 
-import { accountSessionAuditQueryKey } from '../api/accounts.queries';
+import { accountRekeyQueryKey, accountSessionAuditQueryKey } from '../api/accounts.queries';
 import { isSessionEvent, refreshForSessionEvent } from './sessionEvents';
 
 function clientSpy() {
@@ -42,4 +42,18 @@ test('any other event refreshes nothing', () => {
   expect(invalidate).not.toHaveBeenCalled();
   expect(isSessionEvent({ event: 'session_rekeyed' })).toBe(true);
   expect(isSessionEvent({ event: 'passkey_created' })).toBe(false);
+});
+
+test.each([
+  'session_old_key_pending',
+  'session_old_key_closed',
+  'session_old_key_resolved',
+  'session_old_key_problem',
+])("%s refreshes that account's re-key card", (event) => {
+  const { queryClient, invalidate } = clientSpy();
+
+  refreshForSessionEvent(queryClient, { event, account_id: 'acc-1' });
+
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(accountRekeyQueryKey({ path: { account_id: 'acc-1' } }));
 });

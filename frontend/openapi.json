@@ -26333,6 +26333,21 @@
               }
             ],
             "title": "Close After"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "old_key_unknown",
+                  "old_key_is_ours"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
           }
         },
         "type": "object",

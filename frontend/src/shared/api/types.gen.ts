@@ -705,6 +705,10 @@ export type AccountRekeyView = {
    * Close After
    */
   close_after?: string | null;
+  /**
+   * Problem
+   */
+  problem?: 'old_key_unknown' | 'old_key_is_ours' | null;
 };
 
 /**

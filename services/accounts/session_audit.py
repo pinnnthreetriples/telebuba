@@ -27,7 +27,7 @@ from core.repositories.account_own_authorizations import (
     fetch_own_authorizations,
     prune_own_authorizations,
 )
-from core.repositories.account_rekeys import fetch_rekey
+from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.repositories.session_audits import fetch_session_audit, save_session_audit
 from core.telegram_client import SessionAuditGatewayError, read_account_sessions
 from schemas.session_audit import AccountSessionAudit
@@ -38,6 +38,8 @@ from services.lifecycle_journal import record_lifecycle_event
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.session_audit import AccountSession
+    from schemas.session_rekey import StoredRekey
 
 __all__ = [
     "account_audit_lock",
@@ -86,6 +88,29 @@ async def require_proxied_account(account_id: str) -> AccountRead:
     return account
 
 
+async def _clear_ended_problem(
+    account_id: str, rekey: StoredRekey | None, sessions: list[AccountSession]
+) -> None:
+    """Close a re-key row Telebuba gave up on once its old session is no longer listed.
+
+    The operator ended it by hand (or it expired). Only a real hash can say so: ``0`` names
+    nobody. An empty list is never taken as proof, it may be a failed read.
+    """
+    if (
+        rekey is None
+        or rekey.problem is None
+        or rekey.closed_at is not None
+        or rekey.old_hash == "0"
+        or not sessions
+        or any(session.hash == rekey.old_hash for session in sessions)
+    ):
+        return
+    await save_rekey(
+        rekey.model_copy(update={"problem": None, "closed_at": datetime.now(UTC).isoformat()})
+    )
+    await log_event("INFO", "session_old_key_closed", account_id=account_id)
+
+
 async def refresh_account_audit(
     account: AccountRead, *, killed_count: int = 0
 ) -> AccountSessionAudit:
@@ -114,12 +139,10 @@ async def refresh_account_audit(
         # hash is never reused, but the table would only ever grow.
         await prune_own_authorizations(account_id, [s.hash for s in listing.sessions])
     previous = await fetch_session_audit(account_id)
+    rekey = await fetch_rekey(account_id)
+    await _clear_ended_problem(account_id, rekey, listing.sessions)
     listing = listing.model_copy(
-        update={
-            "sessions": flag_seller_keys(
-                listing.sessions, account.created_at, await fetch_rekey(account_id)
-            )
-        }
+        update={"sessions": flag_seller_keys(listing.sessions, account.created_at, rekey)}
     )
     audit = AccountSessionAudit.of(account_id, datetime.now(UTC).isoformat(), listing)
     await save_session_audit(audit, killed_count=killed_count)
