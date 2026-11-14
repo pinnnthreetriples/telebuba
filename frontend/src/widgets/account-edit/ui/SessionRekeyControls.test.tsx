@@ -72,7 +72,7 @@ test('nothing happens until the operator confirms, and then the account is re-ke
   expect(posts()).toHaveLength(1);
 });
 
-test('an old session Telegram would not end yet says when it closes', async () => {
+test('an old session Telegram would not end yet says it is active and when the next attempt is', async () => {
   serve({
     account_id: 'acc-1',
     rekeyed_at: '2026-11-02T10:00:00+00:00',
@@ -80,7 +80,9 @@ test('an old session Telegram would not end yet says when it closes', async () =
   });
   renderControls();
 
-  expect(await screen.findByText(/Старая сессия закроется после/)).toBeVisible();
+  expect(
+    await screen.findByText(/Старая сессия ещё активна\. Следующая попытка закрыть/),
+  ).toBeVisible();
 });
 
 test('an account without a proxy cannot be re-keyed', async () => {
@@ -174,4 +176,43 @@ test('without a proxy the card says why the button is off', async () => {
   renderControls({ hasProxy: false });
 
   expect(await screen.findByText(/Нужен прокси/)).toBeVisible();
+});
+
+test('a row Telebuba gave up on tells the operator to close the old session by hand', async () => {
+  serve({
+    account_id: 'acc-1',
+    rekeyed_at: '2026-11-02T10:00:00+00:00',
+    problem: 'old_key_unknown',
+  });
+  renderControls();
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Не удалось определить старую сессию — закройте её вручную в списке сессий ниже',
+  );
+  expect(screen.queryByText(/закроется после/)).toBeNull();
+  expect(screen.queryByText(/Следующая попытка/)).toBeNull();
+});
+
+test('an old session found to be our own is explained, not retried', async () => {
+  serve({
+    account_id: 'acc-1',
+    rekeyed_at: '2026-11-02T10:00:00+00:00',
+    problem: 'old_key_is_ours',
+  });
+  renderControls();
+
+  expect(await screen.findByRole('status')).toHaveTextContent('собственной сессией аккаунта');
+});
+
+test('a re-key that ends in a problem is not reported as a success', async () => {
+  serve(
+    { account_id: 'acc-1' },
+    { account_id: 'acc-1', rekeyed_at: '2026-11-02T10:00:00+00:00', problem: 'old_key_is_ours' },
+  );
+  renderControls();
+
+  await confirmRekey();
+
+  expect(await screen.findByRole('status')).toHaveTextContent('собственной сессией аккаунта');
+  expect(screen.queryByText('Ключ заменён, старая сессия закрыта.')).toBeNull();
 });

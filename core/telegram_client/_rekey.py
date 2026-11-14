@@ -19,7 +19,12 @@ Nothing is kept unless everything succeeds, in this order:
 Any failure before 4 copies the imported content back and ends the new authorization, and
 the account is exactly as it was. The old AUTHORIZATION (the seller-known key) is ended by the
 service afterwards, with :func:`core.telegram_client._session_close.close_sessions`: its
-hash is returned here. Every failure is a bounded code, never Telethon prose. The cloud
+hash is returned here. Telegram lists the asking session's own entry with ``hash=0``, so the
+approver cannot name its own key; the new session, which sees the approver by its real hash,
+does: the old hash is the one authorization that appears in the new session's list and was not
+in the approver's (and, when known, was created when the approver's entry says it was).
+Anything but exactly one such entry is a refusal, never ``0``.
+Every failure is a bounded code, never Telethon prose. The cloud
 password is only passed to Telegram, never logged or returned.
 """
 
@@ -29,6 +34,8 @@ import asyncio
 import logging
 import sqlite3
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from anyio import Path as AsyncPath
@@ -44,7 +51,7 @@ from core.telegram_client._client import (
 )
 from core.telegram_client._pool import TelegramClientPoolError, get_client, removing_client
 from core.telegram_client._profile import _DEAD_SESSION_ERRORS
-from core.telegram_client._session_audit import _listing, _own_hash
+from core.telegram_client._session_audit import _listing
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.session_rekey import RekeyRefusalCode, RekeyResult
@@ -71,6 +78,7 @@ _FLOOD: RekeyRefusalCode = "rekey_flood_wait"
 _TIMEOUT: RekeyRefusalCode = "rekey_timeout"
 _UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
 _DEAD: RekeyRefusalCode = "rekey_session_dead"
+_OLD_UNKNOWN: RekeyRefusalCode = "rekey_old_key_unknown"
 # The suffix of the file the imported session is set aside as while the swap is verified.
 _ASIDE_SUFFIX = ".rekey-aside"
 # How long a write to the session file waits for another connection that holds it.
@@ -205,14 +213,64 @@ async def _require_same_user(client: TelegramClient, user_id: int, code: str) ->
         raise _refusal(code)
 
 
-async def _approver_identity(approver: TelegramClient) -> tuple[str, int]:
-    """The imported session's own authorization hash and Telegram user id."""
-    old_hash = await _current_hash(approver)
+@dataclass(frozen=True)
+class _Approver:
+    """What the imported session knew before the new login: its user and what it lists."""
+
+    user_id: int
+    hashes: frozenset[int]
+    created: datetime | None
+
+
+def _real_hashes(authorizations: Sequence[object]) -> dict[int, object]:
+    """The other sessions' entries by real hash.
+
+    ``0`` is "whoever asks", never a key of anything, and the asking session's own entry
+    (``current``) is not "another session" whatever hash it carries.
+    """
+    found: dict[int, object] = {}
+    for authorization in authorizations:
+        hash_ = getattr(authorization, "hash", None)
+        if isinstance(hash_, int) and hash_ != 0 and not getattr(authorization, "current", None):
+            found[hash_] = authorization
+    return found
+
+
+async def _approver_identity(approver: TelegramClient) -> _Approver:
+    """The imported session's Telegram user id and the authorizations it lists."""
+    authorizations, _ttl = await _listing(approver)
+    current = next((a for a in authorizations if getattr(a, "current", None)), None)
+    created = getattr(current, "date_created", None)
     me = await approver.get_me()
     user_id = getattr(me, "id", None)
     if not isinstance(user_id, int):
         raise _refusal(_APPROVER)
-    return old_hash, user_id
+    return _Approver(
+        user_id=user_id,
+        hashes=frozenset(_real_hashes(authorizations)),
+        created=created if isinstance(created, datetime) else None,
+    )
+
+
+async def _old_hash(new: TelegramClient, before: _Approver, new_hash: str) -> str:
+    """The imported authorization's real hash, seen from the new session; see the module doc.
+
+    Refused when the approver's own creation date is not known: without it a stranger who
+    logged in between the two reads could not be told from the imported session.
+    """
+    authorizations, _ttl = await _listing(new)
+    fresh = {
+        h: a
+        for h, a in _real_hashes(authorizations).items()
+        if h not in before.hashes and h != int(new_hash)
+    }
+    if len(fresh) != 1:
+        raise _refusal(_OLD_UNKNOWN, f"Candidates{len(fresh)}")
+    ((hash_, entry),) = fresh.items()
+    created = getattr(entry, "date_created", None)
+    if before.created is None or created != before.created:
+        raise _refusal(_OLD_UNKNOWN, "CreatedMismatch")
+    return str(hash_)
 
 
 async def _require_free(session_path: str) -> None:
@@ -287,11 +345,6 @@ async def _swap(
             raise _refusal(_SWAP, type(exc).__name__) from exc
 
 
-async def _current_hash(approver: TelegramClient) -> str:
-    authorizations, _ttl = await _listing(approver)
-    return str(_own_hash(authorizations))
-
-
 async def rekey_session(
     account_id: str, device: DeviceType, scratch_name: str, passwords: Sequence[str]
 ) -> RekeyResult:
@@ -304,7 +357,8 @@ async def rekey_session(
     async with _auth_lock(account_id):
         try:
             approver = await get_client(account_id, device)
-            old_hash, user_id = await _approver_identity(approver)
+            before = await _approver_identity(approver)
+            user_id = before.user_id
             scratch = await prepare_telegram_client_profile(
                 TelegramClientRequest(
                     account_id=account_id,
@@ -321,6 +375,7 @@ async def rekey_session(
                 new_hash = await _sign_in_by_token(new, approver, account_id, passwords)
                 signed_in = True
                 await _require_same_user(new, user_id, _MISMATCH)
+                old_hash = await _old_hash(new, before, new_hash)
                 await new.disconnect()
                 final = await prepare_telegram_client_profile(
                     TelegramClientRequest(

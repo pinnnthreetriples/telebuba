@@ -3,7 +3,11 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import type { LogEntry } from '@/shared/api';
 import { useLogEventStream } from '@/shared/lib';
 
-import { accountSessionAuditQueryKey, invalidateAccountViews } from '../api/accounts.queries';
+import {
+  accountRekeyQueryKey,
+  accountSessionAuditQueryKey,
+  invalidateAccountViews,
+} from '../api/accounts.queries';
 
 // The events that change what the accounts list and the Sessions card show: an audit that
 // found or read the sessions (the background watch runs them without the operator), a close,
@@ -15,6 +19,9 @@ const SESSION_EVENTS: ReadonlySet<string> = new Set([
   'session_close_completed',
   'session_rekeyed',
   'session_old_key_closed',
+  'session_old_key_pending',
+  'session_old_key_resolved',
+  'session_old_key_problem',
 ]);
 
 export function isSessionEvent(entry: Pick<LogEntry, 'event'>): boolean {
@@ -31,6 +38,10 @@ export function refreshForSessionEvent(
   if (entry.account_id) {
     void queryClient.invalidateQueries({
       queryKey: accountSessionAuditQueryKey({ path: { account_id: entry.account_id } }),
+    });
+    // The card's "old session closes" line follows the re-key row, not the session list.
+    void queryClient.invalidateQueries({
+      queryKey: accountRekeyQueryKey({ path: { account_id: entry.account_id } }),
     });
   }
 }

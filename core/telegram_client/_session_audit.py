@@ -88,30 +88,43 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _own_hash(authorizations: Sequence[object]) -> int:
-    """The hash of the entry the asking client is — the one Telegram marks ``current``."""
+def _require_current(authorizations: Sequence[object]) -> None:
+    """Refuse a list in which the asking session does not appear as ``current``."""
+    if not any(getattr(authorization, "current", None) for authorization in authorizations):
+        # Our own session missing from its own list: nothing here can be trusted to say who
+        # is foreign, so the audit must not guess.
+        raise _refusal(_FAILED, error_type="OwnSessionNotListed")
+
+
+def _others(authorizations: Sequence[object]) -> frozenset[int]:
+    """The real hashes of the entries that are not the asking session.
+
+    Telegram lists the asking session as ``hash=0``, ``current=True`` and everyone else by a
+    stable hash, the same from every viewer. ``0`` is "whoever asks", never a key.
+    """
+    found: set[int] = set()
     for authorization in authorizations:
-        if getattr(authorization, "current", None):
-            hash_ = getattr(authorization, "hash", None)
-            if isinstance(hash_, int):
-                return hash_
-    # Our own session missing from its own list: nothing here can be trusted to say who
-    # is foreign, so the audit must not guess.
-    raise _refusal(_FAILED, error_type="OwnSessionNotListed")
+        hash_ = getattr(authorization, "hash", None)
+        if isinstance(hash_, int) and hash_ != 0 and not getattr(authorization, "current", None):
+            found.add(hash_)
+    return frozenset(found)
 
 
 def _session(
-    authorization: object, *, current: int, ours: frozenset[int], own: Mapping[str, str]
+    authorization: object, *, ours: frozenset[int], own: Mapping[str, str]
 ) -> AccountSession:
     hash_ = getattr(authorization, "hash", None)
     if not isinstance(hash_, int):
         raise _refusal(_FAILED, error_type="HashMissing")
-    # A recorded own authorization (Telebuba's web login) is ours too, with its kind.
-    kind = own.get(str(hash_)) if hash_ not in ours else None
+    current = bool(getattr(authorization, "current", None))
+    # The asking session is ours; ``0`` itself never matches another entry. A recorded own
+    # authorization (Telebuba's web login) is ours too, with its kind.
+    is_own_device = current or (hash_ != 0 and hash_ in ours)
+    kind = own.get(str(hash_)) if not is_own_device and hash_ != 0 else None
     return AccountSession(
         hash=str(hash_),
-        is_current=hash_ == current,
-        is_ours=hash_ in ours or kind is not None,
+        is_current=current,
+        is_ours=is_own_device or kind is not None,
         kind=cast("Literal['web'] | None", kind),
         official_app=bool(getattr(authorization, "official_app", None)),
         device_model=str(getattr(authorization, "device_model", "") or ""),
@@ -140,14 +153,21 @@ async def _read(
     async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
         primary, *others = devices
         authorizations, ttl = await _listing(await get_client(account_id, primary))
-        current = _own_hash(authorizations)
-        ours = {current}
+        _require_current(authorizations)
+        seen = _others(authorizations)
+        ours: set[int] = set()
         for device in others:
             other, _ttl = await _listing(await get_client(account_id, device))
-            ours.add(_own_hash(other))
+            _require_current(other)
+            # What this device is to the primary: the one entry the primary lists that this
+            # device does not list besides itself. Anything else cannot be told apart.
+            mine = seen - _others(other)
+            if len(mine) != 1:
+                raise _refusal(_FAILED, error_type="OtherDeviceNotIdentified")
+            ours |= mine
     frozen_ours = frozenset(ours)
     return AuthorizationList(
-        sessions=[_session(a, current=current, ours=frozen_ours, own=own) for a in authorizations],
+        sessions=[_session(a, ours=frozen_ours, own=own) for a in authorizations],
         ttl_days=ttl,
     )
 

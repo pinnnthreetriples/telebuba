@@ -24,6 +24,8 @@ RekeyRefusalCode = Literal[
     "rekey_account_busy",
     # An earlier re-key still has its old authorization to end.
     "rekey_pending",
+    # ... and Telebuba gave up on it: the operator must close it in the session list.
+    "rekey_needs_attention",
     # The imported session could not be read, so it cannot approve the new login.
     "rekey_approver_unavailable",
     # Telegram refused the login token (expired, already used, invalid).
@@ -45,9 +47,15 @@ RekeyRefusalCode = Literal[
     "rekey_flood_wait",
     # The imported session is dead (revoked, expired, account deactivated): nothing to replace.
     "rekey_session_dead",
+    # The new login's listing did not name the imported authorization unambiguously: undone.
+    "rekey_old_key_unknown",
     # Anything else Telegram answered; the new session was undone.
     "rekey_failed",
 ]
+
+
+# Terminal states of a re-key whose old authorization Telebuba will not end on its own.
+RekeyProblem = Literal["old_key_unknown", "old_key_is_ours"]
 
 
 class RekeyResult(BaseModel):
@@ -66,6 +74,8 @@ class StoredRekey(BaseModel):
     # Not before this: the next try to end the old authorization. ``None`` once it is ended.
     close_after: str | None = None
     closed_at: str | None = None
+    # Why Telebuba stopped trying to end the old authorization; ``None`` while it still tries.
+    problem: RekeyProblem | None = None
 
 
 class AccountRekeyView(BaseModel):
@@ -76,3 +86,5 @@ class AccountRekeyView(BaseModel):
     # The old authorization is ended (``closed_at``) or waits (``close_after``).
     closed_at: str | None = None
     close_after: str | None = None
+    # Set when Telebuba stopped trying: the operator closes the old session by hand.
+    problem: RekeyProblem | None = None

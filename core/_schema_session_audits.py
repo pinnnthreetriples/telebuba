@@ -51,5 +51,7 @@ _account_rekeys = Table(
     Column("rekeyed_at", String, nullable=False),
     Column("close_after", String, nullable=True),
     Column("closed_at", String, nullable=True),
+    # Set when Telebuba cannot end the old authorization itself: the operator must.
+    Column("problem", String, nullable=True),
     Index("ix_account_rekeys_due", "close_after"),
 )

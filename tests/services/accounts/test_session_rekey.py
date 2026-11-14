@@ -10,6 +10,7 @@ import pytest
 from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.telegram_client import RekeyGatewayError, SessionAuditGatewayError
 from schemas.accounts import AccountRead
+from schemas.session_audit import AccountSession, AuthorizationList
 from schemas.session_close import SessionCloseOutcome
 from schemas.session_rekey import RekeyResult, StoredRekey
 from services import _account_owner
@@ -17,7 +18,7 @@ from services.accounts import AccountActionError, AccountNotFoundError
 from services.accounts import session_rekey as svc
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 def _account(**fields: object) -> AccountRead:
@@ -45,6 +46,15 @@ class _Wire:
         self.close_failure: Exception | None = None
         self.closes: list[list[str]] = []
         self.audits = 0
+        self.listing: list[AccountSession] = []
+        self.listing_failure: Exception | None = None
+
+    async def read_sessions(
+        self, _account_id: str, _devices: list[str], _own: dict[str, str] | None = None
+    ) -> AuthorizationList:
+        if self.listing_failure is not None:
+            raise self.listing_failure
+        return AuthorizationList(sessions=self.listing, ttl_days=180)
 
 
 @pytest.fixture
@@ -72,7 +82,11 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
         return RekeyResult(old_hash="111", new_hash="222")
 
     async def _close(
-        _account_id: str, _devices: list[str], hashes: list[str], _pauses: list[float]
+        _account_id: str,
+        _devices: list[str],
+        hashes: list[str],
+        _pauses: list[float],
+        _own: dict[str, str] | None = None,
     ) -> list[SessionCloseOutcome]:
         state.closes.append(list(hashes))
         if state.close_failure is not None:
@@ -87,6 +101,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     monkeypatch.setattr(svc, "twofa_password_candidates", _password)
     monkeypatch.setattr(svc, "rekey_session", _rekey)
     monkeypatch.setattr(svc, "close_sessions", _close)
+    monkeypatch.setattr(svc, "read_account_sessions", state.read_sessions)
     monkeypatch.setattr(svc, "refresh_account_audit", _audit)
     yield state
     # A claim a test made must not outlive it: the registry is process-wide.
@@ -281,3 +296,257 @@ async def test_a_deleted_account_is_skipped_by_the_background_pass(wire: _Wire) 
 
     assert await svc.close_due_old_keys() == 0
     assert wire.closes == []
+
+
+def _session(
+    hash_: str,
+    *,
+    created: str,
+    active: str,
+    current: bool = False,
+    ours: bool = False,
+) -> AccountSession:
+    return AccountSession(
+        hash=hash_,
+        is_current=current,
+        is_ours=ours or current,
+        official_app=False,
+        device_model="Model",
+        platform="Windows",
+        system_version="10",
+        app_name="Telegram Desktop",
+        ip="192.0.2.10",
+        country="Nowhere",
+        date_created=created,
+        date_active=active,
+    )
+
+
+def _legacy(account_id: str = "acc-1", *, rekeyed_at: str) -> StoredRekey:
+    """A row the bug wrote: the asking session's own ``0`` as the old hash."""
+    return StoredRekey(
+        account_id=account_id,
+        old_hash="0",
+        rekeyed_at=rekeyed_at,
+        close_after=(datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+    )
+
+
+def _account_a() -> list[AccountSession]:
+    """Production account A (hash suffixes only): rekeyed 2026-11-07T13:34:45Z."""
+    return [
+        _session(
+            "0",
+            created="2026-11-07T13:34:38+00:00",
+            active="2026-11-14T08:00:00+00:00",
+            current=True,
+        ),
+        _session("6204", created="2026-11-02T10:00:00+00:00", active="2026-11-13T11:52:00+00:00"),
+        _session("3706", created="2026-10-31T09:00:00+00:00", active="2026-11-07T11:00:00+00:00"),
+        _session("4487", created="2026-11-02T18:28:00+00:00", active="2026-11-02T18:28:00+00:00"),
+        _session("4807", created="2026-11-02T18:30:00+00:00", active="2026-11-02T18:30:00+00:00"),
+        _session("5989", created="2026-11-02T18:32:00+00:00", active="2026-11-02T18:32:00+00:00"),
+    ]
+
+
+def _account_b() -> list[AccountSession]:
+    """Production account B: rekeyed 2026-11-08T11:52:53Z."""
+    return [
+        _session(
+            "0",
+            created="2026-11-08T11:52:46+00:00",
+            active="2026-11-14T08:00:00+00:00",
+            current=True,
+        ),
+        _session("8435", created="2026-11-04T10:00:00+00:00", active="2026-11-13T10:00:00+00:00"),
+        _session("8804", created="2026-09-02T10:00:00+00:00", active="2026-11-08T10:51:00+00:00"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("sessions", "rekeyed_at", "expected"),
+    [
+        (_account_a, "2026-11-07T13:34:45+00:00", "3706"),
+        (_account_b, "2026-11-08T11:52:53+00:00", "8804"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_row_stored_with_zero_is_resolved_to_the_one_session_the_approver_used(
+    wire: _Wire, sessions: Callable[[], list[AccountSession]], rekeyed_at: str, expected: str
+) -> None:
+    wire.listing = sessions()
+    wire.close_outcome = SessionCloseOutcome(hash=expected, status="closed")
+    await save_rekey(_legacy(rekeyed_at=rekeyed_at))
+
+    ended = await svc.close_due_old_keys()
+
+    assert ended == 1
+    assert wire.closes == [[expected]]  # never "0": resolved first, then closed in the same call
+    stored = await fetch_rekey("acc-1")
+    assert stored is not None
+    assert (stored.old_hash, stored.problem) == (expected, None)
+    assert stored.closed_at is not None
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        [],  # nothing was active around the re-key
+        [("9999", "2026-10-01T00:00:00+00:00", "2026-11-07T12:00:00+00:00")],  # a second one
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_zero_row_without_exactly_one_candidate_stops_for_the_operator(
+    wire: _Wire, extra: list[tuple[str, str, str]]
+) -> None:
+    wire.listing = [
+        _session(
+            "0",
+            created="2026-11-07T13:34:38+00:00",
+            active="2026-11-14T08:00:00+00:00",
+            current=True,
+        ),
+        _session("6204", created="2026-11-02T10:00:00+00:00", active="2026-11-13T11:52:00+00:00"),
+        *(_session(h, created=c, active=a) for h, c, a in extra),
+    ]
+    if extra:
+        wire.listing.append(
+            _session(
+                "3706", created="2026-10-31T09:00:00+00:00", active="2026-11-07T11:00:00+00:00"
+            )
+        )
+    await save_rekey(_legacy(rekeyed_at="2026-11-07T13:34:45+00:00"))
+
+    ended = await svc.close_due_old_keys()
+
+    assert ended == 0
+    assert wire.closes == []
+    stored = await fetch_rekey("acc-1")
+    assert stored is not None
+    assert (stored.problem, stored.close_after, stored.closed_at) == ("old_key_unknown", None, None)
+    # Terminal: the background pass no longer picks it up. The old key was never identifiable,
+    # so a new re-key is allowed and replaces the row (the operator closes it by hand).
+    assert await svc.close_due_old_keys() == 0
+    view = await svc.rekey_account_session("acc-1")
+    assert view.problem is None
+    assert len(wire.rekeys) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_zero_row_whose_listing_cannot_be_read_is_retried_after_the_flood_wait(
+    wire: _Wire,
+) -> None:
+    wire.listing_failure = SessionAuditGatewayError("flood_wait", retry_after_seconds=7200)
+    await save_rekey(_legacy(rekeyed_at="2026-11-07T13:34:45+00:00"))
+
+    await svc.close_due_old_keys()
+
+    stored = await fetch_rekey("acc-1")
+    assert stored is not None
+    assert (stored.old_hash, stored.problem) == ("0", None)
+    due = datetime.fromisoformat(stored.close_after or "") - datetime.now(UTC)
+    assert timedelta(seconds=7200) < due < timedelta(seconds=7200 + 120)
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_before_the_close_is_honoured_not_the_default_hour(
+    wire: _Wire,
+) -> None:
+    wire.close_failure = SessionAuditGatewayError("flood_wait", retry_after_seconds=10_000)
+
+    view = await svc.rekey_account_session("acc-1")
+
+    due = datetime.fromisoformat(view.close_after or "") - datetime.now(UTC)
+    assert timedelta(seconds=10_000) < due < timedelta(seconds=10_000 + 120)
+
+
+@pytest.mark.asyncio
+async def test_a_real_hash_that_turns_out_to_be_ours_is_a_terminal_problem_not_a_retry(
+    wire: _Wire,
+) -> None:
+    wire.close_outcome = SessionCloseOutcome(hash="111", status="not_foreign")
+
+    view = await svc.rekey_account_session("acc-1")
+
+    assert (view.problem, view.close_after, view.closed_at) == ("old_key_is_ours", None, None)
+    assert wire.closes == [["111"]]
+    assert await svc.close_due_old_keys() == 0
+    assert wire.closes == [["111"]]  # never tried again
+
+
+@pytest.mark.asyncio
+async def test_a_pending_close_logs_why(wire: _Wire, monkeypatch: pytest.MonkeyPatch) -> None:
+    logged: list[tuple[str, dict[str, object]]] = []
+
+    async def _log(
+        _level: str,
+        event: str,
+        *,
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        assert account_id == "acc-1"
+        logged.append((event, extra or {}))
+
+    monkeypatch.setattr(svc, "log_event", _log)
+    wire.close_outcome = SessionCloseOutcome(hash="111", status="failed", error_type="RPCError")
+
+    await svc.rekey_account_session("acc-1")
+
+    assert ("session_old_key_pending", {"status": "failed", "error_type": "RPCError"}) in logged
+
+
+@pytest.mark.asyncio
+async def test_the_view_carries_the_problem(wire: _Wire) -> None:
+    del wire
+    await save_rekey(
+        StoredRekey(
+            account_id="acc-1",
+            old_hash="5",
+            rekeyed_at="2026-11-01T00:00:00+00:00",
+            problem="old_key_unknown",
+        )
+    )
+
+    view = await svc.read_account_rekey("acc-1")
+
+    assert view.problem == "old_key_unknown"
+
+
+@pytest.mark.asyncio
+async def test_an_old_session_found_to_be_ours_blocks_a_new_rekey(wire: _Wire) -> None:
+    wire.close_outcome = SessionCloseOutcome(hash="111", status="not_foreign")
+    await svc.rekey_account_session("acc-1")
+    wire.rekeys.clear()
+
+    with pytest.raises(AccountActionError) as refused:
+        await svc.rekey_account_session("acc-1")
+
+    assert refused.value.code == "rekey_needs_attention"
+    assert wire.rekeys == []
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_close_logs_one_pending_event_with_everything(
+    wire: _Wire, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logged: list[tuple[str, dict[str, object]]] = []
+
+    async def _log(
+        _level: str,
+        event: str,
+        *,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        logged.append((event, extra or {}))
+
+    monkeypatch.setattr(svc, "log_event", _log)
+    wire.close_failure = SessionAuditGatewayError("unavailable", error_type="TimeoutError")
+
+    await svc.rekey_account_session("acc-1")
+
+    pending = [extra for event, extra in logged if event == "session_old_key_pending"]
+    assert pending == [
+        {"status": "unreachable", "code": "unavailable", "error_type": "TimeoutError"}
+    ]
