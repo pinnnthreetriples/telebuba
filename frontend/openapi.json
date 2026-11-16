@@ -8793,6 +8793,76 @@
         }
       }
     },
+    "/api/v1/session-guard": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Session Guard Status",
+        "description": "The session guard's heartbeat: running, its last activity, and whether it stalled.",
+        "operationId": "getSessionGuardStatus",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGuardStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/registered-at": {
       "put": {
         "tags": [
@@ -37869,6 +37939,51 @@
         ],
         "title": "SessionCloseResult",
         "description": "A run's outcomes, and the account's sessions read again afterwards.\n\n``audit`` is ``None`` only when the re-read itself failed: the closes already happened,\nso they are reported all the same."
+      },
+      "SessionGuardStatus": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "stalled": {
+            "type": "boolean",
+            "title": "Stalled",
+            "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "stopped",
+                  "silent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "running"
+        ],
+        "title": "SessionGuardStatus",
+        "description": "Whether the guard runs, when it last did something, and whether that is too long ago."
       },
       "SetAccountChannelRequest": {
         "properties": {

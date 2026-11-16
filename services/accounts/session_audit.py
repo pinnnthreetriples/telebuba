@@ -145,13 +145,9 @@ async def refresh_account_audit(
         update={"sessions": flag_seller_keys(listing.sessions, account.created_at, rekey)}
     )
     audit = AccountSessionAudit.of(account_id, datetime.now(UTC).isoformat(), listing)
-    await save_session_audit(audit, killed_count=killed_count)
-    await log_event(
-        "INFO",
-        "session_audit_completed",
-        account_id=account_id,
-        extra={"total": audit.total, "foreign": audit.foreign_count},
-    )
+    # The news first, the snapshot after: the next audit compares against the saved snapshot,
+    # so a save that landed before an interrupted alert would have lost the alert for good.
+    # In this order an interruption at worst repeats it.
     new_foreign = _foreign_hashes(audit) - _foreign_hashes(previous)
     if new_foreign:
         extra: dict[str, object] = {
@@ -163,6 +159,13 @@ async def refresh_account_audit(
             "WARNING", "session_audit_foreign_found", account_id=account_id, extra=extra
         )
         await record_lifecycle_event(account_id, "foreign_sessions_found", extra)
+    await save_session_audit(audit, killed_count=killed_count)
+    await log_event(
+        "INFO",
+        "session_audit_completed",
+        account_id=account_id,
+        extra={"total": audit.total, "foreign": audit.foreign_count},
+    )
     return audit
 
 

@@ -43,6 +43,13 @@ class SessionAuditSettings(BaseSettings):
     old_key_spam_clean_days: float = Field(default=30.0, gt=0.0)
     # The guard reminds about an old authorization still open at most this often per account.
     old_key_reminder_hours: float = Field(default=24.0, gt=0.0)
+    # One account's old-key close (read, close, read again) may take this long in the
+    # background pass before it is given up for now and tried again later, so one stuck
+    # account cannot hold every other one behind it.
+    old_key_account_timeout_seconds: float = Field(default=300.0, gt=0.0)
+    # An action or audit that finds an account's key dead starts a session check for it, at
+    # most once per this many seconds per account.
+    death_check_cooldown_seconds: float = Field(default=600.0, gt=0.0)
     # The session guard's background task makes a pass this often: it ends old keys that are
     # due and re-audits at most ONE account (below).
     guard_interval_seconds: float = Field(default=300.0, gt=0.0)

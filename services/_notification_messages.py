@@ -37,6 +37,11 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     "session_watch_passkey_missing": "passkey_missing",
     # The shared @SpamBot budget ran past its daily cap (``services.spam_intel``).
     "spam_intel_budget_exceeded": "spam_budget",
+    # A session check found the account's key gone (journalled once per death).
+    "account_session_dead": "session_dead",
+    # The session guard failed a step or stopped making passes.
+    "session_guard_failed": "session_guard",
+    "session_guard_stalled": "session_guard",
 }
 
 _PREFIX = "Telebuba · "
@@ -61,6 +66,14 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "spam_budget": (
         "Опросы @SpamBot: превышен суточный лимит по парку, проверки откладываются. "
         "Откройте журнал событий (spam_intel_*): частые опросы выглядят как автоматизация."
+    ),
+    "session_dead": (
+        "{label}: сессия аккаунта больше не работает. "
+        "Войдите заново: ключом доступа (passkey) или кодом входа."
+    ),
+    "session_guard": (
+        "Сторож сессий дал сбой или перестал делать проходы — "
+        "проверка сессий и закрытие старых ключей могут не работать."
     ),
 }
 TEST_MESSAGE = f"{_PREFIX}тестовое уведомление: бот настроен и пишет в этот чат."

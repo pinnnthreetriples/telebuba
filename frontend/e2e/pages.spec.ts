@@ -39,6 +39,7 @@ const ROUTES: [RegExp, unknown][] = [
   [/\/warming\/board/, fx.warmingBoard],
   [/\/warming\/settings/, fx.warmingSettings],
   [/\/notifications\/settings/, fx.notificationSettings],
+  [/\/session-guard$/, fx.sessionGuard],
   [/\/warming\/dialogues/, fx.warmingDialogues],
   [/\/warming\/survival/, fx.warmingSurvival],
   [/\/warming\/tuning/, fx.warmingTuning],

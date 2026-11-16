@@ -119,6 +119,7 @@ import {
   getPhoneTelephonyStatus,
   getQrLogin,
   getReadiness,
+  getSessionGuardStatus,
   getUserParserRun,
   getWarmingBoard,
   getWarmingSettings,
@@ -597,6 +598,9 @@ import type {
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
+  GetSessionGuardStatusData,
+  GetSessionGuardStatusError,
+  GetSessionGuardStatusResponse,
   GetUserParserRunData,
   GetUserParserRunError,
   GetUserParserRunResponse,
@@ -3454,6 +3458,33 @@ export const closeAccountOldKeyMutation = (
   };
   return mutationOptions;
 };
+
+export const getSessionGuardStatusQueryKey = (options?: Options<GetSessionGuardStatusData>) =>
+  createQueryKey('getSessionGuardStatus', options);
+
+/**
+ * Get Session Guard Status
+ *
+ * The session guard's heartbeat: running, its last activity, and whether it stalled.
+ */
+export const getSessionGuardStatusOptions = (options?: Options<GetSessionGuardStatusData>) =>
+  queryOptions<
+    GetSessionGuardStatusResponse,
+    GetSessionGuardStatusError,
+    GetSessionGuardStatusResponse,
+    ReturnType<typeof getSessionGuardStatusQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getSessionGuardStatus({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getSessionGuardStatusQueryKey(options),
+  });
 
 /**
  * Set Account Registered At

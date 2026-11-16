@@ -251,3 +251,22 @@ async def test_a_zero_hash_problem_is_never_cleared_by_an_audit() -> None:
     rekey = await fetch_rekey("acc-1")
     assert rekey is not None
     assert (rekey.problem, rekey.closed_at) == ("old_key_unknown", None)
+
+
+@pytest.mark.asyncio
+async def test_an_interrupted_save_never_loses_the_new_foreign_session_alert(
+    wire: _Wire, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The next audit compares with the SAVED snapshot: the alert must be out before it lands.
+    wire.listing = AuthorizationList(sessions=[_session("1", ours=True), _session("2", ours=False)])
+
+    async def _interrupted(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError
+
+    monkeypatch.setattr(svc, "save_session_audit", _interrupted)
+
+    with pytest.raises(RuntimeError):
+        await svc.audit_account_sessions("acc-1")
+
+    assert await _journal() == [{"total": 2, "foreign": 1, "new": 1}]
+    assert await fetch_session_audit("acc-1") is None

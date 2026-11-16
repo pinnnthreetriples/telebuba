@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from anyio import to_thread
-from telethon import TelegramClient
 
 from core.config import settings
 from core.db import fetch_account, fetch_account_proxy_settings, fetch_device_fingerprint
@@ -14,6 +13,7 @@ from core.device_fingerprint import get_or_create_device_fingerprint
 from core.device_fingerprint_android import ANDROID_LANG_PACK
 from core.logging import register_log_secrets
 from core.secure_paths import make_private_dir
+from core.telegram_client._guarded_client import GuardedTelegramClient
 from schemas.accounts import FORBIDDEN_SESSION_NAME_PARTS
 from schemas.device_fingerprint import (
     TelegramClientProfile,
@@ -23,6 +23,8 @@ from schemas.device_fingerprint import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from telethon import TelegramClient
 
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint, DeviceType
@@ -242,7 +244,8 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     # Passed only when set: an explicit ``proxy=None`` is not what a proxy-less
     # client was ever built with.
     proxy_option: dict[str, Any] = {"proxy": proxy} if proxy is not None else {}
-    client = TelegramClient(
+    # Guarded: a request never ends in Telethon's own cancellation (see the module).
+    client = GuardedTelegramClient(
         profile.session_path,
         settings.telegram.mobile_api_id if mobile else settings.telegram.api_id,
         settings.telegram.mobile_api_hash if mobile else settings.telegram.api_hash,

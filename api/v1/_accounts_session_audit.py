@@ -16,8 +16,9 @@ from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from schemas.session_audit import AccountSessionAudit
 from schemas.session_close import SessionCloseRequest, SessionCloseResult
+from schemas.session_guard import SessionGuardStatus
 from schemas.session_rekey import AccountRekeyView
-from services import accounts
+from services import accounts, session_guard
 
 # No tags: mounted onto the accounts router (already tagged "accounts").
 session_audit_router = APIRouter()
@@ -113,3 +114,13 @@ async def close_account_old_key(account_id: str) -> AccountRekeyView:
     """
     with service_errors_to_http():
         return await accounts.close_account_old_key(account_id)
+
+
+@session_audit_router.get(
+    "/session-guard",
+    response_model=SessionGuardStatus,
+    operation_id="getSessionGuardStatus",
+)
+async def get_session_guard_status() -> SessionGuardStatus:
+    """The session guard's heartbeat: running, its last activity, and whether it stalled."""
+    return await session_guard.read_session_guard_status()
