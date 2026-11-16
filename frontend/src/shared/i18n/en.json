@@ -384,9 +384,9 @@
       "sessionsCloseBody": "These sessions are signed out of Telegram, one at a time with pauses, so it can take a minute. Our own sessions are not touched. A session that belongs to this account's phone or container app would be signed out too.",
       "sessionsClosed": "Closed: {{count}}",
       "rekey": "Re-key the session",
-      "rekeyHint": "The imported session shares its key with whoever kept a copy. Re-keying signs the account in again as a session of its own and ends the imported one. Never automatic.",
+      "rekeyHint": "The imported session shares its key with whoever kept a copy. Re-keying signs the account in again as a session of its own. Telebuba does not end the old session itself: you do it below, once the account is ready. Never automatic.",
       "rekeyTitle": "Re-key this session?",
-      "rekeyBody": "The account is signed in again from this PC, through its proxy and with the same device, as a new session; the imported session file is replaced and its authorization is ended. If Telegram will not end it yet (a new session cannot end others for a day) it is ended later, automatically.",
+      "rekeyBody": "The account signs in again from this PC, through its own proxy and with the same device, as a new session; the imported session's file is replaced. The old session stays open until you close it here.",
       "rekeyDone": "Re-keyed {{date}}",
       "rekeyClosed": "The old session is closed {{date}}",
       "rekeyScheduled": "The old session is still active. Next attempt to close it: {{date}}",
@@ -407,6 +407,42 @@
         "flood_wait": "Telegram asked to wait {{s}} s: the rest was not closed.",
         "failed": "Telegram refused: the rest was not closed.",
         "skipped": "not tried: an earlier session stopped the run."
+      },
+      "rekeyBodyAuto": "The account signs in again from this PC, through its own proxy and with the same device, as a new session; the imported session's file is replaced and its authorization is ended. If Telegram does not allow ending it yet (a new session cannot end others for a day), that happens later, automatically.",
+      "rekeySucceededManual": "Re-keyed. The old session is still open: close it once the items below are met.",
+      "rekeyOldOpen": "The old session is still open",
+      "rekeyOldRetryAfter": "Telegram does not allow closing the old session yet. Try after {{date}}",
+      "rekeyProblemIncomplete": "The re-key did not finish: the new session could not be put in place and the old one could not be put back. No session was ended, and a copy of the old file is kept next to it (.rekey-aside). Check the account and do not re-key again until this is sorted out.",
+      "oldKeyHint": "Closing the old session is safer once every item is met. If our key stops working after the close, only a login code can bring the account back.",
+      "oldKeyChecklist": "Ready to close the old session",
+      "oldKeyCheck": {
+        "spam_clean": "SpamBot: clean, no limits in the last month",
+        "session_age": "The new session is at least a week old",
+        "fallback_session": "A second device of ours is signed in to receive a login code",
+        "twofa_stored": "The 2FA password is stored",
+        "passkey_stored": "A passkey is stored"
+      },
+      "closeOldKey": "Close the old session",
+      "closeOldKeyTitle": "Close the old session?",
+      "closeOldKeyBody": "The imported (old) session will be ended in Telegram. This cannot be undone.",
+      "closeOldKeyWarning": "Not every item is met. An account limited by SpamBot has already lost its key a second after such a close.",
+      "closeOldKeyFailed": "The old session was not closed. {{reason}}",
+      "endSession": {
+        "logoutTitle": "Log out of the account?",
+        "resetTitle": "Reset the session?",
+        "logoutBody": "These sessions of the account will be ended in Telegram:",
+        "resetBody": "These sessions of the account will be ended in Telegram and their files deleted:",
+        "primary": "{{device}}: the main session",
+        "second": "{{device}}: the second device",
+        "device": {
+          "desktop": "PC",
+          "mobile": "Phone"
+        },
+        "after": "After this, only a login code can bring the account back. If Telegram does not confirm the logout, nothing changes.",
+        "typePrompt": "The account is active right now. To confirm, type {{word}}",
+        "word": "END",
+        "logoutConfirm": "Log out",
+        "resetConfirm": "Reset"
       }
     },
     "actions": {
@@ -870,7 +906,7 @@
       "privacyHint": "Only ticked rows are applied.",
       "sessionsHint": "For each account the sessions that are not ours at this moment are signed out of Telegram, one at a time with pauses. This cannot be undone. A session that belongs to an account's phone or container app is signed out too.",
       "sessionsConfirm": "Close the foreign sessions of these accounts",
-      "rekeyHint": "Each account is signed in again as a session of its own and its imported session is ended, one account at a time. This cannot be undone; an account whose imported session is too new to end others waits and is finished later.",
+      "rekeyHint": "Each account is signed in again as a session of its own, one account at a time. This cannot be undone. The old sessions are closed as configured: by default by hand, from each account's card.",
       "rekeyConfirm": "Re-key the sessions of these accounts",
       "noteSessions_one": "{{count}} account",
       "noteSessions_other": "{{count}} accounts",
@@ -1660,7 +1696,10 @@
       "rekey_flood_wait": "Telegram asks to wait {{s}} s. Nothing was changed — try again later.",
       "rekey_session_dead": "The imported session no longer works (Telegram ended it or the account is disabled), so there is nothing to replace. Sign the account in again.",
       "rekey_old_key_unknown": "The new login could not be matched to the imported session, so the old key could not be named. The new login was undone and nothing was changed.",
-      "rekey_failed": "Telegram refused the new login — nothing was changed."
+      "rekey_failed": "Telegram refused the new login — nothing was changed.",
+      "rekey_incomplete": "The re-key did not finish: no session was ended and a copy of the old file is kept. The account needs a manual check.",
+      "rekey_old_key_none": "There is no old session to close: it is already closed, or the account was never re-keyed.",
+      "logout_unconfirmed": "Telegram did not confirm the logout. Nothing was changed: the session, its file and the second device are as they were. Check the proxy and try again."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -2219,7 +2258,10 @@
     "session_old_key_resolved": "The old imported session was identified",
     "session_old_key_problem": "The old imported session must be closed by hand",
     "session_guard_failed": "A background session check failed",
-    "session_watch_passkey_missing": "Telegram no longer lists the account's passkey"
+    "session_watch_passkey_missing": "Telegram no longer lists the account's passkey",
+    "account_logout_unconfirmed": "Telegram did not confirm the logout — nothing changed",
+    "session_old_key_open": "The old session after a re-key is still open",
+    "session_old_key_close_requested": "The operator is closing the old session"
   },
   "logEventReason": {
     "freed": "the account became free",

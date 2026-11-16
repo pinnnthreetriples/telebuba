@@ -18,6 +18,7 @@ export function ConfirmModal({
   cancelLabel,
   onClose,
   onConfirm,
+  confirmDisabled = false,
 }: {
   title: string;
   body: ReactNode;
@@ -25,6 +26,8 @@ export function ConfirmModal({
   cancelLabel: string;
   onClose: () => void;
   onConfirm: () => void | Promise<unknown>;
+  // The confirm button stays disabled while this is true (see ConfirmCard).
+  confirmDisabled?: boolean;
 }) {
   const [pending, setPending] = useState(false);
 
@@ -50,6 +53,7 @@ export function ConfirmModal({
         onCancel={onClose}
         onConfirm={confirm}
         pending={pending}
+        confirmDisabled={confirmDisabled}
       />
     </Modal>
   );

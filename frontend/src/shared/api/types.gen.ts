@@ -708,7 +708,15 @@ export type AccountRekeyView = {
   /**
    * Problem
    */
-  problem?: 'old_key_unknown' | 'old_key_is_ours' | null;
+  problem?: 'old_key_unknown' | 'old_key_is_ours' | 'rekey_incomplete' | null;
+  /**
+   * Auto Close
+   */
+  auto_close?: boolean;
+  /**
+   * Checklist
+   */
+  checklist?: Array<OldKeyCheck>;
 };
 
 /**
@@ -5783,6 +5791,22 @@ export type NotificationTestResult = {
    * Sent
    */
   sent?: boolean;
+};
+
+/**
+ * OldKeyCheck
+ *
+ * One item of that checklist: met or not.
+ */
+export type OldKeyCheck = {
+  /**
+   * Name
+   */
+  name: 'spam_clean' | 'session_age' | 'fallback_session' | 'twofa_stored' | 'passkey_stored';
+  /**
+   * Ok
+   */
+  ok: boolean;
 };
 
 /**
@@ -13796,6 +13820,57 @@ export type RekeyAccountSessionResponses = {
 
 export type RekeyAccountSessionResponse =
   RekeyAccountSessionResponses[keyof RekeyAccountSessionResponses];
+
+export type CloseAccountOldKeyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/rekey/close-old-key';
+};
+
+export type CloseAccountOldKeyErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CloseAccountOldKeyError = CloseAccountOldKeyErrors[keyof CloseAccountOldKeyErrors];
+
+export type CloseAccountOldKeyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRekeyView;
+};
+
+export type CloseAccountOldKeyResponse =
+  CloseAccountOldKeyResponses[keyof CloseAccountOldKeyResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

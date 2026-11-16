@@ -96,6 +96,9 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     async def _audit(_account: AccountRead) -> None:
         state.audits += 1
 
+    # These tests are about Telebuba ending the old key itself; the default (the operator
+    # does it) is covered in ``test_session_rekey_manual``.
+    monkeypatch.setattr(svc.settings.session_audit, "auto_close_old_key", True)
     monkeypatch.setattr(svc, "require_account", _require)
     monkeypatch.setattr(svc, "fetch_account", _fetch_account)
     monkeypatch.setattr(svc, "twofa_password_candidates", _password)

@@ -6,12 +6,18 @@ The re-key signs the account in again as a session of its own (``core.telegram_c
 ``rekey_session``: a login token the imported session approves), swaps the session file,
 and then ends the OLD authorization, the key the seller knows.
 
-Ending the old authorization needs a session Telegram trusts to end others, and a session
-younger than 24 hours is refused (``FRESH_RESET_AUTHORISATION_FORBIDDEN``). Whether one made
-by a login token counts as young is not documented, so the close is TRIED right away and a
-refusal is not a failure: the old hash is stored with the time it may be tried again, and a
-background pass (:func:`close_due_old_keys`, run by ``services.session_guard``) finishes the
-job. Until then the card says when it closes.
+Who ends the old authorization is a setting (``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY``), off by
+default: an account's own key once died about a second after Telebuba ended an old official
+session from a six-day-old unofficial one, which is what an account takeover looks like to
+Telegram. Off, the old hash is stored with no time to try, the card shows a checklist
+(``._old_key_checklist``) and the operator closes it (:func:`close_account_old_key`); the
+background pass only reminds. On, the close is TRIED right away and a refusal is not a
+failure: the old hash is stored with the time it may be tried again (a session younger than
+24 hours cannot end others, ``FRESH_RESET_AUTHORISATION_FORBIDDEN``), and the background pass
+(:func:`close_due_old_keys`, run by ``services.session_guard``) finishes the job.
+
+A swap that could not be put back either way (``rekey_incomplete``) ends nothing: its row
+keeps the old hash with that problem, so no new re-key starts over it and a person decides.
 
 One device at a time: the account's primary session. A second sign-in of its own (another
 device type) is its own authorization with its own key and is left alone.
@@ -27,7 +33,12 @@ from core.db import fetch_account
 from core.logging import log_event
 from core.repositories._accounts_twofa import twofa_password_candidates
 from core.repositories.account_own_authorizations import fetch_own_authorizations
-from core.repositories.account_rekeys import fetch_rekey, list_due_rekeys, save_rekey
+from core.repositories.account_rekeys import (
+    fetch_rekey,
+    list_due_rekeys,
+    list_open_rekeys,
+    save_rekey,
+)
 from core.telegram_client import (
     RekeyGatewayError,
     SessionAuditGatewayError,
@@ -37,17 +48,27 @@ from core.telegram_client import (
 )
 from schemas.session_rekey import AccountRekeyView, StoredRekey
 from services._account_owner import is_lent, owner_of
+from services.accounts._old_key_checklist import old_key_checklist
 from services.accounts._result import AccountActionError
 from services.accounts._session_classify import parse_moment
 from services.accounts.lifecycle import require_account
-from services.accounts.session_audit import account_audit_lock, refresh_account_audit
+from services.accounts.session_audit import (
+    account_audit_lock,
+    refresh_account_audit,
+    require_proxied_account,
+)
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.session_audit import AccountSession
     from schemas.session_rekey import RekeyProblem
 
-__all__ = ["close_due_old_keys", "read_account_rekey", "rekey_account_session"]
+__all__ = [
+    "close_account_old_key",
+    "close_due_old_keys",
+    "read_account_rekey",
+    "rekey_account_session",
+]
 
 # Added to a wait Telegram named, so the retry lands after it rather than on its edge.
 _MARGIN = timedelta(seconds=60)
@@ -57,28 +78,44 @@ _ASKING_HASH = "0"
 # approved the login) and no later than a moment after it.
 _ACTIVE_BEFORE = timedelta(hours=24)
 _ACTIVE_AFTER = timedelta(minutes=5)
+_INCOMPLETE = "rekey_incomplete"
+# When the guard last reminded about each account's open old authorization (this process).
+_REMINDED: dict[str, datetime] = {}
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _view(account_id: str, rekey: StoredRekey | None) -> AccountRekeyView:
+def reset_for_tests() -> None:
+    """Forget the in-memory reminder times between tests."""
+    _REMINDED.clear()
+
+
+def _auto_close() -> bool:
+    return settings.session_audit.auto_close_old_key
+
+
+async def _view(account: AccountRead, rekey: StoredRekey | None) -> AccountRekeyView:
+    account_id = account.account_id
     if rekey is None:
-        return AccountRekeyView(account_id=account_id)
+        return AccountRekeyView(account_id=account_id, auto_close=_auto_close())
+    is_open = rekey.closed_at is None and rekey.problem is None
     return AccountRekeyView(
         account_id=account_id,
         rekeyed_at=rekey.rekeyed_at,
         closed_at=rekey.closed_at,
         close_after=rekey.close_after,
         problem=rekey.problem,
+        auto_close=_auto_close(),
+        checklist=await old_key_checklist(account, rekey) if is_open else [],
     )
 
 
 async def read_account_rekey(account_id: str) -> AccountRekeyView:
     """The account's last re-key and whether its old authorization is ended yet."""
-    await require_account(account_id)
-    return _view(account_id, await fetch_rekey(account_id))
+    account = await require_account(account_id)
+    return await _view(account, await fetch_rekey(account_id))
 
 
 def _next_try(wait: int | None) -> datetime:
@@ -266,26 +303,95 @@ async def rekey_account_session(account_id: str) -> AccountRekeyView:
                 account_id=account_id,
                 extra={"code": exc.code, "error_type": exc.error_type},
             )
+            if exc.code == _INCOMPLETE and exc.old_hash:
+                await _keep_incomplete(account_id, exc.old_hash)
             raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
         stored = StoredRekey(
             account_id=account_id,
             old_hash=result.old_hash,
             rekeyed_at=_now().isoformat(),
-            close_after=_now().isoformat(),
+            # Off, no time to try: the operator closes it from the card.
+            close_after=_now().isoformat() if _auto_close() else None,
         )
         await save_rekey(stored)
         await log_event("INFO", "session_rekeyed", account_id=account_id)
-        stored = await _end_old_key(account, stored)
+        if _auto_close():
+            stored = await _end_old_key(account, stored)
         await _audit_again(account)
-    return _view(account_id, stored)
+    return await _view(account, stored)
+
+
+async def _keep_incomplete(account_id: str, old_hash: str) -> None:
+    """Record a swap that could not be put back: nothing is ended, a person decides."""
+    await save_rekey(
+        StoredRekey(
+            account_id=account_id,
+            old_hash=old_hash,
+            rekeyed_at=_now().isoformat(),
+            problem=_INCOMPLETE,
+        )
+    )
+    await log_event(
+        "WARNING",
+        "session_old_key_problem",
+        account_id=account_id,
+        extra={"problem": _INCOMPLETE, "old_hash_suffix": old_hash[-4:]},
+    )
+
+
+async def close_account_old_key(account_id: str) -> AccountRekeyView:
+    """End the account's old authorization now, at the operator's word; the re-key state after.
+
+    Refused (``rekey_old_key_none``) when there is none open, and (``rekey_needs_attention``)
+    for a row Telebuba gave up on, which the operator settles from the session list. A
+    refusal by Telegram (too young, flood, unreachable) is not an error: the row says when it
+    may be tried again, and nothing tries it then unless the setting says so.
+    """
+    account = await require_proxied_account(account_id)
+    async with account_audit_lock(account_id):
+        rekey = await fetch_rekey(account_id)
+        if rekey is None or rekey.closed_at is not None:
+            code = "rekey_old_key_none"
+            raise AccountActionError(code)
+        if rekey.problem is not None:
+            code = "rekey_needs_attention"
+            raise AccountActionError(code)
+        await log_event("INFO", "session_old_key_close_requested", account_id=account_id)
+        rekey = await _end_old_key(account, rekey)
+        if rekey.closed_at is not None:
+            await _audit_again(account)
+    return await _view(account, rekey)
+
+
+async def _remind_open_old_keys() -> None:
+    """Log each account whose old authorization is still open, at most once per interval."""
+    now = _now()
+    every = timedelta(hours=settings.session_audit.old_key_reminder_hours)
+    for rekey in await list_open_rekeys():
+        last = _REMINDED.get(rekey.account_id)
+        if last is not None and now - last < every:
+            continue
+        if await fetch_account(rekey.account_id) is None:
+            continue
+        _REMINDED[rekey.account_id] = now
+        await log_event(
+            "WARNING",
+            "session_old_key_open",
+            account_id=rekey.account_id,
+            extra={"rekeyed_at": rekey.rekeyed_at},
+        )
 
 
 async def close_due_old_keys() -> int:
     """Try every old authorization whose time has come; how many were ended.
 
     The background pass (``services.session_guard``). One account at a time, each under its
-    audit lock; an account that was deleted since is skipped (its row went with it).
+    audit lock; an account that was deleted since is skipped (its row went with it). With
+    ``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY`` off it ends nothing and only reminds.
     """
+    if not _auto_close():
+        await _remind_open_old_keys()
+        return 0
     ended = 0
     for rekey in await list_due_rekeys(_now().isoformat()):
         account = await fetch_account(rekey.account_id)

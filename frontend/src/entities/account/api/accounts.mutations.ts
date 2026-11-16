@@ -15,6 +15,7 @@ export {
   checkAccountPasskeyMutation,
   clearAccountTwofaEmailMutation,
   closeAccountForeignSessionsMutation,
+  closeAccountOldKeyMutation,
   closeAccountSessionsMutation,
   closeAccountWebWindowsMutation,
   confirmAccountTwofaEmailMutation,

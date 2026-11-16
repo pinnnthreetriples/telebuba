@@ -32,6 +32,17 @@ class SessionAuditSettings(BaseSettings):
     # A re-keyed account's old authorization that could not be ended yet is tried again after
     # this long (or after the wait Telegram named).
     rekey_retry_seconds: float = Field(default=3600.0, gt=0.0)
+    # Whether Telebuba ends a re-keyed account's old authorization on its own, right after the
+    # re-key and then from the session guard. Off, the old authorization stays until the
+    # operator closes it from the card, and the guard only reminds: a young unofficial session
+    # ending an older official one is what an account takeover looks like to Telegram.
+    auto_close_old_key: bool = False
+    # The card's checklist before the operator closes an old authorization by hand: the new
+    # session is at least this old, and SpamBot said nothing but "clean" for this long.
+    old_key_min_age_days: float = Field(default=7.0, gt=0.0)
+    old_key_spam_clean_days: float = Field(default=30.0, gt=0.0)
+    # The guard reminds about an old authorization still open at most this often per account.
+    old_key_reminder_hours: float = Field(default=24.0, gt=0.0)
     # The session guard's background task makes a pass this often: it ends old keys that are
     # due and re-audits at most ONE account (below).
     guard_interval_seconds: float = Field(default=300.0, gt=0.0)

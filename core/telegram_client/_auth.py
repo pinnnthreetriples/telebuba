@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 
 from anyio import Path
 from telethon import TelegramClient, errors
+from telethon.tl.functions.auth import LogOutRequest
 
 from core.config import settings
 from core.telegram_client._auth_bounds import (
@@ -49,6 +50,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
 )
 from core.telegram_client._pool import removing_client
+from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from core.telegram_client._util import optional_bool, optional_str
 from schemas.device_fingerprint import TelegramClientRequest
@@ -233,29 +235,28 @@ async def log_out_session(
     *,
     wipe_session: bool = False,
 ) -> TelegramSessionCheckResult:
-    """Log the account out server-side; with ``wipe_session`` remove the local file.
+    """End the session's authorization server-side; with ``wipe_session`` remove the local file.
 
-    Best-effort: even if the server-side ``log_out`` fails, the account is
-    reported ``unauthorized`` (that is the operator's intent).
+    Ended only on proof: Telegram answered ``auth.logOut``, or refused because the key is
+    already dead (revoked, unregistered, the account deactivated). Then the account is
+    ``unauthorized`` and, with ``wipe_session``, its file is removed. Anything else (a
+    timeout, a dropped proxy, another refusal) proves nothing about the key, which may still
+    be alive at Telegram: the result is a temporary ``network_error`` naming the exception
+    class, and the file stays whatever the flag says. Deleting it then would throw away the
+    only copy of a live key (one the seller may also hold).
 
-    ``wipe_session`` does not decide *whether* the ``.session`` file survives —
-    Telethon's own ``log_out()`` ends with ``session.delete()`` (an ``os.remove``
-    whose ``OSError`` it swallows), so a successful plain logout already removes
-    the file on POSIX, and on Windows only fails to because a live handle blocks
-    it. What the flag decides is whether the removal is *guaranteed*: a logout
-    that never reached the server leaves a stale token behind, and wiping it
-    makes the next connect mint a fresh auth key.
+    The call is ``auth.logOut`` itself, not Telethon's ``log_out()``: that one answers
+    ``False`` for every refusal, a dead key included, so it cannot tell "already gone" from
+    "not ended", and it deletes the file on its own.
 
-    The whole call runs under the pool tombstone, wipe or not. It evicts the
-    pooled client so the ``.session`` file is not held open (on Windows that
-    handle is what makes Telethon's own delete — and ours — fail), and it drops
-    the cached client whose ``auth_key`` this logout is about to revoke, instead
-    of leaving a borrower holding a dead credential. The ``_auth`` lock on top is
-    what keeps a code submit from holding a second handle on the same file while
-    this logout revokes the key.
+    The whole call runs under the pool tombstone, wipe or not. It evicts the pooled client so
+    the ``.session`` file is not held open (on Windows that handle is what makes our delete
+    fail), and it drops the cached client whose ``auth_key`` this logout is about to revoke,
+    instead of leaving a borrower holding a dead credential. The ``_auth`` lock on top is
+    what keeps a code submit from holding a second handle on the same file while this logout
+    revokes the key.
     """
     profile = await prepare_telegram_client_profile(request)
-    error_message: str | None = None
     async with (
         _auth_lock(request.account_id),
         removing_client(request.account_id, profile.device_type),
@@ -264,26 +265,24 @@ async def log_out_session(
         try:
             async with asyncio.timeout(auth_deadline()):
                 await client.connect()
-                await client.log_out()
-        except Exception as exc:  # noqa: BLE001 - best-effort logout; record the class only.
-            # Class name, not ``str(exc)`` — the same contract ``_error_result``
-            # states two functions down, and for the same reason: this arm catches
-            # transport failures, and a ``python_socks`` error stringifies with the
-            # proxy ``user:pass@host:port`` (non-negotiable #12).
-            #
-            # Nothing reads it today. ``services.accounts.login._end_session`` hands
-            # the result to ``update_account_from_session_check``, which writes only
-            # ``status`` / ``last_checked_at`` / ``updated_at`` — the ``error_message``
-            # a previous comment claimed to "surface" goes nowhere. It stays on the
-            # returned model because its sibling field IS read (``login`` raises
-            # ``PhoneLoginError(result.error_message)`` off the submit path), so the
-            # value a future reader picks up must already be bounded.
-            error_message = type(exc).__name__
+                await _end_authorization(client)
+        except Exception as exc:  # noqa: BLE001 - not ended; record the class only.
+            # Class name, not ``str(exc)``: this arm catches transport failures, and a
+            # ``python_socks`` error stringifies with the proxy ``user:pass@host:port``.
+            return _error_result(profile, exc, status="network_error", is_temporary=True)
         finally:
             await safe_disconnect(client)
         if wipe_session:
             await _remove_session_file(profile.session_path)
-    return _status_result(profile, status="unauthorized", error_message=error_message)
+    return _status_result(profile, status="unauthorized")
+
+
+async def _end_authorization(client: TelegramClient) -> None:
+    """``auth.logOut``; a key that is already dead counts as ended. Anything else raises."""
+    try:
+        await client(LogOutRequest())
+    except _DEAD_SESSION_ERRORS:
+        return
 
 
 _SIGN_IN_ERRORS = (

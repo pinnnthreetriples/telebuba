@@ -109,6 +109,7 @@ export {
   removeAccountTwofaMutation,
   auditAccountSessionsMutation,
   closeAccountForeignSessionsMutation,
+  closeAccountOldKeyMutation,
   closeAccountSessionsMutation,
   checkAccountPasskeyMutation,
   createAccountPasskeyMutation,

@@ -60,3 +60,19 @@ def _list_due_rekeys(now: str) -> list[StoredRekey]:
 async def list_due_rekeys(now: str) -> list[StoredRekey]:
     """Re-keys whose old authorization may be tried again at ``now`` (ISO, oldest first)."""
     return await asyncio.to_thread(_list_due_rekeys, now)
+
+
+def _list_open_rekeys() -> list[StoredRekey]:
+    table = _account_rekeys
+    with _get_engine().connect() as connection:
+        rows = connection.execute(
+            select(table)
+            .where(table.c.closed_at.is_(None), table.c.problem.is_(None))
+            .order_by(table.c.rekeyed_at)
+        ).all()
+    return [StoredRekey.model_validate(dict(row._mapping)) for row in rows]  # noqa: SLF001
+
+
+async def list_open_rekeys() -> list[StoredRekey]:
+    """Re-keys whose old authorization is still alive and not given up on (oldest first)."""
+    return await asyncio.to_thread(_list_open_rekeys)

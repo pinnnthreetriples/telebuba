@@ -41,6 +41,7 @@ import {
   clearLogs,
   clearNeurocommentListener,
   closeAccountForeignSessions,
+  closeAccountOldKey,
   closeAccountSessions,
   closeAccountWebWindows,
   confirmAccountTwofaEmail,
@@ -364,6 +365,9 @@ import type {
   CloseAccountForeignSessionsData,
   CloseAccountForeignSessionsError,
   CloseAccountForeignSessionsResponse,
+  CloseAccountOldKeyData,
+  CloseAccountOldKeyError,
+  CloseAccountOldKeyResponse,
   CloseAccountSessionsData,
   CloseAccountSessionsError,
   CloseAccountSessionsResponse,
@@ -3409,6 +3413,38 @@ export const rekeyAccountSessionMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await rekeyAccountSession({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Close Account Old Key
+ *
+ * End the re-keyed account's old authorization now, at the operator's word.
+ *
+ * Telebuba does not end it on its own unless ``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY`` is on;
+ * the card shows its checklist first. A refusal by Telegram comes back as ``close_after``.
+ */
+export const closeAccountOldKeyMutation = (
+  options?: Partial<Options<CloseAccountOldKeyData>>,
+): UseMutationOptions<
+  CloseAccountOldKeyResponse,
+  CloseAccountOldKeyError,
+  Options<CloseAccountOldKeyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CloseAccountOldKeyResponse,
+    CloseAccountOldKeyError,
+    Options<CloseAccountOldKeyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await closeAccountOldKey({
         ...options,
         ...fnOptions,
         throwOnError: true,

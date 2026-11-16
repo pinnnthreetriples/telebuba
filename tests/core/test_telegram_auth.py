@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import pytest
 from telethon import errors
+from telethon.tl.functions.auth import LogOutRequest
 
 from core.db import configure_database
 from core.telegram_client import _auth as auth_module
@@ -71,7 +71,7 @@ class FakeAuthClient:
         self.disconnected = False
         self.logged_out = False
         self.password_used = False
-        # Set by ``_patch_client``: real Telethon's ``log_out()`` deletes this.
+        # Set by ``_patch_client``: the account's own file.
         self.session_file: Path | None = None
 
     async def connect(self) -> None:
@@ -99,18 +99,17 @@ class FakeAuthClient:
     async def get_me(self) -> FakeUser:
         return FakeUser()
 
-    async def log_out(self) -> bool:
+    async def __call__(self, request: object) -> bool:
+        # ``log_out_session`` sends ``auth.logOut`` itself, not Telethon's ``log_out()``
+        # (which answers False for every refusal and deletes the file on its own).
+        assert isinstance(request, LogOutRequest)
+        await self.log_out_rpc()
+        return True
+
+    async def log_out_rpc(self) -> None:
         if self.log_out_error is not None:
             raise self.log_out_error
         self.logged_out = True
-        # Telethon's own log_out() ends with ``session.delete()`` — an
-        # ``os.remove`` whose OSError it swallows (sqlite.py). The fake has to do
-        # the same or it hides both the deletion and the Windows live-handle
-        # failure from every test in this file.
-        if self.session_file is not None:
-            with suppress(OSError):
-                self.session_file.unlink()
-        return True
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client: FakeAuthClient) -> None:
@@ -311,7 +310,8 @@ async def test_log_out_session_failure_reports_only_the_exception_class(
 
     result = await log_out_session(TelegramClientRequest(account_id="acc", receive_updates=False))
 
-    assert result.status == "unauthorized"
+    # Not ended: nothing proves the key is gone, so it is not reported unauthorized.
+    assert (result.status, result.is_temporary) == ("network_error", True)
     assert result.error_message == "ConnectionError"
     for secret in _PROXY_SECRETS:
         assert secret not in (result.error_message or "")
@@ -360,12 +360,9 @@ async def test_log_out_session_evicts_pool_before_wiping_file(
 async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, monkeypatch) -> None:
     """A plain logout evicts too — it revokes the auth key the pool has cached.
 
-    This test used to assert the opposite ("no wipe → no eviction, the file
-    stays"), on a Telethon behavior that does not exist: ``log_out()`` itself
-    calls ``session.delete()``. So a plain logout already removes the file on
-    POSIX, and on Windows only fails to because the pooled client holds the
-    handle — which is also what leaves a *revoked* client in ``_CLIENTS``. The
-    tombstone therefore has to cover the whole logout, not just the wipe branch.
+    A plain logout revokes the key the pooled client holds, which would otherwise
+    stay in ``_CLIENTS`` as a *revoked* client. The tombstone therefore has to
+    cover the whole logout, not just the wipe branch.
     """
     configure_database(tmp_path / "telebuba.db")
     marks: list[bool] = []
@@ -389,14 +386,66 @@ async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, mon
     )
 
     assert marks == [True], "the logout RPC itself must run under the tombstone"
-    # ``session_file`` is gone after this call, but only because
-    # ``FakeAuthClient.log_out`` unlinks it, mirroring Telethon's own
-    # ``session.delete()`` — asserting its absence would test the fake. The
-    # production facts are the eviction and its ORDER: Telethon deletes the file
-    # inside ``log_out()``, and on Windows a live pooled handle is what makes that
-    # delete (and ours) fail, so the eviction has to come first.
+    # The eviction and its ORDER: the revoked key must not stay cached in the pool.
     assert evicted == [("acc", False)], "evict before the logout revokes the key"
     assert client.logged_out is True
+    # A plain logout keeps the file (its key is revoked); only a reset removes it.
+    assert session_file.exists()
+
+
+@pytest.mark.parametrize(
+    "dead",
+    [errors.AuthKeyUnregisteredError(request=None), errors.SessionRevokedError(request=None)],
+)
+@pytest.mark.asyncio
+async def test_a_key_that_is_already_dead_counts_as_ended_and_a_reset_wipes_it(
+    tmp_path: Path, monkeypatch, dead: Exception
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(log_out_error=dead)
+    _patch_client(monkeypatch, tmp_path, client)
+    session_file = tmp_path / "sessions" / "acc.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
+
+    result = await log_out_session(
+        TelegramClientRequest(account_id="acc", receive_updates=False), wipe_session=True
+    )
+
+    assert result.status == "unauthorized"
+    assert not session_file.exists()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ConnectionError("proxy down"),
+        TimeoutError(),
+        errors.FloodWaitError(request=None, capture=30),
+        errors.RPCError(request=None, message="INTERNAL", code=500),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_reset_telegram_did_not_confirm_keeps_the_file(
+    tmp_path: Path, monkeypatch, failure: Exception
+) -> None:
+    # The key may still be alive at Telegram (and with the seller): deleting our copy of it
+    # would lose the account for nothing.
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(log_out_error=failure)
+    _patch_client(monkeypatch, tmp_path, client)
+    session_file = tmp_path / "sessions" / "acc.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
+
+    result = await log_out_session(
+        TelegramClientRequest(account_id="acc", receive_updates=False), wipe_session=True
+    )
+
+    assert result.status == "network_error"
+    assert result.error_type == type(failure).__name__
+    assert session_file.read_bytes() == b"sqlite session bytes"
+    assert client.disconnected is True
 
 
 @pytest.mark.asyncio

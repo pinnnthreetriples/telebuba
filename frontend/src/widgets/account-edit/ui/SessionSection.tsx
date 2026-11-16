@@ -17,6 +17,7 @@ import { Button, FeedbackMark, Icon, Input, SegmentedControl, Spinner } from '@/
 
 import { Section } from './_shared';
 import { LABEL, type CheckState } from './_styles';
+import { EndSessionConfirm } from './EndSessionConfirm';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
 // shows the real session state — not a hardcoded green "active". Tokens, so the
@@ -46,6 +47,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
   const uploadInput = useRef<HTMLInputElement>(null);
   const nextUploadId = useRef(0);
   const [logoutCheck, setLogoutCheck] = useState<CheckState>('idle');
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [smsCode, setSmsCode] = useState('');
   const [twoFa, setTwoFa] = useState('');
   const [loginNote, setLoginNote] = useState<string | null>(null);
@@ -93,22 +95,26 @@ export function SessionSection({ account }: { account: AccountRead }) {
       },
     );
   };
+  // Asked first (EndSessionConfirm). The dialog closes either way; a refusal
+  // (`logout_unconfirmed`: nothing changed) reaches the operator through the mutation toast.
   const onLogout = () => {
     setLogoutCheck('loading');
-    logout.mutate(path, {
-      onSuccess: () => {
-        setLogoutCheck('ok');
-        invalidate();
-      },
-      onError: () => {
-        setLogoutCheck('err');
-      },
-      onSettled: () => {
+    return logout
+      .mutateAsync(path)
+      .then(
+        () => {
+          setLogoutCheck('ok');
+          invalidate();
+        },
+        () => {
+          setLogoutCheck('err');
+        },
+      )
+      .finally(() => {
         later(() => {
           setLogoutCheck('idle');
         }, 1600);
-      },
-    });
+      });
   };
 
   // Import a .session / tdata.zip file as a new account (the active import tab
@@ -165,13 +171,25 @@ export function SessionSection({ account }: { account: AccountRead }) {
           <Button
             size="sm"
             className="text-content-muted"
-            onClick={onLogout}
+            onClick={() => {
+              setConfirmLogout(true);
+            }}
             loading={logout.isPending}
           >
             {t('accounts.edit.logout')}
           </Button>
         </span>
       </div>
+      {confirmLogout ? (
+        <EndSessionConfirm
+          account={account}
+          kind="logout"
+          onClose={() => {
+            setConfirmLogout(false);
+          }}
+          onConfirm={onLogout}
+        />
+      ) : null}
       <div className="mb-3 mt-4 flex items-center justify-between gap-2">
         <span className="type-small-medium">{t('accounts.edit.loginByCode')}</span>
         <Button

@@ -22,6 +22,7 @@ from schemas.accounts import AccountCheckRequest, AccountCreate, AccountSessionF
 from schemas.telegram_session import TelegramSessionCheckRequest, TelegramSessionCheckResult
 from services.accounts import (
     DeviceRefusedError,
+    PhoneLoginError,
     add_account,
     add_account_device,
     check_account_session,
@@ -383,3 +384,70 @@ def test_the_code_pause_ends_on_its_second_and_rounds_what_is_left_up(
     with pytest.raises(DeviceRefusedError) as refused:
         devices_module.claim_code_request("acc")
     assert refused.value.retry_after_seconds == left
+
+
+def _unconfirmed(account_id: str) -> TelegramSessionCheckResult:
+    return TelegramSessionCheckResult(
+        account_id=account_id,
+        session_path=account_id,
+        status="network_error",
+        is_temporary=True,
+        error_type="ConnectionError",
+    )
+
+
+@pytest.mark.parametrize("end", [logout_account, reset_account_session])
+@pytest.mark.asyncio
+async def test_a_logout_telegram_did_not_confirm_leaves_both_sign_ins_alone(
+    monkeypatch: pytest.MonkeyPatch, end: object
+) -> None:
+    """The primary key may still be alive: its status, file and the second device all stay."""
+    await _desktop()
+    _fake_sign_in(monkeypatch)
+    await add_account_device("acc", "mobile")
+    before = await fetch_account("acc")
+    second_calls: list[str | None] = []
+
+    async def fake_log_out(request: TelegramClientRequest, *, wipe_session: bool):  # noqa: ARG001
+        return _unconfirmed(request.account_id)
+
+    async def second(request: TelegramClientRequest, *, wipe_session: bool):  # noqa: ARG001
+        second_calls.append(request.session_name)
+        return _unauthorized(request.account_id)
+
+    monkeypatch.setattr("services.accounts.login.log_out_session", fake_log_out)
+    monkeypatch.setattr("core.telegram_client._second_device.log_out_session", second)
+
+    with pytest.raises(PhoneLoginError, match="logout_unconfirmed"):
+        await end("acc")  # ty: ignore[call-non-callable]
+
+    after = await fetch_account("acc")
+    assert after is not None
+    assert before is not None
+    assert after.status == before.status
+    assert after.second_session_name == "acc_mobile"
+    assert second_calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_second_device_sign_out_telegram_did_not_confirm_keeps_its_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _desktop()
+    _fake_sign_in(monkeypatch)
+    await add_account_device("acc", "mobile")
+
+    async def fake_log_out(request: TelegramClientRequest, *, wipe_session: bool):  # noqa: ARG001
+        if request.session_name == "acc_mobile":
+            return _unconfirmed(request.account_id)
+        return _unauthorized(request.account_id)
+
+    monkeypatch.setattr("services.accounts.login.log_out_session", fake_log_out)
+    monkeypatch.setattr("core.telegram_client._second_device.log_out_session", fake_log_out)
+
+    account = await logout_account("acc")
+
+    # The account's own session ended; the second one may still be alive and is kept.
+    assert account.status == "unauthorized"
+    assert account.second_session_name == "acc_mobile"
+    assert await fetch_device_fingerprint("acc", "mobile") is not None
