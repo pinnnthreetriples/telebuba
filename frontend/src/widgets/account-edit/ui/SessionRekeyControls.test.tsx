@@ -77,6 +77,7 @@ test('an old session Telegram would not end yet says it is active and when the n
     account_id: 'acc-1',
     rekeyed_at: '2026-11-02T10:00:00+00:00',
     close_after: '2026-11-03T10:01:00+00:00',
+    auto_close: true,
   });
   renderControls();
 
@@ -144,6 +145,7 @@ test('a re-key whose old session is not closed yet says when it will be', async 
       account_id: 'acc-1',
       rekeyed_at: '2026-11-02T10:00:00+00:00',
       close_after: '2026-11-03T10:01:00+00:00',
+      auto_close: true,
     },
   );
   renderControls();
@@ -215,4 +217,79 @@ test('a re-key that ends in a problem is not reported as a success', async () =>
 
   expect(await screen.findByRole('status')).toHaveTextContent('собственной сессией аккаунта');
   expect(screen.queryByText('Ключ заменён, старая сессия закрыта.')).toBeNull();
+});
+
+// --- the old session is the operator's to close (the default) --------------------
+
+const OPEN: AccountRekeyView = {
+  account_id: 'acc-1',
+  rekeyed_at: '2026-11-08T11:52:53+00:00',
+  auto_close: false,
+  checklist: [
+    { name: 'spam_clean', ok: false },
+    { name: 'session_age', ok: true },
+    { name: 'fallback_session', ok: false },
+    { name: 'twofa_stored', ok: true },
+    { name: 'passkey_stored', ok: true },
+  ],
+};
+
+function closes(): Request[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => new URL(request.url).pathname === `${URL_PATH}/close-old-key`);
+}
+
+test('an open old session shows the checklist and closes only after the operator confirms', async () => {
+  serve(OPEN, { ...OPEN, checklist: [], closed_at: '2026-11-16T10:00:00+00:00' });
+  renderControls();
+
+  expect(await screen.findByText('Старая сессия ещё открыта')).toBeVisible();
+  const checklist = screen.getByRole('list', { name: 'Готовность к закрытию старой сессии' });
+  expect(checklist).toHaveTextContent('✗ SpamBot: чисто');
+  expect(checklist).toHaveTextContent('✓ Новой сессии не меньше недели');
+
+  await userEvent.click(screen.getByRole('button', { name: 'Закрыть старую сессию' }));
+  expect(await screen.findByText('Закрыть старую сессию?')).toBeVisible();
+  // Not every item is met: the dialog says what is at stake.
+  expect(screen.getByText(/Не все пункты выполнены/)).toBeVisible();
+  expect(closes()).toHaveLength(0);
+
+  const confirm = screen.getAllByRole('button', { name: 'Закрыть старую сессию' });
+  await userEvent.click(confirm[confirm.length - 1] as HTMLElement);
+
+  expect(await screen.findByText(/Старая сессия закрыта/)).toBeVisible();
+  expect(closes()).toHaveLength(1);
+});
+
+test('a re-key in the default mode says the old session is still open', async () => {
+  serve({ account_id: 'acc-1' }, OPEN);
+  renderControls();
+
+  await confirmRekey();
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Ключ заменён. Старая сессия ещё открыта',
+  );
+  expect(screen.queryByText('Ключ заменён, старая сессия закрыта.')).toBeNull();
+});
+
+test('a close Telegram refuses keeps the session open and says why', async () => {
+  serve(OPEN, OPEN, 'rekey_old_key_none');
+  renderControls();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Закрыть старую сессию' }));
+  const confirm = screen.getAllByRole('button', { name: 'Закрыть старую сессию' });
+  await userEvent.click(confirm[confirm.length - 1] as HTMLElement);
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Старая сессия не закрыта.');
+});
+
+test('a re-key that could not be put back asks for a person, not a retry', async () => {
+  serve({ ...OPEN, checklist: [], problem: 'rekey_incomplete' });
+  renderControls();
+
+  expect(await screen.findByRole('status')).toHaveTextContent('Замена ключа не завершилась');
+  expect(screen.queryByRole('button', { name: 'Закрыть старую сессию' })).toBeNull();
 });

@@ -70,6 +70,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class SecondDeviceLogoutUnconfirmedError(Exception):
+    """Telegram did not confirm the second device's sign-out; its file and record are kept."""
+
+
 class _SignInRefusedError(Exception):
     def __init__(self, code: DeviceRefusalCode) -> None:
         super().__init__(code)
@@ -344,14 +348,15 @@ async def remove_second_device(account_id: str) -> None:
 
     For a logout or a session reset of the account: a second sign-in left running
     after the operator ended the account's session would keep serving unseen, and a
-    forgotten one can be added again. Best effort like every logout: a sign-out that
-    never reaches Telegram still removes the file and the record.
+    forgotten one can be added again. A sign-out Telegram did not confirm keeps the file
+    and the record and raises :class:`SecondDeviceLogoutUnconfirmedError`: that key may
+    still be alive, and it may be the account's last working one.
     """
     account = await fetch_account(account_id)
     if account is None or account.second_session_name is None:
         return
     try:
-        await log_out_session(
+        result = await log_out_session(
             TelegramClientRequest(
                 account_id=account_id,
                 session_name=account.second_session_name,
@@ -359,6 +364,8 @@ async def remove_second_device(account_id: str) -> None:
             ),
             wipe_session=True,
         )
+        if result.status != "unauthorized":
+            raise SecondDeviceLogoutUnconfirmedError(result.error_type or "unconfirmed")
     except DeviceUnavailableError:
         # Mobile is no longer configured, so no client can be built to sign it out.
         try:

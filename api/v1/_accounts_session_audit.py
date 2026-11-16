@@ -97,3 +97,19 @@ async def rekey_account_session(account_id: str) -> AccountRekeyView:
     """
     with service_errors_to_http():
         return await accounts.rekey_account_session(account_id)
+
+
+@session_audit_router.post(
+    "/accounts/{account_id}/rekey/close-old-key",
+    response_model=AccountRekeyView,
+    operation_id="closeAccountOldKey",
+    responses=SERVICE_ERRORS,
+)
+async def close_account_old_key(account_id: str) -> AccountRekeyView:
+    """End the re-keyed account's old authorization now, at the operator's word.
+
+    Telebuba does not end it on its own unless ``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY`` is on;
+    the card shows its checklist first. A refusal by Telegram comes back as ``close_after``.
+    """
+    with service_errors_to_http():
+        return await accounts.close_account_old_key(account_id)

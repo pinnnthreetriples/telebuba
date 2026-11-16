@@ -17,7 +17,13 @@ Nothing is kept unless everything succeeds, in this order:
 4. only then is the imported content dropped.
 
 Any failure before 4 copies the imported content back and ends the new authorization, and
-the account is exactly as it was. The old AUTHORIZATION (the seller-known key) is ended by the
+the account is exactly as it was. Once the new content has answered from the account's own
+file the swap is DONE: tidying the side copies afterwards can fail (a file another process
+still holds, on Windows) and is only logged, because undoing at that point would end the
+very key the account's file now holds. For the same reason the undo never ends the new
+authorization while the account's file may hold its key, and a copy-back that fails leaves
+the new authorization alive and the side copy in place (``rekey_incomplete``) for a person
+to sort out. The old AUTHORIZATION (the seller-known key) is ended by the
 service afterwards, with :func:`core.telegram_client._session_close.close_sessions`: its
 hash is returned here. Telegram lists the asking session's own entry with ``hash=0``, so the
 approver cannot name its own key; the new session, which sees the approver by its real hash,
@@ -34,8 +40,10 @@ import asyncio
 import logging
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from anyio import Path as AsyncPath
@@ -79,6 +87,7 @@ _TIMEOUT: RekeyRefusalCode = "rekey_timeout"
 _UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
 _DEAD: RekeyRefusalCode = "rekey_session_dead"
 _OLD_UNKNOWN: RekeyRefusalCode = "rekey_old_key_unknown"
+_INCOMPLETE: RekeyRefusalCode = "rekey_incomplete"
 # The suffix of the file the imported session is set aside as while the swap is verified.
 _ASIDE_SUFFIX = ".rekey-aside"
 # How long a write to the session file waits for another connection that holds it.
@@ -99,6 +108,8 @@ class RekeyGatewayError(Exception):
         self.code = code
         self.retry_after_seconds = retry_after_seconds
         self.error_type = error_type
+        # Only for ``rekey_incomplete``: the old authorization, which must NOT be ended now.
+        self.old_hash: str | None = None
 
 
 def _refusal(code: str, error_type: str | None = None) -> RekeyGatewayError:
@@ -181,12 +192,55 @@ async def _accept_token(approver: TelegramClient, token: bytes) -> int:
 _RECONNECT_TIMEOUT_S = 20.0
 
 
-async def _discard(new: TelegramClient, scratch_path: str, *, signed_in: bool) -> None:
+def _file_key(session_file: str) -> bytes | None:
+    """The auth key a Telethon session file holds, read without changing it; ``None`` if unknown."""
+    path = Path(session_file)
+    if not path.exists():
+        return None
+    try:
+        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as db:
+            row = db.execute("select auth_key from sessions").fetchone()
+    except sqlite3.Error:
+        return None
+    return bytes(row[0]) if row and row[0] else None
+
+
+def _client_key(client: object) -> bytes | None:
+    """The auth key a client holds in memory (kept after ``disconnect``); ``None`` if unknown."""
+    key = getattr(getattr(getattr(client, "session", None), "auth_key", None), "key", None)
+    return bytes(key) if isinstance(key, (bytes, bytearray)) else None
+
+
+async def _same_key(first: str, second: str) -> bool:
+    """Whether two session files provably hold the same auth key."""
+    key = await asyncio.to_thread(_file_key, first)
+    return key is not None and key == await asyncio.to_thread(_file_key, second)
+
+
+async def _may_hold_new_key(new: TelegramClient, final_file: str) -> bool:
+    """Whether the account's own file may hold ``new``'s key: anything but proof it does not."""
+    held = await asyncio.to_thread(_file_key, final_file)
+    mine = _client_key(new)
+    return held is None or mine is None or held == mine
+
+
+async def _discard(
+    new: TelegramClient, scratch_path: str, *, signed_in: bool, final_file: str | None = None
+) -> None:
     """Undo a failed attempt: end the new authorization, disconnect, remove its file.
 
     Each step runs whatever the one before did: a logout or disconnect that raises must not
     leave the half-made ``.session`` behind to refuse every retry.
+
+    ``final_file`` is the account's own file once the swap may have written it. The new
+    authorization is then ended only on proof that this file does not hold its key: ending
+    it otherwise could end the account's only working key. Kept, it stays signed in with its
+    scratch file in place, and the warning says so.
     """
+    if signed_in and final_file is not None and await _may_hold_new_key(new, final_file):
+        logger.warning("re-key undo kept the new authorization: the account's file may hold it")
+        await _disconnect_quietly(new)
+        return
     if signed_in and not new.is_connected():
         # The swap stage disconnects ``new`` first; ``log_out`` on a closed client would
         # fail and leave the new authorization standing, orphaned with no session file.
@@ -279,6 +333,43 @@ async def _require_free(session_path: str) -> None:
         raise _refusal(_CONFLICT)
 
 
+async def _require_no_aside(final_session_path: str) -> None:
+    """Refuse while an earlier swap's side copy holds a key the account's file does not.
+
+    That copy may be the only one of an old key (a copy-back that failed); a new swap would
+    overwrite it. A side copy holding exactly what the account's file holds is a leftover of
+    a swap that finished, and goes.
+    """
+    final = f"{final_session_path}.session"
+    aside = f"{final}{_ASIDE_SUFFIX}"
+    if not await AsyncPath(aside).exists():
+        return
+    if not await _same_key(aside, final):
+        raise _refusal(_CONFLICT, "SideCopyKept")
+    await _tidy(aside)
+
+
+async def _unlink(path: str) -> None:
+    await AsyncPath(path).unlink()
+
+
+async def _tidy(path: str) -> None:
+    """Remove a side file the swap no longer needs; a failure is only logged."""
+    try:
+        await _unlink(path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        logger.warning("re-key side file kept (%s)", type(exc).__name__)
+
+
+async def _disconnect_quietly(client: TelegramClient) -> None:
+    try:
+        await client.disconnect()
+    except Exception as exc:  # noqa: BLE001 - best effort; the authorization is kept on purpose.
+        logger.warning("re-key disconnect failed (%s)", type(exc).__name__)
+
+
 def _copy_session(source: str, target: str) -> None:
     """Make the SQLite file ``target`` hold exactly what ``source`` holds, in place.
 
@@ -310,6 +401,16 @@ def _copy_session(source: str, target: str) -> None:
         reader.close()
 
 
+async def _require_works(profile: TelegramClientProfile, user_id: int) -> None:
+    """Open the account's own file once: it must answer as ``user_id``."""
+    check = create_telegram_client(profile)
+    try:
+        await check.connect()
+        await _require_same_user(check, user_id, _SWAP)
+    finally:
+        await check.disconnect()
+
+
 async def _swap(
     profile: TelegramClientProfile, scratch_path: str, user_id: int, device: DeviceType
 ) -> None:
@@ -318,6 +419,11 @@ async def _swap(
     The imported file's content is kept in a side copy, not dropped, until the new one has
     answered as the same user from its final place; a failure copies it back. The final file
     itself is never renamed or deleted, see :func:`_copy_session`.
+
+    Once the new content has answered the swap is done, and nothing after it raises: the
+    side copies are tidied best effort. A copy-back that fails raises ``rekey_incomplete``
+    (the account's file may hold either key) and keeps the side copy, the only one of the
+    old key that may be left.
     """
     final = f"{profile.session_path}.session"
     aside = f"{final}{_ASIDE_SUFFIX}"
@@ -325,24 +431,42 @@ async def _swap(
     async with removing_client(profile.account_id, device):
         try:
             await asyncio.to_thread(_copy_session, final, aside)
-            try:
-                await asyncio.to_thread(_copy_session, fresh, final)
-                check = create_telegram_client(profile)
-                try:
-                    await check.connect()
-                    await _require_same_user(check, user_id, _SWAP)
-                finally:
-                    await check.disconnect()
-            except BaseException:
-                # Back to the imported content, and the new authorization is ended by the caller.
-                await asyncio.to_thread(_copy_session, aside, final)
-                # Dropped only once the content is back: a restore that failed keeps it.
-                await AsyncPath(aside).unlink()
-                raise
-            await AsyncPath(aside).unlink()
-            await AsyncPath(fresh).unlink()
         except (sqlite3.Error, OSError) as exc:
+            # The account's file was only read; a half-written side copy is worth nothing.
+            await _tidy(aside)
             raise _refusal(_SWAP, type(exc).__name__) from exc
+        try:
+            await asyncio.to_thread(_copy_session, fresh, final)
+            await _require_works(profile, user_id)
+        except BaseException as failure:
+            await _copy_back(aside, final, failure)
+            if isinstance(failure, (sqlite3.Error, OSError)):
+                raise _refusal(_SWAP, type(failure).__name__) from failure
+            raise
+    # Done: the account's file holds the new key and answered with it.
+    await _tidy(aside)
+    await _tidy(fresh)
+
+
+async def _copy_back(aside: str, final: str, failure: BaseException) -> None:
+    """Put the imported content back after ``failure``; ``rekey_incomplete`` if it will not go.
+
+    A cancellation keeps propagating as itself: the caller's undo then finds the account's
+    file may hold the new key and keeps the new authorization (:func:`_discard`).
+    """
+    try:
+        await asyncio.to_thread(_copy_session, aside, final)
+    except (sqlite3.Error, OSError) as exc:
+        if await _same_key(final, aside):
+            # The copy in never landed (SQLite's backup commits whole or not at all): the
+            # account's file still holds the imported key, and nothing needs putting back.
+            await _tidy(aside)
+            return
+        logger.warning("re-key copy-back failed (%s); the side copy is kept", type(exc).__name__)
+        if isinstance(failure, Exception):
+            raise _refusal(_INCOMPLETE, type(exc).__name__) from exc
+        return
+    await _tidy(aside)
 
 
 async def rekey_session(
@@ -368,23 +492,40 @@ async def rekey_session(
                     receive_updates=True,
                 ),
             )
+            final = await prepare_telegram_client_profile(
+                TelegramClientRequest(
+                    account_id=account_id, device_type=device, receive_updates=False
+                ),
+            )
             await _require_free(scratch.session_path)
+            await _require_no_aside(final.session_path)
             new = create_telegram_client(scratch)
             signed_in = False
+            # Set once the swap may have written the account's own file.
+            final_file: str | None = None
+            old_hash = ""
             try:
                 new_hash = await _sign_in_by_token(new, approver, account_id, passwords)
                 signed_in = True
                 await _require_same_user(new, user_id, _MISMATCH)
                 old_hash = await _old_hash(new, before, new_hash)
                 await new.disconnect()
-                final = await prepare_telegram_client_profile(
-                    TelegramClientRequest(
-                        account_id=account_id, device_type=device, receive_updates=False
-                    ),
-                )
+                final_file = f"{final.session_path}.session"
                 await _swap(final, scratch.session_path, user_id, device)
+            except RekeyGatewayError as exc:
+                if exc.code == _INCOMPLETE:
+                    # Neither key is ended and no file dropped: a person sorts it out.
+                    exc.old_hash = old_hash
+                    await asyncio.shield(_disconnect_quietly(new))
+                    raise
+                await asyncio.shield(
+                    _discard(new, scratch.session_path, signed_in=signed_in, final_file=final_file)
+                )
+                raise
             except BaseException:
-                await asyncio.shield(_discard(new, scratch.session_path, signed_in=signed_in))
+                await asyncio.shield(
+                    _discard(new, scratch.session_path, signed_in=signed_in, final_file=final_file)
+                )
                 raise
         except Exception as exc:
             raise _classify(exc) from exc

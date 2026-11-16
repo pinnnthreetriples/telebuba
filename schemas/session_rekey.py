@@ -49,13 +49,33 @@ RekeyRefusalCode = Literal[
     "rekey_session_dead",
     # The new login's listing did not name the imported authorization unambiguously: undone.
     "rekey_old_key_unknown",
+    # The swap failed and the imported content could not be put back: neither authorization
+    # was ended and the side copy is kept; the account needs a person.
+    "rekey_incomplete",
+    # "Close the old session" on an account whose old session is already closed, or that was
+    # never re-keyed.
+    "rekey_old_key_none",
     # Anything else Telegram answered; the new session was undone.
     "rekey_failed",
 ]
 
 
 # Terminal states of a re-key whose old authorization Telebuba will not end on its own.
-RekeyProblem = Literal["old_key_unknown", "old_key_is_ours"]
+RekeyProblem = Literal["old_key_unknown", "old_key_is_ours", "rekey_incomplete"]
+
+# What the card checks before the operator ends an old authorization by hand: the account
+# is clean with SpamBot, the new session is old enough, a second sign-in of ours could
+# receive a login code, and the cloud password and passkey are stored.
+OldKeyCheckName = Literal[
+    "spam_clean", "session_age", "fallback_session", "twofa_stored", "passkey_stored"
+]
+
+
+class OldKeyCheck(BaseModel):
+    """One item of that checklist: met or not."""
+
+    name: OldKeyCheckName
+    ok: bool
 
 
 class RekeyResult(BaseModel):
@@ -88,3 +108,7 @@ class AccountRekeyView(BaseModel):
     close_after: str | None = None
     # Set when Telebuba stopped trying: the operator closes the old session by hand.
     problem: RekeyProblem | None = None
+    # Whether Telebuba ends the old authorization on its own; off, the operator does it.
+    auto_close: bool = False
+    # Filled while the old authorization is alive and the operator may close it.
+    checklist: list[OldKeyCheck] = Field(default_factory=list)

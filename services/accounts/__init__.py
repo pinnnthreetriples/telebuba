@@ -147,6 +147,7 @@ from services.accounts.registered import set_registered_at
 from services.accounts.session_audit import audit_account_sessions, read_account_session_audit
 from services.accounts.session_close import close_account_foreign_sessions, close_account_sessions
 from services.accounts.session_rekey import (
+    close_account_old_key,
     close_due_old_keys,
     read_account_rekey,
     rekey_account_session,
@@ -211,6 +212,7 @@ __all__ = [
     "check_passkey_vault",
     "clear_account_twofa_email",
     "close_account_foreign_sessions",
+    "close_account_old_key",
     "close_account_sessions",
     "close_all_web_windows",
     "close_due_old_keys",

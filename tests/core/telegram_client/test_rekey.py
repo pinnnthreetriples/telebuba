@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -27,11 +28,15 @@ _CREATED = datetime(2026, 11, 7, 13, 34, 38, tzinfo=UTC)
 
 
 def _write(path: Path, marker: str) -> None:
-    """A real SQLite file, as Telethon's session is, holding ``marker``."""
+    """A real SQLite file, as Telethon's session is, holding ``marker`` (its key, too)."""
     with closing(sqlite3.connect(path)) as db, db:
         db.execute("create table if not exists marker (v text)")
         db.execute("delete from marker")
         db.execute("insert into marker values (?)", (marker,))
+        # Telethon's own table: the undo reads which key the account's file holds.
+        db.execute("create table if not exists sessions (auth_key blob)")
+        db.execute("delete from sessions")
+        db.execute("insert into sessions values (?)", (marker.encode(),))
 
 
 def _read(path: Path) -> str:
@@ -80,6 +85,8 @@ class _New:
         self.events: list[str] = []
         self.order: list[str] = []
         self.connected = True
+        # The key the scratch file is written with (``_write(..., "new")``), kept in memory.
+        self.session = SimpleNamespace(auth_key=SimpleNamespace(key=b"new"))
         # What the new session lists once signed in: itself as 0, the imported one by hash.
         self.listing: list[SimpleNamespace] = [
             SimpleNamespace(hash=0, current=True, date_created=None),
@@ -126,11 +133,13 @@ class _New:
 class _Check:
     """The client the swap opens on the final file to prove it works."""
 
-    def __init__(self, user_id: int) -> None:
+    def __init__(self, user_id: int, failure: BaseException | None = None) -> None:
         self.user_id = user_id
+        self.failure = failure
 
     async def connect(self) -> None:
-        return None
+        if self.failure is not None:
+            raise self.failure
 
     async def disconnect(self) -> None:
         return None
@@ -150,6 +159,7 @@ class _Rig:
         self.new = _New()
         self.new.order = self.approver.order
         self.check_user = _USER
+        self.check_failure: BaseException | None = None
 
 
 @pytest.fixture
@@ -171,7 +181,7 @@ def rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
         if path == state.scratch:
             _write(path, "new")  # Telethon makes the file when the client is built
             return state.new
-        return _Check(state.check_user)
+        return _Check(state.check_user, state.check_failure)
 
     monkeypatch.setattr(_rekey, "get_client", _get_client)
     monkeypatch.setattr(_rekey, "prepare_telegram_client_profile", _prepare)
@@ -395,3 +405,109 @@ async def test_a_file_that_stays_locked_is_refused_and_keeps_the_imported_sessio
     assert refused.value.code == "rekey_swap_failed"
     assert _read(rig.final) == "old"
     assert not rig.scratch.exists()
+
+
+def _fail_on(
+    monkeypatch: pytest.MonkeyPatch, name: str, exc: Exception, *, source: Path | None = None
+) -> None:
+    """Make ``_rekey.<name>`` raise ``exc``: for every call, or only when reading ``source``."""
+    real = getattr(_rekey, name)
+
+    def _copy(src: str, target: str) -> None:
+        if Path(src) == source:
+            raise exc
+        real(src, target)
+
+    async def _unlink(path: str) -> None:
+        if source is None or Path(path) == source:
+            raise exc
+        await real(path)
+
+    monkeypatch.setattr(_rekey, name, _copy if name == "_copy_session" else _unlink)
+
+
+@pytest.mark.parametrize("left", ["aside", "scratch"])
+@pytest.mark.asyncio
+async def test_a_side_file_that_will_not_go_after_the_swap_keeps_the_new_key(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch, left: str
+) -> None:
+    # The new key is in the account's file and answered from it: the swap is done. Ending the
+    # new authorization because a side file could not be deleted would end that very key.
+    stuck = rig.aside if left == "aside" else rig.scratch
+    _fail_on(monkeypatch, "_unlink", PermissionError(32, "in use"), source=stuck)
+
+    result = await _run()
+
+    assert result.new_hash == str(_NEW_HASH)  # ty: ignore[unresolved-attribute]
+    assert "log_out" not in rig.new.events
+    assert _read(rig.final) == "new"
+    assert stuck.exists()
+
+
+@pytest.mark.asyncio
+async def test_a_copy_back_that_fails_ends_nothing_and_keeps_the_side_copy(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The new file did not answer from its place, and the imported content will not go back:
+    # the account's file may hold either key, so neither authorization is ended.
+    rig.check_user = 999
+    _fail_on(monkeypatch, "_copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
+
+    with pytest.raises(RekeyGatewayError) as refused:
+        await _run()
+
+    assert refused.value.code == "rekey_incomplete"
+    assert refused.value.old_hash == str(_OLD_HASH)
+    assert "log_out" not in rig.new.events
+    # The only copy of the old key that may be left, and the new key's own file, both stay.
+    assert _read(rig.aside) == "old"
+    assert _read(rig.scratch) == "new"
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_swap_whose_copy_back_fails_keeps_the_new_authorization(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Cancellation propagates as itself; the undo finds the account's file holds the new key.
+    rig.check_failure = asyncio.CancelledError()
+    _fail_on(monkeypatch, "_copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _run()
+
+    assert "log_out" not in rig.new.events
+    assert _read(rig.final) == "new"
+    assert _read(rig.aside) == "old"
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_swap_that_was_put_back_ends_the_new_authorization(rig: _Rig) -> None:
+    rig.check_failure = asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        await _run()
+
+    assert "log_out" in rig.new.events
+    assert _files(rig) == {"acc.session": "old"}
+
+
+@pytest.mark.asyncio
+async def test_a_side_copy_left_by_an_unfinished_swap_refuses_a_new_one(rig: _Rig) -> None:
+    # It may be the only copy of an old key: a new swap would write over it.
+    _write(rig.aside, "older")
+
+    with pytest.raises(RekeyGatewayError) as refused:
+        await _run()
+
+    assert refused.value.code == "rekey_session_conflict"
+    assert rig.new.events == []
+    assert _files(rig) == {"acc.session": "old", "acc.session.rekey-aside": "older"}
+
+
+@pytest.mark.asyncio
+async def test_a_side_copy_identical_to_the_account_file_is_a_leftover_and_goes(rig: _Rig) -> None:
+    _write(rig.aside, "old")
+
+    await _run()
+
+    assert _files(rig) == {"acc.session": "new"}

@@ -106,6 +106,9 @@ import type {
   CloseAccountForeignSessionsData,
   CloseAccountForeignSessionsErrors,
   CloseAccountForeignSessionsResponses,
+  CloseAccountOldKeyData,
+  CloseAccountOldKeyErrors,
+  CloseAccountOldKeyResponses,
   CloseAccountSessionsData,
   CloseAccountSessionsErrors,
   CloseAccountSessionsResponses,
@@ -2075,6 +2078,23 @@ export const rekeyAccountSession = <ThrowOnError extends boolean = false>(
     RekeyAccountSessionErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/rekey', ...options });
+
+/**
+ * Close Account Old Key
+ *
+ * End the re-keyed account's old authorization now, at the operator's word.
+ *
+ * Telebuba does not end it on its own unless ``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY`` is on;
+ * the card shows its checklist first. A refusal by Telegram comes back as ``close_after``.
+ */
+export const closeAccountOldKey = <ThrowOnError extends boolean = false>(
+  options: Options<CloseAccountOldKeyData, ThrowOnError>,
+): RequestResult<CloseAccountOldKeyResponses, CloseAccountOldKeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CloseAccountOldKeyResponses,
+    CloseAccountOldKeyErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/rekey/close-old-key', ...options });
 
 /**
  * Set Account Registered At

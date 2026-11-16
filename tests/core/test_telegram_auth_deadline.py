@@ -55,10 +55,10 @@ class HangingClient(FakeAuthClient):
             await asyncio.Event().wait()
         return await super().sign_in(**kwargs)
 
-    async def log_out(self) -> bool:
+    async def log_out_rpc(self) -> None:
         if self.hang == "log_out":
             await asyncio.Event().wait()
-        return await super().log_out()
+        await super().log_out_rpc()
 
     async def is_user_authorized(self) -> bool:
         return self.authorized
@@ -150,7 +150,7 @@ async def test_submit_that_never_answers_ends_as_a_temporary_network_error(
 
 
 @pytest.mark.asyncio
-async def test_logout_that_never_answers_still_ends_unauthorized(
+async def test_a_logout_that_never_answers_is_not_confirmed_and_frees_the_lock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -163,7 +163,8 @@ async def test_logout_that_never_answers_still_ends_unauthorized(
         timeout=5,
     )
 
-    assert result.status == "unauthorized"
+    # No answer proves nothing: the account is not reported unauthorized.
+    assert (result.status, result.is_temporary) == ("network_error", True)
     assert result.error_message == "TimeoutError"
     assert client.disconnected is True
     assert not auth_module._auth_lock("acc").locked()
