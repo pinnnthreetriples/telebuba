@@ -37,6 +37,10 @@ DEVICE_MISSING: DeviceRefusalCode = "device_missing"
 MOBILE_API_NOT_CONFIGURED: DeviceRefusalCode = "mobile_api_not_configured"
 
 
+class ProxyRequiredError(ConnectionError):
+    """The account has no proxy: it is not connected from this computer's own IP."""
+
+
 class DeviceUnavailableError(ValueError):
     """The requested device cannot connect: the account lacks it, or mobile is not set up.
 
@@ -241,9 +245,14 @@ async def _ensure_session_dir() -> None:
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     # Before anything else: a computer that is not the fleet owner never connects a key.
     require_fleet_owner()
+    proxy = _proxy_config(profile)
+    if proxy is None and not settings.telegram.allow_direct_connection:
+        # Every flow builds its client here, so no path can connect a proxyless account.
+        # A ConnectionError: callers already read it as "account unreachable".
+        msg = "the account has no proxy (TELEGRAM__ALLOW_DIRECT_CONNECTION is off)"
+        raise ProxyRequiredError(msg)
     device = profile.device
     mobile = device.device_type == "mobile"
-    proxy = _proxy_config(profile)
     # Passed only when set: an explicit ``proxy=None`` is not what a proxy-less
     # client was ever built with.
     proxy_option: dict[str, Any] = {"proxy": proxy} if proxy is not None else {}

@@ -63,6 +63,10 @@ class TelegramSettings(BaseSettings):
     api_id: int = Field(default=0, ge=0, repr=False)
     api_hash: str = Field(default="", repr=False)
     session_dir: Path = Path("sessions")
+    # Off: an account without a proxy is never connected to Telegram (it would connect from
+    # this computer's own IP, the same IP for every such account). On only for a deliberate
+    # local test.
+    allow_direct_connection: bool = False
     timeout_seconds: int = Field(default=20, ge=1)
     connection_retries: int = Field(default=3, ge=0)
     retry_delay_seconds: int = Field(default=2, ge=0)

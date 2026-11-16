@@ -32,6 +32,7 @@ export {
   importAccountTdataMutation,
   loginAccountWithPasskeyMutation,
   logoutAccountMutation,
+  markAccountSessionOursMutation,
   openAccountMobileMutation,
   openAccountWebMutation,
   postAccountStoryMutation,

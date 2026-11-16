@@ -41,9 +41,10 @@ class AccountSession(BaseModel):
     # authorization it is.
     is_ours: bool
     # What made an own authorization that is not a Telethon device: ``web`` is Telebuba's
-    # own Telegram Web login (recorded when it ended). ``None`` for a device of ours and
-    # for every foreign session.
-    kind: Literal["web"] | None = None
+    # own Telegram Web login (recorded when it ended); ``manual`` one the operator marked
+    # as ours (an orphan of a failed sign-in, a login made by hand). ``None`` for a device
+    # of ours and for every foreign session.
+    kind: Literal["web", "manual"] | None = None
     # One of ours whose key was created BEFORE the account was added to Telebuba: the
     # seller made it and very likely still holds a copy. The device name shown is the
     # fingerprint Telebuba presents, the date is the key's; the remedy is the re-key.
@@ -113,3 +114,9 @@ class SessionAuditEvent(BaseModel):
     total: int = Field(ge=0)
     foreign_count: int = Field(ge=0)
     killed_count: int = Field(default=0, ge=0)
+
+
+class SessionOursRequest(BaseModel):
+    """The operator's mark on one listed session: ours, or (for such a mark) not ours."""
+
+    ours: bool

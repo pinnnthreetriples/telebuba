@@ -462,3 +462,37 @@ async def test_logout_cancels_an_open_qr_login(
     await login_service.logout_account("qr-1")
 
     assert cancelled == ["qr-1"]
+
+
+@pytest.mark.parametrize("status", ["new", "alive_unknown", "frozen"])
+@pytest.mark.asyncio
+async def test_a_qr_sign_in_is_refused_on_an_imported_account_not_known_dead(
+    monkeypatch: pytest.MonkeyPatch, status: str
+) -> None:
+    from core.db import create_account  # noqa: PLC0415 - this test only
+    from schemas.accounts import AccountCreate as _Create  # noqa: PLC0415
+    from services.accounts import qr_login as qr_service  # noqa: PLC0415
+
+    await create_account(_Create(account_id="imported-1"))
+    if status != "new":
+        await update_account_from_session_check(
+            TelegramSessionCheckResult(
+                account_id="imported-1",
+                session_path="imported-1",
+                status="frozen" if status == "frozen" else "network_error",
+                is_temporary=status != "frozen",
+            )
+        )
+    started: list[object] = []
+
+    async def _start(request: object) -> object:
+        started.append(request)
+        raise AssertionError
+
+    monkeypatch.setattr(qr_service, "_gateway_start", _start)
+
+    with pytest.raises(qr_service.QrLoginError) as refused:
+        await qr_service.begin_qr_login("imported-1")
+
+    assert refused.value.code == "session_not_dead"
+    assert started == []

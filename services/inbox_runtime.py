@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.db import fetch_account, list_accounts
 from core.logging import log_event
 from core.telegram_client import (
@@ -34,6 +35,10 @@ async def _start_account(account_id: str, account: AccountRead | None = None) ->
     if account is None:
         account = await fetch_account(account_id)
     if account is None or account.status in _NON_AUTHORIZED_STATUSES:
+        return False
+    if not settings.telegram.allow_direct_connection and account.proxy_id is None:
+        # Never connected without a proxy (it would use this computer's own IP); not a
+        # failure to retry either.
         return False
     subscribed = await subscribe_incoming_messages(account_id, on_message_received)
     if subscribed:

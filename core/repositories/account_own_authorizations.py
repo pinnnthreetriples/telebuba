@@ -42,6 +42,19 @@ async def save_own_authorizations(
     )
 
 
+def _forget_own_authorization(account_id: str, hash_: str) -> None:
+    table = _account_own_authorizations
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(table).where(table.c.account_id == account_id, table.c.hash == hash_)
+        )
+
+
+async def forget_own_authorization(account_id: str, hash_: str) -> None:
+    """Stop counting ``hash_`` as ours (the operator took a mark back)."""
+    await asyncio.to_thread(_forget_own_authorization, account_id, hash_)
+
+
 def _prune_own_authorizations(account_id: str, listed: list[str]) -> None:
     table = _account_own_authorizations
     statement = delete(table).where(table.c.account_id == account_id, table.c.hash.not_in(listed))

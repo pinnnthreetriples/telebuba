@@ -10,6 +10,8 @@ If any one of the account's clients cannot answer, the whole read fails: a parti
 
 The Telegram app inside a mobile container (pod) is not one of our clients, so its authorization is not recognised as ours and lists as foreign. Closing is therefore always an explicit, confirmed operator action.
 
+**Marked ours by hand.** What Telebuba cannot prove (an orphan of a failed sign-in, a login made by hand, a web login from before they were recorded) the operator can mark as ours on the card ("This session is ours", `PUT /accounts/{id}/sessions/{hash}/ours`); it then counts as ours (kind `manual`): no foreign badge, no alert, and a close refuses it. Nothing is closed and Telegram is not asked. Only such a mark can be taken back.
+
 ## When it runs
 
 - On demand from the account's "Sessions" card.

@@ -125,7 +125,7 @@ def _session(
         hash=str(hash_),
         is_current=current,
         is_ours=is_own_device or kind is not None,
-        kind=cast("Literal['web'] | None", kind),
+        kind=cast("Literal['web', 'manual'] | None", kind),
         official_app=bool(getattr(authorization, "official_app", None)),
         device_model=str(getattr(authorization, "device_model", "") or ""),
         platform=str(getattr(authorization, "platform", "") or ""),
