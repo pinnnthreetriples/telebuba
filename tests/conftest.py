@@ -90,6 +90,13 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     Isolating the directory suite-wide fixes the race and stops the leak at once.
     """
     monkeypatch.setattr(settings.telegram, "session_dir", tmp_path / "sessions")
+    # The session vault and the quarantine a removed session goes to: under the repo root
+    # by default, i.e. next to the live instance's own copies. Off (no key) unless a test
+    # turns it on.
+    monkeypatch.setattr(settings.session_vault, "dir", tmp_path / "session_vault")
+    monkeypatch.setattr(settings.session_vault, "mirror_dir", None)
+    monkeypatch.setattr(settings.session_vault, "quarantine_dir", tmp_path / "session_quarantine")
+    monkeypatch.setattr(settings.session_vault, "key", "")
 
 
 @pytest.fixture(autouse=True)

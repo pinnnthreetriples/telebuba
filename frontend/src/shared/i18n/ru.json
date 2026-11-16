@@ -2311,7 +2311,9 @@
     "session_old_key_close_requested": "Оператор закрывает старую сессию",
     "account_session_dead": "Сессия аккаунта больше не работает",
     "session_death_suspected": "Ключ аккаунта похож на мёртвый — проверяем сессию",
-    "session_guard_stalled": "Сторож сессий остановился или молчит"
+    "session_guard_stalled": "Сторож сессий остановился или молчит",
+    "session_vault_off": "Копии сессий не делаются: не задан SESSION_VAULT__KEY",
+    "session_backup_failed": "Не удалось сохранить копию сессии"
   },
   "logEventReason": {
     "freed": "аккаунт освободился",

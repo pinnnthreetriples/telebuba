@@ -31,13 +31,15 @@ followed straight by reset-session), so all three also run under
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path as PlainPath
 from typing import TYPE_CHECKING
 
-from anyio import Path
+from anyio import Path, to_thread
 from telethon import TelegramClient, errors
 from telethon.tl.functions.auth import LogOutRequest
 
 from core.config import settings
+from core.session_vault import quarantine_file, snapshot_session
 from core.telegram_client._auth_bounds import (
     UNREACHABLE_ERRORS,
     auth_deadline,
@@ -311,10 +313,20 @@ def _challenge_error(
 
 
 async def _remove_session_file(session_path: str) -> None:
-    # Telethon's SQLiteSession stores at "<session_path>.session".
+    """Take the session file out of the sessions folder: into the quarantine, not deleted.
+
+    A ``.session`` is the only copy of an auth key; a removal that turns out wrong (the
+    wrong account, a key that was still alive) must stay recoverable for a while
+    (``core.session_vault``, purged after ``SESSION_VAULT__QUARANTINE_DAYS``). Telethon's
+    SQLiteSession stores at "<session_path>.session"; its ``-journal`` sidecar, if one is
+    left, holds nothing of its own and is dropped.
+    """
     session_file = Path(f"{session_path}.session")
     if await session_file.exists():
-        await session_file.unlink()
+        await to_thread.run_sync(quarantine_file, PlainPath(str(session_file)))
+    journal = Path(f"{session_path}.session-journal")
+    if await journal.exists():
+        await journal.unlink()
 
 
 async def remove_account_session(account_id: str, session_name: str | None = None) -> None:
@@ -390,3 +402,16 @@ def _alive_result(
         premium=optional_bool(getattr(me, "premium", None)),
         typed_password_accepted=typed_password_accepted,
     )
+
+
+async def back_up_account_session(account_id: str, session_name: str | None = None) -> bool:
+    """Store an encrypted copy of one of the account's session files (``core.session_vault``).
+
+    ``True`` when a new version was written; ``False`` when the vault is off, the file is not
+    there or nothing changed since the last copy. Path composition is the client's own, so
+    the copy is of exactly the file a client would open.
+    """
+    session_file = PlainPath(
+        f"{await _session_path(_login_request(account_id, session_name))}.session"
+    )
+    return await to_thread.run_sync(snapshot_session, session_file) is not None

@@ -35,6 +35,7 @@ from core.telegram_client._action_results import UNCONFIRMED_ERROR_TYPE
 from core.telegram_client._actions import execute
 from core.telegram_client._auth import (
     account_auth_lock,
+    back_up_account_session,
     log_out_session,
     remove_account_session,
     request_phone_code,
@@ -128,6 +129,7 @@ __all__ = [
     "accept_web_login_token",
     "account_auth_lock",
     "authorize_second_device",
+    "back_up_account_session",
     "cancel_qr_login",
     "check_spam_status",
     "check_telegram_session",

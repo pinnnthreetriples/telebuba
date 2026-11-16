@@ -2272,7 +2272,9 @@
     "session_old_key_close_requested": "The operator is closing the old session",
     "account_session_dead": "The account's session no longer works",
     "session_death_suspected": "The account's key looks dead: checking the session",
-    "session_guard_stalled": "The session guard stopped or went silent"
+    "session_guard_stalled": "The session guard stopped or went silent",
+    "session_vault_off": "Session copies are off: SESSION_VAULT__KEY is not set",
+    "session_backup_failed": "Could not store a session copy"
   },
   "logEventReason": {
     "freed": "the account became free",
