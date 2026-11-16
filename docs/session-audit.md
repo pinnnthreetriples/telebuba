@@ -70,3 +70,14 @@ Verified against the pages on 2026-11-02, not assumed:
 - If the account has a stored passkey, the watch asks Telegram whether it still lists it (`check_account_passkey`, read-only). A passkey that is gone is logged (`session_watch_passkey_missing`) and sent to the operator bot (kind `passkey_missing`): somebody else was in the account's security settings.
 
 Switch it off with `SESSION_AUDIT__WATCH_ENABLED=false`; the old-key closing keeps running.
+
+## A dead key is never silent
+
+On 2026-11-14 an account's key died and was found 41 hours later, and the guard itself had stopped in the same moment. Four things now stand against that:
+
+- **No stray cancellation.** When a client's update loop meets a dead key, Telethon disconnects it and cancels every request still waiting (`future.cancel()`). The client every flow builds (`core/telegram_client/_guarded_client.py`) turns that into the auth error Telethon recorded, or a `ConnectionError`, so callers classify it like any other refusal and no loop is ended by a `CancelledError` it never asked for.
+- **The death watch** (`services/session_death_watch.py`, started with the guard) reads the live log bus. A row saying an account's key is dead (an action's `*_failed` with `error_type` `session_dead` / `account_deactivated`, or a refused audit) starts one ordinary session check for that account, at most once per `SESSION_AUDIT__DEATH_CHECK_COOLDOWN_SECONDS`. Busy accounts (warming, campaigns), which the watch never reads, are covered this way. Never for an account without a proxy.
+- **A dead key is `unauthorized`**, whichever client found it, so it is journalled (`session_dead`) and the journal row tells the operator bot (`account_session_dead`, kind `session_dead`).
+- **The watchdog** looks at the guard's heartbeat every guard interval: a guard whose task ended, or that did nothing for longer than a step's deadline plus two passes, is logged once as `session_guard_stalled` (to the bot, kind `session_guard`) and an ended one is started again. `GET /session-guard` serves the heartbeat; Settings shows it.
+
+In the background pass each account's old-key close has its own deadline (`SESSION_AUDIT__OLD_KEY_ACCOUNT_TIMEOUT_SECONDS`): one stuck account is tried again later instead of holding the others.

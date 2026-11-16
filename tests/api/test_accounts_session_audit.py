@@ -239,3 +239,25 @@ async def test_closing_the_old_key_answers_the_view_or_its_stable_code(
     assert closed.json()["closed_at"] == "2026-11-16T10:00:00+00:00"
     assert refused.status_code == 400
     assert refused.json()["error"]["message"] == "rekey_old_key_none"
+
+
+@pytest.mark.asyncio
+async def test_the_session_guard_heartbeat_is_served(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from schemas.session_guard import SessionGuardStatus  # noqa: PLC0415 - this test only
+
+    async def _status() -> SessionGuardStatus:
+        return SessionGuardStatus(
+            running=True,
+            last_activity_at="2026-11-16T10:00:00+00:00",
+            stalled=True,
+            reason="silent",
+        )
+
+    monkeypatch.setattr("services.session_guard.read_session_guard_status", _status)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/session-guard")
+
+    assert resp.status_code == 200
+    assert resp.json()["reason"] == "silent"

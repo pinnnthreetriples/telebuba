@@ -340,6 +340,9 @@ import type {
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
+  GetSessionGuardStatusData,
+  GetSessionGuardStatusErrors,
+  GetSessionGuardStatusResponses,
   GetUserParserRunData,
   GetUserParserRunErrors,
   GetUserParserRunResponses,
@@ -2095,6 +2098,20 @@ export const closeAccountOldKey = <ThrowOnError extends boolean = false>(
     CloseAccountOldKeyErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/rekey/close-old-key', ...options });
+
+/**
+ * Get Session Guard Status
+ *
+ * The session guard's heartbeat: running, its last activity, and whether it stalled.
+ */
+export const getSessionGuardStatus = <ThrowOnError extends boolean = false>(
+  options?: Options<GetSessionGuardStatusData, ThrowOnError>,
+): RequestResult<GetSessionGuardStatusResponses, GetSessionGuardStatusErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetSessionGuardStatusResponses,
+    GetSessionGuardStatusErrors,
+    ThrowOnError
+  >({ url: '/api/v1/session-guard', ...options });
 
 /**
  * Set Account Registered At

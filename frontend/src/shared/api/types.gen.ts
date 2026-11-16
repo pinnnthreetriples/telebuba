@@ -7430,6 +7430,30 @@ export type SessionCloseResult = {
 };
 
 /**
+ * SessionGuardStatus
+ *
+ * Whether the guard runs, when it last did something, and whether that is too long ago.
+ */
+export type SessionGuardStatus = {
+  /**
+   * Running
+   */
+  running: boolean;
+  /**
+   * Last Activity At
+   */
+  last_activity_at?: string | null;
+  /**
+   * Stalled
+   */
+  stalled?: boolean;
+  /**
+   * Reason
+   */
+  reason?: 'stopped' | 'silent' | null;
+};
+
+/**
  * SetAccountChannelRequest
  *
  * Set the campaign channels an account targets; an empty list = all channels.
@@ -13871,6 +13895,41 @@ export type CloseAccountOldKeyResponses = {
 
 export type CloseAccountOldKeyResponse =
   CloseAccountOldKeyResponses[keyof CloseAccountOldKeyResponses];
+
+export type GetSessionGuardStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/session-guard';
+};
+
+export type GetSessionGuardStatusErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetSessionGuardStatusError =
+  GetSessionGuardStatusErrors[keyof GetSessionGuardStatusErrors];
+
+export type GetSessionGuardStatusResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionGuardStatus;
+};
+
+export type GetSessionGuardStatusResponse =
+  GetSessionGuardStatusResponses[keyof GetSessionGuardStatusResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

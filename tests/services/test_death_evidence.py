@@ -200,3 +200,27 @@ async def test_a_failing_audit_read_never_breaks_the_death_record(
     monkeypatch.setattr(lifecycle_journal, "fetch_last_session_audit_event", _broken)
 
     assert await _die("unauthorized") == {"status": "unauthorized"}
+
+
+@pytest.mark.asyncio
+async def test_a_death_is_logged_once_for_the_operator_bot(monkeypatch: pytest.MonkeyPatch) -> None:
+    logged: list[tuple[str, str | None]] = []
+
+    async def _log_event(_level: str, event: str, **kwargs: object) -> None:
+        logged.append((event, kwargs.get("account_id")))  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(lifecycle_journal, "log_event", _log_event)
+    await _alive()
+    account = await fetch_account("a1")
+    assert account is not None
+    await record_session_death(account, "unauthorized")
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="a1", session_path="a1", status="unauthorized", is_temporary=False
+        ),
+    )
+    dead = await fetch_account("a1")
+    assert dead is not None
+    await record_session_death(dead, "unauthorized")  # the same death, seen again
+
+    assert logged == [("account_session_dead", "a1")]

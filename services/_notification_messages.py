@@ -35,6 +35,11 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     "session_audit_foreign_found": "foreign_session",
     # The watch found that Telegram no longer lists the account's stored passkey.
     "session_watch_passkey_missing": "passkey_missing",
+    # A session check found the account's key gone (journalled once per death).
+    "account_session_dead": "session_dead",
+    # The session guard failed a step or stopped making passes.
+    "session_guard_failed": "session_guard",
+    "session_guard_stalled": "session_guard",
 }
 
 _PREFIX = "Telebuba · "
@@ -55,6 +60,14 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "passkey_missing": (
         "{label}: ключ доступа аккаунта пропал из Telegram — "
         "в настройках безопасности аккаунта был кто-то ещё."
+    ),
+    "session_dead": (
+        "{label}: сессия аккаунта больше не работает. "
+        "Войдите заново: ключом доступа (passkey) или кодом входа."
+    ),
+    "session_guard": (
+        "Сторож сессий дал сбой или перестал делать проходы — "
+        "проверка сессий и закрытие старых ключей могут не работать."
     ),
 }
 TEST_MESSAGE = f"{_PREFIX}тестовое уведомление: бот настроен и пишет в этот чат."
