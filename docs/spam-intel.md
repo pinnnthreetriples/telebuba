@@ -295,6 +295,25 @@ New `core/_config_spam_intel.py` (`SPAM_INTEL__*`, mirrored in `.env.example`, w
 
 Per-stage thresholds (all validated, `core/_config_spam_intel.py`): coalesce 30 min; account daily cap 4; proxy spacing 120 min; fleet gap 3-10 min; soft/hard caps 10/24; operator daily cap 3; startup quiet 10 min; routine 72/120/168 h; backoff 6/12/24/48 h; limited recheck 5 d.
 
+### 5.12 Semi-automatic appeal of a spam block (Stage 3; added at the owner's request, 2026-11-16)
+
+**Hard limit, first.** The program never presses an @SpamBot button ("This is a mistake" and the like), never answers one of its questions, never passes or solves the appeal's captcha, never sends appeal text. A human does the whole appeal in the account's own Telegram Web window. The only message the code ever sends to @SpamBot stays the `/start` of the probe, already agreed. What the code adds is a notification, a window opened on the right dialog, and a record that the human says they filed.
+
+1. **Notification when block evidence appears** (a `limited` @SpamBot reading, or fresh PeerFlood evidence), through the existing operator bot (`services/_notification_messages.py`): the account, the end date or "бессрочно", and the source ("@SpamBot", "PeerFlood"). The date and the source are values the program derived (an ISO date, an enumerated source), never a quoted reply, which keeps the rule that a message never carries log `extra` or third-party text. Throttled per account and kind like the other notifications. It extends the existing `spam_limited` kind rather than adding one.
+2. **Safe mode is not a new state.** Every consumer already reads the verdict, so safe mode is those readers being consistent, and this section lists what each does today instead of adding a second mechanism:
+
+| Consumer | Today for a `limited` account | Stage 3 |
+|---|---|---|
+| Warming | PeerFlood or a `limited` check → quarantine 48 h, a confirmed block → `spam_blocked` (DMs off; search, join, read, react stay on, i.e. the gentle mode) | unchanged: nothing is duplicated |
+| Outreach, bulk messages, masstagging | skip a `limited` account | unchanged, now through `verdicts_for` (a dated limit that expired reads `unknown`) |
+| Neurocomment | readiness and trust gates refuse `limited` ("spam limited") **unless the block is known and kept** (`spam_block_known`): a kept account is handed to neurocomment on purpose, because commenting needs no messages to strangers | **conflict with the request, see D14**: the request says neurocomment stops; the existing rule says a kept account may comment |
+| Chat broadcast | **reads no spam status at all**; an account rests only after its own PeerFlood | new, small: a `limited` verdict rests the account through the broadcast's existing rest (`rest_for`, `spam_rest_seconds`), the same exit a PeerFlood takes, so a known block is not discovered by sending |
+
+3. **"Подать апелляцию" button on the account card** calls the existing `open_account_web` (the account's own proxy and fingerprint; refused without a proxy as today) with a navigation target. `core/web_login/browser.py` navigates to `https://web.telegram.org/k/` today; for an open window it raises the window and then navigates it (`Page.navigate`), for a new one it launches on the target URL. Target candidates, in order: WebK's own deep link `https://web.telegram.org/k/#@SpamBot` (WebK resolves `#@username` itself), then the form Telegram's `tg://` links use on the web, `?tgaddr=tg%3A%2F%2Fresolve%3Fdomain%3DSpamBot`. **Neither is verified**: it is a live check on one account the owner chooses (D8), recorded in the PR that lands it. If the dialog does not open, the window still opens on WebK and the operator searches @SpamBot by hand; nothing breaks.
+4. **Record of the appeal**: table `spam_appeals` (migration 116: account, `filed_at`, `filed_by` = the signed-in operator, the verdict and end date at that moment; one open row per account, closed by a `clean`). The operator presses "Апелляция подана"; the card shows when and by whom. Nothing infers it from the window. **Re-check**: by the end date (+ the jitter of D5) or, for an undated limit, `appeal_recheck_hours` (24) after filing, as an ordinary DECISION ask under the budget, so there are no extra probes; a button still follows the operator limits. **Lifting a block is unchanged: only an @SpamBot `clean` lifts it (D4)**, whether or not an appeal was filed.
+
+**How the hard limit is pinned by tests (T18):** (a) an AST test: the appeal module imports nothing from `core.telegram_client` and no send, click or `Input.*` symbol; (b) a behaviour test against a fake CDP session records every command `open_account_web` sends for the appeal and asserts the allowlist `Page.navigate`, `Target.activateTarget`, `Page.bringToFront` and nothing else (no `Input.dispatch*`, no `Runtime.evaluate` that clicks or types); (c) a test that the gateway's only send to the bot is the probe's `/start`, with the history reader and the appeal sending nothing; (d) the appeal route takes no body that could become text.
+
 ## 6. Caller by caller: was → will be
 
 "Name the difference, justify it, test it." `U` = a `deferred`/`refused` answer that the caller must not mistake for an unreadable reading.
@@ -312,6 +331,8 @@ Per-stage thresholds (all validated, `core/_config_spam_intel.py`): coalesce 30 
 | Operator button | forced, unlimited | OPERATOR: ≥ 30 min hard minimum, `confirm_out_of_turn` under 24 h, 3 extra per day, served from the last reading inside 30 min; response gains `served_from`, `next_allowed_at`, `probed` | shows source and confidence | card and confirmation dialog |
 | Masstagging `spamblock` write | direct `upsert_spam_status('limited', 'peer_flood')`, no journal, no lift | goes through the gateway as the same row (no behaviour change yet) | `peer_flood_send` evidence; no longer looks like a fresh @SpamBot reading | — |
 | Outreach protection, masstagging fleet, trust, selection, board, table (readers) | read `limited` of any age; `unknown` = allowed | unchanged | read through `verdicts_for`: a dated limit that expired reads `unknown` (not skipped); an undated one stays `limited` until a clean arrives, and is rechecked (D5) | card shows the source |
+| Appeal of a block | none: the operator opens the window by hand and finds the dialog | unchanged | the verdict-change notification (Stage 2) | notification with the account, the end date or "бессрочно" and the source; "Подать апелляцию" opens the window on the @SpamBot dialog; "Апелляция подана" is recorded and shown; re-check by the date or the budget; the program presses and sends nothing (5.12) |
+| Chat broadcast for a `limited` account | sends until its own PeerFlood | unchanged | unchanged | rests through its existing rest (D14) |
 | Frozen | account status only | unchanged | `freeze_seen` evidence; legacy projection `unknown` + detail `frozen`; probes refused (rule 1) | card |
 | Lift of a spam block | any `clean` | any persisted **@SpamBot** `clean` | same: a passive clean never lifts (D4) | — |
 
@@ -329,7 +350,7 @@ One PR per stage, the next starts only after the previous is merged on green CI 
 
 **Stage 2: evidence and passive signals.** Evidence table and migration 115, the fold, operator notifications when a verdict turns `limited` or `frozen` (the existing `spam_limited` notification already fires on `spam_status_refreshed`; Stage 2 extends it to passive evidence and adds `frozen`), the signal port and all passive sources, readers through `verdicts_for`, freeze as a verdict, `passive_decisions` **off** for the first two weeks (shadow comparison of the fold with the real @SpamBot answers).
 
-**Stage 3: live probe and UI.** `converse_with_spambot`, `has_live_client`, the multi-language lexicons built from captured samples, the card, the confirmation dialog, the warning. The first live run of the human sequence is on **one account the owner chooses**, with the owner's explicit approval (D8).
+**Stage 3: live probe, UI and the semi-automatic appeal (5.12).** `converse_with_spambot`, `has_live_client`, the multi-language lexicons built from captured samples, the card, the confirmation dialog, the warning. The first live run of the human sequence is on **one account the owner chooses**, with the owner's explicit approval (D8).
 
 After each merge: 24-48 h later, read-only on the production machine: probes per account, errors, refusals, verdict changes, compared with section 3.2, and a report.
 
@@ -355,6 +376,7 @@ Ids are referenced from the PR descriptions.
 | T14 | API and OpenAPI: additive fields, error contract, `confirm_out_of_turn`, generated types in sync | `tests/api/`, `tests/test_api_error_contract.py`, `tools.gen_api` |
 | T15 | Frontend: confirmation dialog, source line, budget warning; Vitest per widget; Playwright where the editor spec exists | `frontend/` |
 | T16 | Kill switches: each off-state reproduces the old behaviour on the original tests (the current test files stay green unmodified with the switches off) | parametrised over the existing suites |
+| T18 | Appeal (Stage 3): the hard limit (AST allowlist, fake-CDP command allowlist, no send but `/start`, no free-text route); the notification carries the account, the date or "бессрочно" and the source and no third-party text; the record (who, when, one open row, closed by `clean`); the re-check timing under the budget; broadcast rests a `limited` account; migration 116 | `tests/services/spam_intel/test_appeal*.py`, `tests/core/test_migrations_spam_appeals.py`, `tests/core/web_login/` |
 | T17 | Coverage stays ≥ 90 % branch, warnings fail, MEX check and re-pinned `bodyHash` for any grounded function touched | CI |
 
 ## 9. Risks and how each is closed
@@ -375,6 +397,9 @@ Ids are referenced from the PR descriptions.
 | R12 | The ledger starts empty and the first day after deploy allows a burst | migration backfill from the journal; quiet start; fleet spacing; T3, T10 |
 | R13 | A live action on a production account | none planned in Phases 0-2; Stage 3 live validation only on one account chosen by the owner, with approval (D8) |
 | R14 | Failure to emit a signal changes a Telegram action's result | the sink is awaited inside a guarded wrapper, errors swallowed and logged; T11 |
+| R16 | The appeal drifts into automation (a button press, a typed reply, a captcha attempt) | not implementable by construction: no send path, no input dispatch in the appeal code; pinned by T18 (a)-(d). A request to automate any step is a design change, not a patch |
+| R17 | `#@SpamBot` does not open the dialog in the installed WebK build | the window still opens; fallback deep link; live check on one account (D8); the operator finds the bot by hand |
+| R18 | "Safe mode" duplicates or contradicts quarantine, `spam_blocked` or the kept-account rule | no new state (5.12 table); the one real conflict, neurocomment, is D14 |
 | R15 | Stored reply samples hold personal data | redaction before storing, size and row caps, dedupe; T9 |
 
 ## 10. Decisions (all accepted as recommended on 2026-11-16; D4 "no", D8 only after Stage 3 and with the owner's explicit yes)
@@ -395,6 +420,10 @@ Ids are referenced from the PR descriptions.
 | D12 | Frozen shown as a separate verdict in the card; legacy projection `unknown` + detail `frozen` | **Yes** | add `frozen` to `SpamStatusKind` (touches every consumer and the API type) |
 | D13 | Defer routine probes out of the account's local night | **Yes, in Stage 3** (warming already has the active-hours helper) | not at all |
 
+| D14 | Neurocomment for a kept spam-blocked account: the request says stop it; today's rule lets a kept account comment (commenting needs no messages to strangers, and the hand-off is allowed with a known block) | **Keep today's rule** and stop only an account whose block is NOT known and kept; the operator decides \"keep\" on the card (the existing `Оставить`) | stop neurocomment for every `limited` account (changes a documented, tested contract) |
+| D15 | The appeal re-check: at the end date + jitter, or 24 h after filing for an undated limit, as an ordinary decision ask | **Yes** | only by hand |
+| D16 | The notification names the end date and the source | **Yes**; the date is derived by the program, never a quoted reply | no date |
+
 ## 11. Not verified (and therefore not assumed)
 
 - @SpamBot's exact reply texts, buttons, multi-message behaviour, and whether the language follows the client `lang_code`. No official source; the lexicons wait for captured samples.
@@ -403,4 +432,5 @@ Ids are referenced from the PR descriptions.
 - Whether a frozen account can talk to @SpamBot.
 - Whether a pooled client that stays connected is seen as "online" by Telegram, and what the cold connect of an idle account looks like. Not changed here.
 - The cause of each historical burst (nothing recorded the caller). Stage 1 records it from now on.
+- Whether `#@SpamBot` (or the `tgaddr` form) opens the dialog in the WebK build the web window loads, and how @SpamBot's appeal flow looks (buttons, captcha): only a human in a window can tell; the program is built not to need either.
 - Telegram's page for `channels.joinChannel` and `/faq_spam` (the bare URL) did not load for the fetcher; the `?setln=en` form did.
