@@ -2313,7 +2313,8 @@
     "session_death_suspected": "Ключ аккаунта похож на мёртвый — проверяем сессию",
     "session_guard_stalled": "Сторож сессий остановился или молчит",
     "session_vault_off": "Копии сессий не делаются: не задан SESSION_VAULT__KEY",
-    "session_backup_failed": "Не удалось сохранить копию сессии"
+    "session_backup_failed": "Не удалось сохранить копию сессии",
+    "instance_not_fleet_owner": "Этот компьютер не хозяин парка: подключения к Telegram запрещены"
   },
   "logEventReason": {
     "freed": "аккаунт освободился",
