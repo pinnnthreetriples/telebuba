@@ -10,11 +10,13 @@ sessions, whatever it is asked.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Path
 
 from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
-from schemas.session_audit import AccountSessionAudit
+from schemas.session_audit import AccountSessionAudit, SessionOursRequest
 from schemas.session_close import SessionCloseRequest, SessionCloseResult
 from schemas.session_guard import SessionGuardStatus
 from schemas.session_rekey import AccountRekeyView
@@ -124,3 +126,19 @@ async def close_account_old_key(account_id: str) -> AccountRekeyView:
 async def get_session_guard_status() -> SessionGuardStatus:
     """The session guard's heartbeat: running, its last activity, and whether it stalled."""
     return await session_guard.read_session_guard_status()
+
+
+@session_audit_router.put(
+    "/accounts/{account_id}/sessions/{session_hash}/ours",
+    response_model=AccountSessionAudit,
+    operation_id="markAccountSessionOurs",
+    responses=SERVICE_ERRORS,
+)
+async def mark_account_session_ours(
+    account_id: str,
+    session_hash: Annotated[str, Path(pattern=r"^-?[0-9]{1,20}$")],
+    body: SessionOursRequest,
+) -> AccountSessionAudit:
+    """Mark a listed session as ours (or take such a mark back). Closes nothing."""
+    with service_errors_to_http():
+        return await accounts.mark_session_ours(account_id, session_hash, ours=body.ours)

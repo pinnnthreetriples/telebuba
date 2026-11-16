@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.tl.functions.auth import FinishPasskeyLoginRequest, InitPasskeyLoginRequest
+from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.types import DataJSON, InputPasskeyCredentialPublicKey, InputPasskeyResponseLogin
 
 from core.passkey_vault import PasskeyVaultError, sign_with_key
@@ -157,6 +158,22 @@ async def _log_out_quietly(client: TelegramClient) -> None:
         logger.warning("passkey sign-in logout failed (%s)", type(exc).__name__)
 
 
+async def _authorized(client: TelegramClient) -> bool:
+    """Whether the session is signed in; ``False`` only when Telegram says it is not.
+
+    Not Telethon's ``is_user_authorized()``: it answers ``False`` for ANY refusal of its
+    probe (a flood wait, an internal error), and a "not authorized" here starts a passkey
+    sign-in, whose DC switch empties the auth key in the account's own file. A live key
+    must never be thrown away on a hiccup, so anything but an authorization refusal is
+    raised and ends the attempt as a failure the caller reports.
+    """
+    try:
+        await client(GetStateRequest())
+    except errors.UnauthorizedError:
+        return False
+    return True
+
+
 async def _sign_in_verdict(
     client: TelegramClient,
     passkey: StoredPasskey,
@@ -168,7 +185,7 @@ async def _sign_in_verdict(
     A fresh sign-in that landed on another user is logged out again. An already
     authorized session of another user is not ours to end: it is reported and left.
     """
-    already = await client.is_user_authorized()
+    already = await _authorized(client)
     if not already:
         await _finish_with_retry(client, passkey)
     me = await client.get_me()

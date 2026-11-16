@@ -27,6 +27,9 @@ QrLoginErrorCode = Literal[
     "password_invalid",
     "flood_wait",
     "connection_failed",
+    # An imported account whose own session is not known to be dead: a QR sign-in on its
+    # file would replace (and, for a duplicate, log out) a key that may still work.
+    "session_not_dead",
 ]
 
 

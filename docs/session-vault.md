@@ -35,3 +35,7 @@ The database is backed up as well (`DB__BACKUP_ENABLED`, on by default): it hold
 ## One owner of the fleet
 
 Copies of the session files on a second computer (a laptop) are a backup only while that computer never connects them: two instances on one key, from two IPs, get the key revoked. `INSTANCE__FLEET_OWNER_HOST` names the one computer (its hostname) that may build Telegram clients. Set it on every computer that holds copies; on any other the client factory refuses (`FleetOwnerRefusedError`, read by every caller as an unreachable account) and the startup log says `instance_not_fleet_owner`. Empty means no restriction.
+
+## Never without a proxy
+
+An account without a proxy is never connected to Telegram: it would connect from this computer's own IP, the same for every such account. The client factory refuses (`ProxyRequiredError`), a session check is refused before it writes anything (`proxy_required`), and the inbox does not start for such an account. `TELEGRAM__ALLOW_DIRECT_CONNECTION=true` lifts this, for a deliberate local test only.

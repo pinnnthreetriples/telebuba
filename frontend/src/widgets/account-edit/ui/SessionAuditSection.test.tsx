@@ -302,3 +302,29 @@ test('after a re-key the seller warning is gone', async () => {
   await screen.findByText('Чужих сессий нет.');
   expect(screen.queryByText(/У купленного аккаунта его мог создать продавец/)).toBeNull();
 });
+
+test('a foreign session can be marked ours, which closes nothing', async () => {
+  const marked = session({ hash: '2', is_ours: true, kind: 'manual' });
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const body =
+      request.method === 'PUT'
+        ? audit([OURS, marked], '2026-11-02T10:00:00+00:00')
+        : audit([OURS, STRANGER], '2026-11-02T10:00:00+00:00');
+    return Promise.resolve(
+      new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } }),
+    );
+  });
+  await renderSection();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Это наша сессия' }));
+
+  expect(await screen.findByText('отмечена вручную')).toBeVisible();
+  const puts = vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => request.method === 'PUT');
+  expect(puts.map((request) => new URL(request.url).pathname)).toEqual([`${URL_PATH}/2/ours`]);
+  expect(posts()).toHaveLength(0);
+  expect(screen.getByRole('button', { name: 'Не наша' })).toBeVisible();
+});

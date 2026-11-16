@@ -97,6 +97,7 @@ export {
   importAccountSessionMutation,
   importAccountTdataMutation,
   logoutAccountMutation,
+  markAccountSessionOursMutation,
   openAccountMobileMutation,
   openAccountWebMutation,
   postAccountStoryMutation,

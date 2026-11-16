@@ -8,6 +8,7 @@ import {
   accountSessionAuditQueryOptions,
   auditAccountSessionsMutation,
   invalidateAccountViews,
+  markAccountSessionOursMutation,
 } from '@/entities/account';
 import type { AccountRead, AccountSession } from '@/shared/api';
 import { cn, formatLocalDateTime } from '@/shared/lib';
@@ -23,8 +24,20 @@ import { SessionRekeyControls } from './SessionRekeyControls';
 // badge follows the same number. Ending a foreign session is SessionCloseControls.
 // Ours and foreign must not look alike: a foreign row is red with a bar and a «Foreign»
 // badge, ours is green with «Ours», so the operator reads the verdict before the details.
-function SessionRow({ session }: { session: AccountSession }) {
+// `onMark` is the operator's word on what Telebuba cannot prove: a foreign row may be
+// marked ours (an orphan of a failed sign-in, a login made by hand), and only such a mark
+// can be taken back. Marking closes nothing.
+function SessionRow({
+  session,
+  onMark,
+  marking,
+}: {
+  session: AccountSession;
+  onMark?: (hash: string, ours: boolean) => void;
+  marking?: boolean;
+}) {
   const { t, i18n } = useTranslation();
+  const manual = session.kind === 'manual';
   const when = (iso: string) => formatLocalDateTime(Date.parse(iso), i18n.language);
   const isWeb = session.kind === 'web';
   const device = isWeb
@@ -68,6 +81,20 @@ function SessionRow({ session }: { session: AccountSession }) {
         {session.unconfirmed ? (
           <Badge tone="warning">{t('accounts.edit.sessionsUnconfirmed')}</Badge>
         ) : null}
+        {manual ? <Badge tone="neutral">{t('accounts.edit.sessionsManualBadge')}</Badge> : null}
+        {onMark && !session.is_current && (!session.is_ours || manual) ? (
+          <Button
+            size="sm"
+            disabled={marking}
+            onClick={() => {
+              onMark(session.hash, !session.is_ours);
+            }}
+          >
+            {session.is_ours
+              ? t('accounts.edit.sessionsUnmarkOurs')
+              : t('accounts.edit.sessionsMarkOurs')}
+          </Button>
+        ) : null}
       </div>
       {system ? <div className="type-small text-content-subtle">{system}</div> : null}
       {place ? <div className="type-small text-content-subtle">{place}</div> : null}
@@ -85,10 +112,14 @@ function SessionGroup({
   title,
   explain,
   sessions,
+  onMark,
+  marking,
 }: {
   title: string;
   explain: string;
   sessions: AccountSession[];
+  onMark?: (hash: string, ours: boolean) => void;
+  marking?: boolean;
 }) {
   return (
     <div className="mb-3">
@@ -101,7 +132,7 @@ function SessionGroup({
       <p className="mb-2 type-small text-content-subtle">{explain}</p>
       <ul className="flex flex-col gap-2">
         {sessions.map((session) => (
-          <SessionRow key={session.hash} session={session} />
+          <SessionRow key={session.hash} session={session} onMark={onMark} marking={marking} />
         ))}
       </ul>
     </div>
@@ -118,6 +149,18 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
   // A DB read only, but gated like the other cards so a closed card costs nothing.
   const saved = useQuery({ ...accountSessionAuditQueryOptions(path), enabled: open });
   const check = useMutation(auditAccountSessionsMutation());
+  const mark = useMutation(markAccountSessionOursMutation());
+  const onMark = (hash: string, ours: boolean) => {
+    mark.mutate(
+      { path: { account_id: accountId, session_hash: hash }, body: { ours } },
+      {
+        onSuccess: (audit) => {
+          queryClient.setQueryData(accountSessionAuditQueryKey(path), audit);
+          invalidateAccountViews(queryClient);
+        },
+      },
+    );
+  };
   // Never re-keyed: the key in use may be the one whoever sold the account made.
   const rekey = useQuery({ ...accountRekeyQueryOptions(path), enabled: open });
   const neverRekeyed = rekey.isSuccess && !rekey.data.rekeyed_at;
@@ -184,6 +227,8 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
         <>
           {others.length > 0 ? (
             <SessionGroup
+              onMark={onMark}
+              marking={mark.isPending}
               title={t('accounts.edit.sessionsForeignTitle')}
               explain={t('accounts.edit.sessionsForeignExplain')}
               sessions={others}
@@ -194,6 +239,8 @@ export function SessionAuditSection({ account }: { account: AccountRead }) {
             </p>
           )}
           <SessionGroup
+            onMark={onMark}
+            marking={mark.isPending}
             title={t('accounts.edit.sessionsOursTitle')}
             explain={t('accounts.edit.sessionsOursExplain')}
             sessions={ours}

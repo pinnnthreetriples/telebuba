@@ -28,6 +28,17 @@ async def fetch_account_passkey(account_id: str) -> StoredPasskey | None:
     return await asyncio.to_thread(_fetch_account_passkey, account_id)
 
 
+def _list_passkey_account_ids() -> set[str]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(select(_account_passkeys.c.account_id)).all()
+    return {row[0] for row in rows}
+
+
+async def list_passkey_account_ids() -> set[str]:
+    """The accounts that have a stored passkey (one query for the whole list page)."""
+    return await asyncio.to_thread(_list_passkey_account_ids)
+
+
 def _save_account_passkey(passkey: StoredPasskey) -> None:
     with _get_engine().begin() as connection:
         connection.execute(insert(_account_passkeys).values(**passkey.model_dump()))

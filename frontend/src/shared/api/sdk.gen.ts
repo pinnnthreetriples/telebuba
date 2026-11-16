@@ -499,6 +499,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadErrors,
   MarkAccountChatReadResponses,
+  MarkAccountSessionOursData,
+  MarkAccountSessionOursErrors,
+  MarkAccountSessionOursResponses,
   OpenAccountMobileData,
   OpenAccountMobileErrors,
   OpenAccountMobileResponses,
@@ -2112,6 +2115,27 @@ export const getSessionGuardStatus = <ThrowOnError extends boolean = false>(
     GetSessionGuardStatusErrors,
     ThrowOnError
   >({ url: '/api/v1/session-guard', ...options });
+
+/**
+ * Mark Account Session Ours
+ *
+ * Mark a listed session as ours (or take such a mark back). Closes nothing.
+ */
+export const markAccountSessionOurs = <ThrowOnError extends boolean = false>(
+  options: Options<MarkAccountSessionOursData, ThrowOnError>,
+): RequestResult<MarkAccountSessionOursResponses, MarkAccountSessionOursErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    MarkAccountSessionOursResponses,
+    MarkAccountSessionOursErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/sessions/{session_hash}/ours',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Set Account Registered At
