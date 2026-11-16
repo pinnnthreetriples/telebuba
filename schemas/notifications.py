@@ -27,6 +27,8 @@ NotificationKind = Literal[
     "warmed",
     "foreign_session",
     "passkey_missing",
+    "session_dead",
+    "session_guard",
 ]
 BotSendStatus = Literal["sent", "rejected", "unreachable"]
 

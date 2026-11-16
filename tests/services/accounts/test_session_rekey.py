@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -553,3 +554,38 @@ async def test_an_unreachable_close_logs_one_pending_event_with_everything(
     assert pending == [
         {"status": "unreachable", "code": "unavailable", "error_type": "TimeoutError"}
     ]
+
+
+@pytest.mark.usefixtures("wire")
+@pytest.mark.asyncio
+async def test_one_stuck_account_does_not_hold_the_others_and_is_tried_later(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fetch(account_id: str) -> AccountRead:
+        return _account(account_id=account_id)
+
+    monkeypatch.setattr(svc, "fetch_account", _fetch)
+    due = "2026-11-01T00:00:00+00:00"
+    for account_id in ("acc-1", "acc-2"):
+        await save_rekey(
+            StoredRekey(account_id=account_id, old_hash="111", rekeyed_at=due, close_after=due)
+        )
+    monkeypatch.setattr(svc.settings.session_audit, "old_key_account_timeout_seconds", 0.05)
+    real_close = svc.close_sessions
+
+    async def _close(account_id: str, *args: object, **kwargs: object) -> object:
+        if account_id == "acc-1":
+            await asyncio.Event().wait()  # hangs: Telegram never answers for this one
+        return await real_close(account_id, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(svc, "close_sessions", _close)
+
+    assert await svc.close_due_old_keys() == 1
+
+    stuck = await fetch_rekey("acc-1")
+    assert stuck is not None
+    assert stuck.closed_at is None
+    assert datetime.fromisoformat(stuck.close_after or "") > datetime.now(UTC)
+    done = await fetch_rekey("acc-2")
+    assert done is not None
+    assert done.closed_at is not None

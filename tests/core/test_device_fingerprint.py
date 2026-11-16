@@ -356,7 +356,7 @@ def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:
             captured["api_hash"] = api_hash
             captured["kwargs"] = kwargs
 
-    monkeypatch.setattr("core.telegram_client._client.TelegramClient", FakeTelegramClient)
+    monkeypatch.setattr("core.telegram_client._client.GuardedTelegramClient", FakeTelegramClient)
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
 
@@ -398,7 +398,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
         def __init__(self, _session_path: str, _api_id: int, _api_hash: str, **kwargs) -> None:
             captured.update(kwargs)
 
-    monkeypatch.setattr("core.telegram_client._client.TelegramClient", FakeTelegramClient)
+    monkeypatch.setattr("core.telegram_client._client.GuardedTelegramClient", FakeTelegramClient)
 
     client_profile = DeviceFingerprintFactory.build(account_id="account-3")
     create_telegram_client(
@@ -590,7 +590,7 @@ async def test_check_telegram_session_alive_when_no_freeze_field(
     [
         (TimeoutError("timeout"), "network_error"),
         (ProxyConnectionError("proxy down"), "proxy_error"),
-        (errors.SessionRevokedError(request=None), "session_error"),
+        (errors.SessionRevokedError(request=None), "unauthorized"),
         (errors.UserDeactivatedBanError(request=None), "account_error"),
         (errors.FrozenMethodInvalidError(request=None), "frozen"),
         (errors.FloodWaitError(request=None, capture=42), "flood_wait"),

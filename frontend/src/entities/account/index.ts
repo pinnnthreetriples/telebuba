@@ -35,6 +35,7 @@ export {
   accountRekeyQueryKey,
   accountRekeyQueryOptions,
   accountSessionAuditQueryKey,
+  sessionGuardStatusQueryOptions,
   accountSessionAuditQueryOptions,
   accountTwofaQueryKey,
   accountTwofaQueryOptions,

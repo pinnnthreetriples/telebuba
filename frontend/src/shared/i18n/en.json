@@ -1779,6 +1779,14 @@
       "test": "Send test",
       "testSent": "Test message sent",
       "testNeedsSave": "Save your changes before sending a test"
+    },
+    "sessionGuard": {
+      "title": "Session guard",
+      "hint": "The fleet's background session check: it notices a dead key and foreign sessions.",
+      "running": "Running · last activity {{date}}",
+      "notRunning": "Not running",
+      "silent": "Silent since {{date}}: session checks may not be running. The bot has been told.",
+      "stopped": "Stopped and restarting. If this does not clear within a couple of minutes, restart Telebuba."
     }
   },
   "logTerminal": {
@@ -2261,7 +2269,10 @@
     "session_watch_passkey_missing": "Telegram no longer lists the account's passkey",
     "account_logout_unconfirmed": "Telegram did not confirm the logout — nothing changed",
     "session_old_key_open": "The old session after a re-key is still open",
-    "session_old_key_close_requested": "The operator is closing the old session"
+    "session_old_key_close_requested": "The operator is closing the old session",
+    "account_session_dead": "The account's session no longer works",
+    "session_death_suspected": "The account's key looks dead: checking the session",
+    "session_guard_stalled": "The session guard stopped or went silent"
   },
   "logEventReason": {
     "freed": "the account became free",

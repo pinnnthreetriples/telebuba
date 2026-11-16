@@ -88,7 +88,11 @@ async def check_telegram_session(
                     profile, me, await _download_avatar_thumb(client, me)
                 )
     except _SESSION_ERRORS as exc:
-        result = _error_session_check_result(profile, exc, status="session_error")
+        # The key itself is gone (revoked, unregistered, duplicated): the same verdict a
+        # fresh client's ``is_user_authorized()`` gives, so the account is journalled dead
+        # and shown as needing a login code. A long-lived pooled client used to land here
+        # instead (Telethon caches "authorized"), and ``session_error`` was neither.
+        result = _error_session_check_result(profile, exc, status="unauthorized")
     except _ACCOUNT_ERRORS as exc:
         result = _error_session_check_result(profile, exc, status="account_error")
     # Frozen errors subclass FloodError (420) / BadRequestError (400); classify

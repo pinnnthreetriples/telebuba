@@ -108,6 +108,7 @@ export {
   getAccountRekeyQueryKey as accountRekeyQueryKey,
   getAccountSessionAuditOptions as accountSessionAuditQueryOptions,
   getAccountSessionAuditQueryKey as accountSessionAuditQueryKey,
+  getSessionGuardStatusOptions as sessionGuardStatusQueryOptions,
   getAccountProfileSnapshotOptions as accountProfileSnapshotQueryOptions,
   getAccountProfileSnapshotQueryKey as accountProfileSnapshotQueryKey,
   getAccountTwofaOptions as accountTwofaQueryOptions,

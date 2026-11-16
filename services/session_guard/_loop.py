@@ -25,11 +25,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
+from schemas.session_guard import SessionGuardStatus
 from services.accounts import close_due_old_keys
 from services.session_guard._watch import run_watch_pass
 
@@ -43,6 +46,47 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _State:
     task: asyncio.Task[None] | None = None
+    # The heartbeat: when a step last started or a pass last ended (``time.monotonic``),
+    # and the same moment as the API shows it.
+    last_activity: float | None = None
+    last_activity_at: str | None = None
+
+
+def _beat() -> None:
+    _state.last_activity = time.monotonic()
+    _state.last_activity_at = datetime.now(UTC).isoformat()
+
+
+def silence_limit_seconds() -> float:
+    """Doing nothing for longer than this is a stall: a whole step's deadline and two passes."""
+    audit = settings.session_audit
+    return audit.guard_step_timeout_seconds + 2 * audit.guard_interval_seconds
+
+
+def guard_status() -> SessionGuardStatus:
+    """The heartbeat: running, the last activity, and whether the guard has stalled.
+
+    Not started (or shut down) is not a stall. A task that ended on its own is (the loop
+    only ends by shutdown), and so is silence past :func:`silence_limit_seconds`.
+    """
+    task = _state.task
+    if task is None:
+        return SessionGuardStatus(running=False, last_activity_at=_state.last_activity_at)
+    if task.done():
+        return SessionGuardStatus(
+            running=False,
+            last_activity_at=_state.last_activity_at,
+            stalled=True,
+            reason="stopped",
+        )
+    silent = time.monotonic() - _state.last_activity if _state.last_activity is not None else None
+    stalled = silent is not None and silent > silence_limit_seconds()
+    return SessionGuardStatus(
+        running=True,
+        last_activity_at=_state.last_activity_at,
+        stalled=stalled,
+        reason="silent" if stalled else None,
+    )
 
 
 _state = _State()
@@ -73,6 +117,7 @@ async def _guarded(step: str, run: Callable[[], Awaitable[int | str | None]]) ->
     Only the task's own cancellation propagates: a stray ``CancelledError`` and the deadline's
     ``TimeoutError`` are step failures, since either one escaping used to end the whole guard.
     """
+    _beat()
     try:
         async with asyncio.timeout(settings.session_audit.guard_step_timeout_seconds):
             done = await run()
@@ -99,6 +144,7 @@ async def _loop() -> None:
             if isinstance(exc, asyncio.CancelledError) and _own_cancellation():
                 raise
             await _log_failure("loop", exc)
+        _beat()
         await asyncio.sleep(settings.session_audit.guard_interval_seconds)
 
 
@@ -106,6 +152,7 @@ async def start_session_guard() -> None:
     """Start the background task (lifespan startup); a no-op when it is already running."""
     if _state.task is not None:
         return
+    _beat()
     _state.task = asyncio.create_task(_loop(), name="session-guard")
 
 
@@ -117,6 +164,15 @@ async def shutdown_session_guard() -> None:
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await task
+
+
+async def restart_session_guard() -> None:
+    """Start the loop again after it ended outside a shutdown (the watchdog's remedy)."""
+    task = _state.task
+    if task is not None and not task.done():
+        return
+    _state.task = None
+    await start_session_guard()
 
 
 def reset_for_tests() -> None:

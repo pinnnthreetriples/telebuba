@@ -8,6 +8,7 @@ import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@
 
 import { ApiKeyField } from './ApiKeyField';
 import { NotificationsCard } from './NotificationsCard';
+import { SessionGuardCard } from './SessionGuardCard';
 
 const FIELD_LABEL = 'mb-2 block type-body-medium text-content-secondary';
 
@@ -365,6 +366,9 @@ export function SettingsPage() {
       )}
       <div className="mt-4">
         <NotificationsCard />
+      </div>
+      <div className="mt-4">
+        <SessionGuardCard />
       </div>
     </div>
   );

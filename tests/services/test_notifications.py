@@ -127,6 +127,9 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
         (_entry("warming_target_reached"), "warmed"),
         (_entry("session_audit_foreign_found"), "foreign_session"),
         (_entry("session_watch_passkey_missing"), "passkey_missing"),
+        (_entry("account_session_dead", status="unauthorized"), "session_dead"),
+        (_entry("session_guard_failed", account_id=None, step="watch"), "session_guard"),
+        (_entry("session_guard_stalled", account_id=None, reason="silent"), "session_guard"),
         (_entry("session_audit_completed"), None),
         (_entry("warming_started"), None),
         (_entry("notifications_send_failed"), None),
@@ -154,6 +157,17 @@ def test_the_foreign_session_message_names_the_account_and_where_to_look() -> No
 
 def test_the_passkey_message_names_the_account() -> None:
     assert "Polina (@polina)" in compose_message("passkey_missing", "Polina (@polina)")
+
+
+def test_the_dead_session_message_names_the_account_and_how_to_get_it_back() -> None:
+    text = compose_message("session_dead", "Polina (@polina)")
+
+    assert "Polina (@polina)" in text
+    assert "passkey" in text
+
+
+def test_the_session_guard_message_says_what_may_not_be_working() -> None:
+    assert "Сторож сессий" in compose_message("session_guard", "")
 
 
 def test_the_label_never_carries_a_phone_number() -> None:

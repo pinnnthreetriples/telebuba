@@ -25,6 +25,7 @@ device type) is its own authorization with its own key and is left alone.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -397,12 +398,32 @@ async def close_due_old_keys() -> int:
         account = await fetch_account(rekey.account_id)
         if account is None:
             continue
-        async with account_audit_lock(rekey.account_id):
-            current = await fetch_rekey(rekey.account_id)
-            if current is None or current.closed_at is not None:
-                continue
-            after = await _end_old_key(account, current)
-            if after.closed_at is not None:
-                ended += 1
-                await _audit_again(account)
+        try:
+            async with asyncio.timeout(settings.session_audit.old_key_account_timeout_seconds):
+                ended += await _close_one(account)
+        except TimeoutError:
+            await _postpone(rekey.account_id)
     return ended
+
+
+async def _close_one(account: AccountRead) -> int:
+    """One due account under its audit lock; 1 when its old authorization ended."""
+    async with account_audit_lock(account.account_id):
+        current = await fetch_rekey(account.account_id)
+        if current is None or current.closed_at is not None:
+            return 0
+        after = await _end_old_key(account, current)
+        if after.closed_at is None:
+            return 0
+        await _audit_again(account)
+        return 1
+
+
+async def _postpone(account_id: str) -> None:
+    """A close that ran out of time is tried again later, behind the accounts after it."""
+    current = await fetch_rekey(account_id)
+    if current is None or current.closed_at is not None:
+        return
+    await _schedule_again(
+        account_id, current, wait=None, status="timeout", error_type="TimeoutError"
+    )

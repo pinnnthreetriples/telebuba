@@ -185,6 +185,14 @@ function warmingState(i: number, over: Record<string, unknown> = {}) {
 }
 
 // The Settings page's Telegram-notification card: nothing configured yet.
+// The session guard's heartbeat (Settings): running, nothing stalled.
+export const sessionGuard = {
+  running: true,
+  last_activity_at: '2026-11-16T10:00:00+00:00',
+  stalled: false,
+  reason: null,
+};
+
 export const notificationSettings = {
   enabled: false,
   has_bot_token: false,

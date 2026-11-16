@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import fetch_account
+from core.logging import log_event
 from core.repositories.death_evidence import first_failure_after, latest_telegram_success_at
 from core.repositories.lifecycle import (
     append_lifecycle_event,
@@ -128,6 +129,11 @@ async def record_session_death(account: AccountRead, status: AccountStatus) -> N
     extra |= await death_evidence(account.account_id, codes, alive_floor(life, account.created_at))
     extra |= await last_audit_evidence(account.account_id)
     await record_lifecycle_event(account.account_id, "session_dead", extra)
+    # The operator bot maps this row to a message: a dead key is only recoverable while
+    # someone acts on it (passkey, login code), so it must not wait to be noticed.
+    await log_event(
+        "WARNING", "account_session_dead", account_id=account.account_id, extra={"status": status}
+    )
 
 
 def alive_floor(life: list[LifecycleEvent], born_at: str | None) -> str | None:
