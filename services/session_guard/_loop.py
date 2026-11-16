@@ -8,6 +8,14 @@ each step guarded on its own so one failing never ends the loop or starves the o
   (``services.accounts.close_due_old_keys``);
 * the watch: one account's sessions re-read, if one is due (``_watch``).
 
+Guarantees: a step that fails in ANY way is logged as ``session_guard_failed`` and the loop
+goes on, including a ``CancelledError`` that did not come from cancelling this task and a step
+that outlives ``SESSION_AUDIT__GUARD_STEP_TIMEOUT_SECONDS`` (its cancellation unwinds the
+per-account audit lock). In production the guard once went silent for 41 hours right after
+ending an old key, with no ``session_guard_failed`` logged; whether a stray cancellation or a
+hang did it is unknown, so both are covered. Only cancelling the task itself
+(``shutdown_session_guard``) ends the loop; KeyboardInterrupt and SystemExit are never caught.
+
 Everything here is in memory and one uvicorn worker runs, so there is no coordination beyond
 the per-account audit lock the steps take.
 """
@@ -40,17 +48,38 @@ class _State:
 _state = _State()
 
 
+async def _log_failure(step: str, exc: BaseException) -> None:
+    logger.warning("session guard step failed", exc_info=exc)
+    await log_event(
+        "WARNING",
+        "session_guard_failed",
+        extra={"step": step, "error_type": type(exc).__name__},
+    )
+
+
+def _own_cancellation() -> bool:
+    """Whether this task itself is being cancelled (shutdown), not a stray ``CancelledError``.
+
+    ``Task.cancelling()`` counts the ``cancel()`` calls made on this task; a ``CancelledError``
+    raised from inside a step by a library's own cancelled future leaves it at zero.
+    """
+    task = asyncio.current_task()
+    return task is not None and task.cancelling() > 0
+
+
 async def _guarded(step: str, run: Callable[[], Awaitable[int | str | None]]) -> int:
-    """One step; how many things it did. A failure is logged and never raised."""
+    """One step, under a deadline; how many things it did. A failure is logged, never raised.
+
+    Only the task's own cancellation propagates: a stray ``CancelledError`` and the deadline's
+    ``TimeoutError`` are step failures, since either one escaping used to end the whole guard.
+    """
     try:
-        done = await run()
-    except Exception as exc:  # noqa: BLE001 - one failed step must not end the loop.
-        logger.warning("session guard step failed", exc_info=exc)
-        await log_event(
-            "WARNING",
-            "session_guard_failed",
-            extra={"step": step, "error_type": type(exc).__name__},
-        )
+        async with asyncio.timeout(settings.session_audit.guard_step_timeout_seconds):
+            done = await run()
+    except (Exception, asyncio.CancelledError) as exc:  # one failed step must not end the loop.
+        if isinstance(exc, asyncio.CancelledError) and _own_cancellation():
+            raise
+        await _log_failure(step, exc)
         return 0
     return done if isinstance(done, int) else int(done is not None)
 
@@ -64,7 +93,12 @@ async def run_guard_pass() -> int:
 
 async def _loop() -> None:
     while True:
-        await run_guard_pass()
+        try:
+            await run_guard_pass()
+        except (Exception, asyncio.CancelledError) as exc:  # the loop must outlive anything.
+            if isinstance(exc, asyncio.CancelledError) and _own_cancellation():
+                raise
+            await _log_failure("loop", exc)
         await asyncio.sleep(settings.session_audit.guard_interval_seconds)
 
 

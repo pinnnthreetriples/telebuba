@@ -60,7 +60,7 @@ Verified against the pages on 2026-11-02, not assumed:
 
 ## The watch: continuous, cheap, paced
 
-`services/session_guard` runs one background task (started in the lifespan beside the survival probes, stopped before the client pool; one uvicorn worker). Every pass (`SESSION_AUDIT__GUARD_INTERVAL_SECONDS`, 5 min) it ends old re-key authorizations that are due and re-audits **at most one** account.
+`services/session_guard` runs one background task (started in the lifespan beside the survival probes, stopped before the client pool; one uvicorn worker). Every pass (`SESSION_AUDIT__GUARD_INTERVAL_SECONDS`, 5 min) it ends old re-key authorizations that are due and re-audits **at most one** account. Each step has a deadline (`SESSION_AUDIT__GUARD_STEP_TIMEOUT_SECONDS`, 30 min) and a failure of any kind, a stray `CancelledError` and a timeout included, is logged as `session_guard_failed` while the loop goes on; only cancelling the task itself (shutdown) stops it.
 
 - Which accounts: alive, behind a proxy, and not held by another feature (warming, campaigns, a channel-search loan). The first pass waits after startup (`WATCH_STARTUP_DELAY_SECONDS`) so a restart does not read the fleet at once.
 - When: each account about every 6 to 12 hours (`WATCH_MIN_HOURS` / `WATCH_MAX_HOURS`). The interval is drawn afresh per account from a clipped log-normal in the service (core holds no randomness), so a fleet imported together never reads in step. An account never audited is due at once; one audited before a restart is due one drawn interval after that audit. A refused read is retried after `WATCH_RETRY_HOURS`.
