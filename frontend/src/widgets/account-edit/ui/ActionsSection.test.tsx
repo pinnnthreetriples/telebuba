@@ -73,3 +73,35 @@ test('the alive check is locked while it is in flight (no second Telegram round 
   });
   expect(button).toBeEnabled();
 });
+
+function resets(): Request[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => new URL(request.url).pathname === '/api/v1/accounts/acc-1/reset-session');
+}
+
+test('a reset asks first and, for an alive account, waits for the typed word', async () => {
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ ...ACCOUNT, status: 'unauthorized' }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  );
+  renderSection();
+
+  await userEvent.click(screen.getByText('Действия'));
+  await userEvent.click(screen.getByRole('button', { name: 'Сбросить' }));
+  expect(await screen.findByText('Сбросить сессию?')).toBeVisible();
+  expect(resets()).toHaveLength(0);
+
+  const confirm = screen.getAllByRole('button', { name: 'Сбросить' }).at(-1) as HTMLElement;
+  expect(confirm).toBeDisabled();
+  await userEvent.type(screen.getByLabelText(/введите ЗАВЕРШИТЬ/), 'ЗАВЕРШИТЬ');
+  await userEvent.click(confirm);
+
+  await waitFor(() => {
+    expect(resets()).toHaveLength(1);
+  });
+});

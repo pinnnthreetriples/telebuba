@@ -8684,6 +8684,115 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/rekey/close-old-key": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Close Account Old Key",
+        "description": "End the re-keyed account's old authorization now, at the operator's word.\n\nTelebuba does not end it on its own unless ``SESSION_AUDIT__AUTO_CLOSE_OLD_KEY`` is on;\nthe card shows its checklist first. A refusal by Telegram comes back as ``close_after``.",
+        "operationId": "closeAccountOldKey",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRekeyView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/registered-at": {
       "put": {
         "tags": [
@@ -26340,7 +26449,8 @@
                 "type": "string",
                 "enum": [
                   "old_key_unknown",
-                  "old_key_is_ours"
+                  "old_key_is_ours",
+                  "rekey_incomplete"
                 ]
               },
               {
@@ -26348,6 +26458,18 @@
               }
             ],
             "title": "Problem"
+          },
+          "auto_close": {
+            "type": "boolean",
+            "title": "Auto Close",
+            "default": false
+          },
+          "checklist": {
+            "items": {
+              "$ref": "#/components/schemas/OldKeyCheck"
+            },
+            "type": "array",
+            "title": "Checklist"
           }
         },
         "type": "object",
@@ -34800,6 +34922,32 @@
         "type": "object",
         "title": "NotificationTestResult",
         "description": "``POST /notifications/test`` succeeded: the message was delivered."
+      },
+      "OldKeyCheck": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "spam_clean",
+              "session_age",
+              "fallback_session",
+              "twofa_stored",
+              "passkey_stored"
+            ],
+            "title": "Name"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "ok"
+        ],
+        "title": "OldKeyCheck",
+        "description": "One item of that checklist: met or not."
       },
       "OpenMobileResult": {
         "properties": {

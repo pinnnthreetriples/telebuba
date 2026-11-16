@@ -15,6 +15,7 @@ export function ConfirmCard({
   onCancel,
   onConfirm,
   pending = false,
+  confirmDisabled = false,
 }: {
   title: string;
   // A sentence, or a sentence with the list of what the answer will touch.
@@ -24,6 +25,8 @@ export function ConfirmCard({
   onCancel: () => void;
   onConfirm: () => void;
   pending?: boolean;
+  // Holds the danger action back until the body's own condition is met (a typed word).
+  confirmDisabled?: boolean;
 }) {
   return (
     <div className="p-6">
@@ -31,7 +34,7 @@ export function ConfirmCard({
       <div className="mb-6 text-body text-content-muted">{body}</div>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{cancelLabel}</Button>
-        <Button variant="danger" onClick={onConfirm} loading={pending}>
+        <Button variant="danger" onClick={onConfirm} loading={pending} disabled={confirmDisabled}>
           {confirmLabel}
         </Button>
       </div>

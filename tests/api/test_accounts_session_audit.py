@@ -215,3 +215,27 @@ async def test_a_refused_rekey_answers_its_stable_code(
 
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "rekey_twofa_missing"
+
+
+@pytest.mark.asyncio
+async def test_closing_the_old_key_answers_the_view_or_its_stable_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+
+    async def _close(account_id: str) -> AccountRekeyView:
+        calls.append(account_id)
+        if len(calls) > 1:
+            code = "rekey_old_key_none"
+            raise AccountActionError(code)
+        return AccountRekeyView(account_id=account_id, closed_at="2026-11-16T10:00:00+00:00")
+
+    monkeypatch.setattr("services.accounts.close_account_old_key", _close)
+    async with _client(app) as client:
+        closed = await client.post("/api/v1/accounts/acc-1/rekey/close-old-key")
+        refused = await client.post("/api/v1/accounts/acc-1/rekey/close-old-key")
+
+    assert closed.status_code == 200
+    assert closed.json()["closed_at"] == "2026-11-16T10:00:00+00:00"
+    assert refused.status_code == 400
+    assert refused.json()["error"]["message"] == "rekey_old_key_none"

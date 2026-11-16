@@ -77,6 +77,9 @@ _SUBMIT_CODES = {
     "PasswordHashInvalidError": "password_invalid",
 }
 
+# A logout or reset that Telegram did not confirm: nothing was ended or deleted.
+_LOGOUT_UNCONFIRMED = "logout_unconfirmed"
+
 # Strong references: the loop keeps only weak ones to a fire-and-forget task.
 _INBOX_STARTS: set[asyncio.Task[None]] = set()
 
@@ -301,6 +304,17 @@ async def _end_session(account_id: str, *, wipe_session: bool, event: str) -> Ac
     except Exception:
         await start_account_inbox(account_id)
         raise
+    if result.status != "unauthorized":
+        # Telegram did not confirm the logout: the key may be alive, so its file, its status
+        # and the account's second sign-in all stay as they were.
+        await start_account_inbox(account_id)
+        await log_event(
+            "WARNING",
+            "account_logout_unconfirmed",
+            account_id=account_id,
+            extra={"error_type": result.error_type, "wipe": wipe_session},
+        )
+        raise PhoneLoginError(_LOGOUT_UNCONFIRMED)
     forget_code(account_id)
     saved = await update_account_from_session_check(result)
     await log_event("INFO", event, account_id=account_id)

@@ -15,6 +15,7 @@ import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Spinner } from '@
 
 import { Section } from './_shared';
 import { type CheckState } from './_styles';
+import { EndSessionConfirm } from './EndSessionConfirm';
 
 // Actions card: liveness check, reset-session, and delete-account (with a
 // confirm modal). `onBack` returns to the list after a successful delete.
@@ -23,6 +24,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
   const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
   const [resetCheck, setResetCheck] = useState<CheckState>('idle');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const queryClient = useQueryClient();
   const later = useClearedTimeouts();
@@ -55,22 +57,26 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
     );
   };
 
+  // Asked first (EndSessionConfirm): a reset ends both sign-ins and deletes their files.
+  // A refusal (`logout_unconfirmed`: nothing changed) reaches the operator as the toast.
   const onReset = () => {
     setResetCheck('loading');
-    resetSession.mutate(path, {
-      onSuccess: () => {
-        setResetCheck('ok');
-        invalidate();
-      },
-      onError: () => {
-        setResetCheck('err');
-      },
-      onSettled: () => {
+    return resetSession
+      .mutateAsync(path)
+      .then(
+        () => {
+          setResetCheck('ok');
+          invalidate();
+        },
+        () => {
+          setResetCheck('err');
+        },
+      )
+      .finally(() => {
         later(() => {
           setResetCheck('idle');
         }, 1600);
-      },
-    });
+      });
   };
 
   // Returns the promise so ConfirmModal keeps the dialog open (with a pending
@@ -143,7 +149,13 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <FeedbackMark
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
-            <Button size="sm" onClick={onReset} loading={resetSession.isPending}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setConfirmReset(true);
+              }}
+              loading={resetSession.isPending}
+            >
               {t('accounts.edit.reset')}
             </Button>
           </span>
@@ -165,6 +177,16 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         </div>
       </Section>
 
+      {confirmReset ? (
+        <EndSessionConfirm
+          account={account}
+          kind="reset"
+          onClose={() => {
+            setConfirmReset(false);
+          }}
+          onConfirm={onReset}
+        />
+      ) : null}
       {confirmDelete ? (
         <ConfirmModal
           title={t('accounts.deleteModal.title', { phone: account.phone ?? account.account_id })}
