@@ -744,7 +744,7 @@
           "accounts"
         ],
         "summary": "Spam Check Account",
-        "description": "Re-probe @SpamBot for one account within the shared budget; return the verdict.\n\nA reading younger than the coalescing window, or a refusal by the budget, comes back as\nthe stored verdict with ``served_from`` / ``reason`` / ``retry_at`` saying why.",
+        "description": "Re-probe @SpamBot for one account within the shared probe budget; return the verdict.",
         "operationId": "spamCheckAccount",
         "parameters": [
           {

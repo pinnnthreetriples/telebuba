@@ -1388,10 +1388,7 @@ export const checkAccountMutation = (
 /**
  * Spam Check Account
  *
- * Re-probe @SpamBot for one account within the shared budget; return the verdict.
- *
- * A reading younger than the coalescing window, or a refusal by the budget, comes back as
- * the stored verdict with ``served_from`` / ``reason`` / ``retry_at`` saying why.
+ * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
  */
 export const spamCheckAccountMutation = (
   options?: Partial<Options<SpamCheckAccountData>>,

@@ -1,7 +1,7 @@
 ---
 name: architecture
 description: Backend flow, stack, services, gateways and system design.
-last_updated: 2026-10-19
+last_updated: 2026-11-16
 edges:
   - target: context/conventions.md
     condition: backend implementation or review conventions
@@ -41,3 +41,5 @@ The account lifecycle journal has no FK to `accounts` and outlives both the log 
 The operator bot is one more reader of the in-process log bus: it maps a few warming and spam-status events to Telegram messages, throttled in memory per account and kind, and a failed send is logged by status only, never breaking the pipeline. Its bot token is stored like the LLM keys and leaves the API only as a mask.
 
 Inbound telephony is the one machine-to-machine route outside the session gate: SMS gateways authenticate with a shared secret header (the webhook is off until `TELEPHONY__WEBHOOK_SECRET` is set); separately, a replay window answers a repeated SMS once and a timestamp skew check refuses a stale or future one. A code is typed into a phone only while the operator opened a wait for it and the SMS is from that wait's platform; an SMS from another platform is kept unmatched in the inbox and the wait stays open. A matched code is typed only when the Telegram app shows its code screen and no start or warming session holds the pod; otherwise the wait ends `failed` with a stable code. Waits, the replay window and the inbox are in-process state, like the other runtimes.
+
+@SpamBot is asked only through `services/spam_intel` (a shared, database-kept probe budget; a postponed answer is not an unreadable one; `docs/spam-intel.md`); `tests/test_architecture.py` forbids any other path to the probe.
