@@ -145,6 +145,8 @@ async def begin_qr_login(account_id: str) -> QrLoginView:
             account_id=account_id,
             session_name=account.session_name,
             ignored_user_ids=ignored,
+            # A placeholder or a key known dead (checked above): a new authorization.
+            new_key=True,
         ),
     )
     return await _view(state)

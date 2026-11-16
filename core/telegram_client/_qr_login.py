@@ -37,6 +37,7 @@ from telethon import errors
 from core.config import settings
 from core.logging import log_event
 from core.qr_image import render_qr_data_uri
+from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth import _alive_result, _auth_lock
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
 from core.telegram_client._pool import removing_client
@@ -137,6 +138,7 @@ async def start_qr_login(request: QrLoginRequest) -> QrLoginState:
             account_id=account_id,
             session_name=request.session_name,
             receive_updates=True,
+            new_key=request.new_key,
         ),
     )
     session = _QrSession(
@@ -278,6 +280,8 @@ async def _sign_in(
             if not await _await_password(session, client):
                 return
         break
+    # A fresh sign-in: the key now carries this API for good.
+    await record_key_api(profile)
     await _publish(
         session,
         status="alive",

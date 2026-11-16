@@ -20,6 +20,9 @@ class PhoneCodeRequest(BaseModel):
     account_id: str = Field(min_length=1)
     session_name: str | None = Field(default=None, min_length=1)
     phone: str = Field(min_length=1)
+    # The session's key is known dead: the sign-in makes a new authorization and may use the
+    # new API (``TelegramClientRequest.new_key``). The submit must say the same.
+    new_key: bool = False
 
 
 class PhoneCodeChallenge(BaseModel):
@@ -51,6 +54,8 @@ class PhoneCodeSubmit(BaseModel):
     password: str | None = None
     # Tried in order after ``password`` when Telegram rejects it (or none was typed).
     fallback_passwords: list[str] = Field(default_factory=list)
+    # As the code request said (a code is bound to the API that asked for it).
+    new_key: bool = False
 
 
 class PhoneCodeRequestResult(BaseModel):

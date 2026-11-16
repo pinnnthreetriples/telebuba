@@ -75,6 +75,8 @@ Switch it off with `SESSION_AUDIT__WATCH_ENABLED=false`; the old-key closing kee
 
 Copies of every session file and the quarantine for removed ones: `docs/session-vault.md`.
 
+Which Telegram API (app title) each session uses, and the new neutral one: `docs/neutral-api.md`.
+
 ## A dead key is never silent
 
 On 2026-11-14 an account's key died and was found 41 hours later, and the guard itself had stopped in the same moment. Four things now stand against that:

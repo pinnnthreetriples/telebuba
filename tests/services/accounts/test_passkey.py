@@ -35,7 +35,7 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
     async def _fetch_account(account_id: str) -> object:
         if account_id == "missing" or state.get("account_gone"):
             return None
-        return SimpleNamespace(session_name="sess-1")
+        return SimpleNamespace(session_name="sess-1", status="unauthorized")
 
     async def _fetch_row(_account_id: str) -> StoredPasskey | None:
         return state["row"]  # ty: ignore[invalid-return-type]
@@ -83,8 +83,11 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:  # noqa: C901 - 
             raise state["exists_error"]  # ty: ignore[invalid-raise]
         return bool(state.get("key_exists", True))
 
-    async def _login(passkey: StoredPasskey, session_name: str | None) -> object:
+    async def _login(
+        passkey: StoredPasskey, session_name: str | None, *, new_key: bool = False
+    ) -> object:
         log.append(f"login:{passkey.credential_id}:{session_name}")
+        state["new_key"] = new_key
         return state["login_result"]
 
     async def _update(result: TelegramSessionCheckResult) -> object:
@@ -494,3 +497,16 @@ async def test_the_view_carries_the_last_vault_check_only_for_an_account_with_a_
 
     wire["row"] = None
     assert (await svc.read_account_passkey("acc-1")).vault_state is None
+
+
+@pytest.mark.asyncio
+async def test_a_relogin_over_a_dead_key_is_a_new_key_and_a_live_one_is_not(
+    wire: dict[str, object],
+) -> None:
+    """A key Telegram ended may get the new API; one that may still work keeps its own."""
+    wire["row"] = _stored()
+    wire["login_result"] = _result("alive", user_id=257221571)
+
+    await svc.relogin_with_passkey("acc-1")
+
+    assert wire["new_key"] is True  # the wire's account is ``unauthorized``
