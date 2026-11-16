@@ -35,6 +35,12 @@ class SessionAuditSettings(BaseSettings):
     # The session guard's background task makes a pass this often: it ends old keys that are
     # due and re-audits at most ONE account (below).
     guard_interval_seconds: float = Field(default=300.0, gt=0.0)
+    # One guard step (ending due old keys, or the watch's one read) may run this long before
+    # it is abandoned and logged, so a hung step cannot freeze the loop for every account.
+    # The worst legitimate step is the old-key one: each account is a Telegram call bounded by
+    # ``telegram.session_check_timeout_seconds`` (75 s) plus the human-like pauses between
+    # closes, for however many accounts are due at once; 30 minutes is ~24 such reads.
+    guard_step_timeout_seconds: float = Field(default=1800.0, gt=0.0)
     # The watch re-reads every alive account's sessions about this often; each account's own
     # interval is drawn afresh from the range (a clipped log-normal, in the service), so the
     # fleet never reads in step.
