@@ -12,26 +12,20 @@ Nothing is kept unless everything succeeds, in this order:
 1. the new session is built under a scratch name, never over a file that exists;
 2. it signs in and is checked against the imported one's user;
 3. the new session's content is copied into the imported file's place, in place (the imported
-   content is kept aside, the file itself is never renamed: see ``_copy_session``), and the
+   content is kept aside, the file itself is never renamed: see ``_files.copy_session``), and the
    result is opened once as the account's own and must answer as the same user;
 4. only then is the imported content dropped.
 
 Any failure before 4 copies the imported content back and ends the new authorization, and
 the account is exactly as it was. Once the new content has answered from the account's own
-file the swap is DONE: tidying the side copies afterwards can fail (a file another process
-still holds, on Windows) and is only logged, because undoing at that point would end the
-very key the account's file now holds. For the same reason the undo never ends the new
-authorization while the account's file may hold its key, and a copy-back that fails leaves
-the new authorization alive and the side copy in place (``rekey_incomplete``) for a person
-to sort out. The old AUTHORIZATION (the seller-known key) is ended by the
-service afterwards, with :func:`core.telegram_client._session_close.close_sessions`: its
-hash is returned here. Telegram lists the asking session's own entry with ``hash=0``, so the
-approver cannot name its own key; the new session, which sees the approver by its real hash,
-does: the old hash is the one authorization that appears in the new session's list and was not
-in the approver's (and, when known, was created when the approver's entry says it was).
-Anything but exactly one such entry is a refusal, never ``0``.
-Every failure is a bounded code, never Telethon prose. The cloud
-password is only passed to Telegram, never logged or returned.
+file the swap is DONE: tidying side copies is only logged, since undoing then would end the
+key that file now holds. The undo never ends the new authorization while the account's file
+may hold its key; a failed copy-back keeps both keys and the side copy (``rekey_incomplete``).
+The old AUTHORIZATION (the seller-known key) is ended later, by the service
+(``close_sessions``), with the hash returned here. The asking session lists itself as
+``hash=0``, so the new session names it: the one entry in its list the approver's lacked
+(created when the approver's entry says). Anything but exactly one is a refusal, never ``0``.
+Every failure is a bounded code; the cloud password is only passed to Telegram.
 """
 
 from __future__ import annotations
@@ -39,11 +33,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-import time
-from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from anyio import Path as AsyncPath
@@ -52,17 +43,30 @@ from telethon.tl.functions.account import ChangeAuthorizationSettingsRequest
 from telethon.tl.functions.auth import AcceptLoginTokenRequest
 
 from core.config import settings
+from core.telegram_client import _rekey_files as _files
 from core.telegram_client._auth import _auth_lock, _remove_session_file
 from core.telegram_client._client import (
     create_telegram_client,
     prepare_telegram_client_profile,
 )
-from core.telegram_client._pool import TelegramClientPoolError, get_client, removing_client
-from core.telegram_client._profile import _DEAD_SESSION_ERRORS
+from core.telegram_client._pool import get_client, removing_client
+from core.telegram_client._rekey_errors import (
+    _APPROVER,
+    _CONFLICT,
+    _FAILED,
+    _INCOMPLETE,
+    _MISMATCH,
+    _OLD_UNKNOWN,
+    _SWAP,
+    _TWOFA_MISSING,
+    RekeyGatewayError,
+    _classify,
+    _refusal,
+)
 from core.telegram_client._session_audit import _listing
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from schemas.device_fingerprint import TelegramClientRequest
-from schemas.session_rekey import RekeyRefusalCode, RekeyResult
+from schemas.session_rekey import RekeyResult
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,81 +77,6 @@ if TYPE_CHECKING:
 
 # Stdlib sink: a transport failure stringifies with the proxy URL (see ``_pool``).
 logger = logging.getLogger(__name__)
-
-_APPROVER: RekeyRefusalCode = "rekey_approver_unavailable"
-_TOKEN: RekeyRefusalCode = "rekey_token_rejected"  # noqa: S105 - a refusal code
-_TWOFA_MISSING: RekeyRefusalCode = "rekey_twofa_missing"
-_TWOFA_INVALID: RekeyRefusalCode = "rekey_twofa_invalid"
-_MISMATCH: RekeyRefusalCode = "rekey_user_mismatch"
-_CONFLICT: RekeyRefusalCode = "rekey_session_conflict"
-_SWAP: RekeyRefusalCode = "rekey_swap_failed"
-_FAILED: RekeyRefusalCode = "rekey_failed"
-_FLOOD: RekeyRefusalCode = "rekey_flood_wait"
-_TIMEOUT: RekeyRefusalCode = "rekey_timeout"
-_UNAVAILABLE: RekeyRefusalCode = "rekey_unavailable"
-_DEAD: RekeyRefusalCode = "rekey_session_dead"
-_OLD_UNKNOWN: RekeyRefusalCode = "rekey_old_key_unknown"
-_INCOMPLETE: RekeyRefusalCode = "rekey_incomplete"
-# The suffix of the file the imported session is set aside as while the swap is verified.
-_ASIDE_SUFFIX = ".rekey-aside"
-# How long a write to the session file waits for another connection that holds it.
-_LOCK_WAIT_SECONDS = 10.0
-
-
-class RekeyGatewayError(Exception):
-    """The re-key was refused or failed; ``str(exc)`` is the stable code, never Telethon prose."""
-
-    def __init__(
-        self,
-        code: str,
-        *,
-        retry_after_seconds: int | None = None,
-        error_type: str | None = None,
-    ) -> None:
-        super().__init__(code)
-        self.code = code
-        self.retry_after_seconds = retry_after_seconds
-        self.error_type = error_type
-        # Only for ``rekey_incomplete``: the old authorization, which must NOT be ended now.
-        self.old_hash: str | None = None
-
-
-def _refusal(code: str, error_type: str | None = None) -> RekeyGatewayError:
-    return RekeyGatewayError(code, error_type=error_type)
-
-
-# Telegram answers that end the attempt, each with the code the operator is shown.
-_ERROR_CODES: tuple[tuple[tuple[type[Exception], ...], str], ...] = (
-    ((errors.PasswordHashInvalidError,), _TWOFA_INVALID),
-    (
-        (
-            errors.AuthTokenExpiredError,
-            errors.AuthTokenInvalidxError,
-            errors.AuthTokenAlreadyAcceptedError,
-        ),
-        _TOKEN,
-    ),
-    # ``TimeoutError`` is an ``OSError``: it must be told apart from a dropped connection, because
-    # the login token was accepted and Telegram's answer never came, not the network failing.
-    ((TimeoutError,), _TIMEOUT),
-    ((TelegramClientPoolError, ConnectionError), _UNAVAILABLE),
-)
-
-
-def _classify(exc: Exception) -> RekeyGatewayError:
-    """The bounded code for whatever stopped the login or the swap."""
-    if isinstance(exc, RekeyGatewayError):
-        return exc
-    name = type(exc).__name__
-    if isinstance(exc, errors.FloodWaitError):
-        return RekeyGatewayError(_FLOOD, retry_after_seconds=exc.seconds, error_type=name)
-    if isinstance(exc, _DEAD_SESSION_ERRORS):
-        return _refusal(_DEAD, name)
-    for error_types, code in _ERROR_CODES:
-        if isinstance(exc, error_types):
-            return _refusal(code, name)
-    logger.warning("session re-key failed for an account", exc_info=exc)
-    return _refusal(_FAILED, name)
 
 
 async def _sign_in_by_token(
@@ -192,34 +121,15 @@ async def _accept_token(approver: TelegramClient, token: bytes) -> int:
 _RECONNECT_TIMEOUT_S = 20.0
 
 
-def _file_key(session_file: str) -> bytes | None:
-    """The auth key a Telethon session file holds, read without changing it; ``None`` if unknown."""
-    path = Path(session_file)
-    if not path.exists():
-        return None
-    try:
-        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as db:
-            row = db.execute("select auth_key from sessions").fetchone()
-    except sqlite3.Error:
-        return None
-    return bytes(row[0]) if row and row[0] else None
-
-
 def _client_key(client: object) -> bytes | None:
     """The auth key a client holds in memory (kept after ``disconnect``); ``None`` if unknown."""
     key = getattr(getattr(getattr(client, "session", None), "auth_key", None), "key", None)
     return bytes(key) if isinstance(key, (bytes, bytearray)) else None
 
 
-async def _same_key(first: str, second: str) -> bool:
-    """Whether two session files provably hold the same auth key."""
-    key = await asyncio.to_thread(_file_key, first)
-    return key is not None and key == await asyncio.to_thread(_file_key, second)
-
-
 async def _may_hold_new_key(new: TelegramClient, final_file: str) -> bool:
     """Whether the account's own file may hold ``new``'s key: anything but proof it does not."""
-    held = await asyncio.to_thread(_file_key, final_file)
+    held = await asyncio.to_thread(_files.file_key, final_file)
     mine = _client_key(new)
     return held is None or mine is None or held == mine
 
@@ -341,26 +251,12 @@ async def _require_no_aside(final_session_path: str) -> None:
     a swap that finished, and goes.
     """
     final = f"{final_session_path}.session"
-    aside = f"{final}{_ASIDE_SUFFIX}"
+    aside = f"{final}{_files.ASIDE_SUFFIX}"
     if not await AsyncPath(aside).exists():
         return
-    if not await _same_key(aside, final):
+    if not await _files.same_key(aside, final):
         raise _refusal(_CONFLICT, "SideCopyKept")
-    await _tidy(aside)
-
-
-async def _unlink(path: str) -> None:
-    await AsyncPath(path).unlink()
-
-
-async def _tidy(path: str) -> None:
-    """Remove a side file the swap no longer needs; a failure is only logged."""
-    try:
-        await _unlink(path)
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        logger.warning("re-key side file kept (%s)", type(exc).__name__)
+    await _files.tidy(aside)
 
 
 async def _disconnect_quietly(client: TelegramClient) -> None:
@@ -368,37 +264,6 @@ async def _disconnect_quietly(client: TelegramClient) -> None:
         await client.disconnect()
     except Exception as exc:  # noqa: BLE001 - best effort; the authorization is kept on purpose.
         logger.warning("re-key disconnect failed (%s)", type(exc).__name__)
-
-
-def _copy_session(source: str, target: str) -> None:
-    """Make the SQLite file ``target`` hold exactly what ``source`` holds, in place.
-
-    SQLite's backup writes the target's pages under its own lock: a client that still has the
-    target open does not stop it. A rename does, on Windows: SQLite opens its files without
-    delete sharing, so ONE leftover connection fails it (``WinError 32``). Telethon's session
-    reopens its file on any call, so a background task that kept the evicted client leaves
-    exactly that behind, and nothing here can reach it.
-
-    A connection that holds the target for writing would make ``backup`` wait for ever (it
-    retries a busy target on its own), so the wait is bounded: ``sqlite3.OperationalError``.
-    """
-    deadline = time.monotonic() + _LOCK_WAIT_SECONDS
-
-    def give_up(status: int, _remaining: int, _total: int) -> None:
-        if status in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} and time.monotonic() > deadline:
-            msg = "the session file stayed locked"
-            raise sqlite3.OperationalError(msg)
-
-    reader = sqlite3.connect(source)
-    try:
-        # No busy handler of its own: the loop below is the one wait, and it is bounded.
-        writer = sqlite3.connect(target, timeout=0)
-        try:
-            reader.backup(writer, sleep=0.05, progress=give_up)
-        finally:
-            writer.close()
-    finally:
-        reader.close()
 
 
 async def _require_works(profile: TelegramClientProfile, user_id: int) -> None:
@@ -418,7 +283,7 @@ async def _swap(
 
     The imported file's content is kept in a side copy, not dropped, until the new one has
     answered as the same user from its final place; a failure copies it back. The final file
-    itself is never renamed or deleted, see :func:`_copy_session`.
+    itself is never renamed or deleted, see :func:`_files.copy_session`.
 
     Once the new content has answered the swap is done, and nothing after it raises: the
     side copies are tidied best effort. A copy-back that fails raises ``rekey_incomplete``
@@ -426,17 +291,17 @@ async def _swap(
     old key that may be left.
     """
     final = f"{profile.session_path}.session"
-    aside = f"{final}{_ASIDE_SUFFIX}"
+    aside = f"{final}{_files.ASIDE_SUFFIX}"
     fresh = f"{scratch_path}.session"
     async with removing_client(profile.account_id, device):
         try:
-            await asyncio.to_thread(_copy_session, final, aside)
+            await asyncio.to_thread(_files.copy_session, final, aside)
         except (sqlite3.Error, OSError) as exc:
             # The account's file was only read; a half-written side copy is worth nothing.
-            await _tidy(aside)
+            await _files.tidy(aside)
             raise _refusal(_SWAP, type(exc).__name__) from exc
         try:
-            await asyncio.to_thread(_copy_session, fresh, final)
+            await asyncio.to_thread(_files.copy_session, fresh, final)
             await _require_works(profile, user_id)
         except BaseException as failure:
             await _copy_back(aside, final, failure)
@@ -444,8 +309,8 @@ async def _swap(
                 raise _refusal(_SWAP, type(failure).__name__) from failure
             raise
     # Done: the account's file holds the new key and answered with it.
-    await _tidy(aside)
-    await _tidy(fresh)
+    await _files.tidy(aside)
+    await _files.tidy(fresh)
 
 
 async def _copy_back(aside: str, final: str, failure: BaseException) -> None:
@@ -455,18 +320,18 @@ async def _copy_back(aside: str, final: str, failure: BaseException) -> None:
     file may hold the new key and keeps the new authorization (:func:`_discard`).
     """
     try:
-        await asyncio.to_thread(_copy_session, aside, final)
+        await asyncio.to_thread(_files.copy_session, aside, final)
     except (sqlite3.Error, OSError) as exc:
-        if await _same_key(final, aside):
+        if await _files.same_key(final, aside):
             # The copy in never landed (SQLite's backup commits whole or not at all): the
             # account's file still holds the imported key, and nothing needs putting back.
-            await _tidy(aside)
+            await _files.tidy(aside)
             return
         logger.warning("re-key copy-back failed (%s); the side copy is kept", type(exc).__name__)
         if isinstance(failure, Exception):
             raise _refusal(_INCOMPLETE, type(exc).__name__) from exc
         return
-    await _tidy(aside)
+    await _files.tidy(aside)
 
 
 async def rekey_session(

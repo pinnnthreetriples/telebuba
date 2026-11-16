@@ -17,7 +17,7 @@ from telethon.tl.functions.account import (
 )
 from telethon.tl.functions.auth import AcceptLoginTokenRequest
 
-from core.telegram_client import _rekey
+from core.telegram_client import _rekey, _rekey_files
 from core.telegram_client._rekey import RekeyGatewayError, rekey_session
 
 _USER = 4242
@@ -393,7 +393,7 @@ async def test_a_connection_still_open_on_the_imported_file_does_not_stop_the_sw
 async def test_a_file_that_stays_locked_is_refused_and_keeps_the_imported_session(
     rig: _Rig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(_rekey, "_LOCK_WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(_rekey_files, "LOCK_WAIT_SECONDS", 0.05)
     holder = sqlite3.connect(rig.final, isolation_level=None)
     holder.execute("begin immediate")  # a writer that never lets go
     try:
@@ -410,8 +410,8 @@ async def test_a_file_that_stays_locked_is_refused_and_keeps_the_imported_sessio
 def _fail_on(
     monkeypatch: pytest.MonkeyPatch, name: str, exc: Exception, *, source: Path | None = None
 ) -> None:
-    """Make ``_rekey.<name>`` raise ``exc``: for every call, or only when reading ``source``."""
-    real = getattr(_rekey, name)
+    """Make ``_rekey_files.<name>`` raise ``exc``: always, or only when reading ``source``."""
+    real = getattr(_rekey_files, name)
 
     def _copy(src: str, target: str) -> None:
         if Path(src) == source:
@@ -423,7 +423,7 @@ def _fail_on(
             raise exc
         await real(path)
 
-    monkeypatch.setattr(_rekey, name, _copy if name == "_copy_session" else _unlink)
+    monkeypatch.setattr(_rekey_files, name, _copy if name == "copy_session" else _unlink)
 
 
 @pytest.mark.parametrize("left", ["aside", "scratch"])
@@ -434,7 +434,7 @@ async def test_a_side_file_that_will_not_go_after_the_swap_keeps_the_new_key(
     # The new key is in the account's file and answered from it: the swap is done. Ending the
     # new authorization because a side file could not be deleted would end that very key.
     stuck = rig.aside if left == "aside" else rig.scratch
-    _fail_on(monkeypatch, "_unlink", PermissionError(32, "in use"), source=stuck)
+    _fail_on(monkeypatch, "unlink", PermissionError(32, "in use"), source=stuck)
 
     result = await _run()
 
@@ -451,7 +451,7 @@ async def test_a_copy_back_that_fails_ends_nothing_and_keeps_the_side_copy(
     # The new file did not answer from its place, and the imported content will not go back:
     # the account's file may hold either key, so neither authorization is ended.
     rig.check_user = 999
-    _fail_on(monkeypatch, "_copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
+    _fail_on(monkeypatch, "copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
 
     with pytest.raises(RekeyGatewayError) as refused:
         await _run()
@@ -470,7 +470,7 @@ async def test_a_cancelled_swap_whose_copy_back_fails_keeps_the_new_authorizatio
 ) -> None:
     # Cancellation propagates as itself; the undo finds the account's file holds the new key.
     rig.check_failure = asyncio.CancelledError()
-    _fail_on(monkeypatch, "_copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
+    _fail_on(monkeypatch, "copy_session", sqlite3.OperationalError("locked"), source=rig.aside)
 
     with pytest.raises(asyncio.CancelledError):
         await _run()
