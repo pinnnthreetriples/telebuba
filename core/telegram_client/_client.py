@@ -11,6 +11,7 @@ from core.config import settings
 from core.db import fetch_account, fetch_account_proxy_settings, fetch_device_fingerprint
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.device_fingerprint_android import ANDROID_LANG_PACK
+from core.instance import require_fleet_owner
 from core.logging import register_log_secrets
 from core.secure_paths import make_private_dir
 from core.telegram_client._guarded_client import GuardedTelegramClient
@@ -238,6 +239,8 @@ async def _ensure_session_dir() -> None:
 
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
+    # Before anything else: a computer that is not the fleet owner never connects a key.
+    require_fleet_owner()
     device = profile.device
     mobile = device.device_type == "mobile"
     proxy = _proxy_config(profile)

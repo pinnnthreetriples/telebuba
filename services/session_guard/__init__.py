@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.instance import fleet_owner_host, is_fleet_owner
+from core.logging import log_event
 from services.session_backups import shutdown_session_backups, start_session_backups
 from services.session_death_watch import shutdown_session_death_watch, start_session_death_watch
 from services.session_guard import _loop
@@ -30,7 +32,15 @@ __all__ = [
 
 
 async def start_session_guard() -> None:
-    """Start the guard, its watchdog and the death watch (lifespan startup)."""
+    """Start the guard, its watchdog and the death watch (lifespan startup).
+
+    On a computer that is not the fleet owner every Telegram client is refused; that is
+    said once here, so the operator reads why nothing connects.
+    """
+    if not is_fleet_owner():
+        await log_event(
+            "WARNING", "instance_not_fleet_owner", extra={"fleet_owner_host": fleet_owner_host()}
+        )
     await _loop.start_session_guard()
     start_watchdog()
     await start_session_death_watch()

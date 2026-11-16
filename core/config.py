@@ -35,6 +35,7 @@ from core._config_domains import (
     TrustSettings,
 )
 from core._config_emulator import EmulatorSettings
+from core._config_instance import InstanceSettings
 from core._config_masstagging import MasstaggingSettings
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
@@ -389,6 +390,7 @@ class Settings(BaseSettings):
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
     session_vault: SessionVaultSettings = Field(default_factory=SessionVaultSettings)
+    instance: InstanceSettings = Field(default_factory=InstanceSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
     passkey_vault: PasskeyVaultSettings = Field(default_factory=PasskeyVaultSettings)

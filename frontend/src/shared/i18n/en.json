@@ -2274,7 +2274,8 @@
     "session_death_suspected": "The account's key looks dead: checking the session",
     "session_guard_stalled": "The session guard stopped or went silent",
     "session_vault_off": "Session copies are off: SESSION_VAULT__KEY is not set",
-    "session_backup_failed": "Could not store a session copy"
+    "session_backup_failed": "Could not store a session copy",
+    "instance_not_fleet_owner": "This computer is not the fleet owner: Telegram connections are refused"
   },
   "logEventReason": {
     "freed": "the account became free",

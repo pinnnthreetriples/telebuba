@@ -97,6 +97,8 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(settings.session_vault, "mirror_dir", None)
     monkeypatch.setattr(settings.session_vault, "quarantine_dir", tmp_path / "session_quarantine")
     monkeypatch.setattr(settings.session_vault, "key", "")
+    # A developer's .env may name another computer as the fleet owner; tests never connect.
+    monkeypatch.setattr(settings.instance, "fleet_owner_host", "")
 
 
 @pytest.fixture(autouse=True)

@@ -31,3 +31,7 @@ Never commit the key, never paste it into a chat or a log.
 Removing a session file (deleting an account, a confirmed reset, a discarded sign-in) moves it to `runtime/session_quarantine/<UTC time>-<name>.session` instead of deleting it. The session guard's pass purges what is older than `SESSION_VAULT__QUARANTINE_DAYS` (30). A file removed by mistake can be put back by hand within that window.
 
 The database is backed up as well (`DB__BACKUP_ENABLED`, on by default): it holds the 2FA passwords every re-login needs.
+
+## One owner of the fleet
+
+Copies of the session files on a second computer (a laptop) are a backup only while that computer never connects them: two instances on one key, from two IPs, get the key revoked. `INSTANCE__FLEET_OWNER_HOST` names the one computer (its hostname) that may build Telegram clients. Set it on every computer that holds copies; on any other the client factory refuses (`FleetOwnerRefusedError`, read by every caller as an unreachable account) and the startup log says `instance_not_fleet_owner`. Empty means no restriction.
