@@ -41,6 +41,7 @@ from core._config_notifications import NotificationsSettings
 from core._config_passkey_vault import PasskeyVaultSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_session_audit import SessionAuditSettings
+from core._config_session_vault import SessionVaultSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_survival import SurvivalSettings
 from core._config_telephony import TelephonySettings
@@ -212,9 +213,10 @@ class DbSettings(BaseSettings):
     max_overflow: int = Field(default=20, ge=0)
     pool_timeout_seconds: float = Field(default=30.0, gt=0)
     # Periodic maintenance: WAL checkpoint (TRUNCATE) always runs; the online
-    # backup (VACUUM INTO a timestamped file) is opt-in. telebuba.db is the sole
+    # backup (VACUUM INTO a timestamped file) is on by default (it holds the 2FA
+    # passwords every re-login needs). telebuba.db is the sole
     # datastore (incl. users/auth), so a backup guards against corruption/loss.
-    backup_enabled: bool = False
+    backup_enabled: bool = True
     backup_interval_hours: float = Field(default=24.0, gt=0)
     backup_dir: Path = Path("backups")
     backup_keep: int = Field(default=7, ge=1)
@@ -386,6 +388,7 @@ class Settings(BaseSettings):
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
+    session_vault: SessionVaultSettings = Field(default_factory=SessionVaultSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
     passkey_vault: PasskeyVaultSettings = Field(default_factory=PasskeyVaultSettings)

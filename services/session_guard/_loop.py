@@ -34,6 +34,7 @@ from core.config import settings
 from core.logging import log_event
 from schemas.session_guard import SessionGuardStatus
 from services.accounts import close_due_old_keys
+from services.session_backups import run_backup_pass
 from services.session_guard._watch import run_watch_pass
 
 if TYPE_CHECKING:
@@ -133,6 +134,8 @@ async def run_guard_pass() -> int:
     """One pass over every step; how many old keys it ended plus accounts it watched."""
     ended = await _guarded("old_keys", close_due_old_keys)
     watched = await _guarded("watch", run_watch_pass)
+    # Local file work only (encrypted session copies, the quarantine purge): not counted.
+    await _guarded("backups", run_backup_pass)
     return ended + watched
 
 
