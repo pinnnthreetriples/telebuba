@@ -21,7 +21,7 @@ from core.gemini import generate_text
 from core.openai import generate_text_deepseek
 from core.telegram_client import execute as _gateway_execute
 from core.telegram_client import execute_read as _gateway_execute_read
-from services.spam_status import refresh_spam_status as _refresh_spam_status
+from services.spam_intel import bound_asker
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -182,6 +182,11 @@ async def execute_owned_read(account_id: str, action: TelegramReadAction) -> Bas
         result = await _gateway_execute_read(account_id, action)
     _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
+
+
+# The gateway's asker for warming: an account warming holds is asked by warming itself, an
+# account another feature holds is not probed in parallel. Tests patch this name.
+_refresh_spam_status = bound_asker("warming")
 
 
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:

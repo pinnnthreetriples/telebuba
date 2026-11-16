@@ -52,7 +52,7 @@ from schemas.lifecycle import AccountDeleteReasonGuess, DeleteReason
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
-from services import accounts, spam_status
+from services import accounts, spam_intel
 from services import warming as warming_service
 
 # No router-wide ``responses``: the routes here do NOT share one error surface (a
@@ -149,7 +149,7 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
     responses=SERVICE_ERRORS,
 )
 async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
-    """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
+    """Re-probe @SpamBot for one account within the shared probe budget; return the verdict."""
     # 404 on a missing row like every sibling route. ``refresh_spam_status`` answers
     # an uncached ``unknown`` verdict instead of raising, because warming and
     # neurocomment onboarding call it too and a hard raise there would change cycle
@@ -157,7 +157,7 @@ async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     # of the docstring: that text becomes the OpenAPI ``description``.
     with service_errors_to_http():
         await accounts.require_account(account_id)
-        return await spam_status.refresh_spam_status(account_id, force=True)
+        return await spam_intel.operator_check(account_id, confirm_out_of_turn=True)
 
 
 @router.post(

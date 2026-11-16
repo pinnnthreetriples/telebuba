@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from schemas.spam_status import SpamStatusVerdict
+
 from core.config import settings
 from core.db import (
     fetch_campaign,
@@ -52,6 +54,7 @@ from services.neurocomment._onboard_pair import (  # noqa: F401 - re-exported pu
     onboard_account_channel,
 )
 from services.neurocomment._onboarding_owner import ensure_current
+from services.spam_intel import caller_scope
 
 
 async def onboard_campaign(
@@ -213,7 +216,7 @@ async def _join_pair_safely(
         )
 
 
-def _probed_this_run(checked_at: str, run_start: datetime) -> bool:
+def _probed_this_run(verdict: SpamStatusVerdict, run_start: datetime) -> bool:
     """True when the verdict was stamped during this run, i.e. @SpamBot traffic just went out.
 
     ``refresh_spam_status`` returns the *cached* verdict (older stamp, no Telegram
@@ -221,9 +224,14 @@ def _probed_this_run(checked_at: str, run_start: datetime) -> bool:
     a cache hit — and only a real probe needs the anti-burst pause below. A verdict a
     concurrent warming cycle just probed reads as ours; pausing on it is still right,
     the traffic happened. A legacy naive stamp is read as UTC, matching ``spam_status``.
+
+    A verdict from the gateway says how it was served: only ``probe`` went out, and a cache
+    hit, a coalesced reading or an answer the budget postponed sent nothing.
     """
+    if verdict.served_from is not None:
+        return verdict.served_from == "probe"
     try:
-        checked = datetime.fromisoformat(checked_at)
+        checked = datetime.fromisoformat(verdict.checked_at)
     except ValueError:
         return False
     if checked.tzinfo is None:
@@ -253,7 +261,8 @@ async def _probe_account_spam(
         if report:
             report(OnboardingProgressEvent(code="spam_probe_started", account_id=account_id))
         try:
-            verdict = await _seams.refresh_spam_status(account_id, force=False)
+            with caller_scope("neurocomment.onboarding"):
+                verdict = await _seams.refresh_spam_status(account_id, force=False)
         except Exception as exc:  # noqa: BLE001 - a spam probe must never abort onboarding
             await log_event(
                 "WARNING",
@@ -265,7 +274,7 @@ async def _probe_account_spam(
                 report(OnboardingProgressEvent(code="spam_probe_failed", account_id=account_id))
         else:
             ensure_current()
-            if index + 1 < len(accounts) and _probed_this_run(verdict.checked_at, run_start):
+            if index + 1 < len(accounts) and _probed_this_run(verdict, run_start):
                 await asyncio.sleep(_join_jitter_seconds())
 
 

@@ -18,6 +18,7 @@ from core import (
     _schema_passkeys,
     _schema_recipients,
     _schema_session_audits,
+    _schema_spam_intel,
     _schema_standalone_emulators,
 )
 
@@ -33,5 +34,6 @@ __all__ = [
     "_schema_passkeys",
     "_schema_recipients",
     "_schema_session_audits",
+    "_schema_spam_intel",
     "_schema_standalone_emulators",
 ]

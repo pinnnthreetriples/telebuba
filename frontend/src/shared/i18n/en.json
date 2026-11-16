@@ -2219,7 +2219,17 @@
     "session_old_key_resolved": "The old imported session was identified",
     "session_old_key_problem": "The old imported session must be closed by hand",
     "session_guard_failed": "A background session check failed",
-    "session_watch_passkey_missing": "Telegram no longer lists the account's passkey"
+    "session_watch_passkey_missing": "Telegram no longer lists the account's passkey",
+    "spam_intel_probe": "@SpamBot probe done",
+    "spam_intel_probe_refused": "@SpamBot probe postponed or refused by the budget",
+    "spam_intel_coalesced": "@SpamBot probe not needed: a recent result was reused",
+    "spam_intel_budget_exceeded": "Daily @SpamBot probe budget exceeded for the fleet",
+    "spam_intel_parser_shadow_disagreement": "The strict @SpamBot reply parser differs from the legacy one",
+    "spam_intel_history_read": "Old @SpamBot dialog read",
+    "spam_intel_history_sweep_done": "Reading old @SpamBot dialogs finished",
+    "spam_intel_history_sweep_failed": "Reading old @SpamBot dialogs failed",
+    "telegram_spam_history_failed": "Could not read the @SpamBot dialog",
+    "warming_quarantine_recheck_deferred": "Quarantine re-check postponed: @SpamBot probe budget"
   },
   "logEventReason": {
     "freed": "the account became free",

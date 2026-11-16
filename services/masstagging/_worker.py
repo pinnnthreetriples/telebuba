@@ -21,11 +21,10 @@ from typing import TYPE_CHECKING, Literal
 from core.config import settings
 from core.logging import log_event
 from core.repositories import masstagging as repository
-from core.repositories.spam_status import upsert_spam_status
 from schemas.masstagging_records import JournalRecord
-from schemas.spam_status import SpamStatusVerdict
 from services.masstagging import _fleet, _moves, _seams, _state, _steps
 from services.masstagging.pace import batch_size, day_of, gap_seconds, stories_cap
+from services.spam_intel import record_peer_flood_limited
 
 if TYPE_CHECKING:
     from schemas.masstagging_records import TargetRecord
@@ -296,13 +295,8 @@ async def _halt(ctx: RunContext, account_id: str, held: list[TargetRecord], verd
     )
     extra: dict[str, object] = {"campaign_id": ctx.campaign_id}
     if verdict == "spamblock":
-        await upsert_spam_status(
-            SpamStatusVerdict(
-                account_id=account_id,
-                status="limited",
-                detail="peer_flood",
-                checked_at=datetime.fromtimestamp(_seams.now(), UTC).isoformat(),
-            )
+        await record_peer_flood_limited(
+            account_id, checked_at=datetime.fromtimestamp(_seams.now(), UTC).isoformat()
         )
         await log_event("ERROR", "masstagging_spamblock", account_id=account_id, extra=extra)
         return

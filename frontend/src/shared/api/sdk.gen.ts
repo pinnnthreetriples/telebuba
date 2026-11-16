@@ -927,7 +927,10 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
 /**
  * Spam Check Account
  *
- * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ * Re-probe @SpamBot for one account within the shared budget; return the verdict.
+ *
+ * A reading younger than the coalescing window, or a refusal by the budget, comes back as
+ * the stored verdict with ``served_from`` / ``reason`` / ``retry_at`` saying why.
  */
 export const spamCheckAccount = <ThrowOnError extends boolean = false>(
   options: Options<SpamCheckAccountData, ThrowOnError>,

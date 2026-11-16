@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import get_spam_status, record_spam_check_outcome
 from core.logging import log_event
+from schemas.spam_status import is_unasked
 from schemas.warming import WarmingCycleResult, spam_block_known
+from services.spam_intel import caller_scope
 from services.warming import _seams
 from services.warming._state import _set_state
 
@@ -87,7 +89,8 @@ async def ask_spambot(account_id: str) -> SpamStatusVerdict:
     """
     cached = await get_spam_status(account_id)
     force = cached is not None and cached.status == "unknown"
-    return await _seams.refresh_spam_status(account_id, force=force)
+    with caller_scope("warming.handoff"):
+        return await _seams.refresh_spam_status(account_id, force=force)
 
 
 async def _quarantine_limited(
@@ -146,7 +149,12 @@ async def _spam_step(
     if not spam_check_due(cached, record, now):
         return None, False
     force = cached is not None and cached.status == "unknown"
-    verdict = await _seams.refresh_spam_status(account_id, force=force)
+    with caller_scope("warming.cycle"):
+        verdict = await _seams.refresh_spam_status(account_id, force=force)
+    if is_unasked(verdict):
+        # The budget said later (or never, for an account that cannot be asked): nothing
+        # was asked, so there is no unreadable answer to count. The next cycle tries again.
+        return None, False
     readable = verdict.status != "unknown"
     if not readable or record.spam_unknown_streak > 0:
         streak = await record_spam_check_outcome(

@@ -41,6 +41,7 @@ from services.neurocomment._ban_cleanup import (
 )
 from services.neurocomment._onboarding_owner import ensure_current
 from services.neurocomment._pins import serving_accounts
+from services.spam_intel import caller_scope
 
 _ChannelStatus = Literal["ok", "banned", "unknown"]
 
@@ -170,7 +171,8 @@ async def confirm_group_ban_and_leave(
         )
         return False
     ensure_current()
-    verdict = await _seams.refresh_spam_status(account_id, force=True)
+    with caller_scope("neurocomment.ban_confirm"):
+        verdict = await _seams.refresh_spam_status(account_id, force=True)
     ensure_current()
     if verdict.status != "clean":
         await log_event(
@@ -269,7 +271,8 @@ async def register_unconfirmed_ban(
     # so a refusal the interval already rules out never reaches @SpamBot below.
     if not await unconfirmed_ban_is_countable(account_id, channel, interval_start):
         return None
-    verdict = await _seams.refresh_spam_status(account_id)
+    with caller_scope("neurocomment.ban_budget"):
+        verdict = await _seams.refresh_spam_status(account_id)
     if verdict.status != "clean":
         return None
     rounds = max(2, nc.channel_max_rounds)
@@ -324,7 +327,8 @@ async def _ban_on_a_spent_budget(
     over-run must not render as "3/2".
     """
     ensure_current()
-    verdict = await _seams.refresh_spam_status(account_id, force=True)
+    with caller_scope("neurocomment.ban_budget"):
+        verdict = await _seams.refresh_spam_status(account_id, force=True)
     ensure_current()
     if verdict.status != "clean":
         await log_event(

@@ -125,6 +125,7 @@ from core.migration_steps_scheduled_posts import (
     _add_scheduled_posts_tables,
 )
 from core.migration_steps_session_audits import _add_account_session_audits
+from core.migration_steps_spam_intel import _add_spam_probe_ledger
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
 from core.migration_steps_standalone_emulators import (
@@ -298,6 +299,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (111, "add_chat_broadcast_refusals", _add_chat_broadcast_refusals),
     (112, "add_chat_broadcast_pinned", _add_chat_broadcast_pinned),
     (113, "add_account_rekey_problem", _add_account_rekey_problem),
+    (114, "add_spam_probe_ledger", _add_spam_probe_ledger),
 )
 
 

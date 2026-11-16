@@ -744,7 +744,7 @@
           "accounts"
         ],
         "summary": "Spam Check Account",
-        "description": "Re-probe @SpamBot for one account and return the fresh, cached verdict.",
+        "description": "Re-probe @SpamBot for one account within the shared budget; return the verdict.\n\nA reading younger than the coalescing window, or a refusal by the budget, comes back as\nthe stored verdict with ``served_from`` / ``reason`` / ``retry_at`` saying why.",
         "operationId": "spamCheckAccount",
         "parameters": [
           {
@@ -38031,6 +38031,61 @@
             "type": "string",
             "minLength": 1,
             "title": "Checked At"
+          },
+          "served_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "cache",
+                  "probe",
+                  "coalesced",
+                  "deferred",
+                  "refused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Served From"
+          },
+          "retry_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "backoff",
+                  "account_daily_cap",
+                  "proxy_spacing",
+                  "fleet_spacing",
+                  "fleet_soft_cap",
+                  "fleet_hard_cap",
+                  "busy",
+                  "startup_quiet",
+                  "account_missing",
+                  "account_not_alive",
+                  "no_proxy",
+                  "operator_daily_cap",
+                  "needs_confirmation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -38040,7 +38095,7 @@
           "checked_at"
         ],
         "title": "SpamStatusVerdict",
-        "description": "Parsed, cacheable spam-status verdict for one account."
+        "description": "Parsed, cacheable spam-status verdict for one account.\n\nThe last three fields are never stored: the gateway fills them on an answer so the\ncaller can tell \"not asked, the budget says later\" (``deferred``, ``retry_at``) and\n\"will not be asked\" (``refused``, ``reason``) from a reading that came back\nunreadable. ``None`` everywhere means a plain stored reading, as before the gateway."
       },
       "StandaloneEmulatorCreate": {
         "properties": {

@@ -29,6 +29,7 @@ from core.config import settings
 from core.db import record_spam_check_outcome
 from core.logging import log_event
 from schemas.warming import WarmingCycleResult, spam_block_known
+from services.spam_intel import caller_scope, parse_retry
 from services.warming import _seams
 from services.warming._spam_block import stop_spam_blocked
 from services.warming._state import _set_state
@@ -36,6 +37,7 @@ from services.warming._state import _set_state
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
 
 _STALE = "stale run"
@@ -134,6 +136,51 @@ async def _unreadable(
     return await _extend(record, now, record.quarantine_count, run_id)
 
 
+async def _wait_for_budget(
+    record: WarmingStateRecord,
+    now: datetime,
+    verdict: SpamStatusVerdict,
+    run_id: str | None,
+) -> WarmingCycleResult:
+    """The budget said later: keep the window and ask again then, spending nothing.
+
+    Not an unreadable answer (nothing was asked), so neither the re-check count nor the
+    unreadable streak moves.
+    """
+    account_id = record.account_id
+    retry = parse_retry(verdict) or now + timedelta(minutes=settings.spam_intel.busy_retry_minutes)
+    write = await _set_state(
+        account_id,
+        "quarantine",
+        last_event="quarantine_recheck_deferred",
+        next_run_at=retry.isoformat(),
+        heartbeat_at=now.isoformat(),
+        quarantine_count=record.quarantine_count,
+        expected_run_id=run_id,
+    )
+    if run_id is not None and not write.applied:
+        return _stale(account_id)
+    await log_event(
+        "INFO",
+        "warming_quarantine_recheck_deferred",
+        account_id=account_id,
+        extra={"reason": verdict.reason},
+    )
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="recheck deferred")
+
+
+async def _no_reading(
+    record: WarmingStateRecord,
+    now: datetime,
+    verdict: SpamStatusVerdict,
+    run_id: str | None,
+) -> WarmingCycleResult:
+    """An ``unknown`` re-check: postponed by the budget, or genuinely unreadable."""
+    if verdict.served_from == "deferred":
+        return await _wait_for_budget(record, now, verdict, run_id)
+    return await _unreadable(record, now, run_id)
+
+
 async def _reset_streak(account_id: str, run_id: str | None) -> bool:
     """End the unreadable streak on a reading; ``False`` when a newer run owns the row."""
     streak = await record_spam_check_outcome(account_id, readable=True, expected_run_id=run_id)
@@ -165,9 +212,10 @@ async def _recover_from_quarantine(
     if run_id is not None and not probe_started.applied:
         return _stale(account_id)
 
-    verdict = await _seams.refresh_spam_status(account_id, force=True)
+    with caller_scope("warming.quarantine"):
+        verdict = await _seams.refresh_spam_status(account_id, force=True)
     if verdict.status == "unknown":
-        return await _unreadable(record, now, run_id)
+        return await _no_reading(record, now, verdict, run_id)
     # A reading ends the unreadable streak; a refused guard means a newer run.
     if record.spam_unknown_streak > 0 and not await _reset_streak(account_id, run_id):
         return _stale(account_id)

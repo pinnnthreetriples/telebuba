@@ -24,6 +24,8 @@ edges:
     condition: user parser runs, bases, presets, or exports
   - target: context/runtime-masstagging.md
     condition: masstagging campaigns, story mentions, priming, or the tagged registry
+  - target: context/runtime-spam-intel.md
+    condition: the @SpamBot gateway, probe budget, spam verdict, reply samples or the history sweep
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md

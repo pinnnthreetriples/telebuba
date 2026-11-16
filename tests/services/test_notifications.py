@@ -127,6 +127,8 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
         (_entry("warming_target_reached"), "warmed"),
         (_entry("session_audit_foreign_found"), "foreign_session"),
         (_entry("session_watch_passkey_missing"), "passkey_missing"),
+        (_entry("spam_intel_budget_exceeded", account_id=None, cap="hard"), "spam_budget"),
+        (_entry("spam_intel_probe_refused", reason="proxy_spacing"), None),
         (_entry("session_audit_completed"), None),
         (_entry("warming_started"), None),
         (_entry("notifications_send_failed"), None),
@@ -150,6 +152,13 @@ def test_the_foreign_session_message_names_the_account_and_where_to_look() -> No
     assert "Polina (@polina)" in text
     assert "чужая сессия" in text
     assert "Сессии" in text
+
+
+def test_the_budget_message_is_fleet_wide_and_points_at_the_event_log() -> None:
+    text = compose_message("spam_budget", "аккаунт без имени")
+    assert "@SpamBot" in text
+    assert "spam_intel" in text
+    assert "аккаунт без имени" not in text  # a fleet-level notice names no account
 
 
 def test_the_passkey_message_names_the_account() -> None:

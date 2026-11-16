@@ -247,3 +247,68 @@ def test_frontend_test_source_detection_excludes_production_and_other_languages(
     filename: str,
 ) -> None:
     assert not _is_frontend_test_source(Path(filename))
+
+
+# --- The spam-intel gateway is the only way to ask @SpamBot (docs/spam-intel.md) ---------
+
+_SPAM_GATEWAY = ("services/spam_intel/", "services/spam_status.py")
+
+
+def _imported_symbols(path: Path) -> set[str]:
+    """Every imported thing as a dotted name: ``from a.b import c`` is ``a.b.c`` and ``a.b``."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    symbols: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            symbols.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            symbols.add(node.module)
+            symbols.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return symbols
+
+
+def _spam_gateway_violations(forbidden: dict[str, tuple[str, ...]]) -> list[str]:
+    """``forbidden`` maps a dotted name to the path prefixes that MAY import it."""
+    out: list[str] = []
+    for layer in ("api", "core", "services", "schemas"):
+        for path in _python_modules(layer):
+            relative = path.relative_to(_ROOT).as_posix()
+            out.extend(
+                f"{relative} imports {symbol}"
+                for symbol in sorted(_imported_symbols(path) & forbidden.keys())
+                if not relative.startswith(forbidden[symbol])
+            )
+    return out
+
+
+def test_only_the_spam_gateway_may_probe_or_write_the_spam_verdict() -> None:
+    """No caller reaches @SpamBot, or stores a verdict, except through ``services.spam_intel``.
+
+    The probe lives in ``core.telegram_client`` and is imported by ``services.spam_status`` (the
+    executor) alone; the gateway is the only importer of that executor; the history reader is the
+    sweep's. ``upsert_spam_status`` belongs to the repository layer, the executor and the gateway.
+    A new feature that wants a verdict asks ``services.spam_intel.ask`` and gets the budget with it.
+    """
+    forbidden: dict[str, tuple[str, ...]] = {
+        "core.telegram_client.check_spam_status": ("core/", "services/spam_status.py"),
+        "core.telegram_client._spam": ("core/", "services/spam_status.py"),
+        "core.telegram_client.read_spambot_history": ("core/", "services/spam_intel/"),
+        "services.spam_status": _SPAM_GATEWAY,
+        "services.spam_status.refresh_spam_status": _SPAM_GATEWAY,
+        "services.spam_status.probe_and_store": _SPAM_GATEWAY,
+        "core.db.upsert_spam_status": ("core/", *_SPAM_GATEWAY),
+        "core.repositories.spam_status.upsert_spam_status": ("core/", *_SPAM_GATEWAY),
+        "core.repositories.spam_probe_ledger": ("core/", "services/spam_intel/"),
+    }
+    assert _spam_gateway_violations(forbidden) == []
+
+
+def test_the_spam_gateway_guard_catches_a_bypass(tmp_path: Path) -> None:
+    """The scan itself is sound: a direct probe import in a service is reported."""
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        "from core.telegram_client import check_spam_status\nfrom services import spam_status\n",
+        encoding="utf-8",
+    )
+    symbols = _imported_symbols(bad)
+    assert {"core.telegram_client.check_spam_status", "services.spam_status"} <= symbols

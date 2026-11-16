@@ -35,7 +35,8 @@ from schemas.warming import is_parked, is_warming
 from services._account_owner import is_lent, owner_of
 from services.lifecycle_journal import DEAD_SESSION_STATUSES, record_session_death
 from services.spam_block_lift import lift_from_stored_answer
-from services.spam_status import refresh_spam_status
+from services.spam_intel import ask as refresh_spam_status
+from services.spam_intel import caller_scope
 from services.survival._due import (
     DIRECT,
     BlockRecheckCandidate,
@@ -51,6 +52,7 @@ from services.survival._stints import build_lives, parse_moment
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.lifecycle import LifecycleEvent
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
 
 # Stdlib sink for the traceback; the persisted event carries only the error type.
@@ -157,6 +159,31 @@ async def _blocked_candidates(fleet: _Fleet) -> list[BlockRecheckCandidate]:
     return candidates
 
 
+async def _ask(account_id: str, proxy_key: str, at: datetime, caller: str) -> SpamStatusVerdict:
+    """Ask through the gateway, remembering the attempt unless the budget said "later".
+
+    An answer the budget postponed asked nothing, so it must not start the 24 h retry wait
+    or the per-proxy spacing: the next pass tries again once the budget allows.
+    """
+    attempt_before = _state.attempts.get(account_id)
+    proxy_before = _state.asked_by_proxy.get(proxy_key)
+    _state.attempts[account_id] = at
+    _state.asked_by_proxy[proxy_key] = at
+    with caller_scope(caller):
+        verdict = await refresh_spam_status(account_id)
+    if verdict.served_from == "deferred":
+        _restore(_state.attempts, account_id, attempt_before)
+        _restore(_state.asked_by_proxy, proxy_key, proxy_before)
+    return verdict
+
+
+def _restore(memory: dict[str, datetime], key: str, before: datetime | None) -> None:
+    if before is None:
+        memory.pop(key, None)
+    else:
+        memory[key] = before
+
+
 async def _recheck_spam_block(fleet: _Fleet, pacing: ProbePacing) -> str | None:
     """Re-ask @SpamBot about one spam-blocked account; a clean answer lifts the block."""
     interval = timedelta(hours=settings.survival.block_recheck_hours)
@@ -164,10 +191,8 @@ async def _recheck_spam_block(fleet: _Fleet, pacing: ProbePacing) -> str | None:
     due = pick_block_recheck(candidates, fleet.asked_by_proxy, _state.attempts, pacing, interval)
     if due is None:
         return None
-    _state.attempts[due.account_id] = pacing.now
-    _state.asked_by_proxy[due.proxy_key] = pacing.now
     # The ask itself lifts the block on a clean answer (``services.spam_block_lift``).
-    verdict = await refresh_spam_status(due.account_id)
+    verdict = await _ask(due.account_id, due.proxy_key, pacing.now, "survival.block_recheck")
     await log_event(
         "INFO",
         "survival_spam_block_recheck",
@@ -192,9 +217,7 @@ async def run_probe_pass(*, now: datetime | None = None) -> str | None:
     due = pick_due_probe(_candidates(fleet), fleet.asked_by_proxy, _state.attempts, pacing)
     if due is None:
         return await _recheck_spam_block(fleet, pacing)
-    _state.attempts[due.account_id] = moment
-    _state.asked_by_proxy[due.proxy_key] = moment
-    verdict = await refresh_spam_status(due.account_id)
+    verdict = await _ask(due.account_id, due.proxy_key, moment, "survival.window")
     await log_event(
         "INFO",
         "survival_probe",

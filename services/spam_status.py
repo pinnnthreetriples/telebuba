@@ -1,171 +1,64 @@
-"""Account spam-status service: parse the @SpamBot probe and cache the verdict.
+"""The @SpamBot probe executor: ask, classify, cache the verdict, journal it.
 
-Pure parsing logic plus a TTL cache around the gateway probe. No Telethon, no
-SQLAlchemy — those live in ``core/*``. Callers (pre-flight, quarantine recovery)
-use :func:`refresh_spam_status`.
+Two entry points. :func:`probe_and_store` always asks and is what the gateway
+(``services.spam_intel``) calls once its budget has said yes. :func:`refresh_spam_status`
+is the pre-gateway function — a TTL cache around the probe with a per-account lock — kept
+as the executor the gateway falls back to when ``SPAM_INTEL__ENABLED=false`` and as the name
+the old tests exercise. Callers outside this package and ``services.spam_intel`` must not
+use either: ``tests/test_architecture.py`` enforces the gateway as the only way in.
+
+No Telethon, no SQLAlchemy — those live in ``core/*``. Parsing is in
+``services._spam_parse``.
 """
 
 from __future__ import annotations
 
 import asyncio
-import re
+import logging
 from datetime import UTC, datetime
+from typing import Literal
 
 from core.config import settings
 from core.db import fetch_account, get_spam_status, upsert_spam_status
 from core.logging import log_event
+from core.repositories.device_fingerprint import list_device_fingerprints_by_ids
+from core.repositories.spam_reply_samples import upsert_reply_sample
 from core.telegram_client import check_spam_status
-from schemas.spam_status import SpamStatusKind, SpamStatusProbe, SpamStatusVerdict
+from schemas.spam_intel import ReplySample
+from schemas.spam_status import (
+    ProbeOutcome,
+    SpamStatusKind,
+    SpamStatusProbe,
+    SpamStatusVerdict,
+)
+from services._spam_parse import (
+    classify_legacy,
+    classify_strict,
+    find_date,
+    redact_reply,
+    reply_hash,
+)
 from services.lifecycle_journal import record_lifecycle_event
 from services.spam_block_lift import lift_on_clean
 
+logger = logging.getLogger(__name__)
+
 _SECONDS_PER_HOUR = 3600
-
-# Substring markers, lowercased, ordered by check priority. ``@SpamBot``
-# localises its reply to the account's interface language, so the same
-# verdict can land in EN, RU, or anything else; matching by short stems lets
-# one rule cover several inflections of one language. Clean is checked first
-# because the Russian clean reply ("не применены ограничения") legitimately
-# contains a substring shared with the limited markers.
-_CLEAN_MARKERS = (
-    # EN — "Good news, no limits are currently applied to your account."
-    "no limits",
-    "good news",
-    # RU — long form: "Хорошие новости, ... не применены никакие ограничения."
-    "хорошие новости",
-    "не применены",
-    # RU — short form: "Ваш аккаунт свободен от каких-либо ограничений."
-    # Has to be matched explicitly because the substring "ограничен" appears in
-    # both the clean ("ограничений") and limited ("наложены ограничения") forms
-    # and is therefore not a safe limited-marker.
-    "свободен от",
-)
-_BEING_CHECKED_MARKERS = (
-    # EN — "Your account is being checked."
-    "being checked",
-    "is checked",
-    # RU — "Ваш аккаунт сейчас проверяется автоматизированной системой."
-    "сейчас проверя",
-    "автоматизирован",
-)
-_LIMITED_MARKERS = (
-    # EN — "Your account is now limited until …"
-    "limited",
-    "restricted",
-    # RU — Russian limited reply consistently contains the "наложены" stem.
-    # We deliberately do NOT match the "ограничен" stem here: it also appears
-    # in the Russian *clean* reply ("свободен от каких-либо ограничений") and
-    # would cause a false-positive limited verdict. "Наложены" is specific to
-    # limited replies and is the only safe Russian discriminator.
-    "наложены",
-)
-# Latin stem covers en/de/fr/it/pt/es ("automated", "automatisch", "automatique",
-# "automatizzato", "automatizado"); Cyrillic stem covers ru. Anything else with
-# this stem in @SpamBot's reply means automated review is in progress.
-_AUTOMATED_MARKERS = ("automat", "автомат")
-
-# Date patterns — language-agnostic signal that the reply describes a
-# time-bounded limitation ("until <date>"). @SpamBot clean replies never carry
-# dates on any locale we've observed, so finding one almost certainly means
-# the account is currently limited.
-_DATE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # Numeric: 12.07.2026 / 12/07/2026 / 12-07-26 / 12.7.2026
-    re.compile(r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b"),
-    # ISO: 2026-07-12
-    re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b"),
-    # Day + month-name + 4-digit year: "12 July 2026", "12. Juli 2026",
-    # "12 июля 2026", "12 de julio de 2026". Month-name as any 3-9 letter
-    # word; the 4-digit year constraint keeps the regex from grabbing
-    # arbitrary "<num> <word> <num>" sequences.
-    re.compile(r"\b\d{1,2}\.?\s+(?:de\s+)?\w{3,9}\.?\s+(?:de\s+)?\d{4}\b", re.UNICODE),
-)
-
-
-def _find_date(text: str) -> str | None:
-    """Return the first date-like substring in ``text``, or ``None``."""
-    for pat in _DATE_PATTERNS:
-        match = pat.search(text)
-        if match:
-            return match.group(0)
-    return None
-
-
-def _extract_until(text: str) -> str | None:
-    """Pull the "until <date>" tail of a limited reply, falling back to any date.
-
-    The English "until" prefix is the cleanest detail when present; for other
-    locales we still surface the date itself so the operator sees when the
-    limitation expires.
-    """
-    idx = text.lower().find("until")
-    if idx != -1:
-        tail = text[idx:].splitlines()[0].strip().rstrip(".")
-        if tail:
-            return tail
-    return _find_date(text)
-
-
-def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
-    """Match the reply against the explicit keyword markers (en/ru/de).
-
-    ``None`` = no marker matched; caller falls back to the heuristic.
-    """
-    lowered = text.lower()
-    if any(marker in lowered for marker in _CLEAN_MARKERS):
-        return "clean", None
-    if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
-        return "unknown", "account is being checked"
-    if any(marker in lowered for marker in _LIMITED_MARKERS):
-        return "limited", _extract_until(text)
-    return None
-
-
-def _classify_by_heuristic(text: str) -> tuple[SpamStatusKind, str | None]:
-    """Language-agnostic verdict for a non-empty reply when no marker matched.
-
-    Stable invariants of @SpamBot's replies, observed across en/ru/de and
-    documented in Telegram's spam FAQ: clean messages never carry dates;
-    time-bounded limits always do; automated review wording always contains
-    the ``automat`` / ``автомат`` stem. So a reply with a date is limited, a
-    reply mentioning automation is being-checked, and anything else short of
-    those is treated as clean — better than failing closed on locales we
-    don't have explicit keywords for.
-    """
-    date = _find_date(text)
-    if date is not None:
-        return "limited", _extract_until(text) or date
-    lowered = text.lower()
-    if any(marker in lowered for marker in _AUTOMATED_MARKERS):
-        return "unknown", "account is being checked"
-    return "clean", None
 
 
 def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]:
     """Map a raw probe to a (status, detail) verdict.
 
-    Pipeline:
-    1. Probe error → unknown with the exception's CLASS NAME in ``detail`` (the
-       gateway bounds it; ``detail`` is re-served as ``AccountRead.spam_detail``).
-    2. Explicit keyword markers (en/ru/de) → precise verdict if any match.
-    3. ``getFullUser.restricted`` flag → limited (Telegram-side hard restriction).
-    4. Non-empty reply with no marker match → language-agnostic heuristic
-       (date → limited, ``automat`` stem → being-checked, otherwise clean).
-    5. Empty / no reply → unknown with no detail.
+    The strict classifier when ``SPAM_INTEL__STRICT_PARSER`` is on (a reply nothing
+    recognised is ``unknown``), the pre-gateway one otherwise.
     """
-    if probe.error:
-        return "unknown", probe.error
-    text = probe.reply_text or ""
-    matched = _classify_reply_text(text)
-    if matched is not None:
-        return matched
-    if probe.restricted:
-        return "limited", probe.restriction_reason
-    if text.strip():
-        return _classify_by_heuristic(text)
-    return "unknown", None
+    if settings.spam_intel.strict_parser:
+        return classify_strict(probe)
+    return classify_legacy(probe)
 
 
-def _is_fresh(checked_at: str, now: datetime) -> bool:
+def is_reading_fresh(checked_at: str, now: datetime) -> bool:
+    """Whether a stored reading is still inside ``spam_status_ttl_hours``."""
     ttl_hours = settings.warming.spam_status_ttl_hours
     if ttl_hours <= 0:
         return False
@@ -178,71 +71,131 @@ def _is_fresh(checked_at: str, now: datetime) -> bool:
     return (now - checked).total_seconds() < ttl_hours * _SECONDS_PER_HOUR
 
 
+async def _observe_reply(account_id: str, probe: SpamStatusProbe, now: datetime) -> None:
+    """Shadow-compare the two classifiers and keep a redacted sample; never fails the probe."""
+    if probe.error or not (probe.reply_text or "").strip():
+        return
+    intel = settings.spam_intel
+    legacy, strict = classify_legacy(probe), classify_strict(probe)
+    try:
+        if not intel.strict_parser and intel.parser_shadow and legacy[0] != strict[0]:
+            await log_event(
+                "WARNING",
+                "spam_intel_parser_shadow_disagreement",
+                account_id=account_id,
+                extra={"legacy": legacy[0], "strict": strict[0], "strict_detail": strict[1]},
+            )
+        if intel.sample_capture:
+            await store_reply_sample(account_id, probe.reply_text or "", "probe", now)
+    except Exception as exc:  # noqa: BLE001 - observation must never fail a probe.
+        logger.warning("spam reply observation failed: %s", type(exc).__name__, exc_info=exc)
+
+
+async def store_reply_sample(
+    account_id: str,
+    text: str,
+    source: Literal["probe", "history"],
+    now: datetime,
+) -> None:
+    """Keep one reply of @SpamBot, redacted, with what each classifier makes of it."""
+    account = await fetch_account(account_id)
+    names = (
+        [account.first_name, account.last_name, account.username, account.phone]
+        if account is not None
+        else []
+    )
+    redacted = redact_reply(text, names, settings.spam_intel.sample_max_chars)
+    if not redacted:
+        return
+    probe = SpamStatusProbe(account_id=account_id, reply_text=text)
+    fingerprint = (await list_device_fingerprints_by_ids([account_id])).get(account_id)
+    stamp = now.isoformat()
+    await upsert_reply_sample(
+        ReplySample(
+            text_hash=reply_hash(redacted),
+            sample=redacted,
+            lang=fingerprint.lang_code if fingerprint is not None else None,
+            source=source,
+            legacy_status=classify_legacy(probe)[0],
+            strict_status=classify_strict(probe)[0],
+            has_date=find_date(redacted) is not None,
+            first_seen_at=stamp,
+            last_seen_at=stamp,
+        ),
+        settings.spam_intel.samples_max_rows,
+    )
+
+
+async def probe_and_store(
+    account_id: str,
+    *,
+    previous: SpamStatusVerdict | None = None,
+) -> ProbeOutcome:
+    """Ask @SpamBot now, classify, persist, journal, lift — no cache check, no budget.
+
+    A probe that never reached the bot returns an ``unknown`` for the caller only, with
+    ``error`` set: caching it would serve it as fresh for ``spam_status_ttl_hours`` (36 h by
+    default), long past the point where a real reading could be had. Warming's quarantine
+    gate requires a positive ``clean`` to release, so an ``unknown`` holds the quarantine
+    rather than opening it.
+    """
+    now = datetime.now(UTC)
+    probe = await check_spam_status(account_id)
+    status, detail = classify_spam_probe(probe)
+    await _observe_reply(account_id, probe, now)
+    if probe.error:
+        # No second log line: the gateway already recorded the refusal under
+        # ``telegram_spam_status_probe_failed`` (bounded to the exception class name — the
+        # full text is on its stdlib logger, not in ``extra``).
+        return ProbeOutcome(verdict=_uncached_unknown(account_id, detail, now), error=probe.error)
+    saved = await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id=account_id,
+            status=status,
+            detail=detail,
+            checked_at=now.isoformat(),
+        ),
+    )
+    await log_event(
+        "INFO" if status != "limited" else "WARNING",
+        "spam_status_refreshed",
+        account_id=account_id,
+        # ``previous``: the stored answer this one replaces, so a reader can tell a new
+        # restriction from a known one (the bot pings only on news).
+        extra={
+            "status": status,
+            "detail": detail,
+            "previous": previous.status if previous is not None else None,
+        },
+    )
+    await record_lifecycle_event(
+        account_id, "spambot_verdict", {"status": status, "detail": detail}
+    )
+    # A clean answer ends a confirmed spam block, whoever asked (``spam_block_lift``).
+    await lift_on_clean(account_id, saved)
+    return ProbeOutcome(verdict=saved)
+
+
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
-    """Return the account's spam-status verdict, re-probing @SpamBot if stale.
+    """The pre-gateway funnel: a fresh cached verdict is reused, else probe @SpamBot.
 
-    A fresh cached verdict within ``spam_status_ttl_hours`` is reused (probing
-    @SpamBot too often is itself suspicious). ``force`` bypasses the cache.
-
-    A per-account asyncio lock collapses concurrent callers: the first one
-    probes, the rest wait, and on wake they see the freshly-cached verdict
-    instead of all hitting @SpamBot. Without this, several warming cycles
-    waking together can all decide the cache is stale and probe in parallel.
-
-    Two verdicts are returned WITHOUT being cached, because neither is a reading
-    of the account's actual standing: an unknown account, and a probe that never
-    reached @SpamBot. Caching those would serve them as fresh for
-    ``spam_status_ttl_hours`` (36 h by default) — long past the point where a real
-    reading could be had. Warming's quarantine gate now requires a positive
-    ``clean`` verdict to release, so an ``unknown`` holds the quarantine rather
-    than opening it.
+    ``force`` bypasses the cache. A per-account asyncio lock makes concurrent
+    cache-respecting callers wait for the first probe and then read its cached verdict. A
+    FORCED caller that waited on the lock probes again regardless; the gateway's
+    single-flight is what coalesces those.
     """
     async with _refresh_lock(account_id):
         now = datetime.now(UTC)
         if await fetch_account(account_id) is None:
             # Guard, don't probe: with no row there is no stored session name, so
-            # ``_session_path`` falls back to ``session_dir / account_id`` and
-            # Telethon's SQLiteSession CREATES that file on construction. A
-            # spam-check must never mint a credential for an account that does
-            # not exist — that was the second way an unvalidated id reached disk.
+            # ``_session_path`` falls back to ``session_dir / account_id`` and Telethon's
+            # SQLiteSession CREATES that file on construction. A spam-check must never mint
+            # a credential for an account that does not exist.
             return _uncached_unknown(account_id, "account not found", now)
         cached = await get_spam_status(account_id)
-        if not force and cached is not None and _is_fresh(cached.checked_at, now):
+        if not force and cached is not None and is_reading_fresh(cached.checked_at, now):
             return cached
-
-        probe = await check_spam_status(account_id)
-        status, detail = classify_spam_probe(probe)
-        if probe.error:
-            # No second log line: the gateway already recorded the refusal under
-            # ``telegram_spam_status_probe_failed`` (bounded to the exception class
-            # name — the full text is on its stdlib logger, not in ``extra``).
-            return _uncached_unknown(account_id, detail, now)
-        saved = await upsert_spam_status(
-            SpamStatusVerdict(
-                account_id=account_id,
-                status=status,
-                detail=detail,
-                checked_at=now.isoformat(),
-            ),
-        )
-        await log_event(
-            "INFO" if status != "limited" else "WARNING",
-            "spam_status_refreshed",
-            account_id=account_id,
-            # ``previous``: the stored answer this one replaces, so a reader can tell a
-            # new restriction from a known one (the bot pings only on news).
-            extra={
-                "status": status,
-                "detail": detail,
-                "previous": cached.status if cached is not None else None,
-            },
-        )
-        await record_lifecycle_event(
-            account_id, "spambot_verdict", {"status": status, "detail": detail}
-        )
-        # A clean answer ends a confirmed spam block, whoever asked (``spam_block_lift``).
-        await lift_on_clean(account_id, saved)
-        return saved
+        return (await probe_and_store(account_id, previous=cached)).verdict
 
 
 def _uncached_unknown(account_id: str, detail: str | None, now: datetime) -> SpamStatusVerdict:

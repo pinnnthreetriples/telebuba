@@ -192,6 +192,12 @@ async def _place_chats(ctx: RunContext, account_id: str, seconds: int) -> int:
     )
 
 
+async def _spam_verdict(account_id: str, caller: str) -> str:
+    """@SpamBot's answer for this account, named by who is asking."""
+    with _seams.spam_caller(caller):
+        return await _seams.spam_verdict(account_id)
+
+
 async def account_refused(
     ctx: RunContext,
     account_id: str,
@@ -214,7 +220,10 @@ async def account_refused(
     if verdict == "account_halt":
         await _moves.halt_account(ctx, account_id, reason)
         return "halted"
-    if reason == _BANNED_IN_CHAT and await _seams.spam_verdict(account_id) == "clean":
+    if (
+        reason == _BANNED_IN_CHAT
+        and await _spam_verdict(account_id, "chat_broadcast.banned") == "clean"
+    ):
         if target.handed_from_account_id is None:
             await reroute(ctx, account_id, target, "banned")
         else:
@@ -303,9 +312,16 @@ async def sit_out(ctx: RunContext, account_id: str) -> bool:
             await _seams.sleep(min(remaining, tick))
             continue
         _seams.assert_live_run()
-        if item.rest_reason in SPAM_REASONS and await _seams.spam_verdict(account_id) != "clean":
-            await _moves.halt_account(ctx, account_id, "spam_block")
-            return False
+        if item.rest_reason in SPAM_REASONS:
+            verdict = await _spam_verdict(account_id, "chat_broadcast.rest_end")
+            if verdict == "deferred":
+                # The budget says later: that is not a failed check, so the account keeps
+                # resting and is asked again on the next tick instead of being halted.
+                await _seams.sleep(tick)
+                continue
+            if verdict != "clean":
+                await _moves.halt_account(ctx, account_id, "spam_block")
+                return False
         if item.rest_reason in LIMIT_REASONS and (ends := await limit_ends(ctx, account_id)):
             await repository.rest_account(ctx.campaign_id, account_id, ends[0], ends[1])
             continue

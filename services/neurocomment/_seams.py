@@ -24,7 +24,7 @@ from core.openai import generate_text_deepseek as _generate_text_deepseek
 from core.telegram_client import download_post_image as _download_post_image
 from core.telegram_client import execute as _gateway_execute
 from core.telegram_client import execute_read as _gateway_execute_read
-from services.spam_status import refresh_spam_status as _refresh_spam_status
+from services.spam_intel import bound_asker
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -250,6 +250,11 @@ async def generate_text_openai(request: GeminiRequest) -> GeminiResult:
     result = await _generate_text_openai(request)
     _assert_live_generation()
     return result
+
+
+# The gateway's asker for neurocomment. It holds no account claim (see
+# ``services._account_owner``), so ``holder`` is ``None``. Tests patch this name.
+_refresh_spam_status = bound_asker(None)
 
 
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:

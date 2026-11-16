@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from telethon import events
 
@@ -12,9 +12,11 @@ from core.config import settings
 from core.logging import log_event
 from core.telegram_client._pool import get_client
 from core.telegram_client._util import optional_str
-from schemas.spam_status import SpamStatusProbe
+from schemas.spam_status import SpamBotHistory, SpamStatusProbe
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from telethon import TelegramClient
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
@@ -117,3 +119,36 @@ async def _probe_self_restriction(client: TelegramClient) -> tuple[bool, str | N
         str(getattr(item, "text", "") or getattr(item, "reason", "")) for item in reasons
     ).strip("; ")
     return restricted, (reason or None)
+
+
+async def read_spambot_history(account_id: str, limit: int) -> SpamBotHistory:
+    """Read what @SpamBot already said to this account, without sending anything.
+
+    One ``messages.getHistory`` on the existing dialog (plus the username resolution, which
+    the session caches): the bot's earlier replies are still there, because nothing ever
+    deleted the dialog. Nothing is marked read and no ``/start`` goes out. Never raises: a
+    failure is the exception class name in ``error``.
+
+    Runs on the pooled client, like the probe (a second client on an open ``.session`` file
+    dies on ``database is locked``).
+    """
+    try:
+        client = await get_client(account_id)
+        bot = await client.get_input_entity(_SPAMBOT_USERNAME)
+        messages = await client.get_messages(bot, limit=limit)
+    except Exception as exc:  # any read failure is a class name, nothing more.
+        logger.exception("spambot history read failed for %s", account_id)
+        await log_event(
+            "WARNING",
+            "telegram_spam_history_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+        return SpamBotHistory(account_id=account_id, error=type(exc).__name__)
+    texts = [
+        text
+        for message in cast("Iterable[object]", messages)
+        if not getattr(message, "out", False)
+        and (text := optional_str(getattr(message, "raw_text", None)))
+    ]
+    return SpamBotHistory(account_id=account_id, texts=texts)

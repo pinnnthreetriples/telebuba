@@ -42,6 +42,7 @@ from core._config_passkey_vault import PasskeyVaultSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_session_audit import SessionAuditSettings
 from core._config_soft_start import SoftStartSettings
+from core._config_spam_intel import SpamIntelSettings
 from core._config_survival import SurvivalSettings
 from core._config_telephony import TelephonySettings
 from core._config_user_parser import UserParserSettings
@@ -385,6 +386,7 @@ class Settings(BaseSettings):
     notifications: NotificationsSettings = Field(default_factory=NotificationsSettings)
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
+    spam_intel: SpamIntelSettings = Field(default_factory=SpamIntelSettings)
     session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
