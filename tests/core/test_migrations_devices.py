@@ -133,7 +133,9 @@ def test_the_fingerprint_key_admits_one_row_per_device(v87_engine: Engine) -> No
     apply_migrations(v87_engine)
     with v87_engine.begin() as connection:
         connection.exec_driver_sql(
-            "INSERT INTO device_fingerprints VALUES"
+            "INSERT INTO device_fingerprints"
+            " (account_id, device_type, platform, device_model, system_version, app_version,"
+            " lang_code, system_lang_code) VALUES"
             " ('acc-1', 'mobile', 'android', 'GooglePixel 8', 'SDK 34', '12.10.6 (7112)',"
             " 'es', 'es-MX')",
         )

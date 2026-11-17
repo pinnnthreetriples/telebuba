@@ -111,6 +111,11 @@ class TelegramSettings(BaseSettings):
     # mismatch Telegram can see, and ``lang_pack`` is accepted from official apps only.
     mobile_api_id: int = Field(default=0, ge=0, repr=False)
     mobile_api_hash: str = Field(default="", repr=False)
+    # A second desktop API (a neutral app title) for NEW keys only: a re-key's new session,
+    # a second device, a sign-in over a key Telegram ended. Existing sessions keep the API
+    # their key was made with (``core.telegram_client._api_credentials``). 0 / empty: unused.
+    new_api_id: int = Field(default=0, ge=0, repr=False)
+    new_api_hash: str = Field(default="", repr=False)
     # A second device's sign-in: how long to wait for the login code to reach the
     # account's existing session (Telegram service messages from 777000), how often to
     # look, and the per-account pause before another code may be requested.

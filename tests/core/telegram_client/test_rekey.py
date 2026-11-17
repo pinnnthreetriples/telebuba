@@ -511,3 +511,25 @@ async def test_a_side_copy_identical_to_the_account_file_is_a_leftover_and_goes(
     await _run()
 
     assert _files(rig) == {"acc.session": "new"}
+
+
+@pytest.mark.asyncio
+async def test_the_new_key_keeps_its_api_only_once_the_swap_is_done(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded: list[object] = []
+
+    async def _record(profile: object) -> None:
+        recorded.append(profile)
+
+    monkeypatch.setattr(_rekey, "record_key_api", _record)
+
+    await _run()
+    assert len(recorded) == 1
+
+    recorded.clear()
+    _write(rig.final, "old")
+    rig.check_user = 999  # the swap fails and is put back
+    with pytest.raises(RekeyGatewayError):
+        await _run()
+    assert recorded == []

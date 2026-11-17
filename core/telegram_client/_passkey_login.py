@@ -30,6 +30,7 @@ from telethon.tl.types import DataJSON, InputPasskeyCredentialPublicKey, InputPa
 
 from core.passkey_vault import PasskeyVaultError, sign_with_key
 from core.repositories._accounts_twofa import twofa_password_candidates
+from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth import _alive_result, _auth_lock, _error_result, _status_result
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
 from core.telegram_client._passkey import PasskeyGatewayError, public_key_options
@@ -193,16 +194,25 @@ async def _sign_in_verdict(
         if not already:
             await _log_out_quietly(client)
         return _status_result(profile, status="unauthorized", error_message="passkey_user_mismatch")
+    if not already:
+        await record_key_api(profile)
     return _alive_result(profile, me)
 
 
 async def login_with_passkey(
-    passkey: StoredPasskey, session_name: str | None
+    passkey: StoredPasskey, session_name: str | None, *, new_key: bool = False
 ) -> TelegramSessionCheckResult:
-    """Re-authorize the account's session with its passkey; the session verdict."""
+    """Re-authorize the account's session with its passkey; the session verdict.
+
+    ``new_key``: the key is known dead, so the sign-in makes a new authorization and may use
+    the new API; recorded once it succeeded.
+    """
     profile = await prepare_telegram_client_profile(
         TelegramClientRequest(
-            account_id=passkey.account_id, session_name=session_name, receive_updates=False
+            account_id=passkey.account_id,
+            session_name=session_name,
+            receive_updates=False,
+            new_key=new_key,
         ),
     )
     user_id = int(passkey.user_handle.partition(":")[2])

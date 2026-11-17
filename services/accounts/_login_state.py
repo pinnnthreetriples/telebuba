@@ -21,24 +21,28 @@ class PendingCode:
     phone: str
     phone_code_hash: str
     expires_at: float
+    # The code was requested for a new key (the API it is bound to): the submit says the same.
+    new_key: bool = False
 
 
 _PENDING: dict[str, PendingCode] = {}
 
 
-def remember_code(
+def remember_code(  # noqa: PLR0913 - one pending code's whole record
     account_id: str,
     phone: str,
     phone_code_hash: str,
     *,
     now: float,
     ttl_seconds: float,
+    new_key: bool = False,
 ) -> None:
     """Store a freshly-requested code's hash, replacing any prior pending one."""
     _PENDING[account_id] = PendingCode(
         phone=phone,
         phone_code_hash=phone_code_hash,
         expires_at=now + ttl_seconds,
+        new_key=new_key,
     )
 
 

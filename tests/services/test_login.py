@@ -166,7 +166,7 @@ async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatc
     assert result.phone == "79990001122"
     assert account.status == "alive"
     assert [request.model_dump() for request in requested] == [
-        {"account_id": "acc", "session_name": None, "phone": "79990001122"},
+        {"account_id": "acc", "session_name": None, "phone": "79990001122", "new_key": False},
     ]
     assert [submission.model_dump() for submission in submitted] == [
         {
@@ -177,6 +177,7 @@ async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatc
             "code": "01234",
             "password": "2fa",
             "fallback_passwords": [],
+            "new_key": False,
         },
     ]
 
