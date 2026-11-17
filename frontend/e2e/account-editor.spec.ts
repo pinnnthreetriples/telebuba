@@ -233,7 +233,7 @@ test('the account card words the spam verdict and asks before an out-of-turn che
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
-  await page.getByText('+7 900 100-22-33').first().click();
+  await page.getByRole('row', { name: /@user_0/ }).getByText('@user_0').click();
   await page.getByText('Спам/бан-сигналы').click();
 
   await expect(page.getByText('Ограничен', { exact: true })).toBeVisible();
