@@ -22,7 +22,7 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   type only, restarted after a pause, repeated crashes halt it as `worker_crash`).
 - Rounds belong to the chat, not the campaign. A chat plays its chain, then rests on its
   own clock and comes back for its next round by itself; the last round ends it as done.
-  Nobody waits for the slowest chat. `round_done` means "resting until `next_action_at`";
+  `round_done` means "resting until `next_action_at`";
   the campaign's `round` is only a label and `rest_until` is set only while every
   unfinished chat rests (the board's `resting` phase). An error-skipped chat returns
   after its rest, every other skip is final. A new chat added on Continue starts at
@@ -67,9 +67,8 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   and the rests under way are redrawn from their own start.
 - The run ends only when no chat is left in play, checked together with the write that
   marks the campaign done, so a chat kept from the board at that instant is never
-  dropped. A volume stop (messages or time) ends the run in any state; the board shows
-  chats it left short of their plan as cut short (`cutShort`), never as paused — a done
-  campaign resumes nothing.
+  dropped. A volume stop (messages or time) ends the run in any state; chats it
+  left short read `cutShort`, not paused.
 - A deletion is an admin's signal the operator may overrule: a kept chat still records
   deletions but is skipped only for a ban. `chat_kind` tells the deletion check whether
   message ids are shared (megagroup) or per account (basic group).
